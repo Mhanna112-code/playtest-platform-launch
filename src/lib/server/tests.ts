@@ -1521,7 +1521,10 @@ async function writtenUploading(tx: Tx, contractId: string, text: unknown) {
 function formMistakes(page: WrittenPage, part: SentPart | null) {
   const { qs, forQs } = page;
   const { answers, fresh } = answersFor(part, page);
-  const switched = !!part && (!!part.setUntil || !sameQuestions(latestItems(part, qs), itemsFor(qs)));
+  // (Owner, Dec 10 2026) Only a part switched to changed questions before §265 (`setUntil`) may Send with no new answer (that Send moves it onto the current
+  // questions); the page's needOne says the same. Since §265 questions follow the listing, so a question Nora adds or rewords is not a switch: an empty Send
+  // is refused here too, never saved as an empty addition (which restarted the review clock: a fresh pay-by).
+  const switched = !!part?.setUntil;
   const missing0 = fresh ? answersMissing(fresh.map((i) => qs[i]), fresh.map((i) => answers[i]), answerMin()) : answersMissing(qs, answers, answerMin());
   const missing = fresh && missing0 ? (missing0.message === ANSWER_ONE && switched ? null : { ...missing0, at: Math.max(0, (forQs ?? []).findIndex((q) => qText(q) === qText(qs[fresh[missing0.at] ?? 0]))) })
     : forQs && missing0 ? { ...missing0, at: Math.max(0, forQs.findIndex((q) => qText(q) === qText(qs[missing0.at] ?? ""))) } /* (§269) its place in the page's form */ : missing0;
