@@ -144,30 +144,30 @@ press on a test that switched to Anyone joins her (no application).
 
 ### 2.3 Ask to rejoin
 
-Starts at `askToRejoin`, `src/lib/server/joining.ts:1011`. Its own refusals are in `askOwnRefusal`, joining.ts:977.
+Starts at `askToRejoin`, `src/lib/server/joining.ts:1005`. Its own refusals are in `askOwnRefusal`, joining.ts:971.
 
 | Step | When | Exact words | Where |
 |---|---|---|---|
 | 0 | as Join | | |
-| 1a | joinRefusal as a rejoin (check 7 is skipped), in Ask to rejoin's words | e.g. `You blocked Nora Lane, so your Ask to rejoin didn't go through.` | joining.ts:1016 |
-| 1b | An open invite: shown → refused; new → she is back at once | `Nora Lane invited you: press Join to join.` | joining.ts:1019 |
-| 2a | She was never in the test | `You haven't been in this test.` | joining.ts:978 |
-| 2a | She is in it | `You've already joined this test.` — **not reachable**: joinRefusal check 5 says the same first | joining.ts:978 |
-| 2b | Ana blocked Nora | `You blocked Nora Lane, so your Ask to rejoin didn't go through.` — **not reachable**: joinRefusal check 10 says the same first | joining.ts:983 |
-| 2b | Nora blocked Ana | `This test isn't taking new testers right now, so your Ask to rejoin didn't go through.` — **not reachable** for the same reason | joining.ts:986 |
-| 2c | Her part ended in a way that can't come back (a Stop, the test closing, or she left after her deadline passed) | `You can't ask to rejoin this test.` (Its other line, `You rated this test, so you can't join it again.`, is **not reachable**: joinRefusal check 6 says it first.) | joining.ts:988 |
-| 2d | Already asked in another tab | `You already asked to rejoin this test in another tab.` | joining.ts:1027 |
-| 2e | Third request in 24 hours | `You can apply or ask to rejoin this test twice in 24 hours. Try again later.` | joining.ts:1030 |
-| 3 | Profile | `Save your tester profile first: …` | joining.ts:1033 |
-| 4 | The listing box | stop-once box | joining.ts:1036 |
-| 5a | Gap | `Your profile doesn't list … ` + `Ask to rejoin anyway?` | joining.ts:1039 |
-| 5b | Terms tick | `Tick to agree to the updated Terms of Use.` | joining.ts:1042 |
-| 5c | NDA tick | `Accept the NDA to ask to rejoin.` | joining.ts:1045 |
-| 6 | The ask (kind "rejoin") and its "Ana Silva asks to rejoin" line; a suspension's "you were removed" card leaves her dashboard | | joining.ts:1048 |
+| 1a | joinRefusal as a rejoin (check 7 is skipped), in Ask to rejoin's words | e.g. `You blocked Nora Lane, so your Ask to rejoin didn't go through.` | joining.ts:1010 |
+| 1b | An open invite: shown → refused; new → she is back at once | `Nora Lane invited you: press Join to join.` | joining.ts:1013 |
+| 2a | She was never in the test | `You haven't been in this test.` | joining.ts:972 |
+| 2a | She is in it | `You've already joined this test.` — **not reachable**: joinRefusal check 5 says the same first | joining.ts:972 |
+| 2b | Ana blocked Nora | `You blocked Nora Lane, so your Ask to rejoin didn't go through.` — **not reachable**: joinRefusal check 10 says the same first | joining.ts:978 |
+| 2b | Nora blocked Ana | `This test isn't taking new testers right now, so your Ask to rejoin didn't go through.` — **not reachable** for the same reason | joining.ts:981 |
+| 2c | Her part ended in a way that can't come back (a Stop, the test closing, or she left after her deadline passed) | `You can't ask to rejoin this test.` (Its other line, `You rated this test, so you can't join it again.`, is **not reachable**: joinRefusal check 6 says it first.) | joining.ts:982 |
+| 2d | Already asked in another tab | `You already asked to rejoin this test in another tab.` | joining.ts:1021 |
+| 2e | Third request in 24 hours | `You can apply or ask to rejoin this test twice in 24 hours. Try again later.` | joining.ts:1024 |
+| 3 | Profile | `Save your tester profile first: …` | joining.ts:1027 |
+| 4 | The listing box | stop-once box | joining.ts:1030 |
+| 5a | Gap | `Your profile doesn't list … ` + `Ask to rejoin anyway?` | joining.ts:1033 |
+| 5b | Terms tick | `Tick to agree to the updated Terms of Use.` | joining.ts:1036 |
+| 5c | NDA tick | `Accept the NDA to ask to rejoin.` | joining.ts:1039 |
+| 6 | The ask (kind "rejoin") and its "Ana Silva asks to rejoin" line; a suspension's "you were removed" card leaves her dashboard | | joining.ts:1042 |
 
 Note the ask has no "invite only" or "takes applications" check: a tester who was in the test can always ask, whatever Who can join says.
 
-**Bells.** Nora: `Ana Silva asks to rejoin “Harbor Run”` with `rejoinAskLine` (joining.ts:960): `Ana Silva asks to rejoin. If you accept, she gets back the
+**Bells.** Nora: `Ana Silva asks to rejoin “Harbor Run”` with `rejoinAskLine` (joining.ts:954): `Ana Silva asks to rejoin. If you accept, she gets back the
 2 days she had left (deadline Dec 14, 11:59 PM).` (or `… She had no time left: her deadline stays passed.`), and her note. When an invite joined her:
 `Ana Silva rejoined “Harbor Run”`.
 
@@ -217,27 +217,27 @@ didn't go through.` — the cause words depend on the hold), the team's Stop (`T
 
 ### 3.1 Accept / Decline (an application or an ask to rejoin)
 
-Starts at `decideApplication`, `src/lib/server/joining.ts:773` (route `case "application"`, line 198; the body's `action` says Accept or Decline). Not one pass:
+Starts at `decideApplication`, `src/lib/server/joining.ts:760` (route `case "application"`, line 198; the body's `action` says Accept or Decline). Not one pass:
 the checks read the database, the box takes the lock, and the join (`joinTest`) claims the still-pending application under its own lock.
 
 | Step | When | Exact words | Line |
 |---|---|---|---|
-| 0 | Not her test / no such application | `That application doesn't exist.` | 777 |
-| 1 | Decline on one already withdrawn, closed or declined | silent | 784 |
-| 2 | Accept: Nora blocked Ana | `You blocked Ana Silva, so your Accept didn't go through.` | 788 (`ownBlockStop`, blocks.ts:49) |
-| 2 | Accept: Ana blocked Nora (still pending) | `Ana Silva's application was closed.` | 791 |
-| 3 | No longer pending | closed: `Ana Silva's application closed when the test was stopped at 3:05 PM.` / `… when joining closed (Open until passed) on Nov 20, 2026.` / `… when the test became invite only at 3:05 PM.` / `… when you changed the listing in another tab at 3:05 PM.` / (old rows) `… when the test filled up at 3:05 PM.` / a block: `Ana Silva's application was closed.`; withdrawn: `Ana Silva withdrew her application.`; declined: `You already declined this application.`; accepted: `You already accepted this application.` | 794 (`answeredOrClosed`, 709; `appClosedForDev`, 685) |
-| 4 | Accept: joinRefusal (as the developer: no key check; rejoin for an ask) | e.g. `This test was stopped, so your Accept didn't go through.`, `This test is full.`, `Ana Silva can't join more tests right now.` The paused line (`This test isn't taking new testers right now, so your Accept didn't go through.`) shows **only in a race**: the route refuses a held or suspended developer and a team-paused test first. The block lines likewise (step 2 says them first). | 797 |
-| 5 | Box: Ana's rating changed since the row showed it, the listing changed, other changes | stop-once box | 803 |
-| 6 | Decline: save (only if still pending) | lost race: silent, or step 3's line | `declineApplication`, 835 |
-| 7 | Accept: joinRefusal again (something changed while the box showed) | as step 4 | 818 |
-| 7 | Accept: the join (`joinTest`) | no free key: `No access key is free right now, so this test can't take another tester until the developer adds one.`; withdrawn a moment ago: step 3's line | 827 |
+| 0 | Not her test / no such application | `That application doesn't exist.` | 764 |
+| 1 | Decline on one already withdrawn, closed or declined | silent | 771 |
+| 2 | Accept: Nora blocked Ana | `You blocked Ana Silva, so your Accept didn't go through.` | 775 (`ownBlockStop`, blocks.ts:49) |
+| 2 | Accept: Ana blocked Nora (still pending) | `Ana Silva's application was closed.` | 778 |
+| 3 | No longer pending | closed: `Ana Silva's application closed when the test was stopped at 3:05 PM.` / `… when joining closed (Open until passed) on Nov 20, 2026.` / `… when the test became invite only at 3:05 PM.` / `… when you changed the listing in another tab at 3:05 PM.` / (old rows) `… when the test filled up at 3:05 PM.` / a block: `Ana Silva's application was closed.`; withdrawn: `Ana Silva withdrew her application.`; declined: `You already declined this application.`; accepted: `You already accepted this application.` | 781 (`answeredOrClosed`, 709; `appClosedForDev`, 685) |
+| 4 | Accept: joinRefusal (as the developer: no key check; rejoin for an ask) | e.g. `This test was stopped, so your Accept didn't go through.`, `This test is full.`, `Ana Silva can't join more tests right now.` The paused line (`This test isn't taking new testers right now, so your Accept didn't go through.`) shows **only in a race**: the route refuses a held or suspended developer and a team-paused test first. The block lines likewise (step 2 says them first). | 784 |
+| 5 | Box: Ana's rating changed since the row showed it, the listing changed, other changes | stop-once box | 790 |
+| 6 | Decline: save (only if still pending) | lost race: silent, or step 3's line | `declineApplication`, 829 |
+| 7 | Accept: joinRefusal again (something changed while the box showed) | as step 4 | 805 |
+| 7 | Accept: the join (`joinTest`) | no free key: `No access key is free right now, so this test can't take another tester until the developer adds one.`; withdrawn a moment ago: step 3's line | 814 |
 
 **Writes / bells.**
 
 * Decline: the application → "declined". Ana: `Your application to “Harbor Run” wasn't accepted` (`Thanks for applying. There are other tests to find.`) or
   `Your ask to rejoin “Harbor Run” wasn't accepted` (`The developer didn't accept your ask to rejoin.`), in her "Joined" entry.
-* Accept: the application → "accepted", the contract (as Join). Ana, always emailed (`tellAccepted`, joining.ts:748): `You're in: Harbor Run` (`You're in:
+* Accept: the application → "accepted", the contract (as Join). Ana, always emailed (joining.ts:816): `You're in: Harbor Run` (`You're in:
   Harbor Run. Your contract: …`) or `You're back in Harbor Run: your deadline is Dec 14.` (with `Your session is restored on the current listing: …`). An ask's
   result line for Nora: `Ana Silva rejoined: her deadline is Dec 14, 11:59 PM.` No "joined" bell for Nora (she did it herself).
 
@@ -261,16 +261,16 @@ joining a waiting applicant and the emails come after the commit.
 | 2 | Every ticked tester rated this test | `Ana Silva rated this test, so she can't join it again.` | `ratersAmong`, invites.ts:423 |
 | 2 | Some did | a line each in the done message: `Your Invite didn't go through for Ana Silva: Ana Silva rated this test, so she can't join it again.` | same |
 | 3 | (worked out for step 6) what changed since the panel loaded | box lines: `The test's requirements changed: Devices: Windows PC → iPad`, a rating change, `Ana Silva joined this test, so she's no longer in your invite list`, `Ana Silva can't be invited right now`, `Ana Silva is no longer in your list`, `Ana Silva can't join more tests right now` | `changesSincePanel`, invites.ts:438 |
-| 4 | Per ticked tester, in order (`whyNotInvited`, invites.ts:492): already in / already invited | silent (left out) | |
+| 4 | Per ticked tester, in order (`whyNotInvited`, invites.ts:494): already in / already invited | silent (left out) | |
 | 4 | her application or ask the page showed | `Ana Silva applied: answer her in Needs you.` | |
 | 4 | Nora blocked her | `You blocked Ana Silva, so your Invite didn't go through.` (Invite anyway: `… your Invite anyway …`) | |
 | 4 | account closed / suspended or she blocked Nora / 10 tests | `Ana Silva's account was closed, so she can't be invited.` / `Ana Silva can't be invited right now.` / `Ana Silva can't join more tests right now.` (`inviteTesterRefusal`, rules.ts) | |
 | 4 | 2 invites to her on this test in 24 hours | `Ana Silva: you've invited her to this test 2 times today. You can invite her again tomorrow.` | |
-| 5 | Over 100 invites in 24 hours across Nora's tests | `You can send up to 100 invites a day. You have 3 left today.` / `You've sent 100 invites today. You can invite more tomorrow.` | `dailyInviteLimit`, invites.ts:520 |
+| 5 | Over 100 invites in 24 hours across Nora's tests | `You can send up to 100 invites a day. You have 3 left today.` / `You've sent 100 invites today. You can invite more tomorrow.` | `dailyInviteLimit`, invites.ts:522 |
 | 6 | Box | stop-once box (a ticked tester's new application is not a box line: it joins her below) | invites.ts:374 |
 | 7 | Someone ticked misses a need, not Invite anyway | the Invite anyway box: `Ana Silva doesn't list a device this test needs (iPad)` | invites.ts:377 |
 | 8 | The invites and Nora's line `You invited Ana Silva and Ben Cole` | | invites.ts:380 |
-| 9 | After the commit: a ticked tester with a pending application or ask joins at once, as Accept (`matchInviteAndAsk`, joining.ts:1100) | done message: `Ana Silva had applied: she joined.` / `Ben Cole had asked to rejoin: he's back in.`; refused: the joinRefusal line, e.g. `This test is full.`; no key: `Ana Silva: no access key is free right now, …` | `joinWaitingApplicants`, invites.ts:531 |
+| 9 | After the commit: a ticked tester with a pending application or ask joins at once, as Accept (`matchInviteAndAsk`, joining.ts:1094) | done message: `Ana Silva had applied: she joined.` / `Ben Cole had asked to rejoin: he's back in.`; refused: the joinRefusal line, e.g. `This test is full.`; no key: `Ana Silva: no access key is free right now, …` | `joinWaitingApplicants`, invites.ts:533 |
 | 10 | Bells | each invited tester (not those who joined): `Nora Lane invited you to “Harbor Run”` (`Nora Lane invited you to test “Harbor Run”.`, `What you get: …`, `Open it and press Join to join on these terms.`) | invites.ts:387 |
 | 11 | Done message | `Invited Ana Silva and Ben Cole.` + the lines above; nothing at all: `Everyone you ticked was already invited or joined.` | invites.ts:397 |
 
@@ -280,18 +280,18 @@ invite never holds a spot: any number can be open; the first to join takes the s
 
 ### 3.3 Cancel invite
 
-Starts at `cancelInvite`, `src/lib/server/invites.ts:568` (route `case "cancel-invite"`, line 181).
+Starts at `cancelInvite`, `src/lib/server/invites.ts:570` (route `case "cancel-invite"`, line 181).
 
 | Step | When | Exact words | Line |
 |---|---|---|---|
-| 0 | No such invite on this test | `That invite doesn't exist.` | 572 |
-| 1 | Ana said No thanks, or it was cancelled/closed | silent | 573 |
-| 2 | Ana joined | `She already joined.` | 593 |
-| 2 | Old invites only: re-sent by an edit | `This invite is no longer valid: it was re-sent on the new listing.` | 593 |
-| 3 | Box: Ana's rating changed, another tab's invite action on her, other changes | stop-once box | 594 |
-| 4 | Lost race: joined a moment ago → `She already joined.`; declined a moment ago → silent | | 597 |
+| 0 | No such invite on this test | `That invite doesn't exist.` | 574 |
+| 1 | Ana said No thanks, or it was cancelled/closed | silent | 575 |
+| 2 | Ana joined | `She already joined.` | 595 |
+| 2 | Old invites only: re-sent by an edit | `This invite is no longer valid: it was re-sent on the new listing.` | 595 |
+| 3 | Box: Ana's rating changed, another tab's invite action on her, other changes | stop-once box | 596 |
+| 4 | Lost race: joined a moment ago → `She already joined.`; declined a moment ago → silent | | 599 |
 
-**Writes / bells.** The invite → "cancelled". Ana: `Your invite to “Harbor Run” was closed.` (`tellInvitesClosed`, invites.ts:653, in "Applications and
+**Writes / bells.** The invite → "cancelled". Ana: `Your invite to “Harbor Run” was closed.` (`tellInvitesClosed`, invites.ts:655, in "Applications and
 invites"; never why). Cancel invite is never limited.
 
 ---
@@ -378,7 +378,7 @@ was closed.`
 `editTest`, `src/lib/server/tests.ts:381`; the part about invites and applications runs after the Save's transaction, from tests.ts:631, in this order:
 
 1. New terms offered to working testers (`offerNewTerms`).
-2. Pending applications close (`closeApplicationsAfterEdit`, joining.ts:938) when the Save switched to invite only (reason "invite_only": `“Harbor Run” is now
+2. Pending applications close (`closeApplicationsAfterEdit`, joining.ts:932) when the Save switched to invite only (reason "invite_only": `“Harbor Run” is now
    invite only, so your application was closed.`) or changed a closing field (`CLOSING_FIELDS`: NDA, prices, parts, questions, devices, languages,
    description, build link; reason "listing": `“Harbor Run”'s listing changed, so your application was closed. You can apply again on the current listing.`).
    Never on the NDA-only edit of a paused, stopped or closed test. Switching to invite only wins over a closing field.
@@ -394,11 +394,11 @@ once for it.
 
 ### 5.7 Switching who can join to "Anyone can join"
 
-`onSwitchToAnyone`, `src/lib/server/joining.ts:872`. Each pending application, oldest first:
+`onSwitchToAnyone`, `src/lib/server/joining.ts:866`. Each pending application, oldest first:
 
 1. The test is full → stop; the rest keep waiting (untold).
 2. The listing changed since she applied (anything but Who can join and spots) → the application is marked changed and Ana is told `“Harbor Run” changed since
-   you applied: join on the current listing, or withdraw your application.` (`markApplicationChanged`, joining.ts:918).
+   you applied: join on the current listing, or withdraw your application.` (`markApplicationChanged`, joining.ts:912).
 3. Her profile misses a need → skipped (keeps waiting, untold).
 4. joinRefusal (no key check) → skipped (keeps waiting, untold).
 5. The join, as Nora's acceptance → Ana: `You're in: Harbor Run` (always). No free key → she and everyone after her wait; Nora's Save note and live line:
