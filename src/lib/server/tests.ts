@@ -936,6 +936,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
     invitesClosed = await (await import("./invites")).openInviteIds({ testId }, tx);
     await tx.invite.updateMany({ where: { testId, status: "sent" }, data: { status: "cancelled" } }); // (batch 16 section 32) a stop closes open invites
     await recordEvent(tx, testId, "stopped", stopEventText(reason), true, { status: "stopped", stoppedAt: new Date() });
+    await (await import("./holds")).shiftAtStop(tx, testId); // (Owner, Dec 9 2026) stopped during the team's pause: the Stop is its lift
     return cs;
   });
   if (!contracts) return { stopped: true, testers: 0, already: true };

@@ -63,7 +63,7 @@ async function finalRefusal(userId: string, contractId: string, action: string, 
     // Cancel call too: the one line by why (stopped / ended / your part ended), naming the press.
     const press = workOverPress(action, body);
     throw new HttpError(409, "work_over", workOverLine(ctx, dev, fmtDate, press), { failed: press, top: true });
-  }
+  } 
   // A call press on a part the tester's OWN block ended: "You blocked Nora Lane, so your Request a time didn't go through."
   if (c.endKind === "blocked" && CALL_PRESS_ACTIONS.has(action)) await (await import("@/lib/server/blocks")).ownBlockStop(userId, c.test.developerId, dev, workOverPress(action, body));
   // Left, rated or blocked: "Your part in this test has ended, so your Send didn't go through."
@@ -72,18 +72,18 @@ async function finalRefusal(userId: string, contractId: string, action: string, 
 
 /**
  * A paused test (the developer's payment hold, chargeback hold or suspension; the team's pause too, PAUSE_DEFAULTS.teamPauseSameRules): testers can't send
- * work. Drafts can still be written and saved (PAUSE_DEFAULTS.draftsEditable: the written answers are kept as typed, recordings can be uploaded); Charge / Let it go, disputes,
- * rating, leaving and cancelling calls carry on under their own rules. Testers read only "paused". Chat isn't closed by a paused test: only while a
- * person is restricted, or the team paused the test (messages.ts).
+ * work. The sends (Send Answers, Add to this answer, a recording's Send / Add) check "paused" in their own pass under the test's lock (ONE_PASS), so they
+ * never come here. Drafts can still be written and saved (PAUSE_DEFAULTS.draftsEditable, on: the written answers are kept as typed, recordings can be
+ * uploaded); Charge / Let it go and Rate follow the money freeze (moneyFrozen) in their own code; disputes, leaving and cancelling calls carry on under
+ * their own rules. Testers read only "paused". Chat isn't closed by a paused test: only while a person is restricted, or the team paused the test (messages.ts).
  */
-const SEND_ACTIONS = new Set(["written", "written-add", "recording-send"]); // adding follows Send's windows
 const DRAFT_ACTIONS = new Set(["recording-start", "recording-done", "recording-remove"]);
-/** Flow: a soft refusal ("paused"), after finalRefusal and before the NDA block. */
-async function pausedRefusal(userId: string, contractId: string, action: string, body: Record<string, unknown>) {
-  if (!SEND_ACTIONS.has(action) && !DRAFT_ACTIONS.has(action)) return;
+/** Flow: a soft refusal ("paused") for a draft recording's upload steps, only if drafts stop being editable during a pause (PAUSE_DEFAULTS.draftsEditable off). */
+async function draftPausedRefusal(userId: string, contractId: string, action: string, body: Record<string, unknown>) {
+  if (PAUSE_DEFAULTS.draftsEditable || !DRAFT_ACTIONS.has(action)) return;
   const c = await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true, test: { select: { adminPausedAt: true, developer: { select: { devSuspendedAt: true, holdStartedAt: true } } } } } });
   if (!c || c.testerId !== userId || !testerPaused(c.test.developer, c.test)) return;
-  if (SEND_ACTIONS.has(action) || !PAUSE_DEFAULTS.draftsEditable) throw new HttpError(409, "paused", RF.pressRefused(RF.PAUSED_CAUSE, workOverPress(action, body)));
+  throw new HttpError(409, "paused", RF.pressRefused(RF.PAUSED_CAUSE, workOverPress(action, body)));
 }
 
 /**
@@ -161,7 +161,7 @@ async function limitedUser(req: Request, contractId: string, action: string) {
  *   1. The account: limitedUser, else requireActive (another account, the page opened elsewhere, signed out, suspended); readJson (a bad or too large body: red).
  *   2. Silent: alreadyDone (already what the press wanted: ok, before any refusal).
  *   3. Final refusals: finalRefusal (not for the one-pass presses or starting an upload).
- *   4. Soft refusals: pausedRefusal; Dispute's own refusals (disputeRefusalsFirst: final, then soft); ndaBlockFirst (not for Rate, Leave, the notice, the pill,
+ *   4. Soft refusals: draftPausedRefusal (off while drafts stay editable); Dispute's own refusals (disputeRefusalsFirst: final, then soft); ndaBlockFirst (not for Rate, Leave, the notice, the pill,
  *      an upload under way, or the one-pass presses).
  *   5. Stop-once box: stateMoment (an unseen end of her work, with testerGate's lines).
  *   6. run(): the press's own function: its own refusals, its gate (testerGate / testerSendGate / testerTermsGate / decideTerms' box), its red mistakes, the action.
@@ -182,7 +182,7 @@ export async function POST(req: Request, { params }: Ctx) {
     const onePass = ONE_PASS.has(action);
     // Starting an upload checks part over in its own pass under the lock too (startRecording), with the same line.
     if (!onePass && action !== "recording-start") await finalRefusal(u.id, id, action, body);
-    if (!onePass) await pausedRefusal(u.id, id, action, body);
+    await draftPausedRefusal(u.id, id, action, body); // the upload steps only; the sends check "paused" in their own pass
     // Dispute's refusals (final, then soft) before the NDA block, the stop-moment box and its red reason check.
     if (action === "dispute") await (await import("@/lib/server/payments")).disputeRefusalsFirst(u, id, body);
     // An NDA change (any kind) not yet acknowledged blocks every press here but Rate and Leave, the

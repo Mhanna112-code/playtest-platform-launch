@@ -197,9 +197,10 @@ export async function testerRateLiftedAt(contractId: string, now = new Date()) {
  * added (their Charge is hidden while suspended). null while the test's close-out isn't known.
  * (Owner, Nov 11, §378; replaces batch 17 §19's one Pay more date per test and the developer side's own date) ONE date per piece for all of them: the tester's
  * Charge / Let it go, the developer's Pay AND Pay more on that piece close together, on this date (the tester's suspension time included). (Owner, Nov 11, §386 A)
- * Moved by every span the money was frozen, after the test closed too (moneySpans). `dispute`: the dispute window, which keeps the test's spans (testSpans).
+ * Moved by every span the money was frozen, after the test closed too (moneySpans). (Owner, Dec 9 2026; replaces §386 A's separate dispute window) The tester's
+ * Dispute closes on this same date: one closing date per piece for everything.
  */
-export async function pieceCloseOut(where: { submissionId?: string | null; callId?: string | null }, now = new Date(), /** (§386 A) the dispute window: testSpans, as before */ opts: { dispute?: boolean } = {}) {
+export async function pieceCloseOut(where: { submissionId?: string | null; callId?: string | null }, now = new Date()) {
   const piece = where.submissionId
     ? await db.submission.findUnique({ where: { id: where.submissionId }, select: { payBy: true, contractId: true, stintDueAt: true } })
     : where.callId
@@ -215,8 +216,8 @@ export async function pieceCloseOut(where: { submissionId?: string | null; callI
   const opens = piece.payBy ? reviewDateOf(piece.payBy, pieceDueAt(piece, c)) : null; // (§313c) an earlier stint's work keeps its deadline
   const tEvents = await db.accountEvent.findMany({ where: { userId: c.tester.id, kind: { in: ["suspended", "reinstated"] } }, select: { kind: true, side: true, createdAt: true } });
   const from = new Date(Math.min(base.getTime(), opens?.getTime() ?? Infinity));
-  // (Owner, Nov 11, §386 A) The money window moves by every frozen span, after the test closed too (moneySpans); a dispute keeps the test's spans (§358).
-  const spans = mergeSpans([...(await (opts.dispute ? testSpans(t, from, now) : moneySpans(t, from, now))), ...testerPauseSpans(tEvents, c.tester.testerSuspendedAt, now)]);
+  // (Owner, Nov 11, §386 A) The window moves by every frozen span, after the test closed too (moneySpans); (Owner, Dec 9 2026) Dispute's too.
+  const spans = mergeSpans([...(await moneySpans(t, from, now)), ...testerPauseSpans(tEvents, c.tester.testerSuspendedAt, now)]);
   const testEnd = windowEnd(base, spans, now, CLOSE_OUT_DAYS).end;
   const own = opens ? windowEnd(opens, spans, now, CLOSE_OUT_DAYS).end : null;
   return own && own > testEnd ? own : testEnd;
@@ -236,8 +237,9 @@ export async function callChargeAt(callId: string, now = new Date()) {
   if (!t) return x.payBy;
   const from = x.measuredAt && x.measuredAt > x.startsAt ? x.measuredAt : x.startsAt;
   const end = workEndOf(t)?.getTime() ?? Infinity;
-  // Only what shiftAfterPause never moved: a freeze that began after the work ended (outages move payBy themselves when recorded: left out).
-  const spans = (await moneySpans(t, from, now, false)).filter((sp) => sp.start >= end && sp.end > from.getTime());
+  // (Owner, Dec 9 2026) A freeze that began after the work ended moves payBy itself when it lifts (shiftAfterPause), like one during the work: only one still ON
+  // moves the date here, day by day, until its lift moves payBy. Outages move payBy themselves when recorded (left out).
+  const spans = (await moneySpans(t, from, now, false)).filter((sp) => sp.open && sp.start >= end && sp.end > from.getTime());
   if (!spans.length || x.payBy <= from) return x.payBy;
   return windowEnd(from, mergeSpans(spans), now, (x.payBy.getTime() - from.getTime()) / DAY).end;
 }
@@ -258,7 +260,7 @@ export async function disputesClosed(contractId: string, pieces: { submissionId?
   for (const k of keys) {
     const id = (k.submissionId ?? k.callId)!;
     if (rated) { out.set(id, RATED_NO_DISPUTE); continue; }
-    const at = await pieceCloseOut(k, now, { dispute: true }); // (§386 A) unchanged by the money freeze
+    const at = await pieceCloseOut(k, now); // (Owner, Dec 9 2026) the piece's one closing date, as Charge
     if (closedOut(at, now)) out.set(id, disputeClosedLine(fmtDate(at!)));
   }
   return out;

@@ -503,7 +503,9 @@ export async function unpauseTest(testId: string, adminId: string | null = null,
     await tx.test.update({ where: { id: testId }, data: { adminPausedAt: null, adminNote: "", ...(dev.holdStartedAt || dev.devSuspendedAt ? {} : { pausedSince: null }) } });
     // (Owner, Nov 11, §389) The same clock shift as a hold lift or a reinstatement: nothing while the developer's own hold or suspension still pauses it; when this is
     // the last pause, every date once by the whole paused stretch (from the test's pausedSince).
-    await shiftAfterPause(tx, cur, start, now, [dev.holdStartedAt, dev.devSuspendedAt]);
+    // (Owner, Dec 9 2026) Only the developer's own hold or suspension can begin after the work ended (pauseTest refuses a closed test); a team pause recorded
+    // after it anyway moves nothing (§358).
+    if ((await import("@/lib/pause")).startedBeforeWorkEnd(start, cur)) await shiftAfterPause(tx, cur, start, now, [dev.holdStartedAt, dev.devSuspendedAt]);
     await recordEvent(tx, testId, "resumed", "The team lifted the pause on this test", true);
     if (adminId) await recordAction(tx, adminId, "unpause-test", testId, now);
     return null;
@@ -554,6 +556,7 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
     // (Owner, Oct 28) Not an "admin decision" stop-once: a stopped test always refuses what it does not allow, and Pay / Reject carry on without stopping for it.
     const ev = await recordEvent(tx, testId, "stopped", "The team stopped this test", true, { status: "stopped", stoppedAt: new Date(), adminStoppedAt: new Date(), adminNote: note, adminStoppedById: adminId });
     await keepNote(tx, ev.id, adminId, note); // (batch 35 §49) the stop's own reason, with its event
+    await (await import("./holds")).shiftAtStop(tx, testId); // (Owner, Dec 9 2026) stopped during the team's pause: the Stop is its lift
     return list;
   });
   await tellCancelled(cancelled, "stopped");

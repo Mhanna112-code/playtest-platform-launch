@@ -43,6 +43,7 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
     appsClosed = await (await import("./blocks")).pendingAppIds(testId, tx); // (Owner, Nov 22 2026) each applicant is told (below)
     await tx.application.updateMany({ where: { testId, status: "pending" }, data: { status: "closed", closedReason: "stopped", decidedAt: now } });
     await recordEvent(tx, testId, "stopped", "The test was closed", true, { status: "stopped", stoppedAt: now, pauseClosedAt: now, pauseClosedReason: reason, ...(by === "admin" ? { adminStoppedById: adminId } : {}) });
+    await (await import("./holds")).shiftAtStop(tx, testId); // (Owner, Dec 9 2026) closed during the team's pause: the closure is its lift
     return list;
   });
   if (!cancelled) return { closed: false };

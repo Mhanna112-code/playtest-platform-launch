@@ -2,7 +2,7 @@ import { beforeLock } from "./pressRace";
 import { chooseOwnText } from "./actionText";
 import { randomUUID } from "node:crypto";
 import { startedBeforeWorkEnd } from "@/lib/pause";
-import { TESTER_FROZEN_CAUSE, moneyFrozen } from "@/lib/restricted";
+import { TESTER_FROZEN_CAUSE, moneyFrozen, teamPausedNow } from "@/lib/restricted";
 import * as RF from "@/lib/refusal";
 import { Prisma, type Payment } from "@prisma/client";
 import { T } from "@/lib/tz";
@@ -196,7 +196,8 @@ export async function resumeTests(tx: Prisma.TransactionClient, devId: string, s
   const tests = await tx.test.findMany({ where: { developerId: devId } });
   const running: string[] = [];
   for (const t of tests) {
-    const still = [...others, t.adminPausedAt];
+    // (Owner, Dec 9 2026) A stopped test's team pause no longer pauses it (teamPausedNow): the developer's lift moves its dates by the whole stretch (shiftAtStop).
+    const still = [...others, teamPausedNow(t) ? t.adminPausedAt : null];
     await shiftAfterPause(tx, t, start, now, still);
     if (still.some(Boolean)) continue;
     running.push(t.id);
@@ -279,11 +280,13 @@ export async function shiftPieceDeadlines(tx: Prisma.TransactionClient, where: P
  * the nearest day end; review clocks and call pay dates exact).
  */
 export async function shiftAfterPause(tx: Prisma.TransactionClient, t0: { id: string; status: string; openUntil: Date | null; workEndedAt?: Date | null; pauseClosedAt?: Date | null; pausedSince?: Date | null }, lifted: Date, now: Date, others: (Date | null | undefined)[] = []) {
-  // (Owner, Nov 9, §358) A pause that began after the test's work ended (closed, or the 7-day pause closure) never paused it: it neither moves dates nor holds
-  // them back. (Owner, Nov 11, §386 A) Its frozen time still moves each piece's money window (pieceCloseOut counts it from the piece's own dates, which stay).
+  // (Owner, Dec 9 2026; replaces §358's "neither moves dates" here) A pause that began after the test's work ended (only the developer's own hold or suspension
+  // can: the team can't pause a closed or stopped test) moves each piece's review clock (payBy) and stamped deadline at its lift too, like one during the work:
+  // the developer gets back the review days it took, and the tester's Charge opens that much later. Open until and the working deadlines are already behind it,
+  // so the test's own close doesn't move. (§386 A) Its frozen time also moves each piece's closing date (pieceCloseOut counts it after the piece's dates).
   const t = t0;
-  if (others.some((d) => !!d && startedBeforeWorkEnd(d, t))) return 0; // (§389) still paused another way: nothing moves yet
-  const starts = [lifted, t.pausedSince].filter((d): d is Date => !!d && startedBeforeWorkEnd(d, t));
+  if (others.some(Boolean)) return 0; // (§389) still paused another way: nothing moves yet
+  const starts = [lifted, t.pausedSince].filter((d): d is Date => !!d);
   if (!starts.length) return 0;
   const start = new Date(Math.min(...starts.map((d) => d.getTime()))); // (§389) the whole stretch
   const ms = pauseShiftMs(start, now);
@@ -305,14 +308,31 @@ export async function shiftAfterPause(tx: Prisma.TransactionClient, t0: { id: st
     const by = pauseShiftMs(x.updatedAt > start ? x.updatedAt : start, now); // only the part of the stretch after it was sent
     // (Owner, Nov 9, §346) Like a deadline: a review date (Charge open) that had already passed when the pause began stays. Its close-out counts the whole pause
     // after it (pieceCloseOut); moving it too counted the pause twice (a 48 h pause moved the close-out ~60 h).
-    if (by > 0) await tx.submission.update({ where: { id: x.id }, data: { payBy: x.payBy && x.payBy > start ? later(x.payBy, by) : x.payBy, choiceBy: later(x.choiceBy, by) } });
+    if (by > 0) await tx.submission.update({ where: { id: x.id }, data: { payBy: x.payBy && x.payBy > start ? later(x.payBy, by) : x.payBy, choiceBy: x.choiceBy && x.choiceBy > start ? later(x.choiceBy, by) : x.choiceBy } }); // (Dec 9 2026) a passed choiceBy stays, like payBy
   }
   // (Batch 15 sections 15 and 40) A call's review clock moves the same way (only the part of the pause after its length was final).
   for (const x of await tx.call.findMany({ where: { contract: { testId: t.id }, review: null, payBy: { not: null }, status: "booked" } })) {
     const from = x.measuredAt && x.measuredAt > start ? x.measuredAt : start;
     const by = pauseShiftMs(from, now);
-    if (by > 0) await tx.call.update({ where: { id: x.id }, data: { payBy: x.payBy && x.payBy > start ? later(x.payBy, by) : x.payBy, choiceBy: later(x.choiceBy, by) } }); // (§346)
+    if (by > 0) await tx.call.update({ where: { id: x.id }, data: { payBy: x.payBy && x.payBy > start ? later(x.payBy, by) : x.payBy, choiceBy: x.choiceBy && x.choiceBy > start ? later(x.choiceBy, by) : x.choiceBy } }); // (§346)
   }
+  return ms;
+}
+
+/**
+ * (Owner, Dec 9 2026) A test stopped while the TEAM's pause is on (the developer's Stop, the team's Stop, the 7-day pause closure): that pause can never be lifted
+ * (unpauseTest refuses a stopped test), so the Stop is its lift. Every sent piece's review clock (payBy) and stamped deadline move once, by the paused stretch up to
+ * the Stop (shiftAfterPause: the working testers' deadlines are already ended, Open until doesn't move on a stopped test, so the test's own close doesn't move).
+ * The developer gets back the review days the pause took; the tester's Charge opens that much later. A developer hold or suspension still on at the Stop: nothing
+ * moves now, its own lift moves every date by the whole stretch (owner's decision, Dec 9 2026: as before). Called inside the Stop's transaction, after the test
+ * is marked stopped.
+ */
+export async function shiftAtStop(tx: Prisma.TransactionClient, testId: string) {
+  const t = await tx.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: { select: { holdStartedAt: true, devSuspendedAt: true } } } });
+  if (t.status !== "stopped" || !t.adminPausedAt || !t.stoppedAt) return 0;
+  if (t.developer.holdStartedAt || t.developer.devSuspendedAt) return 0; // the developer's own lift moves the whole stretch later (resumeTests)
+  const ms = await shiftAfterPause(tx, t, t.adminPausedAt, t.stoppedAt);
+  if (t.pausedSince) await tx.test.update({ where: { id: testId }, data: { pausedSince: null } }); // the clock ended at the Stop: a later lift never counts it again
   return ms;
 }
 

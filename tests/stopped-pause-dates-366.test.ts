@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { chargeOpensAt, pieceDueAt } from "@/lib/rules";
+import { chargeOpensAt, movedDue, pieceDueAt } from "@/lib/rules";
 import { closeOutOf, pieceCloseOut } from "@/lib/server/closeOut";
 import { liftHoldIfClear, runDaily, shiftAfterPause, startHold } from "@/lib/server/holds";
 import { closePausedTest } from "@/lib/server/pauseClosure";
@@ -59,8 +59,12 @@ describe("§366 A: a team-paused test that is then stopped reaches its close-out
     const a = await closeOutOf(w.testId, now), b = await closeOutOf(w.testId, new Date(now.getTime() + 10 * D));
     expect(a!.getTime()).toBe(base + 14 * D);
     expect(b!.getTime()).toBe(a!.getTime());
-    // The review date passes: the daily job opens Charge (the stopped test isn't "paused" any more).
-    await db.submission.update({ where: { id: w.sub.id }, data: { payBy: new Date(Date.now() - D) } });
+    // (Owner, Dec 9 2026, decision 1) The Stop is the team pause's lift: the piece is stamped with the deadline it was sent under, moved by the paused stretch
+    // (adminPausedAt → the Stop), rounded up to the end of its day; its Charge counts to that stamp.
+    const stamped = await db.submission.findUniqueOrThrow({ where: { id: w.sub.id } });
+    expect(stamped.stintDueAt).toEqual(movedDue(t.contracts[0].dueAt, t.stoppedAt!.getTime() - t.adminPausedAt!.getTime()));
+    // The review date passes: the daily job opens Charge (the stopped test isn't "paused" any more). (Decision 1: the stamp too, as the Stop set one.)
+    await db.submission.update({ where: { id: w.sub.id }, data: { payBy: new Date(Date.now() - D), stintDueAt: new Date(Date.now() - D) } });
     await db.contract.update({ where: { id: w.sessionId }, data: { dueAt: new Date(Date.now() - D) } });
     await runDaily();
     expect((await db.submission.findUniqueOrThrow({ where: { id: w.sub.id } })).choiceOfferedAt).not.toBeNull();
@@ -70,8 +74,8 @@ describe("§366 A: a team-paused test that is then stopped reaches its close-out
   });
 });
 
-describe("§366 B: a hold starting after a Stop moves none of the test's dates", () => {
-  it("close-out and review dates stay; the lift moves nothing", async () => {
+describe("§366 B: a hold starting after a Stop moves none of the test's own dates", () => {
+  it("the close-out stays; (decision 4) the lift moves the piece's review clock and stamps its deadline", async () => {
     const s = await setup();
     const j = await joined(s.testId);
     expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ["The harbour level was clear and the boats handled well.", "Fine."], seenAt: seen(), confirmed: true })).status).toBe(200);
@@ -86,10 +90,18 @@ describe("§366 B: a hold starting after a Stop moves none of the test's dates",
     await db.user.update({ where: { id: s.dev.user.id }, data: { holdStartedAt: new Date(Date.now() - H) } });
     await db.accountEvent.updateMany({ where: { userId: s.dev.user.id, kind: "hold" }, data: { createdAt: new Date(Date.now() - H) } });
     expect((await closeOutOf(s.testId))?.getTime()).toBe(before?.getTime());
+    const holdStart = (await db.user.findUniqueOrThrow({ where: { id: s.dev.user.id } })).holdStartedAt!.getTime();
+    const liftFrom = Date.now();
     await liftHoldIfClear(s.dev.user.id);
     const sub1 = await db.submission.findUniqueOrThrow({ where: { id: sub0.id } });
-    expect(sub1.payBy?.getTime()).toBe(sub0.payBy?.getTime());
-    expect(sub1.stintDueAt).toBeNull();
+    // (Owner, Dec 9 2026, decision 4; was: payBy unchanged, no stamp) The hold began after the Stop, so after the work ended: its lift now moves the review clock
+    // by the whole hold (the piece was sent before it), and stamps the ended tester's deadline moved by it (rounded up to its day's end). The close-out stays.
+    const moved = sub1.payBy!.getTime() - sub0.payBy!.getTime();
+    expect(moved).toBeGreaterThanOrEqual(liftFrom - holdStart);
+    expect(moved).toBeLessThanOrEqual(Date.now() - holdStart);
+    const due = (await db.contract.findUniqueOrThrow({ where: { id: j.sessionId } })).dueAt;
+    expect(sub1.stintDueAt).not.toBeNull();
+    expect(sub1.stintDueAt!.getTime()).toBeGreaterThanOrEqual(due.getTime());
     expect((await closeOutOf(s.testId))?.getTime()).toBe(before?.getTime());
   });
 });

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { awayAction, confirmStart } from "@/lib/server/confirm";
 import { confirmAllPress } from "@/lib/server/confirmAll";
-import { autoChargeCalls, liftHoldIfClear, runSweep, startHold } from "@/lib/server/holds";
+import { autoChargeCalls, liftHoldIfClear, runSweep, shiftAfterPause, startHold } from "@/lib/server/holds";
 import { callChargeAt, closeOutOf, pieceCloseOut, testerRatingClosesAt } from "@/lib/server/closeOut";
 import { testerRateState } from "@/lib/server/ratings";
 import { deleteAccount, pauseTest, reinstateAccount } from "@/lib/server/restrictions";
@@ -209,7 +209,8 @@ describe("§386 A windows: a freeze after the test closed moves each piece's own
     await suspended(w.dev.user.id, "11-02", "11-03");
     expect(await pieceCloseOut({ submissionId: w.early.id }, NOW)).toEqual(at("11-16"));
     expect(await closeOutOf(w.testId, NOW)).toEqual(at("11-15"));
-    expect(await pieceCloseOut({ submissionId: w.early.id }, NOW, { dispute: true })).toEqual(at("11-15"));
+    // (Owner, Dec 9 2026, decision 3: dispute = charge; was its own window, Nov 15) Dispute closes on the piece's one closing date, with Charge.
+    expect(await pieceCloseOut({ submissionId: w.early.id }, NOW)).toEqual(at("11-16"));
   });
 
   it("a 1-day suspension on Nov 10 moves the piece whose Charge opened Nov 8 to Nov 23", async () => {
@@ -338,7 +339,13 @@ describe("§386 G the automatic call charge after a freeze that began after the 
     const lifted = new Date(T0 - 60_000);
     await db.accountEvent.create({ data: { userId: w.dev.user.id, kind: "suspended", side: "developer", createdAt: new Date(T0 - 2 * DAY) } });
     await db.accountEvent.create({ data: { userId: w.dev.user.id, kind: "reinstated", side: "developer", createdAt: lifted } });
-    expect((await callChargeAt(w.call.id, new Date(T0)))!.getTime()).toBe(lifted.getTime() + DAY);
+    // (Owner, Dec 9 2026, decision 4; was: callChargeAt added the lifted freeze itself) A lifted freeze no longer counts here: the lift moved payBy itself.
+    expect((await callChargeAt(w.call.id, new Date(T0)))!.getTime()).toBe(T0 - DAY); // rows alone, no lift run: the stored date
+    // The lift (reinstateAccount → resumeTests → shiftAfterPause) moves the call's payBy by the frozen time after its countdown started: the 2 days less a minute.
+    const t = await db.test.findUniqueOrThrow({ where: { id: w.testId } });
+    await db.$transaction((tx) => shiftAfterPause(tx, t, new Date(T0 - 2 * DAY), lifted));
+    expect((await db.call.findUniqueOrThrow({ where: { id: w.call.id } })).payBy!.getTime()).toBe(lifted.getTime() + DAY);
+    expect((await callChargeAt(w.call.id, new Date(T0)))!.getTime()).toBe(lifted.getTime() + DAY); // counted once
     await autoChargeCalls(new Date(T0));
     expect(await db.payment.count({ where: { callId: w.call.id } })).toBe(0);
     await autoChargeCalls(new Date(lifted.getTime() + DAY + 60_000));
