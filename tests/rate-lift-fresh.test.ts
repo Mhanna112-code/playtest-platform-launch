@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { ratingReminders } from "@/lib/server/ratings";
-import { testerRatingClosesAt } from "@/lib/server/closeOut";
+import { testerRateLiftedAt, testerRatingClosesAt } from "@/lib/server/closeOut";
 import { T, renderTimes } from "@/lib/tz";
 import { json, req } from "./helpers";
 import { joined, sact, seen, settle, setup } from "./fixtures";
@@ -12,6 +12,7 @@ import { pay, sentWork } from "./b15";
 // (Owner, Dec 2026) Rate reminders come back after a pause the way the tester's "Charge or let go" line does: when a freeze lifts (the team's pause, the
 // developer's hold or suspension, the tester's own suspension; for the developer, their own hold or suspension or the team's pause), ONE fresh reminder right
 // away (from the 5-minute sweep too), then the every-3-days repeats count from it. A freeze that ended before the last reminder changes nothing.
+// (Owner, Dec 10 2026) The tester's: a money freeze counts only when it hid her Rate (work waiting for review in it); otherwise her Rate stayed open.
 
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
@@ -40,7 +41,7 @@ async function testerRateOpen() {
 }
 
 describe("(Owner, Dec 2026) the tester's Rate reminder after a freeze lifts", () => {
-  it("before the test closes: a team pause and its lift give one fresh line from the sweep at once, the next only 3 days after it", async () => {
+  it("before the test closes: a team pause that hid her Rate (work waiting for review) gives one fresh line once her Rate is open again, the next only 3 days after it", async () => {
     const { w, prompted: P, lines } = await testerRateOpen();
     // Keep the test running (no close-out known) through the whole run.
     await db.test.update({ where: { id: w.testId }, data: { openUntil: new Date(Date.now() + 60 * DAY) } });
@@ -48,22 +49,43 @@ describe("(Owner, Dec 2026) the tester's Rate reminder after a freeze lifts", ()
     const t1 = new Date(P.getTime() + 3 * DAY);
     await at(t1, ratingReminders); // the first repeat (3 days after the prompt)
     expect(await lines()).toHaveLength(1);
+    // (Owner, Dec 10 2026) She sends more work right after it: its review date is a week ahead, so her Rate is disabled, and hidden once the pause begins.
+    const more = await db.submission.create({ data: { contractId: w.sessionId, kind: "recording", agreedCents: 1000, sentAt: new Date(t1.getTime() + HOUR), payBy: new Date(t1.getTime() + 8 * DAY) } });
     await teamPause(w.testId, new Date(t1.getTime() + 2 * HOUR));
     await at(new Date(t1.getTime() + 6 * HOUR), sweep);
-    await at(new Date(t1.getTime() + DAY), ratingReminders); // paused: her Rate is hidden
+    await at(new Date(t1.getTime() + DAY), ratingReminders); // paused with work waiting: her Rate is hidden
     expect(await lines()).toHaveLength(1);
     const L = new Date(t1.getTime() + DAY + HOUR);
     await db.testEvent.create({ data: { testId: w.testId, kind: "resumed", text: "The team lifted the pause on this test", createdAt: L } });
     await db.test.update({ where: { id: w.testId }, data: { adminPausedAt: null } });
-    await at(new Date(L.getTime() + 5 * MIN), sweep); // the sweep right after the lift: one fresh line
+    await at(new Date(L.getTime() + 5 * MIN), sweep); // lifted, but her Rate is still disabled (the work waits for review): no line yet
+    expect(await lines()).toHaveLength(1);
+    await db.review.create({ data: { contractId: w.sessionId, submissionId: more.id, amountCents: 1000, agreedCents: 1000, payKey: randomUUID(), createdAt: new Date(L.getTime() + HOUR) } });
+    const R = new Date(L.getTime() + 2 * HOUR);
+    await at(R, sweep); // reviewed: her Rate is open again, one fresh line
     expect(await lines()).toHaveLength(2);
     expect((await lines())[1]).toBe("Reminder: rate Nora Lane on “Harbor Run”");
-    await at(new Date(L.getTime() + 10 * MIN), sweep); // never twice
-    await at(new Date(L.getTime() + DAY), ratingReminders);
-    await at(new Date(L.getTime() + 2 * DAY), ratingReminders);
+    await at(new Date(R.getTime() + 10 * MIN), sweep); // never twice
+    await at(new Date(R.getTime() + DAY), ratingReminders);
+    await at(new Date(R.getTime() + 2 * DAY), ratingReminders);
     expect(await lines()).toHaveLength(2);
-    await at(new Date(L.getTime() + 3 * DAY), ratingReminders); // 3 days after the fresh line
+    await at(new Date(R.getTime() + 3 * DAY), ratingReminders); // 3 days after the fresh line
     expect(await lines()).toHaveLength(3);
+  }, 180_000);
+
+  it("(Owner, Dec 10 2026) a team pause while everything she sent was reviewed: her Rate stayed open, so no fresh line at the lift; the repeats go on", async () => {
+    const { w, prompted: P, lines } = await testerRateOpen();
+    await db.test.update({ where: { id: w.testId }, data: { openUntil: new Date(Date.now() + 60 * DAY) } });
+    const t1 = new Date(P.getTime() + 3 * DAY);
+    await at(t1, ratingReminders);
+    expect(await lines()).toHaveLength(1);
+    const L = new Date(t1.getTime() + DAY + HOUR);
+    await teamPause(w.testId, new Date(t1.getTime() + 2 * HOUR), L);
+    expect(await testerRateLiftedAt(w.sessionId, new Date(L.getTime() + 5 * MIN))).toBeNull();
+    await at(new Date(L.getTime() + 5 * MIN), sweep);
+    expect(await lines()).toHaveLength(1);
+    await at(new Date(t1.getTime() + 3 * DAY), ratingReminders); // the 3-day slot from her last line
+    expect(await lines()).toHaveLength(2);
   }, 180_000);
 
   it("after the test closed: a pause that both moved the date and lifted still gives ONE line, naming the new date", async () => {

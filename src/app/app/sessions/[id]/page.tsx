@@ -219,9 +219,10 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const rateState = myRating ? { kind: "rated" as const, line: "" } : await testerRateState(c.id);
   const rateBlock = rateState.kind === "open" ? "" : rateState.kind === "rated" ? "rated" : rateState.line;
   const rateWarn = await rateWarning(c.id);
-  // (Owner, Nov 11, §387 4) Rate says until when, next to its button ("Rate until Nov 25"); while the money is frozen the box is hidden with RATE_TEST_PAUSED.
+  // (Owner, Nov 11, §387 4) Rate says until when, next to its button ("Rate until Nov 25"). (Owner, Dec 10 2026) While the money is frozen the box shows unless
+  // work waits for review (then it is hidden with RATE_TEST_PAUSED); its date moves with the freeze, so its line reads FROZEN_WAITS_LINE, as Charge's and Dispute's.
   const rateCloses = rateState.kind === "open" || rateState.kind === "disabled" ? await testerRatingClosesAt(c.id, now) : null;
-  const rateBy = closesAhead(rateCloses, now) ? rateUntilLine(fmtDate(rateCloses!)) : "";
+  const rateBy = rateCloses && moneyFrozen(c.test.developer, c.test) ? FROZEN_WAITS_LINE : closesAhead(rateCloses, now) ? rateUntilLine(fmtDate(rateCloses!)) : "";
   // Live calls: the request panel shows only when there's something to do or see.
   const paused = testPaused(c.test.developer, c.test);
   // (Owner, Oct 28 afternoon) The paused-test rules (a hold, a chargeback hold or a suspension of the developer; the team's pause too by default): no sending (drafts still
@@ -485,7 +486,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       {myRating && rated.testerRevealed && <div className="note" data-my-rating="">You rated <NameLink text={dev} href={devHref} />: {myRating.stars} ★{myRating.comment && <ReasonQuote id={`my-rating-${c.id}`} label="Your comment" text={myRating.comment} className="mt-1" />}</div>}
       {rated.developer && <div className="note" data-rated-you=""><NameLink text={dev} href={devHref} /> rated you: {rated.developer.stars} ★{rated.developer.comment && <ReasonQuote id={`rated-you-${c.id}`} label="Their comment" text={rated.developer.comment} className="mt-1" />}</div>}
       {rateState.kind === "closed" && !meOff && <p className="note" data-rating-closed="">{rateState.line}</p>}
-      {/* (Owner, Nov 11, §387 4) While the money is frozen the tester's Rate is hidden (§386 E); its line says so where it was: "You can rate once this test resumes." */}
+      {/* (Owner, Nov 11, §387 4; Owner, Dec 10 2026) While the money is frozen and work waits for review the tester's Rate is hidden; its line says so where it was: "You can rate once this test resumes." */}
       {rateState.kind === "hidden" && rateState.line === RATE_TEST_PAUSED && !meOff && <p className="note" data-rate-paused="">{rateState.line}</p>}
       {(rateState.kind === "open" || rateState.kind === "disabled") && !meOff && (
         <RateBox

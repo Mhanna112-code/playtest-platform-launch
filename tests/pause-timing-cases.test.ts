@@ -100,7 +100,11 @@ async function testerRateWorld(first?: (P0: number) => Date) {
   const firstAt = first ? first(P0) : on(P0 + 3, 9);
   await at(firstAt, ratingReminders);
   expect(await lines()).toBe(1);
-  return { w, P0, lines, firstAt };
+  // (Owner, Dec 10 2026) A freeze hides her Rate (and so owes her a fresh line at its lift) only while work she sent waits for review; with everything
+  // reviewed her Rate stays open during it. So in these cases she sends another part as the freeze begins (its review date far ahead), reviewed at the lift.
+  const waitFrom = (start: Date) => db.submission.create({ data: { contractId: w.sessionId, kind: "recording", agreedCents: 1000, sentAt: start, updatedAt: start, payBy: plus(start, 30 * DAY) } });
+  const reviewedAt = (sub: { id: string }, end: Date) => db.review.create({ data: { contractId: w.sessionId, submissionId: sub.id, amountCents: 1000, agreedCents: 1000, payKey: randomUUID(), createdAt: end } });
+  return { w, P0, lines, firstAt, waitFrom, reviewedAt };
 }
 
 /** The developer's Rate, opened `openedDaysAgo` days ago (the tester rated then); their first reminder from the daily job at 09:00 UTC 3 calendar days after it. */
@@ -146,12 +150,14 @@ describe("1. a lift BEFORE the daily run on a UTC day with no line yet: one fres
   }, 240_000);
 
   it("the tester's Rate: lifted at 03:00 on the day her repeat was due: the sweep's line, nothing at 09:00, the next 3 days after", async () => {
-    const { w, P0, lines } = await testerRateWorld();
+    const { w, P0, lines, waitFrom, reviewedAt } = await testerRateWorld();
     await teamPause(w.testId, on(P0 + 4, 1));
+    const more = await waitFrom(on(P0 + 4, 1));
     await at(on(P0 + 4, 9), ratingReminders);
     await at(on(P0 + 5, 9), ratingReminders);
     expect(await lines()).toBe(1);
     await teamLift(w.testId, on(P0 + 6, 3));
+    await reviewedAt(more, on(P0 + 6, 3));
     await at(on(P0 + 6, 3.05), rateSweep);
     expect(await lines()).toBe(2);
     await at(on(P0 + 6, 9), ratingReminders);
@@ -200,11 +206,13 @@ describe("2. a lift AFTER the daily run (the run skipped the frozen test): one f
   }, 240_000);
 
   it("the tester's Rate", async () => {
-    const { w, P0, lines } = await testerRateWorld();
+    const { w, P0, lines, waitFrom, reviewedAt } = await testerRateWorld();
     await teamPause(w.testId, on(P0 + 5, 20));
+    const more = await waitFrom(on(P0 + 5, 20));
     await at(on(P0 + 6, 9), ratingReminders); // her 3-day slot, but frozen: skipped
     expect(await lines()).toBe(1);
     await teamLift(w.testId, on(P0 + 6, 10));
+    await reviewedAt(more, on(P0 + 6, 10));
     await at(on(P0 + 6, 10.08), rateSweep);
     expect(await lines()).toBe(2);
     await at(on(P0 + 6, 10.25), rateSweep);
@@ -303,14 +311,16 @@ describe("5. a pause spanning several daily runs: each run sends nothing; after 
   }, 240_000);
 
   it("the tester's Rate", async () => {
-    const { w, P0, lines } = await testerRateWorld();
+    const { w, P0, lines, waitFrom, reviewedAt } = await testerRateWorld();
     await teamPause(w.testId, on(P0 + 3, 12));
+    const more = await waitFrom(on(P0 + 3, 12));
     for (let d = 4; d <= 8; d++) {
       await at(on(P0 + d, 9), ratingReminders);
       await at(on(P0 + d, 15), rateSweep);
     }
     expect(await lines()).toBe(1);
     await teamLift(w.testId, on(P0 + 8, 18));
+    await reviewedAt(more, on(P0 + 8, 18));
     await at(on(P0 + 8, 18.08), rateSweep);
     expect(await lines()).toBe(2);
     await at(on(P0 + 8, 18.25), rateSweep);
@@ -355,8 +365,9 @@ describe.each(ORDERS)("6. overlapping freezes (%s): the first lift sends nothing
   }, 240_000);
 
   it("the tester's Rate", async () => {
-    const { w, P0, lines } = await testerRateWorld();
+    const { w, P0, lines, waitFrom, reviewedAt } = await testerRateWorld();
     await freeze(first, w.testId, w.dev.user.id, on(P0 + 4, 1));
+    const more = await waitFrom(on(P0 + 4, 1));
     await freeze(second, w.testId, w.dev.user.id, on(P0 + 4, 5));
     await at(on(P0 + 4, 9), ratingReminders);
     await lift(first, w.testId, w.dev.user.id, on(P0 + 5, 3));
@@ -364,6 +375,7 @@ describe.each(ORDERS)("6. overlapping freezes (%s): the first lift sends nothing
     await at(on(P0 + 6, 9), ratingReminders); // her 3-day slot; the other freeze still holds
     expect(await lines()).toBe(1);
     await lift(second, w.testId, w.dev.user.id, on(P0 + 7, 2));
+    await reviewedAt(more, on(P0 + 7, 2));
     await at(on(P0 + 7, 2.08), rateSweep);
     expect(await lines()).toBe(2);
     await at(on(P0 + 7, 9), ratingReminders);
@@ -470,11 +482,13 @@ describe("8. the team's pause reaching 7 days: the daily job closes the test; th
   }, 240_000);
 
   it("the tester's Rate: nothing while paused; the closing run itself sends her one fresh line; no second from the sweep; then every 3 days", async () => {
-    const { w, P0, lines } = await testerRateWorld();
+    const { w, P0, lines, waitFrom, reviewedAt } = await testerRateWorld();
     await teamPause(w.testId, on(P0 + 3, 12)); // closes 7 days later: P0+10 12:00
+    const more = await waitFrom(on(P0 + 3, 12));
     for (let d = 4; d <= 10; d++) await at(on(P0 + d, 9), runDaily);
     expect(await lines()).toBe(1);
     expect((await db.test.findUniqueOrThrow({ where: { id: w.testId } })).status).toBe("open");
+    await reviewedAt(more, on(P0 + 11, 9)); // (Dec 10 2026) reviewed as the closure lifts the pause (dated then: nothing can be reviewed while frozen)
     await at(on(P0 + 11, 9), runDaily); // the closure, then the Rate step: her fresh line
     expect((await db.test.findUniqueOrThrow({ where: { id: w.testId } })).status).toBe("stopped");
     expect(await lines()).toBe(2);

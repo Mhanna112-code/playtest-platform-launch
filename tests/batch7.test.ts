@@ -134,7 +134,10 @@ describe("batch 7 item 4: stop-once on every press still allowed", () => {
     // (Batch 15 section 27) The side of a dispute never stops.
     expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "They skipped two answers", seenAt: loaded })).status).toBe(200);
     // (Batch 17 section 16) Rate Ana: her call isn't paid yet, so the developer's Rate is still pending (refused with its line).
-    expect((await act(testId, "rate", dev.cookie, { contractId: a.sessionId, stars: 4, seenAt: loaded })).body.error.message).toBe("You can rate Ana Silva once she's rated you and everything she sent is settled."); // (batch 35 §162) Ana is "she"
+    // (Owner, Dec 10 2026) The test is stopped, so the line names when Ana's own Rate ends (her close-out, in the developer's zone).
+    const ends = (await (await import("@/lib/server/closeOut")).testerRatingClosesAt(a.sessionId))!;
+    const date = (await import("@/lib/format")).fmtDateIn(ends, (await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).timeZone);
+    expect((await act(testId, "rate", dev.cookie, { contractId: a.sessionId, stars: 4, seenAt: loaded })).body.error.message).toBe(`You can rate Ana Silva once she's rated you (or her time to rate ends on ${date}) and everything she sent is settled.`); // (batch 35 §162) Ana is "she"
   });
 
   it("developer, restricted: Cancel call from the dashboard's Calls box stops once for news, then goes through (batch 29 section 11)", async () => {
@@ -155,7 +158,7 @@ describe("batch 7 item 4: stop-once on every press still allowed", () => {
   for (const state of ["stopped", "paused"] as const) {
     // (Owner, Oct 29, batch 29 section 11; reverses batch 16 section 25 again) In these states what still works follows the running test's stop-once rules; Rate keeps
     // its own list. Refusals are unchanged.
-    it(`tester, ${state} test: ${state === "paused" ? "Charge and Rate are refused (§386); Dispute and Cancel call" : "Charge, Dispute"} stop once for the new payment, then go through${state === "paused" ? "" : "; Rate stops once for it too"}`, async () => {
+    it(`tester, ${state} test: ${state === "paused" ? "Charge is refused (§386), Rate waits for the Charge; Dispute and Cancel call" : "Charge, Dispute"} stop once for the new payment, then go through${state === "paused" ? "" : "; Rate stops once for it too"}`, async () => {
       const { dev, testId } = await setup({ recordingCents: "5.00" });
       const { tester, sessionId } = await joined(testId);
       await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -169,8 +172,9 @@ describe("batch 7 item 4: stop-once on every press still allowed", () => {
       const rec = await paidLater(sessionId);
       const press = (action: string, body: Record<string, unknown>) => sact(sessionId, action, tester.cookie, { seenAt: loaded, ...body });
       if (state === "paused") {
-        // (Owner, Nov 11, §386 A and E) No money moves while the test is paused (here, the developer's hold): Charge and Rate are refused, never why.
-        expect((await press("rate", { stars: 4 })).body.error.message).toBe("This test is paused, so your Rate didn't go through.");
+        // (Owner, Nov 11, §386 A) No money moves while the test is paused (here, the developer's hold): Charge is refused, never why. (Owner, Dec 10 2026) Rate
+        // keeps its Charge-first line during the freeze (the freeze hides it only after that, while work waits for review).
+        expect((await press("rate", { stars: 4 })).body.error.message).toBe("Charge or let go of your unreviewed work first.");
         expect((await press("choose", { submissionId: sub.id, choice: "charge", tickedCents: 1000 })).body.error.message).toBe("This test is paused, so your Charge didn't go through.");
       } else {
         // (Batch 17 section 1) Rate waits while a piece can be charged.

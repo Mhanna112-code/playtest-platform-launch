@@ -44,14 +44,14 @@ export const pressOfWhat = (what: string) => (what === "extra pay" ? "Pay more" 
 
 const ANY_MORE = "This test isn't taking new testers any more.";
 /**
- * A refusal line written without its press (the join refusals' and the invite's), named with it: stopped (§363), Open until passed, paused / blocked / an
- * invite closed by a pause ("isn't taking new testers right now"), not open any more. Lines of other causes (full, already joined, the key line …) stay as they are.
+ * A refusal line written without its press (the join refusals' and the invite's), named with it: stopped (§363), Open until passed, paused / blocked
+ * ("isn't taking new testers right now"), not open any more. Lines of other causes (full, already joined, the key line …) stay as they are.
  */
 export function asPressRefusal(line: string, press: string) {
   if (line === TEST_WAS_STOPPED) return stoppedPressLine(press);
   const closed = /^(?:This test|“.*”) closed to new testers on (.+)\.$/.exec(line);
   if (closed) return pressRefused(closedToNewCause(closed[1]), press);
-  if (line === "This test is paused right now." || line === `${NOT_TAKING_CAUSE}.` || / isn't taking new testers right now, so this invite was closed\.$/.test(line)) return pressRefused(NOT_TAKING_CAUSE, press);
+  if (line === "This test is paused right now." || line === `${NOT_TAKING_CAUSE}.`) return pressRefused(NOT_TAKING_CAUSE, press);
   if (line === ANY_MORE) return pressRefused(ANY_MORE.replace(/\.$/, ""), press);
   // (Owner, Nov 11, §380 H) The presser's own block: "You blocked Nora Lane, so your Apply didn't go through."
   const own = /^You blocked (.+)\.$/.exec(line);

@@ -7,7 +7,8 @@ import { joined, sact, seen, setup } from "./fixtures";
 import { devRateStates } from "@/lib/server/ratings";
 import { testerRatingClosesAt } from "@/lib/server/closeOut";
 
-// (Owner, Nov 11 and 12, §382) Rating windows: (a) the tester's own suspension extends their Rate like Charge; (b) outages extend the developer's Rate however it
+// (Owner, Nov 11 and 12, §382) Rating windows: (a) (Owner, Dec 10 2026; replaces "the tester's own suspension extends their Rate like Charge") the tester's own
+// suspension no longer moves their Rate; (b) outages extend the developer's Rate however it
 // opens; (c) the developer's Rate closes at the later of the close-out and 14 days after it opened, moved exactly by their own holds and suspensions (after the work
 // ended too), the tester's disputes and outages; the tester's rating stays hidden until then.
 
@@ -30,8 +31,8 @@ async function closed(closedDaysAgo: number) {
 }
 const near = (a: Date | null | undefined, b: number) => expect(Math.abs((a?.getTime() ?? 0) - b)).toBeLessThan(60_000);
 
-describe("§382 a: the tester's own suspension extends their Rate (only the part after test close)", () => {
-  it("a suspension before test close moves nothing; one after it moves the close by its length", async () => {
+describe("§382 a (Owner, Dec 10 2026): the tester's own suspension no longer moves their Rate", () => {
+  it("a suspension before test close moves nothing; one after it moves nothing either", async () => {
     await db.outage.deleteMany({});
     const x = await closed(10);
     const before = (await testerRatingClosesAt(x.sessionId))!.getTime();
@@ -44,7 +45,7 @@ describe("§382 a: the tester's own suspension extends their Rate (only the part
       { userId: x.tester.user.id, kind: "suspended", side: "tester", createdAt: new Date(Date.now() - 3 * DAY) },
       { userId: x.tester.user.id, kind: "reinstated", side: "tester", createdAt: new Date(Date.now() - 2 * DAY) },
     ] });
-    near(await testerRatingClosesAt(x.sessionId), before + DAY);
+    near(await testerRatingClosesAt(x.sessionId), before);
   });
 });
 

@@ -55,6 +55,8 @@ describe("§386 C Rate", () => {
     expect((await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
     await settle();
     expect(msg(await sact(x.sessionId, "rate", x.tester.cookie, { seenAt: seen() }))).toBe("Choose 1 to 5 stars.");
+    // (Owner, Dec 10 2026) A freeze refuses her Rate only while work waits for review: a second part, sent and not reviewed yet.
+    await db.submission.create({ data: { contractId: x.sessionId, kind: "recording", agreedCents: 1000, payBy: new Date(Date.now() + 7 * 86_400_000) } });
     await pauseTest((await admin()).user.id, x.testId, "Checking");
     expect(msg(await sact(x.sessionId, "rate", x.tester.cookie, { seenAt: seen() }))).toBe("This test is paused, so your Rate didn't go through.");
     expect(await db.rating.count({ where: { contractId: x.sessionId } })).toBe(0);

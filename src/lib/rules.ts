@@ -1336,17 +1336,31 @@ export const PAUSED_UNTIL_PAID = "Your tests are paused until you pay what you o
 export const PAUSED_UNTIL_CHARGEBACK = "Your tests are paused until the chargeback steps are done";
 export const pausedUntil = (chargeback: boolean) => (chargeback ? PAUSED_UNTIL_CHARGEBACK : PAUSED_UNTIL_PAID);
 
-/** Invite: reasons the whole press is refused for good. */
+/**
+ * Invite: reasons the whole press is refused for good, in order: 1. stopped → 2. joining closed (Open until passed) → 3. paused (`paused`: the developer's
+ * hold; the server passes only that) → 4. not open → 5. full. "" when Invite works.
+ */
 export function inviteTestRefusal(
-  t: { status: string; spots: number; testersIn: number; openUntil: Date | null; stoppedAt: Date | null; paused: boolean; /** (Batch 35 §22) the hold is a chargeback's */ chargeback?: boolean; title?: string },
+  t: {
+    status: string; spots: number; testersIn: number; openUntil: Date | null; stoppedAt: Date | null; paused: boolean;
+    /** (Batch 35 §22) the hold is a chargeback's */ chargeback?: boolean; title?: string;
+  },
   now: Date,
   fmt: (d: Date) => string,
 ) {
+  // 1.
   if (t.status === "stopped") return `This test was stopped${t.stoppedAt ? ` on ${fmt(t.stoppedAt)}` : ""}, so nobody can be invited.`;
+  // 2.
   if (t.openUntil && t.openUntil.getTime() < now.getTime()) return `Joining closed on ${fmt(t.openUntil)} (Open until), so nobody can be invited.`;
-  if (t.paused) return t.chargeback ? "This test is paused until the chargeback steps are done, so nobody can be invited." : "This test is paused until you pay what you owe, so nobody can be invited.";
+  // 3.
+  if (t.paused) {
+    return t.chargeback
+      ? "This test is paused until the chargeback steps are done, so nobody can be invited."
+      : "This test is paused until you pay what you owe, so nobody can be invited.";
+  }
+  // 4.
   if (t.status !== "open") return "This test isn't taking new testers, so nobody can be invited.";
-  // New invites wait for spots (open ones stay open while full: correction 6).
+  // 5. New invites wait for spots (open ones stay open while full: correction 6).
   if (t.testersIn >= t.spots) return `${t.title ?? "This test"} is full. Add spots to invite more people.`;
   return "";
 }
@@ -1407,7 +1421,10 @@ export const PART_PRICE_MISSING = { written: "Enter a price for the written answ
 export const MAX_ACTIVE_TESTS = LIMITS.testsPerTester;
 /** (7.3) Joining, applying, accepting an invite and asking to rejoin all refuse with this line at the limit. */
 export const TEST_LIMIT_LINE = "You can't join more tests right now.";
-/** Invite: per-tester refusals. Never reveals a block or a suspension. */
+/**
+ * Invite: per-tester refusals, in order: 1. account closed → 2. suspended or a block either way (one neutral line) → 3. at the 10-test limit. Never reveals a
+ * block or a suspension. (The developer's own block is checked before this, by inviteTesters, with its own line.)
+ */
 export function inviteTesterRefusal(name: string, x: { suspended: boolean; blocked: boolean; deleted: boolean; activeTests: number; pronoun?: string | null }) {
   if (x.deleted) return `${name}'s account was closed, so ${pronouns(x.pronoun).subj} can't be invited.`;
   if (x.suspended || x.blocked) return `${name} can't be invited right now.`;
@@ -1946,7 +1963,7 @@ export function canAskToRejoin(c: { status: string; endKind: string; endedAt: Da
 
 /** (Batch 17 section 2) Your own side suspended (or, for a developer, on a hold): Rate is hidden and an old page's press is refused. */
 export const RATE_INACTIVE = "You can rate once your account is active again.";
-/** (Owner, Nov 11, §386 E) The tester's hidden Rate while the test or its developer is paused (never why). */
+/** (Owner, Nov 11, §386 E; Owner, Dec 10 2026) The tester's hidden Rate while the test or its developer is paused and work she sent still waits for review (never why). */
 export const RATE_TEST_PAUSED = "You can rate once this test resumes.";
 /** (Batch 17 section 1) The tester's Rate is disabled, with the first of these lines that applies. */
 export const RATE_CHARGE_FIRST = "Charge or let go of your unreviewed work first.";
@@ -1956,10 +1973,17 @@ export const rateOpensOnLine = (date: string, devName: string) => `Rating opens 
 export const rateOpensReviewLine = (devName: string) => `Rating opens once ${devName} reviews everything you sent.`;
 /** (Batch 17 section 1) The developer's Rate is disabled while a dispute with that tester on this test is open. */
 export const rateTheirDisputeLine = (name: string) => `Rating opens once the team decides ${name}'s dispute.`;
-/** (Batch 17 section 16) The developer's Rate is hidden until the tester has rated and everything they sent is settled; an old page's press reads this. */
-export const ratePendingLine = (name: string, pronoun?: string | null) => {
+/**
+ * (Batch 17 section 16) The developer's Rate is hidden until it opens; an old page's press reads this. (Owner, Dec 10 2026) It opens once everything the tester
+ * sent is settled AND the tester rated or her own Rate window ended: with that end (`herRate`: its date in the developer's zone, and whether it has passed) the
+ * line names both ways ("… once she's rated you (or her time to rate ends on Dec 24, 2026) and everything she sent is settled."); once it has passed, only the
+ * settling is left; unknown (the test hasn't closed), the line as before.
+ */
+export const ratePendingLine = (name: string, pronoun?: string | null, herRate?: { date: string; passed: boolean } | null) => {
   const p = pronouns(pronoun);
-  return `You can rate ${name} once ${p.subjHas} rated you and everything ${p.subj} sent is settled.`;
+  if (herRate?.passed) return `You can rate ${name} once everything ${p.subj} sent is settled.`;
+  const or = herRate ? ` (or ${p.poss} time to rate ends on ${herRate.date})` : "";
+  return `You can rate ${name} once ${p.subjHas} rated you${or} and everything ${p.subj} sent is settled.`;
 };
 /** (Batch 17 section 12) A Cancel call pressed on a page opened before the test stopped (its calls ahead were cancelled by the stop). */
 export const CALL_CANCELLED_BY_STOP = "This call was cancelled when the test stopped.";
@@ -2058,7 +2082,8 @@ export const ratingClosedLine = (date: string) => `Rating closed on ${date}.`;
 export const CLOSE_OUT_REMINDER_DAYS = [3, 1] as const;
 // (Owner, Nov 11, §387 4; replaces batch 17 §19's "the last 7 days" rule) Each money button always says its closing date next to it, in the reader's zone: the
 // tester's Charge / Let it go, Dispute and Rate; the developer's Pay and Pay more. While the money is frozen (moneyFrozen) the line reads FROZEN_WAITS_LINE instead
-// (the tester's Rate is hidden then, with RATE_TEST_PAUSED). The developer's "Rate X · N days left" is unchanged.
+// (the tester's Rate too: (Owner, Dec 10 2026) it shows during a freeze unless work waits for review, then it is hidden with RATE_TEST_PAUSED). The developer's
+// "Rate X · N days left" is unchanged.
 /** Is the date still ahead (the line shows it)? */
 export const closesAhead = (at: Date | null, now = new Date()) => !!at && at.getTime() > now.getTime();
 export const FROZEN_WAITS_LINE = "Waits while the test is paused";

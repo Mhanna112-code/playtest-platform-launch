@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { awayAction, confirmStart } from "@/lib/server/confirm";
 import { confirmAllPress } from "@/lib/server/confirmAll";
 import { autoChargeCalls, liftHoldIfClear, runSweep, shiftAfterPause, startHold } from "@/lib/server/holds";
-import { callChargeAt, closeOutOf, pieceCloseOut, testerRatingClosesAt } from "@/lib/server/closeOut";
+import { callChargeAt, pieceCloseOut, testerRatingClosesAt } from "@/lib/server/closeOut";
 import { testerRateState } from "@/lib/server/ratings";
 import { deleteAccount, pauseTest, reinstateAccount } from "@/lib/server/restrictions";
 import { moneyFrozen } from "@/lib/restricted";
@@ -180,7 +180,9 @@ describe("§386 A pages: the buttons stay, the banners don't offer paying", () =
 });
 
 // The owner's worked cases (Nov 11): test close Nov 1, close-out Nov 15.
-describe("§386 A windows: a freeze after the test closed moves each piece's own window, not the close-out", () => {
+// (Owner, Dec 10 2026) No test-wide close-out date any more (closeOutOf is gone): the tester's Rate (her close-out) moves with these freezes too (below and
+// rate-windows-dec10.test.ts), so the "close-out doesn't move" checks here were dropped.
+describe("§386 A windows: a freeze after the test closed moves each piece's own window", () => {
   const at = (d: string) => new Date(`2020-${d}T12:00:00Z`);
   const NOW = at("12-31");
   async function closed() {
@@ -199,16 +201,15 @@ describe("§386 A windows: a freeze after the test closed moves each piece's own
 
   it("without a freeze: Nov 15 and Nov 22", async () => {
     const w = await closed();
-    expect(await closeOutOf(w.testId, NOW)).toEqual(at("11-15"));
+    expect(await testerRatingClosesAt(w.sessionId, NOW)).toEqual(at("11-15"));
     expect(await pieceCloseOut({ submissionId: w.early.id }, NOW)).toEqual(at("11-15"));
     expect(await pieceCloseOut({ submissionId: w.late.id }, NOW)).toEqual(at("11-22"));
   });
 
-  it("suspended 1 day after the test close: the piece whose Charge opened Oct 25 closes Nov 16; the close-out and its disputes don't move", async () => {
+  it("suspended 1 day after the test close: the piece whose Charge opened Oct 25 closes Nov 16", async () => {
     const w = await closed();
     await suspended(w.dev.user.id, "11-02", "11-03");
     expect(await pieceCloseOut({ submissionId: w.early.id }, NOW)).toEqual(at("11-16"));
-    expect(await closeOutOf(w.testId, NOW)).toEqual(at("11-15"));
     // (Owner, Dec 9 2026, decision 3: dispute = charge; was its own window, Nov 15) Dispute closes on the piece's one closing date, with Charge.
     expect(await pieceCloseOut({ submissionId: w.early.id }, NOW)).toEqual(at("11-16"));
   });
@@ -217,7 +218,6 @@ describe("§386 A windows: a freeze after the test closed moves each piece's own
     const w = await closed();
     await suspended(w.dev.user.id, "11-10", "11-11");
     expect(await pieceCloseOut({ submissionId: w.late.id }, NOW)).toEqual(at("11-23"));
-    expect(await closeOutOf(w.testId, NOW)).toEqual(at("11-15"));
   });
 
   it("a 1-day suspension on Nov 4 leaves the Nov 8 piece at Nov 22 (before its Charge opened: never counted twice)", async () => {
@@ -232,24 +232,38 @@ describe("§386 A windows: a freeze after the test closed moves each piece's own
     await db.accountEvent.create({ data: { userId: w.dev.user.id, kind: "hold", createdAt: at("11-02") } });
     await db.accountEvent.create({ data: { userId: w.dev.user.id, kind: "hold-lifted", createdAt: at("11-05") } });
     expect(await pieceCloseOut({ submissionId: w.early.id }, NOW)).toEqual(at("11-18"));
-    expect(await closeOutOf(w.testId, NOW)).toEqual(at("11-15"));
     const v = await closed();
     await db.user.update({ where: { id: v.dev.user.id }, data: { devSuspendedAt: at("11-10") } });
     expect(await pieceCloseOut({ submissionId: v.early.id }, at("11-20"))).toEqual(at("11-25")); // 5 days were left on Nov 10: counted from "now"
   });
 });
 
-// (Owner, Nov 11, §386 E) The tester's Rate is hidden and refused while frozen, like during their own suspension, never saying why; its window moves on by a
-// developer-side freeze after the test closed (one clock from the test close); the close-out doesn't move.
-describe.each(CAUSES)("§386 E %s: the tester's Rate is hidden and refused, during the test and after it closed", (_name, freeze) => {
+// (Owner, Nov 11, §386 E; Owner, Dec 10 2026) While frozen the tester's Rate is hidden and refused, never saying why, only while work she sent still waits for
+// review; with everything she sent settled it stays OPEN and a press goes through.
+describe.each(CAUSES)("§386 E (Dec 10 2026) %s: the tester's Rate during a freeze, during the test and after it closed", (_name, freeze) => {
   for (const after of [false, true]) {
-    it(after ? "after the test closed" : "during the test", async () => {
+    it(`${after ? "after the test closed" : "during the test"}: everything settled: open, and her Rate goes through`, async () => {
       const w = await world();
       // Everything she sent settled, so her Rate is open.
       await db.submission.deleteMany({ where: { id: { in: [w.written.id, w.open.id] } } });
       await db.call.update({ where: { id: w.call.id }, data: { status: "cancelled" } });
       if (after && freeze !== teamPause) await close(w);
       expect((await testerRateState(w.sessionId)).kind).toBe("open");
+      await freeze(w);
+      if (after && freeze === teamPause) await close(w);
+      await settle();
+      expect((await testerRateState(w.sessionId)).kind).toBe("open");
+      const r = await sact(w.sessionId, "rate", w.tester.cookie, { stars: 4, seenAt: seen() });
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      expect(await db.rating.count({ where: { contractId: w.sessionId } })).toBe(1);
+    });
+    it(`${after ? "after the test closed" : "during the test"}: work waiting for review: hidden and refused`, async () => {
+      const w = await world();
+      // Her written answers still wait for review (no review date yet); nothing to Charge, no dispute.
+      await db.submission.deleteMany({ where: { id: w.open.id } });
+      await db.call.update({ where: { id: w.call.id }, data: { status: "cancelled" } });
+      if (after && freeze !== teamPause) await close(w);
+      expect((await testerRateState(w.sessionId)).kind).toBe("disabled");
       await freeze(w);
       if (after && freeze === teamPause) await close(w);
       await settle();
@@ -261,7 +275,7 @@ describe.each(CAUSES)("§386 E %s: the tester's Rate is hidden and refused, duri
   }
 });
 
-describe("§386 E the tester's Rate window: a developer freeze after the test closed moves it; one before doesn't; the close-out doesn't move", () => {
+describe("§386 E the tester's Rate window: a developer freeze after the test closed moves it; one before doesn't", () => {
   const at = (d: string) => new Date(`2020-${d}T12:00:00Z`);
   const NOW = at("12-31");
   async function closed() {
@@ -281,14 +295,12 @@ describe("§386 E the tester's Rate window: a developer freeze after the test cl
     expect(await testerRatingClosesAt(w.sessionId, NOW)).toEqual(at("11-15"));
     await suspended(w.dev.user.id, "11-03", "11-05");
     expect(await testerRatingClosesAt(w.sessionId, NOW)).toEqual(at("11-17"));
-    expect(await closeOutOf(w.testId, NOW)).toEqual(at("11-15"));
   });
 
   it("a suspension before the test close doesn't move it", async () => {
     const w = await closed();
     await suspended(w.dev.user.id, "10-25", "10-27");
     expect(await testerRatingClosesAt(w.sessionId, NOW)).toEqual(at("11-15"));
-    expect(await closeOutOf(w.testId, NOW)).toEqual(at("11-15"));
   });
 });
 

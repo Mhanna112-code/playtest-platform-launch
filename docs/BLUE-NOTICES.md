@@ -410,7 +410,7 @@ Each row has **F** lifetime and **Alerts: always** as defined above unless marke
 
 | Who / press / shared check | Exact reason or common-family reference | Trigger (code condition) | HTTP / code / source |
 | --- | --- | --- | --- |
-| Both sides / caller of shared check; `closedInvite` | `This invite is no longer open.`<br>`This test was stopped.`<br>`“<test>” closed to new testers on <date/time>.`<br>`“<test>” isn't taking new testers right now, so this invite was closed.` | `shared check / unconditional` | `409 / "invite_closed"`; [src/lib/server/joining.ts:154](../src/lib/server/joining.ts#L154) |
+| Both sides / caller of shared check; `closedInvite` | `This invite is no longer open.`<br>`This test was stopped.`<br>`“<test>” closed to new testers on <date/time>.` (Since Dec 10 2026 a pause no longer closes invites: the old pause line “<test>” isn't taking new testers right now, so this invite was closed. is gone; invites a pause closed before then read This invite is no longer open.) | `shared check / unconditional` | `409 / "invite_closed"`; [src/lib/server/joining.ts:154](../src/lib/server/joining.ts#L154) |
 | Both sides / caller of shared check; `replacedInvite` | `<person> changed the listing at <date/time> and sent you a new invite on it. Press Join to join on it.`<br>`<person> changed the listing at <date/time>, and this invite closed.` | `shared check / unconditional` | `409 / "invite_replaced"`; [src/lib/server/joining.ts:173](../src/lib/server/joining.ts#L173) |
 | Both sides / caller of shared check; `alreadyWaiting` | `You already asked to rejoin this test in another tab.`<br>`You already applied to join this test in another tab.` | `shared check / unconditional` | `409 / "already_waiting"`; [src/lib/server/joining.ts:183](../src/lib/server/joining.ts#L183) |
 | Both sides / caller of shared check; `inviteBeforePress` | `<dev> invited you: press Join to join.` | `seen && inv.createdAt <= seen` | `409 / "invited"`; [src/lib/server/joining.ts:202](../src/lib/server/joining.ts#L202) |
@@ -781,8 +781,8 @@ These wrap the server checks above. GET/pulse/live failures protect reads; they 
 | Admin; `/api/admin/[action]/route.ts`; `run` | `That action doesn't exist.` | `shared check / unconditional` | `404 / "not_found"`; [src/app/api/admin/[action]/route.ts:120](../src/app/api/admin/[action]/route.ts#L120) |
 | Both sides / caller of shared check; `/api/help/route.ts`; `POST` | `You've sent <LIMITS.contactPerDay> messages today. We'll reply by email.` | `today >= CONTACT_LIMIT_PER_DAY` | `409 / "limit"`; [src/app/api/help/route.ts:23](../src/app/api/help/route.ts#L23) |
 | Both sides / caller of shared check; `/api/invites/[id]/route.ts`; `POST` | `That invite doesn't exist.` | `!inv \|\| inv.testerId !== u.id` | `404 / "not_found"`; [src/app/api/invites/[id]/route.ts:20](../src/app/api/invites/[id]/route.ts#L20) |
-| Both sides / caller of shared check; `/api/invites/[id]/route.ts`; `POST` | `This invite is no longer open.`<br>`This test was stopped.`<br>`“<test>” closed to new testers on <date/time>.`<br>`“<test>” isn't taking new testers right now, so this invite was closed.` | `inv.status === "replaced"; !fresh` | `409 / "invite_closed"`; [src/app/api/invites/[id]/route.ts:24](../src/app/api/invites/[id]/route.ts#L24) |
-| Both sides / caller of shared check; `/api/invites/[id]/route.ts`; `POST` | `This invite is no longer open.`<br>`This test was stopped.`<br>`“<test>” closed to new testers on <date/time>.`<br>`“<test>” isn't taking new testers right now, so this invite was closed.` | `inv.status === "cancelled"` | `409 / "invite_closed"`; [src/app/api/invites/[id]/route.ts:42](../src/app/api/invites/[id]/route.ts#L42) |
+| Both sides / caller of shared check; `/api/invites/[id]/route.ts`; `POST` | `This invite is no longer open.`<br>`This test was stopped.`<br>`“<test>” closed to new testers on <date/time>.` (Since Dec 10 2026 a pause no longer closes invites: the old pause line “<test>” isn't taking new testers right now, so this invite was closed. is gone; invites a pause closed before then read This invite is no longer open.) | `inv.status === "replaced"; !fresh` | `409 / "invite_closed"`; [src/app/api/invites/[id]/route.ts:24](../src/app/api/invites/[id]/route.ts#L24) |
+| Both sides / caller of shared check; `/api/invites/[id]/route.ts`; `POST` | `This invite is no longer open.`<br>`This test was stopped.`<br>`“<test>” closed to new testers on <date/time>.` (Since Dec 10 2026 a pause no longer closes invites: the old pause line “<test>” isn't taking new testers right now, so this invite was closed. is gone; invites a pause closed before then read This invite is no longer open.) | `inv.status === "cancelled"` | `409 / "invite_closed"`; [src/app/api/invites/[id]/route.ts:42](../src/app/api/invites/[id]/route.ts#L42) |
 | Both sides / caller of shared check; `/api/invites/[id]/route.ts`; `POST` | `You already joined.` | `inv.status === "joined"` | `409 / "gone"`; [src/app/api/invites/[id]/route.ts:43](../src/app/api/invites/[id]/route.ts#L43) |
 | Both sides / caller of shared check; `/api/invites/[id]/route.ts`; `POST` | `This invite is no longer open.` | `inv.status !== "sent"` | `409 / "invite_closed"`; [src/app/api/invites/[id]/route.ts:44](../src/app/api/invites/[id]/route.ts#L44) |
 | Both sides / caller of shared check; `/api/live/route.ts`; `GET` | `That session doesn't exist.` | `kind === "session"; !c \|\| c.testerId !== u.id` | `404 / "not_found"`; [src/app/api/live/route.ts:40](../src/app/api/live/route.ts#L40) |
@@ -1065,7 +1065,9 @@ Some reusable constructors are also used as F reasons, I banners or an S line. T
 
 **ratePendingLine** — [src/lib/rules.ts:1458](../src/lib/rules.ts#L1458)
 
-* `You can rate <tester> once they've rated you and everything they sent is settled.`
+* `You can rate <tester> once they've rated you and everything they sent is settled.` (the test hasn't closed yet: the end of the tester's Rate isn't known)
+* `You can rate <tester> once they've rated you (or their time to rate ends on <date>) and everything they sent is settled.` (Owner, Dec 10 2026: the end of the tester's Rate window, testerRatingClosesAt, in the developer's zone)
+* `You can rate <tester> once everything they sent is settled.` (Owner, Dec 10 2026: the tester's Rate window has ended unrated)
 
 **stopMomentLine** — [src/lib/rules.ts:1468](../src/lib/rules.ts#L1468)
 
@@ -1140,13 +1142,14 @@ Some reusable constructors are also used as F reasons, I banners or an S line. T
 * `Rating closed on <date/time>.`
 * `Charge or let go of your unreviewed work first.`
 * `Rating opens once the team decides your dispute.`
+* `You can rate once this test resumes.` (hidden; Owner, Dec 10 2026: only while the money is frozen (the team's pause, the developer's hold or suspension) AND work she sent still waits for review; with none, her Rate stays open during the freeze. The press: `This test is paused, so your Rate didn't go through.`)
 * `Rating opens once <person> reviews everything you sent.`
 * `Rating opens on <date/time>, or sooner if <person> reviews everything you sent.`
 
 **devRateStates** — [src/lib/server/ratings.ts:74](../src/lib/server/ratings.ts#L74)
 
 * `You can rate once your account is active again.`
-* `You can rate <person> once they've rated you and everything they sent is settled.`
+* `You can rate <person> once they've rated you and everything they sent is settled.` (and, Owner, Dec 10 2026, the two other ratePendingLine forms above)
 * `The 14 days to rate <person> have passed.`
 * `Rating opens once the team decides <person>'s dispute.`
 
