@@ -18,8 +18,9 @@ const editPrice = async (testId: string, cookie: string, price: string) =>
 describe("A. Switch / Keep for an offer that arrived while the page was open", () => {
   it("the page's offer id follows the offer shown (it arrives live)", () => {
     const top = src("app/app/sessions/[id]/TesterTop.tsx");
-    expect(top).toContain("if (offer?.id) setOfferId(offer.id);");
-    expect(top).toContain("}, [offer?.id]);");
+    // (Owner, Dec 10 2026) The same effect also starts a different offer's box clean (terms-offer-box-fresh.test.ts).
+    expect(top).toContain("if (!offer?.id) return;\n    setOfferId(offer.id);");
+    expect(top).toContain("}, [offer?.id, setBox]);");
   });
 
   for (const choice of ["switch", "keep"] as const) {

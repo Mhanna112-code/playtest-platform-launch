@@ -21,16 +21,28 @@ import { PressDone } from "@/components/PressDone";
 export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: string; seenAt: string; offer: { id: string; diff: string } | null; devName: string }) {
   const [box, setBox] = useStopBox();
   const [offerId, setOfferId] = useState(offer?.id ?? "");
-  // (Owner, Oct 28, batch 16 section 38A) The offer can arrive while the page is open (a refresh brings it): Switch / Keep always send the offer shown now.
-  useEffect(() => {
-    if (offer?.id) setOfferId(offer.id);
-  }, [offer?.id]);
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
   const [err, setErr] = useState("");
   // (§156) Named by the button pressed: "Switch to the new terms" or "Keep my current terms".
   const [errPress, setErrPress] = useState("");
+  // The offer this box's refusal, stop-once box and box time are about (the one shown, or the newest one a stop-once box moved it to).
+  const aboutOffer = useRef(offer?.id ?? "");
+  // (Owner, Oct 28, batch 16 section 38A) The offer can arrive while the page is open (a refresh brings it): Switch / Keep always send the offer shown now.
+  // (Owner, Dec 10 2026) A DIFFERENT offer starts clean: the last offer's refusal ("These terms are no longer on offer.") never shows under the new buttons,
+  // and its box time never makes the next press a second press (which would switch to terms the page never showed, skipping "changed the terms again").
+  useEffect(() => {
+    if (!offer?.id) return;
+    setOfferId(offer.id);
+    if (offer.id !== aboutOffer.current) {
+      setErr("");
+      setErrPress("");
+      setBox(null);
+      setBoxAt("");
+    }
+    aboutOffer.current = offer.id;
+  }, [offer?.id, setBox]);
   const fin = useFinished();
   useEffect(() => {
     const on = (e: Event) => setBox((e as CustomEvent).detail as StopBox);
@@ -67,6 +79,7 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
     ) : null;
   const decide = (choice: string) => {
     setErrPress(pressLabelOf(`/api/sessions/${sessionId}/terms`, { choice }));
+    setErr(""); // (Owner, Dec 10 2026) one outcome per press: an earlier refusal goes
     return api(`/api/sessions/${sessionId}/terms`, { offerId, choice, seenAt, confirmed, boxAt })
       .then(() => { setBox(null); fin.finish(choice === "switch" ? "Switched to the new terms." : "Kept your current terms.", { reload: true }); })
       .catch((e) => {
@@ -75,7 +88,7 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
           setBox(sb);
           setBoxAt(sb.now);
           const next = (e as { data?: { offerId?: string } }).data?.offerId;
-          if (next) setOfferId(next);
+          if (next) { setOfferId(next); aboutOffer.current = next; } // the box is about the newest offer now: its arrival on the page keeps the box
         } else setErr(errOf(e));
       });
   };
