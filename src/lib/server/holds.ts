@@ -1442,11 +1442,12 @@ async function runDailyLocked(now: Date) {
     const due = openUntilMarkDue(t, t.notifiedMarks, now);
     if (!due.record.length && !due.send) continue;
     // (Owner, Nov 11, §383) The marks and the line in ONE transaction: a failure writing either leaves neither, so the next run sends it (never lost, never twice).
-    // Bell lines, also in the developer's Daily / Weekly / Monthly summary like every bell line (Off: the bell only). (Batch 15 sections 11 and 18) The reader's
+    // Bell lines, in the developer's morning email whatever the setting (owner, Dec 2026: `always`, like review). (Batch 15 sections 11 and 18) The reader's
     // own zone; Open until is the last day to join.
     await db.$transaction(async (tx) => {
       if (due.record.length) await tx.test.update({ where: { id: t.id }, data: { notifiedMarks: { push: due.record } } });
-      if (due.send) await bell(t.developerId, joinClosingLine(t.title, t.openUntil!, (d) => T(d, "date")), `/app/tests/${t.id}`, undefined, { reminder: `headsup:${t.id}` }, tx);
+      // (Owner, Dec 2026) Like the review countdown and the tester's own deadline: in the morning email whatever the email setting (`always`).
+      if (due.send) await bell(t.developerId, joinClosingLine(t.title, t.openUntil!, (d) => T(d, "date")), `/app/tests/${t.id}`, undefined, { reminder: `headsup:${t.id}`, always: true }, tx);
     });
     if (due.send) out.headsUps++;
   }

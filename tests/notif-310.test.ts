@@ -235,6 +235,8 @@ describe("§311g reminder marks follow the date they count to", () => {
     const heads = () => db.notification.count({ where: { userId: s.dev.user.id, reminderKey: `headsup:${s.testId}` } });
     await runDaily(new Date(open.getTime() - 0.5 * DAY));
     expect(await heads()).toBe(1); // the 1-day heads-up
+    // (Owner, Dec 2026) Like review: in the morning email whatever the email setting.
+    expect((await db.notification.findFirstOrThrow({ where: { userId: s.dev.user.id, reminderKey: `headsup:${s.testId}` } })).mustEmail).toBe(true);
     const later = new Date(open.getTime() + 15 * DAY); // (not over a month after the test was made: no 1-month mark)
     await db.test.update({ where: { id: s.testId }, data: { openUntil: later } });
     await runDaily(new Date(open.getTime() - 0.4 * DAY)); // the day of the move: nothing (no stale line)
