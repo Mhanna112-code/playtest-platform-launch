@@ -37,6 +37,13 @@ describe("each tester is reminded before their own deadline (section 1)", () => 
     });
   }
 
+  it("(Owner, Dec 2026) no 24-hour skip: joined Dec 14, 1:46 PM CST with a Dec 17 deadline gets the 3-day line (its mark 10 hours after joining), then the 1-day line", () => {
+    const j = new Date("2026-12-14T19:46:35Z"), d = new Date("2026-12-18T05:59:59Z");
+    expect(R.deadlineMarksFor(j, d).map((m) => m.mark)).toEqual(["3d", "1d"]);
+    expect(R.ownDeadlineMarkDue({ id: "c1", joinedAt: j, dueAt: d }, [], new Date("2026-12-15T09:00:30Z")).send?.mark).toBe("3d");
+    expect(simulate(j, d)).toEqual(["3d", "1d"]);
+  });
+
   it("a deadline moved later: the marks still ahead of the new deadline fire again; those already behind it never do; never twice for one deadline", () => {
     const dueAt = R.dueFromJoin(joinedAt, 10);
     const recorded: string[] = [];

@@ -1733,15 +1733,16 @@ export function openUntilMarkDue(t: { openUntil: Date | null; createdAt: Date },
 
 /**
  * (Owner, Oct 28, batch 16 section 1) A working tester's own deadline reminders: 1 month, 1 week, 3 days and 1 day before THEIR deadline (dueAt). The same rule as the
- * review reminders (reviewMarksFor): only marks still ahead when they joined; the month only when the deadline was more than a month away then; none within 24 hours of
- * joining. Every tester gets the same tester days from joining (batch 15 section 18), so on one test every tester gets the same set: 10 days per tester gives 1 week,
- * 3 days and 1 day; 45 days gives all four; 2 days gives 1 day.
+ * review reminders (reviewMarksFor): only marks still ahead when they joined; the month only when the deadline was more than a month away then. (Owner, Dec 2026;
+ * replaces "none within 24 hours of joining" and §295's 1-day exception) A mark within 24 hours of joining is kept too: joined Dec 14, 1:46 PM with a Dec 17
+ * deadline gives the 3-day line at the next morning run, then the 1-day line. Every tester gets the same tester days from joining (batch 15 section 18), so on
+ * one test every tester gets the same set: 10 days per tester gives 1 week, 3 days and 1 day; 45 days gives all four; 2 days gives 1 day.
  */
 export function deadlineMarksFor(joinedAt: Date, dueAt: Date) {
   const away = dueAt.getTime() - joinedAt.getTime();
-  // (Owner, Nov 6, §295) The last mark (1 day before) is always kept, even within 24 hours of joining: a tester whose deadline is within a day when she joins (or
-  // whose tester days are 1) got no reminder at all before. She gets that one line at the daily job's next run.
-  return MARKS.filter((m) => (m.mark !== "1m" || away > m.ms) && (m.mark === LAST_MARK || dueAt.getTime() - m.ms >= joinedAt.getTime() + DAY_MS)).map((m) => ({ ...m, at: new Date(dueAt.getTime() - m.ms) }));
+  // (Owner, Nov 6, §295) The last mark (1 day before) is always kept, even when it had passed at joining: a tester whose deadline is within a day when she joins (or
+  // whose tester days are 1) gets that one line at the daily job's next run. (Owner, Dec 2026) Every other mark still ahead at joining is kept (no 24-hour skip).
+  return MARKS.filter((m) => (m.mark !== "1m" || away > m.ms) && (m.mark === LAST_MARK || dueAt.getTime() - m.ms >= joinedAt.getTime())).map((m) => ({ ...m, at: new Date(dueAt.getTime() - m.ms) }));
 }
 const LAST_MARK = MARKS[MARKS.length - 1].mark;
 /** The key prefix of one contract's sent deadline marks for one deadline, kept in Test.notifiedMarks (Open until's own marks there are "open:<ms>:<mark>" since §311g). */
