@@ -14,7 +14,7 @@ async function ownsScope(userId: string, scope: string) {
   return !!(await db.user.findUnique({ where: { id }, select: { id: true } }));
 }
 
-export type ClaimAnswer = { claimed: true } | { claimed: false; waiting: true; waitMs: number };
+export type ClaimAnswer = { claimed: true } | { claimed: false; waiting: true; waitMs: number } | { claimed: false; moved: true };
 
 /**
  * Opening the page (§380 J): this tab takes it at once, unless the copy holding it has a press on its way (its "busy" mark, fresh): then this tab waits for it,
@@ -23,8 +23,11 @@ export type ClaimAnswer = { claimed: true } | { claimed: false; waiting: true; w
  * (Owner, Nov 28) `prev`: the load this same browser tab showed just before (a full page load gets a new tab id, lib/sameTab.ts). When that load still holds
  * the page, this is the same tab moving on (Edit's Save reloading Edit, ...): it takes the page at once, never waiting for its own press. Another copy (another
  * tab, browser or device) never names the holder, so it still waits for a press on its way.
+ * (Owner, Dec 10 2026) `loadedAgo`: a copy whose claim failed (offline at open) claiming again (back online, shown again, before its next press) says how long
+ * ago it loaded (ms, by its own steady clock: only the span is the copy's, the moment is the server's). Like a fresh open, except the copy opened later wins:
+ * when another copy claimed the page after this copy loaded, this copy doesn't take it (`moved`: it leaves like a moved page, drafts kept). Otherwise as above.
  */
-export async function claimPage(userId: string, scope: string, tab: string, opts: { now?: boolean; prev?: string } = {}): Promise<ClaimAnswer> {
+export async function claimPage(userId: string, scope: string, tab: string, opts: { now?: boolean; prev?: string; loadedAgo?: number } = {}): Promise<ClaimAnswer> {
   if (!isScope(scope) || !tab) throw new HttpError(400, "bad_request", "Something went wrong sending that. Reload the page and try again.");
   if (!(await ownsScope(userId, scope))) throw new HttpError(404, "not_found", "Not found.");
   const tabId = tab.slice(0, 64);
@@ -37,9 +40,13 @@ export async function claimPage(userId: string, scope: string, tab: string, opts
       return { claimed: true };
     };
     // Two copies asking at once take turns on the claim's row.
-    const rows = await tx.$queryRaw<{ tabId: string; busy: boolean; beatAt: Date | null; wantTab: string; wantAt: Date | null }[]>`SELECT "tabId", busy, "beatAt", "wantTab", "wantAt" FROM "PageClaim" WHERE "userId" = ${userId} AND scope = ${scope} FOR UPDATE`;
+    const rows = await tx.$queryRaw<{ tabId: string; busy: boolean; beatAt: Date | null; wantTab: string; wantAt: Date | null; claimedAt: Date }[]>`SELECT "tabId", busy, "beatAt", "wantTab", "wantAt", "claimedAt" FROM "PageClaim" WHERE "userId" = ${userId} AND scope = ${scope} FOR UPDATE`;
     const c = rows[0];
-    if (!c || c.tabId === tabId || opts.now || (prev && c.tabId === prev)) return take();
+    if (!c || c.tabId === tabId || (prev && c.tabId === prev)) return take();
+    // (Owner, Dec 10 2026) Claiming again after a failed claim: another copy claimed the page after this one loaded (checked before "Open now" too).
+    const ago = opts.loadedAgo;
+    if (typeof ago === "number" && Number.isFinite(ago) && c.claimedAt.getTime() > now.getTime() - Math.max(0, ago)) return { claimed: false, moved: true };
+    if (opts.now) return take();
     const busy = c.busy && !!c.beatAt && now.getTime() - c.beatAt.getTime() < BUSY_STALE_MS;
     if (!busy) return take();
     if (c.wantTab !== tabId || !c.wantAt) {
@@ -93,12 +100,20 @@ const FREE_PATHS = /^\/api\/(page-claim|page-handover|auth\/)/;
  * Every press from a one-at-a-time page names it (x-page, with its tab in x-tab): a press from a copy that no longer holds the claim is refused with the one line
  * (the page then goes to the dashboard). Reads (GET) are never refused here: the page learns through its poll (pulse's `moved`).
  * (§380 J) A press that locks the page (x-press) marks the holder busy: a new copy opened meanwhile waits for it (the copy says "done" when it's over).
+ * (Owner, Dec 10 2026) A copy whose claim failed names its page too (from its first draw): its press is refused the same way while another tab holds the page,
+ * and goes ahead only when nobody has claimed it.
+ * (Owner, Dec 10 2026) ... or when the holder is the load this same browser tab showed just before (`x-prev`, lib/sameTab.ts, as claimPage's `prev`): the same
+ * tab moving on, so this load takes the claim and the press goes ahead.
  */
 export async function checkPageClaim(req: Request, userId: string) {
   const scope = req.headers.get("x-page"), tab = req.headers.get("x-tab");
   if (!scope || !tab || !isScope(scope) || req.method === "GET" || req.method === "HEAD") return;
   if (FREE_PATHS.test(new URL(req.url, "http://x").pathname)) return;
-  if (!(await holdsPage(userId, scope, tab))) throw new HttpError(409, PAGE_MOVED_CODE, PAGE_MOVED_LINE);
+  if (!(await holdsPage(userId, scope, tab))) {
+    const prev = (req.headers.get("x-prev") ?? "").slice(0, 64), now = new Date();
+    const took = prev ? await db.pageClaim.updateMany({ where: { userId, scope, tabId: prev }, data: { tabId: tab.slice(0, 64), claimedAt: now, beatAt: now, busy: false, wantTab: "", wantAt: null } }) : null;
+    if (!took?.count) throw new HttpError(409, PAGE_MOVED_CODE, PAGE_MOVED_LINE);
+  }
   if (req.headers.get("x-press") === "1") await db.pageClaim.updateMany({ where: { userId, scope, tabId: tab.slice(0, 64) }, data: { busy: true, beatAt: new Date() } });
 }
 

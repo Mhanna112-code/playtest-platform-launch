@@ -186,7 +186,8 @@ export { NO_LONGER_ON_OFFER };
  *   1. Final refusals: not her session (404); her part has ended (its offer closes; "gone"); no open offer (already switched / decided / no longer on offer).
  *   2. Stop-once box: testerGate with skipTerms (her other unseen changes).
  *   3. Final refusal again, read after the box: no open offer any more (decided in another tab while the box showed).
- *   4. Stop-once box: "changed the terms again" when the page named an older offer (not on a confirmed press); it carries testerBoxRule.
+ *   4. Stop-once box: "changed the terms again" whenever the press didn't name the newest open offer (confirmed or not); it
+ *      carries testerBoxRule.
  *   5. No red mistakes. Action: Switch (the contract takes the terms; a line and a bell for the developer) or Keep.
  */
 export async function decideTerms(tester: { id: string }, contractId: string, body: Record<string, unknown>) {
@@ -214,7 +215,10 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
   await noOffer();
   await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: true });
   const newest = await noOffer(); // read again after the box (decided in another tab while it showed)
-  if ((!offer || offer.id !== newest.id) && body.confirmed !== true) {
+  // (Owner, Dec 10 2026) Only the offer the press names is ever decided on as is: a press naming any other (missing, older) stops with the newest, confirmed or
+  // not. The page moves its Switch / Keep to the offer that box names, so its next press names it and goes ahead; terms that arrived after any box (this one, or
+  // her other changes' box) stop it once again, never switched to unseen.
+  if (!offer || offer.id !== newest.id) {
     throw new HttpError(409, "stop_once", "Press again to go ahead.", { top: true, changes: [{ text: `${displayName(c.test.developer)} changed the terms again: ${newest.diff}`, at: newest.createdAt }], offerId: newest.id, tail: "Press again to decide on these newest terms.",
       // Her Alerts (`alertsOff`); and the rule the box was built under, so with Alerts Off a line picked up live joins it only if it
       // always stops (Switch / Keep are about no part).

@@ -163,8 +163,12 @@ describe("§380 J: the new copy is locked from its first draw until its claim an
       expect(locked()).toBe(true);
       await p.answer(r);
       expect(locked(), JSON.stringify(r)).toBe(false);
+      // (Owner, Dec 10 2026) Its next press claims again first (tests/claim-again-page-380.test.ts), then goes out naming the page.
       await p.press();
+      expect(stops(), JSON.stringify(r)).toEqual([]);
+      await p.answer({ status: 200, data: { claimed: true } });
       expect(stops().length, JSON.stringify(r)).toBe(1);
+      expect(stops()[0].headers["x-page"]).toBe(SCOPE);
       await p.done();
     }
     // A wait that ends with neither answer: unlocked too, the wait line gone.

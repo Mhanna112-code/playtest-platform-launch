@@ -65,7 +65,9 @@ describe("new terms offered to working testers", () => {
     await edit(testId, dev.cookie, { writtenCents: "14.00" });
     const r = await sact(sessionId, "terms", tester.cookie, { offerId: old.id, choice: "switch" });
     expect(r.body.error.changes[0].text).toBe("Nora Lane changed the terms again: written $10 → $14");
-    expect((await sact(sessionId, "terms", tester.cookie, { offerId: old.id, choice: "keep", confirmed: true })).status).toBe(200);
+    // (Owner, Dec 10 2026) A confirmed press still naming the older offer stops again; the page's next press names the offer the box moved it to.
+    expect((await sact(sessionId, "terms", tester.cookie, { offerId: old.id, choice: "keep", confirmed: true })).body.error.offerId).toBe(r.body.error.offerId);
+    expect((await sact(sessionId, "terms", tester.cookie, { offerId: r.body.error.offerId, choice: "keep", confirmed: true })).status).toBe(200);
     expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).writtenCents).toBe(1000);
   });
 

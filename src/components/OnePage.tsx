@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { TAB, leaveMovedPage, pageScope, pageUser, resetMovedPage, setPageScope } from "@/lib/client";
+import { TAB, leaveMovedPage, leftMovedPage, pageScope, pageShown, pageUser, resetMovedPage, setPageScope, setPageShown } from "@/lib/client";
 import { lockForClaim, onPressIdle, pressInFlight, pressOnItsWay, releaseAll } from "@/lib/pageLock";
 import { prevTab, watchPageLeft } from "@/lib/sameTab";
 import { flushKept } from "@/lib/useKept";
@@ -27,9 +27,14 @@ const post = (path: string, body: Record<string, unknown>) =>
  * over; then it redraws with what that press changed. The old copy, once its press is over, keeps its drafts, hands over and goes to the dashboard ("This page
  * was opened somewhere else."). A bank check left open isn't a press on its way (the page was freed when it showed), so it is never waited for.
  * Going BACK to an older copy (the browser's memory, `pageshow` persisted) is opening it again: the same claim and handover, and the other copy leaves.
- * (Owner, Nov 12: the new copy is locked from its first draw until its claim answers) Until then its presses would name no page (x-page) and so go unchecked,
- * possibly while the old copy's press is still on its way. Claimed: unlocked. Waiting: stays locked, with the wait line. The claim failed (an error, offline):
- * unlocked, the page stays usable. Back (`pageshow` persisted) re-claims the same way. This lock is not a press (lib/pageLock.ts lockForClaim): nobody waits for it.
+ * (Owner, Nov 12: the new copy is locked from its first draw until its claim answers) Until then a press would go out before the claim, possibly while the old
+ * copy's press is still on its way. Claimed: unlocked. Waiting: stays locked, with the wait line. The claim failed (an error, offline): unlocked, the page stays
+ * usable. Back (`pageshow` persisted) re-claims the same way. This lock is not a press (lib/pageLock.ts lockForClaim): nobody waits for it.
+ * (Owner, Dec 10 2026: claim again when the connection returns and before its next press, like a fresh open) A copy whose claim failed names its page on every
+ * press from its first draw (lib/client.ts setPageShown: the server refuses it while another tab holds the page) and claims again when the browser is back
+ * online, when the tab is shown again, and before its next press (that press goes out only after the claim). Like a fresh open (the same lock, the same wait for
+ * a busy holder), except the copy opened later wins: when another copy claimed the page after this one loaded (the server compares, `loadedAgo`), this copy
+ * leaves like a moved page, its unsent drafts kept.
  * (Owner, Nov 28) The same browser tab never waits for itself: a press that ends with a full page load (Edit's Save, ...) gets a new tab id on the next load, so
  * the claim names the load this tab showed before (`prev`, lib/sameTab.ts) and takes the page at once. And a copy going away (pagehide) whose press already
  * answered lets go of its busy mark (a copy waiting elsewhere takes the page at once); a press still on its way keeps it (the server may yet change the page).
@@ -66,26 +71,43 @@ export function OnePage({ scope, poll = false }: { scope: string; /** (§380 K) 
         router.refresh(); // what the old copy's press changed
       }
     };
+    /** (Owner, Dec 10 2026) When this copy loaded (or was opened again from the browser's memory), by the steady clock: a claim again says how long ago. */
+    let loadedAt = performance.now();
+    /** The claim on its way, if any: a claim again joins it rather than sending another. */
+    let claiming: Promise<void> | null = null;
     /** Open (or re-open) the page: claim it, waiting for the old copy's press when it has one on its way. Every button locked until the claim answers. */
-    const claim = async () => {
+    const claim = (again = false) => {
       const mine = ++run;
       const unlock = lockForClaim();
       freeClaim = unlock;
-      try {
-        await claimLoop(mine);
-      } finally {
+      const p: Promise<void> = claimLoop(mine, again).finally(() => {
         unlock(); // claimed, failed, or this copy closed / re-claimed (a newer claim keeps its own lock)
-      }
+        if (claiming === p) claiming = null;
+      });
+      claiming = p;
+      return p;
     };
-    const claimLoop = async (mine: number) => {
+    /** (Owner, Dec 10 2026) Claim again after a claim that failed (back online, shown again, before the next press). Nothing to do while it holds the page. */
+    const claimAgain = (): Promise<void> => {
+      if (!alive || pageScope() === scope || leftMovedPage()) return Promise.resolve();
+      return claiming ?? claim(true);
+    };
+    setPageShown(scope, claimAgain, () => prevTab());
+    const claimLoop = async (mine: number, again: boolean) => {
       let now = false;
       let waited = false;
       for (;;) {
         const prev = prevTab();
-        const r = await post("/api/page-claim", { scope, ...(prev ? { prev } : {}), ...(now ? { now: true } : {}) });
+        const r = await post("/api/page-claim", { scope, ...(prev ? { prev } : {}), ...(now ? { now: true } : {}), ...(again ? { loadedAgo: Math.max(0, Math.round(performance.now() - loadedAt)) } : {}) });
         if (!alive || mine !== run) return;
-        // Only a claim that landed names the page: a press or poll before it never reads as an older copy's.
+        // Only a claim that landed names the page: a poll before it never reads as an older copy's.
         if (r?.claimed === true) return hold(waited);
+        // (Owner, Dec 10 2026) Claiming again: another copy claimed the page after this one loaded. It keeps it; this copy leaves (drafts kept).
+        if (r?.moved === true) {
+          if (waited) setWaiting(false);
+          leaveMovedPage();
+          return;
+        }
         if (r?.waiting !== true) {
           if (waited) setWaiting(false);
           return;
@@ -143,6 +165,7 @@ export function OnePage({ scope, poll = false }: { scope: string; /** (§380 K) 
       resetMovedPage();
       handing = false;
       setPageScope("");
+      loadedAt = performance.now();
       void claim().then(() => {
         if (alive && pageScope() === scope) router.refresh();
       });
@@ -154,6 +177,13 @@ export function OnePage({ scope, poll = false }: { scope: string; /** (§380 K) 
       void post("/api/page-handover", { scope, release: true });
     };
     window.addEventListener("pagehide", onHide);
+    // (Owner, Dec 10 2026) A copy whose claim failed claims again when the browser is back online and when the tab is shown again.
+    const onOnline = () => void claimAgain();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void claimAgain();
+    };
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisible);
     // (§380 K) A page with no poll of its own: another browser or device opening it is learned on the live beat.
     const ask = async () => {
       if (pageScope() !== scope || document.visibilityState === "hidden") return;
@@ -172,7 +202,10 @@ export function OnePage({ scope, poll = false }: { scope: string; /** (§380 K) 
       channel?.close();
       window.removeEventListener("pageshow", onShow);
       window.removeEventListener("pagehide", onHide);
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisible);
       if (pageScope() === scope) setPageScope("");
+      if (pageShown() === scope) setPageShown("");
     };
   }, [scope, poll, router]);
   if (!waiting) return null;
