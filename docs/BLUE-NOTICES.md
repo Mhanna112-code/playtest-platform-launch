@@ -78,7 +78,7 @@ Every row below is an event producer read by `devChanges`, or a companion live-o
 | `subscription` | `Your subscription ended.` | S; see kind/Alerts table | `endSubscription`; [src/lib/server/subscription.ts:241](../src/lib/server/subscription.ts#L241) |
 | `admin` | `The team closed <list.length> open review on this test for $0: “<reason>”`<br>`The team closed <list.length> <one>s on this test for $0: “<reason>”` | S; see kind/Alerts table | `tellEveryone`; [src/lib/server/teamClose.ts:115](../src/lib/server/teamClose.ts#L115) |
 | `terms` | `<person> switched to the new terms` | quiet; live only | `decideTerms`; [src/lib/server/terms.ts:118](../src/lib/server/terms.ts#L118) |
-| `full` | `<test> is full: closed <apps.length> application. <invs.length> invite stays open until a spot opens`<br>`<test> is full: closed <apps.length> application. <invs.length> invites stay open until a spot opens`<br>`<test> is full: closed <apps.length> application`<br>`<test> is full: closed <apps.length> applications. <invs.length> invite stays open until a spot opens`<br>`<test> is full: closed <apps.length> applications. <invs.length> invites stay open until a spot opens`<br>`<test> is full: closed <apps.length> applications`<br>`<test> is full. <invs.length> invite stays open until a spot opens`<br>`<test> is full. <invs.length> invites stay open until a spot opens`<br>`<test> is full` | S; see kind/Alerts table | `closeOnFull`; [src/lib/server/tests.ts:176](../src/lib/server/tests.ts#L176) |
+| `full` | `<test> is full. <invs.length> invite stays open until a spot opens`<br>`<test> is full. <invs.length> invites stay open until a spot opens`<br>`<test> is full` | S; see kind/Alerts table | `closeOnFull`; [src/lib/server/tests.ts:176](../src/lib/server/tests.ts#L176) |
 | `listingFields.length ? "edited" : "edited_spots` | `The listing was edited: <items>` | Edit version fallback; normal current Save uses the own-action/listing feed | `editTest`; [src/lib/server/tests.ts:452](../src/lib/server/tests.ts#L452) |
 | `info` | `<person> changed <people / items>` | S; see kind/Alerts table | `editTest`; [src/lib/server/tests.ts:501](../src/lib/server/tests.ts#L501) |
 | `options.quietJoinEvent === true ? "auto_joined" : "joined` | `<person> joined again`<br>`<person> joined` | joined: S under Joins; auto_joined: quiet/suppressed, aggregate accepted-applications line instead | `joinTest`; [src/lib/server/tests.ts:952](../src/lib/server/tests.ts#L952) |
@@ -97,7 +97,7 @@ The following synthesized lines do not depend on a stored event's literal text:
 | Payment went through on &lt;test&gt;: $X to &lt;tester&gt; for the &lt;part&gt; (§177: as above) | Developer; a payment settled | S payments unless it had owedUntil: then quiet live-only (§78). |
 | On &lt;test&gt;: &lt;event with its first letter lowercased&gt; | Developer; another test has a chargeback/payment event | S; chargeback always, payment under payments. |
 | You saved the listing in another tab | Developer; listing save(s) from another load collapsed to one latest line | S always; See it marks the union of changed fields. Rename-only is quiet. |
-| You re-sent &lt;tester&gt;'s invite (the listing changed) | Developer; Save re-sent an invite | S always; separate consequence beside the listing line. |
+| You re-sent &lt;tester&gt;'s invite (the listing changed) | Developer; Save re-sent an invite (older action logs only: since Dec 10 2026 a Save no longer re-sends invites) | S always; separate consequence beside the listing line. |
 | You closed &lt;tester&gt;'s application (the listing changed) | Developer; Save closed an application | S always. |
 | You closed &lt;tester&gt;'s invite (fewer spots) | Developer; Save reduced spots | S always; existing trailing parenthesis is retained. |
 | You didn't re-invite &lt;tester&gt; (the listing changed) | Developer; changed listing could not re-invite them | S always. |
@@ -247,13 +247,13 @@ Join / Apply to join / Ask to rejoin / Withdraw application / No thanks share on
 | Exact wording | Trigger |
 | --- | --- |
 | &lt;dev&gt; changed the NDA: read and accept it again below | Join listing Save changed NDA; its tick clears. |
-| &lt;test&gt; is full: your application was closed | Application closed because full. |
+| &lt;test&gt; is full: your application was closed | Application closed because full (older rows only: since Dec 10 2026 a full test keeps applications open). |
 | &lt;dev&gt; made the test invite only: your application was closed | Join mode changed. |
 | &lt;dev&gt; changed the listing: your application was closed | Other listing edit closed application. |
 | &lt;test&gt; is full right now. Your invite stays open; we'll tell you when a spot opens. | Open invite when test fills. |
 | &lt;spot-open event wording&gt; | Spot opened with open invite; producer shown in section 1. |
-| &lt;dev&gt; changed the listing: here's a new invite on the updated listing | Old invite replaced; fresh invite exists. |
-| &lt;dev&gt; changed the listing: your invite closed (no spots left) | Replaced invite without a fresh one. |
+| &lt;dev&gt; changed the listing: here's a new invite on the updated listing | Old invite replaced; fresh invite exists (invites re-sent before Dec 10 2026 only). |
+| &lt;dev&gt; changed the listing: your invite closed (no spots left) | Replaced invite without a fresh one (before Dec 10 2026 only). |
 
 Blocked application wording comes from `appClosedLine`: see the common constructor index below. A rename alone is informational and is listed only with some other stopping change.
 
@@ -425,7 +425,7 @@ Each row has **F** lifetime and **Alerts: always** as defined above unless marke
 | Tester; `Apply to join (apply)` | `This test is invite only.` | `t.joinMode === "invite"` | `409 / "invite_only"`; [src/lib/server/joining.ts:245](../src/lib/server/joining.ts#L245) |
 | Tester; `Withdraw application (withdrawApplication)` | `There's no pending application to withdraw.`<br>`<person> accepted your application at <date/time>, so you're in this test.`<br>`The developer accepted your application at <date/time>, so you're in this test.`<br>`<person> declined your application at <date/time>.`<br>`The developer declined your application at <date/time>.`<br>`You withdrew it in another tab at <date/time>.`<br>`It closed when <person> changed the listing at <date/time>. You can apply again.`<br>`It closed when The developer changed the listing at <date/time>. You can apply again.` | `!n.count` | `409 / "gone"`; [src/lib/server/joining.ts:264](../src/lib/server/joining.ts#L264) |
 | Developer; `Accept / Decline application or rejoin ask (decideApplication)` | `That application doesn't exist.` | `!a \|\| a.testId !== testId` | `404 / "not_found"`; [src/lib/server/joining.ts:296](../src/lib/server/joining.ts#L296) |
-| Developer; `Accept / Decline application or rejoin ask (decideApplication)` | `<person>'s application closed when the test filled up at <date/time>.` | `a.status === "closed" && a.closedReason === "full"` | `409 / "gone"`; [src/lib/server/joining.ts:299](../src/lib/server/joining.ts#L299) |
+| Developer; `Accept / Decline application or rejoin ask (decideApplication)` | `<person>'s application closed when the test filled up at <date/time>.` | `a.status === "closed" && a.closedReason === "full"` (older rows only: since Dec 10 2026 a full test keeps applications open; Accept while full reads `This test is full.`) | `409 / "gone"`; [src/lib/server/joining.ts:299](../src/lib/server/joining.ts#L299) |
 | Developer; `Accept / Decline application or rejoin ask (decideApplication)` | `<person>'s application was closed.` | `a.status === "closed" && a.closedReason === "blocked"` | `409 / "gone"`; [src/lib/server/joining.ts:301](../src/lib/server/joining.ts#L301) |
 | Developer; `Accept / Decline application or rejoin ask (decideApplication)` | `<person>'s application closed when the test became invite only at <date/time>.`<br>`<person>'s application closed when you changed the listing in another tab at <date/time>.` | `a.status === "closed"` | `409 / "gone"`; [src/lib/server/joining.ts:302](../src/lib/server/joining.ts#L302) |
 | Developer; `Accept / Decline application or rejoin ask (decideApplication)` | `<person> withdrew their application.`<br>`You already declined this application.`<br>`You already accepted this application.`<br>`This application was already answered.` | `a.status !== "pending"` | `409 / "gone"`; [src/lib/server/joining.ts:304](../src/lib/server/joining.ts#L304) |

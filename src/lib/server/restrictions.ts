@@ -199,12 +199,11 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
   };
   if (u[f.at]) await alreadyErr(); // (§386 C) already suspended: before the note's own mistakes
   check?.();
-  let invitesClosed = 0;
   const claimed = await db.user.updateMany({ where: { id: userId, [f.at]: null, deletedAt: null }, data: { [f.at]: new Date(), [f.note]: note, [f.by]: adminId, [f.back]: null } });
   if (claimed.count !== 1) await alreadyErr();
   await accountEvent(userId, "suspended", adminId, note, side);
   if (side === "developer" && u.isDeveloper) {
-    invitesClosed = await markPaused({ developerId: userId }); // (batch 9) one clock per paused test; (§390 d) its invites closed, said in the line below
+    await markPaused({ developerId: userId }); // (batch 9) one clock per paused test; (Owner, Dec 10 2026) its open invites stay open
     await pauseDeveloper(u);
     // (Owner, Nov 6, §295) Their testers read "“<test>” is paused": each test no other cause (a hold, the team's pause) was pausing already.
     if (!u.holdStartedAt) await tellTestersPaused((await db.test.findMany({ where: { developerId: userId, status: "open", workEndedAt: null, adminPausedAt: null }, select: { id: true } })).map((t) => t.id));
@@ -216,8 +215,7 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
   if (side === "tester" && u.isTester) await removeTester(u, "suspended");
   // (Owner, Nov 6, §313a) The developer side's line names each paused test's closing date (it was this line plus one "<test> is paused and closes on …" per test).
   const closing = side === "developer" && u.isDeveloper ? await (await import("./pauseClosure")).pausedClosingWords(userId) : null;
-  const invites = (await import("./invites")).invitesClosedTail(invitesClosed); // (§390 d)
-  await notify(u.email, `${closing ? `${sidePausedLine(side)}: ${closing} unless your account is cleared` : sidePausedLine(side)}${invites ? `; ${invites}` : ""}`, [`${sidePausedLine(side)}. Contact us in Settings if you think this is a mistake.`], "/app/help", { side, always: true, group: "admindecision" });
+  await notify(u.email, `${closing ? `${sidePausedLine(side)}: ${closing} unless your account is cleared` : sidePausedLine(side)}`, [`${sidePausedLine(side)}. Contact us in Settings if you think this is a mistake.`], "/app/help", { side, always: true, group: "admindecision" });
   return { ok: true, side };
 }
 
@@ -444,7 +442,7 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
   const from = checkFrom(seen);
   if (from) stopIfChanged("Pause", await testChangesSince(testId, adminId, from, seen?.tab));
   check?.();
-  const invitesClosed = await markPaused({ id: testId }); // (batch 9) one clock per paused test: kept if a hold or suspension already paused it
+  await markPaused({ id: testId }); // (batch 9) one clock per paused test: kept if a hold or suspension already paused it; (Owner, Dec 10 2026) its open invites stay open
   // (Batch 34 §1) Two admins at once: the test is locked, so the second reads the first's pause and is refused naming them.
   await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
@@ -466,8 +464,7 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
   // (Owner, Nov 6, §310b) The developer's line names the closing date in the paused line's words ("The team paused “…”: it closes on <date> unless the team lifts
   // the pause"). (§313a) There is no separate per-test paused line any more.
   const closes = (await import("./pauseClosure")).closesUnless(dev, await db.test.findUniqueOrThrow({ where: { id: testId } }), "team"); // (§390 c) the team's pause leads
-  // (Owner, Nov 11, §390 d) And how many open invites the pause closed: "…: it closes on Dec 5 unless the team lifts the pause; 3 open invites were closed".
-  const pausedLine = withTail(`The team paused “${t.title}”${closes ? `: it ${closes}` : ""}`, (await import("./invites")).invitesClosedTail(invitesClosed));
+  const pausedLine = `The team paused “${t.title}”${closes ? `: it ${closes}` : ""}`;
   // (Owner, Nov 6, §295) Its testers read "“<test>” is paused" (never why), unless the developer's own hold or suspension was pausing it already.
   if (!dev.holdStartedAt && !dev.devSuspendedAt) await tellTestersPaused([testId]);
   // (Batch 15 section 20) Never the note in the bell line: it says what happened; the note is on the test page. (Owner, Nov 6, §299) The longer text below is

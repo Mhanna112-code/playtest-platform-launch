@@ -152,9 +152,8 @@ export async function startHold(devId: string, reason: string, /** (§315) the d
   const { release } = await import("./confirm");
   for (const p of await db.payment.findMany({ where: { developerId: devId, status: "needs_action", kind: { in: ["review", "call", "extra"] } }, select: { id: true } }))
     await release(p.id).catch((e) => console.error("[hold] cancel open Pay check:", (e as Error).message));
-  // (Batch 9) One closing clock per paused test: it starts now unless the test was already paused.
-  const invitesClosed = await markPaused({ developerId: devId }, now);
-  const invites = (await import("./invites")).invitesClosedTail(invitesClosed); // (§390 d)
+  // (Batch 9) One closing clock per paused test: it starts now unless the test was already paused. (Owner, Dec 10 2026) Open invites stay open through it.
+  await markPaused({ developerId: devId }, now);
   // (Batch 8) Subscription billing pauses while the hold lasts.
   await (await import("./subscription")).pauseBilling(devId, now);
   const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
@@ -175,13 +174,13 @@ export async function startHold(devId: string, reason: string, /** (§315) the d
   // (Owner, Nov 6, §313a) ONE line names each paused test's closing date (it was this line plus one "<test> is paused and closes on …" line per test).
   const closing = await (await import("./pauseClosure")).pausedClosingWords(devId);
   if (reason === "chargeback") {
-    await notify(dev.email, `${closing ? `Your tests are paused after a chargeback: ${closing} unless you finish the steps` : "Your tests are paused after a chargeback"}${invites ? `; ${invites}` : ""}`, ["Your bank reversed a payment, so your tests are paused: you can't change anything on them, and testers stay in them.", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval. Open Payments to see which steps remain.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#chargeback-steps", { side: "developer", always: true, now: true, payment: true, group: "payhold" }); // (§294) emailed immediately
+    await notify(dev.email, `${closing ? `Your tests are paused after a chargeback: ${closing} unless you finish the steps` : "Your tests are paused after a chargeback"}`, ["Your bank reversed a payment, so your tests are paused: you can't change anything on them, and testers stay in them.", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval. Open Payments to see which steps remain.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#chargeback-steps", { side: "developer", always: true, now: true, payment: true, group: "payhold" }); // (§294) emailed immediately
     return true;
   }
   // (Owner, Nov 6, §315) Started by a declined payment: the line names it ("A $10.00 payment for … was declined, so your tests are paused until you pay what you
   // owe: …"); a hold started any other way reads as before.
   const paused = `Your tests are paused until you pay what you owe${closing ? `: ${closing}` : ""}`;
-  const subject = `${declined ? `${declinedLead(declined.cents, declined.what)}, so ${paused.charAt(0).toLowerCase()}${paused.slice(1)}` : closing ? paused : "Your tests are paused"}${invites ? `; ${invites}` : ""}`; // (§390 d)
+  const subject = `${declined ? `${declinedLead(declined.cents, declined.what)}, so ${paused.charAt(0).toLowerCase()}${paused.slice(1)}` : closing ? paused : "Your tests are paused"}`;
   await notify(dev.email, subject, ["Your tests are paused until you pay what you owe: you can't change anything on them, and testers stay in them.", "Open Payments and press Pay what you owe: your tests resume at once.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#owed", { side: "developer", always: true, payment: true, group: "payhold" });
   return true;
 }
@@ -234,18 +233,13 @@ export async function tellTestersPaused(testIds: string[]) {
 }
 
 /**
- * (Owner, Oct 28 night, batch 9) A pause started: the tests it pauses that weren't paused yet start their one 7-day clock now. (Owner, Nov 11, §390 d) Returns how
- * many open invites it closed (the developer's pause line says so).
+ * (Owner, Oct 28 night, batch 9) A pause started: the tests it pauses that weren't paused yet start their one 7-day clock now.
+ * (Owner, Dec 10 2026) Open invites stay open through any pause, hold or suspension, like pending applications: nothing is cancelled and no invitee is told.
+ * Join waits meanwhile (PAUSED_RIGHT_NOW) and so do the invite reminders; only the 7-day pause closure (pauseClosure.ts) closes them.
  */
 export async function markPaused(where: { developerId?: string; id?: string }, now = new Date()) {
-  // (Owner, Oct 28, batch 16 section 32) Open invites close when the test or its developer can't take testers (any pause, hold or suspension); nothing reopens
-  // by itself: the developer can invite again after.
   // (Owner, Nov 9, §358) A closed test (its work ended) is like a stopped one: a pause starting now doesn't pause it.
-  const closing = await (await import("./invites")).openInviteIds({ test: { ...where, status: "open" } });
-  await db.invite.updateMany({ where: { id: { in: closing }, status: "sent" }, data: { status: "cancelled" } });
-  await (await import("./invites")).tellInvitesClosed(closing); // (batch 30 §6) the neutral line, never why
   await db.test.updateMany({ where: { ...where, status: "open", pausedSince: null }, data: { pausedSince: now } });
-  return closing.length;
 }
 
 /**

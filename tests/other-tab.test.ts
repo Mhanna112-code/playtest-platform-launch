@@ -81,14 +81,12 @@ describe("reason E: your own actions in another tab", () => {
     await later();
     const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     expect((await act(testId, "edit", dev.cookie, { version: v, fields: { description: "Sail faster" } })).status).toBe(200);
-    // The edit re-sent the invite (NEWEST+4): (batch 17 section 4) No thanks on the old one stops once (blue) with the new listing; No thanks on the new one stops once for the change.
-    const old = await invitePOST(req(`/api/invites/${inv.id}`, { cookie: cara.cookie, body: { seenAt: opened } }), { params: Promise.resolve({ id: inv.id }) }).then(json);
-    expect(texts(old)[0]).toBe("Nora Lane updated “Harbor Run”: your invite was sent again on the new listing");
-    const inv2 = await db.invite.findFirstOrThrow({ where: { testId, testerId: cara.user.id, status: "sent" } });
-    const nt = await invitePOST(req(`/api/invites/${inv2.id}`, { cookie: cara.cookie, body: { seenAt: opened } }), { params: Promise.resolve({ id: inv2.id }) }).then(json);
-    // (Batch 30 §10) One line per save.
-    expect(texts(nt)).toEqual([expect.stringMatching(saveRe("Nora Lane", "description")), "Nora Lane changed the listing: here's a new invite on the updated listing"]);
-    expect((await invitePOST(req(`/api/invites/${inv2.id}`, { cookie: cara.cookie, body: { seenAt: opened, confirmed: true } }), { params: Promise.resolve({ id: inv2.id }) }).then(json)).status).toBe(200);
+    // (Owner, Dec 10 2026) The edit keeps the invite (nothing re-sent): No thanks on it stops once for the change, (batch 30 §10) one line per save.
+    expect((await db.invite.findUniqueOrThrow({ where: { id: inv.id } })).status).toBe("sent");
+    const nt = await invitePOST(req(`/api/invites/${inv.id}`, { cookie: cara.cookie, body: { seenAt: opened } }), { params: Promise.resolve({ id: inv.id }) }).then(json);
+    expect(texts(nt)).toEqual([expect.stringMatching(saveRe("Nora Lane", "description"))]);
+    expect((await invitePOST(req(`/api/invites/${inv.id}`, { cookie: cara.cookie, body: { seenAt: opened, confirmed: true } }), { params: Promise.resolve({ id: inv.id }) }).then(json)).status).toBe(200);
+    expect((await db.invite.findUniqueOrThrow({ where: { id: inv.id } })).status).toBe("declined");
   });
 });
 

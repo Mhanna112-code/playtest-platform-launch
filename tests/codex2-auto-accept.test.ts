@@ -33,7 +33,7 @@ describe("switching to instant joins", () => {
     expect(await db.testEvent.count({ where: { testId, kind: "applied", text: "3 waiting applications were accepted when you switched to joins instantly" } })).toBe(1);
   });
 
-  it("stops accepting at the spot cap and closes remaining applications as full", async () => {
+  it("stops accepting at the spot cap; (Owner, Dec 10 2026) the remaining applications stay pending while full", async () => {
     const { dev, testId } = await setup({ joinMode: "apply", devices: ["Windows PC"], spots: 2 });
     const applicants = await Promise.all([
       makeUser({ tester: true }), makeUser({ tester: true }), makeUser({ tester: true }),
@@ -44,8 +44,7 @@ describe("switching to instant joins", () => {
 
     expect(await db.contract.count({ where: { testId, status: "working" } })).toBe(2);
     const apps = await db.application.findMany({ where: { testId }, orderBy: { createdAt: "asc" } });
-    expect(apps.map((a) => a.status)).toEqual(["joined", "joined", "closed"]);
-    expect(apps[2].closedReason).toBe("full");
+    expect(apps.map((a) => a.status)).toEqual(["joined", "joined", "pending"]);
   });
 
   it("does not accept an application made against an older listing", async () => {

@@ -209,8 +209,10 @@ describe("§377 a re-sent invite goes with the listing box (batch 34 §10); an i
 
   it("re-sent: the first press is the box (the new invite's line, the NDA's line); the second joins on the current invite. Two presses", async () => {
     const x = await invitedThenEdited({ ndaText: "Keep it secret, please." });
-    const fresh = await db.invite.findFirstOrThrow({ where: { testId: x.testId, testerId: x.ana.user.id, status: "sent" } });
-    expect(fresh.id).not.toBe(x.oldInvite.id);
+    // (Owner, Dec 10 2026) An edit no longer re-sends invites: the invite stays. One re-sent before then ("replaced", a new one after it) reads as below.
+    expect((await db.invite.findUniqueOrThrow({ where: { id: x.oldInvite.id } })).status).toBe("sent");
+    await db.invite.update({ where: { id: x.oldInvite.id }, data: { status: "replaced" } });
+    const fresh = await db.invite.create({ data: { testId: x.testId, testerId: x.ana.user.id } });
     const first = await act(x.testId, "join", x.ana.cookie, { seenAt: x.pageAt, inviteId: x.oldInvite.id, ndaAccepted: true });
     expect(first.body.error.code).toBe("stop_once");
     const lines = first.body.error.changes as { text: string; nda?: boolean }[];
