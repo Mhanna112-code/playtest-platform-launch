@@ -104,6 +104,12 @@ export async function teamPauseSpans(testId: string, adminPausedAt: Date | null,
   return out;
 }
 
+/** (Owner, Dec 2026) When one side's Rate last came back from a freeze: the end of the latest of these spans that ended at or before now (an open one is still on), or null. */
+export function lastLift(spans: Span[], now: Date): Date | null {
+  const ends = spans.filter((x) => !x.open && x.end <= now.getTime()).map((x) => x.end);
+  return ends.length ? new Date(Math.max(...ends)) : null;
+}
+
 /** Everything that moves a test's close-out: the team's pauses, the developer's holds and suspensions, and outages. */
 export async function testSpans(t: { id: string; adminPausedAt: Date | null; workEndedAt?: Date | null; pauseClosedAt?: Date | null; status?: string; stoppedAt?: Date | null; developer: { id: string; holdStartedAt: Date | null; devSuspendedAt: Date | null } }, from: Date, now: Date) {
   const [devEvents, outages, team] = await Promise.all([
@@ -169,6 +175,20 @@ export async function testerRatingClosesAt(contractId: string, now = new Date())
  // pauses it after the test closed too, on the same one clock from the test close (so only the part after it counts); the close-out itself doesn't move.
  const spans=mergeSpans([...await moneySpans(t,base,now),...disputeSpans,...testerPauseSpans(tEvents,c.tester.testerSuspendedAt,now)]);
  return windowEnd(base,spans,now,CLOSE_OUT_DAYS).end;
+}
+
+/**
+ * (Owner, Dec 2026) When the tester's Rate on this contract last came back from a freeze (lastLift), for ratingReminders' one fresh line after a pause lifts.
+ * A freeze is what hides her Rate: the money freeze alone (moneySpans without outages: the team's pause while in force, the developer's holds and suspensions,
+ * during the test or after it closed) and her own tester-side suspensions (testerPauseSpans). A dispute or work in its review window (Rate disabled) is not one.
+ */
+export async function testerRateLiftedAt(contractId: string, now = new Date()) {
+  const c = await db.contract.findUnique({ where: { id: contractId }, select: { testId: true, tester: { select: { id: true, testerSuspendedAt: true } } } });
+  if (!c) return null;
+  const t = await db.test.findUnique({ where: { id: c.testId }, include: { developer: true } });
+  if (!t) return null;
+  const tEvents = await db.accountEvent.findMany({ where: { userId: c.tester.id, kind: { in: ["suspended", "reinstated"] } }, select: { kind: true, side: true, createdAt: true } });
+  return lastLift(mergeSpans([...(await moneySpans(t, now, now, false)), ...testerPauseSpans(tEvents, c.tester.testerSuspendedAt, now)]), now);
 }
 
 /**

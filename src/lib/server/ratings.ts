@@ -12,7 +12,7 @@ import { callsGoneTail, cancelCallsAhead, lockTest, ownContract, ownTest, record
 import { seenOf, unanswered, tabOf, testerPaymentChanges } from "./live";
 import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges, testerGate } from "./testerGate";
 import { devPauseMoments, devStopSince, loadedOf, stopBox } from "./stopMoment";
-import { CONTRACTS, closeOutOf, testSpans, testerRatingClosesAt, closedOut, devPauseSpans, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
+import { CONTRACTS, closeOutOf, testSpans, testerRateLiftedAt, testerRatingClosesAt, closedOut, devPauseSpans, lastLift, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
 import { CLOSE_OUT_DAYS, closeOutBase, repeatDue, REPEAT_MIN_GAP_MS } from "@/lib/rules";
 import { closeOffersOfEnded } from "./offerClose";
 import { RATE_TEAM_PAUSED, TESTER_FROZEN_CAUSE, moneyFrozen, teamPausedNow } from "@/lib/restricted";
@@ -44,7 +44,8 @@ export const RATINGS_HREF = "/app#ratings-to-give";
  * (Batch 17) One Rate box's state: "open" (pressable), "disabled" (shown with its grey line), "hidden" (not shown; an old page's press is refused with the line),
  * "closed" (after the test's close-out: a note, refused), "rated" (done). The developer's also carries their window: when it opened and ends (`paused`: the end moves on while they can't rate) and when the tester's rating shows.
  */
-export type RateState = { kind: "open" | "disabled" | "hidden" | "closed" | "rated"; line: string; opensAt?: Date | null; endsAt?: Date | null; paused?: boolean; revealAt?: Date | null };
+export type RateState = { kind: "open" | "disabled" | "hidden" | "closed" | "rated"; line: string; opensAt?: Date | null; endsAt?: Date | null; paused?: boolean; revealAt?: Date | null;
+  /** (Owner, Dec 2026) The developer's: when their last freeze (their own hold or suspension, the team's pause of the test) ended, at or before now (lastLift) */ liftedAt?: Date | null };
 
 /** Why this side can't rate yet ("" = available; "rated" = done; otherwise the line, for a hidden or a disabled box). */
 export async function rateBlocker(contractId: string, side: Side, now = new Date()) {
@@ -138,7 +139,7 @@ export async function devRateStates(contractIds: string[], now = new Date()) {
     // The tester's rating shows once the developer rates or their 14 days end. A window that hadn't opened 14 days after the tester rated (the developer left work
     // unsettled that long) doesn't hold it back past those 14 days.
     const revealAt = !theirs ? null : (theirs.revealedAt ?? (opensAt && w && opensAt.getTime() <= theirs.createdAt.getTime() + WINDOW_DAYS * DAY ? w.end : new Date(theirs.createdAt.getTime() + WINDOW_DAYS * DAY)));
-    const base = { opensAt, endsAt: w?.end ?? null, paused: w?.paused ?? false, revealAt };
+    const base = { opensAt, endsAt: w?.end ?? null, paused: w?.paused ?? false, revealAt, liftedAt: lastLift(spans.get(c.testId)!, now) };
     if (dev.deletedAt || c.tester.deletedAt) out.set(c.id, { kind: "hidden", line: ACCOUNT_DELETED_RATE, ...base });
     else if (mine) out.set(c.id, { kind: "rated", line: "", ...base });
     else if (dev.devSuspendedAt || dev.holdStartedAt) out.set(c.id, { kind: "hidden", line: RATE_INACTIVE, ...base });
@@ -373,11 +374,16 @@ export async function devRate(dev: { id: string; name: string; email: string }, 
  * close-out (their Rate "closed"), skipped while their Rate is disabled (new work in its review window, a Charge to settle, an open dispute) or their tester side is
  * suspended; when it opens again the next one comes once 3 days have passed since the last. Reminders name the close-out once it is known. The LAST one ignores email Off. Developer (batch 17 section 16): from when their Rate opened, until they
  * rate or their 14 days end, paused while they can't rate.
+ * (Owner, Dec 2026) After a pause, both sides' reminders come back the way the tester's "Charge or let go" line does: a freeze (tester: the team's pause, the
+ * developer's hold or suspension, her own tester-side suspension; developer: their own hold or suspension, the team's pause of that test) that ENDED after that
+ * person's last reminder on the contract (or their prompt / opening line, if none yet) gets ONE fresh reminder as soon as their Rate is open again, from the
+ * 5-minute sweep too; the every-3-days repeats then count from it. A freeze that ended before the last reminder changes nothing; a disabled Rate (a dispute, work
+ * in its review window) is no freeze.
  */
 /** (§367) The close-out date the tester's last rating reminder on this contract named ("ratec:<contract>:<ms>" in the test's marks), or null. */
 const ratingNamed = (marks: string[], contractId: string) => { const t = marks.filter((x) => x.startsWith(`ratec:${contractId}:`)).pop(); return t ? Number(t.slice(t.lastIndexOf(":") + 1)) : null; };
 
-export async function ratingReminders(now = new Date(), opts: { /** (§383) false from the 5-minute sweep: only the opening and §367's fresh line */ repeats?: boolean } = {}) {
+export async function ratingReminders(now = new Date(), opts: { /** (§383) false from the 5-minute sweep: only the opening, §367's fresh line and (Owner, Dec 2026) the one after a freeze lifted */ repeats?: boolean } = {}) {
   // (Owner, Nov 11, §383) Every 3 UTC calendar days and at least 12 hours after the last (repeatDue; it was 3 days − 1 hour, drifting earlier), from the daily job
   // only. The developer's opening line (maybeOpenDevRating) and §367's fresh line when the date moved later still come from the sweep straight away.
   const EVERY_DAYS = 3;
@@ -385,6 +391,11 @@ export async function ratingReminders(now = new Date(), opts: { /** (§383) fals
   let n = 0;
   const sinceLast = async (userId: string, testId: string, fallback: Date) => {
     const last = await db.notification.findFirst({ where: { userId, testId, text: { startsWith: "Reminder: rate " } }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
+    return last && last.createdAt > fallback ? last.createdAt : fallback;
+  };
+  /** (Owner, Dec 2026) This contract's own last line with this reminder key (or `fallback` if later): what a lifted freeze is compared with. */
+  const lastOf = async (userId: string, key: string, fallback: Date) => {
+    const last = await db.notification.findFirst({ where: { userId, reminderKey: key }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
     return last && last.createdAt > fallback ? last.createdAt : fallback;
   };
   // Tester: prompted once (when their Rate opens), then every 3 days until they rate or the close-out, whatever the test's state (batch 29 §21: running tests too).
@@ -398,7 +409,10 @@ export async function ratingReminders(now = new Date(), opts: { /** (§383) fals
     const closes = await testerRatingClosesAt(c.id, now);
     const named = ratingNamed(c.test.notifiedMarks, c.id);
     const moved = !!closes && named != null && closes.getTime() > named;
-    if (!moved && !(repeats && repeatDue(await sinceLast(c.testerId, c.testId, c.ratePromptedAt!), now, EVERY_DAYS))) continue;
+    // (Owner, Dec 2026) A freeze that lifted after her last reminder on this contract (or her prompt): one fresh line now, before the test closes too (no date
+    // to move then), from the sweep as well. Its line is dated after the lift, so it never fires twice; with `moved` too it is still the one line.
+    const lifted = async () => { const at = await testerRateLiftedAt(c.id, now); return !!at && at > (await lastOf(c.testerId, `rate:${c.id}`, c.ratePromptedAt!)); };
+    if (!moved && !(repeats && repeatDue(await sinceLast(c.testerId, c.testId, c.ratePromptedAt!), now, EVERY_DAYS)) && !(await lifted())) continue;
     if ((await rateBlocker(c.id, "tester", now)) !== "") continue; // disabled, or (§331) closed at the close-out: no reminder
     // (Owner, Nov 7, §331) The last one before the close-out (the next 3-day slot would fall after it) ignores email Off.
     const last = !!closes && now.getTime() + EVERY_DAYS * DAY >= closes.getTime();
@@ -417,10 +431,14 @@ export async function ratingReminders(now = new Date(), opts: { /** (§383) fals
     const s = states.get(r.contractId);
     if (!s || s.kind !== "open" || s.paused) continue;
     if (await maybeOpenDevRating(r.contractId, now)) continue; // the opening line itself (once)
-    if (!repeats) continue; // (§383) the repeats: the daily job only
+    // (§383) the repeats: the daily job only. (Owner, Dec 2026) A freeze lifted since their Rate opened may still owe the sweep its one fresh line (below).
+    if (!repeats && !(s.liftedAt && s.liftedAt > s.opensAt!)) continue;
     const c = await db.contract.findUnique({ where: { id: r.contractId }, include: { tester: true, test: true } });
     if (!c || (await db.user.findUnique({ where: { id: c.test.developerId }, select: { deletedAt: true } }))?.deletedAt) continue; // (batch 29 §21) on a running test too
-    if (!repeatDue(await sinceLast(c.test.developerId, c.testId, s.opensAt!), now, EVERY_DAYS)) continue;
+    // (Owner, Dec 2026) Their hold or suspension, or the team's pause of the test, lifted after their last reminder on this contract (or the opening line, or
+    // when their Rate opened): one fresh line now, from the sweep too; the repeats count from it.
+    const lifted = !!s.liftedAt && s.liftedAt > (await lastOf(c.test.developerId, `rate-dev:${c.id}`, await lastOf(c.test.developerId, `rate-open:${c.id}`, s.opensAt!)));
+    if (!lifted && !(repeats && repeatDue(await sinceLast(c.test.developerId, c.testId, s.opensAt!), now, EVERY_DAYS))) continue;
     // (Owner, Nov 7, §329) The LAST reminder before their 14 days end (the next 3-day slot would fall after the end) ignores email Off (`always`): it reaches the
     // morning email. The others follow the email setting. (The line already names the end date.)
     const last = now.getTime() + EVERY_DAYS * DAY >= s.endsAt!.getTime();
