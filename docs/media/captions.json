@@ -18862,5 +18862,104 @@
     "group": "b35x1",
     "order": 148004,
     "size": "desktop"
+  },
+  "termsbox-withdrawn.webm": {
+    "caption": "Nora changes the price again just before Ana's Switch (stop-once box), then puts it back to Ana's terms: after the live update one line is left, and a reload clears it.",
+    "kind": "video",
+    "title": "Offer withdrawn",
+    "section": "Switch / Keep box (Dec 10)",
+    "group": "termsbox",
+    "order": 112001,
+    "size": "desktop"
+  },
+  "termsbox-new-offer-clean.webm": {
+    "caption": "With the “no longer on offer” line showing, Nora offers another price: Switch / Keep appear without the old line, and Keep reads “Kept your current terms.”",
+    "kind": "video",
+    "title": "A new offer starts clean",
+    "section": "Switch / Keep box (Dec 10)",
+    "group": "termsbox",
+    "order": 112001,
+    "size": "desktop"
+  },
+  "termsbox-leave-loads-offer.webm": {
+    "caption": "Nora changes the price and Ana presses Leave before the live update: the stop-once box naming the new terms and Switch / Keep appear at once.",
+    "kind": "video",
+    "title": "Leave loads the new terms",
+    "section": "Switch / Keep box (Dec 10)",
+    "group": "termsbox",
+    "order": 112002,
+    "size": "desktop"
+  },
+  "termsbox-refusal-then-stopped.webm": {
+    "caption": "Nora stops the test and Ana presses Switch before the live update: the refusal shows under the buttons; the live update then redraws the page as stopped, and a reload follows.",
+    "kind": "video",
+    "title": "Switch after a Stop",
+    "section": "Switch / Keep box (Dec 10)",
+    "group": "termsbox",
+    "order": 112003,
+    "size": "desktop"
+  },
+  "termsbox-already-switched.webm": {
+    "caption": "Ana switched in another tab; this tab still shows the same offer and its Switch is refused under the buttons.",
+    "kind": "video",
+    "title": "Switch in a second tab",
+    "section": "Switch / Keep box (Dec 10)",
+    "group": "termsbox",
+    "order": 112001,
+    "size": "desktop"
+  },
+  "send-empty-after-question-added.webm": {
+    "caption": "After Nora adds a third question, Ana presses Send Answers with its box empty; then, on a test whose questions didn't change, the same press with the box empty.",
+    "kind": "video",
+    "title": "Send Answers with the box empty",
+    "section": "Switch / Keep box (Dec 10)",
+    "group": "termsbox",
+    "order": 112005,
+    "size": "desktop"
+  },
+  "send-red-and-paused.webm": {
+    "caption": "The team pauses the test, Ana types 12 characters (Send goes away); the team lifts the pause, pauses again, and Ana presses Send Answers at once.",
+    "kind": "video",
+    "title": "Short answer while paused",
+    "section": "Switch / Keep box (Dec 10)",
+    "group": "termsbox",
+    "order": 112003,
+    "size": "desktop"
+  },
+  "send-red-and-stop-box.webm": {
+    "caption": "Ana has 12 characters typed; off camera Nora paid $0.00 for her recording (with a reason); she presses Send Answers, then again without fixing the answer.",
+    "kind": "video",
+    "title": "Short answer and a stop-once",
+    "section": "Switch / Keep box (Dec 10)",
+    "group": "termsbox",
+    "order": 112007,
+    "size": "desktop"
+  },
+  "leave-clears-lines.webm": {
+    "caption": "Ana's page shows the “no longer on offer” line and a red mistake in her written form; she ends her part with Leave, then reloads.",
+    "kind": "video",
+    "title": "Leave clears the lines",
+    "section": "Switch / Keep box (Dec 10)",
+    "group": "termsbox",
+    "order": 112008,
+    "size": "desktop"
+  },
+  "rate-clears-lines.webm": {
+    "caption": "Ana's page shows the “no longer on offer” line and a red mistake in her written form; she ends her part with Rate, then reloads.",
+    "kind": "video",
+    "title": "Rate clears the lines",
+    "section": "Switch / Keep box (Dec 10)",
+    "group": "termsbox",
+    "order": 112004,
+    "size": "desktop"
+  },
+  "termsbox-already-switched-elsewhere.webm": {
+    "caption": "Ana's Switch is made outside this page (through the API, off camera); she then presses Switch on the offer this page still shows.",
+    "kind": "video",
+    "title": "Switch already made elsewhere",
+    "section": "Switch / Keep box (Dec 10)",
+    "group": "termsbox",
+    "order": 112002,
+    "size": "desktop"
   }
 }

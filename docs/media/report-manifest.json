@@ -8386,6 +8386,89 @@
       ]
     },
     {
+      "title": "Switch / Keep box (Dec 10)",
+      "explanation": "The new-terms box on the tester's session page: an offer withdrawn after a stopped Switch, a new offer starting clean, Leave loading the new terms at once, Switch refused after a Stop or after switching in another tab; Send Answers with an empty box, with a short answer while paused or stopped once; and Leave or Rate clearing the lines.",
+      "cases": [
+        {
+          "title": "Offer withdrawn",
+          "explanation": "Nora changes the price again just before Ana's Switch (stop-once box), then puts it back to Ana's terms: after the live update one line is left, and a reload clears it.",
+          "kind": "video",
+          "desktop": "termsbox-withdrawn.webm",
+          "phone": null
+        },
+        {
+          "title": "A new offer starts clean",
+          "explanation": "With the “no longer on offer” line showing, Nora offers another price: Switch / Keep appear without the old line, and Keep reads “Kept your current terms.”",
+          "kind": "video",
+          "desktop": "termsbox-new-offer-clean.webm",
+          "phone": null
+        },
+        {
+          "title": "Switch in a second tab",
+          "explanation": "Ana switched in another tab; this tab still shows the same offer and its Switch is refused under the buttons.",
+          "kind": "video",
+          "desktop": "termsbox-already-switched.webm",
+          "phone": null
+        },
+        {
+          "title": "Leave loads the new terms",
+          "explanation": "Nora changes the price and Ana presses Leave before the live update: the stop-once box naming the new terms and Switch / Keep appear at once.",
+          "kind": "video",
+          "desktop": "termsbox-leave-loads-offer.webm",
+          "phone": null
+        },
+        {
+          "title": "Switch already made elsewhere",
+          "explanation": "Ana's Switch is made outside this page (through the API, off camera); she then presses Switch on the offer this page still shows.",
+          "kind": "video",
+          "desktop": "termsbox-already-switched-elsewhere.webm",
+          "phone": null
+        },
+        {
+          "title": "Switch after a Stop",
+          "explanation": "Nora stops the test and Ana presses Switch before the live update: the refusal shows under the buttons; the live update then redraws the page as stopped, and a reload follows.",
+          "kind": "video",
+          "desktop": "termsbox-refusal-then-stopped.webm",
+          "phone": null
+        },
+        {
+          "title": "Short answer while paused",
+          "explanation": "The team pauses the test, Ana types 12 characters (Send goes away); the team lifts the pause, pauses again, and Ana presses Send Answers at once.",
+          "kind": "video",
+          "desktop": "send-red-and-paused.webm",
+          "phone": null
+        },
+        {
+          "title": "Rate clears the lines",
+          "explanation": "Ana's page shows the “no longer on offer” line and a red mistake in her written form; she ends her part with Rate, then reloads.",
+          "kind": "video",
+          "desktop": "rate-clears-lines.webm",
+          "phone": null
+        },
+        {
+          "title": "Send Answers with the box empty",
+          "explanation": "After Nora adds a third question, Ana presses Send Answers with its box empty; then, on a test whose questions didn't change, the same press with the box empty.",
+          "kind": "video",
+          "desktop": "send-empty-after-question-added.webm",
+          "phone": null
+        },
+        {
+          "title": "Short answer and a stop-once",
+          "explanation": "Ana has 12 characters typed; off camera Nora paid $0.00 for her recording (with a reason); she presses Send Answers, then again without fixing the answer.",
+          "kind": "video",
+          "desktop": "send-red-and-stop-box.webm",
+          "phone": null
+        },
+        {
+          "title": "Leave clears the lines",
+          "explanation": "Ana's page shows the “no longer on offer” line and a red mistake in her written form; she ends her part with Leave, then reloads.",
+          "kind": "video",
+          "desktop": "leave-clears-lines.webm",
+          "phone": null
+        }
+      ]
+    },
+    {
       "title": "Bell and emails",
       "explanation": "The bell after batch 29: one entry per kind and day across tests (Ratings to give, Applications and invites, Joined, Deadlines, Pay now, Charge or let go, the bank line), the number counting entries with anything unread, and lines read only when opened.",
       "cases": [

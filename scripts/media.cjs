@@ -8094,6 +8094,470 @@ group("b19b", async () => {
 }
 
 
+// ---------- (Dec 10 media run) The Switch / Keep box: a withdrawn offer, a new offer, Leave loading the offer, refusals; and Send after a question is added ----------
+{
+  const TB = "Switch / Keep box (Dec 10)";
+  // (Each answer is at least 50 characters, as the server checks.)
+  const ANS = ["The boat handling feels great and the harbor lights help a lot at night.", "The second bridge: I couldn't tell where to go, the map arrow points the wrong way."];
+  const Q3 = ["What did you like?", "Where did you get stuck?", "Would you play level 4?"];
+  const flat = (s) => String(s || "").replace(/\s+/g, " ").trim();
+  const textOf = async (page, sel) => flat(await page.locator(sel).first().innerText({ timeout: 3000 }).catch(() => ""));
+  const visible = (page, sel) => page.locator(sel).first().isVisible().catch(() => false);
+  const center = (page, sel) => page.locator(sel).first().evaluate((el) => el.scrollIntoView({ block: "center" })).catch(() => {});
+  const SWITCH = "#terms-offer button:has-text('Switch to the new terms')";
+  const KEEP = "#terms-offer button:has-text('Keep my current terms')";
+  const GONE_LINE = "text=/no longer on offer/";
+  /** What the top of Ana's page says now (for the log). */
+  const state = async (page, label) => {
+    const offer = await visible(page, "#terms-offer");
+    const seeNew = await page.locator("button:visible, a:visible", { hasText: "See the new terms" }).count();
+    const lines = await page.locator(GONE_LINE).count();
+    const boxes = await page.locator("[data-stop-box]:visible").count();
+    console.log(`   [${label}] offer box: ${offer}; stop boxes: ${boxes}; "See the new terms": ${seeNew}; "no longer on offer" lines: ${lines}; scrollY ${await page.evaluate(() => Math.round(scrollY))}`);
+    if (offer) console.log(`   [${label}] #terms-offer: ${(await textOf(page, "#terms-offer")).slice(0, 700)}`);
+    for (const l of await page.locator(GONE_LINE).all()) console.log(`   [${label}] line: ${flat(await l.innerText().catch(() => ""))}`);
+  };
+  /** A tester account as account() makes it, but signing up with a device and a language (sign-up as a tester needs them since batch 35 §153). */
+  const testerAcct = async (email, name) => {
+    const p = await ctx(V);
+    if (MEDIA_DB !== "playtest_lite") sql(`delete from "LoginAttempt" where kind = 'signup' and ip in ('::1', '127.0.0.1', '::ffff:127.0.0.1')`);
+    const r = await post(p, "/api/auth/signup", { email, password: PASSWORD, role: "tester", name, acceptTerms: true, over18: true, devices: ["Windows PC"], languages: ["English"] });
+    if (!r.ok) throw new Error("sign-up failed for " + email);
+    own(`update "User" set "emailVerifiedAt" = (now() at time zone 'utc') where email = ${lit(email)}`);
+    p.email = email;
+    p.name = name;
+    p.uid = userId(email);
+    return p;
+  };
+  let n = 0;
+  /** Nora (developer) and Ana (tester) on a new test with written answers at $10.00 and two questions. */
+  const pair = async (over = {}) => {
+    const tag = `tb${++n}`;
+    const nora = await account(`dev+media${TS}${tag}@playtest.test`, "Nora Lane", "developer", "they");
+    const ana = await testerAcct(`tester+media${TS}${tag}a@playtest.test`, "Ana Silva");
+    const t = await postTest(nora, { title: "First 3 levels", writtenCents: "10.00", ...over });
+    const s = await join(ana, t);
+    return { nora, ana, t, s };
+  };
+  /** Ana's session page, recording. */
+  const openRec = async (ana, s) => {
+    const T = await rec(V, ana);
+    watch(T);
+    await open(T, `/app/sessions/${s}`, "main h1");
+    return T;
+  };
+  /** (for the report) Each press's answer and each live redraw of the page, with the time. */
+  function watch(T, tag = "") {
+    const t0 = Date.now(), sec = () => ((Date.now() - t0) / 1000).toFixed(1);
+    T.on("response", async (r) => {
+      const u = r.url();
+      if (r.request().method() === "POST" && /\/api\/sessions\//.test(u)) console.log(`   (${tag}${sec()} s) ${u.split("/").pop()} -> ${r.status()} ${(await r.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 300)}`);
+      else if (/_rsc=/.test(u) && /\/app\/sessions\//.test(u)) console.log(`   (${tag}${sec()} s) page redraw`);
+    });
+  }
+  /** A press that may not find its button (the page redrew): logged, and the page's state with it. */
+  const press = (page, sel, label) => page.click(sel, { timeout: 8000 }).catch(async (e) => { console.log(`   ! ${label}: couldn't press (${String(e.message).split(String.fromCharCode(10))[0]})`); await state(page, label + " (no press)"); });
+  /** Ana types in an answer box one key at a time. */
+  const typeIn = async (page, sel, text) => { await page.locator(sel).click(); await page.keyboard.type(text, { delay: 60 }); };
+  const SHORT = "Too short ok"; // 12 characters
+  const subs = (s) => sql(`select count(*) || ' sent piece(s), updated ' || coalesce(max(to_char("updatedAt", 'HH24:MI:SS')), '-') from "Submission" where "contractId" = '${s}'`);
+  /** Which of Ana's videos to make (TB=1,7 for some; all when unset). */
+  const want = (k) => !process.env.TB || process.env.TB.split(",").includes(String(k));
+  const SEND = "button:has-text('Send Answers')";
+  /** The visible texts of everything matching, flattened. */
+  const texts = async (page, loc) => { const out = []; for (const l of await loc.all()) if (await l.isVisible().catch(() => false)) out.push(flat(await l.innerText().catch(() => ""))); return out; };
+  /** What the written form shows after a press (for the log). */
+  const sendState = async (page, label) => {
+    const red = await texts(page, page.locator("p, li, span").filter({ hasText: /^(Write at least \d+ characters|Each answer needs at least|Answer at least one question|Answer every required question)/ }));
+    const boxes = await texts(page, page.locator("[data-stop-box]"));
+    const refusals = await texts(page, page.locator("p").filter({ hasText: /didn't go through/ }));
+    console.log(`   [${label}] red: ${JSON.stringify(red)}; stop boxes: ${JSON.stringify(boxes.map((b) => b.slice(0, 400)))}; "didn't go through" lines: ${JSON.stringify(refusals.map((b) => b.slice(0, 300)))}; “Sent your answers.”: ${await page.locator("text=Sent your answers.").count()}`);
+  };
+  /** The page after Ana's part ended (for the log). */
+  const endState = async (page, label) => {
+    console.log(`   [${label}] top notice: ${(await textOf(page, "#stopped-line")).slice(0, 400) || "(none)"}`);
+    console.log(`   [${label}] offer box: ${await visible(page, "#terms-offer")}; "no longer on offer": ${await page.locator(GONE_LINE).count()}; answer form: ${await page.locator("[data-answer-form]").count()}; red: ${JSON.stringify(await texts(page, page.locator("p").filter({ hasText: /^(Write at least \d+ characters|Answer at least one question)/ })))}; “You left this test.”: ${await page.locator("text=You left this test.").count()}`);
+    console.log(`   [${label}] buttons: ${JSON.stringify([...new Set(await texts(page, page.locator("main button")))].slice(0, 30))}`);
+  };
+  /** Up to the one line: an offer arrives live, Nora changes the listing again just before Ana's Switch (stop-once box), then sets the price back to Ana's terms. */
+  const toTheLine = async (T, nora, t, log) => {
+    await apiEdit(nora, t, { writtenCents: "12.00" });
+    await waitLive(T, "#terms-offer", 40000);
+    await center(T, "#terms-offer");
+    await pause(T, 2500);
+    await waitPulse(T); // (the page's next live update is about 20 s away: Ana's press comes from a page that hasn't seen the second change)
+    await apiEdit(nora, t, { writtenCents: "14.00" });
+    await pause(T, 600);
+    await press(T, SWITCH, "Switch");
+    await T.waitForSelector("#terms-offer [data-stop-box]", { timeout: 15000 }).catch(() => console.log("   ! no stop-once box after Switch"));
+    await center(T, "#terms-offer");
+    await pause(T, 3000);
+    await log("after Switch");
+    await apiEdit(nora, t, { writtenCents: "10.00" });
+  };
+
+  group("termsbox", async () => {
+    // 1. The offer is withdrawn after Ana's Switch was stopped once: one line stays; a reload clears it.
+    if (want(1)) {
+      const { nora, ana, t, s } = await pair();
+      const T = await openRec(ana, s);
+      const from = at(T);
+      await pause(T, 1500);
+      await toTheLine(T, nora, t, (l) => state(T, "1 " + l));
+      await waitLive(T, GONE_LINE, 45000);
+      await center(T, GONE_LINE);
+      await pause(T, 4000);
+      await state(T, "1 after the live update");
+      await T.reload();
+      await T.waitForSelector("main h1");
+      await pause(T, 3500);
+      await state(T, "1 after reload");
+      finishVideo([{ file: await saveVideo(T, "termsbox-1.webm"), from }], "termsbox-withdrawn",
+        "Offer withdrawn | Nora changes the price again just before Ana's Switch (stop-once box), then puts it back to Ana's terms: after the live update one line is left, and a reload clears it.");
+    }
+    // 2. With that one line showing, a new offer arrives: Switch / Keep without the old line; Keep.
+    if (want(2)) {
+      const { nora, ana, t, s } = await pair();
+      const T = await openRec(ana, s);
+      await pause(T, 1000);
+      await toTheLine(T, nora, t, (l) => state(T, "2 " + l));
+      await waitLive(T, GONE_LINE, 45000);
+      const from = Math.max(0, at(T) - 2);
+      await center(T, GONE_LINE);
+      await pause(T, 3000);
+      await state(T, "2 the line");
+      // (Three price changes lock "parts and prices": the team allows 3 more changes first, off camera, as an admin does in the console.)
+      await adminDo(await adminAccount(), "allow-critical-changes", t);
+      await apiEdit(nora, t, { writtenCents: "15.00" });
+      await waitLive(T, "#terms-offer", 45000);
+      await center(T, "#terms-offer");
+      await pause(T, 3000);
+      await state(T, "2 new offer");
+      await press(T, KEEP, "Keep");
+      await T.waitForSelector("text=/Kept your current terms/", { timeout: 15000 }).catch(() => console.log("   ! 2: no “Kept your current terms.”"));
+      console.log("   [2 after Keep]", (await textOf(T, "#terms-offer")).slice(0, 400));
+      await pause(T, 5000);
+      await state(T, "2 after Keep and the reload");
+      finishVideo([{ file: await saveVideo(T, "termsbox-2.webm"), from }], "termsbox-new-offer-clean",
+        "A new offer starts clean | With the “no longer on offer” line showing, Nora offers another price: Switch / Keep appear without the old line, and Keep reads “Kept your current terms.”");
+    }
+    // 3. Leave a few seconds after a price change, before the live update: the box naming the new terms and Switch / Keep appear at once.
+    if (want(3)) {
+      const { nora, ana, t, s } = await pair();
+      const T = await openRec(ana, s);
+      await center(T, "#leave");
+      const from = at(T);
+      await pause(T, 1500);
+      await waitPulse(T);
+      await apiEdit(nora, t, { writtenCents: "12.00" });
+      const t0 = Date.now();
+      await pause(T, 1500);
+      await pressConfirm(T, T.locator("#leave button", { hasText: "Leave this test" }).first(), "Leave this test");
+      const shown = await T.waitForSelector("#terms-offer", { timeout: 15000 }).then(() => true, () => false);
+      console.log(`   [3] Switch / Keep ${shown ? "appeared" : "did NOT appear"} ${((Date.now() - t0) / 1000).toFixed(1)} s after Nora's change`);
+      await pause(T, 1200);
+      const inView = await T.locator("#terms-offer").first().evaluate((el) => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; }).catch(() => false);
+      console.log(`   [3] #terms-offer in view: ${inView}; left: ${await T.locator("text=You left this test.").count()}`);
+      await pause(T, 3000);
+      await state(T, "3 after Leave");
+      finishVideo([{ file: await saveVideo(T, "termsbox-3.webm"), from }], "termsbox-leave-loads-offer",
+        "Leave loads the new terms | Nora changes the price and Ana presses Leave before the live update: the stop-once box naming the new terms and Switch / Keep appear at once.");
+    }
+    // 4. An offer showing; Nora stops the test; Ana's Switch before the live update is refused; then the live update and a reload.
+    if (want(4)) {
+      const { nora, ana, t, s } = await pair();
+      const T = await openRec(ana, s);
+      await pause(T, 1000);
+      await apiEdit(nora, t, { writtenCents: "12.00" });
+      await waitLive(T, "#terms-offer", 40000);
+      await center(T, "#terms-offer");
+      const from = Math.max(0, at(T) - 1);
+      await pause(T, 2000);
+      await waitPulse(T);
+      await stopTest(nora, t);
+      await pause(T, 1200);
+      await press(T, SWITCH, "Switch");
+      await T.waitForSelector("text=/didn't go through/", { timeout: 15000 }).catch(() => console.log("   ! 4: no refusal line"));
+      await pause(T, 3500);
+      await state(T, "4 after Switch");
+      console.log("   [4] refusal:", await textOf(T, "#terms-offer [data-err], #terms-offer p:has-text(\"didn't go through\")"));
+      await waitLive(T, "#stopped-line", 45000);
+      await waitGone(T, "#terms-offer", 30000);
+      await T.evaluate(() => scrollTo(0, 0));
+      await pause(T, 4000);
+      await state(T, "4 after the live update");
+      console.log("   [4] stopped notice:", (await textOf(T, "#stopped-line")).slice(0, 300));
+      await T.reload();
+      await T.waitForSelector("main h1");
+      await pause(T, 3500);
+      await state(T, "4 after reload");
+      console.log("   [4] stopped notice after reload:", (await textOf(T, "#stopped-line")).slice(0, 300));
+      finishVideo([{ file: await saveVideo(T, "termsbox-4.webm"), from }], "termsbox-refusal-then-stopped",
+        "Switch after a Stop | Nora stops the test and Ana presses Switch before the live update: the refusal shows under the buttons; the live update then redraws the page as stopped, and a reload follows.");
+    }
+    // 5. Two tabs on the same offer: tab 1 switches, then tab 2 presses Switch (recorded).
+    if (want(5)) {
+      const { nora, ana, t, s } = await pair();
+      await apiEdit(nora, t, { writtenCents: "12.00" });
+      const T1 = await same(ana);
+      watch(T1, "tab 1, ");
+      await open(T1, `/app/sessions/${s}`, "#terms-offer");
+      const T2 = await openRec(ana, s);
+      await T2.waitForSelector("#terms-offer");
+      await center(T2, "#terms-offer");
+      const from = at(T2);
+      await pause(T2, 1500);
+      await press(T1, SWITCH, "Switch (tab 1)");
+      await T1.waitForSelector("text=/Switched to the new terms/", { timeout: 15000 }).catch(() => console.log("   ! 5: tab 1 didn't switch"));
+      await T2.bringToFront();
+      await pause(T2, 800);
+      await press(T2, SWITCH, "Switch (tab 2)");
+      await T2.locator("#terms-offer [data-stop-box]").or(T2.locator("text=/didn't go through|already switched/")).first().waitFor({ timeout: 15000 }).catch(() => console.log("   ! 5: nothing under tab 2's buttons"));
+      await pause(T2, 3500);
+      await state(T2, "5 tab 2 after Switch");
+      if (await visible(T2, "#terms-offer [data-stop-box]")) {
+        console.log("   [5] tab 2 got a stop-once box: pressing Switch again");
+        await T2.click(SWITCH).catch(() => {});
+        await pause(T2, 4000);
+        await state(T2, "5 tab 2 after the second Switch");
+      }
+      finishVideo([{ file: await saveVideo(T2, "termsbox-5.webm"), from }], "termsbox-already-switched",
+        "Switch in a second tab | Ana switched in another tab; this tab still shows the same offer and its Switch is refused under the buttons.");
+      await T1.context().close().catch(() => {});
+      // 5b. The same Switch made from outside this page (the API, as another device's press would be; a second open session page moves the first away, above).
+      {
+        const p = await pair();
+        await apiEdit(p.nora, p.t, { writtenCents: "12.00" });
+        const T = await openRec(p.ana, p.s);
+        await T.waitForSelector("#terms-offer");
+        await center(T, "#terms-offer");
+        const from = at(T);
+        await pause(T, 2000);
+        const offerId = sql(`select id from "TermsOffer" where "contractId" = '${p.s}' and status = 'open' order by "createdAt" desc limit 1`);
+        const r = await post(p.ana, `/api/sessions/${p.s}/terms`, { offerId, choice: "switch", seenAt: nowIso(), confirmed: true });
+        console.log(`   [5b] Switch from outside the page: ${r.status} ${JSON.stringify(r.body).slice(0, 200)}`);
+        await pause(T, 1500);
+        await press(T, SWITCH, "Switch (5b)");
+        await T.locator("#terms-offer [data-stop-box]").or(T.locator("text=/didn't go through|already switched/")).first().waitFor({ timeout: 15000 }).catch(() => console.log("   ! 5b: nothing under the buttons"));
+        await pause(T, 3500);
+        await state(T, "5b after Switch");
+        for (const l of await texts(T, T.locator("p").filter({ hasText: /didn't go through|already switched/ }))) console.log("   [5b] line:", l.slice(0, 300));
+        if (await visible(T, "#terms-offer [data-stop-box]")) {
+          console.log("   [5b] a stop-once box: pressing Switch again");
+          await press(T, SWITCH, "Switch (5b, again)");
+          await pause(T, 4000);
+          await state(T, "5b after the second Switch");
+          for (const l of await texts(T, T.locator("p").filter({ hasText: /didn't go through|already switched/ }))) console.log("   [5b] line:", l.slice(0, 300));
+        }
+        finishVideo([{ file: await saveVideo(T, "termsbox-5b.webm"), from }], "termsbox-already-switched-elsewhere",
+          "Switch already made elsewhere | Ana's Switch is made outside this page (through the API, off camera); she then presses Switch on the offer this page still shows.");
+      }
+    }
+    // 6. Send Answers with the box empty: after Nora adds a question (not Required), and, for contrast, with the questions unchanged.
+    if (want(6)) {
+      const { nora, ana, t, s } = await pair();
+      await sendWritten(ana, s, ANS);
+      const added = async (page) => page.locator("[data-added-label]").count();
+      const T = await openRec(ana, s);
+      await pause(T, 1000);
+      const from = at(T);
+      const before = await added(T);
+      await apiEdit(nora, t, { questions: Q3 });
+      await waitLive(T, "[data-open-questions-title]", 45000);
+      await center(T, "[data-answer-form]");
+      await pause(T, 3000);
+      const send = T.locator("[data-answer-form] button", { hasText: /^Send Answers$/ }).first();
+      console.log(`   [6a] Send Answers disabled: ${await send.isDisabled().catch(() => "?")}; title: ${await send.getAttribute("title").catch(() => "")}`);
+      await send.click({ timeout: 4000 }).catch((e) => console.log("   [6a] the press didn't happen:", String(e.message).split("\n")[0]));
+      await pause(T, 4000);
+      console.log(`   [6a] red line: ${await visible(T, "[data-answer-one]")} “${await textOf(T, "[data-answer-one]")}”; “Sent your answers.”: ${await T.locator("text=Sent your answers.").count()}; Added labels ${before} -> ${await added(T)}`);
+      console.log("   [6a] form area:", (await textOf(T, "[data-answer-form]")).slice(0, 500));
+      await pause(T, 3000);
+      await T.reload();
+      await T.waitForSelector("main h1");
+      await pause(T, 1500);
+      const after = await added(T);
+      console.log(`   [6a] after reload: Added labels ${after}; open-questions form: ${await visible(T, "[data-open-questions-title]")}`);
+      if (after > before) { await center(T, "[data-added-label]"); await pause(T, 1000); console.log("   [6a] added entry:", (await T.locator("[data-added-label]").last().locator("xpath=..").innerText().catch(() => "")).replace(/\s+/g, " ").slice(0, 300)); }
+      else await center(T, "[data-answer-form]");
+      await pause(T, 3500);
+      // Contrast: a fresh test with three questions; Ana sent two answers, the third left empty; nothing changed since.
+      const t2 = await postTest(nora, { title: "Night harbor", writtenCents: "10.00", questions: Q3 });
+      const s2 = await join(ana, t2);
+      await sendWritten(ana, s2, [...ANS, ""]);
+      await T.goto(`/app/sessions/${s2}`);
+      await T.waitForSelector("main h1");
+      await pause(T, 1500);
+      const before2 = await added(T);
+      await center(T, "[data-answer-form]");
+      await pause(T, 2500);
+      const send2 = T.locator("[data-answer-form] button", { hasText: /^Send Answers$/ }).first();
+      console.log(`   [6b] open-questions form: ${await visible(T, "[data-open-questions-title]")}; Send Answers disabled: ${await send2.isDisabled().catch(() => "?")}; title: ${await send2.getAttribute("title").catch(() => "")}`);
+      await send2.click({ timeout: 4000 }).catch((e) => console.log("   [6b] the press didn't happen:", String(e.message).split("\n")[0]));
+      await pause(T, 4000);
+      console.log(`   [6b] red line: ${await visible(T, "[data-answer-one]")} “${await textOf(T, "[data-answer-one]")}”; “Sent your answers.”: ${await T.locator("text=Sent your answers.").count()}; Added labels ${before2} -> ${await added(T)}`);
+      await T.reload();
+      await T.waitForSelector("main h1");
+      await pause(T, 2500);
+      console.log(`   [6b] after reload: Added labels ${await added(T)}`);
+      finishVideo([{ file: await saveVideo(T, "termsbox-6.webm"), from }], "send-empty-after-question-added",
+        "Send Answers with the box empty | After Nora adds a third question, Ana presses Send Answers with its box empty; then, on a test whose questions didn't change, the same press with the box empty.");
+    }
+    // 7. A short answer (12 characters) sent while the team has paused the test (paused after the page opened).
+    if (want(7)) {
+      const { nora, ana, t, s } = await pair();
+      const admin = await adminAccount();
+      const T = await openRec(ana, s);
+      await center(T, "#a0");
+      const from = at(T);
+      await pause(T, 1500);
+      await waitPulse(T); // (the pause lands before the page's next live update)
+      await adminDo(admin, "pause-test", t);
+      console.log("   [7] the team paused the test (admin Pause)");
+      await typeIn(T, "#a0", SHORT);
+      await pause(T, 600);
+      for (const b of await T.locator("button", { hasText: "Send Answers" }).all()) console.log(`   [7] a Send Answers button: visible ${await b.isVisible()}, disabled ${await b.isDisabled().catch(() => "?")}, title “${(await b.getAttribute("title")) ?? ""}”`);
+      console.log("   [7] the written part now:", (await textOf(T, "[data-answer-form]")).slice(0, 400));
+      await press(T, SEND, "Send Answers");
+      await pause(T, 3000);
+      await sendState(T, "7 after Send");
+      console.log("   [7] saved:", subs(s));
+      // Then the other order: the team lifts the pause (Send comes back), and pauses again just before Ana presses Send with the same 12 characters.
+      await adminDo(admin, "unpause-test", t);
+      console.log("   [7] the team lifted the pause");
+      const back = await waitLive(T, SEND, 45000);
+      console.log(`   [7] Send Answers back: ${back}`);
+      await T.locator(SEND).first().scrollIntoViewIfNeeded().catch(() => {});
+      await pause(T, 2000);
+      await waitPulse(T);
+      await adminDo(admin, "pause-test", t);
+      console.log("   [7] the team paused the test again; Ana presses Send at once");
+      await press(T, SEND, "Send Answers (after the second pause)");
+      await pause(T, 4500);
+      await sendState(T, "7 second order, after Send");
+      console.log("   [7] the written part now:", (await textOf(T, "[data-answer-form]")).slice(0, 400));
+      console.log("   [7] saved:", subs(s));
+      await pause(T, 2000);
+      finishVideo([{ file: await saveVideo(T, "termsbox-7.webm"), from }], "send-red-and-paused",
+        "Short answer while paused | The team pauses the test, Ana types 12 characters (Send goes away); the team lifts the pause, pauses again, and Ana presses Send Answers at once.");
+    }
+    // 8. A short answer typed; Nora acts on another of Ana's parts off camera (a stop-once for Ana); Send Answers twice without fixing it.
+    if (want(8)) {
+      const { nora, ana, t, s } = await pair({ recordingCents: "15.00" });
+      let recSub = "";
+      try {
+        recSub = sqlId(`insert into "Submission" (id, "contractId", kind, "agreedCents", "sentAt", "updatedAt", "payBy", "devMarks") values ('ms' || md5(random()::text), '${s}', 'recording', 1500, ${utcNow}, ${utcNow}, ${utcNow} + interval '7 days', ARRAY[]::text[]) returning id`);
+      } catch (e) { console.log("   ! 8: no recording piece:", String(e.message).split(String.fromCharCode(10))[0].slice(0, 200)); }
+      const T = await openRec(ana, s);
+      await center(T, "#a0");
+      const from = at(T);
+      await pause(T, 1200);
+      await typeIn(T, "#a0", SHORT);
+      await pause(T, 800);
+      await waitPulse(T);
+      // Off camera: Nora pays Ana's recording $0 with a reason (the media server has no stand-in for Stripe, so no card charge is made);
+      // if that isn't possible, she edits the listing's steps instead (also a stop-once for Ana with Alerts on).
+      let how = "";
+      if (recSub) {
+        post.quiet = true;
+        const r = await post(nora, "/api/review", { action: "pay", kind: "submission", id: recSub, amount: "0", tickedCents: 0, reason: "Paying nothing for this media check.", note: "Paying nothing for this media check.", payKey: require("crypto").randomUUID(), seenAt: nowIso(), confirmed: true });
+        post.quiet = false;
+        if (r.ok) how = "Nora paid $0.00 for Ana's recording (with a reason)";
+        else console.log("   [8] the $0 pay was refused:", JSON.stringify(r.body).slice(0, 200));
+      }
+      if (!how) {
+        await apiEdit(nora, t, { description: "Sail through the first three harbors, then the night harbor, and tell us where the controls or the map get confusing." });
+        how = "Nora changed the listing's steps (What should testers do)";
+      }
+      console.log("   [8] off camera:", how);
+      await pause(T, 800);
+      await press(T, SEND, "Send Answers");
+      await pause(T, 4500);
+      await sendState(T, "8 first press");
+      await press(T, SEND, "Send Answers (second)");
+      await pause(T, 4500);
+      await sendState(T, "8 second press");
+      console.log("   [8] saved:", subs(s));
+      await pause(T, 1500);
+      finishVideo([{ file: await saveVideo(T, "termsbox-8.webm"), from }], "send-red-and-stop-box",
+        `Short answer and a stop-once | Ana has 12 characters typed; off camera ${how.replace("Ana's", "her")}; she presses Send Answers, then again without fixing the answer.`);
+    }
+    // 9 and 10. The "no longer on offer" line and a red mistake in the written form, then Ana ends her part: Leave (9) or Rate (10).
+    for (const end of ["leave", "rate"]) {
+      const k = end === "leave" ? 9 : 10;
+      if (!want(k)) continue;
+      const { nora, ana, t, s } = await pair();
+      if (end === "rate") {
+        // Rate opens once some work was sent and Nora reviewed everything sent: she pays $0 with a reason (no card charge on the media server), off camera.
+        await sendWritten(ana, s, [ANS[0], ""]);
+        const r = await post(nora, "/api/review", { action: "pay", kind: "submission", id: subOf(s), amount: "0", tickedCents: 0, reason: "Paying nothing for this media check.", note: "Paying nothing for this media check.", payKey: require("crypto").randomUUID(), seenAt: nowIso(), confirmed: true });
+        console.log(`   [10] Nora's $0 review of the written answers: ${r.status}`);
+      }
+      const T = await openRec(ana, s);
+      const from = at(T);
+      await pause(T, 1000);
+      await toTheLine(T, nora, t, (l) => state(T, `${k} ${l}`));
+      await waitLive(T, GONE_LINE, 45000);
+      await center(T, GONE_LINE);
+      await pause(T, 2500);
+      await state(T, `${k} the line`);
+      const box = end === "rate" ? "[data-answer-form] textarea" : "#a0";
+      if (await T.locator(box).count()) {
+        await center(T, box);
+        await typeIn(T, box, SHORT);
+        await pause(T, 500);
+        await press(T, SEND, "Send Answers");
+        await pause(T, 4000);
+        await sendState(T, `${k} red`);
+      } else console.log(`   ! [${k}] no answer box to type in:`, (await textOf(T, "#written, main")).slice(0, 300));
+      let used = end === "leave" ? "Leave" : "Rate";
+      if (end === "leave") {
+        await center(T, "#leave");
+        await pause(T, 1200);
+        await pressConfirm(T, T.locator("#leave button", { hasText: "Leave this test" }).first(), "Leave this test");
+        await pause(T, 3500);
+        if (await visible(T, "#leave [data-stop-box]")) {
+          console.log("   [9] Leave stopped once:", (await textOf(T, "#leave [data-stop-box]")).slice(0, 300));
+          await pressConfirm(T, T.locator("#leave button", { hasText: "Leave this test" }).first(), "Leave this test");
+          await pause(T, 3500);
+        }
+      } else {
+        await unfold(T, "#rate");
+        const canRate = (await visible(T, "#rate select")) && !(await T.locator("#rate button", { hasText: /^Rate( and finish)?$/ }).first().isDisabled().catch(() => true));
+        if (canRate) {
+          await center(T, "#rate");
+          await pause(T, 1000);
+          await T.locator("#rate select").selectOption("5").catch(() => {});
+          await pressConfirm(T, T.locator("#rate button", { hasText: /^Rate( and finish)?$/ }).first(), "Rate and finish");
+          await pause(T, 3500);
+          if (await visible(T, "#rate [data-stop-box]")) {
+            console.log("   [10] Rate stopped once:", (await textOf(T, "#rate [data-stop-box]")).slice(0, 300));
+            await pressConfirm(T, T.locator("#rate button", { hasText: /^Rate( and finish)?$/ }).first(), "Rate and finish");
+            await pause(T, 3500);
+          }
+        } else {
+          console.log("   [10] Rate isn't available here:", (await textOf(T, "#rate")).slice(0, 900) || "(no #rate)");
+          used = "the developer's End early";
+          ok(await post(nora, `/api/tests/${t}/end-early`, { ...go, contractIds: [s], reason: "We have what we need from this round, thank you." }), "end early");
+          await waitLive(T, "#stopped-line", 45000);
+        }
+      }
+      console.log(`   [${k}] ended by ${used}`);
+      await waitPoll(T, "[data-answer-form]", true, 20000);
+      await T.evaluate(() => scrollTo(0, 0));
+      await pause(T, 3500);
+      await endState(T, `${k} after ${used}`);
+      await T.reload();
+      await T.waitForSelector("main h1");
+      await pause(T, 3500);
+      await endState(T, `${k} after reload`);
+      finishVideo([{ file: await saveVideo(T, `termsbox-${k}.webm`), from }], end === "leave" ? "leave-clears-lines" : "rate-clears-lines",
+        `${end === "leave" ? "Leave" : "Rate"} clears the lines | Ana's page shows the “no longer on offer” line and a red mistake in her written form; she ends her part with ${used}, then reloads.`);
+    }
+  }, { section: TB });
+}
+
+
 // ---------- Outages, for real (owner approved, Oct 29): the 3450 server really stopped for about 16 minutes ----------
 {
   const OUT_SEC = "Outages";
@@ -8444,6 +8908,7 @@ const SECTIONS = [
   ["Other devices", "The same account signed in on two devices (two separate browser sessions, each with its own sign-in, side by side): the top-box line, the pill with its arrow and count, the bell's number, and a press on the second device stopping once with “You … in another tab or device”; for the developer, the tester, and another person's change."],
   ["Calls: paying", "Paying for calls: a listed call (the Pay box at the contract rate × measured minutes, a lower pay needing a reason, the automatic charge after 7 days, Pay more up to the call's cap) beside an unlisted call (any rate up to $200/h, $0 with a note, the weekly line, never charged automatically), on both sides."],
   ["Caps", "The most a piece can be paid: a written part paid in steps up to $1,000 in all, the refusal over the room, the lines on both sides at the cap, Dispute at the cap, and the $1,000 for a tester's calls."],
+  ["Switch / Keep box (Dec 10)", "The new-terms box on the tester's session page: an offer withdrawn after a stopped Switch, a new offer starting clean, Leave loading the new terms at once, Switch refused after a Stop or after switching in another tab; Send Answers with an empty box, with a short answer while paused or stopped once; and Leave or Rate clearing the lines."],
   ["Bell and emails", "The bell after batch 29: one entry per kind and day across tests (Ratings to give, Applications and invites, Joined, Deadlines, Pay now, Charge or let go, the bank line), the number counting entries with anything unread, and lines read only when opened."],
 ];
 /** (Batch 15) Launch fixes proven in text (tests and settings), linked from the report. */
