@@ -194,12 +194,13 @@ describe("§187 item 9: the tester's Charge refusals", () => {
       expect(r.body.error.message).toBe("You already charged $10.00 for your written answers. It's waiting for Nora Lane's bank.");
     }
   });
-  it("(a) a call: \"… for your call on <date/time>. …\"", async () => {
+  // (Owner, Dec 9 2026) Calls have no Charge or Let it go: a call press gets the one refusal, whatever is at the bank.
+  it("(a) a call: the one refusal (calls charge automatically)", async () => {
     const f = await charged("call");
     await db.review.create({ data: { ...f.where, contractId: f.sessionId, amountCents: 1550, reason: R.CHARGED_BY_TESTER, payKey: randomUUID() } });
     await payment(f, "call", 1550, "needs_action");
     const r = await choose(f);
-    expect(r.body.error.message).toMatch(/^You already charged \$15\.50 for your call on .+\. It's waiting for Nora Lane's bank\.$/);
+    expect(r.body.error.message).toBe(R.AUTO_CHARGE_NO_CHOICE);
   });
   it("(b) the developer paid anything: the final refusal, even while another payment of theirs on it is at the bank (paid-anything wins)", async () => {
     const f = await charged("written");

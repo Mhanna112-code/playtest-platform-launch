@@ -49,7 +49,7 @@ describe("batch 35 §40: keep your place after a press", () => {
     expect(lib).toContain("startRefresh(() => router.refresh());");
     expect(lib).toContain("setTimeout(() => reloadKeepingPlace(), result ? DONE_RELOAD_MS : 0);");
     // The last-resort reloads keep their place too.
-    for (const f of ["components/AutoRefresh.tsx", "components/ShellWatch.tsx", "components/SessionWatch.tsx", "app/app/sessions/[id]/TesterTop.tsx", "app/app/find/[id]/JoinBox.tsx"]) expect(code(f), f).toContain("reloadKeepingPlace()");
+    for (const f of ["components/AutoRefresh.tsx", "components/ShellWatch.tsx", "components/SessionWatch.tsx", "app/app/find/[id]/JoinBox.tsx"] /* (Owner, Dec 10 2026) TesterTop loads the offer in place: no reload */) expect(code(f), f).toContain("reloadKeepingPlace()");
   });
 
   it("a full reload drops the stale #… first and comes back at the same scroll", () => {

@@ -143,7 +143,7 @@ describe("§171 A1: same part always stops, whatever the Alerts ticks", () => {
     const src = (await import("node:fs")).readFileSync("src/lib/server/holds.ts", "utf8");
     // (Owner, Nov 11, §386 A) A Charge no longer waits for a hold's lift (it is refused while frozen): one charge line each, not two.
     expect(src.match(/false, \{\}, c\.id, "", `part-\$\{s\.id\}`\)/g)?.length).toBe(3); // choice, let go, charge
-    expect(src.match(/false, \{\}, c\.id, "", `call-\$\{x\.id\}`\)/g)?.length).toBe(5); // closed with nothing, (§311e) an unlisted call closed with nothing paid, the automatic charge, let go, charge
+    expect(src.match(/false, \{\}, c\.id, "", `call-\$\{x\.id\}`\)/g)?.length).toBe(3); // closed with nothing, (§311e) an unlisted call closed with nothing paid, the automatic charge ((Owner, Dec 9 2026) calls have no Charge or Let it go)
   });
 
   it.each([true, false])("Alerts Off=%s, a call: the tester's problem report and its length becoming final follow Call changes alerts", async (off) => {

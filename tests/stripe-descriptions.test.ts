@@ -209,7 +209,7 @@ describe("every charge sends it", () => {
       // No hand-written description left at a call site.
       if (f !== "subscription.ts") expect(src.split("\n").filter((l) => !/^\s*(\/\/|\*)/.test(l) && /["`]Playtest: /.test(l) && /(charge|chargePlatform|authorize)\(/.test(l))).toEqual([]);
     }
-    expect(calls).toBeGreaterThanOrEqual(10);
+    expect(calls).toBeGreaterThanOrEqual(9); // (Owner, Dec 9 2026) the call Charge path is gone (calls charge automatically)
     expect(fs.readFileSync("src/lib/server/stripe.ts", "utf8")).not.toContain('description: "Playtest: what you owe, reserved until the team approves lifting your hold"');
   });
 });

@@ -272,7 +272,7 @@ describe("§371: every place the page can swap a pressing component carries its 
   it("the keyed and moving components name their part", () => {
     expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("const carry = `written-form:${sessionId}`;");
     expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("const carry = `dispute:${kind}:${id}`;");
-    expect(src("app/app/sessions/[id]/ChoiceBox.tsx")).toContain("const carry = `choice:${submissionId ?? callId}`;");
+    expect(src("app/app/sessions/[id]/ChoiceBox.tsx")).toContain("const carry = `choice:${submissionId}`;");
     expect(src("components/NdaNotice.tsx")).toContain('useCarried(`nda:${sessionId}`, "err", "")');
     expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('carry: `pay:${p.fromNeeds ? "needs" : p.awayInNeeds ? "away" : "list"}:${more ? "more" : "pay"}:${p.kind}:${p.id}`');
     expect(src("components/RateBox.tsx")).toContain("carry: `rate:${p.path}:");
