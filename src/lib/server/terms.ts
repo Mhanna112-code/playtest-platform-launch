@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, pronouns } from "@/lib/server/dateFormat";
 import { overPressLine, newDueAt, switchedLine, termsDiff, testerRefusal, type ContractTerms, type TestEventLike } from "@/lib/rules";
-import { ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST, SENT_WORK_PRICE_EXPLANATION } from "@/lib/answerTerms";
+import { ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST, NO_LONGER_ON_OFFER, SENT_WORK_PRICE_EXPLANATION } from "@/lib/answerTerms";
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
 import { testerBoxRule, testerGate } from "./testerGate";
@@ -176,8 +176,8 @@ export async function testerTermsGate(contractId: string, _devName: string, body
   await testerGate(c.testerId, contractId, c.testId, body, fresh ? "Press again to go ahead under your current terms, or switch first." : "Press again to go ahead.");
 }
 
-/** Switch / Keep when no offer is open any more. */
-export const NO_LONGER_ON_OFFER = "These terms are no longer on offer.";
+/** Switch / Keep when no offer is open any more (one line, shared with the Switch / Keep box: lib/answerTerms.ts). */
+export { NO_LONGER_ON_OFFER };
 
 /**
  * Switch to the offered terms, or keep the current ones. Stops once if the terms changed again since (shows the newest).

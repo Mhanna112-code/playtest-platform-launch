@@ -3,7 +3,7 @@ import { Err } from "@/components/Err";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { jumpTo } from "@/lib/markJump";
-import { ANSWER_TERMS_EVENT } from "@/lib/answerTerms";
+import { ANSWER_TERMS_EVENT, NO_LONGER_ON_OFFER } from "@/lib/answerTerms";
 import { ChangesBox } from "@/components/ChangesBox";
 import { api, errOf } from "@/lib/client";
 import { pressLabelOf } from "@/lib/pressLabels";
@@ -32,14 +32,28 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
   // (Owner, Oct 28, batch 16 section 38A) The offer can arrive while the page is open (a refresh brings it): Switch / Keep always send the offer shown now.
   // (Owner, Dec 10 2026) A DIFFERENT offer starts clean: the last offer's refusal ("These terms are no longer on offer.") never shows under the new buttons,
   // and its box time never makes the next press a second press (which would switch to terms the page never showed, skipping "changed the terms again").
+  // Whether Switch or Keep was pressed in this box for the offer it is about.
+  const pressed = useRef(false);
   useEffect(() => {
-    if (!offer?.id) return;
+    if (!offer?.id) {
+      // (Owner, Dec 10 2026) The offer was withdrawn (the listing is back to her terms) after she pressed: no "changed the terms" box and no "See the new
+      // terms" (there are none); the one line "Your Switch to the new terms didn't go through: These terms are no longer on offer." stays until the page
+      // reloads or a new offer arrives.
+      if (aboutOffer.current && pressed.current) {
+        setBox(null);
+        setBoxAt("");
+        setErr(NO_LONGER_ON_OFFER);
+      }
+      aboutOffer.current = "";
+      return;
+    }
     setOfferId(offer.id);
     if (offer.id !== aboutOffer.current) {
       setErr("");
       setErrPress("");
       setBox(null);
       setBoxAt("");
+      pressed.current = false;
     }
     aboutOffer.current = offer.id;
   }, [offer?.id, setBox]);
@@ -70,14 +84,16 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
     pending.current = false;
     setTimeout(() => jumpTo("terms-offer"), 30);
   }, [offer?.id]);
+  // No offer on the page: a box another press brought (new terms the page hasn't loaded yet) with "See the new terms"; else her withdrawn offer's one line.
   if (!offer)
     return box ? (
       <div className="space-y-2">
         <ChangesBox side="tester" changes={box.changes} tail={box.tail} />
         <button className="btn-ghost" onClick={() => reloadKeepingPlace()}>See the new terms</button>
       </div>
-    ) : null;
+    ) : err ? <Err text={err} press={errPress} /> : null;
   const decide = (choice: string) => {
+    pressed.current = true;
     setErrPress(pressLabelOf(`/api/sessions/${sessionId}/terms`, { choice }));
     setErr(""); // (Owner, Dec 10 2026) one outcome per press: an earlier refusal goes
     return api(`/api/sessions/${sessionId}/terms`, { offerId, choice, seenAt, confirmed, boxAt })

@@ -3,6 +3,8 @@
 
 /** The one line, under the pressed button and from the server. */
 export const ANSWER_TERMS_FIRST = "Answer the new terms first: Switch or Keep.";
+/** Switch / Keep when no offer is open any more: the server's refusal, and the Switch / Keep box's line when the offer is withdrawn after a press. */
+export const NO_LONGER_ON_OFFER = "These terms are no longer on offer.";
 /** The refusal's code. */
 export const ANSWER_TERMS_CODE = "answer_terms";
 /** The page event that brings the Switch / Keep box into view, highlighted for a few seconds (the session page's TesterTop listens). */

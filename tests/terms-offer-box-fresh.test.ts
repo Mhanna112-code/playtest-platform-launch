@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 //   2. an old box time made the next press a second press (`confirmed`), so Switch skipped "changed the terms again" and took terms the page never showed.
 // A different offer now starts the box clean; the newest offer a stop-once box moved to keeps its box when it arrives on the page.
 const top = readFileSync(path.resolve(__dirname, "../src/app/app/sessions/[id]/TesterTop.tsx"), "utf8");
-const effect = top.slice(top.indexOf("useEffect(() => {\n    if (!offer?.id) return;"), top.indexOf("}, [offer?.id, setBox]);"));
+const effect = top.slice(top.indexOf("useEffect(() => {\n    if (!offer?.id) {"), top.indexOf("}, [offer?.id, setBox]);"));
 
 describe("Switch / Keep: a new offer starts the box clean", () => {
   it("a different offer clears the refusal, its press name, the stop-once box and the box time", () => {
@@ -20,7 +20,7 @@ describe("Switch / Keep: a new offer starts the box clean", () => {
     // The resets sit inside the "different offer" branch only.
     const branch = effect.slice(effect.indexOf("if (offer.id !== aboutOffer.current) {"), effect.indexOf("aboutOffer.current = offer.id;"));
     expect(branch).toContain('setBoxAt("")');
-    expect(effect.slice(0, effect.indexOf("if (offer.id !== aboutOffer.current) {"))).not.toContain("setBoxAt");
+    expect(effect.slice(effect.indexOf("setOfferId(offer.id);"), effect.indexOf("if (offer.id !== aboutOffer.current) {"))).not.toContain("setBoxAt");
   });
 
   it("a stop-once box that moved the press to the newest offer marks the box as about that offer (its arrival keeps the box)", () => {
@@ -30,5 +30,33 @@ describe("Switch / Keep: a new offer starts the box clean", () => {
   it("each press starts without the last refusal", () => {
     const decide = top.slice(top.indexOf("const decide = (choice: string) => {"), top.indexOf("return api(`/api/sessions/${sessionId}/terms`"));
     expect(decide).toContain('setErr("")');
+    expect(decide).toContain("pressed.current = true;");
+  });
+});
+
+describe("Switch / Keep: the offer withdrawn after a press", () => {
+  const withdrawn = top.slice(top.indexOf("if (!offer?.id) {"), top.indexOf("setOfferId(offer.id);"));
+  it("drops the changed-terms box and its time, and keeps the one line", () => {
+    expect(withdrawn).toContain("if (aboutOffer.current && pressed.current) {");
+    for (const x of ["setBox(null)", 'setBoxAt("")', "setErr(NO_LONGER_ON_OFFER)"]) expect(withdrawn).toContain(x);
+  });
+
+  it("with no offer, the line shows by itself (no See the new terms); a box another press brought keeps its button", () => {
+    const noOffer = top.slice(top.indexOf("if (!offer)\n    return box ?"), top.indexOf("const decide"));
+    expect(noOffer).toContain("See the new terms");
+    expect(noOffer).toContain(") : err ? <Err text={err} press={errPress} /> : null;");
+  });
+
+  it("the server's refusal and the box's line are the same words", async () => {
+    const { NO_LONGER_ON_OFFER: server } = await import("@/lib/server/terms");
+    const { NO_LONGER_ON_OFFER: shared } = await import("@/lib/answerTerms");
+    expect(server).toBe(shared);
+    expect(shared).toBe("These terms are no longer on offer.");
+  });
+
+  it("a new offer after it clears the line (and the pressed mark)", () => {
+    const fresh = top.slice(top.indexOf("if (offer.id !== aboutOffer.current) {"), top.indexOf("aboutOffer.current = offer.id;"));
+    expect(fresh).toContain('setErr("")');
+    expect(fresh).toContain("pressed.current = false;");
   });
 });
