@@ -386,7 +386,7 @@ describe("D) testers", () => {
     expect(first.text).toMatch(/^Reminder: rate .+ on “.+”: rating closes on /);
     expect(first.mustEmail).toBe(false);
     await db.notification.deleteMany({ where: { userId: tester.user.id, text: { startsWith: "Reminder: rate" } } });
-    const closes = (await (await import("@/lib/server/closeOut")).closeOutOf(testId))!;
+    const closes = (await (await import("@/lib/server/closeOut")).testerRatingClosesAt(sessionId))!; // (Owner, Dec 10 2026) her close-out
     // The last one before the close-out: it names the date and ignores email Off.
     await ratingReminders(new Date(closes.getTime() - DAY));
     const last = await db.notification.findFirstOrThrow({ where: { userId: tester.user.id, reminderKey: `rate:${sessionId}` } });

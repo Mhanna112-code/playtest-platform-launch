@@ -6,13 +6,15 @@ import { WORK_ENDED_NO_PAUSE, pauseTest, reinstateAccount, suspendAccount } from
 import { testRowsByIds } from "@/lib/server/adminLists";
 import { closePausedTest } from "@/lib/server/pauseClosure";
 import { liftHoldIfClear, markPaused, startHold } from "@/lib/server/holds";
-import { closeOutOf, pieceCloseOut } from "@/lib/server/closeOut";
+import { pieceCloseOut, testerRatingClosesAt } from "@/lib/server/closeOut";
 import { makeUser } from "./helpers";
 import { joined, sact, seen, setup } from "./fixtures";
 
 // (Owner, Nov 9, §358) A CLOSED test (its work ended on its own: Open until and every deadline passed, or the 7-day pause closure) is treated like a stopped one
 // for pauses: the team's Pause is refused, and a hold or suspension that STARTS after the work ended doesn't pause it or move any of its dates. A pause that
 // started before the work ended still counts.
+// (Owner, Dec 10 2026) There is no test-wide close-out date any more (closeOutOf is gone): the tester's Rate counts the developer's holds and suspensions
+// whenever they ran (testerRatingClosesAt, rate-windows-dec10.test.ts), so the "close-out stays" checks below were dropped.
 
 const HOUR = 3_600_000;
 async function closedTest() {
@@ -54,9 +56,8 @@ describe("§358 a closed test isn't paused by what starts after its work ended",
     expect((await db.test.findUniqueOrThrow({ where: { id: x.testId } })).adminPausedAt).toBeNull();
   });
 
-  it("a hold starting after the work ended: no pause clock, the close-out stays; (decision 4) its lift moves the review clock", async () => {
+  it("a hold starting after the work ended: no pause clock; (decision 4) its lift moves the review clock", async () => {
     const x = await closedTest();
-    const before = await closeOutOf(x.testId);
     const sub0 = await db.submission.findUniqueOrThrow({ where: { id: x.sub.id } });
     await startHold(x.dev.user.id, "unpaid");
     await markPaused({ developerId: x.dev.user.id });
@@ -66,7 +67,6 @@ describe("§358 a closed test isn't paused by what starts after its work ended",
     expect(pauseClosesAt(t.developer, t)).toBeNull();
     // Some time passes on the hold, then it lifts.
     await db.user.update({ where: { id: x.dev.user.id }, data: { holdStartedAt: new Date(Date.now() - HOUR) } });
-    expect((await closeOutOf(x.testId))?.getTime()).toBe(before?.getTime());
     const liftFrom = Date.now();
     await liftHoldIfClear(x.dev.user.id);
     const sub1 = await db.submission.findUniqueOrThrow({ where: { id: x.sub.id } });
@@ -77,14 +77,12 @@ describe("§358 a closed test isn't paused by what starts after its work ended",
     expect(moved).toBeLessThanOrEqual(Date.now() - sub0.updatedAt.getTime());
     expect(moved).toBeGreaterThanOrEqual(liftFrom - sub0.updatedAt.getTime());
     expect(sub1.choiceBy?.getTime()).toBe(sub0.choiceBy?.getTime());
-    expect((await closeOutOf(x.testId))?.getTime()).toBe(before?.getTime());
   });
 
   it("a suspension starting after the work ended: no paused event or tester line, no running-again line; (decision 4) the reinstatement moves the review clock", async () => {
     const x = await closedTest();
     const a = await makeUser({ name: "Admin" });
     await db.user.update({ where: { id: a.user.id }, data: { isAdmin: true } });
-    const before = await closeOutOf(x.testId);
     const piece0 = await pieceCloseOut({ submissionId: x.sub.id });
     const events0 = await db.testEvent.count({ where: { testId: x.testId } });
     const bells0 = await db.notification.count({ where: { userId: x.j.tester.user.id } });
@@ -94,7 +92,6 @@ describe("§358 a closed test isn't paused by what starts after its work ended",
     expect(pauseCauses(t.developer, t)).toEqual([]);
     expect(await db.testEvent.count({ where: { testId: x.testId, kind: "paused" } })).toBe(0);
     await db.user.update({ where: { id: x.dev.user.id }, data: { devSuspendedAt: new Date(Date.now() - HOUR) } });
-    expect((await closeOutOf(x.testId))?.getTime()).toBe(before?.getTime());
     expect((await pieceCloseOut({ submissionId: x.sub.id }))?.getTime()).toBe(piece0?.getTime());
     const liftFrom = Date.now();
     await reinstateAccount(x.dev.user.id, "developer");
@@ -108,32 +105,31 @@ describe("§358 a closed test isn't paused by what starts after its work ended",
     expect(moved).toBeGreaterThan(0);
     expect(moved).toBeLessThanOrEqual(Date.now() - x.sub.updatedAt.getTime());
     expect(moved).toBeGreaterThanOrEqual(liftFrom - x.sub.updatedAt.getTime());
-    expect((await closeOutOf(x.testId))?.getTime()).toBe(before?.getTime());
   });
 
-  it("a pause that started BEFORE the work ended still counts: its span moves the close-out", async () => {
+  it("a pause that started BEFORE the work ended still counts: its span moves the close-out (her Rate's); (Owner, Dec 10 2026) one after it does too", async () => {
     const x = await closedTest();
-    const before = (await closeOutOf(x.testId))!.getTime();
+    const before = (await testerRatingClosesAt(x.j.sessionId))!.getTime();
     // A hold from 3 h before the work ended to 1 h before it, recorded in the account history.
     await db.accountEvent.createMany({ data: [
       { userId: x.dev.user.id, kind: "hold", side: "developer", createdAt: new Date(x.ended.getTime() - 3 * HOUR) },
       { userId: x.dev.user.id, kind: "hold-lifted", side: "developer", createdAt: new Date(x.ended.getTime() - HOUR) },
     ] });
     // Its base is the end of the work (after the hold), so it moves nothing; a span crossing the end moves it by the part after the base.
-    expect((await closeOutOf(x.testId))!.getTime()).toBe(before);
+    expect((await testerRatingClosesAt(x.j.sessionId))!.getTime()).toBe(before);
     await db.accountEvent.createMany({ data: [
       { userId: x.dev.user.id, kind: "hold", side: "developer", createdAt: new Date(x.ended.getTime() - 30 * 60_000) },
       { userId: x.dev.user.id, kind: "hold-lifted", side: "developer", createdAt: new Date(x.ended.getTime() + HOUR) },
     ] });
-    expect((await closeOutOf(x.testId))!.getTime()).toBe(before + HOUR);
-    // The same span starting after the end: nothing.
+    expect((await testerRatingClosesAt(x.j.sessionId))!.getTime()).toBe(before + HOUR);
+    // (Owner, Dec 10 2026; was: nothing) The same span starting after the end moves her Rate by its length too (moneySpans: whenever it ran).
     const y = await closedTest();
-    const yBefore = (await closeOutOf(y.testId))!.getTime();
+    const yBefore = (await testerRatingClosesAt(y.j.sessionId))!.getTime();
     await db.accountEvent.createMany({ data: [
       { userId: y.dev.user.id, kind: "hold", side: "developer", createdAt: new Date(y.ended.getTime() + 30 * 60_000) },
       { userId: y.dev.user.id, kind: "hold-lifted", side: "developer", createdAt: new Date(y.ended.getTime() + HOUR) },
     ] });
-    expect((await closeOutOf(y.testId))!.getTime()).toBe(yBefore);
+    expect((await testerRatingClosesAt(y.j.sessionId))!.getTime()).toBe(yBefore + 30 * 60_000);
   });
 
   it("the 7-day pause closure ends the work too: (decision 4) a hold starting after it moves the review clock at its lift", async () => {
@@ -155,12 +151,10 @@ describe("§358 a closed test isn't paused by what starts after its work ended",
     expect((await db.test.findUniqueOrThrow({ where: { id: f.testId } })).status).toBe("stopped");
     await db.submission.updateMany({ where: { contractId: j.sessionId }, data: { updatedAt: new Date(Date.now() - 3 * HOUR) } });
     const sub0 = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
-    const before = await closeOutOf(f.testId);
     // The piece was sent 3 h ago (its review clock still ahead). A hold that started 1 h ago (after the closure), still on, then lifted.
     await startHold(f.dev.user.id, "unpaid");
     await db.user.update({ where: { id: f.dev.user.id }, data: { holdStartedAt: new Date(Date.now() - HOUR) } });
     await db.accountEvent.updateMany({ where: { userId: f.dev.user.id, kind: "hold" }, data: { createdAt: new Date(Date.now() - HOUR) } });
-    expect((await closeOutOf(f.testId))?.getTime()).toBe(before?.getTime());
     const holdStart = (await db.user.findUniqueOrThrow({ where: { id: f.dev.user.id } })).holdStartedAt!.getTime();
     const liftFrom = Date.now();
     await liftHoldIfClear(f.dev.user.id);

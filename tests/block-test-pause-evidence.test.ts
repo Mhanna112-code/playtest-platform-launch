@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
-import { closeOutOf, disputeClosedFor, pieceCloseOut, testerRatingClosesAt } from "@/lib/server/closeOut";
+import { disputeClosedFor, pieceCloseOut, testerRatingClosesAt } from "@/lib/server/closeOut";
 import { devRateStates } from "@/lib/server/ratings";
 import { pauseTest, unpauseTest } from "@/lib/server/restrictions";
 import { joined, setup } from "./fixtures";
@@ -44,7 +44,7 @@ it("BlockTest rehearsal: lifting a two-day team pause shifts working and settlem
   const call = await db.call.create({ data: { slotId: slot.id, contractId: finished.sessionId, status: "booked", startsAt: sentAt, minutes: 30, measuredMinutes: 30, measuredAt: sentAt, rateCents: 1000, payBy: reviewBy } });
   const piece = { submissionId: submission.id };
   const windows = (now: Date) => Promise.all([
-    closeOutOf(closed.testId, now), testerRatingClosesAt(finished.sessionId, now),
+    testerRatingClosesAt(finished.sessionId, now), // (Owner, Dec 10 2026) the test-wide close-out (closeOutOf) is gone: her close-out stands for it
     pieceCloseOut(piece, now), pieceCloseOut(piece, now),
     pieceCloseOut({ callId: call.id }, now), pieceCloseOut(piece, now), // (Owner, Nov 11, §378) Pay more: the piece's own date
     devRateStates([rated.sessionId], now).then((states) => states.get(rated.sessionId)?.endsAt ?? null),
@@ -80,8 +80,8 @@ it("BlockTest rehearsal: lifting a two-day team pause shifts working and settlem
     expect(before.every(Boolean)).toBe(true);
     const after = await windows(lift);
     expect(after).toEqual(before.map((d) => shifted(d!)));
-    const oldClose = before[3]!;
-    const newClose = after[3]!;
+    const oldClose = before[2]!;
+    const newClose = after[2]!;
     expect(await disputeClosedFor(finished.sessionId, piece, new Date(+oldClose + 1))).toBeNull();
     expect(await disputeClosedFor(finished.sessionId, piece, newClose)).toMatch(/can't be disputed any more/);
     // (§358) Once its work ended, the team's Pause is refused and nothing moves.
@@ -90,7 +90,7 @@ it("BlockTest rehearsal: lifting a two-day team pause shifts working and settlem
     console.info("BlockTest window evidence (UTC)", JSON.stringify({
       pause: [start, lift], openUntil: [joinBy, listing.openUntil], workingDue: [dueDuring, working.dueAt],
       alreadyExpiredDue: [dueBefore, expired.dueAt], writtenReview: [reviewBy, work.payBy], chargeChoiceBy: [choiceBy, work.choiceBy], callReview: [reviewBy, measured.payBy],
-      windowOrder: ["test close-out", "tester rating", "piece Pay", "piece Charge and dispute", "call close-out", "Pay more", "developer rating"], before, after,
+      windowOrder: ["tester rating", "piece Pay", "piece Charge and dispute", "call close-out", "Pay more", "developer rating"], before, after,
     }));
   } finally {
     vi.useRealTimers();

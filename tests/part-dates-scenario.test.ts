@@ -5,7 +5,7 @@ import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { chargeOpensAt, closeOutBase, pieceDueAt } from "@/lib/rules";
-import { callChargeAt, closeOutOf, closedOut, mergeSpans, moneySpans, pieceCloseOut, testSpans, testerRatingClosesAt, windowEnd } from "@/lib/server/closeOut";
+import { callChargeAt, closedOut, moneySpans, pieceCloseOut, testerRatingClosesAt, windowEnd } from "@/lib/server/closeOut";
 import { finishMeasuring } from "@/lib/server/calls";
 import { liftHoldIfClear, runDaily, runSweep, startHold } from "@/lib/server/holds";
 import { recordOutage } from "@/lib/server/outages";
@@ -133,7 +133,7 @@ async function snap(w: World, step: string, label: string, expected: Exp = {}, a
   }
   const snapshot: Record<string, unknown> = {
     scenario: w.scenario, step, label, now: now.toISOString(),
-    test: { status: t.status, openUntil: iso(t.openUntil), testerDays: t.testerDays, workEndedAt: iso(t.workEndedAt), adminPausedAt: iso(t.adminPausedAt), pausedSince: iso(t.pausedSince), stoppedAt: iso(t.stoppedAt), base: iso(closeOutBase(t, t.contracts, now)), testCloseOut: iso(await closeOutOf(w.testId, now)) },
+    test: { status: t.status, openUntil: iso(t.openUntil), testerDays: t.testerDays, workEndedAt: iso(t.workEndedAt), adminPausedAt: iso(t.adminPausedAt), pausedSince: iso(t.pausedSince), stoppedAt: iso(t.stoppedAt), base: iso(closeOutBase(t, t.contracts, now)) }, // (Owner, Dec 10 2026) no test-wide close-out any more (closeOutOf is gone): see each <Tester>.rateCloses
     developer: { holdStartedAt: iso(t.developer.holdStartedAt), devSuspendedAt: iso(t.developer.devSuspendedAt) },
     sessions, parts, expected, expectedAgent: agent, presses, extra,
   };
@@ -307,7 +307,7 @@ describe("part dates, step by step", () => {
     at("2030-12-30T00:30");
     await daily();
     await snap(w, "11", "Dec 30 00:30: the daily job closes the work", { "test.workEndedAt": E("2030-12-29"), "test.base": E("2030-12-29") }, {
-      "test.status": "closed", "Ben.status": "ended", "Cara.status": "ended", "test.testCloseOut": E("2031-01-12"),
+      "test.status": "closed", "Ben.status": "ended", "Cara.status": "ended",
       "Ben/written.moneyCloses": E("2031-01-12"), "Ben/recording.moneyCloses": E("2031-01-12"), "Cara/written.moneyCloses": T("2031-01-18T12:00"),
       "Ben/written.disputeCloses": E("2031-01-12"), "Ben/recording.disputeCloses": E("2031-01-12"), "Cara/written.disputeCloses": T("2031-01-18T12:00"),
     });
@@ -320,7 +320,7 @@ describe("part dates, step by step", () => {
       "test.workEndedAt": E("2030-12-29"), "test.openUntil": E("2030-12-17"), "Ben/recording.stintDueAt": E("2030-12-14"),
       "Ben/written.moneyCloses": E("2031-01-13"), "Ben/recording.moneyCloses": E("2031-01-13"), "Cara/written.moneyCloses": T("2031-01-19T12:00"),
       "Ben/written.disputeCloses": E("2031-01-13"), "Ben/recording.disputeCloses": E("2031-01-13"), "Cara/written.disputeCloses": T("2031-01-19T12:00"),
-    }, { "test.testCloseOut": E("2031-01-13"), "Ben.rateCloses": E("2031-01-13"), "Cara.rateCloses": E("2031-01-13") });
+    }, { "Ben.rateCloses": E("2031-01-13"), "Cara.rateCloses": E("2031-01-13") });
 
     // 13. Developer hold Jan 6 12:00 → lifted Jan 8 12:00. (startHold is what a declined payment calls; liftHoldIfClear is what paying what's owed calls.)
     at("2031-01-06T12:00");
@@ -331,7 +331,7 @@ describe("part dates, step by step", () => {
     });
     at("2031-01-07T12:00");
     await snap(w, "13b", "Jan 7 12:00: during the hold (money and dispute dates move day by day)", { "Ben/written.disputeCloses": D3(E("2031-01-14")), "Cara/written.disputeCloses": D3(T("2031-01-20T12:00")) }, {
-      "Ben/written.moneyCloses": E("2031-01-14"), "Ben/recording.moneyCloses": E("2031-01-14"), "Cara/written.moneyCloses": T("2031-01-20T12:00"), "test.testCloseOut": E("2031-01-13"),
+      "Ben/written.moneyCloses": E("2031-01-14"), "Ben/recording.moneyCloses": E("2031-01-14"), "Cara/written.moneyCloses": T("2031-01-20T12:00"),
     });
     at("2031-01-08T12:00");
     expect.soft(await liftHoldIfClear(w.dev.user.id), "the hold lifts").toBe(true);
@@ -343,7 +343,7 @@ describe("part dates, step by step", () => {
       "Ben/written.payBy": T("2030-12-20T12:00"), "Ben/recording.payBy": T("2030-12-13T12:00"), "Cara/written.payBy": T("2031-01-05T12:00"), "test.workEndedAt": E("2030-12-29"),
       "Ben/written.stintDueAt": null, "Ben/recording.stintDueAt": E("2030-12-14"), "Cara/written.stintDueAt": null,
     }, {
-      "test.testCloseOut": E("2031-01-13"), "Ben.rateCloses": E("2031-01-15"), "Cara.rateCloses": E("2031-01-15"),
+      "Ben.rateCloses": E("2031-01-15"), "Cara.rateCloses": E("2031-01-15"),
       // (Lead, Dec 9 2026) shiftAfterPause moves choiceBy only while it is still ahead: Ben's passed choiceBy stays (as at step 12).
       "Ben/written.choiceBy": T("2030-12-29T00:30"), "Ben/recording.choiceBy": T("2030-12-23T00:30"),
     });
@@ -357,7 +357,7 @@ describe("part dates, step by step", () => {
     await snap(w, "14b", "Jan 10 12:00: Ben reinstated", {
       "Ben/written.moneyCloses": E("2031-01-16"), "Ben/recording.moneyCloses": E("2031-01-16"), "Ben/written.disputeCloses": D3(E("2031-01-16")), "Ben/recording.disputeCloses": D3(E("2031-01-16")),
       "Cara/written.moneyCloses": T("2031-01-21T12:00"), "Cara/written.disputeCloses": D3(T("2031-01-21T12:00")),
-    }, { "Ben.testerSuspendedAt": null, "Ben.rateCloses": E("2031-01-16"), "Cara.rateCloses": E("2031-01-15"), "test.testCloseOut": E("2031-01-13") });
+    }, { "Ben.testerSuspendedAt": null, "Ben.rateCloses": { v: E("2031-01-15"), note: "decision Dec 10: the tester's own suspension no longer moves his Rate" }, "Cara.rateCloses": E("2031-01-15") });
 
     // 15. Presses at Jan 17 12:00.
     at("2031-01-17T12:00");
@@ -395,21 +395,21 @@ describe("part dates, step by step", () => {
     // Agent-derived: base = the stop (every deadline before it) = Mar 14 12:00; the dispute window clips the hold at the stop → Mar 28 12:00; the money window
     // counts the hold still on → now + 14 days.
     await snap(w, "A4", "Mar 14 12:00: developer Stops the test during the hold", {}, {
-      "test.status": "stopped", "test.stoppedAt": T("2031-03-14T12:00"), "test.base": T("2031-03-14T12:00"), "test.testCloseOut": T("2031-03-28T12:00"),
+      "test.status": "stopped", "test.stoppedAt": T("2031-03-14T12:00"), "test.base": T("2031-03-14T12:00"),
       "Ann/written.disputeCloses": T("2031-03-28T12:00"), "Ann/written.moneyCloses": T("2031-03-28T12:00"),
     }, [strip(st)]);
     at("2031-03-15T12:00");
     await daily();
-    await snap(w, "A5", "Mar 15 12:00: hold still on, day 1 after the stop", { "Ann/written.disputeCloses": D3(T("2031-03-29T12:00")) }, { "test.testCloseOut": T("2031-03-28T12:00"), "Ann/written.moneyCloses": T("2031-03-29T12:00") });
+    await snap(w, "A5", "Mar 15 12:00: hold still on, day 1 after the stop", { "Ann/written.disputeCloses": D3(T("2031-03-29T12:00")) }, { "Ann/written.moneyCloses": T("2031-03-29T12:00") });
     at("2031-03-16T12:00");
     await daily();
-    await snap(w, "A6", "Mar 16 12:00: hold still on, day 2 after the stop", { "Ann/written.disputeCloses": D3(T("2031-03-30T12:00")) }, { "test.testCloseOut": T("2031-03-28T12:00"), "Ann/written.moneyCloses": T("2031-03-30T12:00") });
+    await snap(w, "A6", "Mar 16 12:00: hold still on, day 2 after the stop", { "Ann/written.disputeCloses": D3(T("2031-03-30T12:00")) }, { "Ann/written.moneyCloses": T("2031-03-30T12:00") });
     at("2031-03-17T12:00");
     expect.soft(await liftHoldIfClear(w.dev.user.id), "the hold lifts").toBe(true);
     // (Owner's decision, Dec 9 2026) A developer hold, then a Stop: the lift shifts by the whole hold (to the lift), so the piece's own window wins: Apr 4.
     await snap(w, "A7", "Mar 17 12:00: the hold lifts (whole hold shifted: owner-decided)", {
       "Ann/written.payBy": T("2031-03-19T12:00"), "Ann/written.stintDueAt": E("2031-03-21"), "Ann/written.moneyCloses": E("2031-04-04"), "Ann/written.disputeCloses": E("2031-04-04"),
-    }, { "developer.holdStartedAt": null, "test.testCloseOut": T("2031-03-28T12:00") });
+    }, { "developer.holdStartedAt": null });
     at("2031-03-18T12:00");
     await snap(w, "A8", "Mar 18 12:00: a day after the lift (fixed)", { "Ann/written.moneyCloses": E("2031-04-04"), "Ann/written.disputeCloses": E("2031-04-04") });
   }, 300_000);
@@ -428,26 +428,26 @@ describe("part dates, step by step", () => {
     await runSweep(new Date());
     // Agent-derived: base = Apr 12 11:59 PM (Open until and Bo's deadline passed, not moved yet); the open pause makes each window now + 14 days.
     await snap(w, "B3", "Apr 13 12:00: the work would have ended Apr 12; pause still on (sweep run)", {}, {
-      "test.workEndedAt": null, "test.base": E("2031-04-12"), "test.testCloseOut": T("2031-04-27T12:00"), "Bo/written.moneyCloses": T("2031-04-27T12:00"), "Bo/written.disputeCloses": T("2031-04-27T12:00"),
+      "test.workEndedAt": null, "test.base": E("2031-04-12"), "Bo/written.moneyCloses": T("2031-04-27T12:00"), "Bo/written.disputeCloses": T("2031-04-27T12:00"),
     });
     at("2031-04-14T12:00");
     await runSweep(new Date());
     await snap(w, "B4", "Apr 14 12:00: next day, pause still on", {}, {
-      "test.workEndedAt": null, "test.testCloseOut": T("2031-04-28T12:00"), "Bo/written.moneyCloses": T("2031-04-28T12:00"), "Bo/written.disputeCloses": T("2031-04-28T12:00"),
+      "test.workEndedAt": null, "Bo/written.moneyCloses": T("2031-04-28T12:00"), "Bo/written.disputeCloses": T("2031-04-28T12:00"),
     });
     at("2031-04-15T08:00");
     await teamLift(w, "B5");
     // Agent-derived: the pause (6 days) moves Open until Apr 11 → Apr 17, Bo's deadline Apr 12 → Apr 18, payBy Apr 10 → Apr 16 12:00; nothing closes yet.
     await snap(w, "B5", "Apr 15 08:00: the team lifts (6 days)", {}, {
-      "test.openUntil": E("2031-04-17"), "Bo.dueAt": E("2031-04-18"), "Bo/written.payBy": T("2031-04-16T12:00"), "Bo/written.chargeOpens": E("2031-04-18"), "test.base": null, "test.testCloseOut": null,
+      "test.openUntil": E("2031-04-17"), "Bo.dueAt": E("2031-04-18"), "Bo/written.payBy": T("2031-04-16T12:00"), "Bo/written.chargeOpens": E("2031-04-18"), "test.base": null,
     });
     at("2031-04-19T00:30");
     await runSweep(new Date());
     await snap(w, "B6", "Apr 19 00:30: the sweep closes the work at the moved deadline", {}, {
-      "test.workEndedAt": E("2031-04-18"), "test.base": E("2031-04-18"), "test.testCloseOut": E("2031-05-02"), "Bo/written.moneyCloses": E("2031-05-02"), "Bo/written.disputeCloses": E("2031-05-02"), "Bo.rateCloses": E("2031-05-02"),
+      "test.workEndedAt": E("2031-04-18"), "test.base": E("2031-04-18"), "Bo/written.moneyCloses": E("2031-05-02"), "Bo/written.disputeCloses": E("2031-05-02"), "Bo.rateCloses": E("2031-05-02"),
     });
     at("2031-04-20T12:00");
-    await snap(w, "B7", "Apr 20 12:00: settled (unchanged a day later)", {}, { "test.testCloseOut": E("2031-05-02"), "Bo/written.moneyCloses": E("2031-05-02"), "Bo/written.disputeCloses": E("2031-05-02") });
+    await snap(w, "B7", "Apr 20 12:00: settled (unchanged a day later)", {}, { "Bo/written.moneyCloses": E("2031-05-02"), "Bo/written.disputeCloses": E("2031-05-02") });
   }, 300_000);
 
   it("C: an outage entirely inside a team pause moves nothing; the lift moves dates once by the whole pause", async () => {
@@ -467,7 +467,7 @@ describe("part dates, step by step", () => {
     await snap(w, "C4", "May 8 08:00: the team lifts (3 days; once, not 3 + 1)", {}, { "Cy.dueAt": E("2031-05-15"), "Cy/written.payBy": T("2031-05-13T12:00"), "test.openUntil": E("2031-05-14"), "Cy/written.chargeOpens": E("2031-05-15") });
     at("2031-05-16T00:30");
     await runSweep(new Date());
-    await snap(w, "C5", "May 16 00:30: the work closes", {}, { "test.workEndedAt": E("2031-05-15"), "test.testCloseOut": E("2031-05-29"), "Cy/written.moneyCloses": E("2031-05-29"), "Cy/written.disputeCloses": E("2031-05-29") });
+    await snap(w, "C5", "May 16 00:30: the work closes", {}, { "test.workEndedAt": E("2031-05-15"), "Cy/written.moneyCloses": E("2031-05-29"), "Cy/written.disputeCloses": E("2031-05-29") });
   }, 300_000);
 
   it("D: a part's payBy exactly at a pause's start is not moved at the lift (payBy > start)", async () => {
@@ -558,19 +558,19 @@ describe("part dates, step by step", () => {
         }, { "test.status": "open", "Gil.status": "working", "test.pausedSince": null, "test.adminPausedAt": null, "test.base": null }, presses);
         at("2031-09-29T00:30");
         await daily();
-        await snap(w, `${g}.4`, "Sep 29 00:30: the daily job (work closes at Sep 28 11:59 PM; Charge opens)", {}, { "test.workEndedAt": E("2031-09-28"), "Gil/written.choiceOfferedAt": SET, "test.testCloseOut": E("2031-10-12"), "Gil/written.moneyCloses": E("2031-10-12"), "Gil/written.disputeCloses": E("2031-10-12") });
+        await snap(w, `${g}.4`, "Sep 29 00:30: the daily job (work closes at Sep 28 11:59 PM; Charge opens)", {}, { "test.workEndedAt": E("2031-09-28"), "Gil/written.choiceOfferedAt": SET, "Gil/written.moneyCloses": E("2031-10-12"), "Gil/written.disputeCloses": E("2031-10-12") });
         return;
       }
       await snap(w, `${g}.3`, `Sep 20 12:00: ${variant} during the team pause: the Stop is the pause's lift (9d 18h)`, {
         "Gil.dueAt": E("2031-09-18"), "Gil/written.payBy": T("2031-09-27T06:00"), "Gil/written.stintDueAt": E("2031-09-28"), "Gil/written.chargeOpens": E("2031-09-28"),
-        "test.base": T("2031-09-20T12:00"), "test.testCloseOut": T("2031-10-04T12:00"), "Gil/written.moneyCloses": E("2031-10-12"), "Gil/written.disputeCloses": E("2031-10-12"), "test.pausedSince": null,
+        "test.base": T("2031-09-20T12:00"), "Gil/written.moneyCloses": E("2031-10-12"), "Gil/written.disputeCloses": E("2031-10-12"), "test.pausedSince": null,
       }, { "test.status": "stopped", "test.stoppedAt": T("2031-09-20T12:00") }, presses);
       at("2031-09-22T12:00");
       const ch = await press("Gil", "Charge", "Gil/written", () => sact(w.people.Gil.sessionId, "choose", w.people.Gil.cookie, { submissionId: w.parts["Gil/written"].id, choice: "charge", amount: "10.00", seenAt: seen(), confirmed: true }));
       await snap(w, `${g}.4`, "Sep 22 12:00: Gil presses Charge (not offered yet)", { "press.0.code": "not_yet" }, { "press.0.httpStatus": 409, "Gil/written.choiceOfferedAt": null }, [strip(ch)]);
       at("2031-09-29T00:30");
       await daily();
-      await snap(w, `${g}.5`, "Sep 29 00:30: the daily job after Sep 28 11:59 PM", { "Gil/written.choiceOfferedAt": SET }, { "Gil/written.moneyCloses": E("2031-10-12"), "Gil/written.disputeCloses": E("2031-10-12"), "test.testCloseOut": T("2031-10-04T12:00") });
+      await snap(w, `${g}.5`, "Sep 29 00:30: the daily job after Sep 28 11:59 PM", { "Gil/written.choiceOfferedAt": SET }, { "Gil/written.moneyCloses": E("2031-10-12"), "Gil/written.disputeCloses": E("2031-10-12") });
     }, 300_000);
   }
 
@@ -583,7 +583,6 @@ describe("part dates, step by step", () => {
       const base = closeOutBase(t, t.contracts, now);
       return {
         moneyTestWindow: base ? iso(windowEnd(base, await moneySpans(t, base, now), now, 14).end) : null,
-        disputeTestWindow: base ? iso(windowEnd(base, mergeSpans(await testSpans(t, base, now)), now, 14).end) : null,
         runningAgainEvents: await db.testEvent.count({ where: { testId: w.testId, kind: "resumed", text: "Your tests are running again" } }),
       };
     };
@@ -604,15 +603,15 @@ describe("part dates, step by step", () => {
       "Hal/written.payBy": T("2031-10-17T12:00"), "Hal/written.stintDueAt": null, "test.pausedSince": T("2031-10-10T18:00"),
     }, { "test.status": "stopped", "test.base": T("2031-10-20T12:00"), "Hal.dueAt": E("2031-10-18"), "Hal/written.moneyCloses": T("2031-11-03T12:00"), "Hal/written.disputeCloses": T("2031-11-03T12:00") }, [strip(st)], await extra());
     at("2031-10-22T12:00");
-    await snap(w, "H5", "Oct 22 12:00: during the hold (money and dispute move day by day)", { "Hal/written.disputeCloses": D3(T("2031-11-05T12:00")) }, { "Hal/written.moneyCloses": T("2031-11-05T12:00"), "test.testCloseOut": T("2031-11-03T12:00") }, [], await extra());
+    await snap(w, "H5", "Oct 22 12:00: during the hold (money and dispute move day by day)", { "Hal/written.disputeCloses": D3(T("2031-11-05T12:00")) }, { "Hal/written.moneyCloses": T("2031-11-05T12:00") }, [], await extra());
     at("2031-10-23T12:00");
     await snap(w, "H6", "Oct 23 12:00: next day of the hold", { "Hal/written.disputeCloses": D3(T("2031-11-06T12:00")) }, { "Hal/written.moneyCloses": T("2031-11-06T12:00") }, [], await extra());
     at("2031-10-25T12:00");
     expect.soft(await liftHoldIfClear(w.dev.user.id), "the hold lifts").toBe(true);
     await snap(w, "H7", "Oct 25 12:00: the hold lifts: one shift by the whole stretch Oct 10 18:00 → Oct 25 12:00 (14d 18h)", {
       "Hal/written.payBy": T("2031-11-01T06:00"), "Hal/written.stintDueAt": E("2031-11-02"), "Hal/written.chargeOpens": E("2031-11-02"), "test.pausedSince": null, "extra.runningAgainEvents": 0,
-      "Hal/written.moneyCloses": E("2031-11-16"), "extra.moneyTestWindow": T("2031-11-08T12:00"), "Hal/written.disputeCloses": E("2031-11-16"), "extra.disputeTestWindow": T("2031-11-03T12:00"),
-    }, { "developer.holdStartedAt": null, "Hal.dueAt": E("2031-10-18"), "test.testCloseOut": T("2031-11-03T12:00") }, [], await extra());
+      "Hal/written.moneyCloses": E("2031-11-16"), "extra.moneyTestWindow": T("2031-11-08T12:00"), "Hal/written.disputeCloses": E("2031-11-16"),
+    }, { "developer.holdStartedAt": null, "Hal.dueAt": E("2031-10-18") }, [], await extra());
     at("2031-10-26T12:00");
     await snap(w, "H8", "Oct 26 12:00: a day after the lift (fixed)", {}, { "Hal/written.moneyCloses": E("2031-11-16"), "Hal/written.disputeCloses": E("2031-11-16"), "Hal/written.payBy": T("2031-11-01T06:00") }, [], await extra());
   }, 300_000);
@@ -651,7 +650,7 @@ describe("part dates, step by step", () => {
     await snap(w, "I2", "Nov 11 12:00: Ivy sends written answers", { "Ivy/written.payBy": T("2031-11-18T12:00") }, { "Ivy/written.chargeOpens": T("2031-11-18T12:00") }, [], await extra());
     at("2031-11-13T00:30");
     await daily();
-    await snap(w, "I3", "Nov 13 00:30: the daily job ends the work at Nov 12 11:59 PM", {}, { "test.workEndedAt": E("2031-11-12"), "test.status": "closed", "test.testCloseOut": E("2031-11-26"), "Ivy/written.moneyCloses": T("2031-12-02T12:00") }, [], await extra());
+    await snap(w, "I3", "Nov 13 00:30: the daily job ends the work at Nov 12 11:59 PM", {}, { "test.workEndedAt": E("2031-11-12"), "test.status": "closed", "Ivy/written.moneyCloses": T("2031-12-02T12:00") }, [], await extra());
     at("2031-11-14T12:00");
     await startHold(w.dev.user.id, "unpaid");
     shortcut(w, "I4", "startHold(dev, \"unpaid\") called directly", "no Stripe in tests: the declined payment that would start it can't happen");
@@ -669,7 +668,7 @@ describe("part dates, step by step", () => {
     await snap(w, "I6", "Nov 16 12:00: the hold lifts: payBy and the call's payBy move by 2 days (counted once)", {
       "Ivy/written.payBy": T("2031-11-20T12:00"), "Ivy/written.chargeOpens": T("2031-11-20T12:00"), "extra.callPayBy": T("2031-11-19T11:00"), "extra.callChargeAt": T("2031-11-19T11:00"),
       "extra.moneyTestWindow": E("2031-11-28"), "Ivy/written.moneyCloses": T("2031-12-04T12:00"), "Ivy/written.disputeCloses": T("2031-12-04T12:00"),
-    }, { "developer.holdStartedAt": null, "Ivy/written.stintDueAt": null, "test.testCloseOut": E("2031-11-26"), "Ivy.dueAt": E("2031-11-12") }, [], await extra());
+    }, { "developer.holdStartedAt": null, "Ivy/written.stintDueAt": null, "Ivy.dueAt": E("2031-11-12") }, [], await extra());
     at("2031-11-17T12:00");
     await snap(w, "I7", "Nov 17 12:00: a day after the lift (unchanged)", {
       "Ivy/written.payBy": T("2031-11-20T12:00"), "extra.callPayBy": T("2031-11-19T11:00"), "extra.callChargeAt": T("2031-11-19T11:00"), "Ivy/written.moneyCloses": T("2031-12-04T12:00"), "Ivy/written.disputeCloses": T("2031-12-04T12:00"),

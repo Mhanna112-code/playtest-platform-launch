@@ -1065,7 +1065,9 @@ Some reusable constructors are also used as F reasons, I banners or an S line. T
 
 **ratePendingLine** — [src/lib/rules.ts:1458](../src/lib/rules.ts#L1458)
 
-* `You can rate <tester> once they've rated you and everything they sent is settled.`
+* `You can rate <tester> once they've rated you and everything they sent is settled.` (the test hasn't closed yet: the end of the tester's Rate isn't known)
+* `You can rate <tester> once they've rated you (or their time to rate ends on <date>) and everything they sent is settled.` (Owner, Dec 10 2026: the end of the tester's Rate window, testerRatingClosesAt, in the developer's zone)
+* `You can rate <tester> once everything they sent is settled.` (Owner, Dec 10 2026: the tester's Rate window has ended unrated)
 
 **stopMomentLine** — [src/lib/rules.ts:1468](../src/lib/rules.ts#L1468)
 
@@ -1140,13 +1142,14 @@ Some reusable constructors are also used as F reasons, I banners or an S line. T
 * `Rating closed on <date/time>.`
 * `Charge or let go of your unreviewed work first.`
 * `Rating opens once the team decides your dispute.`
+* `You can rate once this test resumes.` (hidden; Owner, Dec 10 2026: only while the money is frozen (the team's pause, the developer's hold or suspension) AND work she sent still waits for review; with none, her Rate stays open during the freeze. The press: `This test is paused, so your Rate didn't go through.`)
 * `Rating opens once <person> reviews everything you sent.`
 * `Rating opens on <date/time>, or sooner if <person> reviews everything you sent.`
 
 **devRateStates** — [src/lib/server/ratings.ts:74](../src/lib/server/ratings.ts#L74)
 
 * `You can rate once your account is active again.`
-* `You can rate <person> once they've rated you and everything they sent is settled.`
+* `You can rate <person> once they've rated you and everything they sent is settled.` (and, Owner, Dec 10 2026, the two other ratePendingLine forms above)
 * `The 14 days to rate <person> have passed.`
 * `Rating opens once the team decides <person>'s dispute.`
 

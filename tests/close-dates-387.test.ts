@@ -14,7 +14,8 @@ import { joined, sact, seen, settle, setup } from "./fixtures";
 
 // (Owner, Nov 11, §387 4; replaces batch 17 §19's "the last 7 days") Each money button always shows its closing date next to it, in the reader's zone: the
 // tester's "Charge or let go by …", "Dispute until …" (the part's own date, as Charge) and "Rate until …" (testerRatingClosesAt); the developer's "Pay by …" and
-// "Pay more until …" (pieceCloseOut). While the money is frozen the line reads "Waits while the test is paused" (the tester's Rate keeps its own line).
+// "Pay more until …" (pieceCloseOut). While the money is frozen the line reads "Waits while the test is paused" ((Owner, Dec 10 2026) the tester's Rate's too
+// while it shows; hidden while work waits for review, it keeps its own line).
 
 const auth = vi.hoisted(() => ({ user: null as User | null }));
 vi.mock("@/lib/server/page-auth", () => ({ requireOpenPage: async () => auth.user, requirePageUser: async () => auth.user, adminAway() {}, leaveIfClosed() {} }));
@@ -81,7 +82,7 @@ describe("§387 4: the closing date always shows next to its button", () => {
     expect(dev).not.toContain(`Pay by ${date}`);
   });
 
-  it("paid in part: \"Dispute until\" (the part's date) and \"Rate until\" for the tester, \"Pay more until\" for the developer; paused: the waits line, Rate's own line", async () => {
+  it("paid in part: \"Dispute until\" (the part's date) and \"Rate until\" for the tester, \"Pay more until\" for the developer; paused: the waits line (Rate's too)", async () => {
     const w = await closedWork();
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "6.00", tickedCents: 600, reason: "Only part of it was useful" })).status).toBe(200);
     await settle();
@@ -96,7 +97,8 @@ describe("§387 4: the closing date always shows next to its button", () => {
     expect(paused).toContain(R.FROZEN_WAITS_LINE);
     expect(paused).not.toContain("Dispute until");
     expect(paused).not.toContain("Rate until");
-    expect(paused).toContain(R.RATE_TEST_PAUSED);
+    // (Owner, Dec 10 2026; was: Rate hidden with RATE_TEST_PAUSED) Nothing waits for review, so her Rate stays open during the freeze, its date waiting too.
+    expect(paused).not.toContain(R.RATE_TEST_PAUSED);
     // The restricted view draws no Pay more box (§368): no date for it either.
     expect(await devPage(w)).not.toContain("Pay more until");
   });

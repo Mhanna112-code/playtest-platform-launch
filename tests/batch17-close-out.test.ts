@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import * as R from "@/lib/rules";
 import { fmtDate } from "@/lib/format";
 import { GET as cronGET } from "@/app/api/cron/daily/route";
-import { closeOutOf, pieceCloseOut } from "@/lib/server/closeOut";
+import { pieceCloseOut, testerRatingClosesAt } from "@/lib/server/closeOut";
 import { closeOutMark } from "@/lib/server/holds";
 import { decideDispute } from "@/lib/server/payments";
 import { makeUser } from "./helpers";
@@ -36,6 +36,8 @@ const overdue = (subId: string) => db.submission.update({ where: { id: subId }, 
 /** Charge already open on the piece (as the daily job does it). */
 const chargeOpen = (subId: string) => db.submission.update({ where: { id: subId }, data: { payBy: ago(20), choiceOfferedAt: ago(8), choiceBy: ago(1), remindedAt: ago(1) } });
 
+// (Owner, Dec 10 2026) No test-wide close-out function any more: the close-out is read through the tester's Rate window (testerRatingClosesAt), which counts
+// it the same way here (no disputes; the developer side's spans).
 describe("the close-out date (section 19)", () => {
   it("14 days after the LAST tester's deadline (a late joiner's counts); unknown while a working tester's deadline is ahead; a stop counts from the stop", async () => {
     const { testId } = await setup({ spots: 5 });
@@ -46,43 +48,43 @@ describe("the close-out date (section 19)", () => {
     await db.contract.update({ where: { id: a.sessionId }, data: { dueAt: ago(20) } });
     const dueB = new Date(now.getTime() + 2 * DAY);
     await db.contract.update({ where: { id: b.sessionId }, data: { dueAt: dueB } });
-    expect(await closeOutOf(testId, now)).toBeNull(); // Ben can still work
+    expect(await testerRatingClosesAt(a.sessionId, now)).toBeNull(); // Ben can still work
     const dueB2 = ago(10);
     await db.contract.update({ where: { id: b.sessionId }, data: { dueAt: dueB2 } });
-    expect((await closeOutOf(testId, now))!.getTime()).toBe(dueB2.getTime() + 14 * DAY);
+    expect((await testerRatingClosesAt(a.sessionId, now))!.getTime()).toBe(dueB2.getTime() + 14 * DAY);
     // Stopped later than every deadline: 14 days after the stop.
     const stoppedAt = ago(5);
     await db.test.update({ where: { id: testId }, data: { status: "stopped", stoppedAt } });
-    expect((await closeOutOf(testId, now))!.getTime()).toBe(stoppedAt.getTime() + 14 * DAY);
+    expect((await testerRatingClosesAt(a.sessionId, now))!.getTime()).toBe(stoppedAt.getTime() + 14 * DAY);
   });
 
   it("moves later with the team's pause, a developer hold (ended or on now) and an outage", async () => {
     const { testId, dev } = await setup();
-    await joined(testId);
+    const { sessionId } = await joined(testId);
     const now = new Date();
     const base = await deadlinesAt(testId, 10);
     const at = (d: number) => new Date(base.getTime() + d * DAY);
-    expect((await closeOutOf(testId, now))!.getTime()).toBe(at(14).getTime());
+    expect((await testerRatingClosesAt(sessionId, now))!.getTime()).toBe(at(14).getTime());
     // The team paused it for 2 days.
     await db.testEvent.create({ data: { testId, kind: "paused", text: "The team paused this test", createdAt: at(1) } });
     await db.testEvent.create({ data: { testId, kind: "resumed", text: "The team lifted the pause on this test", createdAt: at(3) } });
-    expect((await closeOutOf(testId, now))!.getTime()).toBe(at(16).getTime());
+    expect((await testerRatingClosesAt(sessionId, now))!.getTime()).toBe(at(16).getTime());
     // A payment hold of 3 days.
     await db.accountEvent.create({ data: { userId: dev.user.id, kind: "hold", createdAt: at(4) } });
     await db.accountEvent.create({ data: { userId: dev.user.id, kind: "hold-lifted", createdAt: at(7) } });
-    expect((await closeOutOf(testId, now))!.getTime()).toBe(at(19).getTime());
+    expect((await testerRatingClosesAt(sessionId, now))!.getTime()).toBe(at(19).getTime());
     // An outage of 6 hours.
     await db.outage.create({ data: { startAt: at(8), endAt: new Date(at(8).getTime() + 6 * 3_600_000), ms: 6 * 3_600_000 } });
-    expect((await closeOutOf(testId, now))!.getTime()).toBe(at(19).getTime() + 6 * 3_600_000);
+    expect((await testerRatingClosesAt(sessionId, now))!.getTime()).toBe(at(19).getTime() + 6 * 3_600_000);
     // A hold on now (since day 9): the close-out keeps moving with it (the days left at its start, counted from now).
     await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: at(9) } });
     await db.accountEvent.create({ data: { userId: dev.user.id, kind: "hold", createdAt: at(9) } });
     const left = at(19).getTime() + 6 * 3_600_000 - at(9).getTime();
-    expect((await closeOutOf(testId, now))!.getTime()).toBe(now.getTime() + left);
+    expect((await testerRatingClosesAt(sessionId, now))!.getTime()).toBe(now.getTime() + left);
   });
 
   // (Owner, Nov 11, §378) The developer's Pay (and Pay more) close with the tester's Charge: the suspension time counts for all of them.
-  it("a tester whose tester side was suspended gets that time added to their pieces' Charge, Pay and Pay more (not to the test's close-out)", async () => {
+  it("a tester whose tester side was suspended gets that time added to their pieces' Charge, Pay and Pay more (not to the close-out, nor (Owner, Dec 10 2026) their Rate)", async () => {
     const w = await sentWork("10.00", { spots: 5 });
     const b = await joined(w.testId, "Ben Carter", "he");
     await sact(b.sessionId, "written", b.tester.cookie, { answers: ["a", "b"] });
@@ -93,7 +95,7 @@ describe("the close-out date (section 19)", () => {
     for (const id of [w.sub.id, subB.id]) await overdue(id); // Charge opened at the deadline: the piece closes with the test
     await db.accountEvent.create({ data: { userId: w.tester.user.id, kind: "suspended", side: "tester", createdAt: new Date(base.getTime() + DAY) } });
     await db.accountEvent.create({ data: { userId: w.tester.user.id, kind: "reinstated", side: "tester", createdAt: new Date(base.getTime() + 4 * DAY) } });
-    expect((await closeOutOf(w.testId, now))!.getTime()).toBe(base.getTime() + 14 * DAY);
+    expect((await testerRatingClosesAt(w.sessionId, now))!.getTime()).toBe(base.getTime() + 14 * DAY);
     expect((await pieceCloseOut({ submissionId: w.sub.id }, now))!.getTime()).toBe(base.getTime() + 17 * DAY);
     expect((await pieceCloseOut({ submissionId: subB.id }, now))!.getTime()).toBe(base.getTime() + 14 * DAY);
     // Their developer side's suspension doesn't count for their Charge.
@@ -113,7 +115,7 @@ describe("the close-out date (section 19)", () => {
     await db.submission.update({ where: { id: w.sub.id }, data: { payBy: openedA, choiceOfferedAt: openedA, choiceBy: new Date(openedA.getTime() + 7 * DAY), remindedAt: openedA } });
     await db.submission.update({ where: { id: subC.id }, data: { payBy: openedC, choiceOfferedAt: openedC, choiceBy: new Date(openedC.getTime() + 7 * DAY), remindedAt: openedC } });
     const now = new Date();
-    expect((await closeOutOf(w.testId, now))!.getTime()).toBe(base.getTime() + 14 * DAY);
+    expect((await testerRatingClosesAt(w.sessionId, now))!.getTime()).toBe(base.getTime() + 14 * DAY);
     // (Owner, Nov 11, §378) One date per piece: Ana's Charge, Pay and Pay more on Ana's piece; Cara's on hers (no longer the test's last).
     expect((await pieceCloseOut({ submissionId: w.sub.id }, now))!.getTime()).toBe(openedA.getTime() + 14 * DAY);
     expect((await pieceCloseOut({ submissionId: subC.id }, now))!.getTime()).toBe(openedC.getTime() + 14 * DAY);

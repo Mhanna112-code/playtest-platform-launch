@@ -1963,7 +1963,7 @@ export function canAskToRejoin(c: { status: string; endKind: string; endedAt: Da
 
 /** (Batch 17 section 2) Your own side suspended (or, for a developer, on a hold): Rate is hidden and an old page's press is refused. */
 export const RATE_INACTIVE = "You can rate once your account is active again.";
-/** (Owner, Nov 11, §386 E) The tester's hidden Rate while the test or its developer is paused (never why). */
+/** (Owner, Nov 11, §386 E; Owner, Dec 10 2026) The tester's hidden Rate while the test or its developer is paused and work she sent still waits for review (never why). */
 export const RATE_TEST_PAUSED = "You can rate once this test resumes.";
 /** (Batch 17 section 1) The tester's Rate is disabled, with the first of these lines that applies. */
 export const RATE_CHARGE_FIRST = "Charge or let go of your unreviewed work first.";
@@ -1973,10 +1973,17 @@ export const rateOpensOnLine = (date: string, devName: string) => `Rating opens 
 export const rateOpensReviewLine = (devName: string) => `Rating opens once ${devName} reviews everything you sent.`;
 /** (Batch 17 section 1) The developer's Rate is disabled while a dispute with that tester on this test is open. */
 export const rateTheirDisputeLine = (name: string) => `Rating opens once the team decides ${name}'s dispute.`;
-/** (Batch 17 section 16) The developer's Rate is hidden until the tester has rated and everything they sent is settled; an old page's press reads this. */
-export const ratePendingLine = (name: string, pronoun?: string | null) => {
+/**
+ * (Batch 17 section 16) The developer's Rate is hidden until it opens; an old page's press reads this. (Owner, Dec 10 2026) It opens once everything the tester
+ * sent is settled AND the tester rated or her own Rate window ended: with that end (`herRate`: its date in the developer's zone, and whether it has passed) the
+ * line names both ways ("… once she's rated you (or her time to rate ends on Dec 24, 2026) and everything she sent is settled."); once it has passed, only the
+ * settling is left; unknown (the test hasn't closed), the line as before.
+ */
+export const ratePendingLine = (name: string, pronoun?: string | null, herRate?: { date: string; passed: boolean } | null) => {
   const p = pronouns(pronoun);
-  return `You can rate ${name} once ${p.subjHas} rated you and everything ${p.subj} sent is settled.`;
+  if (herRate?.passed) return `You can rate ${name} once everything ${p.subj} sent is settled.`;
+  const or = herRate ? ` (or ${p.poss} time to rate ends on ${herRate.date})` : "";
+  return `You can rate ${name} once ${p.subjHas} rated you${or} and everything ${p.subj} sent is settled.`;
 };
 /** (Batch 17 section 12) A Cancel call pressed on a page opened before the test stopped (its calls ahead were cancelled by the stop). */
 export const CALL_CANCELLED_BY_STOP = "This call was cancelled when the test stopped.";
@@ -2075,7 +2082,8 @@ export const ratingClosedLine = (date: string) => `Rating closed on ${date}.`;
 export const CLOSE_OUT_REMINDER_DAYS = [3, 1] as const;
 // (Owner, Nov 11, §387 4; replaces batch 17 §19's "the last 7 days" rule) Each money button always says its closing date next to it, in the reader's zone: the
 // tester's Charge / Let it go, Dispute and Rate; the developer's Pay and Pay more. While the money is frozen (moneyFrozen) the line reads FROZEN_WAITS_LINE instead
-// (the tester's Rate is hidden then, with RATE_TEST_PAUSED). The developer's "Rate X · N days left" is unchanged.
+// (the tester's Rate too: (Owner, Dec 10 2026) it shows during a freeze unless work waits for review, then it is hidden with RATE_TEST_PAUSED). The developer's
+// "Rate X · N days left" is unchanged.
 /** Is the date still ahead (the line shows it)? */
 export const closesAhead = (at: Date | null, now = new Date()) => !!at && at.getTime() > now.getTime();
 export const FROZEN_WAITS_LINE = "Waits while the test is paused";

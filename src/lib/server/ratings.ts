@@ -12,7 +12,8 @@ import { callsGoneTail, cancelCallsAhead, lockTest, ownContract, ownTest, record
 import { seenOf, unanswered, tabOf, testerPaymentChanges } from "./live";
 import { FINISHED_PART_REASON, payMoreLine, testerChanges, testerGate } from "./testerGate";
 import { devPauseMoments, devStopSince, loadedOf, stopBox } from "./stopMoment";
-import { CONTRACTS, closeOutOf, testSpans, testerRateLiftedAt, testerRatingClosesAt, closedOut, devPauseSpans, lastLift, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
+import { CONTRACTS, disputeSpansOf, moneySpans, testerRateLiftedAt, testerRatingClosesAt, closedOut, devPauseSpans, lastLift, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
+import { workEndOf } from "@/lib/pause";
 import { CLOSE_OUT_DAYS, closeOutBase, repeatDue, REPEAT_MIN_GAP_MS, utcDayNo } from "@/lib/rules";
 import { closeOffersOfEnded } from "./offerClose";
 import { RATE_TEAM_PAUSED, TESTER_FROZEN_CAUSE, moneyFrozen, teamPausedNow } from "@/lib/restricted";
@@ -20,11 +21,12 @@ import { testerRow } from "@/lib/lineAnchors";
 
 // (Owner, Oct 22, NEWEST+5) Ratings. (Owner, Oct 28, batch 17 sections 1, 2, 14, 16 and 17: the rules below replace the earlier ones where they differ.)
 // TESTER rates the developer once some work was sent or a call took place. Rate is DISABLED (shown, with one grey line) while they can still Charge or Let it go of a
-// piece, while a dispute of theirs is open, or while work they sent is inside its review window; HIDDEN (and refused) while their tester side is suspended. No end date.
+// piece, while a dispute of theirs is open, or while work they sent is inside its review window; HIDDEN (and refused) while their tester side is suspended.
+// (Owner, Dec 10 2026) It closes at her close-out (testerRatingClosesAt), and during a money freeze it is hidden only while work still waits for review.
 // Rating finishes their part like Leave (no rejoin ever); Dispute stays.
-// DEVELOPER rates a tester only once the tester has rated them AND everything that tester sent is settled (paid, charged or let go); until then Rate is hidden. Their
-// 14 days start then and pause while they can't rate (their developer side suspended, a payment or chargeback hold, or (owner, Nov 4, §172) the team paused that test).
-// A dispute opened later disables Rate until decided.
+// DEVELOPER rates a tester only once everything that tester sent is settled (paid, charged or let go) AND (Owner, Dec 10 2026) the tester has rated them or the
+// tester's own Rate window has closed; until then Rate is hidden. Their 14 days start then and pause while they can't rate (their developer side suspended, a
+// payment or chargeback hold, or (owner, Nov 4, §172) the team paused that test). A dispute opened later disables Rate until decided.
 // BLIND REVEAL: the tester's rating stays hidden (from the developer, profiles and averages) until the developer rates or their 14 days end (see revealAt).
 
 export type Side = "tester" | "developer";
@@ -61,20 +63,24 @@ export async function testerRateState(contractId: string, now = new Date()): Pro
   if (c.tester.testerSuspendedAt) return { kind: "hidden", line: RATE_INACTIVE };
   const done = c.calls.filter((x) => x.status === "booked" && x.startsAt <= now);
   if (!c.submissions.length && !done.length) return { kind: "hidden", line: "Rating opens once some work was sent or a call took place." };
-  // (Batch 17 section 19) The test's close-out ends the tester's Rate: "Rating closed on <date>." (shown as a note, refused on the server).
+  // (Batch 17 section 19; Owner, Dec 10 2026) Her close-out ends the tester's Rate: "Rating closed on <date>." (shown as a note, refused on the server).
   const closeOut = await testerRatingClosesAt(contractId, now);
   if (closedOut(closeOut, now)) return { kind: "closed", line: ratingClosedLine(fmtDateIn(closeOut!, c.tester.timeZone)) };
-  // (Owner, Nov 11, §386 E) While the test or its developer is paused (the team's pause, the developer's hold or suspension; during the test or after it closed) the
-  // tester's Rate is hidden and refused, as during their own suspension (never why); its window moves on by the pause (testerRatingClosesAt).
-  if (moneyFrozen(c.test.developer, c.test)) return { kind: "hidden", line: RATE_TEST_PAUSED };
   // A part or listed call they can still Charge or Let it go (Charge never happens on its own: they settle it first).
   // (Batch 30 §3) Late work never has a Charge to settle.
   if ([...c.submissions, ...done].some((x) => !x.review && x.choiceOfferedAt && !("late" in x && x.late))) return { kind: "disabled", line: RATE_CHARGE_FIRST };
   if (await db.dispute.count({ where: { contractId, status: "open" } })) return { kind: "disabled", line: RATE_MY_DISPUTE };
   // Work still inside its review window (sent, not reviewed, Charge not open yet); an unlisted part stops blocking at its review date (as before).
-  const waitSubs = c.submissions.filter((s) => !s.review && !chargeIsOpen(s, c.test, c, now));
-  const waitCalls = done.filter((x) => !x.review && !(x.payBy && chargeIsOpen(x, c.test, c, now))); // (batch 15 section 15) a call: paid, or its review date passed
+  // (Owner, Dec 10 2026; replaces §386 E's "hidden during every freeze") While the money is frozen (the team's pause, the developer's hold or suspension; during
+  // the test or after it closed) the Charge-first and own-dispute lines above come first as always; then, with work still waiting for review, her Rate is hidden
+  // and refused ("You can rate once this test resumes.": its review date moves with the freeze); with none, it is OPEN, freeze or not. A review date still ahead
+  // when the freeze began moves with it (shiftAfterPause, at the lift), so during the freeze the waiting work is judged at the freeze's start.
+  const frozen = !!moneyFrozen(c.test.developer, c.test);
+  const judgedAt = frozen ? new Date(Math.min(now.getTime(), (await moneySpans(c.test, now, now, false)).find((x) => x.open)?.start ?? now.getTime())) : now;
+  const waitSubs = c.submissions.filter((s) => !s.review && !chargeIsOpen(s, c.test, c, judgedAt));
+  const waitCalls = done.filter((x) => !x.review && !(x.payBy && chargeIsOpen(x, c.test, c, judgedAt))); // (batch 15 section 15) a call: paid, or its review date passed
   if (waitSubs.length || waitCalls.length) {
+    if (frozen) return { kind: "hidden", line: RATE_TEST_PAUSED };
     const dev = displayName(c.test.developer);
     const dates = [...waitSubs, ...waitCalls].map((x) => chargeOpensAt(x, c.test, c, now));
     if (dates.some((d) => !d)) return { kind: "disabled", line: rateOpensReviewLine(dev) };
@@ -97,44 +103,45 @@ export async function devRateStates(contractIds: string[], now = new Date()) {
   ]);
   const open = new Set(disputes.map((d) => d.contractId));
   const spans = new Map<string, Span[]>();
-  const closeOuts = new Map<string, Date | null>();
-  for (const id of new Set(cs.map((c) => c.testId))) closeOuts.set(id, await closeOutOf(id, now));
-  // (Owner, Nov 11, §382 b and c) Outages move the developer's window whichever way it opens; the tester's disputes on the part (open: up to now) pause it; the test
-  // close each test's close-out counts from, and that close-out's own pauses (team, the developer's holds and suspensions before the work ended, outages).
+  // (Owner, Nov 11, §382 b and c) Outages move the developer's window whichever way it opens; the tester's disputes on the part (open: up to now) pause it.
+  // (Owner, Dec 10 2026; replaces the test's close-out, testSpans) Each test's close and the developer side's spans after it (moneySpans: their holds and
+  // suspensions whenever they ran, the team's pause cut at the Stop, outages): with the tester's disputes, her Rate window (testerRatingClosesAt's clock).
   const outages = (await db.outage.findMany({ where: { OR: [{ needsApproval: false }, { approvedAt: { not: null } }] }, select: { startAt: true, endAt: true } })).map((o): Span => ({ start: o.startAt.getTime(), end: o.endAt.getTime(), open: false }));
   const disputeRows = await db.dispute.findMany({ where: { contractId: { in: contractIds }, status: { not: "withdrawn" }, createdAt: { lte: now } }, select: { contractId: true, createdAt: true, decidedAt: true, status: true } });
-  const testClose = new Map<string, { base: Date; spans: Span[] } | null>();
+  const testClose = new Map<string, { base: Date; money: Span[] } | null>();
   for (const id of new Set(cs.map((c) => c.testId))) {
     const t = await db.test.findUnique({ where: { id }, include: { developer: true, contracts: CONTRACTS } });
     const base = t ? closeOutBase(t, t.contracts, now) : null;
-    testClose.set(id, t && base ? { base, spans: await testSpans(t, base, now) } : null);
+    testClose.set(id, t && base ? { base, money: await moneySpans(t, base, now) } : null);
   }
   for (const c of cs) {
     const dev = c.test.developer;
     const name = displayName(c.tester);
     // (Owner, Nov 4, §172) The window also pauses while the team paused this test (as under a developer suspension), for this test only.
     // (Owner, Nov 11, §382 c; replaces §358 here, for the Rate window only) The developer's OWN hold or suspension pauses it whenever it began, after the work ended too.
-    if (!spans.has(c.testId)) spans.set(c.testId, mergeSpans([...devPauseSpans(events.filter((e) => e.userId === dev.id), dev, now), ...(await teamPauseSpans(c.testId, c.test.adminPausedAt, now, c.test.status === "stopped" ? c.test.stoppedAt ?? now : null))]));
+    // (Owner, Dec 10 2026) The team's pause of a stopped test ends where the work ended (workEndOf), as in moneySpans.
+    if (!spans.has(c.testId)) spans.set(c.testId, mergeSpans([...devPauseSpans(events.filter((e) => e.userId === dev.id), dev, now), ...(await teamPauseSpans(c.testId, c.test.adminPausedAt, now, c.test.status === "stopped" ? workEndOf(c.test) ?? now : null))]));
     const mine = ratings.find((r) => r.contractId === c.id && r.side === "developer");
     const theirs = ratings.find((r) => r.contractId === c.id && r.side === "tester");
     // Everything they sent is settled: every part and every call that took place has its Pay, Charge or Let it go.
     const pieces = [...c.submissions, ...c.calls.filter((x) => x.status === "booked" && x.startsAt <= now)];
     const settled = pieces.every((x) => !!x.review);
-    // (Batch 17 section 19) A tester who never rated: the developer can rate them for 14 days from the test's close-out (or from when their last open piece settled, if
-    // later), only if everything they sent was settled (a piece that closed unpaid never settles: no rating of that tester).
-    const closeOut = closeOuts.get(c.testId) ?? null;
+    // (Owner, Dec 10 2026; replaces batch 17 §19's "from the test's close-out") A tester who never rated: the developer's Rate opens once HER Rate window has
+    // closed (testerRatingClosesAt: her close-out, moved by the developer's side and her disputes; her own suspension doesn't move it), at the later of that date
+    // and when their last open piece settled; only if everything they sent was settled (a piece that closed unpaid never settles: no rating of that tester).
+    const disputeSpans = disputeSpansOf(disputeRows.filter((d) => d.contractId === c.id), now);
+    const tc = testClose.get(c.testId);
+    const hers = tc ? windowEnd(tc.base, mergeSpans([...tc.money, ...disputeSpans]), now, CLOSE_OUT_DAYS) : null;
     const lastSettled = Math.max(0, ...pieces.map((x) => x.review?.createdAt.getTime() ?? 0));
-    const opensAt = !settled ? null : theirs ? new Date(Math.max(theirs.createdAt.getTime(), lastSettled)) : closedOut(closeOut, now) && pieces.length > 0 ? new Date(Math.max(closeOut!.getTime(), lastSettled)) : null; // (DEFAULT) only a tester who sent something or had a call
-    // (Owner, Nov 11, §382 c) The window closes at the LATER of the test's close-out and 14 days after it opened. Both move, exactly, by the developer's own holds
-    // and suspensions, the tester's disputes on this part and (§382 b) outages; the close-out also by everything that moves it before the test closes.
+    const opensAt = !settled ? null : theirs ? new Date(Math.max(theirs.createdAt.getTime(), lastSettled)) : hers && closedOut(hers.end, now) && pieces.length > 0 ? new Date(Math.max(hers.end.getTime(), lastSettled)) : null; // (DEFAULT) only a tester who sent something or had a call
+    // (Owner, Nov 11, §382 c) The window closes at the LATER of the close-out and 14 days after it opened. Both move, exactly, by the developer's own holds and
+    // suspensions, the tester's disputes on this part and (§382 b) outages; (Owner, Dec 10 2026) the close-out part on the tester's clock (moneySpans).
     // (§382 b) No outage counted twice: one that already moved the tester's rating (applyOutage moves a rating while its first 14 days run) isn't added again
     // when the window opens at that rating.
-    const disputeSpans = disputeRows.filter((d) => d.contractId === c.id).map((d): Span => ({ start: d.createdAt.getTime(), end: Math.min((d.status === "open" ? now : d.decidedAt ?? d.createdAt).getTime(), now.getTime()), open: d.status === "open" }));
     const atRating = !!theirs && !!opensAt && opensAt.getTime() === theirs.createdAt.getTime();
     const ownOutages = atRating ? outages.filter((o) => o.start >= theirs!.createdAt.getTime() + WINDOW_DAYS * DAY) : outages;
     const own = opensAt ? windowEnd(opensAt, mergeSpans([...spans.get(c.testId)!, ...disputeSpans, ...ownOutages]), now, WINDOW_DAYS) : null;
-    const tc = testClose.get(c.testId);
-    const byClose = opensAt && tc ? windowEnd(tc.base, mergeSpans([...tc.spans, ...spans.get(c.testId)!, ...disputeSpans]), now, CLOSE_OUT_DAYS) : null;
+    const byClose = opensAt && tc ? windowEnd(tc.base, mergeSpans([...tc.money, ...spans.get(c.testId)!, ...disputeSpans]), now, CLOSE_OUT_DAYS) : null;
     const w = own && byClose && byClose.end > own.end ? byClose : own;
     // The tester's rating shows once the developer rates or their 14 days end. A window that hadn't opened 14 days after the tester rated (the developer left work
     // unsettled that long) doesn't hold it back past those 14 days.
@@ -145,7 +152,8 @@ export async function devRateStates(contractIds: string[], now = new Date()) {
     else if (dev.devSuspendedAt || dev.holdStartedAt) out.set(c.id, { kind: "hidden", line: RATE_INACTIVE, ...base });
     // (Owner, Nov 4, §172; replaces batch 17 §14) A test the team paused: hidden and refused like a suspended developer's Rate, with the team's wording.
     else if (teamPausedNow(c.test)) out.set(c.id, { kind: "hidden", line: RATE_TEAM_PAUSED, ...base });
-    else if (!opensAt) out.set(c.id, { kind: "hidden", line: ratePendingLine(name, c.tester.pronoun), ...base });
+    // (Owner, Dec 10 2026) Both ways it opens, with the end of her Rate in the developer's zone once the test close is known.
+    else if (!opensAt) out.set(c.id, { kind: "hidden", line: ratePendingLine(name, c.tester.pronoun, hers ? { date: fmtDateIn(hers.end, dev.timeZone), passed: closedOut(hers.end, now) } : null), ...base });
     else if (w && w.end.getTime() <= now.getTime()) out.set(c.id, { kind: "hidden", line: `The ${WINDOW_DAYS} days to rate ${name} have passed.`, ...base });
     else if (open.has(c.id)) out.set(c.id, { kind: "disabled", line: rateTheirDisputeLine(name), ...base });
     else out.set(c.id, { kind: "open", line: "", ...base });
@@ -374,8 +382,9 @@ export async function devRate(dev: { id: string; name: string; email: string }, 
  * close-out (their Rate "closed"), skipped while their Rate is disabled (new work in its review window, a Charge to settle, an open dispute) or their tester side is
  * suspended; when it opens again the next one comes once 3 days have passed since the last. Reminders name the close-out once it is known. The LAST one ignores email Off. Developer (batch 17 section 16): from when their Rate opened, until they
  * rate or their 14 days end, paused while they can't rate.
- * (Owner, Dec 2026) After a pause, both sides' reminders come back the way the tester's "Charge or let go" line does: a freeze (tester: the team's pause, the
- * developer's hold or suspension, her own tester-side suspension; developer: their own hold or suspension, the team's pause of that test) that ENDED after that
+ * (Owner, Dec 2026) After a pause, both sides' reminders come back the way the tester's "Charge or let go" line does: a freeze (tester: (Owner, Dec 10 2026)
+ * one that hid her Rate (testerRateLiftedAt): her own tester-side suspension, or the team's pause or the developer's hold or suspension while she had work
+ * waiting for review; developer: their own hold or suspension, the team's pause of that test) that ENDED after that
  * person's last reminder on the contract (or their prompt / opening line, if none yet) gets ONE fresh reminder as soon as their Rate is open again, from the
  * 5-minute sweep too; the every-3-days repeats then count from it. A freeze that ended before the last reminder changes nothing; a disabled Rate (a dispute, work
  * in its review window) is no freeze. (Owner, Dec 2026: one line a day, a lift included) Neither that fresh line nor §367's "date moved later" one goes out when
@@ -432,7 +441,7 @@ export async function ratingReminders(now = new Date(), opts: { /** (§383) fals
     if (closes && named !== closes.getTime()) await db.test.update({ where: { id: c.testId }, data: { notifiedMarks: { push: `ratec:${c.id}:${closes.getTime()}` } } });
     n++;
   }
-  // Developer: once their Rate opened (the tester rated and everything is settled, or (section 19) a never-rated tester at the close-out); every 3 days until they
+  // Developer: once their Rate opened (the tester rated and everything is settled, or (Owner, Dec 10 2026) a never-rated tester once her Rate closed); every 3 days until they
   // rate or their 14 days end.
   const theirs = await db.rating.findMany({ where: { side: "tester", revealedAt: null, createdAt: { gt: new Date(now.getTime() - 365 * DAY) } }, orderBy: { createdAt: "desc" }, take: 1000, select: { contractId: true } });
   const ended = await db.contract.findMany({ where: { joinedAt: { gt: new Date(now.getTime() - 365 * DAY) }, test: { OR: [{ status: "stopped" }, { openUntil: { lt: new Date(now.getTime() - 14 * DAY) } }] } }, orderBy: { joinedAt: "desc" }, take: 2000, select: { id: true } });

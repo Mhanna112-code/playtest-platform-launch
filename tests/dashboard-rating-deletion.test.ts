@@ -44,7 +44,7 @@ it.each(["written","recording"])("earnings link the %s part independently to its
  expect(row.links?.some(l=>l.kind==="person")).toBe(true);expect(row.links?.some(l=>l.kind==="test")).toBe(true);
 });
 import * as rateGates from "@/lib/server/testerGate";
-import { closeOutOf } from "@/lib/server/closeOut";
+import { testerRatingClosesAt } from "@/lib/server/closeOut";
 import { vi } from "vitest";
 it("a tester who left retains Rating until the test-wide 14-day close-out",async()=>{
  const w=await work();await pay(w.dev.cookie,w.sub.id);
@@ -52,7 +52,7 @@ it("a tester who left retains Rating until the test-wide 14-day close-out",async
  const base=new Date(Date.now()-2*86400000);
  await db.test.update({where:{id:w.testId},data:{openUntil:base}});
  await db.contract.update({where:{id:w.sessionId},data:{dueAt:base}});
- const closes=await closeOutOf(w.testId);
+ const closes=await testerRatingClosesAt(w.sessionId); // (Owner, Dec 10 2026) her close-out
  expect(closes?.getTime()).toBe(base.getTime()+14*86400000);
  expect((await testerRateState(w.sessionId,new Date(closes!.getTime()-1))).kind).toBe("open");
  expect((await testerRateState(w.sessionId,closes!)).kind).toBe("closed");

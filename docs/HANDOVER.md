@@ -533,7 +533,7 @@ Batch 17 adds one hand-written migration, `20261101090000_test_visits`: the `Tes
 "Tests visited" (section 18: one row per tester and test, `visitedAt`). It is applied to the local `playtest_lite` database;
 restart `npm run dev` after pulling it (the Prisma client changed). Everything else in batch 17 is computed: the rating
 windows and their pauses (`server/ratings.ts`: `testerRateState`, `devRateStates`), the stop-once for a stop while a page
-is open (`server/stopMoment.ts`) and the close-out dates (`server/closeOut.ts`: `closeOutOf`, `pieceCloseOut`).
+is open (`server/stopMoment.ts`) and the close-out dates (`server/closeOut.ts`: `testerRatingClosesAt`, `pieceCloseOut`; the test-wide `closeOutOf` was removed on Dec 10 2026).
 
 On a fresh, healthy Postgres cluster (a new machine, Docker, Neon) none of this is needed: `npm run db:migrate`
 (`prisma migrate dev`) works as normal, and the hand-written migrations stay valid.

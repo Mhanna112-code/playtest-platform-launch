@@ -1,12 +1,13 @@
 import { db } from "@/lib/db";
 import { workEndOf } from "@/lib/pause";
-import { CLOSE_OUT_DAYS, RATED_NO_DISPUTE, closeOutBase, disputeClosedLine, pieceDueAt, reviewDateOf } from "@/lib/rules";
+import { CLOSE_OUT_DAYS, RATED_NO_DISPUTE, chargeOpensAt, closeOutBase, disputeClosedLine, pieceDueAt, reviewDateOf } from "@/lib/rules";
 import { fmtDate } from "@/lib/server/dateFormat";
 
 /**
- * (Owner, Oct 28, batch 17 section 19, final) Each test's CLOSE-OUT date: 14 days after the last tester's deadline (closeOutBase), moved later by every pause after that
- * (the team's pause, the developer's payment or chargeback hold or developer-side suspension) and every recorded outage, as deadlines move. Computed, never stored.
- * Pieces close at the close-out or 14 days after their own Charge opened, whichever is later (pieceCloseOut).
+ * (Owner, Oct 28, batch 17 section 19, final) The CLOSE-OUT: 14 days after the test close (closeOutBase: the last tester's deadline, or the stop), moved later by
+ * pauses and outages. Computed, never stored. (Owner, Dec 10 2026) There is no test-wide close-out date of its own any more: each date counts its 14 days from
+ * the test close with its own spans. The tester's Rate (testerRatingClosesAt: her close-out) moves by the developer's side only (moneySpans) and her own open
+ * disputes; pieces close at that close-out or 14 days after their own Charge opened, whichever is later (pieceCloseOut).
  */
 
 const DAY = 86_400_000;
@@ -110,27 +111,11 @@ export function lastLift(spans: Span[], now: Date): Date | null {
   return ends.length ? new Date(Math.max(...ends)) : null;
 }
 
-/** Everything that moves a test's close-out: the team's pauses, the developer's holds and suspensions, and outages. */
-export async function testSpans(t: { id: string; adminPausedAt: Date | null; workEndedAt?: Date | null; pauseClosedAt?: Date | null; status?: string; stoppedAt?: Date | null; developer: { id: string; holdStartedAt: Date | null; devSuspendedAt: Date | null } }, from: Date, now: Date) {
-  const [devEvents, outages, team] = await Promise.all([
-    db.accountEvent.findMany({ where: { userId: t.developer.id, kind: { in: ["hold", "hold-lifted", "suspended", "reinstated"] } }, select: { kind: true, side: true, createdAt: true } }),
-    db.outage.findMany({ where: { endAt: { gt: from }, OR: [{ needsApproval: false }, { approvedAt: { not: null } }] }, select: { startAt: true, endAt: true } }),
-    teamPauseSpans(t.id, t.adminPausedAt, now),
-  ]);
-  // (Owner, Nov 9, §358) A hold, suspension or team pause that began after the test's work ended (closed, or the 7-day pause closure) moves none of its dates.
-  const end = workEndOf(t)?.getTime() ?? Infinity;
-  // (Owner, Nov 9, §366 A) On a stopped test (the developer's or the team's Stop, the 7-day closure) a pause still recorded (adminPausedAt is kept on purpose; a
-  // hold or suspension still on) ends counting at the stop, as the developer's Rate window already did: the close-out arrives instead of moving on every day.
-  const stop = t.status === "stopped" ? end : Infinity;
-  const clip = (s: Span): Span => (s.end > stop || s.open ? { start: s.start, end: Math.max(s.start, Math.min(s.end, stop)), open: s.open && stop === Infinity } : s);
-  return mergeSpans([...[...devPauseSpans(devEvents, t.developer, now), ...team].filter((s) => s.start < end).map(clip), ...outages.map((o) => ({ start: o.startAt.getTime(), end: o.endAt.getTime(), open: false }))]);
-}
-
 /**
  * (Owner, Nov 11, §386 A; replaces §358 and §366 A for the money windows only) What moves each piece's money window (Pay, Pay more, Charge / Let it go): every span
  * the money was frozen (moneyFrozen), after the test closed or stopped too: the developer's holds and suspensions whenever they ran (not a deleted developer's
  * one still on ends at the deletion, §386 F), the team's pauses while in force (a stopped test's ends at its stop), and outages. Overlaps count once.
- * The test's close-out, Rate and Dispute windows keep testSpans.
+ * (Owner, Dec 10 2026) Both Rate windows count the close-out with these spans too (testerRatingClosesAt, devRateStates).
  */
 export async function moneySpans(t: { id: string; adminPausedAt: Date | null; workEndedAt?: Date | null; pauseClosedAt?: Date | null; status?: string; stoppedAt?: Date | null; developer: { id: string; holdStartedAt: Date | null; devSuspendedAt: Date | null; deletedAt?: Date | null } }, from: Date, now: Date, /** (§386 G) false: the freeze alone (outages move a call's stored date themselves) */ withOutages = true) {
   const [devEvents, outages, team] = await Promise.all([
@@ -146,49 +131,54 @@ export async function moneySpans(t: { id: string; adminPausedAt: Date | null; wo
 
 export const CONTRACTS = { select: { status: true, dueAt: true, endedAt: true } } as const;
 
+/** (Owner, Nov 11, §382) The tester's disputes on one contract as spans (an open one runs to now; a withdrawn one never counts). */
+export function disputeSpansOf(rows: { createdAt: Date; decidedAt: Date | null; status: string }[], now: Date): Span[] {
+  return rows.filter((d) => d.status !== "withdrawn").map((d) => ({ start: d.createdAt.getTime(), end: Math.min((d.status === "open" ? now : d.decidedAt ?? d.createdAt).getTime(), now.getTime()), open: d.status === "open" }));
+}
+
 /**
- * The test's close-out date: 14 days after the test close, moved by pauses and outages (null while testers can still join or work: it isn't known yet). Pay, Pay
- * more and Charge close on each piece's own date (pieceCloseOut, §378), and the Rate windows follow §382 (they count from this date).
+ * (Owner, Dec 10 2026; replaces §382 a and §386 E's clock) When the tester's Rate on this contract closes: HER close-out, 14 days after the test close
+ * (closeOutBase), moved only by the developer's side (moneySpans: their holds and suspensions whenever they ran, the team's pause cut at the Stop, outages) and
+ * her own disputes on this contract while they await the team. Her own tester-side suspension no longer moves it (her Rate is still hidden while she is
+ * suspended). null while the test close isn't known. The developer's Rate opens at this date for a tester who never rated (devRateStates).
  */
-export async function closeOutOf(testId: string, now = new Date()) {
-  const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true, contracts: CONTRACTS } });
+export async function testerRatingClosesAt(contractId: string, now = new Date()) {
+  const c = await db.contract.findUnique({ where: { id: contractId }, select: { testId: true } });
+  if (!c) return null;
+  const t = await db.test.findUnique({ where: { id: c.testId }, include: { developer: true, contracts: CONTRACTS } });
   if (!t) return null;
   const base = closeOutBase(t, t.contracts, now);
   if (!base) return null;
-  return windowEnd(base, await testSpans(t, base, now), now, CLOSE_OUT_DAYS).end;
-}
-
-/** The tester's rating countdown pauses while their disputes await a team decision. Payment and dispute close-outs are unchanged. */
-export async function testerRatingClosesAt(contractId: string, now = new Date()) {
- const c=await db.contract.findUnique({where:{id:contractId},select:{testId:true,tester:{select:{id:true,testerSuspendedAt:true}}}});
- if(!c)return null;
- const t=await db.test.findUnique({where:{id:c.testId},include:{developer:true,contracts:CONTRACTS}});
- if(!t)return null;
- const base=closeOutBase(t,t.contracts,now);
- if(!base)return null;
- const disputes=await db.dispute.findMany({where:{contractId,createdAt:{lte:now}},select:{createdAt:true,decidedAt:true,status:true}});
- const disputeSpans=disputes.filter(d=>d.status!=="withdrawn").map(d=>({start:d.createdAt.getTime(),end:Math.min((d.status === "open" ? now : d.decidedAt ?? d.createdAt).getTime(),now.getTime()),open:d.status==="open"}));
- // (Owner, Nov 11, §382 a) The tester's own suspension extends their Rate like Charge (§378, pieceCloseOut): its spans pause the same window, so only the part after
- // test close can move it past the close-out.
- const tEvents=await db.accountEvent.findMany({where:{userId:c.tester.id,kind:{in:["suspended","reinstated"]}},select:{kind:true,side:true,createdAt:true}});
- // (Owner, Nov 11, §386 E; replaces §358 for this window only) The developer-side freeze (moneySpans: the team's pause, the developer's holds and suspensions)
- // pauses it after the test closed too, on the same one clock from the test close (so only the part after it counts); the close-out itself doesn't move.
- const spans=mergeSpans([...await moneySpans(t,base,now),...disputeSpans,...testerPauseSpans(tEvents,c.tester.testerSuspendedAt,now)]);
- return windowEnd(base,spans,now,CLOSE_OUT_DAYS).end;
+  const disputes = await db.dispute.findMany({ where: { contractId, createdAt: { lte: now } }, select: { createdAt: true, decidedAt: true, status: true } });
+  return windowEnd(base, mergeSpans([...(await moneySpans(t, base, now)), ...disputeSpansOf(disputes, now)]), now, CLOSE_OUT_DAYS).end;
 }
 
 /**
  * (Owner, Dec 2026) When the tester's Rate on this contract last came back from a freeze (lastLift), for ratingReminders' one fresh line after a pause lifts.
- * A freeze is what hides her Rate: the money freeze alone (moneySpans without outages: the team's pause while in force, the developer's holds and suspensions,
- * during the test or after it closed) and her own tester-side suspensions (testerPauseSpans). A dispute or work in its review window (Rate disabled) is not one.
+ * (Owner, Dec 10 2026) Only a freeze that HID her Rate counts: her own tester-side suspensions (testerPauseSpans: her Rate is hidden all through one), and a
+ * money freeze (moneySpans without outages: the team's pause while in force, the developer's holds and suspensions, during the test or after it closed) only
+ * while she had work waiting for review in it (testerRateState: her Rate is open during a freeze otherwise, and her reminders go on). A piece was waiting during
+ * a span when it was sent (a call: took place) before the span ended, wasn't reviewed by the later of the span's start and its sending, and its review date
+ * (chargeOpensAt; none yet for a call still measured) was still ahead then. Nothing can be reviewed during a freeze, and a review date still ahead at its start
+ * moves with it, so such a piece stays waiting until the lift. A dispute or a Charge to settle (Rate disabled) is no freeze.
  */
 export async function testerRateLiftedAt(contractId: string, now = new Date()) {
-  const c = await db.contract.findUnique({ where: { id: contractId }, select: { testId: true, tester: { select: { id: true, testerSuspendedAt: true } } } });
+  const piece = { sentAt: true, payBy: true, stintDueAt: true, review: { select: { createdAt: true } } } as const;
+  const c = await db.contract.findUnique({ where: { id: contractId }, select: { testId: true, status: true, dueAt: true, tester: { select: { id: true, testerSuspendedAt: true } }, submissions: { select: piece }, calls: { where: { status: "booked" }, select: { startsAt: true, payBy: true, stintDueAt: true, review: { select: { createdAt: true } } } } } });
   if (!c) return null;
   const t = await db.test.findUnique({ where: { id: c.testId }, include: { developer: true } });
   if (!t) return null;
+  const pieces = [...c.submissions.map((x) => ({ ...x, sent: x.sentAt })), ...c.calls.map((x) => ({ ...x, sent: x.startsAt }))];
+  const hidRate = (sp: Span) =>
+    pieces.some((x) => {
+      if (x.sent.getTime() >= sp.end) return false;
+      const from = Math.max(sp.start, x.sent.getTime());
+      if (x.review && x.review.createdAt.getTime() <= from) return false;
+      const opens = chargeOpensAt(x, t, c);
+      return !opens || opens.getTime() > from;
+    });
   const tEvents = await db.accountEvent.findMany({ where: { userId: c.tester.id, kind: { in: ["suspended", "reinstated"] } }, select: { kind: true, side: true, createdAt: true } });
-  return lastLift(mergeSpans([...(await moneySpans(t, now, now, false)), ...testerPauseSpans(tEvents, c.tester.testerSuspendedAt, now)]), now);
+  return lastLift(mergeSpans([...(await moneySpans(t, now, now, false)).filter(hidRate), ...testerPauseSpans(tEvents, c.tester.testerSuspendedAt, now)]), now);
 }
 
 /**

@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { finishWorkIfDue, closeWorkAfterDeadlines, assertWorkOpen } from "@/lib/server/workWindow";
 import { unpauseTest } from "@/lib/server/restrictions";
 import { runDaily } from "@/lib/server/holds";
-import { closeOutOf, pieceCloseOut } from "@/lib/server/closeOut";
+import { pieceCloseOut, testerRatingClosesAt } from "@/lib/server/closeOut";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { json, req } from "./helpers";
 import { act, joined, sact, seen, setup } from "./fixtures";
@@ -140,7 +140,7 @@ describe("work ends at the last tester deadline, with financial windows continui
     expect((await db.contract.findUniqueOrThrow({ where: { id: f.early.sessionId } })).dueAt).toEqual(contractBefore.dueAt);
     // (Owner, Nov 9, §358; was: the review clock and close-out moved by the 8 days) A pause that starts after the work ended moves none of its dates.
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).payBy).toEqual(sub.payBy);
-    expect(await closeOutOf(f.testId)).toEqual(new Date(f.deadline.getTime() + 14 * DAY));
+    // (Owner, Dec 10 2026) The test-wide close-out (closeOutOf) is gone; the tester's Rate counts the developer side's spans (rate-windows-dec10.test.ts).
   });
 
   it("Pay and the later Charge window remain available after work ends; Rate keeps its own close-out", async () => {
@@ -149,7 +149,7 @@ describe("work ends at the last tester deadline, with financial windows continui
     await finishWorkIfDue(f.testId);
     const pay = await json(await reviewPOST(req("/api/review", { cookie: f.dev.cookie, body: { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, payKey: randomUUID(), seenAt: seen(), confirmed: true } })));
     expect(pay.status, JSON.stringify(pay.body)).toBe(200);
-    expect(await closeOutOf(f.testId)).toEqual(new Date(f.deadline.getTime() + 14 * DAY));
+    expect(await testerRatingClosesAt(f.early.sessionId)).toEqual(new Date(f.deadline.getTime() + 14 * DAY)); // (Owner, Dec 10 2026) her close-out
     expect(await pieceCloseOut({ submissionId: sub.id })).toEqual(new Date(sub.payBy!.getTime() + 14 * DAY));
     const g = await fixture(); const unpaid = await sent(g);
     vi.setSystemTime(new Date(unpaid.payBy!.getTime() + 1000));
