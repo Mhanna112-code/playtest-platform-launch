@@ -1336,17 +1336,31 @@ export const PAUSED_UNTIL_PAID = "Your tests are paused until you pay what you o
 export const PAUSED_UNTIL_CHARGEBACK = "Your tests are paused until the chargeback steps are done";
 export const pausedUntil = (chargeback: boolean) => (chargeback ? PAUSED_UNTIL_CHARGEBACK : PAUSED_UNTIL_PAID);
 
-/** Invite: reasons the whole press is refused for good. */
+/**
+ * Invite: reasons the whole press is refused for good, in order: 1. stopped → 2. joining closed (Open until passed) → 3. paused (`paused`: the developer's
+ * hold; the server passes only that) → 4. not open → 5. full. "" when Invite works.
+ */
 export function inviteTestRefusal(
-  t: { status: string; spots: number; testersIn: number; openUntil: Date | null; stoppedAt: Date | null; paused: boolean; /** (Batch 35 §22) the hold is a chargeback's */ chargeback?: boolean; title?: string },
+  t: {
+    status: string; spots: number; testersIn: number; openUntil: Date | null; stoppedAt: Date | null; paused: boolean;
+    /** (Batch 35 §22) the hold is a chargeback's */ chargeback?: boolean; title?: string;
+  },
   now: Date,
   fmt: (d: Date) => string,
 ) {
+  // 1.
   if (t.status === "stopped") return `This test was stopped${t.stoppedAt ? ` on ${fmt(t.stoppedAt)}` : ""}, so nobody can be invited.`;
+  // 2.
   if (t.openUntil && t.openUntil.getTime() < now.getTime()) return `Joining closed on ${fmt(t.openUntil)} (Open until), so nobody can be invited.`;
-  if (t.paused) return t.chargeback ? "This test is paused until the chargeback steps are done, so nobody can be invited." : "This test is paused until you pay what you owe, so nobody can be invited.";
+  // 3.
+  if (t.paused) {
+    return t.chargeback
+      ? "This test is paused until the chargeback steps are done, so nobody can be invited."
+      : "This test is paused until you pay what you owe, so nobody can be invited.";
+  }
+  // 4.
   if (t.status !== "open") return "This test isn't taking new testers, so nobody can be invited.";
-  // New invites wait for spots (open ones stay open while full: correction 6).
+  // 5. New invites wait for spots (open ones stay open while full: correction 6).
   if (t.testersIn >= t.spots) return `${t.title ?? "This test"} is full. Add spots to invite more people.`;
   return "";
 }
@@ -1407,7 +1421,10 @@ export const PART_PRICE_MISSING = { written: "Enter a price for the written answ
 export const MAX_ACTIVE_TESTS = LIMITS.testsPerTester;
 /** (7.3) Joining, applying, accepting an invite and asking to rejoin all refuse with this line at the limit. */
 export const TEST_LIMIT_LINE = "You can't join more tests right now.";
-/** Invite: per-tester refusals. Never reveals a block or a suspension. */
+/**
+ * Invite: per-tester refusals, in order: 1. account closed → 2. suspended or a block either way (one neutral line) → 3. at the 10-test limit. Never reveals a
+ * block or a suspension. (The developer's own block is checked before this, by inviteTesters, with its own line.)
+ */
 export function inviteTesterRefusal(name: string, x: { suspended: boolean; blocked: boolean; deleted: boolean; activeTests: number; pronoun?: string | null }) {
   if (x.deleted) return `${name}'s account was closed, so ${pronouns(x.pronoun).subj} can't be invited.`;
   if (x.suspended || x.blocked) return `${name} can't be invited right now.`;

@@ -182,12 +182,15 @@ const working = (testId: string) => ({ testId, status: "working" });
 export async function closeOnFull(tx: Tx, testId: string, exceptTesterId: string | null) {
   const t = await tx.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
   const now = new Date();
-  const invs = await tx.invite.findMany({ where: { testId, status: "sent", ...(exceptTesterId ? { testerId: { not: exceptTesterId } } : {}) } });
+  // 1. The open invites (not the one of the tester who just took the last spot).
+  const exceptJoiner = exceptTesterId ? { testerId: { not: exceptTesterId } } : {};
+  const invs = await tx.invite.findMany({ where: { testId, status: "sent", ...exceptJoiner } });
+  // 2. The developer's line: "Harbor Run is full. 2 invites stay open until a spot opens" (stops once in all tabs).
   const open = invs.length ? ` ${invs.length} invite${invs.length === 1 ? " stays" : "s stay"} open until a spot opens.` : "";
   await tx.testEvent.create({ data: { testId, kind: "full", text: `${t.title} is full.${open}`.replace(/\.$/, "") } });
   const people = await tx.user.findMany({ where: { id: { in: invs.map((i) => i.testerId) } } });
   const email = (id: string) => people.find((p) => p.id === id)?.email ?? "";
-  // Once per invite: only those never told it filled.
+  // 3. Once per invite: only those never told it filled (tellFull tells them after the commit).
   const tell = invs.filter((i) => !i.fullNotifiedAt);
   await tx.invite.updateMany({ where: { id: { in: tell.map((i) => i.id) } }, data: { fullNotifiedAt: now } });
   return { title: t.title, testId, dev: displayName(t.developer), invites: tell.map((i) => email(i.testerId)) };
@@ -199,8 +202,10 @@ export const spotOpenLine = (title: string, dev: string) => `A spot opened on ${
 /** (Owner, Oct 29, batch 29 §23) The tester's lines about their applications and invites stack into ONE entry per day across tests: "Applications and invites". */
 export const APPS_GROUP = { group: "apps" } as const;
 
+/** After the commit of closeOnFull: each invitee it lists reads fullInviteLine (bell + email, in "Applications and invites"). */
 export async function tellFull(f: { title: string; testId: string; dev: string; invites: string[] }) {
-  for (const e of f.invites) if (e) await notify(e, fullInviteLine(f.title), [fullInviteLine(f.title)], `/app/find/${f.testId}`, { ...APPS_GROUP, testId: f.testId });
+  const line = fullInviteLine(f.title);
+  for (const e of f.invites) if (e) await notify(e, line, [line], `/app/find/${f.testId}`, { ...APPS_GROUP, testId: f.testId });
 }
 
 /**
@@ -209,17 +214,20 @@ export async function tellFull(f: { title: string; testId: string; dev: string; 
  */
 export async function spotOpened(testId: string, opts: { /** (§341) a free key was added to a test full for want of one */ keyAdded?: boolean } = {}) {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
+  // 1. Only after "full" (the latest of the two lines), or a key added.
   const last = await db.testEvent.findFirst({ where: { testId, kind: { in: ["full", "spot_open"] } }, orderBy: { createdAt: "desc" } });
   if (last?.kind !== "full" && !opts.keyAdded) return;
+  // 2. A spot really is open.
   if ((await db.contract.count({ where: working(testId) })) >= t.spots) return;
-  // (Owner, Nov 9, §341) A spot that opened with no free key isn't open to testers yet: they hear of it when a key is added.
+  // 3. (Owner, Nov 9, §341) A spot that opened with no free key isn't open to testers yet: they hear of it when a key is added.
   if (await (await import("./accessKeys")).keysFullNow(db, testId)) return;
-  await db.testEvent.create({ data: { testId, kind: "spot_open", text: spotOpenLine(t.title, displayName(t.developer)) } });
-  // Once per invite: only those never told a spot opened.
+  // 4. The line, then each open invite never told a spot opened (bell + email).
+  const line = spotOpenLine(t.title, displayName(t.developer));
+  await db.testEvent.create({ data: { testId, kind: "spot_open", text: line } });
   const invs = await db.invite.findMany({ where: { testId, status: "sent", openNotifiedAt: null } });
   await db.invite.updateMany({ where: { id: { in: invs.map((i) => i.id) } }, data: { openNotifiedAt: new Date() } });
   const people = await db.user.findMany({ where: { id: { in: invs.map((i) => i.testerId) } } });
-  for (const p of people) await notify(p.email, spotOpenLine(t.title, displayName(t.developer)), [spotOpenLine(t.title, displayName(t.developer))], `/app/find/${testId}`, { ...APPS_GROUP, testId });
+  for (const p of people) await notify(p.email, line, [line], `/app/find/${testId}`, { ...APPS_GROUP, testId });
 }
 
 /**
@@ -620,12 +628,18 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   // (Batch 34 §9) The Save went through: the kept draft ("Not saved yet") is gone, here as well as in the page, so no later visit (a tab switch, Back, another
   // device) can restore older text.
   await db.keptForm.deleteMany({ where: { userId: dev.id, key: `test:edit:${testId}` } });
-  // Working testers are OFFERED the new contract terms (Switch / Keep); their contract changes only if they switch.
+  // ---- After the Save's transaction, in this order: (1) new terms offered, (2) applications closed, (3) full / a spot opened, (4) a key added,
+  // (5) switched to "Anyone can join", (6) the Contract changes entry's effects, (7) the testers' bells, (8) keys given.
+  // 1. Working testers are OFFERED the new contract terms (Switch / Keep); their contract changes only if they switch.
   const offered = termsChanged ? await offerNewTerms(testId, changeId) : 0;
+  // 2. Pending applications close on a closing field (CLOSING_FIELDS; never the NDA-only edit of a paused, stopped or closed test) or a switch to invite only.
   // (Owner, Dec 10 2026) A Save that switched to invite only closes them with the invite-only line, even when it changed a closing field too: they can't apply
   // again to an invite-only test.
-  const closedApps = switchedToInvite ? await (await import("./joining")).closeApplicationsAfterEdit(testId, "invite_only") : closesApps ? await (await import("./joining")).closeApplicationsAfterEdit(testId) : [];
-  // (Correction 4/5) Lowering spots never closes invites by itself; lowering them to the testers in fills the test.
+  const joining = await import("./joining");
+  let closedApps: string[] = [];
+  if (switchedToInvite) closedApps = await joining.closeApplicationsAfterEdit(testId, "invite_only");
+  else if (closesApps) closedApps = await joining.closeApplicationsAfterEdit(testId);
+  // 3. (Correction 4/5) Lowering spots never closes invites by itself; lowering them to the testers in fills the test.
   if (spotsChanged) {
     const filled = await db.$transaction(async (tx) => {
       const t = await lockTest(tx, testId);
@@ -634,15 +648,16 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (filled) await tellFull(filled);
     else await spotOpened(testId);
   }
-  // (§341) A key added to a test that was full for want of one: joinable again, and invitees told it was full hear a spot opened (once per invite).
+  // 4. (§341) A key added to a test that was full for want of one: joinable again, and invitees told it was full hear a spot opened (once per invite).
   if (keysWereFull && !(await (await import("./accessKeys")).keysFullNow(db, testId))) await spotOpened(testId, { keyAdded: true });
-  // (Owner, Nov 9, §338) Applicants it couldn't join for want of a free access key stay waiting; the Save's note names them.
-  const noKeyApps = switchedToAnyone ? (await (await import("./joining")).onSwitchToAnyone(testId)).noKey : [];
+  // 5. Switched to "Anyone can join": waiting applications join. (Owner, Nov 9, §338) Applicants it couldn't join for want of a free access key stay waiting;
+  // the Save's note names them.
+  const noKeyApps = switchedToAnyone ? (await joining.onSwitchToAnyone(testId)).noKey : [];
   // (Owner, Dec 10 2026) Open invites simply stay through an edit: nothing is re-sent (the join page's live box and Join's stop-once show the edit).
-  // (Batch 15 section 43) The Save's effects on others, on its Contract changes entry.
+  // 6. (Batch 15 section 43) The Save's effects on others, on its Contract changes entry.
   const effects = closedApps.length ? `${closedApps.length} application${closedApps.length === 1 ? "" : "s"} closed` : "";
   if (changeId && effects) await db.testChange.update({ where: { id: changeId }, data: { effects } });
-  // (Owner, Nov 5, §265) Each tester whose questions changed: a bell line in the listing's words ("Nora Lane updated the listing: questions"), linking to their
+  // 7. (Owner, Nov 5, §265) Each tester whose questions changed: a bell line in the listing's words ("Nora Lane updated the listing: questions"), linking to their
   // contract box, where the questions carry "Updated <time>" (the top box's line comes from the Save's "listing_save" record).
   for (const q of questionsFollowed) {
     const line = questionsUpdatedLine(displayName(dev));
@@ -662,7 +677,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const line = editedLine(displayName(dev));
     await notify(c.tester.email, line, [`${line}.`, "What changed is marked in Your agreed scope on your session page."], `/app/sessions/${c.id}#scope`, { recipientId: c.testerId, about: dev.id, testId });
   }
-  // (Batch 30 §17) Each tester given a key: a line in their session page's top box (the key itself only on their page). (Owner, Nov 6, §312c) No bell or email
+  // 8. (Batch 30 §17) Each tester given a key: a line in their session page's top box (the key itself only on their page). (Owner, Nov 6, §312c) No bell or email
   // line any more ("<dev> gave you an access key for “X”").
   for (const g of keysGiven) await logEvent(testId, KEY_GIVEN, keyGivenEventLine(displayName(dev), g.name), g.contractId);
   return Object.assign(result, { offered, changed: changedNames, closedApps, keysGiven: keysGiven.length, noKeyApps });
@@ -1785,23 +1800,32 @@ export function tzOf(body: Record<string, unknown>, dev: { timeZone?: string | n
 }
 
 /**
- * (Owner, Oct 30, batch 15 section 18) Open until passed: the test is closed to everyone who hasn't joined. Pending applications and open invites close (as when it
- * fills up), and each person is told once. Working testers carry on until their own deadlines. Run by the daily job (and safe to run again).
+ * (Owner, Oct 30, batch 15 section 18) Open until passed: the test is closed to everyone who hasn't joined. Pending applications and open invites close (a full test,
+ * by contrast, keeps both open), and each person is told once. Working testers carry on until their own deadlines. Run by the daily job (and safe to run again).
  */
 export async function closeJoiningAfterOpenUntil(now = new Date()) {
+  // 1. The tests to close: open, Open until passed, with an open invite or a pending application.
+  const testsWithPendingApps = await db.application.findMany({ where: { status: "pending" }, select: { testId: true }, distinct: ["testId"] });
   const tests = await db.test.findMany({
-    // (Owner, Nov 9, §366) Not on a paused test: its Open until moves on by the pause when it lifts, and what waits keeps waiting.
-    where: { status: "open", openUntil: { lt: now }, adminPausedAt: null, developer: { holdStartedAt: null, devSuspendedAt: null }, OR: [{ invites: { some: { status: "sent" } } }, { id: { in: (await db.application.findMany({ where: { status: "pending" }, select: { testId: true }, distinct: ["testId"] })).map((a) => a.testId) } }] },
+    where: {
+      status: "open", openUntil: { lt: now },
+      // (Owner, Nov 9, §366) Not on a paused test: its Open until moves on by the pause when it lifts, and what waits keeps waiting.
+      adminPausedAt: null, developer: { holdStartedAt: null, devSuspendedAt: null },
+      OR: [{ invites: { some: { status: "sent" } } }, { id: { in: testsWithPendingApps.map((a) => a.testId) } }],
+    },
     include: { developer: true },
   });
   let n = 0;
   for (const t of tests) {
+    // 2. Its pending applications close ("joining_closed") and its open invites are cancelled.
     const apps = await db.application.findMany({ where: { testId: t.id, status: "pending" } });
     const invs = await db.invite.findMany({ where: { testId: t.id, status: "sent" } });
     await db.application.updateMany({ where: { id: { in: apps.map((a) => a.id) } }, data: { status: "closed", closedReason: "joining_closed", decidedAt: now } });
     await db.invite.updateMany({ where: { id: { in: invs.map((i) => i.id) } }, data: { status: "cancelled" } });
-    const people = await db.user.findMany({ where: { id: { in: [...apps.map((a) => a.testerId), ...invs.map((i) => i.testerId)] } }, select: { id: true, email: true } });
-    // (Batch 30 §6) It stacks across tests in "Applications and invites": the line names its test.
+    // 3. Each of them reads "“<test>” closed to new testers on <date>." (bell + email). (Batch 30 §6) It stacks across tests in "Applications and invites": the
+    // line names its test.
+    const told = [...apps.map((a) => a.testerId), ...invs.map((i) => i.testerId)];
+    const people = await db.user.findMany({ where: { id: { in: told } }, select: { id: true, email: true } });
     const line = testClosedToNewLine(t.title, t.openUntil!, (d) => T(d, "date"));
     for (const p of people) await notify(p.email, line, [line], `/app/find/${t.id}`, { ...APPS_GROUP, testId: t.id });
     n += apps.length + invs.length;

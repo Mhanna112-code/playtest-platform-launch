@@ -74,6 +74,11 @@ async function pauseDeveloper(u: { id: string; email: string }) {
   await cancelCallsNearPause(u.id);
 }
 
+/**
+ * A tester's suspension or deletion: she leaves every test she is in (the developer reads "left"), then her pending applications and asks are WITHDRAWN (no
+ * line to anyone). Her open invites are not touched here: a suspension keeps them (she can't join while suspended); deleteAccount cancels a deleted
+ * tester's invites itself, before this.
+ */
 async function removeTester(u: { id: string; name: string; email: string; pronoun: string }, kind: "suspended" | "deleted") {
   const contracts = await db.contract.findMany({ where: { testerId: u.id, status: "working" }, include: { test: { include: { developer: true } } } });
   // (Owner, Oct 28, batch 16 section 21) A closed tester account is a tester leaving: the developer's "left" line (Testers leaving in Alerts), never why; a deleted
@@ -96,6 +101,7 @@ async function removeTester(u: { id: string; name: string; email: string; pronou
     await notify(c.test.developer.email, withTail(`${who} left “${c.test.title}”`, tail), [`${who} left your test “${c.test.title}”. Work ${pronouns(u.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: u.id, testId: c.testId, ...(tail ? cancelledOpts(c.testId) : {}) }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
     await spotOpened(c.testId);
   }
+  // Her pending applications and asks: withdrawn, silently.
   await db.application.updateMany({ where: { testerId: u.id, status: "pending" }, data: { status: "withdrawn", decidedAt: new Date() } });
 }
 
@@ -303,7 +309,9 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
   // (Owner, Oct 29, batch 12 section 1) A developer can always delete their account (the warning lists what is left; nothing blocks it).
   // (Batch 8) The subscription ends at once, with no refund.
   if (u.isDeveloper) await (await import("./subscription")).endOnDelete(userId);
+  // The deleted person's own open invites (as a tester): cancelled, with no line (the account is gone).
   await db.invite.updateMany({ where: { testerId: userId, status: "sent" }, data: { status: "cancelled" } });
+  // A developer's tests: each stopped like the team's Stop (its invites and applications closed, each person told after).
   if (u.isDeveloper) {
     const tests = await db.test.findMany({ where: { developerId: userId, status: { not: "stopped" } } });
     for (const t of tests) {
@@ -318,9 +326,13 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
         const list = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
         await closeOffersOfEnded(tx, cs.map((c) => c.id)); // (batch 35 §118)
         await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test was stopped", decidedAt: new Date() } });
+        // Invites and applications: the open invites cancelled; (Owner, Nov 22 2026) pending applications and asks closed, each applicant told (below).
         await tx.invite.updateMany({ where: { testId: t.id, status: "sent" }, data: { status: "cancelled" } });
-        appsClosed = await (await import("./blocks")).pendingAppIds(t.id, tx); // (Owner, Nov 22 2026) each applicant is told (below)
-        await tx.application.updateMany({ where: { testId: t.id, status: "pending" }, data: { status: "closed", closedReason: "stopped", decidedAt: new Date() } });
+        appsClosed = await (await import("./blocks")).pendingAppIds(t.id, tx);
+        await tx.application.updateMany({
+          where: { testId: t.id, status: "pending" },
+          data: { status: "closed", closedReason: "stopped", decidedAt: new Date() },
+        });
         await recordEvent(tx, t.id, "stopped", "The test was stopped", true, { status: "stopped", stoppedAt: new Date() });
         return list;
       });
@@ -547,8 +559,9 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
     const list = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
     await closeOffersOfEnded(tx, cs.map((c) => c.id)); // (batch 35 §118)
     await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test was stopped", decidedAt: new Date() } });
+    // Invites and applications: the open invites cancelled; (Owner, Nov 22 2026) pending applications and asks closed, each applicant told (below).
     await tx.invite.updateMany({ where: { testId, status: "sent" }, data: { status: "cancelled" } });
-    appsClosed = await (await import("./blocks")).pendingAppIds(testId, tx); // (Owner, Nov 22 2026) each applicant is told (below)
+    appsClosed = await (await import("./blocks")).pendingAppIds(testId, tx);
     await tx.application.updateMany({ where: { testId, status: "pending" }, data: { status: "closed", closedReason: "stopped", decidedAt: new Date() } });
     // (Owner, Oct 28) Not an "admin decision" stop-once: a stopped test always refuses what it does not allow, and Pay / Reject carry on without stopping for it.
     const ev = await recordEvent(tx, testId, "stopped", "The team stopped this test", true, { status: "stopped", stoppedAt: new Date(), adminStoppedAt: new Date(), adminNote: note, adminStoppedById: adminId });

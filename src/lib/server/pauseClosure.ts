@@ -15,8 +15,14 @@ import { closeOffersOfEnded } from "./offerClose";
 const DAY = 86_400_000;
 
 /**
- * Close one paused test like a Stop: testers' work ends (what they sent is still reviewed and paid), calls ahead are cancelled, requests, invites and
- * applications close. Testers read "ended" (never why); the developer is told the reason.
+ * THE 7-DAY PAUSE CLOSURE (the daily job, or the team's Close now). Close one paused test like a Stop: testers' work ends (what they sent is still reviewed and
+ * paid), calls ahead are cancelled, requests, invites and applications close. Testers read "ended" (never why); the developer is told the reason.
+ *   0. the test exists → not already stopped → still paused
+ *   1. under the test's lock: stopped a moment ago → nothing; the open invites read (to tell them after); sessions end; calls, offers, requests, slots close;
+ *      open invites cancelled; pending applications and asks closed ("stopped"); the test stopped (pauseClosedAt)
+ *   after: cancelled calls told; "Your invite to “<test>” was closed." (tellInvitesClosed); "“<test>” closed, so your application was closed." (tellAppsClosed);
+ *   each working tester's "“<test>” ended"; the developer's line with the reason, the calls and "N open invites were closed".
+ * (Owner, Dec 10 2026) The pause itself no longer closes invites or applications: they wait; only this closure (7 days on) closes them.
  */
 export async function closePausedTest(testId: string, by: "daily" | "admin", now = new Date(), adminId: string | null = null) {
   const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true } });
@@ -39,10 +45,12 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
     await closeOffersOfEnded(tx, cs.map((c) => c.id), now); // (batch 35 §118)
     await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test ended", decidedAt: now } });
     await tx.callSlot.updateMany({ where: { testId, status: "open" }, data: { status: "removed" } });
+    // Invites and applications: the open invites cancelled; (Owner, Nov 22 2026) pending applications and asks closed, each applicant told (below).
     await tx.invite.updateMany({ where: { testId, status: "sent" }, data: { status: "cancelled" } });
-    appsClosed = await (await import("./blocks")).pendingAppIds(testId, tx); // (Owner, Nov 22 2026) each applicant is told (below)
+    appsClosed = await (await import("./blocks")).pendingAppIds(testId, tx);
     await tx.application.updateMany({ where: { testId, status: "pending" }, data: { status: "closed", closedReason: "stopped", decidedAt: now } });
-    await recordEvent(tx, testId, "stopped", "The test was closed", true, { status: "stopped", stoppedAt: now, pauseClosedAt: now, pauseClosedReason: reason, ...(by === "admin" ? { adminStoppedById: adminId } : {}) });
+    const byAdmin = by === "admin" ? { adminStoppedById: adminId } : {};
+    await recordEvent(tx, testId, "stopped", "The test was closed", true, { status: "stopped", stoppedAt: now, pauseClosedAt: now, pauseClosedReason: reason, ...byAdmin });
     await (await import("./holds")).shiftAtStop(tx, testId); // (Owner, Dec 9 2026) closed during the team's pause: the closure is its lift
     return list;
   });
