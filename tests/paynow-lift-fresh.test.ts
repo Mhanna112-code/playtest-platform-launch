@@ -52,3 +52,23 @@ describe("(Owner, Dec 2026) Pay now after a freeze lifts", () => {
     expect(await lines()).toBe(3);
   }, 240_000);
 });
+
+describe("(Owner, Dec 2026) one Pay now line a day, a lift included", () => {
+  it("a team pause lifted the same UTC day as the line: nothing that day or the next; the 3-day slot as usual", async () => {
+    const w = await sentWork();
+    const opens = R.chargeOpensAt(w.sub, { openUntil: null, status: "open" }, await db.contract.findUniqueOrThrow({ where: { id: w.sessionId } }))!;
+    const D = R.utcDayNo(opens) + 1;
+    const lines = () => db.notification.count({ where: { userId: w.dev.user.id, reminderKey: "paynow" } });
+    await at(on(D, 1), (now) => runSweep(now));
+    expect(await lines()).toBe(1);
+    await db.testEvent.create({ data: { testId: w.testId, kind: "paused", text: "The team paused this test", createdAt: on(D, 2) } });
+    await db.testEvent.create({ data: { testId: w.testId, kind: "resumed", text: "The team lifted the pause on this test", createdAt: on(D, 4) } });
+    await at(on(D, 5), (now) => runSweep(now)); // the same day: no fresh line
+    await at(on(D + 1, 1), (now) => runSweep(now)); // not deferred to the next day
+    await at(on(D + 1, 9), runDaily);
+    await at(on(D + 2, 9), runDaily);
+    expect(await lines()).toBe(1);
+    await at(on(D + 3, 9), runDaily); // the 3-day slot
+    expect(await lines()).toBe(2);
+  }, 240_000);
+});

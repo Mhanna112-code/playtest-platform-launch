@@ -146,3 +146,41 @@ describe("(Owner, Dec 2026) the developer's Rate reminder after a freeze lifts",
     expect(await lines()).toBe(1);
   }, 180_000);
 });
+
+// (Owner, Dec 2026: one line a day, a lift included) A lift on a UTC day that already had that person's reminder: no fresh line that day, nor deferred to the next;
+// the next comes at the 3-day slot from that day's line.
+const dayStart = (d: Date) => Math.floor(d.getTime() / DAY) * DAY;
+
+describe("(Owner, Dec 2026) one Rate line a day, a lift included", () => {
+  it("tester: a team pause lifted the same UTC day as her reminder: nothing that day or the next; the 3-day slot as usual", async () => {
+    const { w, prompted: P, lines } = await testerRateOpen();
+    await db.test.update({ where: { id: w.testId }, data: { openUntil: new Date(Date.now() + 60 * DAY) } });
+    const t1 = new Date(dayStart(P) + 3 * DAY + HOUR); // 01:00 UTC, 3 calendar days after the prompt
+    await at(t1, ratingReminders);
+    expect(await lines()).toHaveLength(1);
+    await teamPause(w.testId, new Date(t1.getTime() + HOUR), new Date(t1.getTime() + 3 * HOUR));
+    await at(new Date(t1.getTime() + 3 * HOUR + 5 * MIN), sweep); // the same day: no fresh line
+    await at(new Date(t1.getTime() + DAY), sweep); // not deferred to the next day
+    await at(new Date(t1.getTime() + DAY), ratingReminders);
+    await at(new Date(t1.getTime() + 2 * DAY), ratingReminders);
+    expect(await lines()).toHaveLength(1);
+    await at(new Date(t1.getTime() + 3 * DAY), ratingReminders); // the 3-day slot
+    expect(await lines()).toHaveLength(2);
+  }, 180_000);
+
+  it("developer: their suspension lifted the same UTC day as their reminder: nothing that day or the next; the 3-day slot as usual", async () => {
+    const { s, lines } = await devRateOpen(8);
+    const T = new Date(dayStart(ago(3)) + HOUR);
+    await at(T, ratingReminders);
+    expect(await lines()).toBe(1);
+    await db.accountEvent.create({ data: { userId: s.dev.user.id, kind: "suspended", side: "developer", createdAt: new Date(T.getTime() + HOUR) } });
+    await db.accountEvent.create({ data: { userId: s.dev.user.id, kind: "reinstated", side: "developer", createdAt: new Date(T.getTime() + 3 * HOUR) } });
+    await at(new Date(T.getTime() + 4 * HOUR), sweep);
+    await at(new Date(T.getTime() + DAY), sweep);
+    await at(new Date(T.getTime() + DAY), ratingReminders);
+    await at(new Date(T.getTime() + 2 * DAY), ratingReminders);
+    expect(await lines()).toBe(1);
+    await at(new Date(T.getTime() + 3 * DAY), ratingReminders);
+    expect(await lines()).toBe(2);
+  }, 180_000);
+});

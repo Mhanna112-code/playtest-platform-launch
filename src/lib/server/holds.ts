@@ -1843,6 +1843,7 @@ const moneyLineDue = (last: Date | null, fresh: boolean, repeats: boolean, now: 
  * setting (money). Waits while the test is paused, like the line it replaces.
  * (Owner, Dec 2026) After a freeze, like the Rate reminders: a freeze of that money (the team's pause of one of those tests, the developer's hold or suspension;
  * moneySpans without outages) that ENDED after their last "Pay now" line gets ONE fresh line at once, from the 5-minute sweep too; the 3 days count from it.
+ * (Owner, Dec 2026: one line a day, a lift included) Not when a "Pay now" line already went out earlier that UTC day: the next is the 3-day slot from that line.
  */
 async function payNowLines(now: Date, co: CloseOuts, /** (§383) the daily job: the repeats too */ repeats: boolean) {
   const byDev = new Map<string, (OpenPiece & { marks: string[]; offered: Date | null })[]>();
@@ -1857,8 +1858,9 @@ async function payNowLines(now: Date, co: CloseOuts, /** (§383) the daily job: 
     const last = await lastLineAt(devId, "paynow");
     const fresh = list.filter((p) => !p.marks.includes(PAY_NOW_MARK) && (!last || !p.offered || p.offered.getTime() > last.getTime()));
     const unnamed = list.filter((p) => !p.marks.includes(PAY_NOW_MARK));
-    // (Owner, Dec 2026) A freeze lifted since the last line: one fresh line now (its line is dated after the lift, so never twice).
-    const lifted = async () => { const at = last && (await moneyLiftedAt([...new Set(list.map((p) => p.testId))], now)); return !!last && !!at && at > last; };
+    // (Owner, Dec 2026) A freeze lifted since the last line: one fresh line now (its line is dated after the lift, so never twice). (Owner, Dec 2026: one line a
+    // day, a lift included) Not when the last line went out earlier today (UTC), and not deferred: a lift on the day of a line gets none; the next is the 3-day slot.
+    const lifted = async () => { if (!last || utcDayNo(last) === utcDayNo(now)) return false; const at = await moneyLiftedAt([...new Set(list.map((p) => p.testId))], now); return !!at && at > last && utcDayNo(at) !== utcDayNo(last); };
     if (!moneyLineDue(last, fresh.length > 0, repeats, now) && !(await lifted())) {
       // A piece whose Charge opened on a day that already had its line: named in the next line (a repeat), never a second line today.
       for (const p of fresh) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: PAY_NOW_MARK } } });
@@ -1877,7 +1879,8 @@ async function payNowLines(now: Date, co: CloseOuts, /** (§383) the daily job: 
  * let go of your work on “<test>” by <date>") ONE bell line across all the tester's tests while they have at least one piece open to Charge or Let it go,
  * opening the dashboard's "Charge or cancel" box. The first comes the day a piece's Charge opens; (Owner, Nov 11, §390 e; was every day) then every 3 days; it
  * stops when nothing is open. Emailed whatever the setting (money);
- * waits while the tester side is suspended. Never names a hold, a suspension or a failure.
+ * waits while the tester side is suspended. Never names a hold, a suspension or a failure. (Owner, Dec 2026: one line a day, a lift included) §367's fresh line
+ * for a moved date never comes on a UTC day that already had her line; the moved dates count as named, and the 3-day slot names them.
  */
 async function testerChargeLines(now: Date, co: CloseOuts, /** (§383) the daily job: the repeats too */ repeats: boolean) {
   const byTester = new Map<string, (OpenPiece & { marks: string[]; offered: Date | null })[]>();
@@ -1890,14 +1893,18 @@ async function testerChargeLines(now: Date, co: CloseOuts, /** (§383) the daily
   }
   for (const [testerId, list] of byTester) {
     // (Owner, Nov 9, §367) A piece's Charge closing date moved LATER than the date her last line named (a pause or its lift, an outage, Open until extended, a
-    // rejoin): ONE fresh line now naming the new date, even within the day; then the repeats go on (§390 e: every 3 days from it). Each piece keeps the date its last line named ("tc:<ms>").
+    // rejoin): ONE fresh line now naming the new date (Owner, Dec 2026: no longer within the day, below); then the repeats go on (§390 e: every 3 days from it). Each piece keeps the date its last line named ("tc:<ms>").
     const moved = list.some((p) => { const n = chargeNamed(p.marks); return !!n && !!p.closes && p.closes.getTime() > n; }); // ("tc:0": no date named yet, never "moved")
     // (Owner, Nov 11, §383) New to the series: a piece no line named yet (no "tc:" mark; "tc:0" when it had no closing date), whose Charge opened after the last line.
     const last = await lastLineAt(testerId, "chargeday");
     const fresh = list.filter((p) => chargeNamed(p.marks) == null && (!last || !p.offered || p.offered.getTime() > last.getTime()));
-    if (!moved && !moneyLineDue(last, fresh.length > 0, repeats, now)) {
+    // (Owner, Dec 2026: one line a day, a lift included) A moved date gets no fresh line when her line already went out earlier today (UTC), nor tomorrow: the
+    // next is the 3-day slot from today's line, naming the dates then. The moved dates count as named now (below), so they don't fire tomorrow.
+    const movedNow = moved && !(last && utcDayNo(last) === utcDayNo(now));
+    if (!movedNow && !moneyLineDue(last, fresh.length > 0, repeats, now)) {
       // Opened on a day that already had its line: named in the next line, never a second line today (the date it will name is recorded now).
       for (const p of fresh) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: `tc:${p.closes?.getTime() ?? 0}` } } });
+      if (moved) for (const p of list) { const n = chargeNamed(p.marks); if (n && p.closes && p.closes.getTime() > n) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: `tc:${p.closes.getTime()}` } } }); }
       continue;
     }
     const line = chargeDayLine(list);
