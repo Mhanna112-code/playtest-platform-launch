@@ -24,7 +24,7 @@ import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
 import { callMinutesOf } from "@/lib/callMeasure";
 import { callReference, disputeDecisionName, disputedCentsOf, movedDue, nearestDayEnd, partOf, pausedUntil, pieceName, reversedOf, reversedPart, reversedWords, paymentWords, OWED_OVER_TICK, PAY_TICK_CENTS } from "@/lib/rules";
 import { callsLeftCents } from "./callMoney";
-import { callChargeAt, closedOut, disputeClosedFor, pieceCloseOut } from "./closeOut";
+import { callChargeAt, closedOut, disputeClosedFor, lastLift, moneySpans, pieceCloseOut } from "./closeOut";
 import { DAILY_LOCK_WAIT_MS, withTimersLock } from "./timers";
 import { pieceWords } from "@/lib/bankTop";
 import { describedOnce, stripeDescription } from "./paymentRows";
@@ -1816,6 +1816,15 @@ async function chargeablePieces(co: CloseOuts, where: Prisma.SubmissionWhereInpu
 const chargeNamed = (marks: string[]) => { const t = marks.filter((x) => x.startsWith("tc:")).pop(); return t ? Number(t.slice(3)) : null; };
 /** (Owner, Nov 11, §383) When this person's last line with this reminder key was made (null: never). */
 const lastLineAt = async (userId: string, key: string) => (await db.notification.findFirst({ where: { userId, reminderKey: key }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }))?.createdAt ?? null;
+/** (Owner, Dec 2026) When the money of any of these tests last came back from a freeze (moneySpans without outages: the team's pause while in force, the developer's holds and suspensions; lastLift), or null. */
+async function moneyLiftedAt(testIds: string[], now: Date) {
+  let at: Date | null = null;
+  for (const t of await db.test.findMany({ where: { id: { in: testIds } }, include: { developer: true } })) {
+    const l = lastLift(await moneySpans(t, now, now, false), now);
+    if (l && (!at || l > at)) at = l;
+  }
+  return at;
+}
 /** (§383) The mark a piece gets once a "Pay now" line has named it (in its devMarks, beside the "tc:" and review marks). */
 const PAY_NOW_MARK = "pn";
 /**
@@ -1832,6 +1841,8 @@ const moneyLineDue = (last: Date | null, fresh: boolean, repeats: boolean, now: 
  * (Owner, Nov 11, §390 e; was every day) the first when a piece opens, then every 3 days.
  * It stops when nothing is past its review date. Listed calls aren't in it (charged automatically, batch 28 §21); unlisted work isn't either. Emailed whatever the
  * setting (money). Waits while the test is paused, like the line it replaces.
+ * (Owner, Dec 2026) After a freeze, like the Rate reminders: a freeze of that money (the team's pause of one of those tests, the developer's hold or suspension;
+ * moneySpans without outages) that ENDED after their last "Pay now" line gets ONE fresh line at once, from the 5-minute sweep too; the 3 days count from it.
  */
 async function payNowLines(now: Date, co: CloseOuts, /** (§383) the daily job: the repeats too */ repeats: boolean) {
   const byDev = new Map<string, (OpenPiece & { marks: string[]; offered: Date | null })[]>();
@@ -1846,7 +1857,9 @@ async function payNowLines(now: Date, co: CloseOuts, /** (§383) the daily job: 
     const last = await lastLineAt(devId, "paynow");
     const fresh = list.filter((p) => !p.marks.includes(PAY_NOW_MARK) && (!last || !p.offered || p.offered.getTime() > last.getTime()));
     const unnamed = list.filter((p) => !p.marks.includes(PAY_NOW_MARK));
-    if (!moneyLineDue(last, fresh.length > 0, repeats, now)) {
+    // (Owner, Dec 2026) A freeze lifted since the last line: one fresh line now (its line is dated after the lift, so never twice).
+    const lifted = async () => { const at = last && (await moneyLiftedAt([...new Set(list.map((p) => p.testId))], now)); return !!last && !!at && at > last; };
+    if (!moneyLineDue(last, fresh.length > 0, repeats, now) && !(await lifted())) {
       // A piece whose Charge opened on a day that already had its line: named in the next line (a repeat), never a second line today.
       for (const p of fresh) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: PAY_NOW_MARK } } });
       continue;
