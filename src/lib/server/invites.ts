@@ -297,15 +297,27 @@ export const invitesLeftLine = (left: number) =>
 /** One tester skipped (the others in the press are invited). */
 export const sameTesterLimitLine = (name: string, pronoun?: string | null) => `${name}: you've invited ${pronouns(pronoun).obj} to this test ${INVITES_PER_TESTER_PER_TEST} times today. You can invite ${pronouns(pronoun).obj} again tomorrow.`;
 
-/**
- * Invite ticked testers. Refused for good when the test is full, stopped, past Open until or paused. Stops once for the
- * developer stop-once reasons plus: a ticked tester's profile no longer fits, a ticked tester joined, or was already
- * invited in another tab. Then invites those who can be invited and names the others with reasons. (Batch 35 §128) Daily limits: see INVITES_PER_DAY.
- */
 /** (Owner, Nov 5, §278) "Your Invite didn't go through for Ana Silva: Ana Silva rated this test, so she can't join it again." */
 export const inviteRatedLine = (name: string, pronoun: string) => `Your Invite didn't go through for ${name}: ${name} rated this test, so ${pronouns(pronoun).subj} can't join it again.`;
 
+/**
+ * INVITE (the developer ticks testers in the invite panel and presses Invite, or Invite anyway). One transaction under the test's lock for the checks and the
+ * invites; joining a waiting applicant and the emails come after the commit. (Batch 35 §128) Daily limits: see INVITES_PER_DAY.
+ *   0. your test; the subscriber perk; at least one tick
+ *   1. the whole press refused (inviteTestRefusal): stopped → joining closed → paused (the developer's hold) → not open → full
+ *   2. every ticked tester rated this test → refused; some → a line each, the press goes on
+ *   3. (worked out) what changed since the panel loaded: requirements, a ticked tester's rating, joined, suspended, blocked, at 10 tests
+ *   4. each ticked tester: already in / already invited (silent) → application the page showed → your block → their block, suspended, closed, 10 tests → 2 today
+ *   5. the developer's 100 invites a day (refused as a whole)
+ *   6. the stop-once box (devGate) with step 3's lines
+ *   7. Invite anyway: someone misses a need → the confirm box
+ *   8. the invites, and the developer's "You invited …" line
+ *   9. after the commit: an invited tester with a waiting application or ask joins at once (matchInviteAndAsk, as Accept)
+ *   10. the others' bell and email: "<Dev> invited you to “<test>”"
+ *   11. the done message
+ */
 export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, testId: string, body: Record<string, unknown>) {
+  // 0. Your test; the subscriber perk; at least one tick.
   await ownTest(dev.id, testId);
   // (Batch 8) Inviting testers is a subscriber perk (invites already sent stay valid when the subscription ends).
   await (await import("./subscription")).requirePerk(dev.id, "invite");
@@ -313,136 +325,220 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
   if (!ids.length) throw new HttpError(400, "none", "Tick at least one tester.");
   const seenAt = new Date(String(body.seenAt ?? ""));
   const result = await db.$transaction(async (tx) => {
+    // The test's lock: the whole press is one pass.
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
     const t = await tx.test.findUniqueOrThrow({ where: { id: testId } });
-    const me = await tx.user.findUniqueOrThrow({ where: { id: dev.id } });
-    const testersIn = await tx.contract.count({ where: { testId, status: "working" } });
-    const now = new Date();
-    const refusal = inviteTestRefusal({ ...t, testersIn, paused: !!me.holdStartedAt, chargeback: me.holdReason === "chargeback" }, now, fmtDate);
-    if (refusal) throw new HttpError(409, "refused", t.status === "stopped" ? stoppedPressLine("Invite") : refusal, { clearTicks: true }); // (§363)
+    // 1. The whole press refused: stopped, joining closed, paused, not open, full. `now`: the press's time from here on.
+    const now = await wholePressRefusal(tx, t, dev.id);
+    // 2. Ticked testers who rated this test: all of them → refused; some → a line each.
     // In the order the developer ticked them, so the "Invited A and B." line is stable.
-    const ticked = (await tx.user.findMany({ where: { id: { in: ids } }, include: { profile: true } })).sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
-    // (Owner, Oct 31, batch 35 §94) Someone who rated this test can't join it again, so they can't be invited to it (an old page's tick is refused).
-    const rated = await tx.contract.findMany({ where: { testId, testerId: { in: ids }, endKind: "rated" }, select: { testerId: true } });
-    const raters = ticked.filter((p) => rated.some((r) => r.testerId === p.id));
-    // (Owner, Nov 5, §278) Only some ticked testers rated it: each of them gets a refusal line of their own and the press goes on for the others. All of them: one
-    // refusal (no "Untick … to invite the others": there are none).
-    if (raters.length && raters.length === ticked.length) {
-      // (Batch 35 §162) One tester: in their own pronoun ("so she can't join it again"); several: "they".
-      const pr = pronouns(raters.length === 1 ? raters[0].pronoun : "they");
-      throw new HttpError(409, "refused", `${raters.map((p) => displayName(p)).join(", ")} rated this test, so ${pr.subj} can't join it again.`, { clearTicks: true });
-    }
+    const tickedUsers = await tx.user.findMany({ where: { id: { in: ids } }, include: { profile: true } });
+    const ticked = tickedUsers.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+    const raters = await ratersAmong(tx, testId, ids, ticked);
     const people = ticked.filter((p) => !raters.includes(p));
     const ratedLines = raters.map((p) => inviteRatedLine(displayName(p), p.pronoun));
     const contracts = await tx.contract.findMany({ where: { testId, testerId: { in: ids } } });
     const invites = await tx.invite.findMany({ where: { testId, testerId: { in: ids } } });
-    // Extra stop-once reasons for the ticked testers.
-    const extra: TestEventLike[] = [];
-    const shownRatingRows = new Map(await Promise.all(ids.map(async (id) => [id, await ratingSummary(id, "tester")] as const))); // (§276) as the rows show it
-    // (Owner, Oct 28, batch 16 section 31) What the panel showed: the test's requirements and each ticked tester's devices and languages. A change since then always
-    // stops Invite / Invite anyway once (they're Invite's own checks, not Alerts types); the page shows the updated panel with it.
-    const seenNeeds = needsOf(body.seenNeeds);
-    const seenTesters = body.seenTesters && typeof body.seenTesters === "object" ? (body.seenTesters as Record<string, unknown>) : null;
-    if (seenNeeds) {
-      const line = requirementsChangedLine(seenNeeds, t);
-      if (line) {
-        const ed = await tx.testEvent.findFirst({ where: { testId, kind: { in: ["edited", "info"] } }, orderBy: { createdAt: "desc" } });
-        extra.push({ kind: "profile", text: line, createdAt: ed?.createdAt ?? new Date() });
-      }
-    }
-    if (!isNaN(seenAt.getTime())) {
-      for (const p of people) {
-        const name = displayName(p);
-        const seenP = seenTesters ? needsOf(seenTesters[p.id]) : null;
-        // (Batch 20 section 4) One line per tester (`key`: a later stop's line replaces it in the box), with one time: the latest change.
-        if (seenP) {
-          // (Owner, Nov 9, §357) A tester's devices or languages changing (now meeting a need, or no longer) never stops the press; a rating change still does.
-          const lines: string[] = [];
-          const currentRating = shownRatingRows.get(p.id);
-          const ratingLine = ratingChangedLine(name, seenP.rating, currentRating?.n ? Number(currentRating.avg.toFixed(1)) : null, p.pronoun);
-          if (ratingLine) lines.push(ratingLine);
-          if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: currentRating?.at ?? new Date(), key: `needs:${p.id}` });
-        }
-        const joined = contracts.find((c) => c.testerId === p.id && c.joinedAt > seenAt);
-        if (joined) extra.push({ kind: "joined", text: `${name} joined this test, so ${pronouns(p.pronoun).subjIs} no longer in your invite list`, createdAt: joined.joinedAt });
-        // A ticked tester became greyed or removed since the page loaded.
-        if (p.testerSuspendedAt && p.testerSuspendedAt > seenAt) extra.push({ kind: "joined", text: `${name} can't be invited right now`, createdAt: p.testerSuspendedAt });
-        const blockedSince = await tx.block.findFirst({ where: { createdAt: { gt: seenAt }, OR: [{ blockerId: dev.id, blockedId: p.id }, { blockerId: p.id, blockedId: dev.id }] } });
-        if (blockedSince) extra.push({ kind: "joined", text: `${name} is no longer in your list`, createdAt: blockedSince.createdAt });
-        const lastJoin = await tx.contract.findFirst({ where: { testerId: p.id, status: "working", joinedAt: { gt: seenAt } }, orderBy: { joinedAt: "desc" } });
-        if (lastJoin && lastJoin.testId !== testId && (await tx.contract.count({ where: { testerId: p.id, status: "working" } })) >= MAX_ACTIVE_TESTS) extra.push({ kind: "joined", text: `${name} can't join more tests right now`, createdAt: lastJoin.joinedAt });
-      }
-    }
+    // 3. What changed since the page loaded (the stop-once box's extra lines): the test's requirements, each ticked tester's rating, joined, suspended,
+    // blocked, at the 10-test limit.
+    const extra = await changesSincePanel(tx, t, dev.id, ids, people, contracts, body, seenAt);
     // (Batch 16 section 21) An invite (or a cancelled invite) for the same tester from another tab stops it once.
-    const { lines: gaps, items: gapItems } = gapLines(t, people.filter((p) => !contracts.some((c) => c.testerId === p.id)));
     // (Owner's finding, Oct 29, batch 32 §9) The stop carries what's missing NOW, so the Invite anyway box redraws to it and the next Invite anyway goes through
     // (it used to keep the old list, so the same change stopped a second time: "What's missing changed since you looked").
+    const notInTest = people.filter((p) => !contracts.some((c) => c.testerId === p.id));
+    const { lines: gaps, items: gapItems } = gapLines(t, notInTest);
     // (Batch 34 §16, owner, Oct 30) A ticked tester's application or ask to rejoin made after the page loaded is no stop: the press joins them at once (below).
     const tickedApps = await tx.application.findMany({ where: { testId, testerId: { in: ids }, status: "pending" } });
     const askLines = new Set(people.flatMap((p) => [`${displayName(p)} applied to join`, `${displayName(p)} asks to rejoin`]));
     const notTheirAsk = (e: TestEventLike) => !(e.kind === "applied" && askLines.has(e.text));
     const rowInfo = await testerRowInfo(dev.id, t, people);
     const testers = people.map((p) => ({ id: p.id, name: displayName(p), ...rowInfo.get(p.id)! }));
+    // 4. Each ticked tester: invited, skipped silently, or a line saying why not.
     const invited: { id: string; name: string; email: string; pronoun: string }[] = [];
     const seen = (await import("./joining")).pressSeen(body);
     const others: string[] = [];
     for (const p of people) {
       const name = displayName(p);
-      if (contracts.some((c) => c.testerId === p.id && c.status === "working")) continue; // joined: no longer in the list
-      if (invites.some((i) => i.testerId === p.id && i.status === "sent")) continue; // already invited
-      // (Batch 34 §16, owner, Oct 30) The page already showed their application or ask (the greyed "applied: answer them in Needs you →"): answered there, not invited.
-      // One the page hadn't shown yet (made after its seen time) is invited, and the invite joins them at once like Accept (below).
-      const app = tickedApps.find((a) => a.testerId === p.id);
-      if (app && seen && app.createdAt <= seen) {
-        others.push(`${name} ${app.kind === "rejoin" ? "asked to rejoin" : "applied"}: answer ${pronouns(p.pronoun).obj} in Needs you.`);
-        continue;
-      }
-      const active = await tx.contract.count({ where: { testerId: p.id, status: "working" } });
-      // (Owner, Nov 11, §380 H) Their own block: "You blocked Ana Silva, so your Invite didn't go through." (Invite anyway the same); the tester's block stays neutral.
-      if (await tx.block.count({ where: { blockerId: dev.id, blockedId: p.id } })) {
-        others.push(pressRefused(ownBlockCause(name), body.anyway === true ? "Invite anyway" : "Invite"));
-        continue;
-      }
-      const blocked = (await tx.block.count({ where: { OR: [{ blockerId: dev.id, blockedId: p.id }, { blockerId: p.id, blockedId: dev.id }] } })) > 0;
-      const why = inviteTesterRefusal(name, { suspended: !!p.testerSuspendedAt, blocked, deleted: !p.isTester, activeTests: active, pronoun: p.pronoun });
+      const why = await whyNotInvited(tx, { testId, devId: dev.id, now, seen, body, contracts, invites, tickedApps }, p, name);
+      if (why === SKIP_SILENTLY) continue;
       if (why) {
         others.push(why);
         continue;
       }
-      // (Owner, Nov 2, batch 35 §128) At most 2 invites to the same tester on this test a day (a cancel and re-invite counts each time): over it, only they're skipped.
-      if (!TESTING_NO_LIMITS && (await tx.invite.count({ where: { testId, testerId: p.id, createdAt: { gt: new Date(now.getTime() - INVITE_WINDOW_MS) } } })) >= INVITES_PER_TESTER_PER_TEST) {
-        others.push(sameTesterLimitLine(name, p.pronoun));
-        continue;
-      }
       invited.push({ id: p.id, name, email: p.email, pronoun: p.pronoun });
     }
-    // (Owner, Nov 2, batch 35 §128) At most 100 invites a day per developer, across all their tests: a press that would go over sends nothing.
+    // 5. (Owner, Nov 2, batch 35 §128) At most 100 invites a day per developer, across all their tests: a press that would go over sends nothing.
     // (Owner, Nov 27, shared rule 4: refusals → box → field mistakes) A whole-press refusal, so before the stop-once box (worked out here, under the test's lock;
     // the per-tester lines above, the same-tester daily limit among them, stay lines in the done message).
-    if (invited.length) {
-      const sent = await tx.invite.count({ where: { test: { developerId: dev.id }, createdAt: { gt: new Date(now.getTime() - INVITE_WINDOW_MS) } } });
-      if (!TESTING_NO_LIMITS && sent + invited.length > INVITES_PER_DAY) throw new HttpError(429, "too_many_invites", invitesLeftLine(INVITES_PER_DAY - sent));
-    }
-    await devGate(tx, testId, body, { ...(gaps.length ? { lines: gaps, items: gapItems } : {}), testers }, extra, notTheirAsk, { acts: INVITE_ACTS, keys: ids.map((id) => `t:${id}`) });
-    // (Owner, Nov 9, §357) A ticked tester's devices or languages changing never stops the press: Invite anyway sends on what's missing now (no "everyone
-    // now meets" refusal, no "What's missing changed" stop).
+    if (invited.length) await dailyInviteLimit(tx, dev.id, now, invited.length);
+    // 6. The stop-once box (devGate), with the Invite anyway lines for the page.
+    const boxData = { ...(gaps.length ? { lines: gaps, items: gapItems } : {}), testers };
+    await devGate(tx, testId, body, boxData, extra, notTheirAsk, { acts: INVITE_ACTS, keys: ids.map((id) => `t:${id}`) });
+    // 7. Invite anyway: a ticked tester misses something the test needs. (Owner, Nov 9, §357) A ticked tester's devices or languages changing never stops the
+    // press: Invite anyway sends on what's missing now (no "everyone now meets" refusal, no "What's missing changed" stop).
     if (gaps.length && body.anyway !== true) throw new HttpError(409, "needs_confirm", "CONFIRM:" + gaps.join("\n"), { lines: gaps, items: gapItems, testers });
-    // (Correction 5) Invites never hold spots: any number can be open; the first to join gets a spot.
+    // 8. The invites. (Correction 5) Invites never hold spots: any number can be open; the first to join gets a spot.
     for (const i of invited) await tx.invite.create({ data: { testId, testerId: i.id } });
     if (invited.length) await recordEvent(tx, testId, "invited", `You invited ${andList(invited.map((i) => i.name))}`, false);
     return { t, invited, others: [...ratedLines, ...others] };
   });
-  // (Design doc 6) An invite plus a pending application or rejoin ask joins the tester at once. (Batch 34 §16, owner, Oct 30) The Invite press is then exactly Accept
-  // on that application (the tester's Accept lines, the Needs you row goes), and the result says so: "Ana Silva had applied: she joined." Refused for good (as Accept
-  // is: the 10-test limit, the test just filled…): the invite stays sent and the line says why; the join page then shows Join (§16 item 1).
+  // 9. After the commit: an invited tester with a waiting application or ask joins at once.
+  const { matched, joinedLines } = await joinWaitingApplicants(testId, result.invited);
+  // 10. The others are told they're invited (bell + email).
+  const stillInvited = result.invited.filter((x) => !matched.includes(x.id));
+  for (const i of stillInvited) {
+    const lines = [
+      `${displayName(dev)} invited you to test “${result.t.title}”.`,
+      `What you get: ${termsLine(asListing(result.t), true)}.`,
+      "Open it and press Join to join on these terms.",
+    ];
+    await notify(i.email, `${displayName(dev)} invited you to “${result.t.title}”`, lines, `/app/find/${testId}`);
+  }
+  // 11. The done message: who was invited, who joined, and every line about the others.
+  const invitedLine = stillInvited.length ? `Invited ${andList(stillInvited.map((i) => i.name))}.` : "";
+  const msg = [invitedLine, ...joinedLines, ...result.others].filter(Boolean).join(" ") || "Everyone you ticked was already invited or joined.";
+  return { message: msg, invited: result.invited.map((i) => i.id), joined: matched };
+}
+
+type Tx = Prisma.TransactionClient;
+type TestRow = Prisma.TestGetPayload<object>;
+type Ticked = Prisma.UserGetPayload<{ include: { profile: true } }>;
+
+/** inviteTesters step 1: the whole press refused (inviteTestRefusal: stopped, joining closed, paused, not open, full); the ticks clear. Returns the press's time. */
+async function wholePressRefusal(tx: Tx, t: TestRow, devId: string) {
+  const me = await tx.user.findUniqueOrThrow({ where: { id: devId } });
+  const testersIn = await tx.contract.count({ where: { testId: t.id, status: "working" } });
+  const now = new Date();
+  const refusal = inviteTestRefusal({ ...t, testersIn, paused: !!me.holdStartedAt, chargeback: me.holdReason === "chargeback" }, now, fmtDate);
+  // (§363) A stopped test: the one stopped line, named with the press.
+  if (refusal) throw new HttpError(409, "refused", t.status === "stopped" ? stoppedPressLine("Invite") : refusal, { clearTicks: true });
+  return now;
+}
+
+/**
+ * inviteTesters step 2. (Owner, Oct 31, batch 35 §94) Someone who rated this test can't join it again, so they can't be invited to it (an old page's tick is
+ * refused). (Owner, Nov 5, §278) Only some ticked testers rated it: each of them gets a refusal line of their own and the press goes on for the others. All of
+ * them: one refusal (no "Untick … to invite the others": there are none). Returns the raters.
+ */
+async function ratersAmong(tx: Tx, testId: string, ids: string[], ticked: Ticked[]) {
+  const rated = await tx.contract.findMany({ where: { testId, testerId: { in: ids }, endKind: "rated" }, select: { testerId: true } });
+  const raters = ticked.filter((p) => rated.some((r) => r.testerId === p.id));
+  if (raters.length && raters.length === ticked.length) {
+    // (Batch 35 §162) One tester: in their own pronoun ("so she can't join it again"); several: "they".
+    const pr = pronouns(raters.length === 1 ? raters[0].pronoun : "they");
+    throw new HttpError(409, "refused", `${raters.map((p) => displayName(p)).join(", ")} rated this test, so ${pr.subj} can't join it again.`, { clearTicks: true });
+  }
+  return raters;
+}
+
+/**
+ * inviteTesters step 3: the extra stop-once lines. (Owner, Oct 28, batch 16 section 31) What the panel showed: the test's requirements and each ticked tester's
+ * row. A change since then always stops Invite / Invite anyway once (they're Invite's own checks, not Alerts types); the page shows the updated panel with it.
+ */
+async function changesSincePanel(
+  tx: Tx, t: TestRow, devId: string, ids: string[], people: Ticked[], contracts: { testerId: string; joinedAt: Date }[], body: Record<string, unknown>, seenAt: Date,
+) {
+  const testId = t.id;
+  const extra: TestEventLike[] = [];
+  // (§276) Each ticked tester's rating as the rows show it.
+  const shownRatingRows = new Map(await Promise.all(ids.map(async (id) => [id, await ratingSummary(id, "tester")] as const)));
+  const seenNeeds = needsOf(body.seenNeeds);
+  const seenTesters = body.seenTesters && typeof body.seenTesters === "object" ? (body.seenTesters as Record<string, unknown>) : null;
+  // The test's requirements (devices, languages) changed.
+  if (seenNeeds) {
+    const line = requirementsChangedLine(seenNeeds, t);
+    if (line) {
+      const ed = await tx.testEvent.findFirst({ where: { testId, kind: { in: ["edited", "info"] } }, orderBy: { createdAt: "desc" } });
+      extra.push({ kind: "profile", text: line, createdAt: ed?.createdAt ?? new Date() });
+    }
+  }
+  if (isNaN(seenAt.getTime())) return extra;
+  for (const p of people) {
+    const name = displayName(p);
+    const seenP = seenTesters ? needsOf(seenTesters[p.id]) : null;
+    // (Batch 20 section 4) One line per tester (`key`: a later stop's line replaces it in the box), with one time: the latest change.
+    if (seenP) {
+      // (Owner, Nov 9, §357) A tester's devices or languages changing (now meeting a need, or no longer) never stops the press; a rating change still does.
+      const lines: string[] = [];
+      const currentRating = shownRatingRows.get(p.id);
+      const ratingLine = ratingChangedLine(name, seenP.rating, currentRating?.n ? Number(currentRating.avg.toFixed(1)) : null, p.pronoun);
+      if (ratingLine) lines.push(ratingLine);
+      if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: currentRating?.at ?? new Date(), key: `needs:${p.id}` });
+    }
+    // Joined this test since.
+    const joined = contracts.find((c) => c.testerId === p.id && c.joinedAt > seenAt);
+    if (joined) extra.push({ kind: "joined", text: `${name} joined this test, so ${pronouns(p.pronoun).subjIs} no longer in your invite list`, createdAt: joined.joinedAt });
+    // A ticked tester became greyed or removed since the page loaded: suspended, a block either way, at the 10-test limit.
+    if (p.testerSuspendedAt && p.testerSuspendedAt > seenAt) extra.push({ kind: "joined", text: `${name} can't be invited right now`, createdAt: p.testerSuspendedAt });
+    const eitherWay = [{ blockerId: devId, blockedId: p.id }, { blockerId: p.id, blockedId: devId }];
+    const blockedSince = await tx.block.findFirst({ where: { createdAt: { gt: seenAt }, OR: eitherWay } });
+    if (blockedSince) extra.push({ kind: "joined", text: `${name} is no longer in your list`, createdAt: blockedSince.createdAt });
+    const lastJoin = await tx.contract.findFirst({ where: { testerId: p.id, status: "working", joinedAt: { gt: seenAt } }, orderBy: { joinedAt: "desc" } });
+    if (lastJoin && lastJoin.testId !== testId && (await tx.contract.count({ where: { testerId: p.id, status: "working" } })) >= MAX_ACTIVE_TESTS) {
+      extra.push({ kind: "joined", text: `${name} can't join more tests right now`, createdAt: lastJoin.joinedAt });
+    }
+  }
+  return extra;
+}
+
+/** whyNotInvited's answer for a ticked tester left out with no line (already in, or already invited). */
+const SKIP_SILENTLY = "";
+type InviteContext = {
+  testId: string; devId: string; now: Date; seen: Date | null; body: Record<string, unknown>;
+  contracts: { testerId: string; status: string }[]; invites: { testerId: string; status: string }[]; tickedApps: { testerId: string; kind: string; createdAt: Date }[];
+};
+/**
+ * inviteTesters step 4, for one ticked tester, in order: already in (silent) → already invited (silent) → an application the page showed → your block → their
+ * block, suspended, account closed, 10 tests (inviteTesterRefusal) → 2 invites to them today. Returns SKIP_SILENTLY, the line, or null (invite them).
+ */
+async function whyNotInvited(tx: Tx, x: InviteContext, p: Ticked, name: string): Promise<string | null> {
+  // a. Joined: no longer in the list.
+  if (x.contracts.some((c) => c.testerId === p.id && c.status === "working")) return SKIP_SILENTLY;
+  // b. Already invited.
+  if (x.invites.some((i) => i.testerId === p.id && i.status === "sent")) return SKIP_SILENTLY;
+  // c. (Batch 34 §16, owner, Oct 30) The page already showed their application or ask (the greyed "applied: answer them in Needs you →"): answered there, not
+  // invited. One the page hadn't shown yet (made after its seen time) is invited, and the invite joins them at once like Accept (step 9).
+  const app = x.tickedApps.find((a) => a.testerId === p.id);
+  if (app && x.seen && app.createdAt <= x.seen) return `${name} ${app.kind === "rejoin" ? "asked to rejoin" : "applied"}: answer ${pronouns(p.pronoun).obj} in Needs you.`;
+  const active = await tx.contract.count({ where: { testerId: p.id, status: "working" } });
+  // d. (Owner, Nov 11, §380 H) Their own block: "You blocked Ana Silva, so your Invite didn't go through." (Invite anyway the same); the tester's block stays neutral.
+  if (await tx.block.count({ where: { blockerId: x.devId, blockedId: p.id } })) return pressRefused(ownBlockCause(name), x.body.anyway === true ? "Invite anyway" : "Invite");
+  // e. The tester's block, suspended, account closed, at 10 tests.
+  const eitherWay = [{ blockerId: x.devId, blockedId: p.id }, { blockerId: p.id, blockedId: x.devId }];
+  const blocked = (await tx.block.count({ where: { OR: eitherWay } })) > 0;
+  const why = inviteTesterRefusal(name, { suspended: !!p.testerSuspendedAt, blocked, deleted: !p.isTester, activeTests: active, pronoun: p.pronoun });
+  if (why) return why;
+  // f. (Owner, Nov 2, batch 35 §128) At most 2 invites to the same tester on this test a day (a cancel and re-invite counts each time): over it, only they're
+  // skipped.
+  if (!TESTING_NO_LIMITS) {
+    const lastDay = { gt: new Date(x.now.getTime() - INVITE_WINDOW_MS) };
+    const toThem = await tx.invite.count({ where: { testId: x.testId, testerId: p.id, createdAt: lastDay } });
+    if (toThem >= INVITES_PER_TESTER_PER_TEST) return sameTesterLimitLine(name, p.pronoun);
+  }
+  return null;
+}
+
+/** inviteTesters step 5: the developer's 100 invites a day across their tests (refused as a whole). */
+async function dailyInviteLimit(tx: Tx, devId: string, now: Date, adding: number) {
+  const sent = await tx.invite.count({ where: { test: { developerId: devId }, createdAt: { gt: new Date(now.getTime() - INVITE_WINDOW_MS) } } });
+  if (!TESTING_NO_LIMITS && sent + adding > INVITES_PER_DAY) throw new HttpError(429, "too_many_invites", invitesLeftLine(INVITES_PER_DAY - sent));
+}
+
+/**
+ * inviteTesters step 9. (Design doc 6) An invite plus a pending application or rejoin ask joins the tester at once. (Batch 34 §16, owner, Oct 30) The Invite press
+ * is then exactly Accept on that application (the tester's Accept lines, the Needs you row goes), and the result says so: "Ana Silva had applied: she joined."
+ * Refused for good (as Accept is: the 10-test limit, the test just filled…): the invite stays sent and the line says why; the join page then shows Join (§16
+ * item 1).
+ */
+async function joinWaitingApplicants(testId: string, invited: { id: string; name: string; pronoun: string }[]) {
   const joining = await import("./joining");
   const matched: string[] = [];
   const joinedLines: string[] = [];
-  for (const i of result.invited) {
+  for (const i of invited) {
     const app = await db.application.findFirst({ where: { testId, testerId: i.id, status: "pending" } });
     if (!app) continue;
     // (Owner, Nov 9, §338) The invites are already saved: a join that can't happen now (no free access key, or a refusal under the test's lock) never fails the
-    // press. That applicant's invite stays sent (emailed below with the others), their application waits, and the result names them.
+    // press. That applicant's invite stays sent (emailed with the others), their application waits, and the result names them.
     let joinedNow;
     try {
       joinedNow = await joining.matchInviteAndAsk(testId, i.id, { byDeveloper: true });
@@ -459,19 +555,24 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     const refusal = await joining.joinRefusal(i.id, testId, { rejoin: true, byDeveloper: true });
     if (refusal) joinedLines.push(refusal.replace("You've already joined", `${i.name} already joined`).replace(TEST_LIMIT_LINE, `${i.name} can't join more tests right now.`));
   }
-  for (const i of result.invited.filter((x) => !matched.includes(x.id))) {
-    await notify(i.email, `${displayName(dev)} invited you to “${result.t.title}”`, [`${displayName(dev)} invited you to test “${result.t.title}”.`, `What you get: ${termsLine(asListing(result.t), true)}.`, "Open it and press Join to join on these terms."], `/app/find/${testId}`);
-  }
-  const stillInvited = result.invited.filter((x) => !matched.includes(x.id));
-  const msg = [stillInvited.length ? `Invited ${andList(stillInvited.map((i) => i.name))}.` : "", ...joinedLines, ...result.others].filter(Boolean).join(" ") || "Everyone you ticked was already invited or joined.";
-  return { message: msg, invited: result.invited.map((i) => i.id), joined: matched };
+  return { matched, joinedLines };
 }
 
+/**
+ * CANCEL INVITE (the developer's). Not under one lock: the checks read the database, the box takes the test's lock, and only a still-open invite is cancelled.
+ *   0. your test; the invite exists
+ *   1. already declined (No thanks) or cancelled → silent
+ *   2. joined → "She already joined."; re-sent by an old edit → "This invite is no longer valid: it was re-sent on the new listing."
+ *   3. the stop-once box (devGate): the tester's rating changed, another tab's invite action on them, other developer changes
+ *   4. the cancel (a lost race → silent, or the line from 2)
+ *   after: the tester's bell "Your invite to “<test>” was closed." (tellInvitesClosed)
+ */
 export async function cancelInvite(dev: U, testId: string, body: Record<string, unknown>) {
+  // 0.
   await ownTest(dev.id, testId);
   const inv = await db.invite.findUnique({ where: { id: String(body.inviteId ?? "") }, include: { test: true } });
   if (!inv || inv.testId !== testId) throw new HttpError(404, "not_found", "That invite doesn't exist.");
-  // (Owner, Nov 11, §380) The tester said No thanks, or the invite closed (cancelled, the test stopped, joining closed): already what the press wanted, no
+  // 1. (Owner, Nov 11, §380) The tester said No thanks, or the invite closed (cancelled, the test stopped, joining closed): already what the press wanted, no
   // refusal (the page redraws). Joined, or re-sent on the new listing (a new invite is open), keep their refusals.
   const closedAlready = (status: string) => status === "declined" || status === "cancelled";
   if (closedAlready(inv.status)) return { ok: true, already: true };
@@ -479,19 +580,24 @@ export async function cancelInvite(dev: U, testId: string, body: Record<string, 
   const shown = body.seenTesters && typeof body.seenTesters === "object" ? needsOf((body.seenTesters as Record<string, unknown>)[inv.testerId]) : null;
   const extra: TestEventLike[] = [];
   if (shown && tester) {
-    const lines: string[] = []; // (Owner, Nov 9, §357) A tester's devices or languages changing (now meeting a need, or no longer) never stops the press; a rating change still does.
+    // (Owner, Nov 9, §357) A tester's devices or languages changing (now meeting a need, or no longer) never stops the press; a rating change still does.
     const latest = await ratingSummary(tester.id, "tester"); // (Owner, Nov 5, §276) as the row shows it
     const line = ratingChangedLine(displayName(tester), shown.rating, latest.n ? Number(latest.avg.toFixed(1)) : null, tester.pronoun);
-    if (line) lines.push(line);
-    if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: latest.at ?? new Date(), key: `needs:${tester.id}` });
+    if (line) extra.push({ kind: "profile", text: line, createdAt: latest.at ?? new Date(), key: `needs:${tester.id}` });
   }
-  const gone = (status: string) => new HttpError(409, "gone", status === "joined" ? `${pronouns(tester?.pronoun).Subj} already joined.` : status === "replaced" ? "This invite is no longer valid: it was re-sent on the new listing." : "This invite was already cancelled.");
-  // (Owner, Nov 27, shared rule 4: refusals → box → field mistakes) Joined or re-sent on the new listing: the refusal first, never after the stop-once box.
+  const gone = (status: string) => {
+    let line = "This invite was already cancelled.";
+    if (status === "joined") line = `${pronouns(tester?.pronoun).Subj} already joined.`;
+    else if (status === "replaced") line = "This invite is no longer valid: it was re-sent on the new listing.";
+    return new HttpError(409, "gone", line);
+  };
+  // 2. (Owner, Nov 27, shared rule 4: refusals → box → field mistakes) Joined or re-sent on the new listing: the refusal first, never after the stop-once box.
   if (inv.status !== "sent") throw gone(inv.status);
-  // (Batch 16 section 21) Another tab's invite action on this tester (or another change the page hadn't shown): this press stops once naming it.
+  // 3. (Batch 16 section 21) Another tab's invite action on this tester (or another change the page hadn't shown): this press stops once naming it.
   await db.$transaction((tx) => devGate(tx, testId, body, {}, extra, undefined, { acts: INVITE_ACTS, keys: [`t:${inv.testerId}`] }));
-  // (Nov 2, §119) Only a still-open invite is cancelled: a tester who joined (or a re-send) a moment ago wins, and the refusal says what happened.
-  if ((await db.invite.updateMany({ where: { id: inv.id, status: "sent" }, data: { status: "cancelled" } })).count !== 1) {
+  // 4. (Nov 2, §119) Only a still-open invite is cancelled: a tester who joined (or a re-send) a moment ago wins, and the refusal says what happened.
+  const cancelled = await db.invite.updateMany({ where: { id: inv.id, status: "sent" }, data: { status: "cancelled" } });
+  if (cancelled.count !== 1) {
     const now = (await db.invite.findUniqueOrThrow({ where: { id: inv.id } })).status;
     if (closedAlready(now)) return { ok: true, already: true }; // (§380)
     throw gone(now);

@@ -9,9 +9,16 @@ import { asListing } from "@/lib/server/tests";
 import { reinvitedLine } from "@/lib/server/invites";
 import { bell } from "@/lib/server/notify";
 
-// The tester answers an invite with "No thanks" (no more reminders).
+// NO THANKS: the tester answers an invite with "No thanks" (no more reminders).
 // (Owner, Oct 28, batch 17 section 4) It follows batch 16 section 32 exactly like Join and Accept: a full test keeps the invite open (No thanks just declines it); a
 // closed invite is refused with the section 32 reason and the card goes; an invite re-sent on a new listing stops once (blue) instead of being refused.
+// Steps, in order (not under the test's lock; only a still-open invite is declined):
+//   0. an active account; the invite exists and is theirs
+//   1. an invite an old edit replaced: none re-sent → silent; re-sent → the first press stops once with the new listing, the second declines the new invite
+//   2. already closed, cancelled or declined → silent; joined → "You already joined."
+//   3. the join page's listing box (listingGate, "decline": the test filling or a spot opening never stops it)
+//   4. the decline (a lost race: joined → "You already joined."; anything else → silent)
+//   after: the developer's live line and bell "<Tester> said no thanks to your invite".
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return handle(async () => {
     const u = await requireActive(req);
@@ -40,8 +47,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       inv = fresh;
     }
     // (Batch 16 section 32) Closed meanwhile: refused with the reason (never "hold" or "suspended"); the card goes.
-    const closed = async (status: string, testId: string) =>
-      status === "cancelled" ? new HttpError(409, "invite_closed", await inviteClosedLine(testId)) : status === "joined" ? new HttpError(409, "gone", "You already joined.") : new HttpError(409, "invite_closed", INVITE_NOT_OPEN);
+    const closed = async (status: string, testId: string) => {
+      if (status === "cancelled") return new HttpError(409, "invite_closed", await inviteClosedLine(testId));
+      if (status === "joined") return new HttpError(409, "gone", "You already joined.");
+      return new HttpError(409, "invite_closed", INVITE_NOT_OPEN);
+    };
     // (Owner, Nov 11, §380) Already closed, cancelled or declined: what No thanks wanted, so no refusal (the card goes with the redraw). Joined keeps its line.
     if (inv.status !== "sent" && inv.status !== "joined") return ok({ ok: true, already: true });
     if (inv.status !== "sent") throw await closed(inv.status, inv.testId);
