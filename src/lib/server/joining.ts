@@ -161,15 +161,15 @@ export async function joinStopList(userId: string, testId: string, body: Record<
 
 /**
  * (Owner, Oct 28, batch 16 section 32) Why an invite is closed, said to the tester (never "hold" or "suspended"): stopped (or the developer deleted) → "This test was
- * stopped."; Open until passed → "“<test>” closed to new testers on <date>."; a pause, hold or the developer's suspension → "“<test>” isn't taking new testers right
- * now, so this invite was closed."; cancelled, blocked or anything else → "This invite is no longer open."
+ * stopped."; Open until passed → "“<test>” closed to new testers on <date>."; cancelled, blocked or anything else → "This invite is no longer open."
+ * (Owner, Dec 10 2026) A pause no longer closes invites, so a pause is never the reason given: an invite cancelled while the test is paused (Cancel invite, a block…)
+ * reads its normal line. Invites a pause closed before then read "This invite is no longer open." too (they can't be told apart reliably).
  */
 export async function inviteClosedLine(testId: string, now = new Date()) {
-  const t = await db.test.findUnique({ where: { id: testId }, include: { developer: { select: { holdStartedAt: true, devSuspendedAt: true, deletedAt: true } } } });
+  const t = await db.test.findUnique({ where: { id: testId }, include: { developer: { select: { deletedAt: true } } } });
   if (!t) return INVITE_NOT_OPEN;
   if (t.status === "stopped" || t.developer.deletedAt) return "This test was stopped.";
   if (t.openUntil && t.openUntil.getTime() < now.getTime()) return `“${t.title}” closed to new testers on ${fmtDate(t.openUntil)}.`;
-  if (t.adminPausedAt || t.developer.holdStartedAt || t.developer.devSuspendedAt) return `“${t.title}” isn't taking new testers right now, so this invite was closed.`;
   return INVITE_NOT_OPEN;
 }
 export const INVITE_NOT_OPEN = "This invite is no longer open.";

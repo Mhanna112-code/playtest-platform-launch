@@ -1208,10 +1208,9 @@ From Every page: the live box, long lists (each list is a plain scroll box), num
   - On an invite sent again on a new listing (before Dec 10 2026), it stops once (blue) with "<dev> updated “<test>”: your invite was sent again on the new listing" and "The new listing: …"; the second press says no thanks to the new invite.
   - A test that filled up keeps the invite open, so No thanks just declines it.
 - No thanks, Join or Accept on an invite that closed meanwhile is refused, with no stop box, and its card disappears. The reason never says "hold" or "suspended":
-  - a pause, a hold or the developer's suspension: "“<test>” isn't taking new testers right now, so this invite was closed.";
   - Open until passed: "“<test>” closed to new testers on <date>.";
   - the test stopped, or the developer deleted their account: "This test was stopped.";
-  - cancelled, a block, or anything else: "This invite is no longer open."
+  - cancelled (also while the test is paused: a pause itself never closes an invite, owner, Dec 10 2026), a block, or anything else: "This invite is no longer open."
 - Join call is refused if the call was cancelled, moved or closed since the page loaded: "Your Join call didn't go through: <name> cancelled this call at <time>." The row then leaves the list.
 - Join call is also refused while that test has an open offer of new terms: "Answer the new terms first: Switch or Keep." under the button, on every press until the tester answers it on the session page (Why a press stops: New terms come first). Under that line a link, "Answer them on the session page →", opens the session page at the Switch / Keep box, highlighted.
 

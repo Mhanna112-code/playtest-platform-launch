@@ -6,6 +6,7 @@ import { startHold } from "@/lib/server/holds";
 import { finishWorkIfDue } from "@/lib/server/workWindow";
 import { CLOSING_FIELDS } from "@/lib/server/tests";
 import { inviteClosedLine } from "@/lib/server/invites";
+import { INVITE_NOT_OPEN, inviteClosedLine as closedReason } from "@/lib/server/joining";
 import { makeUser } from "./helpers";
 import { act, joined, seen, settle, setup } from "./fixtures";
 
@@ -54,6 +55,11 @@ describe("1. a pause keeps open invites", () => {
       const j = await act(x.testId, "join", x.ana.cookie, { seenAt: seen(), inviteId: x.inv.id });
       expect(j.body.error.message).toBe("This test isn't taking new testers right now, so your Join didn't go through.");
       expect((await db.invite.findUniqueOrThrow({ where: { id: x.inv.id } })).status).toBe("sent");
+    }
+    // (Owner, Dec 10 2026) An invite cancelled while the test is paused (a Cancel invite, a block…) gives its normal reason, never the pause.
+    for (const x of [team, hold, susp]) {
+      await db.invite.update({ where: { id: x.inv.id }, data: { status: "cancelled" } });
+      expect(await closedReason(x.testId)).toBe(INVITE_NOT_OPEN);
     }
     // The developer's pause lines say nothing about invites.
     const devLines = await db.notification.findMany({ where: { userId: { in: [team.dev.user.id, hold.dev.user.id, susp.dev.user.id] } } });
