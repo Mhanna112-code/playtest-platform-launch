@@ -1991,15 +1991,14 @@ export function rateStops(e: TestEventLike, closed: boolean) {
 // ---------- (Owner, Oct 28, batch 17 section 19) Close-out: 14 days after the last tester's deadline, money and ratings end ----------
 
 export const CLOSE_OUT_DAYS = 14;
-/** (Batch 17 section 16) The developer's days to rate a tester (server/ratings WINDOW_DAYS); the tester's rating shows by name to them once they rate or these end. Client-safe for the Rate box's line (Owner, Dec 2026). */
-export const DEV_RATE_WINDOW_DAYS = 14;
 /**
  * (Owner, Dec 2026; replaces "(shown without your name)") Who sees the rating, under the Rate box's title (components/RateBox). `rater`: whose box it is; `name`: the person rated.
- * The tester's shows by name to the developer once they rate back or their days to rate end (the blind reveal); the developer's shows by name to the tester at once.
+ * The tester's shows by name to the developer once they rate back or their time to rate ends (the blind reveal; owner: no day count, that window moves); the
+ * developer's shows by name to the tester at once.
  */
 export const rateWhoSeesLine = (rater: "tester" | "developer", name: string) =>
   rater === "tester"
-    ? `1 to 5, and a note if you like. ${name} sees it with your name once ${name} rates you (or after ${DEV_RATE_WINDOW_DAYS} days). On ${name}'s profile it shows without your name.`
+    ? `1 to 5, and a note if you like. ${name} sees it with your name once ${name} rates you or when ${name}'s time to rate ends. On ${name}'s profile it shows without your name.`
     : `1 to 5, and a note if you like. ${name} sees it with your name. On ${name}'s profile it shows without your name.`;
 /**
  * (Owner, final) Where a test's close-out counts from: the last tester's deadline (every contract's, working or not), and no earlier than Open until (or the stop).
