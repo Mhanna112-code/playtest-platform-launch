@@ -108,7 +108,7 @@ describe("batch 34 §14: listing lines in the test page's blue boxes have See it
     // Outside the test page (Edit) the same line has no See it.
     expect(renderToStaticMarkup(createElement(ChangesBox, { changes: [shown], press: "Save" }))).not.toContain("data-see-it");
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page).toContain('<LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" seeIt="#listing" />');
+    expect(page).toContain('<LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" seeIt="#listing" stopLines'); // (Owner, Dec 10 2026) stops: one line, changes here
     expect(page).toContain('<SeeItTarget target="#listing">');
     expect(page).toContain('<ListingSeeIt box="listing" />');
     expect(src("components/LiveTop.tsx")).toContain('(l.kind === "info" || l.listing) && seeIt');

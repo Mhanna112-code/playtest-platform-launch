@@ -4,7 +4,7 @@ import { useCarried } from "./pressCarry";
 import { liveRuleOf, mergeChanges, useLiveAppend, type LiveRule } from "./live";
 import type { Change } from "@/components/ChangesBox";
 
-export type StopBox = { changes: Change[]; tail: string; top: boolean; now: string; /** the rule the server built it under: lines added live follow what the press is about under the Alerts as they are now (lib/live.ts ruleNow) */ rule?: LiveRule | null };
+export type StopBox = { changes: Change[]; tail: string; top: boolean; now: string; /** (Owner, Dec 10 2026) cleared from view while its button's next press is on its way (still open: live lines still join, its time still confirms) */ hidden?: boolean; /** the rule the server built it under: lines added live follow what the press is about under the Alerts as they are now (lib/live.ts ruleNow) */ rule?: LiveRule | null };
 
 /**
  * A stop-once refusal from the server. It shows under the pressed button (the one line on a page whose top box takes its changes, lib/stopLine.ts; else the
@@ -41,5 +41,10 @@ export const pressRefusal = (e: unknown) => e instanceof ApiError && e.code !== 
 export function useStopBox(carry?: string) {
   const [box, setBox] = useCarried<StopBox | null>(carry, "stopBox", null);
   useLiveAppend(box != null, (added) => setBox((b) => (b ? { ...b, changes: mergeChanges(b.changes, added) } : b)), box?.rule);
-  return [box, setBox] as const;
+  /**
+   * (Owner, Dec 10 2026) Clear, then the new outcome: the press's line (or box) leaves the view the moment its button is pressed; the box stays open meanwhile
+   * (lines that join it live, or that the Alerts let in later, still count) and the next stop or outcome replaces it. `open`: a box is open, shown or not.
+   */
+  const hide = () => setBox((b) => (b && !b.hidden ? { ...b, hidden: true } : b));
+  return [box?.hidden ? null : box, setBox, hide, box != null] as const;
 }

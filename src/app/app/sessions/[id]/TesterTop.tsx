@@ -20,7 +20,7 @@ import { PressDone } from "@/components/PressDone";
  * dropped first); until then both buttons stay greyed with the result line.
  */
 export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: string; seenAt: string; offer: { id: string; diff: string } | null; devName: string }) {
-  const [box, setBox] = useStopBox();
+  const [box, setBox, hideBox] = useStopBox();
   const [offerId, setOfferId] = useState(offer?.id ?? "");
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
@@ -96,7 +96,7 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
     pressed.current = true;
     setErrPress(pressLabelOf(`/api/sessions/${sessionId}/terms`, { choice }));
     setErr(""); // (Owner, Dec 10 2026) one outcome per press: an earlier refusal goes
-    setBox(null); // (Owner, Dec 10 2026) and so does the stop line: clear, then the new outcome (the box's time still makes this the second press)
+    hideBox(); // (Owner, Dec 10 2026) and so does the stop line: clear, then the new outcome (the box's time still makes this the second press)
     return api(`/api/sessions/${sessionId}/terms`, { offerId, choice, seenAt, confirmed, boxAt })
       .then(() => { setBox(null); fin.finish(choice === "switch" ? "Switched to the new terms." : "Kept your current terms.", { reload: true }); })
       .catch((e) => {

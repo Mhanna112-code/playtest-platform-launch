@@ -145,7 +145,7 @@ describe("batch 35 §14: See it on every listing line of the join page", () => {
     expect(pop).toContain("Your Apply didn&#x27;t go through.");
 
     const page = src("app/app/find/[id]/page.tsx");
-    expect(page).toContain('<LiveTop scope={`listing:${t.id}`} seenAt={seenAt} seeIt="#listing" />');
+    expect(page).toContain('<LiveTop scope={`listing:${t.id}`} seenAt={seenAt} seeIt="#listing" stopLines'); // (Owner, Dec 10 2026) stops: one line, changes here
     expect(page).toContain('<SeeItTarget target="#listing">');
     expect(page).toContain('<ListingSeeIt box="listing" />');
     expect(page).toContain('<ListingPanel side="tester" rows={panel.rows} listing={l} savedAt={panel.savedAt}');

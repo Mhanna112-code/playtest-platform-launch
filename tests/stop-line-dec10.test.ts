@@ -121,22 +121,27 @@ describe("clear, then reappear", () => {
   it("the line under the button goes the moment it is pressed; the second press still goes ahead (confirmed with the box's time)", () => {
     const u = src("lib/usePress.ts");
     const press = u.slice(u.indexOf("async function press<T>"), u.indexOf("const r = await api<T>"));
-    expect(press).toContain("const prev = changes;");
-    expect(press).toContain("const again = prev != null && (!opts.perKey || key === at);");
-    expect(press).toContain("setChanges(null);");
+    expect(press).toContain("const again = changes != null && (!opts.perKey || key === at);");
+    expect(press).toContain("setHidden(true);");
     expect(press).toContain('setError("");');
     expect(u).toContain("confirmed: again || body.confirmed === true, ...(again && boxAt ? { boxAt } : {})");
+    // The box stays open while hidden (live lines still join it), and every outcome shows again.
+    expect(u).toContain("return { press, changes: hidden ? null : changes,");
+    expect(u).toContain("} finally {\n      setHidden(false);");
     // useStopOnce: the box hides as the press is made; its time still confirms.
     const once = src("lib/useStopOnce.ts");
     expect(once).toContain("if (box.shown) setBox({ ...box, shown: false });");
     expect(once).toContain("return { confirmed: true, boxAt: box.at };");
     expect(once).toContain("box: box?.shown ? box.changes : null");
-    // Group A: each press clears its box first (its time kept).
+    // Group A (useStopBox): each press hides its box first; it stays open (its time, its live lines).
+    const top = src("lib/topStop.ts");
+    expect(top).toContain("const hide = () => setBox((b) => (b && !b.hidden ? { ...b, hidden: true } : b));");
+    expect(top).toContain("return [box?.hidden ? null : box, setBox, hide, box != null] as const;");
     const s = src("app/app/sessions/[id]/SessionActions.tsx");
-    expect(s.match(/setBox\(null\); \/\/ \(Owner, Dec 10 2026\) Clear, then the new outcome/g)).toHaveLength(3); // Send Answers, Add, Dispute
-    expect(s).toContain("const prev = box;\n    const again = prev != null;\n    // (Owner, Dec 10 2026) Clear, then the new outcome: Leave's line (stop or refusal) goes as it is pressed.\n    setBox(null);\n    setErr(\"\");");
-    for (const f of ["app/app/sessions/[id]/ChoiceBox.tsx", "app/app/sessions/[id]/RecordingUpload.tsx", "app/app/find/[id]/JoinBox.tsx"]) expect(src(f), f).toContain("setBox(null); // (Owner, Dec 10 2026) Clear, then the new outcome");
-    expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain("setBox(null); // (Owner, Dec 10 2026) and so does the stop line");
+    expect(s.match(/hideBox\(\); \/\/ \(Owner, Dec 10 2026\) Clear, then the new outcome/g)).toHaveLength(3); // Send Answers, Add, Dispute
+    expect(s).toContain("const again = boxOpen;\n    // (Owner, Dec 10 2026) Clear, then the new outcome: Leave's line (stop or refusal) leaves the view as it is pressed (its box stays open meanwhile).\n    hideBox();\n    setErr(\"\");");
+    for (const f of ["app/app/sessions/[id]/ChoiceBox.tsx", "app/app/sessions/[id]/RecordingUpload.tsx", "app/app/find/[id]/JoinBox.tsx"]) expect(src(f), f).toContain("hideBox(); // (Owner, Dec 10 2026) Clear, then the new outcome");
+    expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain("hideBox(); // (Owner, Dec 10 2026) and so does the stop line");
     expect(src("components/Excerpts.tsx")).toContain("setBox((b) => (b ? { ...b, shown: false } : b)); // (Owner, Dec 10 2026) clear, then the new outcome");
   });
 });

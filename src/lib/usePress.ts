@@ -97,6 +97,9 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
   const [boxAt, setBoxAt] = useCarried(carry, "boxAt", "");
   // The rule the server built the box under: lines added live follow what the press is about under the Alerts as they are now (lib/live.ts ruleNow).
   const [rule, setRule] = useCarried<LiveRule | null>(carry, "liveRule", null);
+  // (Owner, Dec 10 2026) Clear, then the new outcome: the box (or its one line) leaves the view the moment its button is pressed; it stays open meanwhile
+  // (live lines still join it under its rule), and the press's outcome replaces it.
+  const [hidden, setHidden] = useCarried(carry, "hidden", false);
 
   /**
    * Flow: sends the page's seen time; a second press (its box still open) sends `confirmed` and the box's time (`boxAt`). The server answers in the owner's
@@ -109,21 +112,22 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
     setErrData(NO_DATA);
     setAt(key);
     // With `perKey`, only this key's own box makes this press its second one.
-    const prev = changes;
-    const again = prev != null && (!opts.perKey || key === at);
-    // (Owner, Dec 10 2026) Clear, then the new outcome: the line (or box) under the button goes the moment it is pressed; a second press still goes ahead
-    // (`again` and the box's time were read above).
-    setChanges(null);
+    const again = changes != null && (!opts.perKey || key === at);
+    if (!again && opts.perKey) setChanges(null);
+    // (Owner, Dec 10 2026) Clear, then the new outcome: the line (or box) under the button leaves the view the moment it is pressed; a second press still goes
+    // ahead (`again` and the box's time).
+    setHidden(true);
     try {
       const r = await api<T>(path, { ...body, seenAt, confirmed: again || body.confirmed === true, ...(again && boxAt ? { boxAt } : {}) });
       setChanges(null);
+      setHidden(false);
       const note = (r as { note?: unknown } | null)?.note;
       if (typeof note === "string") setError(note); // shown under the button (blue)
       return r;
     } catch (e) {
       if (e instanceof ApiError && e.code === "stop_once") {
         // A stop after a stop adds its new lines to the box.
-        setChanges(prev && again ? mergeChanges(prev, (e.data.changes as Change[]) ?? []) : ((e.data.changes as Change[]) ?? []));
+        setChanges((c) => (c && again ? mergeChanges(c, (e.data.changes as Change[]) ?? []) : ((e.data.changes as Change[]) ?? [])));
         if (typeof e.data.now === "string") setBoxAt(e.data.now);
         setRule(liveRuleOf(e.data));
         offerStop(e.data); // (Owner, Dec 10 2026) new terms named (Rate): the offer loads at once
@@ -135,6 +139,7 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
       }
       return null;
     } finally {
+      setHidden(false);
       setBusy(false);
     }
   }
@@ -154,8 +159,9 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
   /** Another button opened its panel or dialog: the box (and refusal) under the earlier press goes. */
   const clear = () => {
     setChanges(null);
+    setHidden(false);
     setError("");
     setAt("");
   };
-  return { press, changes, setChanges, error, busy: busy || fin.done, setError, at, errData, done: fin.done, doneLine: fin.line, finish, clear };
+  return { press, changes: hidden ? null : changes, setChanges, error, busy: busy || fin.done, setError, at, errData, done: fin.done, doneLine: fin.line, finish, clear };
 }

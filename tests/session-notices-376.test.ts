@@ -126,6 +126,6 @@ describe("§376 item 3: one outcome per button (Send Answers / Add / a recording
     expect(add).toContain('useEffect(() => { if (!canSend) { setBox(null); setBoxAt(""); } }, [canSend, setBox]);');
     expect(rec).toContain('useEffect(() => { if (!sendable) { setBox(null); setBoxAt(""); } }, [sendable, setBox]);');
     // The Send Answers box is the part's carried box (§371): clearing it clears it for the form a redraw swapped in too.
-    expect(form).toContain("const [box, setBox] = useStopBox(carry);");
+    expect(form).toContain("const [box, setBox, hideBox] = useStopBox(carry);"); // (Owner, Dec 10 2026) hideBox: clear, then the new outcome
   });
 });

@@ -44,10 +44,9 @@ describe("batch 35 §74: the developer's own call-request actions never stop tha
 describe("batch 35 §75: one box at a time in the top panel, named after its own press", () => {
   it("usePress per key: another key's box never confirms or merges; the boxes are named; another top button clears the box", () => {
     const u = src("lib/usePress.ts");
-    // (Owner, Dec 10 2026) The box is read before it clears as the button is pressed (clear, then the new outcome).
-    expect(u).toContain("const again = prev != null && (!opts.perKey || key === at);");
+    expect(u).toContain("const again = changes != null && (!opts.perKey || key === at);");
     expect(u).toContain("confirmed: again || body.confirmed === true");
-    expect(u).toContain("prev && again ? mergeChanges(");
+    expect(u).toContain("c && again ? mergeChanges(");
     const t = src("app/app/tests/[id]/TopPanel.tsx");
     expect(t).toContain('"end-early": "End early"');
     expect(t).toContain("<ChangesBox press={TOP_PRESS[k]}");

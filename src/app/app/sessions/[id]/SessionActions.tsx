@@ -158,7 +158,7 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useCarried(carry, "boxAt", "");
   const confirmed = !!boxAt;
-  const [box, setBox] = useStopBox(carry);
+  const [box, setBox, hideBox] = useStopBox(carry);
   const [pausedNow, setPausedNow] = useCarried(carry, "pausedNow", false);
   const [answers0, setAnswers] = useState<string[]>(() => typedBefore?.answers ?? questions.map((_, i) => initial[i] ?? ""));
   // (Owner, Nov 5, §269) The questions the boxes are for. A redraw with other questions (a change, a reorder, one answered meanwhile) switches the form in
@@ -289,7 +289,7 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
     setSending(true);
     setMsg(red ? { ok: false, text: red } : null);
     setRefused("");
-    setBox(null); // (Owner, Dec 10 2026) Clear, then the new outcome: the stop line under this button goes as it is pressed (its time still makes this the second press).
+    hideBox(); // (Owner, Dec 10 2026) Clear, then the new outcome: the stop line under this button leaves the view as it is pressed (the box stays open: its time still makes this the second press).
     try {
       // (Owner, Nov 5, §269) Always with the questions the boxes are for (`for`): the server reads the answers by their words, and a page whose questions are no
       // longer the contract's stops once (then takes the new questions) instead of sending them under other questions.
@@ -417,7 +417,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
   const [err, setErr] = useState("");
   // (Owner, Nov 11, §380 D2) A refusal, apart from the text's red note (`err`): both show after one press.
   const [refused, setRefused] = useState("");
-  const [box, setBox] = useStopBox();
+  const [box, setBox, hideBox] = useStopBox();
   const [boxAt, setBoxAt] = useState("");
   const [pausedNow, setPausedNow] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -468,7 +468,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
     setBusy(true);
     setErr(red);
     setRefused("");
-    setBox(null); // (Owner, Dec 10 2026) Clear, then the new outcome: the stop line under this button goes as it is pressed (its time still makes this the second press).
+    hideBox(); // (Owner, Dec 10 2026) Clear, then the new outcome: the stop line under this button leaves the view as it is pressed (the box stays open: its time still makes this the second press).
     try {
       await api(`/api/sessions/${sessionId}/written-add`, { text, question: questionKey, seenAt, confirmed: !!boxAt, boxAt, ...(first ? { first: true } : {}) });
       await keep.clear();
@@ -554,21 +554,20 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
 
 export function LeaveButton({ sessionId, seenAt, title, notice }: { sessionId: string; seenAt: string; title: string; /** (Owner, Nov 5, §268) the open-terms notice (information only) */ notice?: ReactNode }) {
   const [err, setErr] = useState("");
-  const [box, setBox] = useStopBox();
+  const [box, setBox, hideBox, boxOpen] = useStopBox();
   // (Owner, Nov 28) Leave's second press works like every other button's (lib/usePress.ts): a press while its stop box is open sends the box's latest time
   // (`boxAt`: the stop's own time, moved on by each line that joins the open box live under the box's rule), and the server stops it again only for something
   // new since then that the box's rule would stop for. Once the box is gone (the press went through), the next press is a first press again.
   const [boxAt, setBoxAt] = useState("");
-  useLiveAppend(box != null, (added) => {
+  useLiveAppend(boxOpen, (added) => {
     const newest = added.map((a) => a.at).sort().pop();
     if (newest) setBoxAt((b) => (b && b > newest ? b : newest));
   }, box?.rule);
   const fin = useFinished();
   const leave = () => {
-    const prev = box;
-    const again = prev != null;
-    // (Owner, Dec 10 2026) Clear, then the new outcome: Leave's line (stop or refusal) goes as it is pressed.
-    setBox(null);
+    const again = boxOpen;
+    // (Owner, Dec 10 2026) Clear, then the new outcome: Leave's line (stop or refusal) leaves the view as it is pressed (its box stays open meanwhile).
+    hideBox();
     setErr("");
     return api(`/api/sessions/${sessionId}/leave`, { seenAt, confirmed: again, ...(again && boxAt ? { boxAt } : {}) })
       .then(() => { setBox(null); setBoxAt(""); fin.finish("You left this test."); })
@@ -576,7 +575,7 @@ export function LeaveButton({ sessionId, seenAt, title, notice }: { sessionId: s
         const sb = stopBox(e);
         if (sb) {
           // A stop after a stop adds its new lines to the box, which now dates from this stop.
-          setBox(prev && again ? { ...sb, changes: mergeChanges(prev.changes, sb.changes) } : sb);
+          setBox((b) => (b && again ? { ...sb, changes: mergeChanges(b.changes, sb.changes) } : sb));
           setBoxAt(sb.now);
         } else setErr(errOf(e));
       });
@@ -609,7 +608,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
   // a new form (the session page is keyed by its status; a call's row moves into the Had panel once there are more than 3), and the server's stop box or refusal
   // shows under ITS button, the fold open.
   const carry = `dispute:${kind}:${id}`;
-  const [box, setBox] = useStopBox(carry);
+  const [box, setBox, hideBox] = useStopBox(carry);
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useCarried(carry, "boxAt", "");
   const confirmed = !!boxAt;
@@ -647,7 +646,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
           setBusy(true);
           setErr("");
           setMeanwhile("");
-          setBox(null); // (Owner, Dec 10 2026) Clear, then the new outcome: the stop line under this button goes as it is pressed (its time still makes this the second press).
+          hideBox(); // (Owner, Dec 10 2026) Clear, then the new outcome: the stop line under this button leaves the view as it is pressed (the box stays open: its time still makes this the second press).
           try {
             await api(`/api/sessions/${sessionId}/dispute`, { kind, id, reason, seenAt, confirmed, boxAt });
             const now = shown(); // (§371) the form shown now

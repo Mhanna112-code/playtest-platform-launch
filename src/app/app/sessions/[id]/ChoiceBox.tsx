@@ -37,7 +37,7 @@ export function ChoiceBox({ paused = false, closes = "", sessionId, submissionId
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useCarried(carry, "boxAt", "");
   const confirmed = !!boxAt;
-  const [box, setBox] = useStopBox(carry);
+  const [box, setBox, hideBox] = useStopBox(carry);
   const [err, setErr] = useCarried(carry, "err", "");
   const [busy, setBusy] = useCarried(carry, "busy", false);
   const fin = useFinished(() => setBusy(false));
@@ -69,7 +69,7 @@ export function ChoiceBox({ paused = false, closes = "", sessionId, submissionId
     setPressed(choice === "letgo" ? "Let it go" : "Charge");
     setBusy(true);
     setErr("");
-    setBox(null); // (Owner, Dec 10 2026) Clear, then the new outcome: the stop line under this button goes as it is pressed (its time still makes this the second press).
+    hideBox(); // (Owner, Dec 10 2026) Clear, then the new outcome: the stop line under this button leaves the view as it is pressed (the box stays open: its time still makes this the second press).
     api(`/api/sessions/${sessionId}/choose`, { submissionId, choice, amount, tickedCents: choice === "charge" && over && ticked ? typed : undefined, seenAt, confirmed, boxAt })
       .then(() => shown().finish(choice === "letgo" ? "You let it go." : `Charged ${devName} ${money(typed ?? cents)}.`))
       .catch((e) => {

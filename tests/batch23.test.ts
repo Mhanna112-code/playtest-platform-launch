@@ -397,7 +397,7 @@ describe("batch 23 section 9: Confirm with your bank runs the stop-once check fi
     // The page's button sends its seen marker and shows the box under it.
     const b = src("components/BankWaiting.tsx");
     expect(b).toContain('press<Omit<BankAction, "requiresAction">>("/api/payments/confirm", { paymentId, start: true, page: location.pathname, ...(over ? { over200 } : {}) }, "bank")');
-    expect(b).toContain("<ChangesBox changes={changes} error={error} press={CONFIRM_WITH_BANK} />");
+    expect(b).toContain("<ChangesBox changes={changes} error={error} press={CONFIRM_WITH_BANK} line={false}"); // (Owner, Dec 10 2026) a bank check keeps its box
     expect(src("app/app/tests/[id]/page.tsx")).toContain("<BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={withLineLinks(b.line, b.links, { draw: (t) => t }) /* (Owner, Nov 5, §270) */} full={b.full} seenAt={seenAt} />");
   });
 });

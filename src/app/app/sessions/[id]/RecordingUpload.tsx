@@ -68,7 +68,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
-  const [box, setBox] = useStopBox();
+  const [box, setBox, hideBox] = useStopBox();
   const [progress, setProgress] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -163,7 +163,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
             setBusy(true);
             setErr("");
             setErrPress(press);
-            setBox(null); // (Owner, Dec 10 2026) Clear, then the new outcome: the stop line under this button goes as it is pressed (its time still makes this the second press).
+            hideBox(); // (Owner, Dec 10 2026) Clear, then the new outcome: the stop line under this button leaves the view as it is pressed (the box stays open: its time still makes this the second press).
             try {
               await api(`/api/sessions/${sessionId}/recording-send`, { seenAt, confirmed, boxAt, ...(sentBefore ? { add: true } : {}) });
               setBox(null);
