@@ -42,7 +42,7 @@ describe("Switch / Keep: a third offer between the box and the second press", ()
     expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).writtenCents).toBe(1600);
   });
 
-  it("with no third offer the second press switches to offer 2 (and Keep keeps it)", async () => {
+  it("with no third offer the page's second press (naming offer 2, as the box moved it) switches to offer 2 (and Keep keeps it); one still naming offer 1 stops again", async () => {
     for (const choice of ["switch", "keep"] as const) {
       const { dev, testId } = await setup();
       const { tester, sessionId } = await joined(testId);
@@ -54,11 +54,43 @@ describe("Switch / Keep: a third offer between the box and the second press", ()
       const o2 = await openOffer(sessionId);
       const stop = await sact(sessionId, "terms", tester.cookie, { offerId: o1.id, choice, seenAt: opened });
       expect(stop.body.error.code).toBe("stop_once");
-      // Even naming the offer the page first showed (an old page that didn't move to offer 2): offer 2 existed at the box's time.
-      const r = await sact(sessionId, "terms", tester.cookie, { offerId: o1.id, choice, seenAt: opened, confirmed: true, boxAt: stop.body.error.now });
+      // A confirmed press still naming offer 1 (the page never moved to offer 2): stopped again with offer 2, never decided unseen.
+      const old = await sact(sessionId, "terms", tester.cookie, { offerId: o1.id, choice, seenAt: opened, confirmed: true, boxAt: stop.body.error.now });
+      expect(old.body.error.code).toBe("stop_once");
+      expect(old.body.error.offerId).toBe(o2.id);
+      expect((await db.termsOffer.findUniqueOrThrow({ where: { id: o2.id } })).status).toBe("open");
+      const r = await sact(sessionId, "terms", tester.cookie, { offerId: stop.body.error.offerId, choice, seenAt: opened, confirmed: true, boxAt: old.body.error.now });
       expect(r.status, JSON.stringify(r.body)).toBe(200);
       expect((await db.termsOffer.findUniqueOrThrow({ where: { id: o2.id } })).status).toBe(choice === "switch" ? "switched" : "kept");
       expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).writtenCents).toBe(choice === "switch" ? 1400 : 1000);
     }
+  });
+
+  it("her other changes' box first (offer 2 arrived after the page showed offer 1): the second press is stopped with offer 2, not switched", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    await editPrice(testId, dev.cookie, "12.00");
+    const o1 = await openOffer(sessionId);
+    const opened = seen();
+    await settle();
+    await editPrice(testId, dev.cookie, "14.00");
+    const o2 = await openOffer(sessionId);
+    const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
+    expect((await act(testId, "edit", dev.cookie, { version: v, fields: { description: "A new description of what to try." }, seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await openOffer(sessionId)).id).toBe(o2.id); // a listing edit that offers nothing new
+    // The first press stops on her other changes (the listing edit), a box that names no terms.
+    const gate = await sact(sessionId, "terms", tester.cookie, { offerId: o1.id, choice: "switch", seenAt: opened });
+    expect(gate.body.error.code).toBe("stop_once");
+    expect(texts(gate.body.error)).not.toMatch(/changed the terms again/);
+    expect(gate.body.error.offerId).toBeUndefined();
+    // The second press from that box (still naming offer 1, its box made after offer 2): stopped with offer 2.
+    const again = await sact(sessionId, "terms", tester.cookie, { offerId: o1.id, choice: "switch", seenAt: opened, confirmed: true, boxAt: gate.body.error.now });
+    expect(again.body.error.code).toBe("stop_once");
+    expect(again.body.error.offerId).toBe(o2.id);
+    expect(texts(again.body.error)).toMatch(/changed the terms again: written \$10 → \$14/);
+    expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).writtenCents).toBe(1000);
+    // Then naming offer 2 (the page moved to it): switched.
+    expect((await sact(sessionId, "terms", tester.cookie, { offerId: o2.id, choice: "switch", seenAt: opened, confirmed: true, boxAt: again.body.error.now })).status).toBe(200);
+    expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).writtenCents).toBe(1400);
   });
 });

@@ -6,7 +6,7 @@ import { ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST, NO_LONGER_ON_OFFER, SENT_WORK_PR
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
 import { testerBoxRule, testerGate } from "./testerGate";
-import { logEvent, seenOf } from "./live";
+import { logEvent } from "./live";
 import { carryOver, itemsFor, prevSetsOf, pushPrev, restoreDraft } from "@/lib/answerSets";
 import { carriedAnswers } from "@/lib/additions";
 import { qText, sameQuestionWords } from "@/lib/questions";
@@ -186,8 +186,8 @@ export { NO_LONGER_ON_OFFER };
  *   1. Final refusals: not her session (404); her part has ended (its offer closes; "gone"); no open offer (already switched / decided / no longer on offer).
  *   2. Stop-once box: testerGate with skipTerms (her other unseen changes).
  *   3. Final refusal again, read after the box: no open offer any more (decided in another tab while the box showed).
- *   4. Stop-once box: "changed the terms again" when the page named an older offer (not on a confirmed press, when the newest terms
- *      already existed at its box's time); it carries testerBoxRule.
+ *   4. Stop-once box: "changed the terms again" whenever the press didn't name the newest open offer (confirmed or not); it
+ *      carries testerBoxRule.
  *   5. No red mistakes. Action: Switch (the contract takes the terms; a line and a bell for the developer) or Keep.
  */
 export async function decideTerms(tester: { id: string }, contractId: string, body: Record<string, unknown>) {
@@ -215,11 +215,10 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
   await noOffer();
   await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: true });
   const newest = await noOffer(); // read again after the box (decided in another tab while it showed)
-  // (Owner, Dec 10 2026) A second press (from the "changed the terms again" box) skips that stop only for terms that existed when its box was made (`boxAt`,
-  // the box's server time, compared as the other boxAt checks do): terms that arrived after the box stop it once again, naming them; never switched to unseen.
-  const boxAt = seenOf(body.boxAt);
-  const secondPress = body.confirmed === true && !(boxAt && newest.createdAt > boxAt);
-  if ((!offer || offer.id !== newest.id) && !secondPress) {
+  // (Owner, Dec 10 2026) Only the offer the press names is ever decided on as is: a press naming any other (missing, older) stops with the newest, confirmed or
+  // not. The page moves its Switch / Keep to the offer that box names, so its next press names it and goes ahead; terms that arrived after any box (this one, or
+  // her other changes' box) stop it once again, never switched to unseen.
+  if (!offer || offer.id !== newest.id) {
     throw new HttpError(409, "stop_once", "Press again to go ahead.", { top: true, changes: [{ text: `${displayName(c.test.developer)} changed the terms again: ${newest.diff}`, at: newest.createdAt }], offerId: newest.id, tail: "Press again to decide on these newest terms.",
       // Her Alerts (`alertsOff`); and the rule the box was built under, so with Alerts Off a line picked up live joins it only if it
       // always stops (Switch / Keep are about no part).
