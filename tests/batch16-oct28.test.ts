@@ -62,6 +62,34 @@ describe("each tester is reminded before their own deadline (section 1)", () => 
     expect(R.ownDeadlineMarkDue({ id: "c2", joinedAt, dueAt }, ["1w", "3d"], new Date(dueAt.getTime() - 7 * DAY + 60_000)).send?.mark).toBe("1w");
   });
 
+  it("(Owner, Dec 2026, §367) her deadline moved later after her 1-day line went out: ONE fresh line at the next run, naming the new date; Open until's heads-ups don't", () => {
+    const dueAt = R.dueFromJoin(joinedAt, 10);
+    const recorded: string[] = [];
+    const run = (at: Date, due: Date) => {
+      const r = R.ownDeadlineMarkDue({ id: "c1", joinedAt, dueAt: due }, recorded, at);
+      recorded.push(...r.record);
+      return r.send?.mark ?? null;
+    };
+    expect(run(new Date(dueAt.getTime() - DAY + 60_000), dueAt)).toBe("1d");
+    // A pause moves her deadline 2 days later: the next run (still more than a day before the new one) sends the fresh line, its latest passed mark ("3d").
+    const later = new Date(dueAt.getTime() + 2 * DAY);
+    expect(run(new Date(dueAt.getTime() - DAY + 3_600_000), later)).toBe("3d");
+    expect(run(new Date(dueAt.getTime() - DAY + 2 * 3_600_000), later)).toBeNull(); // never twice
+    expect(run(new Date(later.getTime() - DAY + 60_000), later)).toBe("1d"); // then the series goes on for the new date
+    expect(run(new Date(later.getTime() - DAY + 120_000), later)).toBeNull();
+    // Moved later again within its last day, after that 1-day line: one fresh "1 day" line for the newest deadline.
+    const again = new Date(later.getTime() + 6 * 3_600_000);
+    expect(run(new Date(later.getTime() - 3_600_000), again)).toBe("1d");
+    expect(run(new Date(later.getTime() - 1_800_000), again)).toBeNull();
+    // Open until's heads-ups keep the old rule: its 1-day heads-up already sent for an earlier Open until, nothing for the later one.
+    const t = { createdAt: joinedAt, openUntil: dueAt };
+    const marks: string[] = [];
+    const ou = R.openUntilMarkDue(t, marks, new Date(dueAt.getTime() - DAY + 60_000));
+    expect(ou.send?.mark).toBe("1d");
+    marks.push(...ou.record);
+    expect(R.openUntilMarkDue({ ...t, openUntil: later }, marks, new Date(dueAt.getTime() - DAY + 3_600_000)).send).toBeNull();
+  });
+
   it("(fake clock) the daily job: a tester with 10 days gets 1 week, 3 days and 1 day before THEIR deadline, linked to their session; Edit moving Open until later sends the marks still ahead again", async () => {
     const { dev, testId } = await setup({ openUntil: new Date(Date.now() + 10 * DAY).toISOString().slice(0, 10) });
     const a = await joined(testId, "Ana Silva");

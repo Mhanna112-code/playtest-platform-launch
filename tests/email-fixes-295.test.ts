@@ -201,8 +201,11 @@ describe("§295 point 5: a tester whose deadline is within the heads-up window g
     const D = new Date(joinedAt.getTime() + 10 * DAY), D2 = new Date(D.getTime() + DAY);
     const seenOld = [`${R.deadlineMarkKey("c1", D)}seen`, `${R.deadlineMarkKey("c1", D)}1w`, `${R.deadlineMarkKey("c1", D)}3d`];
     expect(R.ownDeadlineMarkDue({ id: "c1", joinedAt, dueAt: D2 }, seenOld, new Date(D2.getTime() - 20 * 3_600_000)).send?.mark).toBe("1d");
-    // Already told "1 day" for the earlier deadline: not again.
-    expect(R.ownDeadlineMarkDue({ id: "c1", joinedAt, dueAt: D2 }, [...seenOld, `${R.deadlineMarkKey("c1", D)}1d`], new Date(D2.getTime() - 20 * 3_600_000)).send).toBeNull();
+    // (Owner, Dec 2026; was "not again") Already told "1 day" for the earlier deadline: §367's one fresh line naming the later deadline, then never twice.
+    const told = [...seenOld, `${R.deadlineMarkKey("c1", D)}1d`];
+    const fresh = R.ownDeadlineMarkDue({ id: "c1", joinedAt, dueAt: D2 }, told, new Date(D2.getTime() - 20 * 3_600_000));
+    expect(fresh.send?.mark).toBe("1d");
+    expect(R.ownDeadlineMarkDue({ id: "c1", joinedAt, dueAt: D2 }, [...told, ...fresh.record], new Date(D2.getTime() - 19 * 3_600_000)).send).toBeNull();
   });
 });
 

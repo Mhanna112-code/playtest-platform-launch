@@ -1720,7 +1720,8 @@ export const openUntilMarkKey = (openUntil: Date) => `open:${openUntil.getTime()
 /**
  * (Owner, Nov 6, §311g) Open until's heads-up due now (1 month, only when Open until was more than a month after the test was made; 1 week, 3 days, 1 day) and what
  * to record, keyed by the Open until it counts to (datedMarkDue): moving Open until (Edit, a pause, an outage) re-arms the marks still ahead. Bare marks ("1w",
- * from before §311g) count as sent for an earlier Open until.
+ * from before §311g) count as sent for an earlier Open until. (Owner, Dec 2026) Without §367's fresh line (no `lastMark`): a moved Open until after its 1-day
+ * heads-up went out sends nothing more for it, unlike the tester's own deadline (ownDeadlineMarkDue) and the review countdown.
  */
 export function openUntilMarkDue(t: { openUntil: Date | null; createdAt: Date }, recorded: string[], now: Date) {
   if (!t.openUntil) return { send: null, record: [] as string[] };
@@ -1749,14 +1750,18 @@ export const deadlineMarkKey = (contractId: string, dueAt: Date) => `due:${contr
  * (Batch 16 section 1) The tester's deadline reminder due now, and what to record. Sent marks are kept per contract AND per deadline (`due:<contract>:<deadline ms>:<mark>`),
  * so a mark is never sent twice for the same deadline. When the deadline moved (an Edit moving Open until later, a pause shift), the first daily run that sees the new
  * deadline records the marks already behind it as passed: only the marks still ahead of the new deadline fire. As with the review reminders, the latest mark passed is
- * sent and every earlier one is recorded with it, so a missed mark is never sent late. `seen` marks a deadline the daily job has looked at.
+ * sent and every earlier one is recorded with it, so a missed mark is never sent late. `seen` marks a deadline the daily job has looked at. (Owner, Dec 2026) A
+ * deadline moved later after her 1-day line went out for the earlier one gets one fresh line (§367, as the review reminders).
  */
 export function ownDeadlineMarkDue(c: { id: string; joinedAt: Date; dueAt: Date }, recorded: string[], now: Date): { send: (typeof MARKS)[number] | null; record: string[] } {
   // The deadline moved: what's already behind the new one is recorded, never sent. (Owner, Nov 6, §295) Except the latest mark passed when it was never sent for
   // an earlier deadline of hers: a mark that came due between the move and this run (a pause moves a deadline to the end of a later day, and the daily job runs once
   // a day) was swallowed, and a tester 20 hours from her deadline got no reminder. (§311g) The same rule as every dated countdown (datedMarkDue). A rejoin starts
   // a fresh deadline: the rejoin drops her earlier stint's marks (forgetDeadlineMarks), so its latest passed mark is sent once.
-  const due = datedMarkDue(deadlineMarkKey(c.id, c.dueAt), recorded.filter((x) => x.startsWith(`due:${c.id}:`)), deadlineMarksFor(c.joinedAt, c.dueAt), c.dueAt, now);
+  // (Owner, Dec 2026; replaces "already told for the earlier deadline: not again" here) §367's fresh line, as the review countdown has: when her deadline moved
+  // LATER after her last mark ("1d", LAST_MARK) already went out for an earlier deadline, ONE fresh line naming the new date comes at the next run (the latest
+  // mark passed for it), keyed by the new deadline so never twice. Open until's heads-ups (openUntilMarkDue) stay without it (owner's choice).
+  const due = datedMarkDue(deadlineMarkKey(c.id, c.dueAt), recorded.filter((x) => x.startsWith(`due:${c.id}:`)), deadlineMarksFor(c.joinedAt, c.dueAt), c.dueAt, now, LAST_MARK);
   return { send: due.send ? MARKS.find((m) => m.mark === due.send!.mark)! : null, record: due.record };
 }
 /** (§311g) A contract's recorded deadline marks dropped (a rejoin: a fresh deadline whose reminders start over). */
