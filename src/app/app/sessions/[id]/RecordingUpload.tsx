@@ -68,7 +68,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
-  const [box, setBox] = useStopBox();
+  const [box, setBox, hideBox] = useStopBox();
   const [progress, setProgress] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -163,6 +163,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
             setBusy(true);
             setErr("");
             setErrPress(press);
+            hideBox(); // (Owner, Dec 10 2026) Clear, then the new outcome: the stop line under this button leaves the view as it is pressed (the box stays open: its time still makes this the second press).
             try {
               await api(`/api/sessions/${sessionId}/recording-send`, { seenAt, confirmed, boxAt, ...(sentBefore ? { add: true } : {}) });
               setBox(null);
@@ -182,7 +183,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
       )}
       {canSend && !sendable && fresh.length > 0 && <p className="note" data-draft-kept="">Your recordings are kept. {sentBefore ? "Adding" : "Sending"} comes back when the test resumes.</p>}
       {sending(fin.line) && <PressDone line={fin.line} />}
-      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} button={press} /* (§387 2) "Press Send my recording again" */ />
+      <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} button={press} /* (§387 2) "Press Send my recording again" */ />
       {/* (Batch 16 section 10) A file mistake is red at the file box, and listed here. */}
       <FormMistakes text={err} press={err.startsWith(FIELD) ? press : errPress || press} />
     </div>

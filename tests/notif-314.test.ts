@@ -41,7 +41,7 @@ describe("§314 the NDA notice is one clickable line", () => {
     expect(c).toContain("<Err text={err} press={NDA_ACK_PRESS} />");
     // A later change: a new notice (keyed by the change's time on the page).
     expect(src("app/app/sessions/[id]/page.tsx")).toContain('<NdaNotice key={c.ndaChangedAt?.toISOString() ?? "none"}');
-    expect(refusalLine("Send", NDA_BLOCK_FIRST)).toBe("Acknowledge the NDA change first.");
+    expect(refusalLine("Send", NDA_BLOCK_FIRST)).toBe("Acknowledge the NDA change first at the top of the page."); // (Owner, Dec 10 2026)
     expect(NDA_ACK_PRESS).toBe("Acknowledge");
   });
 

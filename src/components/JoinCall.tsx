@@ -11,7 +11,7 @@ import { useStopOnce } from "@/lib/useStopOnce";
  * Join call: opens the room, or shows why not (blue, under the button). (Owner, Oct 27) Checked live: the button disappears when the call is cancelled; checked on press: a press
  * after a cancellation shows "This call was cancelled" with the reason under Join.
  */
-export function JoinCall({ callId, seenAt }: { callId: string; /** (§271) the page's load time (else the one PageLoaded noted) */ seenAt?: string }) {
+export function JoinCall({ callId, seenAt, side }: { callId: string; /** (§271) the page's load time (else the one PageLoaded noted) */ seenAt?: string; /** (Owner, Dec 10 2026) the tester's session page: "tester" */ side?: "developer" | "tester" }) {
   const [err, setErr] = useState("");
   // (Owner, Nov 5, §271) A pause since the page loaded, or the team's lift of it, stops Join once (its box under the button); the next press opens the room.
   const stop = useStopOnce(seenAt);
@@ -61,7 +61,7 @@ export function JoinCall({ callId, seenAt }: { callId: string; /** (§271) the p
       >
         Join call
       </button>
-      <ChangesBox changes={stop.box} press="Join call" />
+      <ChangesBox changes={stop.box} press="Join call" side={side} />
       <Err text={err} press="Join call" />
       {termsAt && err && <a href={termsAt} className="text-sm" data-answer-terms-link="">Answer them on the session page →</a>}
       {ndaAt && err && <a href={ndaAt} className="text-sm" data-nda-link="">Acknowledge it on the session page →</a>}

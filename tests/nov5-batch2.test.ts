@@ -46,7 +46,7 @@ describe("(Owner, Nov 5) §213-§216 and the join popup", () => {
   it("the join popup is at most a screen tall and its changes show 3, then scroll", () => {
     const g = read("src/components/GapDialog.tsx");
     expect(g).toContain("!m-auto max-h-[calc(100dvh-2rem)] w-[min(28rem,calc(100vw-2rem))] overflow-y-auto");
-    expect(g).toContain('<LongList className="list-disc space-y-0.5 pl-6" tall="max-h-52">');
+    expect(g).toContain('<LongList className="list-disc space-y-0.5 pl-6" tall="max-h-52" newest="last">'); // (Owner, Dec 10 2026) oldest first: the newest 3
   });
 });
 

@@ -142,11 +142,14 @@ describe("§373 usePress: a live line joins the open box only by the box's rule"
       { text: "Ana Silva paid", at: "2026-11-10T06:13:35.500Z", alert: "payments", facts: { kind: "paid", contractId: "ben" } },
     ]);
     expect(b.shown()).not.toContain("Ben Ito disputed");
-    expect(await b.second()).toBe(BOX_NOW);
     await b.live([{ text: "Ana Silva disputed your rejection of the written answers", at: "2026-11-10T06:13:36.000Z", alert: "disputes", facts: { kind: "dispute", contractId: "ana" } }]);
     expect(b.shown()).toContain("Ana Silva disputed");
     await b.live([{ text: "Cleo Park joined", at: "2026-11-10T06:13:37.000Z", alert: "joins", facts: { kind: "joined" } }]);
     expect(b.shown()).toContain("Cleo Park joined"); // not ticked off
+    // (Owner, Dec 10 2026) The second press goes ahead with the newest joined line's time, and the box clears the moment it is pressed (clear, then the
+    // new outcome; this press is still on its way).
+    expect(await b.second()).toBe("2026-11-10T06:13:37.000Z");
+    expect(b.shown()).toBe("");
   });
 });
 

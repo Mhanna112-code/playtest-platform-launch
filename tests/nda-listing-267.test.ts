@@ -69,7 +69,7 @@ describe("§267 a Save that changes the NDA", () => {
     expect(bell[0].link).toBe(`/app/sessions/${j.sessionId}#nda-notice`);
     // Every press is refused with the one line (§302): Add to this answer, messages, call requests, recordings.
     const line = NDA_BLOCK_FIRST;
-    expect(line).toBe("Acknowledge the NDA change first.");
+    expect(line).toBe("Acknowledge the NDA change first at the top of the page."); // (Owner, Dec 10 2026) "… at the top of the page."
     for (const [action, body] of [["written-add", { text: "more", question: "else" }], ["message", { body: "hi" }], ["request-time", {}], ["recording-send", {}]] as const) {
       const r = await press(j.sessionId, j.tester.cookie, action, body);
       expect(r.body.error?.code, `${action}: ${JSON.stringify(r.body)}`).toBe("nda_block");
@@ -121,7 +121,7 @@ describe("§267 a Save that changes the NDA", () => {
 
   it("(§302) the refusal box draws the line as it is, like the new-terms line (no blue notice, no link)", () => {
     const html = renderToStaticMarkup(h(Err, { text: NDA_BLOCK_FIRST, press: "Request a time" }));
-    expect(html).toBe('<p class="err" data-nda-refusal="">Acknowledge the NDA change first.</p>');
+    expect(html).toBe('<p class="err" data-nda-refusal="">Acknowledge the NDA change first at the top of the page.</p>');
   });
 });
 

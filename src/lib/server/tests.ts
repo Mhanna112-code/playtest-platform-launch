@@ -1364,7 +1364,7 @@ export async function partOver(tx: Tx, contractId: string, press: string, run: R
 export async function softRefusals(tx: Tx, c: { id: string; test: { adminPausedAt: Date | null; workEndedAt: Date | null; pauseClosedAt: Date | null; developer: { holdStartedAt: Date | null; devSuspendedAt: Date | null } } }, press: string, uploading: () => Promise<HttpError | null>) {
   // (Owner, Oct 28 afternoon; §364 item 5) No sending while the test is paused (what was typed stays kept as a draft).
   if (testerPaused(c.test.developer, c.test)) return new HttpError(409, "paused", RF.pressRefused(RF.PAUSED_CAUSE, press));
-  // (§267 / §302) "Acknowledge the NDA change first.", then (batch 27 §1) "Answer the new terms first: Switch or Keep."
+  // (§267 / §302) NDA_BLOCK_FIRST, then (batch 27 §1) ANSWER_TERMS_FIRST (Owner, Dec 10 2026: both end "… at the top of the page.")
   return (await stopOf(() => answerTermsFirst(c.id, tx))) ?? uploading();
 }
 

@@ -156,7 +156,8 @@ export const pressVerb = (label: string) => label.split(" on ")[0];
 
 /** A refusal that doesn't already name the press: "Your Pay didn't go through: <reason>" (the reason as the server wrote it). */
 export function refusalLine(label: string, message: string) {
-  // (Batch 27 section 1) "Answer the new terms first: Switch or Keep." reads exactly so under the pressed button; (§302) so does "Acknowledge the NDA change first.".
+  // (Batch 27 section 1) ANSWER_TERMS_FIRST reads exactly so under the pressed button; (§302) so does NDA_BLOCK_FIRST. (Owner, Dec 10 2026) Both now end
+  // "… at the top of the page.".
   // (§156) A line that already names its press anywhere ("Nora Lane stopped the test on Nov 3, so your Send didn't go through. …") isn't named twice.
   if (!label || label === "press" || /\b[Yy]our .*didn't go through/.test(message) || message === ANSWER_TERMS_FIRST || message === NDA_BLOCK_FIRST) return message;
   // (Owner, Nov 5, §217; recording R4a) A check already cancelled underneath it (the team's pause, a new card, a chargeback won) reads as a cancel, whichever press

@@ -158,7 +158,7 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useCarried(carry, "boxAt", "");
   const confirmed = !!boxAt;
-  const [box, setBox] = useStopBox(carry);
+  const [box, setBox, hideBox] = useStopBox(carry);
   const [pausedNow, setPausedNow] = useCarried(carry, "pausedNow", false);
   const [answers0, setAnswers] = useState<string[]>(() => typedBefore?.answers ?? questions.map((_, i) => initial[i] ?? ""));
   // (Owner, Nov 5, §269) The questions the boxes are for. A redraw with other questions (a change, a reorder, one answered meanwhile) switches the form in
@@ -289,6 +289,7 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
     setSending(true);
     setMsg(red ? { ok: false, text: red } : null);
     setRefused("");
+    hideBox(); // (Owner, Dec 10 2026) Clear, then the new outcome: the stop line under this button leaves the view as it is pressed (the box stays open: its time still makes this the second press).
     try {
       // (Owner, Nov 5, §269) Always with the questions the boxes are for (`for`): the server reads the answers by their words, and a page whose questions are no
       // longer the contract's stops once (then takes the new questions) instead of sending them under other questions.
@@ -378,7 +379,7 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
       {/* (Owner, Oct 30, batch 32 §4) Under Send, where the press is (above the questions it could be out of view); in view when it appears. */}
       {needOne && !answers.some((a) => a.trim()) && <p ref={(el) => el?.scrollIntoView({ block: "nearest" })} className="text-sm text-rose-300" role="alert" data-answer-one="">{ANSWER_ONE}</p>}
       <PressDone line={fin.line} />
-      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} press={sendPress} /* (Owner, Nov 6, §290) the box always names the press: "Your Send Answers didn't go through." */ />
+      <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} press={sendPress} /* (Owner, Nov 6, §290) the box always names the press: "Your Send Answers didn't go through." */ />
       {msg?.ok && <p className="ok">{msg.text}</p>}
     </form>
     </SendingScope.Provider>
@@ -416,7 +417,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
   const [err, setErr] = useState("");
   // (Owner, Nov 11, §380 D2) A refusal, apart from the text's red note (`err`): both show after one press.
   const [refused, setRefused] = useState("");
-  const [box, setBox] = useStopBox();
+  const [box, setBox, hideBox] = useStopBox();
   const [boxAt, setBoxAt] = useState("");
   const [pausedNow, setPausedNow] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -467,6 +468,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
     setBusy(true);
     setErr(red);
     setRefused("");
+    hideBox(); // (Owner, Dec 10 2026) Clear, then the new outcome: the stop line under this button leaves the view as it is pressed (the box stays open: its time still makes this the second press).
     try {
       await api(`/api/sessions/${sessionId}/written-add`, { text, question: questionKey, seenAt, confirmed: !!boxAt, boxAt, ...(first ? { first: true } : {}) });
       await keep.clear();
@@ -538,7 +540,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
       <PausedSend sessionId={sessionId} press={`Add:${questionKey}`} label={first ? ANSWER_PRESS : "Add"} canSend={canSend} now={pausedNow} />
       {!canSend && !full && <p className="note" data-draft-kept="">What you add is kept as a draft. Adding comes back when the test resumes.</p>}
       <PressDone line={fin.line} />
-      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} press={first ? ANSWER_PRESS : "Add"} button={sender} /* (§387 2) "Press Add to my answer again" */ />
+      <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} press={first ? ANSWER_PRESS : "Add"} button={sender} /* (§387 2) "Press Add to my answer again" */ />
       {/* (Owner, Nov 4, batch 35 §170) A refusal names the press Add (§146), not "Your Add to my answer didn't go through". */}
       {/* (§222) A question's first answer is the press Answer this question. */}
       <Err text={refused} press={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} />
@@ -552,18 +554,21 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
 
 export function LeaveButton({ sessionId, seenAt, title, notice }: { sessionId: string; seenAt: string; title: string; /** (Owner, Nov 5, §268) the open-terms notice (information only) */ notice?: ReactNode }) {
   const [err, setErr] = useState("");
-  const [box, setBox] = useStopBox();
+  const [box, setBox, hideBox, boxOpen] = useStopBox();
   // (Owner, Nov 28) Leave's second press works like every other button's (lib/usePress.ts): a press while its stop box is open sends the box's latest time
   // (`boxAt`: the stop's own time, moved on by each line that joins the open box live under the box's rule), and the server stops it again only for something
   // new since then that the box's rule would stop for. Once the box is gone (the press went through), the next press is a first press again.
   const [boxAt, setBoxAt] = useState("");
-  useLiveAppend(box != null, (added) => {
+  useLiveAppend(boxOpen, (added) => {
     const newest = added.map((a) => a.at).sort().pop();
     if (newest) setBoxAt((b) => (b && b > newest ? b : newest));
   }, box?.rule);
   const fin = useFinished();
   const leave = () => {
-    const again = box != null;
+    const again = boxOpen;
+    // (Owner, Dec 10 2026) Clear, then the new outcome: Leave's line (stop or refusal) leaves the view as it is pressed (its box stays open meanwhile).
+    hideBox();
+    setErr("");
     return api(`/api/sessions/${sessionId}/leave`, { seenAt, confirmed: again, ...(again && boxAt ? { boxAt } : {}) })
       .then(() => { setBox(null); setBoxAt(""); fin.finish("You left this test."); })
       .catch((e) => {
@@ -591,7 +596,7 @@ export function LeaveButton({ sessionId, seenAt, title, notice }: { sessionId: s
         Leave this test
       </ConfirmButton>
       <PressDone line={fin.line} />
-      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} press="Leave" button="Leave this test" didntGo />
+      <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} press="Leave" button="Leave this test" didntGo />
       <Err text={err ? refusalLine("Leave", err) : ""} />
     </div>
   );
@@ -603,7 +608,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
   // a new form (the session page is keyed by its status; a call's row moves into the Had panel once there are more than 3), and the server's stop box or refusal
   // shows under ITS button, the fold open.
   const carry = `dispute:${kind}:${id}`;
-  const [box, setBox] = useStopBox(carry);
+  const [box, setBox, hideBox] = useStopBox(carry);
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useCarried(carry, "boxAt", "");
   const confirmed = !!boxAt;
@@ -641,6 +646,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
           setBusy(true);
           setErr("");
           setMeanwhile("");
+          hideBox(); // (Owner, Dec 10 2026) Clear, then the new outcome: the stop line under this button leaves the view as it is pressed (the box stays open: its time still makes this the second press).
           try {
             await api(`/api/sessions/${sessionId}/dispute`, { kind, id, reason, seenAt, confirmed, boxAt });
             const now = shown(); // (§371) the form shown now
@@ -673,7 +679,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
       <PressDone line={fin.line} />
       {!fin.done && disabledNote && <p className="note" data-owed-note="">{disabledNote}</p>}
       {keep.restored && reason !== "" && <DraftTag disabled={busy || fin.done} kind="discard" onUseSaved={() => setReason("")} />}
-      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} press={DISPUTE_PRESS} button="Send the dispute" /* (§387 2) the button's label in "Press … again" */ />
+      <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} press={DISPUTE_PRESS} button="Send the dispute" /* (§387 2) the button's label in "Press … again" */ />
       {/* (Owner, Nov 4, batch 35 §170) A refusal names the press Dispute (its route's label), not the button's words: "Your Dispute didn't go through: …". */}
       {meanwhile && <p className="info" data-dispute-meanwhile="">{refusalLine(DISPUTE_PRESS, meanwhile)}</p>}
       <FormMistakes text={err} press="Send the dispute" named={DISPUTE_PRESS} refused={!!meanwhile} /* (§387 3) */ />

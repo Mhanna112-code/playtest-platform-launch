@@ -36,7 +36,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
   // (Batch 35 §10) The note sent with Apply (and Ask to rejoin) is kept as a draft; nothing is saved before the press, so after a sign-in its button reads "Discard".
   // A press that goes through (Apply, Ask to rejoin, or Join) clears it; a stopped or refused press keeps it.
   const keep = useKept(`apply:${p.testId}`, { note }, note === "", (v) => setNote(typeof v.note === "string" ? v.note : ""));
-  const [box, setBox] = useStopBox();
+  const [box, setBox, hideBox, boxOpen] = useStopBox();
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
@@ -90,7 +90,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     setBoxAt(sb.now);
     afterChanges(sb.changes);
   }
-  useLiveAppend(!!box, (added) => {
+  useLiveAppend(boxOpen, (added) => {
     const newest = added.map((a) => a.at).sort().pop();
     if (newest) setBoxAt((b) => (b && b > newest ? b : newest));
   });
@@ -139,6 +139,9 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
   // Join / Apply with something missing: the pop-up asks first (never a refusal). Covered by now: a notice, no pop-up.
   async function press(action: "join" | "apply" | "rejoin-ask") {
     setCovered(null);
+    // (Owner, Dec 10 2026) Clear, then the new outcome: the line under the button (stop or refusal) goes as it is pressed; a red mistake comes back if still true.
+    hideBox();
+    setErr("");
     if (p.nda && !nda) {
       setNdaErr("Accept the NDA to " + (action === "apply" ? "apply." : action === "rejoin-ask" ? "ask to rejoin." : "join."));
       // (Batch 16 section 10) The tick is red with its line, listed under the button, and gets the cursor.
@@ -161,6 +164,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     let reloading = false;
     setBusy(true);
     setErr("");
+    hideBox(); // (Owner, Dec 10 2026) Clear, then the new outcome: the stop line under this button leaves the view as it is pressed (the box stays open: its time still makes this the second press).
     setErrPress(pressLabelOf(`/api/tests/${p.testId}/${action}`));
     try {
         const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, note, seenAt, confirmed, boxAt, anyway, inviteId, agreeTerms });

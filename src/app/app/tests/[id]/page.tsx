@@ -603,7 +603,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             waiting: [...c.submissions.filter((x) => !x.review && !payShut(x.id)).map((x) => (x.kind === "recording" ? "recording" : "written answers")), ...(c.calls.some((x) => tookPlace(x) && !x.review && !payShut(x.id)) ? ["live call"] : [])],
           }))}
         />
-        <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" />
+        <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" stopLines /* (Owner, Dec 10 2026) stops: one line under the button, their changes here */ />
         <PageLoaded at={seenAt} />
         {/* (Owner, Nov 4, §181) One drop-down per person: their charges waiting for the bank (Batch 17 §11: a charge made while away, e.g. a retry during the pause,
             confirmed here), their disputes (Batch 15 section 27: the developer's side is optional, never stopped, works while paused or restricted), their booked calls
@@ -718,7 +718,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {banner}
       {/* (Design doc 6) The order: overview, the live updates box, the yellow keys notice, then the panels. */}
       {/* (Batch 34 §14) A listing line's See it jumps to the Listing panel and marks what that save changed. */}
-      <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" seeIt="#listing" />
+      <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" seeIt="#listing" stopLines /* (Owner, Dec 10 2026) stops: one line under the button, their changes here */ />
       <ListingSeeIt box="listing" />
       {/* (Batch 30) The seen marker starts at this page's first load in the tab: a redraw never skips a change the page hasn't shown. */}
       <PageLoaded at={seenAt} />

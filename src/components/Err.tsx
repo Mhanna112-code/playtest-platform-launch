@@ -9,7 +9,6 @@ import { bringInView } from "@/lib/markJump";
 import { isPerkRefusal } from "@/lib/subscription";
 import { SubscribeLink } from "@/components/SubscribeLink";
 import { ANSWER_TERMS_FIRST } from "@/lib/answerTerms";
-import { useGoneOnNewVersion } from "@/lib/pageVersion";
 import { refusalLine } from "@/lib/pressLabels";
 import Link from "next/link";
 import { ACCOUNT_CLOSED, CONTACT_US_HREF } from "@/lib/accountClosed";
@@ -18,22 +17,22 @@ import { PayOwedLink } from "@/components/PayOwedLink";
 /**
  * Red for a form mistake (fix the field and press again); blue for a refusal. Brought into view when it appears.
  * (Owner, Nov 3, §156) `press`: the pressed button's label. A refusal then names it first, as every refusal does (batch 15 section 36): "Your Block didn't go
- * through: …". A red form mistake, a line that already names its press, "Answer the new terms first: Switch or Keep." and (§302) "Acknowledge the NDA change
- * first." read as they are.
+ * through: …". A red form mistake, a line that already names its press, ANSWER_TERMS_FIRST and (§302) NDA_BLOCK_FIRST read as they are.
+ * (Owner, Dec 10 2026) Those two end "… at the top of the page." and come into view under the button like every other line (the page no longer goes up).
+ * A line under a button stays until that button is pressed again or the page reloads (a redraw with a new version no longer takes it away).
  */
 export function Err({ text, press = "" }: { text: string; press?: string }) {
   const ref = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
-    // (Batch 27 section 1) The new-terms line stays under its button while the page goes up to the Switch / Keep box.
-    // (Owner, Nov 6, §302) So does the NDA block's line while the page goes up to the NDA notice.
-    if (text && text !== ANSWER_TERMS_FIRST && text !== NDA_BLOCK_FIRST) bringInView(ref.current);
+    // (Owner, Dec 10 2026; replaces batch 27 §1 and §302's exceptions) Every line comes into view under its button, the new-terms and NDA lines too: the page
+    // no longer goes up to Switch / Keep or the NDA notice.
+    if (text) bringInView(ref.current);
   }, [text]);
-  // (Batch 35 §60) Gone once the page redraws with a new version of itself (the situation it was about changed).
-  // A red form mistake (fix the field) stays until fixed.
-  const gone = useGoneOnNewVersion(text.startsWith(FIELD) ? "" : text, text);
-  if (!text || gone) return null;
+  // (Owner, Dec 10 2026; replaces batch 35 §60) No longer gone when the page redraws with a new version: a line under a button stays until that button is
+  // pressed again (its owner clears it) or the page reloads. A red form mistake keeps its own rule (stays until fixed).
+  if (!text) return null;
   if (text === ANSWER_TERMS_FIRST) return <p ref={ref} className="err" data-answer-terms="">{text}</p>;
-  // (Owner, Nov 6, §302; replaces §267's blue notice with its link) The NDA block's line reads exactly so, like the new-terms line (the page goes up to the notice).
+  // (Owner, Nov 6, §302; replaces §267's blue notice with its link) The NDA block's line reads exactly so, like the new-terms line.
   if (text === NDA_BLOCK_FIRST) return <p ref={ref} className="err" data-nda-refusal="">{text}</p>;
   const red = text.startsWith(FIELD);
   const line = red ? text : refusalLine(press, text);

@@ -130,9 +130,9 @@ export const resetMovedPage = () => {
 };
 
 /**
- * While the page shows an open new-terms offer (the Switch / Keep box), Send and every call press don't go out: the page goes up
- * to the box (highlighted for a few seconds) and the press gets the line "Answer the new terms first: Switch or Keep." under its button, on every press until the
- * tester answers. True when `path` is such a press and it was stopped here.
+ * While the page shows an open new-terms offer (the Switch / Keep box), Send and every call press don't go out: the press gets the line "Answer the new terms
+ * first: Switch or Keep at the top of the page." under its button, on every press until the tester answers. (Owner, Dec 10 2026; replaces "the page goes up to
+ * the box") The box is only marked a moment; the page stays where it is. True when `path` is such a press and it was stopped here.
  */
 export function blockedByTerms(path: string) {
   if (!termsBlockedPath(path) || !termsBoxShown()) return false;
@@ -149,8 +149,9 @@ const termsBoxShown = () => typeof document !== "undefined" && !!document.getEle
 /** The NDA notice while it blocks this page's presses (its session id), if the page shows it. */
 const ndaBlockShown = () => (typeof document === "undefined" ? null : document.querySelector<HTMLElement>(`#${NDA_NOTICE}[data-nda-block]`)?.dataset.session ?? null);
 /**
- * While the page shows the NDA notice blocking (an NDA change not yet acknowledged), its presses don't go out, as with an open offer: the page
- * goes up to the notice (marked) and the press gets the line "Acknowledge the NDA change first." under its button. True when `path` was stopped here.
+ * While the page shows the NDA notice blocking (an NDA change not yet acknowledged), its presses don't go out, as with an open offer: the press gets the line
+ * "Acknowledge the NDA change first at the top of the page." under its button, and (Owner, Dec 10 2026) the notice is only marked: the page stays where it is.
+ * True when `path` was stopped here.
  */
 export function blockedByNda(path: string) {
   const session = ndaBlockShown();
@@ -284,9 +285,9 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
     const e = data?.error;
     rememberReply(e); // the refusal's and its stop lines' green links
     LAST_PRESS = typeof e?.press === "string" ? e.press : pressLabelOf(path, body);
-    // The server refused for an open offer (an old page that hasn't shown it too): up to the Switch / Keep box (it loads if the page lacks it).
+    // The server refused for an open offer (an old page that hasn't shown it too): the Switch / Keep box is marked (it loads if the page lacks it; no scroll).
     if (e?.code === ANSWER_TERMS_CODE && typeof window !== "undefined") window.dispatchEvent(new Event(ANSWER_TERMS_EVENT));
-    // The server refused for an NDA change not yet acknowledged (an old page too): up to the NDA notice (it loads if the page lacks it).
+    // The server refused for an NDA change not yet acknowledged (an old page too): the NDA notice is marked (it loads if the page lacks it; no scroll).
     if (e?.code === NDA_BLOCK_CODE && typeof window !== "undefined") window.dispatchEvent(new Event(NDA_BLOCK_EVENT));
     // A tester's stop box says whether their Alerts is Off (the box then drops "Turn off alerts").
     if (e?.code === "stop_once" && typeof e.alertsOff === "boolean") setTesterAlertsOff(e.alertsOff);

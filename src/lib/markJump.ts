@@ -26,6 +26,17 @@ export function jumpTo(id: string) {
   setTimeout(() => el.removeAttribute("data-marked"), 4000);
 }
 
+/**
+ * (Owner, Dec 10 2026) Mark a part of the page a moment (the same ring as jumpTo) WITHOUT moving the page: a press blocked by an open offer or an NDA change
+ * keeps its line under the button ("… at the top of the page.") and the page stays where it is.
+ */
+export function markOnly(id: string) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.setAttribute("data-marked", "");
+  setTimeout(() => el.removeAttribute("data-marked"), 4000);
+}
+
 /** (Owner's bug, Oct 31, batch 35 §62) Until then a box under a button doesn't pull the page back to itself: a See it jump is under way. */
 let heldUntil = 0;
 /** Held for `ms` from now (a later call replaces the time: the jump's own scroll landing shortens it). */

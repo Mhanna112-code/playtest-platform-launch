@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { api, errOf } from "@/lib/client";
 import { useCarried } from "@/lib/pressCarry";
-import { jumpTo } from "@/lib/markJump";
+import { jumpTo, markOnly } from "@/lib/markJump";
 import { NDA_INFO } from "@/lib/lineAnchors";
 import { NDA_ACK_PRESS, NDA_BLOCK_EVENT, NDA_NOTICE, ndaNoticeLine } from "@/lib/ndaNotice";
 
@@ -34,12 +34,14 @@ export function NdaNotice({ sessionId, dev, kind, open, block }: { sessionId: st
     window.history.replaceState(null, "", `${path}#${NDA_NOTICE}`);
     setTimeout(() => jumpTo(document.getElementById(NDA_NOTICE) ? NDA_NOTICE : NDA_INFO), 30);
   }, [path]);
-  // (§302) A press refused for the NDA (here, or by the server): up to the notice, marked, every time.
+  // (§302) A press refused for the NDA (here, or by the server): the notice is marked, every time. (Owner, Dec 10 2026; replaces "up to the notice") The page
+  // stays where it is: the line under the pressed button says "Acknowledge the NDA change first at the top of the page." and the notice only gets its ring.
+  // A page that doesn't show it yet loads it, and marks it once it shows.
   const pending = useRef(false);
   useEffect(() => {
     const on = () => {
       if (document.getElementById(NDA_NOTICE)) {
-        setTimeout(() => jumpTo(NDA_NOTICE), 30);
+        markOnly(NDA_NOTICE);
         return;
       }
       pending.current = true;
@@ -51,7 +53,7 @@ export function NdaNotice({ sessionId, dev, kind, open, block }: { sessionId: st
   useEffect(() => {
     if (!open || !pending.current) return;
     pending.current = false;
-    setTimeout(() => jumpTo(NDA_NOTICE), 30);
+    setTimeout(() => markOnly(NDA_NOTICE), 30);
   }, [open]);
   // A newer NDA change after one acknowledged here: its notice shows again.
   useEffect(() => {

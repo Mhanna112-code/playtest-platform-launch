@@ -156,24 +156,25 @@ describe("batch 27 section 1: an open new-terms offer blocks Send and calls unti
     expect((await sact(k.sessionId, "leave", k.tester.cookie, { seenAt: seen() })).status).toBe(200);
   });
 
-  it("the page: the blocked presses, the line exactly under the button (no 'didn't go through' prefix), the move up to Switch / Keep", () => {
+  // (Owner, Dec 10 2026) The line now ends "at the top of the page." and the page no longer moves up to Switch / Keep: the box is only marked (its ring).
+  it("the page: the blocked presses, the line exactly under the button (no 'didn't go through' prefix), Switch / Keep marked without a scroll", () => {
     for (const a of ["written", "recording-send", "request-time", "answer-request", "cancel-call", "cancel-set", "choose", "dispute"]) expect(termsBlockedPath(`/api/sessions/s1/${a}`), a).toBe(true);
     expect(termsBlockedPath("/api/calls/c1/join")).toBe(true);
     for (const a of ["rate", "leave", "message", "terms", "recording-start", "recording-done", "no-show"]) expect(termsBlockedPath(`/api/sessions/s1/${a}`), a).toBe(false);
     expect(termsBlockedPath("/api/tests/t1/request-time")).toBe(false); // the developer's
-    expect(refusalLine("Send", ANSWER_TERMS_FIRST)).toBe("Answer the new terms first: Switch or Keep.");
+    expect(refusalLine("Send", ANSWER_TERMS_FIRST)).toBe("Answer the new terms first: Switch or Keep at the top of the page.");
     const client = src("lib/client.ts");
     expect(client).toContain("if (body !== undefined && blockedByTerms(path)) throw new ApiError(409, ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST);");
     expect(client).toContain("if (e?.code === ANSWER_TERMS_CODE && typeof window !== \"undefined\") window.dispatchEvent(new Event(ANSWER_TERMS_EVENT));");
     const top = src("app/app/sessions/[id]/TesterTop.tsx");
     expect(top).toContain("window.addEventListener(ANSWER_TERMS_EVENT, on);");
-    expect(top).toContain("setTimeout(() => jumpTo(\"terms-offer\"), 30);");
+    expect(top).toContain("markOnly(\"terms-offer\");");
+    expect(top).not.toContain("jumpTo(");
     expect(top).toContain("router.refresh();"); // an old page loads the offer first
     expect(top).toContain("data-[marked]:ring-2 data-[marked]:ring-sky-300");
-    // The line stays under its button: no scroll back down to it.
-    // (Owner, Nov 6, §302) The NDA block's line the same way.
-    expect(src("components/Err.tsx")).toContain("if (text && text !== ANSWER_TERMS_FIRST && text !== NDA_BLOCK_FIRST) bringInView(ref.current);");
-    expect(src("components/ChangesBox.tsx")).toContain("if (changes || (error && error !== ANSWER_TERMS_FIRST && error !== NDA_BLOCK_FIRST)) bringInView(ref.current);");
+    // (Owner, Dec 10 2026) The page stays put, so the line comes into view under its button like every other line (the NDA block's line too).
+    expect(src("components/Err.tsx")).toContain("if (text) bringInView(ref.current);");
+    expect(src("components/ChangesBox.tsx")).toContain("if (changes || error) bringInView(ref.current);");
     // The offer comes before the form's own checks.
     expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("const missing0 = terms || red ? null : answersMissing(questions, answers);");
     expect(src("components/CallRequests.tsx")).toContain("if (!(p.side === \"tester\" && offerShown())) checkFields(form.current);"); // (§386 C) the press still goes

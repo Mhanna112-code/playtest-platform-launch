@@ -42,25 +42,25 @@ describe("Switch / Keep: the offer withdrawn after a press", () => {
   });
 
   it("with no offer, the line shows by itself; no See the new terms button anywhere", () => {
-    expect(top).toContain("if (!offer) return box ? <ChangesBox side=\"tester\" changes={box.changes} tail={box.tail} /> : err ? <Err text={err} press={errPress} /> : null;");
+    expect(top).toContain("if (!offer) return box ? <ChangesBox side=\"tester\" changes={box.changes} tail={box.tail} press={errPress || undefined} /> : err ? <Err text={err} press={errPress} /> : null;");
     expect(top).not.toContain(">See the new terms</button>");
     expect(top).not.toContain("reloadKeepingPlace");
   });
 });
 
-describe("Switch / Keep: another press's box naming new terms (Leave, Rate)", () => {
-  const handler = top.slice(top.indexOf("const on = (e: Event) => {"), top.indexOf('window.addEventListener("tester-top", on);'));
-  it("loads the offer at once when the page doesn't show it yet, and goes to it when it arrives", () => {
-    expect(handler).toContain('if (!document.getElementById("terms-offer")) {');
-    expect(handler).toContain("pending.current = true;");
-    expect(handler).toContain("router.refresh();");
-    expect(top).toContain("if (!offer?.id || !pending.current) return;"); // the jump to the Switch / Keep box once the offer is on the page
+// (Owner, Dec 10 2026; replaces "another press's box shows here") Leave's or Rate's stop naming new terms keeps its one line under ITS button (the change goes to
+// the top box); the offer still loads at once, and nothing moves into the Switch / Keep area or scrolls there.
+describe("Switch / Keep: another press's stop naming new terms (Leave, Rate)", () => {
+  const handler = top.slice(top.indexOf("const on = () => {"), top.indexOf("window.addEventListener(OFFER_LOAD_EVENT, on);"));
+  it("loads the offer at once when the page doesn't show it yet; no box moves here, no jump", () => {
+    expect(handler).toContain('if (!document.getElementById("terms-offer")) router.refresh();');
+    expect(handler).not.toContain("setBox");
+    expect(top).not.toContain("jumpTo(");
+    expect(top).not.toContain("boxMine");
   });
 
-  it("the offer's arrival keeps that box (it shows only here); Switch / Keep's own box is cleared by a different offer", () => {
-    expect(handler).toContain("boxMine.current = false;");
-    expect(top).toContain("if (boxMine.current) setBox(null);");
-    expect(top).toContain("boxMine.current = true; // after stopBox");
+  it("a different offer clears Switch / Keep's own box (the only box here)", () => {
+    expect(top).toContain("setBox(null); // (Owner, Dec 10 2026) the only box here is Switch / Keep's own");
   });
 
   it("the server's refusal and the box's line are the same words", async () => {
