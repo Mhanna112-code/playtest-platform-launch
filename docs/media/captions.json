@@ -18961,5 +18961,230 @@
     "group": "termsbox",
     "order": 112002,
     "size": "desktop"
+  },
+  "round-dec10/a1-send-answers-stop-line.webm": {
+    "caption": "Nora edits the listing; Ana's Send Answers shows one blue line and the change goes to the top box; the line survives her Alerts toggle and a live redraw; the next press clears it and shows the red mistake; another edit: the line, the red mark and the top box all at once; fixed and sent.",
+    "kind": "video",
+    "title": "A1 · Session page: Send Answers stopped once (the one line)",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900001,
+    "size": "desktop"
+  },
+  "round-dec10/a2-session-refusals.webm": {
+    "caption": "The team pauses the test: Ana's Add is refused; the page redraws without Add and the line stays where it was (another press doesn't remove it; after the lift it stays until Add is pressed again or the page reloads). Nora ends Ana's work early: Ana's Request a time is refused, the page loads again at its top and the line comes back where the button was.",
+    "kind": "video",
+    "title": "A2 · Session page: refused for good (a pause; the work ended)",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900002,
+    "size": "desktop"
+  },
+  "round-dec10/a3-session-block-lines.webm": {
+    "caption": "Nora adds an NDA: Ana's Send Answers reads “Acknowledge the NDA change first at the top of the page.” and the page stays put. Nora raises the price: Ana's Request a time reads “Answer the new terms first: Switch or Keep at the top of the page.”; Switch / Keep is at the top. After acknowledging / Keep, the presses go ahead.",
+    "kind": "video",
+    "title": "A3 · Session page: the NDA line and the new-terms line",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900003,
+    "size": "desktop"
+  },
+  "round-dec10/a4-session-questions-changed.webm": {
+    "caption": "Nora adds a question: Ana's Send Answers stops once and the form shows the new question (her answers kept); answered, it goes. Nora adds another: Send Answers with the new box empty is refused (“Answer at least one question …”), nothing is sent and the pay-by date doesn't move.",
+    "kind": "video",
+    "title": "A4 · Session page: questions changed; an empty Send refused",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900004,
+    "size": "desktop"
+  },
+  "round-dec10/a5-session-dispute-request-leave.webm": {
+    "caption": "Dispute: a red reason, then the one line, then sent. Request a time: the one line, then sent. A call request Nora withdraws: Accept refused for good (the request stays listed, marked Withdrawn). Leave: the one line, then she leaves.",
+    "kind": "video",
+    "title": "A5 · Session page: Dispute, Request a time, a call request, Leave",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900005,
+    "size": "desktop"
+  },
+  "round-dec10/a6-session-charge-rate.webm": {
+    "caption": "Charge stops once for Nora's edit; then the team pauses the test and the second Charge is refused for good (“This test is paused, so your Charge didn't go through.”). After the lift Nora pays; Rate stops once, then goes.",
+    "kind": "video",
+    "title": "A6 · Session page: Charge / Let it go and Rate",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900006,
+    "size": "desktop"
+  },
+  "round-dec10/b1-join-page-stop-lines.webm": {
+    "caption": "Nora edits the listing each time; on the join page the press shows one line (whatever Ana's Alerts) and the next press goes ahead: Join, Apply to join, Ask to rejoin, No thanks. Withdraw application after a tester-deadline change goes straight through.",
+    "kind": "video",
+    "title": "B1 · Join page: the one line on Join, Apply, Ask to rejoin, No thanks",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900007,
+    "size": "desktop"
+  },
+  "round-dec10/b2-join-page-refusals.webm": {
+    "caption": "Full (Ben took the last spot), paused (the team's pause; the same words for a hold or a suspension), Open until passed, and invite only (first the one line for the listing change, then refused).",
+    "kind": "video",
+    "title": "B2 · Join page: refused for good",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900008,
+    "size": "desktop"
+  },
+  "round-dec10/c1-test-page-applications-pay.webm": {
+    "caption": "Ana withdraws her application: Nora's Accept is refused for good. Ana adds to her answer: Nora's Pay stops once (one line, the change in her top box). Ana leaves: Nora's Pay more stops once.",
+    "kind": "video",
+    "title": "C1 · Test page: Accept, Pay, Pay more",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900009,
+    "size": "desktop"
+  },
+  "round-dec10/c2-test-page-calls-invite-stop.webm": {
+    "caption": "Ana withdraws her call request: Nora's Accept is refused. Invite asks first for a tester missing a need (Invite anyway); Ana's new request stops it once; pressed again, Bram is invited. Ana's answers stop Stop the test once. The team pauses the test: Nora's Accept is refused and the page goes to its top.",
+    "kind": "video",
+    "title": "C2 · Test page: a call request, Invite anyway, Stop, the team's pause",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900010,
+    "size": "desktop"
+  },
+  "round-dec10/d1-two-copies-session-page.webm": {
+    "caption": "Tab 2 waits (“Saving changes in other tab…” with Open now, buttons locked) while tab 1's Send is on its way, then takes the page; then Open now while tab 2's Add is on its way (the Add still goes through, tab 2 goes to the dashboard); then a Request a time on its way, which a new copy doesn't wait for. The 10-second takeover is in D5.",
+    "kind": "video",
+    "title": "D1 · Two copies: the session page",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900011,
+    "size": "desktop"
+  },
+  "round-dec10/d2-two-copies-test-page-edit.webm": {
+    "caption": "The test page and Edit are one page: Edit opened while the test page's Accept is on its way waits, then is drawn with it. Edit opened again in the first tab while the second has typing but no press on its way takes the page at once, and the typing comes across.",
+    "kind": "video",
+    "title": "D2 · Two copies: the test page and Edit",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900012,
+    "size": "desktop"
+  },
+  "round-dec10/d3-two-copies-join-page.webm": {
+    "caption": "A second join page waits while the first one's Apply is on its way, then shows the application.",
+    "kind": "video",
+    "title": "D3 · Two copies: the join page",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900013,
+    "size": "desktop"
+  },
+  "round-dec10/d4-two-copies-account-pages.webm": {
+    "caption": "Profile and Notifications: the new copy waits for the old copy's Save, then shows it. Payments: opened again with nothing on its way, it moves at once.",
+    "kind": "video",
+    "title": "D4 · Two copies: Profile, Notifications, Payments",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900014,
+    "size": "desktop"
+  },
+  "round-dec10/d5-two-copies-ten-second-takeover.webm": {
+    "caption": "Tab 1's Apply is on its way (its answer held 16 s); tab 2 opens the join page, waits about 10 s and takes the page by itself; tab 1's Apply still goes through and tab 1 then goes to the dashboard.",
+    "kind": "video",
+    "title": "D5 · Two copies: the 10-second takeover",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900015,
+    "size": "desktop"
+  },
+  "round-dec10/e1-account-pages-developer.webm": {
+    "caption": "The full box “Changed in another tab or device since you opened this page:” on Notifications (Password changed at …), Account (Email: Off → Daily) and Payments (Payout account: not connected → connected).",
+    "kind": "video",
+    "title": "E1 · Account pages: Nora",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900016,
+    "size": "desktop"
+  },
+  "round-dec10/e2-account-pages-tester.webm": {
+    "caption": "The full box on Profile (Sides: tester → developer and tester), Notifications (Name: …), Account (Email: Weekly → Off) and Payments (Payout account: not connected → connected).",
+    "kind": "video",
+    "title": "E2 · Account pages: Ana",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900017,
+    "size": "desktop"
+  },
+  "round-dec10/f1-edit-save-kept-box.webm": {
+    "caption": "A team pause and lift since Edit opened: Save shows the full box (“Since you opened this page: The team paused this test at … The team lifted its pause …”), and the next Save goes. Then why the three-value box can't show now.",
+    "kind": "video",
+    "title": "F1 · Edit's Save keeps its full box",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900018,
+    "size": "desktop"
+  },
+  "round-dec10/g1-pause-keeps-invites.webm": {
+    "caption": "The team pauses the test: Ana's Join on her invite is refused (“isn't taking new testers right now”), her bell gets nothing, the invite stays open; after the lift the same invite works.",
+    "kind": "video",
+    "title": "G1 · A pause keeps the invite",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900019,
+    "size": "desktop"
+  },
+  "round-dec10/g2-full-keeps-applications.webm": {
+    "caption": "Full: Ana's application stays pending and she's told nothing; Nora's Accept on her is refused (“This test is full.”); Cam (invited) is told it's full; after a new spot Accept goes ahead and Cam is told a spot opened.",
+    "kind": "video",
+    "title": "G2 · A full test keeps applications",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900020,
+    "size": "desktop"
+  },
+  "round-dec10/g3-edits-invite-only-closing.webm": {
+    "caption": "An edit doesn't send the invite again (Ana sees the edit in the top box and Join stops once). A Save switching to invite only closes Ana's application with the invite-only line. A test closing on its own rings its invitee.",
+    "kind": "video",
+    "title": "G3 · Edits, invite only, a test closing on its own",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900021,
+    "size": "desktop"
+  },
+  "round-dec10/h1-offline.webm": {
+    "caption": "An offline press: “You seem to be offline. Check your connection and try again.”; back online it goes. A copy that opened offline (its claim failed) claims the page again when back online; when another copy claimed it meanwhile, it leaves for the dashboard.",
+    "kind": "video",
+    "title": "H1 · Offline",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900022,
+    "size": "desktop"
+  },
+  "round-dec10/i1-switch-keep-newest-offer.webm": {
+    "caption": "With Alerts Off, a Switch naming an older offer stops once with the newest; a third offer between the stop and the second press stops it again; the third press switches.",
+    "kind": "video",
+    "title": "I1 · Switch / Keep: always the newest offer",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900023,
+    "size": "desktop"
+  },
+  "round-dec10/i2-switch-keep-withdrawn-new-leave.webm": {
+    "caption": "An offer withdrawn after a stopped Switch leaves one line; a new offer starts the box clean (Keep goes); Leave pressed before the live update loads Switch / Keep at once.",
+    "kind": "video",
+    "title": "I2 · Switch / Keep: withdrawn, new offer, Leave",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900024,
+    "size": "desktop"
+  },
+  "round-dec10/j1-home-kept-boxes.webm": {
+    "caption": "Confirm all with your bank stops with the full box when a new charge came in after Home loaded; the Calls box's Cancel (shown while Nora is suspended) stops with the full box for the team's pause.",
+    "kind": "video",
+    "title": "J1 · Home: full boxes",
+    "section": "Overnight Dec 10: one-line stops, invites, two copies, offline",
+    "group": "dec10",
+    "order": 900025,
+    "size": "desktop"
   }
 }

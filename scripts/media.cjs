@@ -257,7 +257,9 @@ async function account(email, name, role, pronoun = "they", tester = {}) {
   // (Batch 15 section 7) Sign-ups are limited per network (10 an hour): the recorder makes many accounts from this machine, so it clears its own local count first
   // (in the media database only).
   if (MEDIA_DB !== "playtest_lite") sql(`delete from "LoginAttempt" where kind = 'signup' and ip in ('::1', '127.0.0.1', '::ffff:127.0.0.1')`);
-  const r = await post(p, "/api/auth/signup", { email, password: PASSWORD, role, name, acceptTerms: true, over18: true });
+  // (Dec 10 media run) Sign-up now needs every side's details at once (batch 35 §134): the tester's devices and languages, the pronoun. Test names are at most
+  // 20 characters, so the listings here use "Harbor Run: 3 levels".
+  const r = await post(p, "/api/auth/signup", { email, password: PASSWORD, role, name, pronoun, acceptTerms: true, over18: true, devices: tester.devices ?? ["Windows PC"], languages: tester.languages ?? ["English"] });
   if (!r.ok) throw new Error("sign-up failed for " + email);
   own(`update "User" set "emailVerifiedAt" = (now() at time zone 'utc') where email = ${lit(email)}`);
   await post(p, "/api/profile", { name, pronoun, isDeveloper: role !== "tester", isTester: role !== "developer", devices: tester.devices ?? ["Windows PC"], languages: tester.languages ?? ["English"], categories: [] });
@@ -275,7 +277,7 @@ async function account(email, name, role, pronoun = "they", tester = {}) {
 /** A date n days from today (YYYY-MM-DD, local), as the date fields take it. (Batch 12: Open until is 3 to 30 days ahead.) */
 const day = (n) => { const d = new Date(Date.now() + n * 86400000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const LISTING = {
-  productName: "Harbor Run", title: "Harbor Run: first 3 levels", description: "Sail through the first three harbors and tell us where the controls or the map get confusing.",
+  productName: "Harbor Run", title: "Harbor Run: 3 levels", description: "Sail through the first three harbors and tell us where the controls or the map get confusing.",
   buildUrl: "https://example.com/harbor-run", categories: ["Game"], devices: [], languages: [], mature: false, matureWhy: "", ndaText: "",
   spots: "5", writtenCents: "10.00", recordingCents: null, liveRateCents: null, liveMinutes: null,
   writtenRequired: true, recordingRequired: false, liveRequired: false, questions: ["What did you like?", "Where did you get stuck?"], joinMode: "anyone",
@@ -525,13 +527,13 @@ group("dash", async () => {
 
   await nora.goto("/app");
   await nora.waitForSelector("[data-test-card]");
-  await shot(nora, "dash-card-game", "Game test card | A game test with written answers, a recording and live calls", card(nora, "Harbor Run: first 3 levels"));
+  await shot(nora, "dash-card-game", "Game test card | A game test with written answers, a recording and live calls", card(nora, "Harbor Run: 3 levels"));
   await shot(nora, "dash-card-free", "Free test card | A free web-app test (Finance, Productivity): its written answers pay nothing", card(nora, "Budget Buddy: sign-up flow"));
   await shot(nora, "dash-card-invite", "Invite-only card | An invite-only test with access keys and an NDA", card(nora, "Lumen Notes private beta"));
   await shot(nora, "dash-card-work-waiting", "Work waiting | An open test with work waiting for review", card(nora, "Sky Lab: tutorial"));
   await shot(nora, "dash-card-full", "Full | A full test: 2 of 2 spots taken", card(nora, "Pocket Chef: recipe search"));
   await shot(nora, "dash-card-stopped", "Stopped | A stopped test: no longer taking testers or work", card(nora, "Night Market demo"));
-  await shot(nora, "dash-card-draft", "Draft | Draft: the next round, not open yet", card(nora, "Harbor Run: first 3 levels (round 2)"));
+  await shot(nora, "dash-card-draft", "Draft | Draft: the next round, not open yet", card(nora, "Harbor Run: 3 levels (round 2)"));
   await shot(nora, "dash-card-closed", "Closed | Closed after 7 days paused", card(nora, "Coral Quest: boss fight"));
   await shot(nora, "checks/dash-needs-review-and-calls", "Visual check: Needs review and Calls boxes", nora.locator("#needs-review"));
   await nora.screenshot({ path: path.join(VTMP, "check-dash-full.png"), fullPage: true });
@@ -585,7 +587,7 @@ group("post", async () => {
   await dev.waitForSelector("#productName");
   await shotSpan(dev, "post-required-mark", "Required fields | The top of Post a test: “* marks the fields you have to fill in”", "main h1", field(dev, "productName"));
   await dev.fill("#productName", "Harbor Run");
-  await dev.fill("#title", "Harbor Run: first 3 levels");
+  await dev.fill("#title", "Harbor Run: 3 levels");
   await dev.fill("#description", "Sail through the first three harbors and tell us where the controls or the map get confusing.");
   await shotSpan(dev, "post-counters", "Counters | Counters on Product (up to 60), Name of this test (up to 60) and What should testers do (up to 1,000)", field(dev, "productName"), field(dev, "description"));
 
@@ -639,7 +641,7 @@ group("post", async () => {
   await pause(r, 800);
   await shotSpan(r, "post-red-required-price", "Red: required, price, spots | Red at the field when you leave it: required fields empty, a price under $1, spots over the limit", field(r, "productName"), r.locator("#spots"), 12, 60);
   await r.locator("#productName").fill("Harbor Run");
-  await r.locator("#title").fill("Harbor Run: first 3 levels");
+  await r.locator("#title").fill("Harbor Run: 3 levels");
   await r.locator("#description").fill("Sail through the harbors.");
   await r.locator("#writtenPrice").fill("10.00");
   await r.locator("#spots").fill("3");
@@ -1096,7 +1098,7 @@ group("check", async () => {
   const tia = await account(`tester+media${TS}ck@playtest.test`, "Tia Brooks", "tester", "she");
   const nora = await account(`dev+media${TS}ck@playtest.test`, "Nora Lane", "developer", "she");
   const omar = await account(`dev+media${TS}cko@playtest.test`, "Omar Reyes", "developer", "he");
-  const a = await postTest(nora, { title: "Harbor Run: first 3 levels", recordingCents: "15.00" }); // To do
+  const a = await postTest(nora, { title: "Harbor Run: 3 levels", recordingCents: "15.00" }); // To do
   const sa = await join(tia, a);
   const b = await postTest(nora, { productName: "Sky Lab", title: "Sky Lab: tutorial", categories: ["Education"] }); // Charge or cancel
   const sb = await join(tia, b);
@@ -1217,7 +1219,7 @@ group("money", async () => {
   const nora = await account(`dev+media${TS}pd@playtest.test`, "Nora Lane", "developer", "she");
   const ana = await account(`tester+media${TS}pda@playtest.test`, "Ana Silva", "tester", "she");
   setCard(nora.email, "pm_card_declined");
-  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: first 3 levels", writtenCents: "10.00" });
+  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: 3 levels", writtenCents: "10.00" });
   const sA = await join(ana, t);
   await sendWritten(ana, sA);
   const sub = subOf(sA);
@@ -1484,7 +1486,7 @@ group("plans", async () => {
   await nora.goto("/app/payments");
   await nora.waitForSelector("#subscription");
   await shot(nora, "plans-free-plan", "The free plan | After the free launch: one open test at a time, the perks a subscription adds, and Subscribe for $7/month", "#subscription");
-  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: first 3 levels" });
+  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: 3 levels" });
   await join(ana, t);
   // A second open test on the free plan.
   await nora.goto("/app/tests/new");
@@ -1556,7 +1558,7 @@ group("outage", async () => {
   const nora = await account(`dev+media${TS}og@playtest.test`, "Nora Lane", "developer", "she");
   const ana = await account(`tester+media${TS}oga@playtest.test`, "Ana Silva", "tester", "she");
   const admin = await adminAccount();
-  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: first 3 levels", liveRateCents: "30.00" });
+  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: 3 levels", liveRateCents: "30.00" });
   const sA = await join(ana, t);
   const call = await bookCall(nora, ana, t, sA, 3);
   // The admin runs a test too, so their own bell shows what everyone affected reads.
@@ -1704,7 +1706,7 @@ group("alerts", async () => {
   const ana = await account(`tester+media${TS}ala@playtest.test`, "Ana Silva", "tester", "she");
   const ben = await account(`tester+media${TS}alb@playtest.test`, "Ben Okafor", "tester", "he");
   const cam = await account(`tester+media${TS}alc@playtest.test`, "Cam Lee", "tester", "they");
-  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: first 3 levels", writtenCents: "10.00", spots: "5" });
+  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: 3 levels", writtenCents: "10.00", spots: "5" });
   const sA = await join(ana, t), sB = await join(ben, t), sC = await join(cam, t);
   await sendWritten(ana, sA);
   await sendWritten(cam, sC);
@@ -1773,7 +1775,7 @@ group("excerpts", async () => {
   const nora = await account(`dev+media${TS}ex@playtest.test`, "Nora Lane", "developer", "she");
   const omar = await account(`dev+media${TS}exo@playtest.test`, "Omar Reyes", "developer", "he");
   const ana = await account(`tester+media${TS}exa@playtest.test`, "Ana Silva", "tester", "she");
-  const p1 = await paidPart(nora, ana, { productName: "Harbor Run", title: "Harbor Run: first 3 levels" });
+  const p1 = await paidPart(nora, ana, { productName: "Harbor Run", title: "Harbor Run: 3 levels" });
   const p2 = await paidPart(nora, ana, { productName: "Sky Lab", title: "Sky Lab: tutorial", categories: ["Education"] });
   const p3 = await paidPart(nora, ana, { productName: "Pocket Chef", title: "Pocket Chef: recipe search", categories: ["Shopping"] });
   const p4 = await paidPart(omar, ana, { productName: "Tide Tracker", title: "Tide Tracker: widgets", categories: ["Productivity"] });
@@ -2066,7 +2068,7 @@ group("changedq", async () => {
   const nora = await account(`dev+media${TS}cq@playtest.test`, "Nora Lane", "developer", "she");
   const ana = await account(`tester+media${TS}cqa@playtest.test`, "Ana Silva", "tester", "she");
   const Q = ["What did you like?", "Where did you get stuck?", "Would you play level 4?"];
-  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: first 3 levels", questions: Q, writtenCents: "10.00" });
+  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: 3 levels", questions: Q, writtenCents: "10.00" });
   const sA = await join(ana, t);
   await sendWritten(ana, sA, ["The boat handling.", "The second bridge.", "Yes."]);
   const sub = subOf(sA);
@@ -2242,7 +2244,7 @@ group("stopped", async () => {
 group("drafts", async () => {
   const nora = await account(`dev+media${TS}dr@playtest.test`, "Nora Lane", "developer", "she");
   const ana = await account(`tester+media${TS}dra@playtest.test`, "Ana Silva", "tester", "she");
-  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: first 3 levels" });
+  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: 3 levels" });
   await join(ana, t);
   // Next round makes a draft and opens it in Post a test, filled in.
   {
@@ -2263,7 +2265,7 @@ group("drafts", async () => {
   const draftId = sql(`select id from "Test" where "developerId" = '${nora.uid}' and status = 'draft' order by "createdAt" desc limit 1`);
   await nora.goto("/app");
   sec("Developer dashboard");
-  await shot(nora, "drafts-card", "A draft card | Draft: the next round, not open yet; clicking it opens Post a test", card(nora, "Harbor Run: first 3 levels (round 2)"));
+  await shot(nora, "drafts-card", "A draft card | Draft: the next round, not open yet; clicking it opens Post a test", card(nora, "Harbor Run: 3 levels (round 2)"));
   sec("Post a test");
   await nora.goto(`/app/tests/${draftId}`);
   await nora.waitForURL((u) => u.pathname.startsWith("/app/tests/new"), { timeout: 15000 });
@@ -2312,7 +2314,7 @@ group("emails", async () => {
   await shot(ben, "emails-setting", "How you're notified | Email Off, or one email a day, week or month listing everything new; a few lines are sent even with email Off", ben.locator("main details, main section").first());
   // Nora's test: joins, sent work, a payment, then a declined one (a payment hold) and a retry that pays.
   setCard(nora.email, "pm_card_visa");
-  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: first 3 levels", writtenCents: "10.00", liveRateCents: "30.00" });
+  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: 3 levels", writtenCents: "10.00", liveRateCents: "30.00" });
   const sA = await join(ana, t), sB = await join(ben, t);
   await sendWritten(ana, sA);
   await sendWritten(ben, sB);
@@ -2351,7 +2353,7 @@ group("settings", async () => {
   const ana = await account(`tester+media${TS}sea@playtest.test`, "Ana Silva", "tester", "she");
   const admin = await adminAccount();
   // Some history so the delete warnings have real numbers.
-  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: first 3 levels", writtenCents: "10.00", recordingCents: "15.00", spots: "4" });
+  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: 3 levels", writtenCents: "10.00", recordingCents: "15.00", spots: "4" });
   const sA = await join(ana, t);
   await sendWritten(ana, sA);
   const t2 = await postTest(nora, { productName: "Sky Lab", title: "Sky Lab: tutorial", categories: ["Education"], writtenCents: "8.00" });
@@ -2399,7 +2401,7 @@ group("settings", async () => {
 group("tester", async () => {
   const nora = await account(`dev+media${TS}tr@playtest.test`, "Nora Lane", "developer", "she");
   const ana = await account(`tester+media${TS}tra@playtest.test`, "Ana Silva", "tester", "she", { devices: ["Windows PC", "iPhone"] });
-  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: first 3 levels", writtenCents: "10.00", recordingCents: "15.00", liveRateCents: "30.00", openUntil: day(4), ndaText: "Don't share screenshots of the beta before launch." });
+  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: 3 levels", writtenCents: "10.00", recordingCents: "15.00", liveRateCents: "30.00", openUntil: day(4), ndaText: "Don't share screenshots of the beta before launch." });
   await postTest(nora, { productName: "Sky Lab", title: "Sky Lab: tutorial", categories: ["Education"], devices: ["iPhone", "iPad"], writtenCents: "8.00" });
   await postTest(nora, { productName: "Pocket Chef", title: "Pocket Chef: recipe search", categories: ["Shopping"], languages: ["Spanish"], writtenCents: "6.00" });
   sec("Tester dashboard and Find");
@@ -2488,7 +2490,7 @@ group("admin", async () => {
   const ben = await account(`tester+media${TS}adb@playtest.test`, "Ben Okafor", "tester", "he");
   const cam = await account(`tester+media${TS}adc@playtest.test`, "Cam Lee", "tester", "they");
   const dee = await account(`tester+media${TS}add@playtest.test`, "Dee Moss", "tester", "they");
-  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: first 3 levels", writtenCents: "10.00", spots: "5" });
+  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: 3 levels", writtenCents: "10.00", spots: "5" });
   const sA = await join(ana, t), sC = await join(cam, t);
   await sendWritten(ana, sA);
   // An unlisted part: the test lists a recording only; Ben sends written feedback, Nora pays $0, Ben disputes.
@@ -2600,7 +2602,7 @@ group("admins2", async () => {
   const omar = await account(`dev+media${TS}xo@playtest.test`, "Omar Reyes", "developer", "he");
   const ana = await account(`tester+media${TS}xa@playtest.test`, "Ana Silva", "tester", "she");
   const dee = await account(`tester+media${TS}xd@playtest.test`, "Dee Moss", "tester", "they");
-  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: first 3 levels", writtenCents: "10.00" });
+  const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: 3 levels", writtenCents: "10.00" });
   const sA = await join(ana, t);
   await sendWritten(ana, sA);
   const d = await disputed(nora, ana, t, sA);
@@ -2643,7 +2645,7 @@ group("bells", async () => {
   // Ana applies to three Approved-only tests; Ben is invited to two. One Save each that changes the build link closes the applications and re-sends the invites:
   // the lines stack, one entry per kind per day.
   const tests = [];
-  for (const [p, title] of [["Harbor Run", "Harbor Run: first 3 levels"], ["Sky Lab", "Sky Lab: tutorial"], ["Pocket Chef", "Pocket Chef: recipe search"]]) {
+  for (const [p, title] of [["Harbor Run", "Harbor Run: 3 levels"], ["Sky Lab", "Sky Lab: tutorial"], ["Pocket Chef", "Pocket Chef: recipe search"]]) {
     const id = await postTest(nora, { productName: p, title, joinMode: "apply" });
     ok(await post(ana, `/api/tests/${id}/apply`, { ...go, note: "I'd love to try it." }), "apply");
     tests.push(id);
@@ -3117,7 +3119,7 @@ group("b15paused", async () => {
   await open(D, "/app", "[data-restricted-box]");
   const from = at(D);
   await shot(D, "b15-27-disputes-box", "§27 Disputes: add your side | While suspended, the dashboard lists each open dispute with the tester's text and the Add your side box; more than 3 scroll", "[data-dispute-box]");
-  await card(D, "Harbor Run: first 3 levels").locator("a").first().click();
+  await card(D, "Harbor Run: 3 levels").locator("a").first().click();
   await D.waitForSelector("[data-test-banner]");
   await pause(D, 1500);
   await shotFull(D, "b15-29-restricted-view", "§29 and §37 The restricted view | A suspended developer opens the test from its card: the red banner (title, reason, what's allowed), the overview with Stop and End early, Booked calls with Cancel");
@@ -3132,7 +3134,7 @@ group("b15paused", async () => {
   await D.waitForURL((u) => u.pathname === "/app", { timeout: 20000 }).catch(() => {});
   await D.waitForSelector("[data-done-line]").catch(() => {});
   await pause(D, 2500);
-  await shot(D, "b15-29-done", "§29 Done | Stop went through silently (no stop-once, whatever changed) and the dashboard top says “Done: you stopped Harbor Run: first 3 levels.”", "[data-done-line]");
+  await shot(D, "b15-29-done", "§29 Done | Stop went through silently (no stop-once, whatever changed) and the dashboard top says “Done: you stopped Harbor Run: 3 levels.”", "[data-done-line]");
   finishVideo([{ file: await saveVideo(D, "b15-29.webm"), from }], "b15-29-restricted", "§29 A suspended developer's test page | From the card to the restricted view; a call cancelled; Stop goes through and the dashboard says it's done");
   // §37 The banner for each cause, and §39's limited Alerts.
   await adminDo(admin, "unsuspend", nora.uid, { side: "developer" });
@@ -3182,7 +3184,7 @@ group("b15contract", async () => {
   await nora.click("#contract-changes > summary");
   await pause(nora, 800);
   await shot(nora, "b15-43-contract-changes", "§43 Contract changes | One entry per Save that changed terms or names, newest first: before → after, Switched / Kept / Not decided yet (names link to the rows), and each Save's effects", "#contract-changes");
-  await shot(nora, "b15-24-rename-row", "§24 Renames in the tester row | “Renamed: “Harbor Run · Harbor Run: first 3 levels” → “Harbor Run · Harbor Run: night harbors”” in each working tester's contract changes", `#tester-${sA}`);
+  await shot(nora, "b15-24-rename-row", "§24 Renames in the tester row | “Renamed: “Harbor Run · Harbor Run: 3 levels” → “Harbor Run · Harbor Run: night harbors”” in each working tester's contract changes", `#tester-${sA}`);
   await open(ana, `/app/sessions/${sA}`, "main");
   await ana.locator("[data-terms-history]").locator("xpath=ancestor::details[1]").evaluate((d) => { d.open = true; });
   await pause(ana, 600);
@@ -3538,7 +3540,7 @@ group("b16a", async () => {
   await subscribeDev(omar);
   const ana = await account(`tester+media${TS}baa@playtest.test`, "Ana Silva", "tester", "she");
   const ben = await account(`tester+media${TS}bab@playtest.test`, "Ben Okafor", "tester", "he");
-  const t1 = await postTest(nora, { title: "Harbor Run: first 3 levels", spots: "6" });
+  const t1 = await postTest(nora, { title: "Harbor Run: 3 levels", spots: "6" });
   const sA = await join(ana, t1), sB = await join(ben, t1);
   // §4 The grey line under Alerts says what stops a press, for the state shown.
   {
@@ -3975,7 +3977,7 @@ group("b16e", async () => {
   }
   // §37 An excerpt shows the question it answers.
   {
-    const p = await paidPart(nora, ana, { productName: "Harbor Run", title: "Harbor Run: first 3 levels", spots: "5" });
+    const p = await paidPart(nora, ana, { productName: "Harbor Run", title: "Harbor Run: 3 levels", spots: "5" });
     ok(await askExcerpt(ana, p.sub, "The second bridge: I couldn't tell where to go."), "ask");
     await open(nora, `/app/tests/${p.t}`, "[data-excerpt-request]");
     await shot(nora, "b16-37-needs-you", "§37 The excerpt request in Needs you | The question it answers sits above the quote in small grey text, then Allow or Deny.", "[data-excerpt-request]");
@@ -4366,7 +4368,7 @@ group("b17a", async () => {
   const ben = await account(`tester+media${TS}cab@playtest.test`, "Ben Okafor", "tester", "he");
   const cam = await account(`tester+media${TS}cac@playtest.test`, "Cam Lee", "tester", "they");
   const dee = await account(`tester+media${TS}cad@playtest.test`, "Dee Park", "tester", "she");
-  const t = await postTest(nora, { title: "Harbor Run: first 3 levels", spots: "6" });
+  const t = await postTest(nora, { title: "Harbor Run: 3 levels", spots: "6" });
   const sA = await join(ana, t), sC = await join(cam, t), sD = await join(dee, t);
   for (const [p, s] of [[ana, sA], [cam, sC], [dee, sD]]) await sendWritten(p, s);
   const subA = subOf(sA), subC = subOf(sC), subD = subOf(sD);
@@ -4408,7 +4410,7 @@ group("b17a", async () => {
     await T.locator("[data-ratings-to-give]").scrollIntoViewIfNeeded();
     const from = at(T);
     await pause(T, 1500);
-    await shot(T, "b17-17-tester-box", "§17 Ratings to give (tester) | Ana's dashboard lists the one rating she can give now: “Rate Nora Lane on “Harbor Run: first 3 levels””.", "[data-ratings-to-give]");
+    await shot(T, "b17-17-tester-box", "§17 Ratings to give (tester) | Ana's dashboard lists the one rating she can give now: “Rate Nora Lane on “Harbor Run: 3 levels””.", "[data-ratings-to-give]");
     await T.locator("[data-ratings-to-give] [data-rate-row]").first().click();
     await T.waitForURL(/\/app\/sessions\//, { timeout: 15000 });
     await pause(T, 2500);
@@ -4441,7 +4443,7 @@ group("b17a", async () => {
     await D.locator("[data-ratings-to-give]").scrollIntoViewIfNeeded();
     const from = at(D);
     await pause(D, 1500);
-    await shot(D, "b17-17-dev-box", "§17 Ratings to give (developer) | Nora's dashboard lists only Ana, who rated her and is settled: “Rate Ana Silva on “Harbor Run: first 3 levels” · 14 days left”. Dee's open dispute keeps her out.", "[data-ratings-to-give]");
+    await shot(D, "b17-17-dev-box", "§17 Ratings to give (developer) | Nora's dashboard lists only Ana, who rated her and is settled: “Rate Ana Silva on “Harbor Run: 3 levels” · 14 days left”. Dee's open dispute keeps her out.", "[data-ratings-to-give]");
     await D.locator("[data-ratings-to-give] [data-rate-row]").first().click();
     await D.waitForURL(/\/app\/tests\//, { timeout: 15000 });
     await pause(D, 2500);
@@ -4892,7 +4894,7 @@ group("b18a", async () => {
   await subscribeDev(nora);
   const ana = await account(`tester+media${TS}daa@playtest.test`, "Ana Silva", "tester", "she");
   const ben = await account(`tester+media${TS}dab@playtest.test`, "Ben Okafor", "tester", "he");
-  const t = await postTest(nora, { title: "Harbor Run: first 3 levels", spots: "5" });
+  const t = await postTest(nora, { title: "Harbor Run: 3 levels", spots: "5" });
   // §1 Post: Nora accepted version 1 of the Terms; posting her next round asks her to agree to version 2 first.
   {
     await nextRound(nora, t);
@@ -5200,7 +5202,7 @@ group("b19a", async () => {
   }
   // §7 and §8 Edit: no tick on an unchanged form; a change shows it above Save, with the line's days after the change.
   {
-    const t = await postTest(nora, { title: "Harbor Run: first 3 levels", openUntil: day(14) });
+    const t = await postTest(nora, { title: "Harbor Run: 3 levels", openUntil: day(14) });
     const E = await rec(V, nora);
     await E.goto(`/app/tests/${t}/edit`);
     await E.waitForSelector("#openUntil");
@@ -6093,13 +6095,13 @@ group("b19b", async () => {
       const nora = await b20acct(`dev+media${TS}b2017nb@playtest.test`, "Nora Lane", "developer", "she");
       await b20R(subscribeDev, nora);
       const ana = await b20acct(`tester+media${TS}b2017nc@playtest.test`, "Ana Silva", "tester", "she");
-      await b20R(postTest, nora, { title: "Harbor Run: first 3 levels", spots: "4" });
+      await b20R(postTest, nora, { title: "Harbor Run: 3 levels", spots: "4" });
       await b20R(postTest, nora, { productName: "Sky Lab", title: "Sky Lab: tutorial", categories: ["Education"], spots: "4" });
       const A = await b20rec(V, ana);
       await open(A, `/app/developers/${nora.uid}`, "main");
       const from = at(A);
       await pause(A, 1500);
-      await shot(A, "b20-17-before", "§17 Before the block | Nora's profile as Ana sees it: the stats, Open tests listing “Sky Lab: tutorial” and “Harbor Run: first 3 levels”, then “Report Nora Lane” and “Block Nora Lane”.", "main");
+      await shot(A, "b20-17-before", "§17 Before the block | Nora's profile as Ana sees it: the stats, Open tests listing “Sky Lab: tutorial” and “Harbor Run: 3 levels”, then “Report Nora Lane” and “Block Nora Lane”.", "main");
       const blockBtn = A.locator("main button", { hasText: /^Block Nora Lane$/ }).first();
       await blockBtn.scrollIntoViewIfNeeded();
       await pressConfirm(A, blockBtn, "Block Nora Lane");
@@ -6214,7 +6216,7 @@ group("b19b", async () => {
     await b20R(subscribeDev, nora);
     // §22 Edit: Save visibly disabled until a change; the kept-changes badge reads "Not saved yet" (Post: "Not posted yet").
     {
-      const t = await b20R(postTest, nora, { title: "Harbor Run: first 3 levels", spots: "4" });
+      const t = await b20R(postTest, nora, { title: "Harbor Run: 3 levels", spots: "4" });
       const E = await b20same(nora);
       await open(E, `/app/tests/${t}/edit`, "#openUntil");
       const save = saveBtn(E);
@@ -6307,7 +6309,7 @@ group("b19b", async () => {
       await D.waitForURL((u) => /\/app\/tests\/\w+$/.test(u.pathname) && !u.pathname.endsWith("/new"), { timeout: 60000 }).catch(async () => console.log("   ! §21: Post didn't go through:", (await D.locator("[data-mistake-list], p.err, .err-field, [role=alert]").allInnerTexts().catch(() => [])).join(" / ").slice(0, 400), "| ticks:", await D.locator("#agree-terms").isChecked().catch(() => "?"), await D.locator("#payRulesOk").isChecked().catch(() => "?")));
       await pause(D, 2000);
       finishVideo([{ file: await saveVideo(D, "b20-21-post.webm"), from }], "b20-21-post-video", "§21 The updated-Terms tick on Post | Refused while unticked; ticked, Post goes through (and the account is on the current Terms from then on).");
-      const t = await b20R(postTest, nora, { title: "Harbor Run: first 3 levels", spots: "4" });
+      const t = await b20R(postTest, nora, { title: "Harbor Run: 3 levels", spots: "4" });
       await open(ana, `/app/find/${t}`, "#join-card");
       await ana.locator("#join-card").scrollIntoViewIfNeeded();
       await pause(ana, 800);
@@ -6797,7 +6799,7 @@ group("b19b", async () => {
     const ana = await account(`tester+media${TS}${R}v1a@playtest.test`, "Ana Silva", "tester", "they");
     const ben = await account(`tester+media${TS}${R}v1b@playtest.test`, "Ben Okafor", "tester", "they");
     setCard(nora.email, "pm_card_visa");
-    const t = await postTest(nora, { title: "Harbor Run: first 3 levels", writtenCents: "12.00" });
+    const t = await postTest(nora, { title: "Harbor Run: 3 levels", writtenCents: "12.00" });
     const sA = await join(ana, t), sB = await join(ben, t);
     await sendWritten(ana, sA);
     await sendWritten(ben, sB);
@@ -6834,7 +6836,7 @@ group("b19b", async () => {
     const dee = await account(`tester+media${TS}${R}v2d@playtest.test`, "Dee Park", "tester", "they");
     const admin = await adminAccount();
     own(`update "User" set "stripeAccountId" = 'acct_fake_' || id, "payoutsReady" = true where email = ${lit(cam.email)}`);
-    const t = await postTest(nora, { title: "Harbor Run: first 3 levels", writtenCents: "10.00" });
+    const t = await postTest(nora, { title: "Harbor Run: 3 levels", writtenCents: "10.00" });
     const sC = await join(cam, t), sD = await join(dee, t);
     await sendWritten(cam, sC);
     await sendWritten(dee, sD);
@@ -6890,7 +6892,7 @@ group("b19b", async () => {
     const cam = await account(`tester+media${TS}${R}v3c@playtest.test`, "Cam Lee", "tester", "they");
     const ana = await account(`tester+media${TS}${R}v3a@playtest.test`, "Ana Silva", "tester", "they");
     const admin = await adminAccount();
-    const t = await postTest(nora, { title: "Harbor Run: first 3 levels", writtenCents: "10.00" });
+    const t = await postTest(nora, { title: "Harbor Run: 3 levels", writtenCents: "10.00" });
     const sC = await join(cam, t), sA = await join(ana, t);
     await sendWritten(cam, sC);
     await sendWritten(ana, sA);
@@ -6920,7 +6922,7 @@ group("b19b", async () => {
     const a1 = await account(`admin+media${TS}${R}v4x@playtest.test`, "Ada Admin", "developer", "they");
     const a2 = await account(`admin+media${TS}${R}v4y@playtest.test`, "Bo Admin", "developer", "they");
     for (const a of [a1, a2]) own(`update "User" set "isAdmin" = true where email = ${lit(a.email)}`);
-    const t = await postTest(nora, { title: "Harbor Run: first 3 levels" });
+    const t = await postTest(nora, { title: "Harbor Run: 3 levels" });
     const t2 = await postTest(nora, { productName: "Sky Lab", title: "Sky Lab: tutorial", categories: ["Education"] });
     const t3 = await postTest(omar, { productName: "Tide Tracker", title: "Tide Tracker: widgets", categories: ["Productivity"] });
     await adminDo(a1, "pause-test", t, { note: "Media pass check: a report about the build link." });
@@ -7162,7 +7164,7 @@ group("b19b", async () => {
     const nora = await accountR(`dev+media${TS}b23b@playtest.test`, "Nora Lane", "developer", "they");
     await subscribeDev(nora);
     const ana = await accountR(`tester+media${TS}b23ba@playtest.test`, "Ana Silva", "tester", "they");
-    const t = await postTestR(nora, { title: "Harbor Run: first 3 levels" });
+    const t = await postTestR(nora, { title: "Harbor Run: 3 levels" });
     sql(`delete from "KeptForm" where "userId" = '${nora.uid}'`);
     {
       const A = await recR(V, nora);
@@ -7250,7 +7252,7 @@ group("b19b", async () => {
     const sub = subOf(sA);
     await apiPayR(nora, sub, "12.00");
     // Ana's answers on a second test, not paid in time: Charge opens for them.
-    const t2 = await postTestR(nora, { productName: "Harbor Run", title: "Harbor Run: first 3 levels", writtenCents: "10.00" });
+    const t2 = await postTestR(nora, { productName: "Harbor Run", title: "Harbor Run: 3 levels", writtenCents: "10.00" });
     const sA2 = await joinR(ana, t2);
     await sendWrittenR(ana, sA2);
     openCharge(sA2, t2);
@@ -7440,7 +7442,7 @@ group("b19b", async () => {
     await subscribeDev(nora);
     const ana = await accountR(`tester+media${TS}b24aa@playtest.test`, "Ana Silva", "tester", "they");
     const ben = await accountR(`tester+media${TS}b24ab@playtest.test`, "Ben Okafor", "tester", "they");
-    const t = await postTestR(nora, { productName: "Harbor Run", title: "Harbor Run: first 3 levels", writtenCents: "12.50", liveRateCents: "30.00" });
+    const t = await postTestR(nora, { productName: "Harbor Run", title: "Harbor Run: 3 levels", writtenCents: "12.50", liveRateCents: "30.00" });
     const sA = await joinR(ana, t), sB = await joinR(ben, t);
     await sendWrittenR(ana, sA);
     // Ben's call took place 9 days ago and wasn't paid: Charge opens for it.
@@ -7666,7 +7668,7 @@ group("b19b", async () => {
     const nora = await acct(`dev+media${TS}${tag}@playtest.test`, "Nora Lane", "developer", "they");
     await subD(nora);
     const rio = await acct(`tester+media${TS}${tag}r@playtest.test`, RIO, "tester", "they");
-    const t = await postT(nora, { title: "Harbor Run: first 3 levels", liveRateCents: "30.00", spots: "4" });
+    const t = await postT(nora, { title: "Harbor Run: 3 levels", liveRateCents: "30.00", spots: "4" });
     const s = await joinR(rio, t);
     await sendW(rio, s);
     const call = await bookCall(nora, rio, t, s, 50);
@@ -7686,7 +7688,7 @@ group("b19b", async () => {
     await outageWait();
     const { nora, rio, t, s, tInv, tApp } = await together("blk1");
     await openR(rio, "/app", "#invitations");
-    await shotSpan(rio, "blk-01-before-tester", "Before the block | Rio's dashboard while working on Nora's test: under “Upcoming calls”, “Nora Lane · Harbor Run: first 3 levels · Sat, Oct 31 · 30 min”, and the invitation “Nora Lane invited you to “Harbor Run: friends and family”. Accept opens the test page.” (Rio's application to “Harbor Run: night harbor” is waiting too).", "#invitations", rio.locator("#upcoming-calls").first());
+    await shotSpan(rio, "blk-01-before-tester", "Before the block | Rio's dashboard while working on Nora's test: under “Upcoming calls”, “Nora Lane · Harbor Run: 3 levels · Sat, Oct 31 · 30 min”, and the invitation “Nora Lane invited you to “Harbor Run: friends and family”. Accept opens the test page.” (Rio's application to “Harbor Run: night harbor” is waiting too).", "#invitations", rio.locator("#upcoming-calls").first());
     const D = await rec(V, nora), T = await rec(V, rio);
     await openR(D, `/app/tests/${t}`, `#tester-${s}`);
     await openR(T, `/app/developers/${nora.uid}`, "main");
@@ -7704,7 +7706,7 @@ group("b19b", async () => {
     await T.goto(`/app/sessions/${s}`);
     await pause(T, 3500);
     finishVideo([{ file: await saveVideo(D, "blk-01-d.webm"), from: fromD }, { file: await saveVideo(T, "blk-01-t.webm"), from: fromT }], "blk-01-video",
-      "Blocked mid-session, both pages open | Nora's test page (left) and Rio on Nora's profile (right, listing “Applied (waiting)” and “You're in this test”): Rio presses Block Nora Lane and confirms; Rio's page then reads “You blocked Nora Lane, so their tests are hidden.” with Unblock Nora Lane, and Nora's page, on its next update, shows Rio's row as “Work ended” with “Calls: 1 cancelled”; Rio's session page reads “Your session on Harbor Run: first 3 levels ended.”");
+      "Blocked mid-session, both pages open | Nora's test page (left) and Rio on Nora's profile (right, listing “Applied (waiting)” and “You're in this test”): Rio presses Block Nora Lane and confirms; Rio's page then reads “You blocked Nora Lane, so their tests are hidden.” with Unblock Nora Lane, and Nora's page, on its next update, shows Rio's row as “Work ended” with “Calls: 1 cancelled”; Rio's session page reads “Your session on Harbor Run: 3 levels ended.”");
     // What each side reads afterwards.
     await openR(nora, `/app/tests/${t}`, `#tester-${s}`);
     console.log("   dev row:", await say(nora, `#tester-${s}`));
@@ -7715,10 +7717,10 @@ group("b19b", async () => {
     await openR(nora, `/app/chat/${s}`, "[data-chat-closed]");
     await shot(nora, "blk-01-dev-chat", "Chat closed | Nora's chat with Rio ends with “This chat is closed.”", "[data-chat-closed]");
     await openBell(nora);
-    await shot(nora, "blk-01-dev-bell", "The developer's bell | Nora reads only “Rio Vance's session on Harbor Run: first 3 levels ended.” (never that it was a block).", bellList(nora));
+    await shot(nora, "blk-01-dev-bell", "The developer's bell | Nora reads only “Rio Vance's session on Harbor Run: 3 levels ended.” (never that it was a block).", bellList(nora));
     await openR(rio, `/app/sessions/${s}`, "main");
     console.log("   tester session:", (await say(rio, "main")).slice(0, 400));
-    await shotFull(rio, "blk-01-tester-session", "The tester's session page | Rio's page reads “Your session on Harbor Run: first 3 levels ended.”, the test is “Ended” and the sent answers stay “Under review”.");
+    await shotFull(rio, "blk-01-tester-session", "The tester's session page | Rio's page reads “Your session on Harbor Run: 3 levels ended.”, the test is “Ended” and the sent answers stay “Under review”.");
     await openR(rio, "/app", "main");
     await shotFull(rio, "blk-01-tester-dash", "The tester's dashboard | No invitation and no upcoming call any more; the test is under History: “Ended (Oct 29, 2026): what you sent is still reviewed and paid.”");
     await openBell(rio);
@@ -7872,11 +7874,11 @@ group("b19b", async () => {
     await pause(U, 2500);
     finishVideo([{ file: await saveVideo(U, "blk-04-unblock.webm"), from: fromU }], "blk-04-unblock-video", "Unblock | Rio presses Unblock Nora Lane on Nora's profile: “Unblocked.”, and the reloaded profile lists Nora's open tests again.");
     await openR(rio, `/app/developers/${nora.uid}`, "main");
-    await shotFull(rio, "blk-04-profile-back", "After Unblock | Nora's profile lists their open tests again (“Harbor Run: open sea”, “Harbor Run: night harbor”, “Harbor Run: first 3 levels”), with Block Nora Lane back at the bottom.");
+    await shotFull(rio, "blk-04-profile-back", "After Unblock | Nora's profile lists their open tests again (“Harbor Run: open sea”, “Harbor Run: night harbor”, “Harbor Run: 3 levels”), with Block Nora Lane back at the bottom.");
     await openR(nora, `/app/testers/${rio.uid}`, "main");
-    await shot(nora, "blk-04-nora-sees", "Both ways | Nora can open Rio's profile again: “Your tests with Rio Vance” lists “Harbor Run: first 3 levels · Ended”, with Chat with Rio Vance and Block Rio Vance.");
+    await shot(nora, "blk-04-nora-sees", "Both ways | Nora can open Rio's profile again: “Your tests with Rio Vance” lists “Harbor Run: 3 levels · Ended”, with Chat with Rio Vance and Block Rio Vance.");
     await openR(rio, `/app/sessions/${s}`, "main");
-    await shotFull(rio, "blk-04-still-closed", "Closed things stay closed | After Unblock Rio's session page still reads “Your session on Harbor Run: first 3 levels ended.”: nothing reopens by itself (the invite stays cancelled, the application closed and the call cancelled).");
+    await shotFull(rio, "blk-04-still-closed", "Closed things stay closed | After Unblock Rio's session page still reads “Your session on Harbor Run: 3 levels ended.”: nothing reopens by itself (the invite stays cancelled, the application closed and the call cancelled).");
     await openR(rio, "/app", "main");
     console.log("   after unblock: invite", sql(`select status from "Invite" where "testId" = '${tInv}'`), "application", sql(`select status from "Application" where "testId" = '${tApp}'`), "call", sql(`select status from "Call" where "contractId" = '${s}'`));
     await shotFull(rio, "blk-04-dash", "The tester's dashboard after Unblock | No invitation comes back; the test stays under History: “Ended (Oct 29, 2026): what you sent is still reviewed and paid.”");
@@ -7889,7 +7891,7 @@ group("b19b", async () => {
     const nora = await acct(`dev+media${TS}ct1@playtest.test`, "Nora Lane", "developer", "they");
     await subD(nora);
     const ana = await acct(`tester+media${TS}ct1a@playtest.test`, "Ana Silva", "tester", "they");
-    const t = await postT(nora, { title: "Harbor Run: first 3 levels", openUntil: day(30), spots: "4" });
+    const t = await postT(nora, { title: "Harbor Run: 3 levels", openUntil: day(30), spots: "4" });
     const s = await joinR(ana, t);
     await sendW(ana, s);
     const sub = subOf(s);
@@ -7930,7 +7932,7 @@ group("b19b", async () => {
     await openBell(ana);
     await shot(ana, "ct-01-tester-bell", "(a) The tester's bell | “Nora Lane didn't review your written answers in 7 days: charge $10.00 or let it go”.", bellList(ana));
     await openBell(nora);
-    await shot(nora, "ct-01-dev-bell", "(a) The developer's bell | ““Harbor Run: first 3 levels”: Ana Silva's written answers waited over 7 days: pay it (Ana Silva can now charge or let it go).”", bellList(nora));
+    await shot(nora, "ct-01-dev-bell", "(a) The developer's bell | ““Harbor Run: 3 levels”: Ana Silva's written answers waited over 7 days: pay it (Ana Silva can now charge or let it go).”", bellList(nora));
   }, { section: CT, fake: true });
 
   group("ct2", async () => {
@@ -8048,7 +8050,7 @@ group("b19b", async () => {
     const ana = await acct(`tester+media${TS}ct4a@playtest.test`, "Ana Silva", "tester", "they");
     const ben = await acct(`tester+media${TS}ct4b@playtest.test`, "Ben Okafor", "tester", "they");
     const admin = await adminAccount();
-    const t = await postT(nora, { title: "Harbor Run: first 3 levels", spots: "4" });
+    const t = await postT(nora, { title: "Harbor Run: 3 levels", spots: "4" });
     const sA = await joinR(ana, t), sB = await joinR(ben, t);
     await sendW(ana, sA);
     await sendW(ben, sB);
@@ -8622,7 +8624,7 @@ group("b19b", async () => {
       const ana = await account(`tester+media${TS}ora@playtest.test`, "Ana Silva", "tester", "she");
       const admin = await adminAccount();
       await subscribeDev(nora);
-      const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: first 3 levels", liveRateCents: "30.00" });
+      const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: 3 levels", liveRateCents: "30.00" });
       const sA = await join(ana, t);
       await sendWritten(ana, sA);
       const call = await bookCall(nora, ana, t, sA, 3);
@@ -8641,7 +8643,7 @@ group("b19b", async () => {
       await pause(D, 2500);
       const tStart = new Map([...from.keys()].map((P) => [P, at(P)]));
       await shot(D, "outage-real-before-dev", "Before: the developer's page | Nora's test page while the site is up: Ana's written answers waiting in Needs you (“Listing: $10.00 for written answers”), with a call booked for later today.");
-      await shot(T, "outage-real-before-tester", "Before: the tester's page | Ana's session page while the site is up: “Your deadline on Harbor Run: first 3 levels is in 5 hours 59 minutes: send your work before then.” and “Due … · 5 h 59 min left”.");
+      await shot(T, "outage-real-before-tester", "Before: the tester's page | Ana's session page while the site is up: “Your deadline on Harbor Run: 3 levels is in 5 hours 59 minutes: send your work before then.” and “Due … · 5 h 59 min left”.");
       await asPhone(async () => {
         await shot(Dp, "outage-real-before-dev", "Before: the developer's page | Nora's test page on a phone while the site is up.");
         await shot(Tp, "outage-real-before-tester", "Before: the tester's page | Ana's session page on a phone while the site is up, with the time left before their deadline.");
@@ -8721,7 +8723,7 @@ group("b19b", async () => {
     const ana = await account(`tester+media${TS}ola@playtest.test`, "Ana Silva", "tester", "she");
     const admin = await adminAccount();
     await subscribeDev(nora);
-    const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: first 3 levels" });
+    const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: 3 levels" });
     const sA = await join(ana, t);
     const due = () => sql(`select to_char("dueAt", 'YYYY-MM-DD HH24:MI') || ' / Open until ' || (select to_char("openUntil", 'YYYY-MM-DD HH24:MI') from "Test" where id = '${t}') from "Contract" where id = '${sA}'`);
     const before = due();
@@ -8816,7 +8818,7 @@ group("b19b", async () => {
     await post(ana, "/api/help", { topic: "A payment", message: "My payment for the Harbor Run answers hasn't arrived yet. Could you check?" });
     // Nora's test: joins, sent work, a payment, a declined one (a payment hold) and the retry that pays; a call booked; a reminder.
     setCard(nora.email, "pm_card_visa");
-    const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: first 3 levels", writtenCents: "10.00", liveRateCents: "30.00" });
+    const t = await postTest(nora, { productName: "Harbor Run", title: "Harbor Run: 3 levels", writtenCents: "10.00", liveRateCents: "30.00" });
     const sA = await join(ana, t), sB = await join(ben, t);
     await sendWritten(ana, sA);
     await sendWritten(ben, sB);
@@ -8910,6 +8912,8 @@ const SECTIONS = [
   ["Caps", "The most a piece can be paid: a written part paid in steps up to $1,000 in all, the refusal over the room, the lines on both sides at the cap, Dispute at the cap, and the $1,000 for a tester's calls."],
   ["Switch / Keep box (Dec 10)", "The new-terms box on the tester's session page: an offer withdrawn after a stopped Switch, a new offer starting clean, Leave loading the new terms at once, Switch refused after a Stop or after switching in another tab; Send Answers with an empty box, with a short answer while paused or stopped once; and Leave or Rate clearing the lines."],
   ["Bell and emails", "The bell after batch 29: one entry per kind and day across tests (Ratings to give, Applications and invites, Joined, Deadlines, Pay now, Charge or let go, the bank line), the number counting entries with anything unread, and lines read only when opened."],
+  // (Dec 10 overnight round: recorded by scripts/round-dec10/, files in docs/media/round-dec10/; kept here so a later run keeps the section)
+  ["Overnight Dec 10: one-line stops, invites, two copies, offline", "The one blue line under a stopped button (the session page, the join page, the test page) with its changes in the top box, the refusals for good and the red mistakes, the two block lines; invites and applications kept open by pauses, fills and edits; two copies of one page; offline presses; Switch / Keep with the newest offer; the pages that keep their full box (account pages, Edit's Save, Home). Nora (developer) and Ana (tester) side by side."],
 ];
 /** (Batch 15) Launch fixes proven in text (tests and settings), linked from the report. */
 const LAUNCH_TEXT = [
