@@ -14,8 +14,8 @@ import { seen, setup } from "./fixtures";
 const claim = (cookie: string, scope: string, tab: string, extra: Record<string, unknown> = {}) =>
   claimPOST(req("/api/page-claim", { cookie, body: { scope, ...extra }, headers: { "x-tab": tab } })).then(json);
 const pulse = (cookie: string, testId: string, scope: string, tab: string) => pulseGET(req(`/api/pulse?test=${testId}`, { cookie, headers: { "x-tab": tab, "x-page": scope } })).then(json);
-const stop = (id: string, cookie: string, tab: string, scope: string) =>
-  testAction(req(`/api/tests/${id}/stop`, { cookie, body: { reason: "We have what we need.", seenAt: seen() }, headers: { "x-tab": tab, "x-page": scope, "x-press": "1" } }), { params: Promise.resolve({ id, action: "stop" }) }).then(json);
+const stop = (id: string, cookie: string, tab: string, scope: string, extra: Record<string, string> = {}) =>
+  testAction(req(`/api/tests/${id}/stop`, { cookie, body: { reason: "We have what we need.", seenAt: seen() }, headers: { "x-tab": tab, "x-page": scope, "x-press": "1", ...extra } }), { params: Promise.resolve({ id, action: "stop" }) }).then(json);
 const busyPress = (id: string, cookie: string, scope: string, tab: string) =>
   testAction(req(`/api/tests/${id}/invite-search`, { cookie, body: { q: "" }, headers: { "x-tab": tab, "x-page": scope, "x-press": "1" } }), { params: Promise.resolve({ id, action: "invite-search" }) }).then(json);
 
@@ -66,5 +66,22 @@ describe("(owner, Dec 10 2026) claiming again after a failed claim", () => {
     // Nobody claimed the page (as before): the press goes ahead.
     const other = await setup();
     expect((await stop(other.testId, other.dev.cookie, "unclaimed", testScope(other.testId))).status).toBe(200);
+  });
+
+  it("a press from a copy that never claimed, whose previous load in the same browser tab (x-prev) holds the page: the same tab moving on (this load takes the claim, the press goes ahead)", async () => {
+    const { dev, testId } = await setup();
+    const scope = testScope(testId);
+    const where = { userId_scope: { userId: dev.user.id, scope } };
+    await claim(dev.cookie, scope, "load1");
+    // x-prev naming a load that doesn't hold the page (another tab does): refused as before.
+    expect((await stop(testId, dev.cookie, "load2", scope, { "x-prev": "someone-else" })).body.error.code).toBe(PAGE_MOVED_CODE);
+    expect((await db.pageClaim.findUniqueOrThrow({ where })).tabId).toBe("load1");
+    // x-prev naming the holder (Edit's Save loaded the page again in this tab; this load's claims failed): taken, and the press goes ahead.
+    const r = await stop(testId, dev.cookie, "load2", scope, { "x-prev": "load1" });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).status).not.toBe("open");
+    expect((await db.pageClaim.findUniqueOrThrow({ where })).tabId).toBe("load2");
+    expect((await pulse(dev.cookie, testId, scope, "load1")).body.moved).toBe(true);
+    expect((await pulse(dev.cookie, testId, scope, "load2")).body.moved).toBeUndefined();
   });
 });

@@ -197,7 +197,33 @@ describe("(owner, Dec 10 2026) a copy whose claim failed claims again", () => {
     expect(stops().length).toBe(1);
     expect(stops()[0].headers["x-page"]).toBe(SCOPE);
     expect(stops()[0].headers["x-press"]).toBeUndefined(); // not the holder: never marks it busy
+    expect(stops()[0].headers["x-prev"]).toBeUndefined(); // no earlier load in this tab
     await p.done();
+  });
+
+  it("a load after its own press (the same browser tab moving on) whose claims fail: the press names the load before it (x-prev), so the server lets it through", async () => {
+    const sameTab = await import("@/lib/sameTab");
+    sessionStorage.setItem(sameTab.PREV_TAB_KEY, JSON.stringify({ tab: "load1", at: Date.now() }));
+    sameTab.resetSameTab(); // a fresh page
+    const p = await failedCopy();
+    await p.press();
+    expect(claims[0].body.prev).toBe("load1"); // the claim again names it too
+    await p.answer({ status: 500, data: {} });
+    expect(stops().length).toBe(1);
+    expect(stops()[0].headers["x-page"]).toBe(SCOPE);
+    expect(stops()[0].headers["x-prev"]).toBe("load1");
+    await p.done();
+    // A copy that holds its page never sends it.
+    lock.releaseAll(); // the last press (gone through: its redraw's grace)
+    sent = [];
+    const q = await failedCopy();
+    await q.press();
+    await q.answer({ status: 200, data: { claimed: true } });
+    expect(stops().length).toBe(1);
+    expect(stops()[0].headers["x-prev"]).toBeUndefined();
+    await q.done();
+    sessionStorage.removeItem(sameTab.PREV_TAB_KEY);
+    sameTab.resetSameTab();
   });
 
   it("still offline: the press keeps today's line", async () => {

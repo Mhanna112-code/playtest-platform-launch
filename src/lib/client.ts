@@ -81,13 +81,17 @@ export const pageHeaders = (): Record<string, string> => (PAGE_SCOPE && TAB ? { 
  * it (x-page), so the server refuses it while another tab holds the page, even when this copy's claim failed (offline at open). A press from a copy that
  * doesn't hold its page first claims again, like a fresh open, and goes out only after that (not at all when the page has moved: it leaves). Polls still name
  * only a claimed page (pageHeaders): a copy whose claim hasn't landed never reads as an older copy's.
+ * (Owner, Dec 10 2026) Such a press also names the load this same browser tab showed just before (x-prev, lib/sameTab.ts): when that load still holds the page,
+ * the server treats it as the same tab moving on (this load takes the claim, the press goes ahead), never as a page opened somewhere else.
  */
 let PAGE_SHOWN = "";
 let CLAIM_AGAIN: (() => Promise<unknown>) | null = null;
+let PREV_LOAD: (() => string) | null = null;
 export const pageShown = () => PAGE_SHOWN;
-export const setPageShown = (scope: string, claimAgain: (() => Promise<unknown>) | null = null) => {
+export const setPageShown = (scope: string, claimAgain: (() => Promise<unknown>) | null = null, prevLoad: (() => string) | null = null) => {
   PAGE_SHOWN = scope;
   CLAIM_AGAIN = scope ? claimAgain : null;
+  PREV_LOAD = scope ? prevLoad : null;
 };
 let LEFT_MOVED = false;
 /** Has this copy left as a moved page (leaveMovedPage)? */
@@ -220,6 +224,8 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
     await CLAIM_AGAIN().catch(() => null);
     if (LEFT_MOVED) throw new ApiError(409, PAGE_MOVED_CODE, PAGE_MOVED_LINE);
   }
+  // (Owner, Dec 10 2026) Still not holding its page: the load this tab showed before, if any (the same tab moving on).
+  const prevLoad = PAGE_SHOWN && PAGE_SCOPE !== PAGE_SHOWN && !LEFT_MOVED ? (PREV_LOAD?.() ?? "") : "";
   // Every press sends the later of the page's render time and what the live top notice has shown.
   // New terms are measured from the page itself: `pageSeenAt` is when the page was rendered, whatever the top box showed.
   if (body && typeof body === "object" && typeof (body as { seenAt?: unknown }).seenAt === "string") body = { ...body, pageSeenAt: (body as { seenAt: string }).seenAt, seenAt: seenNow((body as { seenAt: string }).seenAt), ...(pageLoadedAt() ? { loadedAt: pageLoadedAt() } : {}), ...(boxSeenAt() ? { boxSeenAt: boxSeenAt() } : {}) };
@@ -232,7 +238,7 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
   try {
     res = await fetch(path, {
       method: method ?? (body === undefined ? "GET" : "POST"),
-      headers: { "x-timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, ...(body === undefined ? {} : { "content-type": "application/json" }), "x-tab": TAB, ...(PAGE_LOAD ? { "x-load": PAGE_LOAD } : {}), ...(PAGE_USER ? { "x-uid": PAGE_USER } : {}), ...(PAGE_SCOPE || PAGE_SHOWN ? { "x-page": PAGE_SCOPE || PAGE_SHOWN } : {}), ...(press && PAGE_SCOPE ? { "x-press": "1" } : {}) /* a new copy waits for it */ },
+      headers: { "x-timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, ...(body === undefined ? {} : { "content-type": "application/json" }), "x-tab": TAB, ...(PAGE_LOAD ? { "x-load": PAGE_LOAD } : {}), ...(PAGE_USER ? { "x-uid": PAGE_USER } : {}), ...(PAGE_SCOPE || PAGE_SHOWN ? { "x-page": PAGE_SCOPE || PAGE_SHOWN } : {}), ...(prevLoad ? { "x-prev": prevLoad } : {}),...(press && PAGE_SCOPE ? { "x-press": "1" } : {}) /* a new copy waits for it */ },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {

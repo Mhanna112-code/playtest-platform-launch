@@ -102,12 +102,18 @@ const FREE_PATHS = /^\/api\/(page-claim|page-handover|auth\/)/;
  * (§380 J) A press that locks the page (x-press) marks the holder busy: a new copy opened meanwhile waits for it (the copy says "done" when it's over).
  * (Owner, Dec 10 2026) A copy whose claim failed names its page too (from its first draw): its press is refused the same way while another tab holds the page,
  * and goes ahead only when nobody has claimed it.
+ * (Owner, Dec 10 2026) ... or when the holder is the load this same browser tab showed just before (`x-prev`, lib/sameTab.ts, as claimPage's `prev`): the same
+ * tab moving on, so this load takes the claim and the press goes ahead.
  */
 export async function checkPageClaim(req: Request, userId: string) {
   const scope = req.headers.get("x-page"), tab = req.headers.get("x-tab");
   if (!scope || !tab || !isScope(scope) || req.method === "GET" || req.method === "HEAD") return;
   if (FREE_PATHS.test(new URL(req.url, "http://x").pathname)) return;
-  if (!(await holdsPage(userId, scope, tab))) throw new HttpError(409, PAGE_MOVED_CODE, PAGE_MOVED_LINE);
+  if (!(await holdsPage(userId, scope, tab))) {
+    const prev = (req.headers.get("x-prev") ?? "").slice(0, 64), now = new Date();
+    const took = prev ? await db.pageClaim.updateMany({ where: { userId, scope, tabId: prev }, data: { tabId: tab.slice(0, 64), claimedAt: now, beatAt: now, busy: false, wantTab: "", wantAt: null } }) : null;
+    if (!took?.count) throw new HttpError(409, PAGE_MOVED_CODE, PAGE_MOVED_LINE);
+  }
   if (req.headers.get("x-press") === "1") await db.pageClaim.updateMany({ where: { userId, scope, tabId: tab.slice(0, 64) }, data: { busy: true, beatAt: new Date() } });
 }
 

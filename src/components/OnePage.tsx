@@ -92,7 +92,7 @@ export function OnePage({ scope, poll = false }: { scope: string; /** (§380 K) 
       if (!alive || pageScope() === scope || leftMovedPage()) return Promise.resolve();
       return claiming ?? claim(true);
     };
-    setPageShown(scope, claimAgain);
+    setPageShown(scope, claimAgain, () => prevTab());
     const claimLoop = async (mine: number, again: boolean) => {
       let now = false;
       let waited = false;
