@@ -1479,7 +1479,11 @@ async function runDailyLocked(now: Date) {
   const gap = new Date(now.getTime() - REPEAT_MIN_GAP_MS);
   const invites = (await db.invite.findMany({ where: { status: "sent", createdAt: { lt: gap }, OR: [{ remindedAt: null }, { remindedAt: { lt: gap } }] }, include: { test: { include: { developer: true } } }, take: 500 }))
     .filter((i) => repeatDue(i.remindedAt ?? i.createdAt, now, INVITE_REMIND_DAYS));
+  // (Owner, Dec 2026) They wait while the invited tester's tester side is suspended (like her other reminders); the invite itself stays open (Oct rule). After
+  // her reinstatement the next run sends one line (repeatDue from the last reminder: never one per missed day), then daily again. A deleted account gets none.
+  const away = new Set((await db.user.findMany({ where: { id: { in: [...new Set(invites.map((i) => i.testerId))] }, OR: [{ testerSuspendedAt: { not: null } }, { deletedAt: { not: null } }] }, select: { id: true } })).map((u) => u.id));
   for (const i of invites) {
+    if (away.has(i.testerId)) continue;
     const testersIn = await db.contract.count({ where: { testId: i.testId, status: "working" } });
     if (i.test.status !== "open" || testersIn >= i.test.spots || (i.test.openUntil && i.test.openUntil < now)) continue; // expired
     if (i.test.adminPausedAt || i.test.developer.holdStartedAt || i.test.developer.devSuspendedAt) continue; // paused: the reminders wait
@@ -2302,7 +2306,11 @@ export async function finishChoicePay(paymentId: string, r: { status: string; fe
  */
 async function dailyReminders(now: Date) {
   // (Batch 34 §16) Not an applicant who holds a sent invite (the invite stands for the answer).
-  const pendingApps = await (await import("./joining")).answerable(await db.application.findMany({ where: { status: "pending" }, select: { testId: true, testerId: true } }));
+  // (Owner, Dec 2026) Nor an applicant whose tester side is suspended or whose account was deleted (their pending applications and asks are withdrawn then,
+  // removeTester; this keeps one written meanwhile out of the count): the reminder waits for those, and with none answerable left there is no line.
+  const allApps = await db.application.findMany({ where: { status: "pending" }, select: { testId: true, testerId: true } });
+  const awayApplicants = new Set((await db.user.findMany({ where: { id: { in: [...new Set(allApps.map((a) => a.testerId))] }, OR: [{ testerSuspendedAt: { not: null } }, { deletedAt: { not: null } }] }, select: { id: true } })).map((u) => u.id));
+  const pendingApps = await (await import("./joining")).answerable(allApps.filter((a) => !awayApplicants.has(a.testerId)));
   const waiting = [...pendingApps.reduce((m, a) => m.set(a.testId, (m.get(a.testId) ?? 0) + 1), new Map<string, number>())].map(([testId, n]) => ({ testId, _count: { _all: n } }));
   const tests = await db.test.findMany({ where: { id: { in: waiting.map((w) => w.testId) }, status: "open", ...PAUSE_FREE }, select: { id: true, title: true, developerId: true } });
   // (Owner, Nov 11, §383) A test's line again a calendar day after its last one, and at least 12 hours later (repeatDue; it was "none in the last 20 hours").
