@@ -1601,8 +1601,8 @@ export const UNLISTED_CALL_CLOSED = "Closed with nothing paid (it wasn't listed)
 export const UNLISTED_CALL_TAIL = " (it isn't listed: pay any amount, or it closes with nothing paid)";
 /** The refusal of a Pay or Pay more on it. */
 export const unlistedCallClosedLine = (call: string) => `${call} closed with nothing paid: it wasn't listed and wasn't paid within ${REVIEW_DAYS} days.`;
-/** An older page's Charge or Let it go on a listed call. */
-export const AUTO_CHARGE_NO_CHOICE = "This call is charged automatically, so there's nothing to choose.";
+/** (Owner, Dec 9 2026) An older page's (or a hand-made) Charge or Let it go on any call: calls settle on their own. */
+export const AUTO_CHARGE_NO_CHOICE = "There's nothing to choose for a call: it's charged automatically, or closes with nothing paid if it wasn't listed.";
 /** The developer's line in a listed call's Pay box: "If you don't pay by Nov 5, it's charged automatically: $25.00 (30 min × $50.00/h)." */
 export const autoChargeLine = (date: string, cents: number, minutes: number, rateCents: number) => `If you don't pay by ${date}, it's charged automatically: ${money(cents)} (${minutes} min × ${money(rateCents)}/h).`;
 /** (Owner, Nov 6, §311e) The developer's Pay box note on an UNLISTED call before its pay date: "If you don't pay by Nov 5, it closes with nothing paid." */

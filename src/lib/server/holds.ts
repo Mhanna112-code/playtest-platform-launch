@@ -2091,10 +2091,12 @@ type ChoiceRace = { userId: string; body: Record<string, unknown> } | null;
 /** (§386 A) The press a choice names: "Let it go" or "Charge". */
 const choicePress = (body: Record<string, unknown>) => (body.choice === "letgo" ? "Let it go" : "Charge");
 export async function chooseOutcome(tester: { id: string; email: string; name: string; pronoun?: string }, contractId: string, body: Record<string, unknown>) {
+  // (Owner, Dec 9 2026) Calls settle on their own: a listed call is charged automatically at its pay date, an unlisted one closes with nothing paid
+  // (autoChargeCalls). There's no Charge or Let it go on a call; an older page's or a hand-made press is refused.
+  if (body.callId) throw new HttpError(409, "auto_charge", AUTO_CHARGE_NO_CHOICE);
   const race: ChoiceRace = { userId: tester.id, body };
   // (Owner, Oct 29, batch 32 §7) An open new-terms offer blocks Charge and Let it go until the tester answers it (Switch or Keep).
   if ((await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true } }))?.testerId === tester.id) await (await import("./terms")).answerTermsFirst(contractId);
-  if (body.callId) return chooseCallOutcome(tester, contractId, body, race);
   const s = await db.submission.findUnique({ where: { id: String(body.submissionId ?? "") }, include: { review: true, contract: { include: { tester: true, test: { include: { developer: true } } } } } });
   if (!s || s.contractId !== contractId || s.contract.testerId !== tester.id) throw new HttpError(404, "not_found", "That work doesn't exist.");
   const c = s.contract, dev = c.test.developer, label = s.kind === "recording" ? "recording" : "written answers";
@@ -2262,81 +2264,6 @@ async function chargeRefusals(where: { submissionId: string } | { callId: string
 async function chargeCloseOutGate(where: { submissionId: string } | { callId: string }) {
   const at = await pieceCloseOut(where);
   if (closedOut(at)) throw new HttpError(409, "charge_closed", chargeClosedLine(fmtDate(at!)));
-}
-
-/** (Batch 15 sections 15, 34 and 40) The tester's Charge / Let it go on a listed call left unpaid past its review date. */
-async function chooseCallOutcome(tester: { id: string; email: string; name: string; pronoun?: string }, contractId: string, body: Record<string, unknown>, race: ChoiceRace = null) {
-  const x = await db.call.findUnique({ where: { id: String(body.callId ?? "") }, include: { review: true, contract: { include: { tester: true, test: { include: { developer: true } } } } } });
-  if (!x || x.contractId !== contractId || x.contract.testerId !== tester.id) throw new HttpError(404, "not_found", "That call doesn't exist.");
-  const c = x.contract, dev = c.test.developer, label = "live call";
-  await (await import("./payments")).testerFrozenRefusal(dev.id, c.test, choicePress(body)); // (§386 A)
-  // (Owner, Nov 4, §187) As for written work: the tester's own Charge at the bank, then the developer paid anything (one final refusal), then "being confirmed".
-  await chargeRefusals({ callId: x.id }, displayName(dev), x.review, `your call on ${callAtFor(x.startsAt, c.tester)}`);
-  // (Owner, Oct 29, batch 28 §21) A listed call is charged automatically: no Charge or Let it go (an older page's press).
-  if (x.rateCents != null) throw new HttpError(409, "auto_charge", AUTO_CHARGE_NO_CHOICE);
-  // (Batch 17 §19) After the piece closed nothing is offered any more (even a piece whose Charge never opened).
-  await chargeCloseOutGate({ callId: x.id });
-  if (!x.choiceOfferedAt) throw new HttpError(409, "not_yet", `You can choose once ${REVIEW_DAYS} days have passed since the call and your deadline has passed.`);
-  // (Owner, Nov 27, shared rule 4) Nothing left to charge is a refusal: before the stop-once box (and again after it, below).
-  if (body.choice === "charge" && (await callChargeCap(x)).cents === 0) throw new HttpError(409, "paid_in_full", "There's nothing left to charge for this call (the $500 for calls on this test is used).");
-  try {
-    await testerTermsGate(contractId, displayName(dev), body);
-  } catch (e) {
-    if (e instanceof HttpError && e.code === "stop_once") await chargeRefusals({ callId: x.id }, displayName(dev), await db.review.findUnique({ where: { callId: x.id } }), `your call on ${callAtFor(x.startsAt, c.tester)}`);
-    throw e;
-  }
-  const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;
-  if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");
-  const cap = (await callChargeCap(x)).cents;
-  if (cap === 0 && choice === "charge") throw new HttpError(409, "paid_in_full", "There's nothing left to charge for this call (the $500 for calls on this test is used).");
-  // (Owner, Nov 11, §380 D2) Charge is pressable with the amount box empty: an empty box is its mistake ("Enter an amount like 5.00."), never the whole cap (only a
-  // press that sends no amount at all, an older page, means the cap).
-  const typed = body.amount === undefined ? cap : toCents(body.amount);
-  if (choice === "charge" && (typed == null || typed <= 0)) throw new HttpError(400, "bad_amount", "Enter an amount like 5.00.");
-  if (choice === "charge" && typed! > cap) throw new HttpError(400, "too_much", `At most ${money(cap)}.`);
-  if (choice === "charge" && typed! > 0 && typed! < 50) throw new HttpError(400, "too_small", "The smallest card charge is $0.50.");
-  const amount = choice === "charge" ? typed! : 0;
-  // (Batch 16 section 39) The tick only above $200, naming the typed amount.
-  if (choice === "charge" && amount > CHARGE_TICK_CENTS && body.tickedCents !== amount) throw new HttpError(400, "tick", chargeTickLine(displayName(dev), amount));
-  const payKey = serverKey("choice", x.id);
-  const minutes = callMinutesOf(x);
-  const review = await claimChoice(c.testId, { callId: x.id }, displayName(dev), { callId: x.id, contractId: c.id, amountCents: amount, agreedCents: x.rateCents != null && minutes != null ? callReference(x.rateCents, minutes).cents : null, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey }, race && { ...race, own: await chooseOwnText(choice, displayName(dev), amount, { callId: x.id }) });
-  if (!review) throw new HttpError(409, "done", "This was already settled.");
-  if (choice === "letgo") {
-    const line = `${displayName(tester)} let ${pronouns(tester.pronoun).poss} call on ${callAtFor(x.startsAt, dev)} go: nothing charged`;
-    await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", line, false, {}, c.id, "", `call-${x.id}`));
-    // (Owner, Nov 6, §286) The same line in the developer's bell, linking to the call.
-    await bell(dev.id, line, `/app/tests/${c.testId}#call-${x.id}`, undefined, { side: "developer", testId: c.testId });
-    return { choice, amountCents: 0 };
-  }
-  const row = await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "pending", payKey } });
-  let status = "charged";
-  try {
-    // (Owner, Nov 3) "Playtest: Ana Silva's written answers on “Harbor Run”, charged by Ana Silva after 7 days without a review" (its review is made first).
-    const r = await charge(dev, c.tester, amount, payKey, await describedOnce(row.id, () => stripeDescription({ payment: row })));
-    status = r.status;
-    if (r.status === "requires_action") {
-      await (await import("./confirm")).awayAction(row.id, r as NeedsAction);
-      await notify(c.tester.email, `Payment for your call on “${c.test.title}” (${T(x.startsAt)}) may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tdelayed" });
-      status = "needs_confirmation";
-    } else {
-      return finishChoicePay(row.id, r);
-    }
-  } catch (e) {
-    if (e instanceof HttpError && e.code === "payment_unknown") throw new HttpError(502, "payment_unknown", (await import("./recovery")).PAYMENT_CHECKING);
-    if (!(e instanceof HttpError && e.code === "card_failed")) {
-      await db.payment.delete({ where: { id: row.id } });
-      await db.review.delete({ where: { id: review.id } });
-      // (§130) The developer's card unknown to Stripe (cleared): the tester reads the plain problem line, never the developer's "Add a card".
-      throw e instanceof HttpError && e.code !== "no_card" ? e : new HttpError(503, "payments_problem", PAYMENTS_PROBLEM);
-    }
-    status = "failed";
-    const failed = await db.payment.update({ where: { id: row.id }, data: { status: "failed", failure: (e as Error).message, owedUntil: new Date() } });
-    await notify(c.tester.email, `Payment for your call on “${c.test.title}” (${T(x.startsAt)}) may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tdelayed" });
-    await declinedPayment(dev.id, failed.id, amount, pieceName({ tester: displayName(tester), part: label, test: c.test.title, when: T(x.startsAt), full: true }));
-  }
-  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} call on ${callAtFor(x.startsAt, dev)}`, false, {}, c.id, "", `call-${x.id}`));
-  return { choice, amountCents: amount, status, ...(status === "needs_confirmation" ? { message: `Charged ${money(amount)}. Payment may be delayed.` } : {}) };
 }
 
 /** (Batch 15 section 9) A tester's Charge went through (at once, or found later by the stuck-payment check): recorded, the receipt sent. */

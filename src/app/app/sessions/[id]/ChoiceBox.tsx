@@ -30,10 +30,10 @@ function ChargeLabel({ devName, cents }: { devName: string; cents: number | null
  * is red at its box with the server's own line, and listed under the buttons.
  * (Batch 35 §40, §41) Once it goes through, the page redraws in place (the scroll stays here); until it has, only the pressed button (greyed) and its line show.
  */
-export function ChoiceBox({ paused = false, closes = "", sessionId, submissionId, callId, line, devName, cents, seenAt }: { paused?: boolean; /** (Owner, Nov 11, §387 4) "Charge or let go by Nov 20" (or "Waits while the test is paused"), next to the buttons */ closes?: string; sessionId: string; submissionId?: string; callId?: string; line: string; devName: string; cents: number; seenAt: string }) {
+export function ChoiceBox({ paused = false, closes = "", sessionId, submissionId, line, devName, cents, seenAt }: { paused?: boolean; /** (Owner, Nov 11, §387 4) "Charge or let go by Nov 20" (or "Waits while the test is paused"), next to the buttons */ closes?: string; sessionId: string; /** (Owner, Dec 9 2026) written answers or a recording only: calls settle on their own */ submissionId: string; line: string; devName: string; cents: number; seenAt: string }) {
   // (Owner, Nov 10, §371) The press's state is kept by the piece (lib/pressCarry.ts): the session page is keyed by its status, so a redraw while Charge / Let it go
   // is on its way (the work ended, the test closed) draws a new box; it shows "busy", and the server's stop box or refusal, under its buttons.
-  const carry = `choice:${submissionId ?? callId}`;
+  const carry = `choice:${submissionId}`;
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useCarried(carry, "boxAt", "");
   const confirmed = !!boxAt;
@@ -69,7 +69,7 @@ export function ChoiceBox({ paused = false, closes = "", sessionId, submissionId
     setPressed(choice === "letgo" ? "Let it go" : "Charge");
     setBusy(true);
     setErr("");
-    api(`/api/sessions/${sessionId}/choose`, { ...(callId ? { callId } : { submissionId }), choice, amount, tickedCents: choice === "charge" && over && ticked ? typed : undefined, seenAt, confirmed, boxAt })
+    api(`/api/sessions/${sessionId}/choose`, { submissionId, choice, amount, tickedCents: choice === "charge" && over && ticked ? typed : undefined, seenAt, confirmed, boxAt })
       .then(() => shown().finish(choice === "letgo" ? "You let it go." : `Charged ${devName} ${money(typed ?? cents)}.`))
       .catch((e) => {
         const sb = stopBox(e); if (sb) { setBox(sb); setBoxAt(sb.now); }
@@ -95,7 +95,7 @@ export function ChoiceBox({ paused = false, closes = "", sessionId, submissionId
         <div className="flex flex-wrap items-center gap-2">
           {/* (Owner, Nov 5, §261) The amount is read-only while Charge / Let it go is going through. */}
           <label className="inline-flex items-center gap-1">
-            $ <input className="input w-24" inputMode="decimal" data-money="" aria-label="Amount to charge" id={`charge-${submissionId ?? callId}`} data-min="0.5" data-max={String(cents / 100)} data-msg="Enter an amount like 5.00." data-min-msg="The smallest card charge is $0.50." data-max-msg={`At most ${money(cents)}.`}
+            $ <input className="input w-24" inputMode="decimal" data-money="" aria-label="Amount to charge" id={`charge-${submissionId}`} data-min="0.5" data-max={String(cents / 100)} data-msg="Enter an amount like 5.00." data-min-msg="The smallest card charge is $0.50." data-max-msg={`At most ${money(cents)}.`}
               data-match="amount like|at most|smallest card charge" value={amount} onChange={(e) => { setAmount(e.target.value); setTicked(false); }} {...lockText(busy)} />
             <span className="note whitespace-nowrap">(up to {money(cents)})</span>
           </label>
