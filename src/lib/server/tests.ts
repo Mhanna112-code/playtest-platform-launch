@@ -175,25 +175,22 @@ export async function recordEvent(tx: Tx, testId: string, kind: string, text: st
 const working = (testId: string) => ({ testId, status: "working" });
 
 /**
- * (Owner, correction 4) When the test fills, every pending application and every open invite closes (nothing reopens
- * later). Runs inside the transaction that took the last spot. The developer's line stops once in all tabs.
+ * The test filled: runs inside the transaction that took the last spot. The developer's line stops once in all tabs.
+ * (Owner, Dec 10 2026) Pending applications stay open while it is full and their applicants are told nothing (not when it fills, not when a spot opens);
+ * new applications and Accept are refused while full (joinRefusal). (Correction 6) Open invites stay open too; they're told, and told again when a spot opens.
  */
 export async function closeOnFull(tx: Tx, testId: string, exceptTesterId: string | null) {
   const t = await tx.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
   const now = new Date();
-  const apps = await tx.application.findMany({ where: { testId, status: "pending", ...(exceptTesterId ? { testerId: { not: exceptTesterId } } : {}) } });
-  // (Correction 6) Open invites STAY open while the test is full; they're told, and told again when a spot opens.
   const invs = await tx.invite.findMany({ where: { testId, status: "sent", ...(exceptTesterId ? { testerId: { not: exceptTesterId } } : {}) } });
-  await tx.application.updateMany({ where: { id: { in: apps.map((a) => a.id) } }, data: { status: "closed", closedReason: "full", decidedAt: now } });
-  const closed = apps.length ? `: closed ${apps.length} application${apps.length === 1 ? "" : "s"}.` : ".";
   const open = invs.length ? ` ${invs.length} invite${invs.length === 1 ? " stays" : "s stay"} open until a spot opens.` : "";
-  await tx.testEvent.create({ data: { testId, kind: "full", text: `${t.title} is full${closed}${open}`.replace(/\.$/, "") } });
-  const people = await tx.user.findMany({ where: { id: { in: [...apps.map((a) => a.testerId), ...invs.map((i) => i.testerId)] } } });
+  await tx.testEvent.create({ data: { testId, kind: "full", text: `${t.title} is full.${open}`.replace(/\.$/, "") } });
+  const people = await tx.user.findMany({ where: { id: { in: invs.map((i) => i.testerId) } } });
   const email = (id: string) => people.find((p) => p.id === id)?.email ?? "";
   // Once per invite: only those never told it filled.
   const tell = invs.filter((i) => !i.fullNotifiedAt);
   await tx.invite.updateMany({ where: { id: { in: tell.map((i) => i.id) } }, data: { fullNotifiedAt: now } });
-  return { title: t.title, testId, dev: displayName(t.developer), apps: apps.map((a) => email(a.testerId)), invites: tell.map((i) => email(i.testerId)) };
+  return { title: t.title, testId, dev: displayName(t.developer), invites: tell.map((i) => email(i.testerId)) };
 }
 
 export const fullInviteLine = (title: string) => `${title} is full right now. Your invite stays open; we'll tell you when a spot opens.`;
@@ -202,14 +199,13 @@ export const spotOpenLine = (title: string, dev: string) => `A spot opened on ${
 /** (Owner, Oct 29, batch 29 §23) The tester's lines about their applications and invites stack into ONE entry per day across tests: "Applications and invites". */
 export const APPS_GROUP = { group: "apps" } as const;
 
-export async function tellFull(f: { title: string; testId: string; dev: string; apps: string[]; invites: string[] }) {
-  for (const e of f.apps) if (e) await notify(e, `${f.title} is full, so your application was closed.`, [`${f.title} is full, so your application was closed.`], `/app/find/${f.testId}`, { ...APPS_GROUP, testId: f.testId });
+export async function tellFull(f: { title: string; testId: string; dev: string; invites: string[] }) {
   for (const e of f.invites) if (e) await notify(e, fullInviteLine(f.title), [fullInviteLine(f.title)], `/app/find/${f.testId}`, { ...APPS_GROUP, testId: f.testId });
 }
 
 /**
  * (Correction 6) A spot opened (someone left / was ended, or spots were raised) on a test that was full: every open
- * invite is told (first come, first served). Closed applicants aren't. Reminders resume by themselves.
+ * invite is told (first come, first served). Applicants aren't ((Owner, Dec 10 2026) their pending applications stayed open, unannounced). Reminders resume by themselves.
  */
 export async function spotOpened(testId: string, opts: { /** (§341) a free key was added to a test full for want of one */ keyAdded?: boolean } = {}) {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
@@ -402,7 +398,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   let termsChanged = false;
   let switchedToAnyone = false;
   let changedNames: string[] = [];
-  let reinvite = false;
+  let closesApps = false;
   let spotsChanged = false;
   let switchedToInvite = false;
   let changeId: string | null = null;
@@ -616,7 +612,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // (§286) The fields a working tester's line counts (saveLine's "session" side): the title and the listing information.
     if (listingFields.some((f) => f === "title" || INFO_FIELDS.includes(f))) editedFor = await tx.contract.findMany({ where: working(testId), select: { id: true, testerId: true, tester: { select: { email: true } } } });
     changedNames = [...fields.map((f) => FIELD_NAMES[f]), ...(keysChanged ? ["access keys"] : [])];
-    reinvite = !ndaOnly && fields.some((f) => CLOSING_FIELDS.includes(f));
+    closesApps = !ndaOnly && fields.some((f) => CLOSING_FIELDS.includes(f));
     spotsChanged = fields.includes("spots");
     switchedToInvite = fields.includes("joinMode") && next.joinMode === "invite";
     return tx.test.findUniqueOrThrow({ where: { id: testId } });
@@ -626,7 +622,9 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   await db.keptForm.deleteMany({ where: { userId: dev.id, key: `test:edit:${testId}` } });
   // Working testers are OFFERED the new contract terms (Switch / Keep); their contract changes only if they switch.
   const offered = termsChanged ? await offerNewTerms(testId, changeId) : 0;
-  const closedApps = reinvite ? await (await import("./joining")).closeApplicationsAfterEdit(testId) : switchedToInvite ? await (await import("./joining")).closeApplicationsAfterEdit(testId, "invite_only") : [];
+  // (Owner, Dec 10 2026) A Save that switched to invite only closes them with the invite-only line, even when it changed a closing field too: they can't apply
+  // again to an invite-only test.
+  const closedApps = switchedToInvite ? await (await import("./joining")).closeApplicationsAfterEdit(testId, "invite_only") : closesApps ? await (await import("./joining")).closeApplicationsAfterEdit(testId) : [];
   // (Correction 4/5) Lowering spots never closes invites by itself; lowering them to the testers in fills the test.
   if (spotsChanged) {
     const filled = await db.$transaction(async (tx) => {
@@ -640,10 +638,9 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   if (keysWereFull && !(await (await import("./accessKeys")).keysFullNow(db, testId))) await spotOpened(testId, { keyAdded: true });
   // (Owner, Nov 9, §338) Applicants it couldn't join for want of a free access key stay waiting; the Save's note names them.
   const noKeyApps = switchedToAnyone ? (await (await import("./joining")).onSwitchToAnyone(testId)).noKey : [];
-  // (NEWEST+4) Any listing change except spots / who can join re-sends open invites on the new listing.
-  const { skipped: notReinvited, resent } = reinvite ? await (await import("./invites")).reinviteAfterEdit(testId) : { skipped: [], resent: [] };
+  // (Owner, Dec 10 2026) Open invites simply stay through an edit: nothing is re-sent (the join page's live box and Join's stop-once show the edit).
   // (Batch 15 section 43) The Save's effects on others, on its Contract changes entry.
-  const effects = [closedApps.length ? `${closedApps.length} application${closedApps.length === 1 ? "" : "s"} closed` : "", resent.length ? `${resent.length} invite${resent.length === 1 ? "" : "s"} re-sent` : ""].filter(Boolean).join(" · ");
+  const effects = closedApps.length ? `${closedApps.length} application${closedApps.length === 1 ? "" : "s"} closed` : "";
   if (changeId && effects) await db.testChange.update({ where: { id: changeId }, data: { effects } });
   // (Owner, Nov 5, §265) Each tester whose questions changed: a bell line in the listing's words ("Nora Lane updated the listing: questions"), linking to their
   // contract box, where the questions carry "Updated <time>" (the top box's line comes from the Save's "listing_save" record).
@@ -668,7 +665,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   // (Batch 30 §17) Each tester given a key: a line in their session page's top box (the key itself only on their page). (Owner, Nov 6, §312c) No bell or email
   // line any more ("<dev> gave you an access key for “X”").
   for (const g of keysGiven) await logEvent(testId, KEY_GIVEN, keyGivenEventLine(displayName(dev), g.name), g.contractId);
-  return Object.assign(result, { offered, changed: changedNames, notReinvited, resent, closedApps, keysGiven: keysGiven.length, noKeyApps });
+  return Object.assign(result, { offered, changed: changedNames, closedApps, keysGiven: keysGiven.length, noKeyApps });
 }
 
 /** The access keys as an Edit tab needs them to tell what changed elsewhere (the free keys and how many are in use). */
@@ -680,8 +677,11 @@ async function keysState(tx: Tx, testId: string) {
 /** (Batch 15 sections 24 and 43) The fields a Contract changes entry records: the terms and the names. */
 export const DEAL_FIELDS: (keyof Listing)[] = ["productName", "title", "writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "deadlineDays", "questions", "ndaText"];
 
-/** (Correction 2) The changes that close applications and re-send invites: prices / parts / questions, deadline, devices, languages, description. */
-export const CLOSING_FIELDS: (keyof Listing)[] = ["ndaText", "writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "questions", "deadlineDays", "devices", "languages", "description", "buildUrl"]; // (batch 14) the build link too
+/**
+ * (Correction 2) The changes that close pending applications: prices / parts / questions, devices, languages, description, the NDA; (batch 14) the build link too.
+ * (Owner, Dec 10 2026) Not "deadlineDays": the form never sends it as typed (tester days follow Open until). Open invites stay through any edit.
+ */
+export const CLOSING_FIELDS: (keyof Listing)[] = ["ndaText", "writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "questions", "devices", "languages", "description", "buildUrl"];
 
 export async function openDraft(dev: U, testId: string, body: Record<string, unknown> = {}) {
   const t = await ownTest(dev.id, testId);
@@ -1231,7 +1231,7 @@ export async function saveJoin(tx: Tx, t: Prisma.TestGetPayload<object>, tester:
   await assignKeyAtJoin(tx, testId, contract.id);
   await recordEvent(tx, testId, options.quietJoinEvent === true ? "auto_joined" : "joined", old ? `${displayName(tester)} joined again` : `${displayName(tester)} joined`, true, {}, contract.id, "", testerRow(contract.id)); // (Owner, Nov 6, §284) the place the line opens: their row in Testers
   await tx.invite.updateMany({ where: { testId, testerId: tester.id, status: "sent" }, data: { status: "joined" } });
-  // (Correction 4) The last spot taken: every other pending application and open invite closes, in this transaction.
+  // (Correction 4) The last spot taken: the "full" line, in this transaction ((Owner, Dec 10 2026) applications and invites stay open: closeOnFull).
   const filled = (await tx.contract.count({ where: working(testId) })) >= t.spots
     ? await closeOnFull(tx, testId, tester.id)
     : null;

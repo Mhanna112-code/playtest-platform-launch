@@ -534,15 +534,17 @@ export async function invitesSentSince(userId: string, since: Date) {
   });
 }
 
-/** (Batch 14 section 3) "<dev> updated <test>: your invite was sent again on the new listing." */
+/** (Batch 14 section 3) "<dev> updated <test>: your invite was sent again on the new listing." (Owner, Dec 10 2026) No edit re-sends an invite any more: the line
+ * reads only for invites re-sent before (a "replaced" one before it). */
 export const reinvitedLine = (dev: string, test: string) => `${dev} updated “${test}”: your invite was sent again on the new listing.`; // (batch 15 section 32) quoted
 
 /** (Batch 16 section 32) "Your invite to “Harbor Run” was closed." (never why). */
 export const inviteClosedLine = (test: string) => `Your invite to “${test}” was closed.`;
 /**
  * (Batch 30 §6, per batch 29 §23) The live box's "Your invite to “<test>” was closed." is a bell line too, in "Applications and invites" (stacked across tests), for every
- * invite closed without its own line: the developer's Cancel invite, a stop or close, a pause (any cause, never why), a block, a deleted developer. (Open until passing
- * has its own "“<test>” closed to new testers on <date>."; a re-sent invite its "…was sent again" line.) Pass the ids of the invites just closed.
+ * invite closed without its own line: the developer's Cancel invite, a stop or close (the developer's, the team's, the test closing on its own, a pause running
+ * 7 days), a block, a deleted developer. (Owner, Dec 10 2026) A pause itself no longer closes invites. (Open until passing has its own "“<test>” closed to new
+ * testers on <date>.") Pass the ids of the invites just closed.
  */
 export async function tellInvitesClosed(inviteIds: string[]) {
   if (!inviteIds.length) return;
@@ -557,30 +559,6 @@ export async function tellInvitesClosed(inviteIds: string[]) {
 }
 /** The open invites a closing is about to cancel (for tellInvitesClosed after it). */
 export const openInviteIds = async (where: Prisma.InviteWhereInput, tx: Prisma.TransactionClient | typeof db = db) => (await tx.invite.findMany({ where: { ...where, status: "sent" }, select: { id: true } })).map((i) => i.id);
-
-export async function reinviteAfterEdit(testId: string) {
-  const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
-  const open = await db.invite.findMany({ where: { testId, status: "sent" }, orderBy: { createdAt: "asc" } });
-  const skipped: string[] = [];
-  const resent: string[] = [];
-  for (const inv of open) {
-    await db.invite.update({ where: { id: inv.id }, data: { status: "replaced" } });
-    const p = await db.user.findUnique({ where: { id: inv.testerId } });
-    if (!p) continue;
-    const name = displayName(p);
-    const active = await db.contract.count({ where: { testerId: p.id, status: "working" } });
-    const blocked = (await db.block.count({ where: { OR: [{ blockerId: t.developerId, blockedId: p.id }, { blockerId: p.id, blockedId: t.developerId }] } })) > 0;
-    if (!p.isTester) { skipped.push(`${name} (account closed)`); continue; }
-    if (p.testerSuspendedAt || blocked) { skipped.push(`${name} (can't be invited right now)`); continue; }
-    if (active >= MAX_ACTIVE_TESTS) { skipped.push(`${name} (in ${MAX_ACTIVE_TESTS} tests)`); continue; }
-    await db.invite.create({ data: { testId, testerId: p.id } });
-    resent.push(name);
-    // (Owner, Oct 29, batch 14 section 3) Stacked across tests, one entry per day.
-    const line = reinvitedLine(displayName(t.developer), t.title);
-    await notify(p.email, line, [line, `The new listing: ${termsLine(asListing(t), true)}.`, "Open it and press Join to join on these terms."], `/app/find/${testId}`, { group: "apps", testId }); // (batch 29 §23) in "Applications and invites", no longer its own stack
-  }
-  return { skipped, resent };
-}
 
 /** The state and wording shown by application and invited rows. */
 export async function testerRowInfo(devId: string, test: { devices: string[]; languages: string[] }, people: { id: string; profile: { devices: string[]; languages: string[]; updatedAt: Date } | null }[]) {

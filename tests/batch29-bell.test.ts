@@ -292,15 +292,15 @@ describe("§23-27 the tester's stacks across tests", () => {
     const t = await makeUser({ tester: true });
     for (const title of ["Harbor Run", "Sky Lab"]) {
       const { testId } = await setup({ title, productName: title });
-      await tellFull({ title, testId, dev: "Nora Lane", apps: [t.user.email], invites: [] });
+      await tellFull({ title, testId, dev: "Nora Lane", invites: [t.user.email] });
     }
-    await tellFull({ title: "Reef Dash", testId: (await setup({ title: "Reef Dash" })).testId, dev: "Nora Lane", apps: [], invites: [t.user.email] });
+    await tellFull({ title: "Reef Dash", testId: (await setup({ title: "Reef Dash" })).testId, dev: "Nora Lane", invites: [t.user.email] });
     const ls = await lines(t.user.id);
     expect(ls).toHaveLength(3);
     expect(ls.every((l) => l.groupKey === "apps" && l.link.startsWith("/app/find/"))).toBe(true);
     expect(keys(ls).size).toBe(1);
     expect(groupTitle("apps", 3, 3)).toBe("Applications and invites"); // "Applications and invites · 3 updates today"
-    expect(src("lib/server/invites.ts")).toContain('{ group: "apps", testId }); // (batch 29 §23)');
+    expect(src("lib/server/invites.ts")).toContain('{ group: "apps", testId: i.testId }');
     expect(src("lib/server/joining.ts")).not.toContain('"appclosed"');
   });
 

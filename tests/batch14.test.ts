@@ -63,7 +63,7 @@ describe("batch 14 section 2 (batch 35 §66): the count starts when the first te
 });
 
 describe("batch 14 section 3: applicants and invited testers are told, stacked", () => {
-  it("a build-link change closes applications and re-sends invites; (batch 29 §23) their lines stack across tests in 'Applications and invites'", async () => {
+  it("a build-link change closes applications (invites stay: Owner, Dec 10 2026); (batch 29 §23) their lines stack across tests in 'Applications and invites'", async () => {
     expect(CLOSING_FIELDS).toContain("buildUrl");
     const ana = await makeUser({ tester: true, name: "Ana Silva" });
     for (const title of ["Harbor Run", "Reef Dash"]) {
@@ -77,13 +77,15 @@ describe("batch 14 section 3: applicants and invited testers are told, stacked",
     // (Batch 30 §6) The old "Applications closed" / "Invites sent again" stacks are gone (batch 29 §23: "Applications and invites").
     expect(groupTitle("appclosed", 2)).toBeUndefined();
     expect(groupTitle("reinvited", 3)).toBeUndefined();
-    // Re-sent invites.
+    // (Owner, Dec 10 2026) An open invite simply stays through the edit: nothing is re-sent, no line.
     const { dev, testId } = await setup({ joinMode: "invite" });
     const ben = await makeUser({ tester: true, name: "Ben Ward" });
     await act(testId, "invite", dev.cookie, { testerIds: [ben.user.id], seenAt: seen(), confirmed: true });
     await settle();
+    const before = await db.invite.findFirstOrThrow({ where: { testId, testerId: ben.user.id } });
     expect((await edit(testId, dev.cookie, { buildUrl: "https://example.com/v2" })).status).toBe(200);
-    expect(await db.notification.findFirstOrThrow({ where: { userId: ben.user.id, groupKey: "apps" } })).toMatchObject({ text: "Nora Lane updated “Harbor Run”: your invite was sent again on the new listing." });
+    expect(await db.invite.findMany({ where: { testId, testerId: ben.user.id }, select: { id: true, status: true } })).toEqual([{ id: before.id, status: "sent" }]);
+    expect(await db.notification.count({ where: { userId: ben.user.id, groupKey: "apps" } })).toBe(0);
   });
 });
 

@@ -157,16 +157,20 @@ describe("batch 30 §6: leftovers from the batch 29 design doc check", () => {
     expect(new Set(lines.map(bellKey)).size).toBe(1);
   });
 
-  it("Your invite to “<test>” was closed. is a bell line in Applications and invites (Cancel invite, a stop, a pause), never why", async () => {
+  it("Your invite to “<test>” was closed. is a bell line in Applications and invites (Cancel invite, a stop, the test closing on its own), never why", async () => {
     const one = await setup();
     const two = await setup({ title: "Reef Dash", productName: "Reef Dash" });
     const three = await setup({ title: "Kelp Kart", productName: "Kelp Kart" });
+    const four = await setup({ title: "Sky Lab", productName: "Sky Lab" });
     const ana = await makeUser({ tester: true, name: "Ana Silva" });
-    for (const s of [one, two, three]) expect((await act(s.testId, "invite", s.dev.cookie, { testerIds: [ana.user.id], seenAt: seen(), confirmed: true })).status).toBe(200);
+    for (const s of [one, two, three, four]) expect((await act(s.testId, "invite", s.dev.cookie, { testerIds: [ana.user.id], seenAt: seen(), confirmed: true })).status).toBe(200);
     const inv = await db.invite.findFirstOrThrow({ where: { testId: one.testId, testerId: ana.user.id, status: "sent" } });
     expect((await act(one.testId, "cancel-invite", one.dev.cookie, { inviteId: inv.id, seenAt: seen(), confirmed: true })).status).toBe(200);
     expect((await act(two.testId, "stop", two.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
-    await startHold(three.dev.user.id, "unpaid");
+    // (Owner, Dec 10 2026) The test closing on its own rings the invitee; a pause no longer closes the invite at all.
+    expect(await (await import("@/lib/server/workWindow")).finishWorkIfDue(three.testId, new Date(Date.now() + 25 * 86_400_000))).toBe(true);
+    await startHold(four.dev.user.id, "unpaid");
+    expect(await db.invite.count({ where: { testId: four.testId, testerId: ana.user.id, status: "sent" } })).toBe(1);
     const lines = await db.notification.findMany({ where: { userId: ana.user.id, text: { startsWith: "Your invite to" } } });
     expect(lines.map((l) => l.text).sort()).toEqual(["Your invite to “Harbor Run” was closed.", "Your invite to “Kelp Kart” was closed.", "Your invite to “Reef Dash” was closed."]);
     expect(lines.every((l) => l.groupKey === "apps" && l.link.startsWith("/app/find/"))).toBe(true);

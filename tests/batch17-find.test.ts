@@ -51,11 +51,12 @@ describe("No thanks on an invite follows batch 16 section 32 (section 4)", () =>
 
   // (Owner, Nov 11, §380) No thanks on a closed invite is already what it wanted: silent, whatever closed it (never "hold"), and the card goes.
   it("closed invites: No thanks is silent (never hold), and the card goes", async () => {
+    // (Owner, Dec 10 2026) A hold no longer closes the invite: No thanks during it just declines it.
     const held = await invited();
     await startHold(held.dev.user.id, "unpaid");
     const r1 = await noThanks(held.inv.id, held.ana.cookie, { seenAt: held.loaded });
-    expect([r1.status, r1.body.already]).toEqual([200, true]);
-    expect(await db.invite.count({ where: { testerId: held.ana.user.id, status: "sent" } })).toBe(0);
+    expect([r1.status, r1.body.already]).toEqual([200, undefined]);
+    expect((await db.invite.findUniqueOrThrow({ where: { id: held.inv.id } })).status).toBe("declined");
 
     const stopped = await invited();
     expect((await act(stopped.testId, "stop", stopped.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
@@ -81,8 +82,10 @@ describe("No thanks on an invite follows batch 16 section 32 (section 4)", () =>
     const x = await invited();
     const v = (await db.test.findUniqueOrThrow({ where: { id: x.testId } })).version;
     expect((await act(x.testId, "edit", x.dev.cookie, { version: v, fields: { writtenCents: "12.00" }, seenAt: seen(), confirmed: true })).status).toBe(200);
-    const fresh = await db.invite.findFirstOrThrow({ where: { testId: x.testId, testerId: x.ana.user.id, status: "sent" } });
-    expect(fresh.id).not.toBe(x.inv.id);
+    // (Owner, Dec 10 2026) An edit no longer re-sends invites: the invite stays. An invite re-sent before that (a "replaced" row) still reads as below.
+    expect((await db.invite.findUniqueOrThrow({ where: { id: x.inv.id } })).status).toBe("sent");
+    await db.invite.update({ where: { id: x.inv.id }, data: { status: "replaced" } });
+    const fresh = await db.invite.create({ data: { testId: x.testId, testerId: x.ana.user.id } });
     const r = await noThanks(x.inv.id, x.ana.cookie, { seenAt: x.loaded });
     expect(r.status).toBe(409);
     expect(r.body.error.code).toBe("stop_once");

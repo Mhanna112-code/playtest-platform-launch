@@ -122,12 +122,18 @@ describe("batch 30 §8: a new invite shows on the tester dashboard live", () => 
     }
     expect(first).toEqual([invitedYouLine("Marc Hanna", title)]);
     expect(invitedYouLine("Marc Hanna", "ddddd")).toBe("Marc Hanna invited you to “ddddd”");
-    // A listing change re-sends the invite: the new one reads as re-sent.
+    // (Owner, Dec 10 2026) A listing change no longer re-sends the invite: nothing new in the box.
     // (Since the first invite's own time, as the database wrote it: the two clocks can differ under load.)
-    const since2 = (await db.invite.findFirstOrThrow({ where: { testerId: ana.user.id } })).createdAt.toISOString();
+    const first0 = await db.invite.findFirstOrThrow({ where: { testerId: ana.user.id } });
+    const since2 = first0.createdAt.toISOString();
     await settle();
     const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     expect((await act(testId, "edit", dev.cookie, { version: v, fields: { writtenCents: "12.00" }, seenAt: seen(), confirmed: true })).status).toBe(200);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(await live(new Date(first0.createdAt.getTime() + 1).toISOString())).toEqual([]);
+    // An invite re-sent before then (its earlier one "replaced") still reads as re-sent.
+    await db.invite.update({ where: { id: first0.id }, data: { status: "replaced" } });
+    await db.invite.create({ data: { testId, testerId: ana.user.id } });
     let second: string[] = [];
     for (let i = 0; i < 30 && !second.length; i++) {
       if (i) await new Promise((r) => setTimeout(r, 100));

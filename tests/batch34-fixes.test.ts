@@ -125,8 +125,10 @@ describe("batch 34 §10: Join after a re-sent invite", () => {
     await settle();
     const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     expect((await act(testId, "edit", dev.cookie, { version: v, fields: { ndaText: "Keep it secret, please." } })).status).toBe(200);
-    const fresh = await db.invite.findFirstOrThrow({ where: { testId, testerId: ana.user.id, status: "sent" } });
-    expect(fresh.id).not.toBe(oldInvite.id);
+    // (Owner, Dec 10 2026) An edit no longer re-sends invites: the invite stays. One re-sent before then ("replaced", a new one after it) still reads as below.
+    expect((await db.invite.findUniqueOrThrow({ where: { id: oldInvite.id } })).status).toBe("sent");
+    await db.invite.update({ where: { id: oldInvite.id }, data: { status: "replaced" } });
+    const fresh = await db.invite.create({ data: { testId, testerId: ana.user.id } });
     return { dev, testId, ana, oldInvite, fresh, pageAt };
   }
 

@@ -109,14 +109,15 @@ describe("tester invitations follow every close (section 32)", () => {
     expect(await db.invite.count({ where: { testerId: x.ana.user.id, status: "sent" } })).toBe(0);
   });
 
-  it("a pause or hold closes it (never says why); after it lifts nothing reopens", async () => {
+  it("(Owner, Dec 10 2026) a pause or hold keeps it open (no bell, the card stays); Join waits until it lifts", async () => {
     const x = await invited();
     const v1 = await pulse(x.ana.cookie, "invites=1");
     await startHold(x.dev.user.id, "unpaid");
-    expect(await pulse(x.ana.cookie, "invites=1")).not.toBe(v1);
+    expect(await pulse(x.ana.cookie, "invites=1")).toBe(v1);
     expect((await join(x.testId, x.ana.cookie, x.inv.id)).body.error.message).toBe("This test isn't taking new testers right now, so your Join didn't go through."); // (§364 item 10)
+    expect((await db.invite.findUniqueOrThrow({ where: { id: x.inv.id } })).status).toBe("sent");
     await db.user.update({ where: { id: x.dev.user.id }, data: { holdStartedAt: null, holdReason: "" } });
-    expect((await db.invite.findUniqueOrThrow({ where: { id: x.inv.id } })).status).toBe("cancelled");
+    expect((await db.invite.findUniqueOrThrow({ where: { id: x.inv.id } })).status).toBe("sent");
   });
 
   it("stopped, and Open until passed", async () => {
