@@ -865,9 +865,16 @@ export async function cancelCallsAhead(tx: Tx, contractIds: string[], note: stri
 }
 export type CancelledCall = Awaited<ReturnType<typeof cancelCallsAhead>>[number];
 
-/** Tell each tester their booked call was cancelled (never any fault). */
-export async function tellCancelled(list: { email: string; startsAt: Date; contractId: string; title: string; callId?: string }[], why: Parameters<typeof callCancelledLine>[1]) {
-  for (const c of list) await notify(c.email, callCancelledLine(c.startsAt, why, c.title), [callCancelledLine(c.startsAt, why, c.title)], `/app/sessions/${c.contractId}${c.callId ? `#call-${c.callId}` : ""}`);
+/**
+ * (Owner, Dec 2026) A notice that a booked call of yours was cancelled, in any way, by anything but your own press (your own Cancel, Leave, End early, Block or
+ * Rate gives you no line): `always`, so it reaches your morning email whatever your email setting (not sent at once), and in that test's own stack in the bell
+ * and the email (§308: its testId, no group). Your own suspension or hold that cancels it gives you this same line; the pause notice itself is unchanged.
+ */
+export const cancelledOpts = (testId: string) => ({ always: true, testId }) as const;
+
+/** Tell each tester their booked call was cancelled (never any fault). (Owner, Dec 2026) cancelledOpts. */
+export async function tellCancelled(list: { email: string; startsAt: Date; contractId: string; title: string; callId?: string; testId: string }[], why: Parameters<typeof callCancelledLine>[1]) {
+  for (const c of list) await notify(c.email, callCancelledLine(c.startsAt, why, c.title), [callCancelledLine(c.startsAt, why, c.title)], `/app/sessions/${c.contractId}${c.callId ? `#call-${c.callId}` : ""}`, cancelledOpts(c.testId));
 }
 
 // ---------- (Owner, Nov 11, §390 a) Every cancelled call is told to whoever didn't cancel it ----------
@@ -885,9 +892,9 @@ export const devCallsGoneTail = (list: { tester: string; startsAt: Date }[]) =>
 export const withTail = (line: string, tail: string) => (tail ? `${line}; ${tail}` : line);
 /** The developer's own line for one call: "Your call with Ana Silva on “Harbor Run” on Sat, Nov 28, 8:59 PM CST was cancelled because the test ended". */
 export const devCallCancelledLine = (tester: string, startsAt: Date, title: string | null, why = "") => `Your call with ${tester}${title ? ` on “${title}”` : ""} on ${T(startsAt)} was cancelled${why ? ` because ${why}` : ""}`;
-/** Each call's developer told (bell), one line per call. */
+/** Each call's developer told (bell), one line per call. (Owner, Dec 2026) cancelledOpts. */
 export async function tellDevCancelled(list: CancelledCall[], why: string) {
-  for (const c of list) await notify(c.devEmail, devCallCancelledLine(c.tester, c.startsAt, c.title, why), [devCallCancelledLine(c.tester, c.startsAt, c.title, why)], `/app/tests/${c.testId}#call-${c.callId}`, { recipientId: c.devId, testId: c.testId });
+  for (const c of list) await notify(c.devEmail, devCallCancelledLine(c.tester, c.startsAt, c.title, why), [devCallCancelledLine(c.tester, c.startsAt, c.title, why)], `/app/tests/${c.testId}#call-${c.callId}`, { recipientId: c.devId, ...cancelledOpts(c.testId) });
 }
 /** The developer's live line for each call (a "cancelled" event: a stop-once reason in their open pages, like the tester's own Cancel). */
 export async function devCancelledLive(tx: Tx | typeof db, list: { testId: string; contractId: string; callId: string; tester: string; startsAt: Date }[], why = "") {
@@ -1280,7 +1287,8 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
     return { ...c, tail };
   });
   if (!c) return { left: true, already: true };
-  await notify(c0.test.developer.email, withTail(`${displayName(tester)} left “${c.test.title}”`, c.tail), [`${displayName(tester)} left your test “${c.test.title}”. Work ${pronouns(tester.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: tester.id, testId: c.testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
+  // (Owner, Dec 2026) Naming calls her leaving cancelled, it reaches the morning email whatever the setting (cancelledOpts); she, who left, gets no line.
+  await notify(c0.test.developer.email, withTail(`${displayName(tester)} left “${c.test.title}”`, c.tail), [`${displayName(tester)} left your test “${c.test.title}”. Work ${pronouns(tester.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: tester.id, testId: c.testId, ...(c.tail ? cancelledOpts(c.testId) : {}) }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
   await spotOpened(c.testId);
   return { left: true };
 }

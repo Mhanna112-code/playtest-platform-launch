@@ -4,7 +4,7 @@ import { displayName, fmtDateTime, money, pronouns } from "@/lib/server/dateForm
 import { callCancelledLine, repeatDue, utcDayNo } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify } from "./notify";
-import { callsGoneTail, cancelCallsAhead, devCallsGoneTail, devCancelledLive, recordEvent, spotOpened, tellCancelled, withTail } from "./tests";
+import { callsGoneTail, cancelCallsAhead, cancelledOpts, devCallsGoneTail, devCancelledLive, recordEvent, spotOpened, tellCancelled, withTail } from "./tests";
 import { closeRequests } from "./requests";
 import { chargeDeferred, markPaused, resumeTests, shiftAfterPause, tellTestersPaused } from "./holds";
 import { accountEvent } from "./reports";
@@ -41,9 +41,11 @@ export async function cancelCallsNearPause(devId: string, now = new Date(), test
     await db.callSlot.update({ where: { id: c.slotId }, data: { status: "removed" } }).catch(() => null);
     n++;
     const line = callCancelledLine(c.startsAt, "paused", c.contract.test.title); // (Owner, Nov 6, §312a) names the test
-    await notify(c.contract.tester.email, line, [line], `/app/sessions/${c.contractId}#call-${c.id}`, { about: c.contract.test.developerId });
+    // (Owner, Dec 2026) Both lines cancelledOpts: the morning email whatever the setting, in the test's own stack; the developer whose own suspension or hold
+    // cancelled it gets this line too (their pause notice is unchanged).
+    await notify(c.contract.tester.email, line, [line], `/app/sessions/${c.contractId}#call-${c.id}`, { about: c.contract.test.developerId, ...cancelledOpts(c.contract.testId) });
     const devLine = callCancelledLine(c.startsAt, "paused", c.contract.test.title).replace("Your call", `Your call with ${displayName(c.contract.tester)}`);
-    await notify(c.contract.test.developer.email, devLine, [devLine], `/app/tests/${c.contract.testId}#call-${c.id}`);
+    await notify(c.contract.test.developer.email, devLine, [devLine], `/app/tests/${c.contract.testId}#call-${c.id}`, cancelledOpts(c.contract.testId));
     // (Owner, Nov 11, §390 a) And the developer's live line (the tester's is read from the call itself, testerChanges).
     await devCancelledLive(db, [{ testId: c.contract.testId, contractId: c.contractId, callId: c.id, tester: displayName(c.contract.tester), startsAt: c.startsAt }], "the test is paused");
   }
@@ -89,8 +91,9 @@ async function removeTester(u: { id: string; name: string; email: string; pronou
       await recordEvent(tx, c.testId, "left", withTail(`${who} left the test`, callsGoneTail(list.map((x) => x.startsAt))), true, {}, c.id, "", testerRow(c.id)); // (Owner, Nov 6, §284) the place the line opens
       return list;
     });
-    await tellCancelled(cancelled, "ended");
-    await notify(c.test.developer.email, withTail(`${who} left “${c.test.title}”`, callsGoneTail(cancelled.map((x) => x.startsAt))), [`${who} left your test “${c.test.title}”. Work ${pronouns(u.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: u.id, testId: c.testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
+    await tellCancelled(cancelled, "ended"); // (Owner, Dec 2026) her own suspension cancelled it: she still gets the line (cancelledOpts)
+    const tail = callsGoneTail(cancelled.map((x) => x.startsAt));
+    await notify(c.test.developer.email, withTail(`${who} left “${c.test.title}”`, tail), [`${who} left your test “${c.test.title}”. Work ${pronouns(u.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: u.id, testId: c.testId, ...(tail ? cancelledOpts(c.testId) : {}) }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
     await spotOpened(c.testId);
   }
   await db.application.updateMany({ where: { testerId: u.id, status: "pending" }, data: { status: "withdrawn", decidedAt: new Date() } });

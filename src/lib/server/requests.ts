@@ -15,7 +15,7 @@ import { bell, notify } from "./notify";
 import { BOOKED_GROUP, CALL_REQUESTS_GROUP } from "@/lib/bell";
 /** (Owner, Nov 6, §312a) Every call-request and booked-call bell names its test: ` on “Harbor Run”` (empty without a title). */
 const onTest = (title: string | null | undefined) => (title ? ` on “${title}”` : "");
-import { devGate, recordEvent } from "./tests";
+import { cancelledOpts, devGate, recordEvent } from "./tests";
 import { CLOSED_BY_PAUSE, FINISHED_PART_REASON, devRequestCancelledLine, finishedPartReason, requestWords, testerGate, testerSeesClosed } from "./testerGate";
 import { answerTermsFirst } from "./terms";
 import { CALL_MIN_AHEAD_MINUTES, farEnoughAhead } from "@/lib/callLead";
@@ -1104,7 +1104,7 @@ export async function cancelCallSet(user: U, contractId: string, body: Record<st
   });
   // (Batch 15 sections 11 and 20) The time in the reader's own zone; the reason only in the email, never in the bell line.
   const line = `${displayName(user)} cancelled the remaining ${unit} calls (${calls.length}), starting ${T(calls[0].startsAt)}.`;
-  await notify(other.email, line, [line, ...(reason ? [`${pronouns(user.pronoun).Poss} reason: “${reason}”`] : [])], side === "developer" ? `/app/sessions/${contractId}#call-${calls[0].id}` : `/app/tests/${c.testId}#call-${calls[0].id}`, { about: user.id });
+  await notify(other.email, line, [line, ...(reason ? [`${pronouns(user.pronoun).Poss} reason: “${reason}”`] : [])], side === "developer" ? `/app/sessions/${contractId}#call-${calls[0].id}` : `/app/tests/${c.testId}#call-${calls[0].id}`, { about: user.id, ...cancelledOpts(c.testId) }); // (Owner, Dec 2026)
   return { cancelled: calls.length };
 }
 

@@ -116,10 +116,11 @@ export async function blockUser(me: { id: string; email: string; name: string },
     for (const call of await db.call.findMany({ where: { contractId: c.id, status: "booked", startsAt: { lte: now }, endedAt: null, measuredAt: null, actualMinutes: null } })) await endCallForBlock(call.id, by, now);
     // Neutral lines for the blocked side (never "blocked"). (Owner, Nov 11, §390 a) With the calls it cancelled: "Your session on Harbor Run ended; your call on
     // … was cancelled."
-    const { callsGoneTail, withTail } = await import("./tests");
+    const { callsGoneTail, cancelledOpts, withTail } = await import("./tests");
     const tail = callsGoneTail(done.ahead.filter((a) => a.contractId === c.id).map((a) => a.startsAt));
-    if (c.testerId === otherId) await notify(c.tester.email, `${withTail(`Your session on ${c.test.title} ended`, tail)}.`, [`${withTail(`Your session on ${c.test.title} ended`, tail)}. Work you sent is still reviewed.`], `/app/sessions/${c.id}`);
-    else await notify(c.test.developer.email, `${withTail(`${displayName(c.tester)}'s session on ${c.test.title} ended`, tail)}.`, [`${withTail(`${displayName(c.tester)}'s session on ${c.test.title} ended`, tail)}.`], `/app/tests/${c.testId}#tester-${c.id}`);
+    const opts = tail ? cancelledOpts(c.testId) : {}; // (Owner, Dec 2026) naming cancelled calls: the morning email whatever the setting, in the test's own stack
+    if (c.testerId === otherId) await notify(c.tester.email, `${withTail(`Your session on ${c.test.title} ended`, tail)}.`, [`${withTail(`Your session on ${c.test.title} ended`, tail)}. Work you sent is still reviewed.`], `/app/sessions/${c.id}`, opts);
+    else await notify(c.test.developer.email, `${withTail(`${displayName(c.tester)}'s session on ${c.test.title} ended`, tail)}.`, [`${withTail(`${displayName(c.tester)}'s session on ${c.test.title} ended`, tail)}.`], `/app/tests/${c.testId}#tester-${c.id}`, opts);
   }
   await (await import("./requests")).closeRequests({ contractIds: ended.map((c) => c.id) }, "the session ended");
   await closeOffersOfEnded(db, ended.map((c) => c.id), now); // (batch 35 §118) the part ended: its offer closes

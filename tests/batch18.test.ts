@@ -522,6 +522,8 @@ describe("the final list of emails that ignore Off, and each notification emaile
     // (Owner, Nov 6, §316) pauseClosure.ts one more: the daily hold reminder.
     // (Owner, Nov 6, §311d) holds.ts three more: the developer's review reminders (a part's, a listed or unlisted call's, "… wasn't reviewed by …"). (§311h) One
     // fewer: the line while a suspension continues is gone.
-    expect(names).toEqual(["calls.ts", "calls.ts", "chargeback.ts", "chargeback.ts", "chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "pauseClosure.ts", "pauseClosure.ts", "ratings.ts", "ratings.ts", "requests.ts", "requests.ts", "requests.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
+    // (Owner, Dec 2026) tests.ts one: cancelledOpts, every notice that a booked call was cancelled by anything but the reader's own press (the morning email
+    // whatever the setting, in the test's own stack).
+    expect(names).toEqual(["tests.ts", "calls.ts", "calls.ts", "chargeback.ts", "chargeback.ts", "chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "pauseClosure.ts", "pauseClosure.ts", "ratings.ts", "ratings.ts", "requests.ts", "requests.ts", "requests.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
   });
 });

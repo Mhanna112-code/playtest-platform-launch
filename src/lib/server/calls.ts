@@ -10,7 +10,7 @@ import { LIMITS } from "@/lib/limits";
 import { notify } from "./notify";
 import { testerGate as sharedTesterGate } from "./testerGate";
 import { answerTermsFirst } from "./terms";
-import { devGate, devGateIfSeen, ownContract, ownTest, recordEvent } from "./tests";
+import { cancelledOpts, devGate, devGateIfSeen, ownContract, ownTest, recordEvent } from "./tests";
 import { CALL_ACTS } from "./live";
 import { callIceServers } from "./turn";
 import { callRow } from "@/lib/lineAnchors";
@@ -51,7 +51,7 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
   // (Batch 15 section 20) The reason is on the page, never in the bell line. (Owner, Nov 6, §299) The longer text below is emailed only to an address with no
   // account: an account's email (its summary) lists the bell line.
   const line = cancelLine(displayName(dev), call.startsAt, "", call.contract.test.title); // (Owner, Nov 6, §312a) names the test
-  await notify(call.contract.tester.email, line, [cancelLine(displayName(dev), call.startsAt, reason, call.contract.test.title)], `/app/sessions/${call.contractId}#call-${call.id}`, { about: dev.id });
+  await notify(call.contract.tester.email, line, [cancelLine(displayName(dev), call.startsAt, reason, call.contract.test.title)], `/app/sessions/${call.contractId}#call-${call.id}`, { about: dev.id, ...cancelledOpts(testId) }); // (Owner, Dec 2026)
   return { cancelled: true };
 }
 
@@ -100,7 +100,7 @@ export async function testerCancelCall(tester: U, contractId: string, body: Reco
   });
   if (!call) return { cancelled: true, already: true };
   const line = cancelLine(displayName(tester), call.startsAt, "", c0.test.title); // (Owner, Nov 6, §312a) names the test
-  await notify(c0.test.developer.email, line, [cancelLine(displayName(tester), call.startsAt, reason, c0.test.title), "The time is open again for other testers."], `/app/tests/${c0.testId}#call-${call.id}`, { about: tester.id });
+  await notify(c0.test.developer.email, line, [cancelLine(displayName(tester), call.startsAt, reason, c0.test.title), "The time is open again for other testers."], `/app/tests/${c0.testId}#call-${call.id}`, { about: tester.id, ...cancelledOpts(c0.testId) }); // (Owner, Dec 2026)
   return { cancelled: true };
 }
 
@@ -441,8 +441,9 @@ async function cancelNobodyJoined(id: string, now: Date, note = NOBODY_JOINED) {
   const call = await db.call.findUniqueOrThrow({ where: { id }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } } });
   const line = `Your call on ${T(call.startsAt)}: ${note}`;
   // (Batch 15 section 42) A call that's over links to its row (#call-<id>): the tester's Live session / the developer's tester row, Had or Cancelled (§209).
-  await notify(call.contract.tester.email, line, [line, "Nothing is charged."], `/app/sessions/${call.contractId}#call-${call.id}`);
-  await notify(call.contract.test.developer.email, line.replace("Your call", `Your call with ${displayName(call.contract.tester)}`), [line, "Nothing is charged."], `/app/tests/${call.contract.testId}#call-${call.id}`);
+  // (Owner, Dec 2026) cancelledOpts: the morning email whatever the setting, in the test's own stack.
+  await notify(call.contract.tester.email, line, [line, "Nothing is charged."], `/app/sessions/${call.contractId}#call-${call.id}`, cancelledOpts(call.contract.testId));
+  await notify(call.contract.test.developer.email, line.replace("Your call", `Your call with ${displayName(call.contract.tester)}`), [line, "Nothing is charged."], `/app/tests/${call.contract.testId}#call-${call.id}`, cancelledOpts(call.contract.testId));
   // (Owner, Nov 11, §390 a) And the developer's live line (the tester's is read from the call itself, testerChanges).
   await (await import("./tests")).devCancelledLive(db, [{ testId: call.contract.testId, contractId: call.contractId, callId: call.id, tester: displayName(call.contract.tester), startsAt: call.startsAt }], note === NOBODY_JOINED ? "nobody joined" : "the call couldn't connect");
 }
