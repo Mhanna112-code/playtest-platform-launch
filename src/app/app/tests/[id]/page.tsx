@@ -347,7 +347,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     const st = rateStates.get(c.id);
     if (!st || (st.kind !== "open" && st.kind !== "disabled")) return null;
     const name = displayName(c.tester);
-    return <RateBox key={`rate-${c.id}`} anchor={`rate-${c.id}`} path={`/api/tests/${t.id}/rate`} body={{ contractId: c.id }} seenAt={seenAt} name={name} working={false} disabledLine={st.kind === "disabled" ? st.line : ""} headline={`Your rating of ${name} is final. Both ratings show once you rate.`} lines={[]} />;
+    return <RateBox key={`rate-${c.id}`} rater="developer" anchor={`rate-${c.id}`} path={`/api/tests/${t.id}/rate`} body={{ contractId: c.id }} seenAt={seenAt} name={name} working={false} disabledLine={st.kind === "disabled" ? st.line : ""} headline={`Your rating of ${name} is final. Both ratings show once you rate.`} lines={[]} />;
   };
   // (Owner, Nov 6, §288) Testers who rated this test: their disputes are closed, so nothing on this page says they can dispute.
   const ratedTesters = new Set((await db.rating.findMany({ where: { testId: t.id, side: "tester" }, select: { contractId: true } })).map((r) => r.contractId));

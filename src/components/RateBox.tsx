@@ -11,6 +11,7 @@ import { usePress } from "@/lib/usePress";
 import { DraftTag, useKept } from "@/lib/useKept";
 import { PressDone } from "@/components/PressDone";
 import { lockText, useSending } from "@/lib/sendLock";
+import { rateWhoSeesLine } from "@/lib/rules";
 
 /**
  * (NEWEST+5) Rate, as the full app's rating box: 1-5 and an optional note (500 max). A rating that finishes the part
@@ -20,7 +21,7 @@ import { lockText, useSending } from "@/lib/sendLock";
  * short grey line under it; the page's poll updates both as things are decided. `anchor`: the box's id (a developer's page has one per tester: "rate-<contract>").
  * (Batch 35 §40, §41) Rated: the page redraws in place; until it has, the stars and the note are hidden and the button stays greyed with "Rated <name> N of 5.".
  */
-export function RateBox(p: { /** (Owner, Nov 11, §387 4) "Rate until Nov 25", next to the button */ closes?: string; path: string; seenAt: string; name: string; body?: Record<string, unknown>; headline: string; lines: string[]; working: boolean; disabledLine?: string; anchor?: string; /** (Owner, Nov 5, §268) in the pop-up: the open-terms notice (information only) */ notice?: ReactNode }) {
+export function RateBox(p: { /** (Owner, Nov 11, §387 4) "Rate until Nov 25", next to the button */ closes?: string; /** (Owner, Dec 2026) whose box: the line saying who sees the rating */ rater: "tester" | "developer"; path: string; seenAt: string; name: string; body?: Record<string, unknown>; headline: string; lines: string[]; working: boolean; disabledLine?: string; anchor?: string; /** (Owner, Nov 5, §268) in the pop-up: the open-terms notice (information only) */ notice?: ReactNode }) {
   const [stars, setStars] = useState("");
   const [comment, setComment] = useState("");
   // (Owner, Nov 10, §371) Kept by the box (lib/pressCarry.ts): the session page is keyed by its status, so a redraw mid-press can draw a new box; the server's
@@ -45,7 +46,7 @@ export function RateBox(p: { /** (Owner, Nov 11, §387 4) "Rate until Nov 25", n
   return (
     <div ref={box} className="space-y-2 rounded-xl border border-amber-300/25 bg-amber-300/[0.04] p-3 text-sm text-ink-200" id={p.anchor ?? "rate"} data-mistakes-root="">
       <p className="flex items-center gap-1.5 font-medium text-white"><Star className="h-4 w-4 text-amber-300" /> Rate {p.name}</p>
-      <p className="text-xs text-ink-400">1 to 5, and a note if you like (shown without your name).{p.working ? ` ${p.headline}` : ""}</p>
+      <p className="text-xs text-ink-400" data-rate-who-sees="">{rateWhoSeesLine(p.rater, p.name)}{p.working ? ` ${p.headline}` : ""}</p>
       <div className="flex flex-wrap items-start gap-2">
         {!done && <select id={`stars-${p.path.replace(/[^A-Za-z0-9]+/g, "-")}`} className="input w-44" value={stars} onChange={(e) => setStars(e.target.value)} aria-label="Your rating, 1 to 5" data-required="" data-required-msg="Choose 1 to 5 stars." data-match="stars">
           <option value="" disabled>Choose…</option>

@@ -489,6 +489,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       {rateState.kind === "hidden" && rateState.line === RATE_TEST_PAUSED && !meOff && <p className="note" data-rate-paused="">{rateState.line}</p>}
       {(rateState.kind === "open" || rateState.kind === "disabled") && !meOff && (
         <RateBox
+          rater="tester"
           disabledLine={rateState.kind === "disabled" ? rateState.line : ""}
           closes={rateBy}
           path={`/api/sessions/${c.id}/rate`}

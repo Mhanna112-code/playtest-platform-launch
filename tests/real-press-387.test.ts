@@ -204,13 +204,13 @@ const CASES: Case[] = [
   },
   {
     name: "Rate (the tester's, no stars)",
-    el: async () => R.createElement((await import("@/components/RateBox")).RateBox, { path: `/api/sessions/${SESSION}/rate`, seenAt: SEEN, name: "Nora Lane", headline: "", lines: [], working: false }),
+    el: async () => R.createElement((await import("@/components/RateBox")).RateBox, { rater: "tester", path: `/api/sessions/${SESSION}/rate`, seenAt: SEEN, name: "Nora Lane", headline: "", lines: [], working: false }),
     button: /^Rate$/,
     url: /\/rate$/,
   },
   {
     name: "Rate (the developer's, no stars)",
-    el: async () => R.createElement((await import("@/components/RateBox")).RateBox, { path: "/api/tests/t1/rate", body: { contractId: "c1" }, seenAt: SEEN, name: "Ruth Okafor", headline: "", lines: [], working: false }),
+    el: async () => R.createElement((await import("@/components/RateBox")).RateBox, { rater: "developer", path: "/api/tests/t1/rate", body: { contractId: "c1" }, seenAt: SEEN, name: "Ruth Okafor", headline: "", lines: [], working: false }),
     button: /^Rate$/,
     url: /\/rate$/,
   },

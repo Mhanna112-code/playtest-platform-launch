@@ -13,7 +13,7 @@ import { seenOf, unanswered, tabOf, testerPaymentChanges } from "./live";
 import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges, testerGate } from "./testerGate";
 import { devPauseMoments, devStopSince, loadedOf, stopBox } from "./stopMoment";
 import { CONTRACTS, closeOutOf, testSpans, testerRateLiftedAt, testerRatingClosesAt, closedOut, devPauseSpans, lastLift, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
-import { CLOSE_OUT_DAYS, closeOutBase, repeatDue, REPEAT_MIN_GAP_MS } from "@/lib/rules";
+import { CLOSE_OUT_DAYS, DEV_RATE_WINDOW_DAYS, closeOutBase, repeatDue, REPEAT_MIN_GAP_MS } from "@/lib/rules";
 import { closeOffersOfEnded } from "./offerClose";
 import { RATE_TEAM_PAUSED, TESTER_FROZEN_CAUSE, moneyFrozen, teamPausedNow } from "@/lib/restricted";
 import { testerRow } from "@/lib/lineAnchors";
@@ -29,7 +29,7 @@ import { testerRow } from "@/lib/lineAnchors";
 
 export type Side = "tester" | "developer";
 const DAY = 86_400_000;
-export const WINDOW_DAYS = 14;
+export const WINDOW_DAYS = DEV_RATE_WINDOW_DAYS;
 /** (Owner, Oct 27) Rating reminders: every 3 days, for 2 weeks only. (Batch 29 §21) On running tests too. (Owner, Nov 7, §331) The tester's no longer stop after
  * 2 weeks (they run until they rate or the test's close-out); kept for older readers of the constant. */
 export const REMINDER_WEEKS = 2;
