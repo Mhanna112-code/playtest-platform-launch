@@ -3,13 +3,15 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { pauseTest, suspendAccount } from "@/lib/server/restrictions";
 import { startHold } from "@/lib/server/holds";
+import { sendSummaries } from "@/lib/server/notify";
 import { fmtIn } from "@/lib/tz";
 import { makeUser } from "./helpers";
 import { act, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 
 // (Owner, Dec 2026) Every notice that a booked call of yours was cancelled by anything but your own press: `always` (the morning email whatever your email
 // setting; not sent at once, no expiry), in that test's own stack (its testId, no group). Your own suspension or hold that cancels it gives you the same line,
-// and your pause notice stays as it was. Your own press (Cancel, Leave) still gives you none.
+// and your pause notice stays as it was. Your own press (Cancel, Leave) still gives you none. The morning email leaves out a "Booked: …" line whose call was
+// cancelled since (the bell keeps it).
 
 const when = (d: Date) => fmtIn("UTC", d); // the readers here have no zone: UTC
 const day = (d: Date) => fmtIn("UTC", d, "dayTime");
@@ -93,5 +95,23 @@ describe("(Owner, Dec 2026) call cancellation notices: always, in the test's sta
     await expectCancelNotice(w.dev.user.id, `Your call with Ana Silva on “Harbor Run” on ${day(w.call.startsAt)} was cancelled because the test is paused.`, w.testId);
     const paused = await db.notification.findFirstOrThrow({ where: { userId: w.dev.user.id, text: { startsWith: "Your tests are paused" } } });
     expect(paused.text).not.toContain("call");
+  });
+});
+
+describe("(Owner, Dec 2026) the morning email leaves out a Booked line whose call was cancelled", () => {
+  it("the developer's Booked line stays in the bell, not in the email; the cancellation line is in the email", async () => {
+    const w = await booked();
+    const bookedLine = await db.notification.findFirstOrThrow({ where: { userId: w.dev.user.id, text: { startsWith: "Booked: " } } });
+    expect(bookedLine.summarizedAt).toBeNull();
+    expect((await sact(w.sessionId, "cancel-call", w.tester.cookie, { callId: w.call.id, reason: "", seenAt: seen(), confirmed: true })).status).toBe(200);
+    await sendSummaries(new Date(), [w.dev.user.id]);
+    const text = (await db.outboxEmail.findMany({ where: { to: w.dev.user.email } })).map((m) => m.text).join(" | ");
+    expect(text).toContain(`Ana Silva cancelled the call on “Harbor Run” on ${day(w.call.startsAt)}.`);
+    expect(text).not.toContain("Booked: ");
+    expect((await db.notification.findUniqueOrThrow({ where: { id: bookedLine.id } })).summarizedAt).not.toBeNull(); // marked emailed: in the bell only
+    // A Booked line whose call is still booked is emailed as before.
+    const v = await booked();
+    await sendSummaries(new Date(), [v.dev.user.id]);
+    expect((await db.outboxEmail.findMany({ where: { to: v.dev.user.email } })).map((m) => m.text).join(" | ")).toContain("Booked: ");
   });
 });

@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { summaryDue } from "@/lib/rules";
 import { renderTimes, safeZone } from "@/lib/tz";
-import { bellKeyIn, bellStacks, stackHeading } from "@/lib/bell";
+import { BOOKED_GROUP, bellKeyIn, bellStacks, stackHeading } from "@/lib/bell";
 import { appUrl } from "./auth";
 import { MORNING_FULL, MORNING_SHORT, replacePendingMorning, sendEmail } from "./email";
 import { REMINDER_ONLY_GROUPS } from "@/lib/reminderPolicy";
@@ -267,6 +267,20 @@ const inTeam = (n: { groupKey: string | null; link: string }, t: { disputeIds: S
   !!t && ((n.groupKey === "admindisputes" && n.link.startsWith(DISPUTE_LINK) && t.disputeIds.has(n.link.slice(DISPUTE_LINK.length))) || (n.groupKey === "adminlifts" && n.link.startsWith(LIFT_LINK) && t.liftIds.has(n.link.slice(LIFT_LINK.length))));
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+/** The call a "Booked: …" line (BOOKED_GROUP) or a call reminder ("call24:" / "call15:") is about: its link's "#call-<id>", or null for any other line. */
+const callOfLine = (n: { groupKey: string | null; reminderKey: string | null; link: string }) =>
+  n.groupKey === BOOKED_GROUP || /^call(24|15):/.test(n.reminderKey ?? "") ? (/#call-([^#?/]+)$/.exec(n.link)?.[1] ?? null) : null;
+/**
+ * (Owner, Dec 2026) The "Booked: …" lines and call reminders whose call is no longer booked (cancelled since): the morning email leaves them out (marked emailed),
+ * the bell keeps them. The call's cancellation line says what happened.
+ */
+async function staleCallLines(list: { id: string; groupKey: string | null; reminderKey: string | null; link: string }[]) {
+  const ids = [...new Set(list.map(callOfLine).filter((x): x is string => !!x))];
+  if (!ids.length) return new Set<string>();
+  const booked = new Set((await db.call.findMany({ where: { id: { in: ids }, status: "booked" }, select: { id: true } })).map((c) => c.id));
+  return new Set(list.filter((n) => { const c = callOfLine(n); return !!c && !booked.has(c); }).map((n) => n.id));
+}
+
 export async function sendSummaries(now = new Date(), only?: string[]) {
   // (Owner, Nov 11, §383 7) A morning email never delivered is replaced by this one: its lines go in this email (never two for the same lines). (§383 8) When
   // the replaced one was a FULL summary, the person is due a full summary again now (a Weekly / Monthly person's ordinary lines never wait another period).
@@ -302,9 +316,12 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
       : [];
     // (§306) The admin's own lines, without those the team section lists.
     const repeats = fetched.filter((n) => inTeam(n, t)).map((n) => n.id);
-    const all = fetched.filter((n) => !repeats.includes(n.id));
+    // (Owner, Dec 2026) A "Booked: …" line or call reminder whose call was cancelled since: in the bell only.
+    const stale = await staleCallLines(fetched);
+    const all = fetched.filter((n) => !repeats.includes(n.id) && !stale.has(n.id));
     const teamN = t ? ad.teamCount(t) : 0;
     if (!all.length && !teamN) {
+      if (stale.size) await db.notification.updateMany({ where: { id: { in: [...stale] } }, data: { summarizedAt: now } });
       if (t) await ad.teamSent([u.id], [], now); // (as the admin email: looked at, nothing to send)
       continue;
     }
@@ -329,7 +346,7 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
       const forTeam = t && teamN ? [...(own.length ? [""] : []), ad.TEAM_HEADING, ...ad.teamLines(t, u.timeZone)] : [];
       // (§306) With the team's section, the admin email's button: Open the admin console.
       await sendEmail({ to: u.email, subject, text: [heading, "", ...own, ...forTeam].join("\n") /* (§325) no closing signature */, button: { label: forTeam.length ? "Open the admin console" : "Open Playtest", url: `${appUrl()}${forTeam.length ? "/admin" : "/app/notifications"}` }, heading, recipientId: u.id, notificationIds: items.map((n) => n.id), kind: due ? MORNING_FULL : MORNING_SHORT });
-      await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped, ...repeats, ...olderIds] } }, data: { summarizedAt: now } });
+      await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped, ...repeats, ...olderIds, ...stale] } }, data: { summarizedAt: now } });
       if (due) await db.user.update({ where: { id: u.id }, data: { lastSummaryAt: now } });
       if (t) await ad.teamSent([u.id], t.noShowIds, now);
     } catch (e) {
