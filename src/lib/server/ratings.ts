@@ -389,11 +389,11 @@ export async function ratingReminders(now = new Date(), opts: { /** (§383) fals
   const EVERY_DAYS = 3;
   const repeats = opts.repeats ?? true;
   let n = 0;
-  const sinceLast = async (userId: string, testId: string, fallback: Date) => {
-    const last = await db.notification.findFirst({ where: { userId, testId, text: { startsWith: "Reminder: rate " } }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
-    return last && last.createdAt > fallback ? last.createdAt : fallback;
-  };
-  /** (Owner, Dec 2026) This contract's own last line with this reminder key (or `fallback` if later): what a lifted freeze is compared with. */
+  /**
+   * (Owner, Dec 2026) This contract's own last line with this reminder key (`rate:<contract>`, `rate-dev:<contract>`; or `fallback` if later): what the 3 days
+   * and a lifted freeze count from. Per contract, not per test (it read the test's last "Reminder: rate " line): two testers on one test each get their own
+   * developer reminder every 3 days (the lines still stack in the day's "Ratings to give" entry).
+   */
   const lastOf = async (userId: string, key: string, fallback: Date) => {
     const last = await db.notification.findFirst({ where: { userId, reminderKey: key }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
     return last && last.createdAt > fallback ? last.createdAt : fallback;
@@ -412,7 +412,7 @@ export async function ratingReminders(now = new Date(), opts: { /** (§383) fals
     // (Owner, Dec 2026) A freeze that lifted after her last reminder on this contract (or her prompt): one fresh line now, before the test closes too (no date
     // to move then), from the sweep as well. Its line is dated after the lift, so it never fires twice; with `moved` too it is still the one line.
     const lifted = async () => { const at = await testerRateLiftedAt(c.id, now); return !!at && at > (await lastOf(c.testerId, `rate:${c.id}`, c.ratePromptedAt!)); };
-    if (!moved && !(repeats && repeatDue(await sinceLast(c.testerId, c.testId, c.ratePromptedAt!), now, EVERY_DAYS)) && !(await lifted())) continue;
+    if (!moved && !(repeats && repeatDue(await lastOf(c.testerId, `rate:${c.id}`, c.ratePromptedAt!), now, EVERY_DAYS)) && !(await lifted())) continue;
     if ((await rateBlocker(c.id, "tester", now)) !== "") continue; // disabled, or (§331) closed at the close-out: no reminder
     // (Owner, Nov 7, §331) The last one before the close-out (the next 3-day slot would fall after it) ignores email Off.
     const last = !!closes && now.getTime() + EVERY_DAYS * DAY >= closes.getTime();
@@ -438,7 +438,7 @@ export async function ratingReminders(now = new Date(), opts: { /** (§383) fals
     // (Owner, Dec 2026) Their hold or suspension, or the team's pause of the test, lifted after their last reminder on this contract (or the opening line, or
     // when their Rate opened): one fresh line now, from the sweep too; the repeats count from it.
     const lifted = !!s.liftedAt && s.liftedAt > (await lastOf(c.test.developerId, `rate-dev:${c.id}`, await lastOf(c.test.developerId, `rate-open:${c.id}`, s.opensAt!)));
-    if (!lifted && !(repeats && repeatDue(await sinceLast(c.test.developerId, c.testId, s.opensAt!), now, EVERY_DAYS))) continue;
+    if (!lifted && !(repeats && repeatDue(await lastOf(c.test.developerId, `rate-dev:${c.id}`, s.opensAt!), now, EVERY_DAYS))) continue;
     // (Owner, Nov 7, §329) The LAST reminder before their 14 days end (the next 3-day slot would fall after the end) ignores email Off (`always`): it reaches the
     // morning email. The others follow the email setting. (The line already names the end date.)
     const last = now.getTime() + EVERY_DAYS * DAY >= s.endsAt!.getTime();
