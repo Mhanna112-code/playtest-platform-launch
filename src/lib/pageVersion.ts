@@ -8,6 +8,8 @@ import { PRESS_ERROR_EVENT } from "./client";
  * ended. The page's version is what each AutoRefresh on it was drawn with (`v`, the same fingerprint its poll compares). When a line appears, its baseline
  * is the page's version on the server at that moment (each AutoRefresh's poll): the redraw that brings the very change the line is about is that version and
  * keeps the line; a later one clears it. A redraw that brings nothing new keeps it. A page without a fingerprint (Edit) keeps its lines as before.
+ * (Owner, Dec 10 2026) No longer for lines under buttons (refusals, stop lines, the kept refusal): one rule, a line stays until that button is pressed again or
+ * the page reloads. Only the red mistakes list's own lines (FormMistakes) still follow this.
  */
 const shownBy = new Map<string, string>();
 const sources = new Map<string, () => Promise<string | null>>();

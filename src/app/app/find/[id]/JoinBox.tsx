@@ -139,6 +139,9 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
   // Join / Apply with something missing: the pop-up asks first (never a refusal). Covered by now: a notice, no pop-up.
   async function press(action: "join" | "apply" | "rejoin-ask") {
     setCovered(null);
+    // (Owner, Dec 10 2026) Clear, then the new outcome: the line under the button (stop or refusal) goes as it is pressed; a red mistake comes back if still true.
+    setBox(null);
+    setErr("");
     if (p.nda && !nda) {
       setNdaErr("Accept the NDA to " + (action === "apply" ? "apply." : action === "rejoin-ask" ? "ask to rejoin." : "join."));
       // (Batch 16 section 10) The tick is red with its line, listed under the button, and gets the cursor.
@@ -161,6 +164,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     let reloading = false;
     setBusy(true);
     setErr("");
+    setBox(null); // (Owner, Dec 10 2026) Clear, then the new outcome: the stop line under this button goes as it is pressed (its time still makes this the second press).
     setErrPress(pressLabelOf(`/api/tests/${p.testId}/${action}`));
     try {
         const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, note, seenAt, confirmed, boxAt, anyway, inviteId, agreeTerms });

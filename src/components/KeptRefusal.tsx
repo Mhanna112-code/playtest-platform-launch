@@ -4,7 +4,6 @@ import { knownLinks } from "@/lib/lineLinkRegistry";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { KEEP_MS, KEPT_STORE, OWN_LINE_GRACE_MS, currentKept, dropKept, keptButton, keptPlacement, keptShows, keptOnPage, refusalTextOutsideKept, notePress, onKept, restoreKept, type Kept, type Spot } from "@/lib/keptRefusal";
-import { watchNewPageVersion } from "@/lib/pageVersion";
 
 /** The things a person presses: a press on any of them clears a kept line (and is remembered, in case it's refused). */
 const PRESSABLE = "button, [role='button'], input[type='submit'], input[type='button']";
@@ -100,7 +99,7 @@ export function KeptRefusal() {
       dropHost();
       return;
     }
-    const stopWatching = watchNewPageVersion(() => dropKept(kept.id));
+    // (Owner, Dec 10 2026; replaces batch 35 §60 here) A redraw with a new version no longer drops it: kept until the next press anywhere or a reload.
     // Checked a few times a second: hidden while the button (or a line saying the same) is on the page; once the redraw took it away, placed in the nearest
     // section still there. (Batch 32 §12) ONE notice element per kept line: when a live redraw throws its section away, the same element goes back in at once
     // (a MutationObserver runs before the screen repaints), so it never blinks.
@@ -158,7 +157,6 @@ export function KeptRefusal() {
     });
     mo.observe(document.body, { childList: true, subtree: true });
     return () => {
-      stopWatching();
       clearInterval(t);
       mo.disconnect();
     };

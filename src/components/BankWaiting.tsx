@@ -94,7 +94,7 @@ export function BankWaiting({ text, render, tests, links, after, before, payment
       <button type="button" className={`btn px-3 py-1.5 text-sm${wide ? " w-full sm:w-auto" : ""}`} disabled={busy || bank.open || (over && !over200)} onClick={go}>{CONFIRM_WITH_BANK}</button>
       {/* (Owner, Nov 3, §160) The developer's own press with its window open elsewhere: Cancel this check here too (Stripe first: paid if it went through, else cancelled). */}
       {own && !doneLine && <button type="button" className="btn-ghost ml-2 px-3 py-1.5 text-sm" disabled={busy || bank.open || cancelling} onClick={cancelCheck} data-cancel-own-check="">{CANCEL_THIS_CHECK}</button>}
-      <ChangesBox changes={changes} error={error} press={CONFIRM_WITH_BANK} />
+      <ChangesBox changes={changes} error={error} press={CONFIRM_WITH_BANK} line={false} /* (Owner, Dec 10 2026) a bank check keeps its own box, on the test page too */ />
       {bank.view}
       {/* (§156) The bank's check ended without the payment: named like any refusal ("Your Pay didn't go through: Your bank didn't confirm …"). */}
       {err && <p className="info" data-bank-not-confirmed="">{err.startsWith(STILL_WAITS) ? err /* (§160) Cancel: it keeps waiting, said plainly */ : refusalLine(CONFIRM_WITH_BANK, err)}</p>}

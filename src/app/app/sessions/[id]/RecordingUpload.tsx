@@ -163,6 +163,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
             setBusy(true);
             setErr("");
             setErrPress(press);
+            setBox(null); // (Owner, Dec 10 2026) Clear, then the new outcome: the stop line under this button goes as it is pressed (its time still makes this the second press).
             try {
               await api(`/api/sessions/${sessionId}/recording-send`, { seenAt, confirmed, boxAt, ...(sentBefore ? { add: true } : {}) });
               setBox(null);
@@ -182,7 +183,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
       )}
       {canSend && !sendable && fresh.length > 0 && <p className="note" data-draft-kept="">Your recordings are kept. {sentBefore ? "Adding" : "Sending"} comes back when the test resumes.</p>}
       {sending(fin.line) && <PressDone line={fin.line} />}
-      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} button={press} /* (§387 2) "Press Send my recording again" */ />
+      <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} button={press} /* (§387 2) "Press Send my recording again" */ />
       {/* (Batch 16 section 10) A file mistake is red at the file box, and listed here. */}
       <FormMistakes text={err} press={err.startsWith(FIELD) ? press : errPress || press} />
     </div>

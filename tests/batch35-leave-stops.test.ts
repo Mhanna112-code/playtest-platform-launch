@@ -141,9 +141,11 @@ describe("batch 35 §60: a refusal or stop line goes on a redraw with a new page
     off();
   });
 
-  it("the shared boxes use it: Err (refusals, not red mistakes), ChangesBox, FormMistakes' orphans; AutoRefresh publishes its version; api() announces refusals", () => {
-    expect(src("components/Err.tsx")).toContain('useGoneOnNewVersion(text.startsWith(FIELD) ? "" : text, text)');
-    expect(src("components/ChangesBox.tsx")).toContain("useGoneOnNewVersion(changes ?? error ?? null");
+  // (Owner, Dec 10 2026; replaces §60 for lines under buttons) A line under a button stays until that button is pressed again or the page reloads: Err and
+  // ChangesBox no longer use it. FormMistakes' orphan lines (the red mistakes' own rule) still do.
+  it("FormMistakes' orphans use it; Err and ChangesBox no longer do; AutoRefresh publishes its version; api() announces refusals", () => {
+    expect(src("components/Err.tsx")).not.toContain("useGoneOnNewVersion");
+    expect(src("components/ChangesBox.tsx")).not.toContain("useGoneOnNewVersion");
     expect(src("components/FormMistakes.tsx")).toContain("orphans={gone ? [] : orphans}");
     expect(src("components/AutoRefresh.tsx")).toContain("publishShownVersion(query, v)");
     expect(src("components/AutoRefresh.tsx")).toContain("setVersionSource(query,");

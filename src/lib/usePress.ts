@@ -8,6 +8,7 @@ import { liveRuleOf, mergeChanges, useLiveAppend, type LiveRule } from "./live";
 import { reloadKeepingPlace } from "./keepPlace";
 import { useHoldOpen } from "@/components/HoldFold";
 import { useCarried, useCarriedLive } from "./pressCarry";
+import { offerStop } from "./topStop";
 
 const NO_DATA: Record<string, unknown> = {};
 
@@ -108,8 +109,11 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
     setErrData(NO_DATA);
     setAt(key);
     // With `perKey`, only this key's own box makes this press its second one.
-    const again = changes != null && (!opts.perKey || key === at);
-    if (!again && opts.perKey) setChanges(null);
+    const prev = changes;
+    const again = prev != null && (!opts.perKey || key === at);
+    // (Owner, Dec 10 2026) Clear, then the new outcome: the line (or box) under the button goes the moment it is pressed; a second press still goes ahead
+    // (`again` and the box's time were read above).
+    setChanges(null);
     try {
       const r = await api<T>(path, { ...body, seenAt, confirmed: again || body.confirmed === true, ...(again && boxAt ? { boxAt } : {}) });
       setChanges(null);
@@ -119,9 +123,10 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
     } catch (e) {
       if (e instanceof ApiError && e.code === "stop_once") {
         // A stop after a stop adds its new lines to the box.
-        setChanges((c) => (c && again ? mergeChanges(c, (e.data.changes as Change[]) ?? []) : ((e.data.changes as Change[]) ?? [])));
+        setChanges(prev && again ? mergeChanges(prev, (e.data.changes as Change[]) ?? []) : ((e.data.changes as Change[]) ?? []));
         if (typeof e.data.now === "string") setBoxAt(e.data.now);
         setRule(liveRuleOf(e.data));
+        offerStop(e.data); // (Owner, Dec 10 2026) new terms named (Rate): the offer loads at once
         onStop?.(e.data);
       } else {
         setChanges(null);

@@ -16,10 +16,10 @@ import { lastPressLabel } from "@/lib/client";
 import { pressVerb, refusalLine } from "@/lib/pressLabels";
 import { ANSWER_TERMS_FIRST } from "@/lib/answerTerms";
 import { NDA_BLOCK_FIRST } from "@/lib/ndaNotice";
+import { sendToTop, stopLineText, useStopLines } from "@/lib/stopLine";
 import { fmtTimeIn } from "@/lib/format";
 import { savedZone } from "@/components/TimeZoneSync";
 import { seeItClick, useSeeItTarget } from "@/components/ListingInfo";
-import { useGoneOnNewVersion } from "@/lib/pageVersion";
 
 export type Change = { text: string; /** the people and tests it names, each its own green link */ links?: LineLink[]; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string; /** the fields another tab changed (API names) */ fields?: string[]; /** one line per thing: a newer line with the same key replaces it */ key?: string; /** a live-box line that never stops a press */ quiet?: boolean; /** the text says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** the join page's NDA changed (its tick clears) */ nda?: boolean; /** the developer's listing change: See it jumps to the Listing panel */ listing?: boolean; /** the listing Save the line is about: See it marks that Save's fields only */ saveAt?: string; /** the panel lines all the listing changes it covers changed */ keys?: string[]; /** it stops whatever the Alerts: no way to turn it off is offered for it */ forced?: boolean; /** the update's identity: once any stop box on the page lists it, no other press there stops for it */ sid?: string;
   /** a live line on the tester's page: the part (submission or call id) it is about */ part?: string;
@@ -41,15 +41,19 @@ const time = (iso: string) => fmtTimeIn(iso, savedZone());
 const DEFAULT_TAILS = new Set(["Press again to go ahead.", "Press again to go ahead"]);
 
 /**
+ * (Owner, Dec 10 2026) On a page whose top updates box takes the stops' changes (the session page, the join page, the test page: lib/stopLine.ts), a stop
+ * shows as ONE blue line under the button, "Your <press> didn't go through: check the updates at the top. Press again to go ahead.", and its changes go into
+ * the top box at once. `line`: true draws the line, false keeps the full box (a bank check's Confirm with your bank); unset, the page decides. Elsewhere:
  * The stop-once box (and any refusal): a blue notice placed directly under the button that was pressed, scrolled into view.
  * Top to bottom: "Your <button> didn't go through."; "Since you opened this page:" and the list; the Alerts lines (the tester's
  * toggle wording on the tester side); and last, in bold, "Press <button> again to go ahead.". A refusal names the press first: "Your Pay didn't go through: <reason>".
  * `press` is the button's label; without one, the label of the press that was just stopped or refused (from its API path).
  */
-export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link, didntGo = false, press, button, side = "developer", detail, seeIt, alertsWhere, heading }: { changes: Change[] | null; error?: string; tail?: string; link?: string; didntGo?: boolean; press?: string;
+export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link, didntGo = false, press, button, side = "developer", detail, seeIt, alertsWhere, heading, line }: { changes: Change[] | null; error?: string; tail?: string; link?: string; didntGo?: boolean; press?: string;
   /** The button's own label when it differs from the press's name: "Press <button> again to go ahead." names what the button reads
    * ("Send the dispute"), while "Your Dispute didn't go through." keeps the press's name. */
-  button?: string; side?: "developer" | "tester"; /** more under a line (Edit: Before / What you typed) */ detail?: (c: Change) => React.ReactNode; /** a listing save's line ends "· See it" (where the listing is on this page) */ seeIt?: string; /** a join-page box (Join, Apply, Ask to rejoin, No thanks, Withdraw): it always stops, whatever the Alerts, so it never offers them */ alertsWhere?: "join"; /** the admin pages' heading: "Since this page loaded:" */ heading?: string }) {
+  button?: string; side?: "developer" | "tester"; /** more under a line (Edit: Before / What you typed) */ detail?: (c: Change) => React.ReactNode; /** a listing save's line ends "· See it" (where the listing is on this page) */ seeIt?: string; /** a join-page box (Join, Apply, Ask to rejoin, No thanks, Withdraw): it always stops, whatever the Alerts, so it never offers them */ alertsWhere?: "join"; /** the admin pages' heading: "Since this page loaded:" */ heading?: string;
+  /** (Owner, Dec 10 2026) true: the one line (changes to the top box); false: the full box; unset: the line on a page whose top box takes them */ line?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   // The developer's test page gives every box its Listing panel ("#listing").
   const pageSeeIt = useSeeItTarget();
@@ -59,20 +63,35 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
   useEffect(() => {
     if (shown) setLabel(press ?? lastPressLabel());
   }, [shown, press, error]);
+  const pageLine = useStopLines();
+  const asLine = line ?? pageLine;
   useEffect(() => {
-    if (changes) markShownInBox(changes); // seen: the top box lists them quietly, without its scroll
-    // The new-terms line stays under its button while the page goes up to the Switch / Keep box.
-    // So does the NDA block's line while the page goes up to the NDA notice.
-    if (changes || (error && error !== ANSWER_TERMS_FIRST && error !== NDA_BLOCK_FIRST)) bringInView(ref.current);
-  }, [changes, error]);
-  // A stop box or refusal under a button goes once the page redraws with a new version of itself; the same stop or refusal again shows again.
-  const gone = useGoneOnNewVersion(changes ?? error ?? null, changes ? "" : error ?? "");
-  if ((!changes && !error) || gone) return null;
+    // (Owner, Dec 10 2026) The one line: the stop's changes go into the top box at once (seen there, quietly). The box: seen in it, the top box lists them quietly.
+    if (changes) {
+      if (asLine) sendToTop(changes);
+      else markShownInBox(changes);
+    }
+    // (Owner, Dec 10 2026; replaces batch 27 §1 and §302's exceptions) The page no longer goes up to Switch / Keep or the NDA notice: their lines come into view
+    // under the button like every other.
+    if (changes || error) bringInView(ref.current);
+  }, [changes, error, asLine]);
+  // (Owner, Dec 10 2026; replaces batch 35 §60) A line under a button stays until that button is pressed again or the page reloads: a redraw with a new
+  // version, a live update or the Alerts no longer take it away.
+  if (!changes && !error) return null;
   if (!changes && error && error.startsWith("\u0001")) return <p ref={ref as unknown as React.RefObject<HTMLParagraphElement>} className="err-field basis-full">{error.slice(1)}</p>;
   const name = press ?? (label || lastPressLabel());
   const named = name && name !== "press" ? name : "";
   const again = button || (named ? pressVerb(named) : "");
   const action = DEFAULT_TAILS.has(tail) ? (again ? `Press ${again} again to go ahead.` : "Press again to go ahead.") : tail;
+  // (Owner, Dec 10 2026) The one line under the button (its changes are in the top box); a refusal after it, as in the box.
+  if (changes && asLine) {
+    return (
+      <div ref={ref} className="info basis-full" role="status" aria-live="polite" data-stop-box="" data-stop-line="">
+        <p data-didnt-go="">{stopLineText(named)}</p>
+        {error && <p data-refusal="">{linked(refusalLine(named, error))}</p>}
+      </div>
+    );
+  }
   // Only the lines an Alerts tick could have switched off offer to turn their type off; a box of forced lines shows no turn-off hint at all.
   const alerts = changes ? optionalAlerts(changes) : [];
   return (
@@ -82,8 +101,9 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
           <p className="font-medium" data-didnt-go="">{named ? `Your ${named} didn't go through.` : "Your press didn't go through."}</p>
           {/* Payments, the profile editor and Settings: what another tab or device changed on the account. */}
           <p className="font-medium">{heading ?? (changes.length > 0 && changes.every((c) => c.kind === "account" || c.kind === "account-at") ? "Changed in another tab or device since you opened this page:" : "Since you opened this page:")}</p>
-          {/* The newest 3 lines, then "Show N more" opening a scroll box about 8 lines tall. */}
-          <LongList className="my-1 list-disc pl-5" tall="max-h-52">
+          {/* The newest 3 lines, then "Show N more" opening a scroll box about 8 lines tall. (Owner, Dec 10 2026) The lines come oldest first (the server's
+              order, and merged lines join at the end): the folded list shows the LAST 3, in that order. */}
+          <LongList className="my-1 list-disc pl-5" tall="max-h-52" newest="last">
             {[...changes].map((c, i) => (
               <li key={`${c.at}|${c.text}|${i}`}>
                 {/* A line can open what it's about (e.g. the next round's draft another tab made). */}

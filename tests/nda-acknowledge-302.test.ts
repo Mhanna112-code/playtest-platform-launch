@@ -101,14 +101,15 @@ describe("§302 every NDA change blocks like new terms", () => {
     expect(ndaNoticeLine("fbbb")).toBe("fbbb changed the NDA. Click here to acknowledge you've seen the change.");
     expect(ndaNoticeHref("s1")).toBe("/app/sessions/s1#nda-notice");
     // Under the pressed button exactly as it is (never "Your Send didn't go through: …"), like "Answer the new terms first: Switch or Keep.".
-    expect(refusalLine("Request a time", NDA_BLOCK_FIRST)).toBe("Acknowledge the NDA change first.");
-    expect(unescape(renderToStaticMarkup(h(Err, { text: NDA_BLOCK_FIRST, press: "Send" })))).toBe('<p class="err" data-nda-refusal="">Acknowledge the NDA change first.</p>');
+    // (Owner, Dec 10 2026) "… at the top of the page.": the page no longer goes up to the notice.
+    expect(refusalLine("Request a time", NDA_BLOCK_FIRST)).toBe("Acknowledge the NDA change first at the top of the page.");
+    expect(unescape(renderToStaticMarkup(h(Err, { text: NDA_BLOCK_FIRST, press: "Send" })))).toBe('<p class="err" data-nda-refusal="">Acknowledge the NDA change first at the top of the page.</p>');
     // The top box's link lands on the notice, else (acknowledged) on the NDA line.
     expect(lineFallbacks("nda-notice")).toEqual(["nda-notice", "info-nda"]);
   });
 
   // (Owner, Nov 6, §314) No button, no separate link: the one line acknowledges, leaves the page and goes to the NDA.
-  it("the notice: ONE clickable line that acknowledges and goes to the NDA, no button, no banner; marked when the page goes up to it", () => {
+  it("the notice: ONE clickable line that acknowledges and goes to the NDA, no button, no banner; marked without a scroll", () => {
     for (const kind of KINDS) {
       const html = unescape(renderToStaticMarkup(h(NdaNotice, { sessionId: "s1", dev: "fbbb", kind, open: true, block: true })));
       // One wording for every kind (the owner's, Nov 6), the whole line one press.
@@ -120,10 +121,11 @@ describe("§302 every NDA change blocks like new terms", () => {
     expect(renderToStaticMarkup(h(NdaNotice, { sessionId: "s1", dev: "fbbb", kind: "changed", open: false, block: false }))).toBe("");
     // Not blocking (the tester no longer works on the test): the notice, without the block mark.
     expect(renderToStaticMarkup(h(NdaNotice, { sessionId: "s1", dev: "fbbb", kind: "changed", open: true, block: false }))).not.toContain("data-nda-block");
-    // The source: the press goes up to the notice and marks it, as TesterTop does for Switch / Keep; an older page loads it first.
+    // The source: the press marks the notice (its ring), as TesterTop does for Switch / Keep; an older page loads it first. (Owner, Dec 10 2026) No scroll.
     const src = readFileSync(path.resolve(__dirname, "../src/components/NdaNotice.tsx"), "utf8");
     expect(src).toContain("window.addEventListener(NDA_BLOCK_EVENT, on);");
-    expect(src).toContain("setTimeout(() => jumpTo(NDA_NOTICE), 30);");
+    expect(src).toContain("markOnly(NDA_NOTICE);");
+    expect(src).not.toContain("jumpTo(NDA_NOTICE)");
     expect(src).toContain("router.refresh();");
     // The line is the only thing that records it (no banner, no button); a double press sends once; after it, the line goes and the page goes to the NDA.
     expect(src.match(/nda-seen/g)).toHaveLength(1);

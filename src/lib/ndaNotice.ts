@@ -37,11 +37,12 @@ export const ndaNoticeLine = (dev: string) => `${ndaChangedLine(dev)}. ${NDA_ACK
 /** (§302) The acknowledging press's name (refusal lines). (Owner, Nov 6, §314) It is the notice's line itself now, not a button. */
 export const NDA_ACK_PRESS = "Acknowledge";
 
-/** (§302) The refusal while blocked: one short line under the pressed button (like "Answer the new terms first: Switch or Keep."). */
-export const NDA_BLOCK_FIRST = "Acknowledge the NDA change first.";
+/** (§302) The refusal while blocked: one short line under the pressed button (like ANSWER_TERMS_FIRST). (Owner, Dec 10 2026) "… at the top of the page.": the
+ * page no longer goes up to the notice. */
+export const NDA_BLOCK_FIRST = "Acknowledge the NDA change first at the top of the page.";
 /** The refusal's code. */
 export const NDA_BLOCK_CODE = "nda_block";
-/** (§302) The page event that brings the NDA notice into view, marked (the notice listens; a page without it yet loads it first). */
+/** (§302) The page event that marks the NDA notice (the notice listens; a page without it yet loads it first). (Owner, Dec 10 2026) Its ring only: no scroll. */
 export const NDA_BLOCK_EVENT = "nda-block";
 /** (§302) The notice's id on the session page (the bell's and the top box's link land here). */
 export const NDA_NOTICE = "nda-notice";

@@ -174,7 +174,8 @@ export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { 
 export function ExcerptDecision({ excerptId, seenAt }: { excerptId: string; /** the test page's load time: a big change in another tab stops once */ seenAt?: string }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [box, setBox] = useState<{ changes: Change[]; at: string } | null>(null);
+  // (Owner, Dec 10 2026) `shown`: the line (or box) under the buttons; it clears as Allow or Deny is pressed while the box's time still makes it the second press.
+  const [box, setBox] = useState<{ changes: Change[]; at: string; shown: boolean } | null>(null);
   // (§156) The box and a refusal name the button pressed: Allow or Deny.
   const [pressed, setPressed] = useState<"Allow" | "Deny">("Allow");
   const fin = useFinished(() => { setBusy(false); setBox(null); });
@@ -182,12 +183,13 @@ export function ExcerptDecision({ excerptId, seenAt }: { excerptId: string; /** 
     setPressed(decision === "deny" ? "Deny" : "Allow");
     setBusy(true);
     setErr("");
+    setBox((b) => (b ? { ...b, shown: false } : b)); // (Owner, Dec 10 2026) clear, then the new outcome
     try {
       await api("/api/excerpts", { action: "decide", excerptId, decision, ...(seenAt ? { seenAt } : {}), ...(box ? { confirmed: true, boxAt: box.at } : {}) });
       fin.finish();
     } catch (e) {
       const stop = (e as { code?: string; data?: { changes?: Change[] } }).code === "stop_once" ? (e as { data: { changes?: Change[] } }).data.changes ?? [] : null;
-      if (stop) setBox({ changes: stop, at: new Date().toISOString() });
+      if (stop) setBox({ changes: stop, at: new Date().toISOString(), shown: true });
       else {
         // (Owner, Nov 11, §387 2) One answer under the buttons: a refusal replaces the box (a form mistake keeps it).
         if (!isFieldError(e)) setBox(null);
@@ -202,7 +204,7 @@ export function ExcerptDecision({ excerptId, seenAt }: { excerptId: string; /** 
         <button type="button" className="btn px-3 py-1 text-sm" disabled={busy} onClick={() => decide("allow")}>Allow</button>
         <button type="button" className="btn-secondary px-3 py-1 text-sm" disabled={busy} onClick={() => decide("deny")}>Deny</button>
       </div>
-      {box && <ChangesBox changes={box.changes} press={pressed} />}
+      {box?.shown && <ChangesBox changes={box.changes} press={pressed} />}
       <Err text={err} press={pressed} />
     </div>
   );

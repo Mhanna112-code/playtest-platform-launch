@@ -423,7 +423,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       </div>
       {pausedBanner && <p className="info" data-paused="">{pausedBanner}</p>}
       {key && <KeyBox value={key.value} fresh={!!freshKey} />}
-      <LiveTop scope={`session:${c.id}`} seenAt={seenAt} seeIt="#scope" />
+      <LiveTop scope={`session:${c.id}`} seenAt={seenAt} seeIt="#scope" stopLines /* (Owner, Dec 10 2026) stops: one line under the button, their changes here */ />
       {/* (Owner, Nov 5, §267; Nov 6, §302) The NDA's one notice with its Acknowledge button until it's acknowledged; while the tester works, every NDA change
           blocks their presses until then (no separate banner). */}
       {/* (Owner, Nov 6, §314) Keyed by the change's time: a later NDA change brings a new notice (only ever one, for the latest change). */}

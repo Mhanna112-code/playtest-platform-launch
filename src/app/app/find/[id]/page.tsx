@@ -139,7 +139,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
     <div className="mx-auto max-w-3xl space-y-6">
       <p><a href="/app/find">← All tests</a></p>
       {isAdmin(u) && <AdminTestBoxes testId={t.id} adminId={u.id} />}
-      {t.developerId !== u.id && <LiveTop scope={`listing:${t.id}`} seenAt={seenAt} seeIt="#listing" />}
+      {t.developerId !== u.id && <LiveTop scope={`listing:${t.id}`} seenAt={seenAt} seeIt="#listing" stopLines /* (Owner, Dec 10 2026) stops: one line under the button, their changes here */ />}
       {/* (Batch 30 §12) The seen marker starts at this page's first load in the tab: a redraw (the needs covered, an invite re-sent) never skips a change. */}
       <PageLoaded at={seenAt} />
       {/* (Batch 16 section 32) An invite to this test: the page follows it live (closed, re-sent, the test filling). */}

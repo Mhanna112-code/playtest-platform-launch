@@ -49,7 +49,7 @@ describe("new terms offered to working testers", () => {
     await edit(testId, dev.cookie, { writtenCents: "12.00" });
     const first = await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: pageLoaded });
     expect(first.status).toBe(409);
-    expect(first.body.error).toMatchObject({ code: "answer_terms", message: "Answer the new terms first: Switch or Keep." });
+    expect(first.body.error).toMatchObject({ code: "answer_terms", message: "Answer the new terms first: Switch or Keep at the top of the page." }); // (Owner, Dec 10 2026)
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: pageLoaded, confirmed: true })).body.error.code).toBe("answer_terms");
     const offer = await db.termsOffer.findFirstOrThrow({ where: { contractId: sessionId } });
     expect((await sact(sessionId, "terms", tester.cookie, { offerId: offer.id, choice: "keep" })).status).toBe(200);

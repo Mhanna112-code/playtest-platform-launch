@@ -70,7 +70,8 @@ export function PopupStop({ lines, press, seeIt }: { lines: Change[]; press: str
   return (
     <div role="alert" className="mb-3 space-y-1.5 rounded-lg border border-sky-300/40 bg-sky-300/[0.08] p-2.5 text-sm text-sky-100" data-popup-stop="">
       {lines.length > 0 && (
-        <LongList className="list-disc space-y-0.5 pl-6" tall="max-h-52">
+        // (Owner, Dec 10 2026) The stop's lines come oldest first (the server's order): folded, the newest 3.
+        <LongList className="list-disc space-y-0.5 pl-6" tall="max-h-52" newest="last">
           {lines.map((c, i) => (
             <li key={`${c.text}|${i}`}>{c.text}{seeIt && isListingLine(c) && <> · <a href={seeIt} data-see-it="" onClick={(e) => seeItClick(e, seeIt, c.at, c.saveAt, c.keys)}>See it</a></>}</li>
           ))}

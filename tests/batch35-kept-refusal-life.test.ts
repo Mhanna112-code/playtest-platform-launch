@@ -55,7 +55,8 @@ describe("batch 35 §116: a kept refusal belongs to its situation and page conte
     expect(component).toContain('document.querySelector<HTMLElement>("main")');
     expect(component).toContain("anchor.prepend(hostRef.current)");
     expect(component).not.toContain('position: "fixed"');
-    expect(component).toContain("watchNewPageVersion(() => dropKept(kept.id))");
+    // (Owner, Dec 10 2026; replaces §60 here) A redraw with a new version no longer drops the kept line: only the next press anywhere or a reload.
+    expect(component).not.toContain("watchNewPageVersion");
     expect(component).toContain("flat(refusalTextOutsideKept(p)).includes(msg)");
     expect(component).toContain('h.className = "empty:hidden"');
   });

@@ -11,20 +11,25 @@ import { KEY_BOX_ID } from "@/lib/keys";
 import { pillLabel, pillSide, type PillSide } from "@/lib/livePill";
 import { seeItClick } from "@/components/ListingInfo";
 import { LIVE_TICK, boxSync, rideLiveClock, whileRedrawn } from "@/lib/liveSync";
+import { TO_TOP_EVENT, handedToTop, useStopLinePage } from "@/lib/stopLine";
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const key = (c: Change) => `${c.at}|${c.text}`;
 const time0 = (at: string | Date) => new Date(at).getTime();
+/** (Owner, Dec 10 2026) A line that says its own time ("This test was stopped at 3:10 PM."): "Updated:", never the time twice (as the stop box drew it). */
+const saysItsTime = (l: Change) => l.timed || / at \d{1,2}:\d{2}\s?[AP]M\.?$/.test(l.text);
 /** An ignored line's words that open its row: still the line's grey, underlined on hover. */
 const IGNORED_REST = "text-inherit no-underline hover:underline";
 
 export function LiveNoticeText({ line: l, testId }: { line: Change; testId?: string }) {
-  const rest = l.link ? `${testId ? `/app/tests/${testId}` : ""}#${l.link}` : undefined;
+  // (Owner, Dec 10 2026) A stop's line handed to this box may open a page of its own ("/app/…", as it did in the stop box): its words link there.
+  const away = !!l.link?.startsWith("/");
+  const rest = l.link ? (away ? l.link : `${testId ? `/app/tests/${testId}` : ""}#${l.link}`) : undefined;
   return withLineLinks(l.text, l.links, {
     draw: (text) => text,
     rest,
     restClass: l.ignored ? IGNORED_REST : undefined,
-    onRest: testId || !l.link ? undefined : (e) => {
+    onRest: testId || !l.link || away ? undefined : (e) => {
       e.preventDefault();
       jumpToFirst(l.link!);
     },
@@ -48,9 +53,14 @@ export function LiveNoticeText({ line: l, testId }: { line: Change; testId?: str
  * (setShownOnPage when there were new lines, setShown when none). On unmount it clears it for this scope and hands over to the next box the time up
  * to which it showed every line (`shownTo`, or just before the first line it still held).
  */
-export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string; seenAt: string; seeIt?: string; contractLink?: "scroll" | { testId: string } }) {
-  const [lines, setLines] = useState<Change[]>([]);
+export function LiveTop({ scope, seenAt, seeIt, contractLink, stopLines = false }: { scope: string; seenAt: string; seeIt?: string; contractLink?: "scroll" | { testId: string };
+  /** (Owner, Dec 10 2026) This page's stops show as one line under the button and their changes come here (the session, join and test pages; not Edit or Home) */ stopLines?: boolean }) {
+  // (Owner, Dec 10 2026) A box drawn again in place lists what the page's stops handed to the one before it.
+  const [lines, setLines] = useState<Change[]>(() => (stopLines ? mergeChanges([], handedToTop()) : []));
   const [hiddenUpTo, setHiddenUpTo] = useState("");
+  // (Owner, Dec 10 2026) Lines a stop handed here show even when Dismiss hid older lines (until the next Dismiss).
+  const [unhidden, setUnhidden] = useState<Set<string>>(() => new Set());
+  useStopLinePage(stopLines);
   const known = useRef(new Set<string>());
   const since = useRef(seenAt); // the page-open time: the list always covers everything since then
   const box = useRef<HTMLDivElement>(null);
@@ -127,6 +137,23 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
       // nothing to show
     }
   }, []);
+
+  /**
+   * (Owner, Dec 10 2026) A press stopped once on this page: its changes come here at once, whatever the Alerts (the line under the button says to check them),
+   * never twice (mergeChanges skips a line the box already has); known, so the next check doesn't count them as new; quiet (no pill: the stop listed them).
+   */
+  useEffect(() => {
+    if (!stopLines) return;
+    const on = (e: Event) => {
+      const added = (e as CustomEvent<Change[]>).detail ?? [];
+      if (!added.length) return;
+      added.forEach((c) => known.current.add(key(c)));
+      setLines((old) => mergeChanges(old, added));
+      setUnhidden((u) => new Set([...u, ...added.map(key)]));
+    };
+    window.addEventListener(TO_TOP_EVENT, on);
+    return () => window.removeEventListener(TO_TOP_EVENT, on);
+  }, [stopLines]);
 
   /**
    * One check, not two: the box checks on the page's one beat (the same tick as the page's redraw poll), and at once whenever the
@@ -230,7 +257,7 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- announceFresh and where read refs and setters only
   }, [scope, sync]);
 
-  const show = lines.filter((l) => !hiddenUpTo || new Date(l.at).toISOString() > hiddenUpTo).sort((a, b) => (a.at < b.at ? 1 : -1));
+  const show = lines.filter((l) => !hiddenUpTo || new Date(l.at).toISOString() > hiddenUpTo || unhidden.has(key(l))).sort((a, b) => (time0(a.at) < time0(b.at) ? 1 : -1));
   if (!show.length) return null;
   return (
     <>
@@ -247,7 +274,7 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
           <li key={key(l)} className={`${l.ignored ? "text-sky-100/50" : ""} ${flash === key(l) ? "rounded bg-sky-300/20 transition-colors" : ""}`} data-flash={flash === key(l) ? "" : undefined} title={l.ignored ? "You turned these stops off in Alerts" : undefined}>
             {/* A line about a row on this page opens it (a new dispute: its Needs you row). */}
             {/* A listing save's line says its own time ("Marc Hanna edited the listing at 6:55 PM: …"): not twice. */}
-            <b>{l.timed ? "Updated:" : `Updated · ${time(l.at)}:`}</b> {/* Each person and test it names is its own green link; a line about a row keeps its other words opening that row, beside them. */}
+            <b>{saysItsTime(l) ? "Updated:" : `Updated · ${time(l.at)}:`}</b> {/* Each person and test it names is its own green link; a line about a row keeps its other words opening that row, beside them. */}
             {/* Every line about something with a place on the page opens it (jumps and marks; a request whose row has left: its Call requests box),
                 ignored (greyed) lines too: those keep their grey and their title, the rest of the words linked in the line's own colour. */}
             <LiveNoticeText line={l} testId={typeof contractLink === "object" ? contractLink.testId : undefined} />
@@ -271,7 +298,7 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
         ))}
       </LongList>
       </div>
-      <button className="btn-ghost text-xs" onClick={() => setHiddenUpTo(new Date(show[0].at).toISOString())}>Dismiss</button>
+      <button className="btn-ghost text-xs" onClick={() => { setHiddenUpTo(new Date(show[0].at).toISOString()); setUnhidden(new Set()); }}>Dismiss</button>
     </div>
     </>
   );

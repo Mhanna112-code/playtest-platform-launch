@@ -116,7 +116,8 @@ describe("batch 35 §97: payment tags replace blue payment-state notices", () =>
     expect(html).toMatch(/data-part-status="closed">Not paid \(closed on [^<]+\)<\/span>/);
     expect(html).not.toContain(reason);
     expect(html).not.toContain('class="err"');
-    expect(source("components/Err.tsx")).toContain("useGoneOnNewVersion");
+    // (Owner, Dec 10 2026) The refusal line itself stays until Charge is pressed again or the page reloads (no longer gone on a new version).
+    expect(source("components/Err.tsx")).not.toContain("useGoneOnNewVersion");
     expect(source("app/app/sessions/[id]/ChoiceBox.tsx")).toContain("refusalLine(pressed, err)");
   });
 });

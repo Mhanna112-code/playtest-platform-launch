@@ -67,7 +67,7 @@ export function RateBox(p: { /** (Owner, Nov 11, §387 4) "Rate until Nov 25", n
       <PressDone line={doneLine} />
       {!done && p.disabledLine && <p className="text-xs text-ink-400" data-rate-disabled="">{p.disabledLine}</p>}
       {!done && keep.restored && comment !== "" && <p><DraftTag disabled={busy} kind="discard" onUseSaved={() => setComment("")} /></p>}
-      <ChangesBox changes={changes} error={error.startsWith(FIELD) ? "" : error} didntGo={p.working} button={p.working ? "Rate and finish" : "Rate"} />
+      <ChangesBox side={p.rater /* (Owner, Dec 10 2026) the tester's box on her session page */} changes={changes} error={error.startsWith(FIELD) ? "" : error} didntGo={p.working} button={p.working ? "Rate and finish" : "Rate"} />
       <FormMistakes text={error.startsWith(FIELD) ? error : ""} press={p.working ? "Rate and finish" : "Rate"} refused={!!error && !error.startsWith(FIELD)} />
     </div>
   );
