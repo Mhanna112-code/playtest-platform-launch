@@ -1,0 +1,465 @@
+{
+  "a1-send-answers-stop-line": {
+    "file": "a1-send-answers-stop-line.webm",
+    "mp4": "a1-send-answers-stop-line.mp4",
+    "title": "Session page · Send Answers: the one-line stop, kept, cleared and back",
+    "secs": 127,
+    "steps": [
+      "0:02 Ana types her answers. Her page loaded before Nora's next change.",
+      "0:25 Nora edits the listing in her window (Edit, What should testers do?, Save).",
+      "0:29 Ana presses Send Answers before her page updates.",
+      "0:33 Stopped once: ONE blue line under the button. Nora's change went into the updates box at the top at once.",
+      "0:43 Ana turns her Alerts off, then on again: the line under Send Answers stays.",
+      "0:51 Nora changes the listing again (its build link, off camera): Ana's page redraws live. The line still stays.",
+      "1:07 Ana shortens her first answer to 12 characters and presses Send Answers again.",
+      "1:13 Clear, then the new outcome: the blue line is gone (this was the second press) and the red mistake shows at the box.",
+      "1:38 Nora edits the listing once more (Edit, Save). Ana, still with the short answer, presses Send Answers.",
+      "1:43 Everything at once: the line under the button, the red mark at the answer, and Nora's change in the top box.",
+      "1:53 Ana presses again without fixing it: the line clears, the red mistake comes back (still true).",
+      "1:57 She fixes the answer and presses Send Answers: it goes ahead.",
+      "2:02 Nora's page shows Ana's answers live."
+    ],
+    "page": ""
+  },
+  "a3-session-block-lines": {
+    "file": "a3-session-block-lines.webm",
+    "mp4": "a3-session-block-lines.mp4",
+    "title": "Session page · the two block lines: an NDA change and new terms",
+    "secs": 109,
+    "steps": [
+      "0:02 Ana types her answers.",
+      "0:22 Nora adds an NDA to the listing in her window (Edit, NDA, Save).",
+      "0:24 Ana presses Send Answers before her page updates.",
+      "0:29 The line: “Acknowledge the NDA change first at the top of the page.” Her page doesn't move.",
+      "0:30 Ana scrolls up at once: the NDA notice at the top has a ring (for about 4 seconds). She acknowledges it.",
+      "0:46 Send Answers again.",
+      "0:52 Same for the NDA line: Add, recording Send / Add, Charge, Let it go, Dispute, Switch / Keep, Request a time, call Accept / Decline / Withdraw, Cancel call, Report a call problem, chat Send. Not for Leave or Rate.",
+      "1:01 Ana fills in a call request.",
+      "1:18 Nora raises the written answers' price to $12 in her window (Edit, Save): new terms for Ana.",
+      "1:19 Ana presses Request a time before her page updates.",
+      "1:22 The line: “Answer the new terms first: Switch or Keep at the top of the page.” The page stays put; Ana scrolls up at once: the Switch / Keep box has a ring (about 4 seconds).",
+      "1:29 Ana keeps her current terms, then presses Request a time again.",
+      "1:37 Same for the new-terms line: Send Answers, Add, recording Send / Add, Charge, Let it go, Dispute, call Accept / Decline / Withdraw, Cancel call, Join call. Leave and Rate aren't blocked: they stop once."
+    ],
+    "page": "Session page"
+  },
+  "a4-session-questions-changed": {
+    "file": "a4-session-questions-changed.webm",
+    "mp4": "a4-session-questions-changed.mp4",
+    "title": "Session page · Nora changes the questions: the form follows; an empty Send is refused",
+    "secs": 105,
+    "steps": [
+      "0:02 Ana types answers to the two questions.",
+      "0:18 Nora adds a third question (“Would you play level 4?”; her Save, off camera). Her page shows three questions.",
+      "0:22 Ana presses Send Answers before her page updates.",
+      "0:26 Stopped once: one line, the change in the top box, and the form now shows the new questions (her two answers kept).",
+      "0:35 Ana answers the new question too and presses Send Answers again: it goes ahead.",
+      "0:40 Nora adds a fourth question (off camera). Ana's page shows it live with an empty box.",
+      "1:28 Ana presses Send Answers with the new box empty.",
+      "1:32 Refused with “Answer at least one question”; nothing is sent, and the pay-by date stays where it was (Dec 18 02:10 before, Dec 18 02:10 after, UTC)."
+    ],
+    "page": ""
+  },
+  "a2-session-refusals": {
+    "file": "a2-session-refusals.webm",
+    "mp4": "a2-session-refusals.mp4",
+    "title": "Session page · refusals for good: a pause, then Nora ends Ana's work",
+    "secs": 105,
+    "steps": [
+      "0:02 Ana opens Add to this answer and writes an addition.",
+      "0:19 The team pauses the test (an admin, off camera). Nora's page shows the pause.",
+      "0:33 Ana presses Add to my answer before her page updates.",
+      "0:37 Refused for good, under the button: “This test is paused right now, so your Add didn't go through.” The page redraws: Add goes away, the line stays where it was and the draft is kept.",
+      "0:43 Same for “This test is paused right now”: Send Answers, recording Send / Add, Request a time, Accept a call request. Charge, Let it go and Rate: “This test is paused, so …”. Never refused for a pause: Leave, Dispute, Switch / Keep, Cancel call.",
+      "0:52 Another press on the page (her Alerts button) doesn't remove it: a line refused for a pause stays.",
+      "1:01 The team lifts the pause: Add to my answer comes back with her draft. The line stays under it until she presses Add again or reloads.",
+      "1:07 Ana fills in a call request (a time and 30 minutes).",
+      "1:18 Nora ends Ana's work early in her window (End early, Ana, a reason, End their work now).",
+      "1:23 Ana presses Request a time before her page updates.",
+      "1:25 Refused for good: her part is over. The page loads again at its top, and the line comes back where the button was (within 30 s of the press).",
+      "1:35 Same for “Your part in this test has ended” (and “This test was stopped” after Nora's Stop): Send Answers, Add, recording Send / Add, Switch / Keep, call Accept / Decline / Withdraw, Cancel call. Leave is silent; Dispute, Charge and Rate keep their own rules."
+    ],
+    "page": ""
+  },
+  "a5-session-dispute-request-leave": {
+    "file": "a5-session-dispute-request-leave.webm",
+    "mp4": "a5-session-dispute-request-leave.mp4",
+    "title": "Session page · Dispute, Request a time, a call request, Leave",
+    "secs": 159,
+    "steps": [
+      "0:02 Nora paid $6.00 of $10.00 for Ana's answers. Ana opens Dispute the pay and writes only “Low”.",
+      "0:05 Red mistake at the reason (nothing sent): it needs at least a sentence.",
+      "0:38 Nora edits the listing in her window (Edit, Save).",
+      "0:39 Ana presses Send the dispute before her page updates: one line under the button; the change is in the top box.",
+      "0:46 Pressed again: the dispute goes ahead. Nora's page shows it live.",
+      "0:56 Ana fills in a call request (a time, 30 minutes).",
+      "1:18 Nora edits the listing again (Edit, Save).",
+      "1:19 Ana presses Request a time: one line. Pressed again: the request goes to Nora.",
+      "1:35 Nora asks Ana for a call (Request a time, off camera); Ana's page shows the request live.",
+      "1:46 Nora withdraws her request (off camera); Ana presses Accept before her page updates.",
+      "1:52 Refused for good: “Nora Lane withdrew this request, so your Accept didn't go through.” The request stays in the list, marked Withdrawn, with the line above it.",
+      "1:57 Same for: Decline (withdrawn or closed requests), and Accept also when the test is paused, the call limit is reached or the time clashes.",
+      "2:10 Nora edits the listing once more (Edit, Save).",
+      "2:12 Ana presses Leave this test (and confirms) before her page updates: one line under Leave.",
+      "2:18 Pressed again: Ana leaves the test. Nora's page shows it live.",
+      "2:30 The stop line works the same way on every session-page button that a change can stop: Send Answers, Add, recording Send / Add, Switch / Keep, Charge / Let it go, Dispute, Leave, Rate, Request a time, call Accept / Decline / Withdraw, Cancel call."
+    ],
+    "page": ""
+  },
+  "a6-session-charge-rate": {
+    "file": "a6-session-charge-rate.webm",
+    "mp4": "a6-session-charge-rate.mp4",
+    "title": "Session page · Charge or Let it go, then Rate",
+    "secs": 131,
+    "steps": [
+      "0:02 Nora didn't pay in time: Ana can charge her card or let it go (the dates were moved on in the database to get here).",
+      "0:26 Nora edits the listing in her window (Edit, Save).",
+      "0:32 Ana presses Charge before her page updates: one line under the buttons; the change is in the top box.",
+      "0:58 Before Ana presses again, the team pauses the test (an admin, off camera). Nora's page shows the pause.",
+      "1:06 Ana presses Charge again before her page updates: refused for good, “This test is paused, so your Charge didn't go through.”",
+      "1:14 Same for Let it go. Both are also refused when Nora paid meanwhile, when a payment is being confirmed, and once their date has passed.",
+      "1:21 The team lifts the pause; Nora pays the $10.00 (her Pay, off camera). Both pages show it live.",
+      "1:54 Everything is paid, so Ana can rate Nora. Nora edits the listing again.",
+      "1:55 Ana picks 5 stars and presses Rate before her page updates: one line under Rate.",
+      "2:02 Pressed again: the rating goes ahead."
+    ],
+    "page": "Session page"
+  },
+  "b2-join-page-refusals": {
+    "file": "b2-join-page-refusals.webm",
+    "mp4": "b2-join-page-refusals.mp4",
+    "title": "Join page · refused for good: full, paused, Open until passed, invite only",
+    "secs": 138,
+    "steps": [
+      "0:17 Harbor Run has 1 spot. Ben joins it (off camera); Nora's page shows it full.",
+      "0:22 Ana presses Join this test before her page updates: refused, the test is full.",
+      "0:30 Same for Apply and Ask to rejoin. The page redraws without the join card.",
+      "0:55 Night Harbor: the team pauses it (an admin, off camera); Nora's page shows the pause.",
+      "1:01 Ana presses Join: “This test isn't taking new testers right now” (never says why; the same for a hold or a suspension).",
+      "1:30 Storm Coast: its Open until passes (moved to yesterday in the database, as the clock would).",
+      "1:32 Ana presses Join: refused, the test closed to new testers on that date.",
+      "2:01 Open Sea Run takes applications. Nora switches it to invite only (Edit, How testers join, Save).",
+      "2:02 Ana presses Apply: first the one line (the listing changed).",
+      "2:06 Pressed again: refused, the test is invite only.",
+      "2:13 Same for Join. Ask to rejoin is never refused for invite only."
+    ],
+    "page": "Join page"
+  },
+  "d2-two-copies-test-page-edit": {
+    "file": "d2-two-copies-test-page-edit.webm",
+    "mp4": "d2-two-copies-test-page-edit.mp4",
+    "title": "Two copies · Nora's test page and Edit (one page for both), then Edit twice",
+    "secs": 27,
+    "steps": [
+      "0:01 Tab 1 (test page): Nora accepts Ana's application; its answer is held 9 s.",
+      "0:02 Tab 2 opens Edit for the same test (the test page and Edit are one page): it waits, buttons locked.",
+      "0:08 Tab 1's Accept finishes; tab 1 goes to the dashboard. Tab 2's Edit is unlocked and drawn again with the change.",
+      "0:15 Tab 2 types a change in Edit (not saved). Tab 1 opens Edit too: tab 2 has no press on its way, so tab 1 takes it at once and tab 2 leaves, keeping its typing as a draft."
+    ],
+    "page": "Two copies"
+  },
+  "d3-two-copies-join-page": {
+    "file": "d3-two-copies-join-page.webm",
+    "mp4": "d3-two-copies-join-page.mp4",
+    "title": "Two copies · the join page",
+    "secs": 16,
+    "steps": [
+      "0:00 Tab 1: Ana presses Apply to join; its answer is held 9 s.",
+      "0:01 Tab 2 opens the same join page: “Saving changes in other tab…”, buttons locked.",
+      "0:06 Tab 1's Apply finishes; tab 1 goes to the dashboard; tab 2 redraws showing the application."
+    ],
+    "page": "Two copies"
+  },
+  "d4-two-copies-account-pages": {
+    "file": "d4-two-copies-account-pages.webm",
+    "mp4": "d4-two-copies-account-pages.mp4",
+    "title": "Two copies · Profile, Notifications and Payments",
+    "secs": 45,
+    "steps": [
+      "0:01 Profile, tab 1: Ana picks a pronoun and presses Save profile; its answer is held 8 s.",
+      "0:02 Tab 2 opens Profile: it waits (buttons locked), then redraws with the saved pronoun; tab 1 goes to the dashboard.",
+      "0:16 Notifications, tab 1: Ana turns email Off and presses Save; its answer is held 8 s.",
+      "0:17 Tab 2 opens Notifications: it waits, then shows email Off; tab 1 goes to the dashboard.",
+      "0:33 Payments: tab 1 has it open with no press on its way. Tab 2 opens Payments: it takes the page at once; tab 1 goes to the dashboard.",
+      "0:38 Payments' presses (Connect a payout account, Change card) go on to Stripe's own pages, so a new copy rarely finds one on its way; the same wait applies when it does."
+    ],
+    "page": "Two copies"
+  },
+  "h1-offline": {
+    "file": "h1-offline.webm",
+    "mp4": "h1-offline.mp4",
+    "title": "Offline · an offline press; a copy that opened offline claims again, or leaves",
+    "secs": 49,
+    "steps": [
+      "0:00 Browser 1: Ana types her answers, then her connection drops.",
+      "0:04 She presses Send Answers while offline. (The media server is a development server: its pages show without their styles while offline. The line under the button is the app's.)",
+      "0:10 Back online, she presses again: it goes through.",
+      "0:19 Browser 1 opens the session page, but the connection drops just as it opens: its claim on the page fails (no other copy is open).",
+      "0:23 Back online: browser 1 claims the page again by itself and stays (nobody else opened it).",
+      "0:26 Again browser 1 opens offline (claim failed). Ana types a draft addition there.",
+      "0:30 Meanwhile browser 2 (another window, still online) opens the same page and claims it.",
+      "0:33 Browser 1 comes back online: another copy claimed the page after it loaded, so browser 1 leaves for the dashboard (“This page was opened somewhere else.”).",
+      "0:42 Found: browser 2 (reloaded) opens Add to this answer and the box is empty: the addition browser 1 typed offline didn't come across."
+    ],
+    "page": ""
+  },
+  "b1-join-page-stop-lines": {
+    "file": "b1-join-page-stop-lines.webm",
+    "mp4": "b1-join-page-stop-lines.mp4",
+    "title": "Join page · Join, Apply, Withdraw, Ask to rejoin, No thanks: the one-line stop",
+    "secs": 162,
+    "steps": [
+      "0:18 Ana reads the listing. Nora edits it in her window (Edit, Save).",
+      "0:19 Ana presses Join this test before her page updates: one blue line under the button; the change is in the box at the top.",
+      "0:28 Pressed again: Ana joins (her session page opens).",
+      "0:38 Night Harbor takes applications. Ana writes a note.",
+      "0:59 Nora edits the listing (Edit, Save).",
+      "1:00 Apply: one line; pressed again, the application goes to Nora.",
+      "1:19 Nora changes the tester deadline (7 → 10 days, off camera): it no longer closes applications. Ana presses Withdraw application before her page updates.",
+      "1:23 It goes straight through: a deadline change isn't one of the join page's changes. (Nora's edits can't stop Withdraw now: the edits the join page lists close the application first, and Withdraw then goes quietly.)",
+      "1:30 Storm Coast: Ana left it earlier, so she can ask to rejoin.",
+      "1:51 Nora edits Storm Coast's listing (Edit, Save).",
+      "1:52 Ask to rejoin: one line; pressed again, Nora gets the request.",
+      "2:00 Open Sea Run: Nora invited Ana. The invite has Join and No thanks.",
+      "2:21 Nora edits Open Sea Run's listing (Edit, Save).",
+      "2:22 No thanks: one line; pressed again, the invite is declined (Ana goes to her dashboard).",
+      "2:35 On the join page these lines stop the press whatever Ana's Alerts are. No thanks isn't stopped by “full” or “a spot opened” lines."
+    ],
+    "page": "Join page"
+  },
+  "c2-test-page-calls-invite-stop": {
+    "file": "c2-test-page-calls-invite-stop.webm",
+    "mp4": "c2-test-page-calls-invite-stop.mp4",
+    "title": "Test page · a call request, Invite anyway, Stop the test, the team's pause",
+    "secs": 94,
+    "steps": [
+      "0:00 Ana asks Nora for a call (Request a time).",
+      "0:15 Ana withdraws her request; Nora presses Accept before her page updates.",
+      "0:22 Refused for good: the line under Accept says Ana withdrew this request.",
+      "0:27 Nora invites Bram: she finds him and ticks him. The test needs an iPad, which Bram doesn't list.",
+      "0:32 Invite asks first: Bram is missing what the test needs. Nora can Invite anyway.",
+      "0:38 Ana sends a new call request; Nora presses Invite anyway before her page updates.",
+      "0:43 Stopped once: one line; Ana's request is in the top box. Pressed again: Bram is invited.",
+      "0:56 Ana sends her written answers; Nora presses Stop the test (reason written) before her page updates.",
+      "1:01 Stopped once: one line under Stop the test; “Ana Silva sent her written answers” is in the top box.",
+      "1:05 Same for End early. Nora doesn't press again here: the test stays open for the team's pause next.",
+      "1:11 The team pauses the test (an admin, off camera). Nora presses Accept on Ana's call request before her page updates.",
+      "1:18 Refused for good: “The team paused this test, so your Accept didn't go through.” Nora's page goes to the test's top, where the banner names the press.",
+      "1:24 Same while the team's pause is on: Pay, Pay more, Invite, Request a time, Next round … (Stop the test, End early and Cancel call still work). A hold reads “Your tests are paused”, a suspension “Your account is suspended”."
+    ],
+    "page": "Test page"
+  },
+  "g1-pause-keeps-invites": {
+    "file": "g1-pause-keeps-invites.webm",
+    "mp4": "g1-pause-keeps-invites.mp4",
+    "title": "Invites · a pause keeps the invite open (no bell for Ana)",
+    "secs": 67,
+    "steps": [
+      "0:00 Nora invited Ana; Ana's bell has the invite.",
+      "0:28 The team pauses the test (an admin, off camera). Nora's page shows the pause.",
+      "0:31 Ana presses Join on the invite before her page updates: refused, “This test isn't taking new testers right now”.",
+      "0:46 Ana's bell: nothing new about the pause (1 line before, 1 after). Her invite stays open.",
+      "0:49 The team lifts the pause. Ana's same invite works: she joins.",
+      "1:01 The same for a payment hold or a suspension of Nora: invites stay open and the invitee hears nothing."
+    ],
+    "page": "Invites and applications"
+  },
+  "g2-full-keeps-applications": {
+    "file": "g2-full-keeps-applications.webm",
+    "mp4": "g2-full-keeps-applications.mp4",
+    "title": "Applications · a full test keeps them open; Accept waits for a spot",
+    "secs": 53,
+    "steps": [
+      "0:03 One spot. Ana and Ben applied; Cam is invited. Nora accepts Ben.",
+      "0:07 The test is full. Ana's application stays pending; her page and bell say nothing about it.",
+      "0:19 Nora presses Accept on Ana: refused, the test is full.",
+      "0:28 Cam (invited) is told the test is full; Ana (applied) is told nothing.",
+      "0:32 Nora adds a spot (Spots 1 → 2, off camera). Accept on Ana now goes ahead; Cam is told a spot opened.",
+      "0:48 Ana's bell: she's in."
+    ],
+    "page": "Invites and applications"
+  },
+  "i1-switch-keep-newest-offer": {
+    "file": "i1-switch-keep-newest-offer.webm",
+    "mp4": "i1-switch-keep-newest-offer.mp4",
+    "title": "Switch / Keep · a press naming an older offer always stops; a third offer stops again",
+    "secs": 81,
+    "steps": [
+      "0:00 Ana turns her Alerts off (new terms still stop a press).",
+      "0:18 Nora raises the written answers' price to $12 (Edit, Save).",
+      "0:20 Ana's page shows the new terms live: Switch / Keep ($10 → $12).",
+      "0:38 Nora changes the price again, to $14 (Edit, Save).",
+      "0:39 Ana presses Switch on the $12 offer her page shows: stopped once (“changed the terms again”), and the box now offers $14.",
+      "0:58 Before Ana presses again, Nora changes the price a third time, to $16 (Edit, Save).",
+      "0:59 Ana presses Switch again (her page still offers $14): a newer offer exists, so it stops again, now with $16.",
+      "1:08 Third press, on the newest offer: Ana switches to $16.",
+      "1:15 Nora's page shows that Ana switched. Keep works the same way: a Keep naming an older offer stops with the newest."
+    ],
+    "page": "Switch / Keep"
+  },
+  "j1-home-kept-boxes": {
+    "file": "j1-home-kept-boxes.webm",
+    "mp4": "j1-home-kept-boxes.mp4",
+    "title": "Home · Confirm all with your bank, and the Calls box's Cancel while restricted (full boxes)",
+    "secs": 55,
+    "steps": [
+      "0:00 Ana and Ben charged Nora for unreviewed answers; her bank wants to confirm: Home shows “Confirm all (2)”.",
+      "0:06 Cam charges too (in his window), after Nora's Home loaded.",
+      "0:07 Nora presses Confirm all: Home keeps the full box under it (what changed, then “Press Confirm all again to go ahead.”).",
+      "0:19 Pressed again: the bank's check opens (the fake Stripe's stand-in); Nora confirms.",
+      "0:33 The team suspends Nora (an admin, off camera). Home's Calls box keeps a Cancel for her booked call with Ana.",
+      "0:37 After Nora's Home loaded, the team also pauses the test (off camera). Nora presses Cancel this call: Home keeps the full box, under the row.",
+      "0:47 Pressed again: the call is cancelled."
+    ],
+    "page": "Home"
+  },
+  "e2-account-pages-tester": {
+    "file": "e2-account-pages-tester.webm",
+    "mp4": "e2-account-pages-tester.mp4",
+    "title": "Account pages · Ana: changes from another tab or Stripe, in the kept box",
+    "secs": 64,
+    "steps": [
+      "0:00 Tab 2: Profile is open. In tab 1 (Account), Ana adds the developer side.",
+      "0:01 Tab 2: she picks another device and presses Save profile.",
+      "0:04 The kept box: “Changed in another tab or device since you opened this page: Sides: Tester → Developer and tester”.",
+      "0:08 Save profile again: it goes ahead.",
+      "0:12 Tab 1 opens Notifications. In tab 2 (Profile), Ana changes her name to “Ana S. Silva” and saves.",
+      "0:16 Found: this Save profile is stopped again with the same “Sides” line, though the last Save profile on this page went ahead (and saved this page's sides over it). Pressed again, the name is saved.",
+      "0:25 Tab 1: Ana changes her email setting and presses Save: the kept box lists “Name: Ana Silva → Ana S. Silva”.",
+      "0:35 Tab 2 opens Account. Tab 1 (Notifications) turns email Off and saves (it goes ahead).",
+      "0:39 Tab 2: Ana changes her password: the kept box lists “Email: … → Off” first; pressed again, the password is saved.",
+      "0:50 Tab 2 opens Payments. Stripe tells the app Ana's payout account is connected (the fake Stripe's message, as after setup on her phone).",
+      "0:54 Ana presses the payout button: the kept box lists “Payout account: not connected → connected”."
+    ],
+    "page": "Account pages"
+  },
+  "f1-edit-save-kept-box": {
+    "file": "f1-edit-save-kept-box.webm",
+    "mp4": "f1-edit-save-kept-box.mp4",
+    "title": "Edit · Save keeps its own box; why Before / Now / What you typed can't show now",
+    "secs": 50,
+    "steps": [
+      "0:00 Browser 1: Nora types a change in Edit.",
+      "0:01 The team pauses the test (an admin, off camera), then lifts the pause, both after Edit opened.",
+      "0:12 Nora presses Save: Edit keeps its full box under Save (“Your Save didn't go through. Since you opened this page: …”), not the one line.",
+      "0:22 Save again: it goes ahead.",
+      "0:27 Browser 2 opens Edit (it holds the page). Browser 1 opens Edit too, but offline just as it opens: its claim fails, so browser 2 keeps the page.",
+      "0:32 Offline, browser 1 types its own version of the steps (not saved).",
+      "0:33 Browser 2 changes the steps and saves (Edit's Save loads Edit again, which claims the page again).",
+      "0:37 Browser 1 comes back online: a copy claimed the page after browser 1 loaded, so browser 1 leaves for the dashboard (“This page was opened somewhere else.”).",
+      "0:42 So Edit's three-value box (Before / Now / What you typed) can't be reached now: any other Save of the same test claims the page after this copy loaded, and this copy leaves before its own Save."
+    ],
+    "page": ""
+  },
+  "g3-edits-invite-only-closing": {
+    "file": "g3-edits-invite-only-closing.webm",
+    "mp4": "g3-edits-invite-only-closing.mp4",
+    "title": "Invites · an edit keeps the invite; invite only closes applications; a closing test rings invitees",
+    "secs": 83,
+    "steps": [
+      "0:18 Nora invited Ana. Now she edits the listing (Edit, Save): the invite is NOT sent again.",
+      "0:20 Ana presses Join before her page updates: one line, the edit in the top box.",
+      "0:27 No new bell line for Ana (2 before, 2 after). Pressed again, Join goes ahead.",
+      "0:32 Night Harbor: Ana applied. Nora switches it to invite only and edits the steps in the same Save.",
+      "0:59 Nora's Save says “Closed 1 application: Ana Silva.” Ana's bell: “Night Harbor” is now invite only, so her application was closed (not “the listing changed”). Her join page now reads “This test isn't available right now.”",
+      "1:04 Storm Coast: Ana is invited. Its Open until passes with nobody working (moved in the database, as the clock would): the test closes on its own.",
+      "1:18 Ana's bell rings: “Your invite to “Storm Coast” was closed.”"
+    ],
+    "page": ""
+  },
+  "d1-two-copies-session-page": {
+    "file": "d1-two-copies-session-page.webm",
+    "mp4": "d1-two-copies-session-page.mp4",
+    "title": "Two copies · the session page: wait, redraw, Open now, a press that doesn't lock the page",
+    "secs": 69,
+    "steps": [
+      "0:00 Tab 1: Ana types her answers.",
+      "0:03 Tab 1: Send Answers. Its answer is held 9 s on the way back (a slow connection).",
+      "0:04 Tab 2 opens the same page: “Saving changes in other tab…” with Open now; every button is locked while it waits.",
+      "0:10 Tab 1's press finishes; tab 1 hands over and goes to the dashboard (“This page was opened somewhere else.”). Tab 2 redraws with the sent answers.",
+      "0:20 Tab 2 now holds the page. Ana adds to her answer there; its answer is held 25 s.",
+      "0:24 Tab 1 opens the page again: it waits. Ana presses Open now: tab 1 takes the page at once.",
+      "0:30 Tab 2's Add still goes through when its answer arrives; tab 2 then goes to the dashboard. Tab 1 shows the addition.",
+      "0:38 Found: tab 1's Add box on the first question holds “One more thing: the lighthouse level has no c…” as an unsent draft, though tab 2's addition with these words went through.",
+      "0:44 Tab 1 holds the page. Ana asks Nora for a call (Request a time); its answer is held 18 s.",
+      "0:45 Tab 2 opens the page and takes it at once: Request a time doesn't lock the page, so a new copy doesn't wait for it (Send Answers and Add do: parts 1 and 2; the 10-second takeover is in D5).",
+      "0:48 Tab 1's request still goes through when its answer arrives; tab 1 has already gone to the dashboard (“This page was opened somewhere else.”).",
+      "1:03 Tab 2 (reloaded): tab 1's call request is on the page."
+    ],
+    "page": ""
+  },
+  "e1-account-pages-developer": {
+    "file": "e1-account-pages-developer.webm",
+    "mp4": "e1-account-pages-developer.mp4",
+    "title": "Account pages · Nora: changes from another tab, in the kept box",
+    "secs": 62,
+    "steps": [
+      "0:00 Tab 2: Notifications is open. In tab 1 (Account), Nora changes her password.",
+      "0:04 Tab 2: she turns email Off and presses Save: the kept box “Changed in another tab or device since you opened this page:” lists “Password changed at …”.",
+      "0:12 Save again: it goes ahead.",
+      "0:15 Tab 1 opens Account again (a second Account page is allowed: it isn't one-at-a-time). Tab 2 (Notifications) switches email back On, Daily, and saves.",
+      "0:21 Tab 1: Nora presses “Start testing too” (add the tester side): the kept box lists “Email: Off → Daily”.",
+      "0:28 Pressed again: the tester side is added (tab 1 goes on to her tester profile).",
+      "0:33 Profile: what reaches it from another page is “Sides” (Account) or “Name” (only Profile itself). Adding a side opens Profile in that same tab, which takes the page from any other Profile copy, so Nora's Profile can't show this box now; Ana's video shows it.",
+      "0:41 Tab 2 opens Payments. Stripe tells the app her payout account is now connected (as after setup on her phone; the fake Stripe's message).",
+      "0:51 Nora presses Continue setup just as her page redraws by itself to “connected”: no press went out and no box shows (in Ana's video, E2, the same line stops the press with the box)."
+    ],
+    "page": ""
+  },
+  "c1-test-page-applications-pay": {
+    "file": "c1-test-page-applications-pay.webm",
+    "mp4": "c1-test-page-applications-pay.mp4",
+    "title": "Test page · Accept, Pay and Pay more, with Ana's actions in between",
+    "secs": 134,
+    "steps": [
+      "0:01 Ana applies to join (Apply to join).",
+      "0:05 Nora's page shows the application live.",
+      "0:21 Ana withdraws her application; Nora presses Accept before her page updates.",
+      "0:28 Refused for good: “Ana Silva withdrew her application.” (Decline on a withdrawn application is silent.)",
+      "0:33 Ana applies again (off camera); Nora accepts. Ana is in.",
+      "0:42 Ana sends her written answers.",
+      "0:55 Nora reads them and gets ready to pay $10.00 (the amount, the tick).",
+      "1:12 Ana adds to her answer; Nora presses Pay before her page updates.",
+      "1:18 Stopped once: one line under Pay; “Ana Silva added to her answer …” is in Nora's top box (this stops Pay on that part whatever her Alerts).",
+      "1:25 Pressed again: Nora pays $10.00 (fake card). Ana's page shows the payment live.",
+      "1:33 Nora wants to pay $2.00 more for the addition.",
+      "1:52 Ana leaves the test; Nora presses Pay more before her page updates.",
+      "1:58 Stopped once: one line; “Ana Silva left the test” is in the top box, and the red mistake shows at the tick Nora hadn't ticked. Pressed again: the blue line clears and the red mistake stays until she ticks it (nothing is paid).",
+      "2:06 Same stop line for Nora's other presses (Accept / Decline, Invite, Cancel invite, Request a time, call answers, Cancel call, End early, Stop the test) when a tester's change comes in, under her test's Alerts."
+    ],
+    "page": ""
+  },
+  "i2-switch-keep-withdrawn-new-leave": {
+    "file": "i2-switch-keep-withdrawn-new-leave.webm",
+    "mp4": "i2-switch-keep-withdrawn-new-leave.mp4",
+    "title": "Switch / Keep · a withdrawn offer, a new offer starts clean, Leave loads the new terms",
+    "secs": 118,
+    "steps": [
+      "0:18 Nora raises the price to $12 (Edit, Save).",
+      "0:38 Nora changes it again, to $14 (Edit, Save).",
+      "0:40 Ana presses Switch (her page shows $12): stopped once, the box moves to $14.",
+      "0:47 Nora sets the price back to $10, Ana's own terms (off camera): the offer is withdrawn.",
+      "1:03 After the live update one line is left: “Your Switch to the new terms didn't go through: These terms are no longer on offer.”",
+      "1:10 With that line showing, Nora offers $15 (off camera; the team first allowed more price changes): Switch / Keep appear without the old line.",
+      "1:18 Ana presses Keep my current terms: it goes ahead (“Kept your current terms.”).",
+      "1:40 Nora raises the price to $17 (Edit, Save).",
+      "1:42 Ana presses Leave this test before her page updates: one line under Leave, and Switch / Keep with $17 appear at once at the top (no scroll).",
+      "1:52 Same for Rate: a Rate stopped by new terms loads Switch / Keep at once."
+    ],
+    "page": "Switch / Keep"
+  },
+  "d5-two-copies-ten-second-takeover": {
+    "file": "d5-two-copies-ten-second-takeover.webm",
+    "mp4": "d5-two-copies-ten-second-takeover.mp4",
+    "title": "Two copies · the 10-second takeover while the old press is on its way",
+    "secs": 28,
+    "steps": [
+      "0:02 Tab 1: Ana presses Apply to join; its answer is held 16 s (a slow connection).",
+      "0:03 Tab 2 opens the same join page: “Saving changes in other tab…”. Nobody presses Open now.",
+      "0:16 After about 10 s (here 13.1 s from opening) tab 2 takes the page by itself, while tab 1's Apply is still on its way.",
+      "0:18 Tab 1's Apply still goes through when its answer arrives; then tab 1 goes to the dashboard (“This page was opened somewhere else.”).",
+      "0:21 Tab 2, reloaded, shows the application."
+    ],
+    "page": "Two copies"
+  }
+}

@@ -1,0 +1,3 @@
+# run logs and the media server PID (local only)
+*.log
+server.pid

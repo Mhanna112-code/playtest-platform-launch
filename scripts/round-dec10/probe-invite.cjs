@@ -1,0 +1,30 @@
+// Probe (not a recording): does Invite anyway stop once for a tester's call request made after the Invite anyway box opened?
+const X = require("./lib.cjs");
+(async () => {
+  await X.launch();
+  const nora = await X.account("ivn", "Nora Lane", "developer");
+  const ana = await X.account("iva", "Ana Silva", "tester");
+  const ben = await X.account("ivb", "Ben Okafor", "tester", "he");
+  const t = await X.postTest(nora, { liveRateCents: "30.00", liveMinutes: "30", devices: ["iPad"] });
+  const s = await X.join(ana, t);
+  X.post.quiet = true;
+  const seen = X.nowIso();
+  await new Promise((r) => setTimeout(r, 1500));
+  const r1 = await X.post(nora, `/api/tests/${t}/invite`, { testerIds: [ben.uid], seenAt: seen });
+  console.log("first Invite:", r1.status, JSON.stringify(r1.body).slice(0, 160));
+  const boxAt = X.nowIso();
+  await new Promise((r) => setTimeout(r, 1500));
+  const d = new Date(Date.now() + 3 * 86400000); d.setMinutes(0, 0, 0);
+  const rq = await X.post(ana, `/api/sessions/${s}/request-time`, { seenAt: X.nowIso(), confirmed: true, minutes: 30, times: [d.toISOString()] });
+  console.log("Ana's request:", rq.status, JSON.stringify(rq.body).slice(0, 120));
+  const r2 = await X.post(nora, `/api/tests/${t}/invite`, { testerIds: [ben.uid], anyway: true, confirmed: true, boxAt, seenAt: seen });
+  console.log("Invite anyway (box time before the request):", r2.status, JSON.stringify(r2.body).slice(0, 300));
+  const t2 = await X.postTest(nora, { title: "Night Harbor", liveRateCents: "30.00", liveMinutes: "30" });
+  const s2 = await X.join(ana, t2);
+  const seen2 = X.nowIso();
+  await new Promise((r) => setTimeout(r, 1500));
+  await X.post(ana, `/api/sessions/${s2}/request-time`, { seenAt: X.nowIso(), confirmed: true, minutes: 30, times: [d.toISOString()] });
+  const r3 = await X.post(nora, `/api/tests/${t2}/invite`, { testerIds: [ben.uid], seenAt: seen2 });
+  console.log("Plain Invite after a request:", r3.status, JSON.stringify(r3.body).slice(0, 300));
+  await X.L.browser.close();
+})().catch((e) => { console.error(e); process.exit(1); });
