@@ -5,7 +5,7 @@ import { publishTesterAlertsOff, setTesterAlertsOff } from "./testerAlerts";
 import { ANSWER_TERMS_CODE, ANSWER_TERMS_EVENT, ANSWER_TERMS_FIRST, termsBlockedPath } from "./answerTerms";
 import { NDA_BLOCK_CODE, NDA_BLOCK_EVENT, NDA_BLOCK_FIRST, NDA_NOTICE, ndaBlockedPath } from "./ndaNotice";
 import { rememberReply } from "./lineLinkRegistry";
-import { PAGE_MOVED_CODE, PAGE_MOVED_PATH } from "./pageClaim";
+import { PAGE_MOVED_CODE, PAGE_MOVED_LINE, PAGE_MOVED_PATH } from "./pageClaim";
 import { pressAnswered, pressStarted } from "./pageLock";
 
 /** The label of the last press that was stopped or refused: the box under it names it ("Your Pay didn't go through."). */
@@ -76,7 +76,22 @@ export const setPageScope = (scope: string) => {
 };
 /** The headers that name this page to the server (a poll asking whether this copy still holds the page sends them too). */
 export const pageHeaders = (): Record<string, string> => (PAGE_SCOPE && TAB ? { "x-tab": TAB, "x-page": PAGE_SCOPE } : {});
+/**
+ * (Owner, Dec 10 2026) The one-at-a-time page this copy SHOWS, claimed or not (set by OnePage from its first draw), and how it claims again. A press always names
+ * it (x-page), so the server refuses it while another tab holds the page, even when this copy's claim failed (offline at open). A press from a copy that
+ * doesn't hold its page first claims again, like a fresh open, and goes out only after that (not at all when the page has moved: it leaves). Polls still name
+ * only a claimed page (pageHeaders): a copy whose claim hasn't landed never reads as an older copy's.
+ */
+let PAGE_SHOWN = "";
+let CLAIM_AGAIN: (() => Promise<unknown>) | null = null;
+export const pageShown = () => PAGE_SHOWN;
+export const setPageShown = (scope: string, claimAgain: (() => Promise<unknown>) | null = null) => {
+  PAGE_SHOWN = scope;
+  CLAIM_AGAIN = scope ? claimAgain : null;
+};
 let LEFT_MOVED = false;
+/** Has this copy left as a moved page (leaveMovedPage)? */
+export const leftMovedPage = () => LEFT_MOVED;
 /**
  * This copy was opened somewhere else (another tab, browser or device): every button here is disabled at once and the tab goes to the
  * dashboard, which says "This page was opened somewhere else." Once per page.
@@ -200,6 +215,11 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
   // The NDA block first, as the server checks it first.
   if (body !== undefined && blockedByNda(path)) throw new ApiError(409, NDA_BLOCK_CODE, NDA_BLOCK_FIRST);
   if (body !== undefined && blockedByTerms(path)) throw new ApiError(409, ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST);
+  // (Owner, Dec 10 2026) A copy whose claim failed (offline at open) claims its page again first; a copy another one took meanwhile leaves, its press unsent.
+  if (body !== undefined && PAGE_SHOWN && PAGE_SCOPE !== PAGE_SHOWN && CLAIM_AGAIN && !LEFT_MOVED && !notAPress(path, body)) {
+    await CLAIM_AGAIN().catch(() => null);
+    if (LEFT_MOVED) throw new ApiError(409, PAGE_MOVED_CODE, PAGE_MOVED_LINE);
+  }
   // Every press sends the later of the page's render time and what the live top notice has shown.
   // New terms are measured from the page itself: `pageSeenAt` is when the page was rendered, whatever the top box showed.
   if (body && typeof body === "object" && typeof (body as { seenAt?: unknown }).seenAt === "string") body = { ...body, pageSeenAt: (body as { seenAt: string }).seenAt, seenAt: seenNow((body as { seenAt: string }).seenAt), ...(pageLoadedAt() ? { loadedAt: pageLoadedAt() } : {}), ...(boxSeenAt() ? { boxSeenAt: boxSeenAt() } : {}) };
@@ -212,7 +232,7 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
   try {
     res = await fetch(path, {
       method: method ?? (body === undefined ? "GET" : "POST"),
-      headers: { "x-timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, ...(body === undefined ? {} : { "content-type": "application/json" }), "x-tab": TAB, ...(PAGE_LOAD ? { "x-load": PAGE_LOAD } : {}), ...(PAGE_USER ? { "x-uid": PAGE_USER } : {}), ...(PAGE_SCOPE ? { "x-page": PAGE_SCOPE } : {}), ...(press && PAGE_SCOPE ? { "x-press": "1" } : {}) /* a new copy waits for it */ },
+      headers: { "x-timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, ...(body === undefined ? {} : { "content-type": "application/json" }), "x-tab": TAB, ...(PAGE_LOAD ? { "x-load": PAGE_LOAD } : {}), ...(PAGE_USER ? { "x-uid": PAGE_USER } : {}), ...(PAGE_SCOPE || PAGE_SHOWN ? { "x-page": PAGE_SCOPE || PAGE_SHOWN } : {}), ...(press && PAGE_SCOPE ? { "x-press": "1" } : {}) /* a new copy waits for it */ },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
