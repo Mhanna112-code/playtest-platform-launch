@@ -41,10 +41,26 @@ describe("Switch / Keep: the offer withdrawn after a press", () => {
     for (const x of ["setBox(null)", 'setBoxAt("")', "setErr(NO_LONGER_ON_OFFER)"]) expect(withdrawn).toContain(x);
   });
 
-  it("with no offer, the line shows by itself (no See the new terms); a box another press brought keeps its button", () => {
-    const noOffer = top.slice(top.indexOf("if (!offer)\n    return box ?"), top.indexOf("const decide"));
-    expect(noOffer).toContain("See the new terms");
-    expect(noOffer).toContain(") : err ? <Err text={err} press={errPress} /> : null;");
+  it("with no offer, the line shows by itself; no See the new terms button anywhere", () => {
+    expect(top).toContain("if (!offer) return box ? <ChangesBox side=\"tester\" changes={box.changes} tail={box.tail} /> : err ? <Err text={err} press={errPress} /> : null;");
+    expect(top).not.toContain(">See the new terms</button>");
+    expect(top).not.toContain("reloadKeepingPlace");
+  });
+});
+
+describe("Switch / Keep: another press's box naming new terms (Leave, Rate)", () => {
+  const handler = top.slice(top.indexOf("const on = (e: Event) => {"), top.indexOf('window.addEventListener("tester-top", on);'));
+  it("loads the offer at once when the page doesn't show it yet, and goes to it when it arrives", () => {
+    expect(handler).toContain('if (!document.getElementById("terms-offer")) {');
+    expect(handler).toContain("pending.current = true;");
+    expect(handler).toContain("router.refresh();");
+    expect(top).toContain("if (!offer?.id || !pending.current) return;"); // the jump to the Switch / Keep box once the offer is on the page
+  });
+
+  it("the offer's arrival keeps that box (it shows only here); Switch / Keep's own box is cleared by a different offer", () => {
+    expect(handler).toContain("boxMine.current = false;");
+    expect(top).toContain("if (boxMine.current) setBox(null);");
+    expect(top).toContain("boxMine.current = true; // after stopBox");
   });
 
   it("the server's refusal and the box's line are the same words", async () => {

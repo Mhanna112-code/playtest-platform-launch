@@ -9,7 +9,6 @@ import { api, errOf } from "@/lib/client";
 import { pressLabelOf } from "@/lib/pressLabels";
 import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
 import { useFinished } from "@/lib/usePress";
-import { reloadKeepingPlace } from "@/lib/keepPlace";
 import { PressDone } from "@/components/PressDone";
 
 
@@ -29,11 +28,14 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
   const [errPress, setErrPress] = useState("");
   // The offer this box's refusal, stop-once box and box time are about (the one shown, or the newest one a stop-once box moved it to).
   const aboutOffer = useRef(offer?.id ?? "");
+  // Whether Switch or Keep was pressed in this box for the offer it is about.
+  const pressed = useRef(false);
+  // Whether the box shown came from Switch / Keep here (true), or is another press's box sent up here (false: Leave's or Rate's box naming the new terms,
+  // which only shows here, so the offer's arrival keeps it).
+  const boxMine = useRef(false);
   // (Owner, Oct 28, batch 16 section 38A) The offer can arrive while the page is open (a refresh brings it): Switch / Keep always send the offer shown now.
   // (Owner, Dec 10 2026) A DIFFERENT offer starts clean: the last offer's refusal ("These terms are no longer on offer.") never shows under the new buttons,
   // and its box time never makes the next press a second press (which would switch to terms the page never showed, skipping "changed the terms again").
-  // Whether Switch or Keep was pressed in this box for the offer it is about.
-  const pressed = useRef(false);
   useEffect(() => {
     if (!offer?.id) {
       // (Owner, Dec 10 2026) The offer was withdrawn (the listing is back to her terms) after she pressed: no "changed the terms" box and no "See the new
@@ -51,22 +53,31 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
     if (offer.id !== aboutOffer.current) {
       setErr("");
       setErrPress("");
-      setBox(null);
+      if (boxMine.current) setBox(null);
       setBoxAt("");
       pressed.current = false;
     }
     aboutOffer.current = offer.id;
   }, [offer?.id, setBox]);
   const fin = useFinished();
-  useEffect(() => {
-    const on = (e: Event) => setBox((e as CustomEvent).detail as StopBox);
-    window.addEventListener("tester-top", on);
-    return () => window.removeEventListener("tester-top", on);
-  }, [setBox]);
   // (Owner, Oct 29, batch 27 section 1) A Send or call press while an offer is open: the page goes up to this box, highlighted for a few seconds (jumpTo's ring),
   // every time. A page that doesn't show the offer yet (the server refused it) loads it first, then goes to it.
   const router = useRouter();
   const pending = useRef(false);
+  // Another press's stop-once box that names new terms (Leave, Rate) shows here. (Owner, Dec 10 2026; replaces the "See the new terms" button) A page that
+  // doesn't show the offer yet loads it at once, so Switch / Keep with the new terms appears right away, with the box under them.
+  useEffect(() => {
+    const on = (e: Event) => {
+      setBox((e as CustomEvent).detail as StopBox);
+      boxMine.current = false;
+      if (!document.getElementById("terms-offer")) {
+        pending.current = true;
+        router.refresh();
+      }
+    };
+    window.addEventListener("tester-top", on);
+    return () => window.removeEventListener("tester-top", on);
+  }, [setBox, router]);
   useEffect(() => {
     const on = () => {
       if (document.getElementById("terms-offer")) {
@@ -84,14 +95,8 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
     pending.current = false;
     setTimeout(() => jumpTo("terms-offer"), 30);
   }, [offer?.id]);
-  // No offer on the page: a box another press brought (new terms the page hasn't loaded yet) with "See the new terms"; else her withdrawn offer's one line.
-  if (!offer)
-    return box ? (
-      <div className="space-y-2">
-        <ChangesBox side="tester" changes={box.changes} tail={box.tail} />
-        <button className="btn-ghost" onClick={() => reloadKeepingPlace()}>See the new terms</button>
-      </div>
-    ) : err ? <Err text={err} press={errPress} /> : null;
+  // No offer on the page: a box another press brought (its offer is loading, above), else her withdrawn offer's one line.
+  if (!offer) return box ? <ChangesBox side="tester" changes={box.changes} tail={box.tail} /> : err ? <Err text={err} press={errPress} /> : null;
   const decide = (choice: string) => {
     pressed.current = true;
     setErrPress(pressLabelOf(`/api/sessions/${sessionId}/terms`, { choice }));
@@ -102,6 +107,7 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
         const sb = stopBox(e);
         if (sb) {
           setBox(sb);
+          boxMine.current = true; // after stopBox, whose copy to the top marked it as another press's
           setBoxAt(sb.now);
           const next = (e as { data?: { offerId?: string } }).data?.offerId;
           if (next) { setOfferId(next); aboutOffer.current = next; } // the box is about the newest offer now: its arrival on the page keeps the box
