@@ -162,12 +162,13 @@ describe("daily job", () => {
     const hj = await joined(h.testId);
     await db.test.update({ where: { id: h.testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } });
     await cron();
-    expect(await db.outboxEmail.count({ where: { to: hj.tester.user.email, subject: { contains: "closes on" } } })).toBe(1);
+    const n = () => db.notification.count({ where: { userId: hj.tester.user.id, text: { contains: "closes on" } } });
+    expect(await n()).toBe(1);
     await cron(); // not twice
-    expect(await db.outboxEmail.count({ where: { to: hj.tester.user.email, subject: { contains: "closes on" } } })).toBe(1);
+    expect(await n()).toBe(1);
     await db.test.update({ where: { id: h.testId }, data: { openUntil: new Date(Date.now() + 12 * 3_600_000) } });
     await cron();
-    expect(await db.outboxEmail.count({ where: { to: hj.tester.user.email, subject: { contains: "closes on" } } })).toBe(2);
+    expect(await n()).toBe(2);
   });
 });
 

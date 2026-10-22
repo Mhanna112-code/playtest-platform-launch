@@ -351,3 +351,36 @@ export function inviteTesterRefusal(name: string, x: { suspended: boolean; block
 
 /** "Ana Silva", "Ana Silva and Dee Moss", "Ana, Ben and Dee". */
 export const andList = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+
+// ---------- Latest batch (owner, Oct 22): calls, payment problems, email settings ----------
+
+const callDay = (d: Date) => d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+const CANCEL_WHY = { paused: "the test is paused", stopped: "the test was stopped", closed: "the test was closed", ended: "your session was ended" } as const;
+
+/** What a tester reads when a booked call is cancelled for them (never any fault). */
+export const callCancelledLine = (startsAt: Date, why: keyof typeof CANCEL_WHY) => `Your call on ${callDay(startsAt)} was cancelled because ${CANCEL_WHY[why]}.`;
+
+/** The Pay box reference for a call: the listing rate × the entered length (or the booked length). */
+export function callReference(rateCents: number | null, minutes: number) {
+  if (rateCents == null) return { cents: null as number | null, text: "Not in the listing" };
+  const cents = callCharge(rateCents, minutes);
+  return { cents, text: `Listing: ${money(rateCents).replace(/\.00$/, "")}/h × ${minutes} min = ${money(cents)}` };
+}
+
+/** "How long was the call?": whole minutes, 1 to 3 times the booked length. */
+export function checkActualMinutes(minutes: number | null, booked: number): Check {
+  if (minutes == null || !Number.isInteger(minutes) || minutes < 1) return no("Enter the call's length in whole minutes.");
+  if (minutes > booked * 3) return no(`At most ${booked * 3} minutes (3 times the ${booked} booked).`);
+  return yes;
+}
+
+/** A declined Pay, shown under that Pay button. */
+export const declinedLine = (name: string, cents: number, label: string) =>
+  `Your card was declined, so ${name} wasn't paid ${money(cents)} for the ${label === "live call" ? "call" : label}. Update your card in Payments, then press Pay again.`;
+export const DELAYED_CALL_LINE = "Payment for this call may be delayed.";
+
+/** Email settings: each update / one daily summary / none. Sign-in links and payment receipts always send. */
+export function emailDecision(pref: string, always: boolean): "send" | "summary" | "skip" {
+  if (always || pref === "each" || !pref) return "send";
+  return pref === "daily" ? "summary" : "skip";
+}

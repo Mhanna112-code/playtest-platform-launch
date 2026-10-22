@@ -33,6 +33,11 @@ model User {
   holdReason    String    @default("")
   /// When the admin was alerted about a 30-day hold
   holdAlertedAt DateTime?
+  /// Email settings: "each" (email me each update, default) | "daily" (one daily summary) | "none".
+  /// Sign-in links and payment receipts always send; the bell keeps everything.
+  emailPref     String    @default("each")
+
+  notifications Notification[]
 
   sessions  Session[]
   profile   TesterProfile?
@@ -330,6 +335,8 @@ model Call {
   cancelledBy String?
   cancelledAt DateTime?
   cancelNote  String    @default("")
+  /// The actual length the developer entered after the call (sets the Pay box reference); null = booked length
+  actualMinutes Int?
   /// No-show report: who reported ("developer" | "tester"), what happened; an admin can read it
   noShowBy      String?
   noShowNote    String  @default("")
@@ -384,4 +391,19 @@ model Invite {
   updatedAt DateTime @updatedAt
 
   @@unique([testId, testerId])
+}
+
+/// The bell: every update for a user, whatever their email setting.
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text      String
+  link      String    @default("")
+  readAt    DateTime?
+  /// Included in a daily summary email (users on "One daily summary")
+  summarizedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
 }

@@ -1,0 +1,168 @@
+import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import type Stripe from "stripe";
+import { afterEach, describe, expect, it } from "vitest";
+import { db } from "@/lib/db";
+import { POST as reviewPOST } from "@/app/api/review/route";
+import { GET as cronGET } from "@/app/api/cron/daily/route";
+import * as R from "@/lib/rules";
+import { startHold } from "@/lib/server/holds";
+import { setStripeForTests } from "@/lib/server/stripe";
+import { json, makeUser, req } from "./helpers";
+import { act, joined, sact, seen, setup } from "./fixtures";
+
+const DAY = 86_400_000;
+const inHours = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString();
+const cron = () => cronGET(new Request("http://localhost:3400/api/cron/daily", { headers: { authorization: "Bearer cron-test" } }));
+const pay = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), seenAt: seen(), ...body } })).then(json);
+afterEach(() => setStripeForTests(null));
+
+/** A test with a booked call for Ana; heldAgo moves the call into the past (held). */
+async function withCall(over: Record<string, unknown> = {}, heldAgo = false) {
+  const s = await setup(over);
+  const j = await joined(s.testId);
+  await act(s.testId, "offer-times", s.dev.cookie, { seenAt: seen(), confirmed: true, times: [inHours(48), inHours(96)] });
+  const slots = await db.callSlot.findMany({ where: { testId: s.testId }, orderBy: { startsAt: "asc" } });
+  await sact(j.sessionId, "book", j.tester.cookie, { seenAt: seen(), confirmed: true, slotId: slots[0].id });
+  const call = await db.call.findFirstOrThrow({ where: { contractId: j.sessionId } });
+  if (heldAgo) await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 3_600_000) } });
+  return { ...s, ...j, call, slots };
+}
+
+describe("latest batch rules", () => {
+  it("cancelled-call lines, call reference, call length, declined line, email settings", () => {
+    const d = new Date(2026, 10, 5, 15, 0);
+    expect(R.callCancelledLine(d, "paused")).toBe("Your call on Thu, Nov 5 was cancelled because the test is paused.");
+    expect(R.callCancelledLine(d, "stopped")).toBe("Your call on Thu, Nov 5 was cancelled because the test was stopped.");
+    expect(R.callReference(4000, 25)).toEqual({ cents: 1667, text: "Listing: $40/h × 25 min = $16.67" });
+    expect(R.callReference(null, 25)).toEqual({ cents: null, text: "Not in the listing" });
+    expect(R.checkActualMinutes(25, 30).ok).toBe(true);
+    expect(R.checkActualMinutes(91, 30).ok).toBe(false);
+    expect(R.declinedLine("Ana Silva", 1667, "live call")).toBe("Your card was declined, so Ana Silva wasn't paid $16.67 for the call. Update your card in Payments, then press Pay again.");
+    expect(R.emailDecision("each", false)).toBe("send");
+    expect(R.emailDecision("daily", false)).toBe("summary");
+    expect(R.emailDecision("none", false)).toBe("skip");
+    expect(R.emailDecision("none", true)).toBe("send"); // receipts always
+  });
+
+  it("no 'mark' wording anywhere in the app", () => {
+    const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+    const hits = walk(path.resolve(__dirname, "../src")).filter((f) => /no mark|counts against/i.test(fs.readFileSync(f, "utf8")));
+    expect(hits).toEqual([]);
+  });
+});
+
+describe("email settings and the bell", () => {
+  it("'Don't email me' still fills the bell; receipts always send; 'One daily summary' gets one email from the daily job", async () => {
+    const { dev, testId } = await setup();
+    await db.user.update({ where: { id: dev.user.id }, data: { emailPref: "none" } });
+    const { tester, sessionId } = await joined(testId);
+    expect(await db.outboxEmail.count({ where: { to: dev.user.email, subject: { contains: "joined" } } })).toBe(0);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "joined" } } })).toBe(1);
+    await db.user.update({ where: { id: tester.user.id }, data: { emailPref: "daily" } });
+    await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    await db.user.update({ where: { id: tester.user.id }, data: { emailPref: "none" } });
+    await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
+    expect(await db.outboxEmail.count({ where: { to: tester.user.email, subject: { contains: "You were paid" } } })).toBe(1); // receipt
+    await db.user.update({ where: { id: dev.user.id }, data: { emailPref: "daily" } });
+    await cron();
+    const summary = await db.outboxEmail.findFirstOrThrow({ where: { to: dev.user.email, subject: { startsWith: "Your Playtest summary" } } });
+    expect(summary.text).toContain("Ana Silva joined");
+  });
+
+  it("Open until heads-ups are bell notifications only", async () => {
+    const { testId } = await setup();
+    const { tester } = await joined(testId);
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } });
+    await cron();
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "closes on" } } })).toBe(1);
+    expect(await db.outboxEmail.count({ where: { to: tester.user.email, subject: { contains: "closes on" } } })).toBe(0);
+  });
+
+  it("the admin gets one daily digest listing the cases; no per-event admin emails", async () => {
+    const before = await db.outboxEmail.count({ where: { to: "owner@playtest.test" } });
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    await pay(dev.cookie, { kind: "submission", id: sub.id, action: "reject", reason: "Not what we asked" });
+    await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question" });
+    expect(await db.outboxEmail.count({ where: { to: "owner@playtest.test" } })).toBe(before);
+    await cron();
+    const digest = await db.outboxEmail.findFirstOrThrow({ where: { to: "owner@playtest.test", subject: { startsWith: "Playtest admin digest" } }, orderBy: { createdAt: "desc" } });
+    expect(digest.text).toContain("Dispute: “I answered every question”");
+  });
+});
+
+describe("live calls blocked during holds and on stopped/closed tests", () => {
+  it("a hold cancels booked calls with the tester's line and blocks offering and booking", async () => {
+    const { dev, testId, tester, sessionId, call, slots } = await withCall();
+    await startHold(dev.user.id, "unpaid");
+    expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).status).toBe("cancelled");
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "was cancelled because the test is paused." } } })).toBe(1);
+    expect((await act(testId, "offer-times", dev.cookie, { seenAt: seen(), confirmed: true, times: [inHours(150)] })).body.error.message).toContain("paused");
+    expect((await sact(sessionId, "book", tester.cookie, { seenAt: seen(), confirmed: true, slotId: slots[1].id })).body.error.message).toBe("This test is paused. Payment for your work may be delayed.");
+  });
+
+  it("Stop the test and End early cancel that tester's booked calls with the exact line", async () => {
+    const a = await withCall();
+    await act(a.testId, "stop", a.dev.cookie, { seenAt: seen(), confirmed: true });
+    expect(await db.notification.count({ where: { userId: a.tester.user.id, text: { contains: "was cancelled because the test was stopped." } } })).toBe(1);
+    const b = await withCall();
+    await act(b.testId, "end-early", b.dev.cookie, { seenAt: seen(), confirmed: true, contractId: b.sessionId, reason: "We have enough" });
+    expect((await db.call.findUniqueOrThrow({ where: { id: b.call.id } })).status).toBe("cancelled");
+  });
+
+  it("a closed test (next round) blocks offering and booking and cancels booked calls", async () => {
+    const { dev, testId, tester, sessionId, call, slots } = await withCall();
+    await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true, closeThis: true });
+    expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).status).toBe("cancelled");
+    expect((await act(testId, "offer-times", dev.cookie, { seenAt: seen(), confirmed: true, times: [inHours(150)] })).body.error.message).toBe("This test was closed, so no call times can be offered.");
+    expect((await sact(sessionId, "book", tester.cookie, { seenAt: seen(), confirmed: true, slotId: slots[1].id })).status).toBe(409);
+  });
+});
+
+describe("call length and payment problems on a call", () => {
+  it("'How long was the call?' sets the Pay box reference (rate × entered minutes)", async () => {
+    const { dev, testId, call } = await withCall({}, true);
+    expect((await act(testId, "call-length", dev.cookie, { callId: call.id, minutes: 25 })).status).toBe(200);
+    expect((await pay(dev.cookie, { kind: "call", id: call.id, amount: "10.00", tickedCents: 1000 })).body.error.message).toContain("listing's $12.50");
+    expect((await pay(dev.cookie, { kind: "call", id: call.id, amount: "12.50", tickedCents: 1250 })).status).toBe(200);
+    expect((await act(testId, "call-length", dev.cookie, { callId: call.id, minutes: 30 })).body.error.message).toBe("This call was already paid, so its length can't change.");
+  });
+
+  it("a declined Pay shows the exact line; a chargeback on the call payment reads 'live call'", async () => {
+    const { dev, testId, call, tester } = await withCall({}, true);
+    await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
+    await db.user.update({ where: { id: tester.user.id }, data: { stripeAccountId: "acct_" + randomUUID(), payoutsReady: true } });
+    let decline = true;
+    setStripeForTests({
+      paymentIntents: { create: async () => { if (decline) throw new Error("declined"); return { id: "pi_" + randomUUID(), status: "succeeded" }; } },
+      webhooks: { constructEvent: (raw: string) => JSON.parse(raw) },
+    } as unknown as Stripe);
+    const r = await pay(dev.cookie, { kind: "call", id: call.id, amount: "15.00", tickedCents: 1500 });
+    expect(r.body.error.message).toBe("Your card was declined, so Ana Silva wasn't paid $15.00 for the call. Update your card in Payments, then press Pay again.");
+    decline = false;
+    expect((await pay(dev.cookie, { kind: "call", id: call.id, amount: "15.00", tickedCents: 1500 })).status).toBe(200);
+    const p = await db.payment.findFirstOrThrow({ where: { callId: call.id, status: "charged" } });
+    const { chargebackOpened } = await import("@/lib/server/holds");
+    await chargebackOpened(p.stripePaymentIntentId!);
+    expect(await db.testEvent.count({ where: { testId, kind: "chargeback", text: "Your bank reversed your $15.00 payment for Ana Silva's live call" } })).toBe(1);
+  });
+});
+
+describe("leaving", () => {
+  it("testers can leave any time, even during a hold; sent work stays payable", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
+    await startHold(dev.user.id, "unpaid");
+    expect((await sact(sessionId, "leave", tester.cookie)).status).toBe(200);
+    await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: null } });
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).status).toBe(200);
+    expect(makeUser).toBeDefined();
+  });
+});

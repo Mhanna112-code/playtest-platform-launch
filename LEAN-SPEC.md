@@ -4,7 +4,29 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
-## (Owner, Oct 22, newest) Invites, chargebacks, payment hold, Open until
+## (Owner, Oct 22, latest batch: wins over the sections below)
+- **Leaving:** testers can leave any time; there are no "marks" in this version, so no "with no mark" wording
+  anywhere. Sent work stays payable after leaving. Tester hold line: "This test is paused. Payment for your work may
+  be delayed."
+- **Admin daily digest:** once a day ONE email to the owner/admins listing every case that needs them (disputes,
+  flagged extra work, no-show reports, open chargebacks, holds at 30 days, failed payouts), each with a link. The admin
+  page shows the same list. No per-event admin emails.
+- **Heads-up notices** (Open until in 3 days / 1 day) are in-app bell notifications only, not emailed.
+- **Email settings** (per user, in Settings): "Email me each update" (default) / "One daily summary" / "Don't
+  email me" (sign-in links and payment receipts always send). The bell keeps everything.
+- **Live calls are blocked during a payment hold and on stopped/closed tests, both sides:** no offering, booking or
+  joining; booked calls are cancelled with no fault (tester told: "Your call on Thu, Nov 5 was cancelled because the
+  test is paused." / "…because the test was stopped."). Stop the test and End early also cancel that tester's booked
+  calls. (There are no call requests in this version: booking is the only way to get a call.)
+- **Call length:** after a call, the developer can enter the actual length in minutes on that call ("How long was the
+  call? 25 min"); the Pay box's reference then reads "Listing: $40/h × 25 min = $16.67" and starts at that amount.
+  Without it, the reference uses the booked length.
+- **Payment problems on a call:** a declined Pay shows under that Pay button ("Your card was declined, so Ana Silva
+  wasn't paid $16.67 for the call. Update your card in Payments, then press Pay again.") and the tester sees "Payment
+  for this call may be delayed." A chargeback on a paid call starts the hold with the stop-once line "Your bank
+  reversed your $16.67 payment for Ana Silva's live call".
+
+## (Owner, Oct 22) Invites, chargebacks, payment hold, Open until
 
 ### Invite panel (test page only, never in Edit). No moves at all.
 - Filterable list of testers (devices, languages, categories), "Select all", Invite; sent invites listed with

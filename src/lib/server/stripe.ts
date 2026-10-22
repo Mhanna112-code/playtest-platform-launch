@@ -12,12 +12,26 @@ export const setStripeForTests = (s: Stripe | null) => {
   override = s;
 };
 
+/** STRIPE_FAKE=1: a local stand-in for evidence runs. Only without a real key and only on a localhost APP_URL. */
+export const fakeOn = () => process.env.STRIPE_FAKE === "1" && !process.env.STRIPE_SECRET_KEY?.trim() && /^http:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(process.env.APP_URL ?? "");
+let fakeN = 0;
+const fakeStripe = {
+  paymentIntents: {
+    create: async (p: { payment_method?: string; amount: number }) => {
+      if (p.payment_method === "pm_card_declined") throw new Error("Your card was declined.");
+      return { id: `pi_fake_${Date.now()}_${++fakeN}`, status: "succeeded", amount: p.amount };
+    },
+  },
+  webhooks: { constructEvent: (raw: string, sig: string) => { if (sig !== "fake") throw new Error("bad signature"); return JSON.parse(raw); } },
+} as unknown as Stripe;
+
 export function stripeOn() {
-  return !!override || !!process.env.STRIPE_SECRET_KEY?.trim();
+  return !!override || !!process.env.STRIPE_SECRET_KEY?.trim() || fakeOn();
 }
 
 export function getStripe(): Stripe {
   if (override) return override;
+  if (fakeOn()) return fakeStripe;
   const key = process.env.STRIPE_SECRET_KEY?.trim();
   if (!key) throw new HttpError(503, "payments_off", "Payments aren't set up yet.");
   if (key.startsWith("sk_live_") && process.env.STRIPE_ALLOW_LIVE !== "1") throw new HttpError(503, "payments_off", "Payments are switched off right now. Try again later.");

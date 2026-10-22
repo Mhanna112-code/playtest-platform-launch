@@ -7,6 +7,7 @@ import {
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
+import { callCancelledLine } from "@/lib/rules";
 
 type Tx = Prisma.TransactionClient;
 type U = { id: string; email: string; name: string; pronoun: string; isDeveloper: boolean; isTester: boolean };
@@ -197,28 +198,35 @@ export async function devOnHold(devId: string) {
 export const topPanelGate = devGate;
 
 /** Calls ahead are cancelled (no charge) when a tester's work ends. Their offered times open again for others. */
-async function cancelCallsAhead(tx: Tx, contractIds: string[], note: string) {
-  const ahead = await tx.call.findMany({ where: { contractId: { in: contractIds }, status: "booked", startsAt: { gt: new Date() } } });
+export async function cancelCallsAhead(tx: Tx, contractIds: string[], note: string) {
+  const ahead = await tx.call.findMany({ where: { contractId: { in: contractIds }, status: "booked", startsAt: { gt: new Date() } }, include: { contract: { include: { tester: true } } } });
   for (const c of ahead) {
     await tx.call.update({ where: { id: c.id }, data: { status: "cancelled", cancelledBy: "system", cancelledAt: new Date(), cancelNote: note } });
     await tx.callSlot.update({ where: { id: c.slotId }, data: { status: "removed" } });
   }
-  return ahead.length;
+  return ahead.map((c) => ({ email: c.contract.tester.email, startsAt: c.startsAt, contractId: c.contractId, title: c.contract.title }));
+}
+
+/** Tell each tester their booked call was cancelled (never any fault). */
+export async function tellCancelled(list: { email: string; startsAt: Date; contractId: string; title: string }[], why: Parameters<typeof callCancelledLine>[1]) {
+  for (const c of list) await notify(c.email, callCancelledLine(c.startsAt, why), [callCancelledLine(c.startsAt, why)], `/app/sessions/${c.contractId}`);
 }
 
 export async function stopTest(dev: U, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
+  let cancelled: Awaited<ReturnType<typeof cancelCallsAhead>> = [];
   const contracts = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped." + (await staleNote(testId, body.seenAt)));
     await topPanelGate(tx, testId, body.seenAt, body.confirmed === true);
     const cs = await tx.contract.findMany({ where: working(testId), include: { tester: true } });
     await tx.contract.updateMany({ where: working(testId), data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The developer stopped the test." } });
-    await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
+    cancelled = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
     await tx.callSlot.updateMany({ where: { testId, status: "open" }, data: { status: "removed" } });
     await recordEvent(tx, testId, "stopped", "The test was stopped", true, { status: "stopped", stoppedAt: new Date() });
     return cs;
   });
+  await tellCancelled(cancelled, "stopped");
   for (const c of contracts)
     await notify(c.tester.email, `“${c.title}” was stopped`, [`${displayName(dev)} stopped “${c.title}”. Your work on it has ended.`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`);
   return { stopped: true, testers: contracts.length };
@@ -230,6 +238,7 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
   const reason = str(body.reason, 500);
   if (reason.length < 5) throw new HttpError(400, "bad_reason", "Say why you're ending their work (they read it).");
   const contractId = String(body.contractId ?? "");
+  let cancelled: Awaited<ReturnType<typeof cancelCallsAhead>> = [];
   const c = await db.$transaction(async (tx) => {
     await lockTest(tx, testId);
     const c = await tx.contract.findUnique({ where: { id: contractId }, include: { tester: true } });
@@ -239,10 +248,11 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
     if (c.status !== "working") throw new HttpError(409, "gone", `${name}'s work already ended.` + (await staleNote(testId, body.seenAt)));
     await topPanelGate(tx, testId, body.seenAt, body.confirmed === true);
     await tx.contract.update({ where: { id: c.id }, data: { status: "ended", endKind: "early", endedAt: new Date(), endReason: reason } });
-    await cancelCallsAhead(tx, [c.id], "The developer ended the work early.");
+    cancelled = await cancelCallsAhead(tx, [c.id], "The developer ended the work early.");
     await recordEvent(tx, testId, "ended", `You ended ${name}'s work early`, false, {}, c.id);
     return c;
   });
+  await tellCancelled(cancelled, "ended");
   await notify(c.tester.email, `Your work on “${c.title}” was ended early`, [`${displayName(dev)} ended your work on “${c.title}”: “${reason}”`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`);
   return { ended: true };
 }
@@ -250,7 +260,8 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
 /** Next round: a draft copy of the test for the next build. Optionally stops new testers joining this one. */
 export async function nextRound(dev: U, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
-  return db.$transaction(async (tx) => {
+  let closedCalls: Awaited<ReturnType<typeof cancelCallsAhead>> = [];
+  const res = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped." + (await staleNote(testId, body.seenAt)));
     const existing = await tx.test.findFirst({ where: { previousId: testId } });
@@ -265,9 +276,16 @@ export async function nextRound(dev: U, testId: string, body: Record<string, unk
       },
     });
     const close = body.closeThis !== false && t.status === "open";
+    if (close) {
+      const ids = (await tx.contract.findMany({ where: { testId, status: "working" }, select: { id: true } })).map((x) => x.id);
+      closedCalls = await cancelCallsAhead(tx, ids, "The test was closed.");
+      await tx.callSlot.updateMany({ where: { testId, status: "open" }, data: { status: "removed" } });
+    }
     await recordEvent(tx, testId, "next_round", `Round ${round} was started${close ? "; this round stopped taking new testers" : ""}`, true, close ? { status: "closed" } : {});
     return { id: copy.id };
   });
+  await tellCancelled(closedCalls, "closed");
+  return res;
 }
 
 // ---------- tester: find and join ----------

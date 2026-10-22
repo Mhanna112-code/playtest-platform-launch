@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, pronouns } from "@/lib/format";
-import { CALL_KINDS, canCancelCall, PAUSED_FOR_TESTERS, stopOnce, type TestEventLike } from "@/lib/rules";
+import { CALL_KINDS, canCancelCall, checkActualMinutes, PAUSED_FOR_TESTERS, stopOnce, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { devGate, devOnHold, ownContract, ownTest, recordEvent, seenDate, sessionRefusal, staleNote } from "./tests";
@@ -35,6 +35,8 @@ export async function offerTimes(dev: U, testId: string, body: Record<string, un
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
     const t = await tx.test.findUniqueOrThrow({ where: { id: testId } });
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped." + (await staleNote(testId, body.seenAt)));
+    if (t.status === "closed") throw new HttpError(409, "closed", "This test was closed, so no call times can be offered.");
+    if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", "Your tests are paused, so no call times can be offered. Pay what you owe first.");
     await devGate(tx, testId, body.seenAt, body.confirmed === true);
     const inTest = await tx.contract.findMany({ where: { testId, status: "working" }, select: { testerId: true } });
     const allowed = want.filter((id) => inTest.some((c) => c.testerId === id));
@@ -89,7 +91,7 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
     await recordEvent(tx, testId, "cancelled", `You cancelled the call with ${name} on ${fmtDateTime(c.startsAt)}`, false, {}, c.contractId);
     return c;
   });
-  await notify(call.contract.tester.email, `Your call on “${call.contract.title}” was cancelled`, [`${displayName(dev)} cancelled your live call on ${fmtDateTime(call.startsAt)}. Nothing counts against you.`], `/app/sessions/${call.contractId}`);
+  await notify(call.contract.tester.email, `Your call on “${call.contract.title}” was cancelled`, [`${displayName(dev)} cancelled your live call on ${fmtDateTime(call.startsAt)}.`], `/app/sessions/${call.contractId}`);
   return { cancelled: true };
 }
 
@@ -130,6 +132,7 @@ export async function bookTime(tester: U, contractId: string, body: Record<strin
     const refusal = sessionRefusal(c, t, displayName(dev));
     if (refusal) throw new HttpError(409, "closed", refusal);
     if (await devOnHold(t.developerId)) throw new HttpError(409, "paused", PAUSED_FOR_TESTERS);
+    if (t.status !== "open") throw new HttpError(409, "closed", t.status === "stopped" ? "This test was stopped, so calls can't be booked." : "This test was closed, so calls can't be booked.");
     const slot = await tx.callSlot.findUnique({ where: { id: slotId } });
     if (!slot || slot.testId !== c.testId || !canSee(slot, tester.id)) throw new HttpError(404, "not_found", "That call time doesn't exist.");
     if (slot.status !== "open") throw new HttpError(409, "gone", slot.status === "booked" ? "Someone already booked that time. Pick another." : "That time was removed. Pick another.");
@@ -179,4 +182,19 @@ export async function reportNoShow(user: U, callId: string, body: Record<string,
   if (note.length < 5) throw new HttpError(400, "bad_note", "Say what happened.");
   await db.call.update({ where: { id: call.id }, data: { noShowBy: side, noShowNote: note, noShowAt: new Date() } });
   return { reported: true };
+}
+
+/** "How long was the call?": after the call, the developer enters the actual length; it sets the Pay box reference. */
+export async function setCallLength(dev: U, testId: string, body: Record<string, unknown>) {
+  await ownTest(dev.id, testId);
+  const call = await db.call.findUnique({ where: { id: String(body.callId ?? "") }, include: { contract: true, review: true } });
+  if (!call || call.contract.testId !== testId) throw new HttpError(404, "not_found", "That call doesn't exist.");
+  if (call.status !== "booked") throw new HttpError(409, "cancelled", "This call was cancelled.");
+  if (call.startsAt > new Date()) throw new HttpError(409, "not_yet", "You can enter the length once the call has started.");
+  if (call.review) throw new HttpError(409, "paid", "This call was already paid, so its length can't change.");
+  const minutes = Number(body.minutes);
+  const ok = checkActualMinutes(Number.isFinite(minutes) ? minutes : null, call.minutes);
+  if (!ok.ok) throw new HttpError(400, "bad_minutes", ok.message);
+  await db.call.update({ where: { id: call.id }, data: { actualMinutes: minutes } });
+  return { minutes };
 }

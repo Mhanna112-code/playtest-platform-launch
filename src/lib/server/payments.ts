@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, money, toCents } from "@/lib/format";
-import { canDispute, checkDisputeDecision, checkPay, checkReject, listingAmount, MAX_PAY_CENTS, PAY_WAITS, testerShare } from "@/lib/rules";
+import { callReference, declinedLine, canDispute, checkDisputeDecision, checkPay, checkReject, MAX_PAY_CENTS, PAY_WAITS, testerShare } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { isAdmin } from "./session";
@@ -28,7 +28,7 @@ async function loadPiece(tx: Prisma.TransactionClient, kind: string, id: string)
     if (!c) return null;
     if (c.status === "cancelled") throw new HttpError(409, "cancelled", "This call was cancelled, so there's nothing to pay.");
     if (c.startsAt > new Date()) throw new HttpError(409, "not_yet", "You can pay for this call once it has started.");
-    return { contract: c.contract, review: c.review, listing: c.rateCents == null ? null : listingAmount({ writtenCents: null, recordingCents: null, liveRateCents: c.rateCents }, "call", c.minutes), label: "live call", where: { callId: c.id } };
+    return { contract: c.contract, review: c.review, listing: callReference(c.rateCents, c.actualMinutes ?? c.minutes).cents, label: "live call", where: { callId: c.id } };
   }
   return null;
 }
@@ -95,6 +95,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0], body: R
       db.payment.update({ where: { id: payment!.id }, data: { status: "failed", failure: (e as Error).message } }),
       db.review.delete({ where: { id: rev.id } }),
     ]);
+    if (e instanceof HttpError && e.code === "card_failed") throw new HttpError(402, "card_failed", declinedLine(name, rev.amountCents, piece.label));
     throw e;
   }
   await db.$transaction(async (tx) => {
@@ -110,6 +111,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0], body: R
       ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : []),
     ],
     `/app/sessions/${c.id}`,
+    { always: true },
   );
   return { reviewId: rev.id, amountCents: rev.amountCents, status: result.status, rejected: false, paidSoFarCents: await paidSoFar(c.id) };
 }

@@ -27,8 +27,9 @@ export async function saveProfile(userId: string, body: Record<string, unknown>)
   if (isTester && devices.length === 0) throw new HttpError(400, "bad_devices", "Pick at least one device you play on.");
   if (isTester && languages.length === 0) throw new HttpError(400, "bad_languages", "Pick at least one language you can test in.");
   const bio = str(body.bio, 1000);
+  const emailPref = ["each", "daily", "none"].includes(body.emailPref as string) ? (body.emailPref as string) : undefined;
   return db.$transaction(async (tx) => {
-    const user = await tx.user.update({ where: { id: userId }, data: { name, pronoun, isDeveloper, isTester } });
+    const user = await tx.user.update({ where: { id: userId }, data: { name, pronoun, isDeveloper, isTester, ...(emailPref ? { emailPref } : {}) } });
     if (isTester) await tx.testerProfile.upsert({ where: { userId }, update: { devices, categories, languages, bio }, create: { userId, devices, categories, languages, bio } });
     return user;
   });

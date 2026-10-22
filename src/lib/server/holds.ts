@@ -1,10 +1,12 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
 import {
-  autoPayAmount, headsUpDue, headsUpLine, HOLD_ALERT_DAYS, owedUntilFrom, PAUSED_FOR_TESTERS, PAY_WAITS, shiftForHold,
+  autoPayAmount, callCancelledLine, headsUpDue, headsUpLine, HOLD_ALERT_DAYS, owedUntilFrom, PAUSED_FOR_TESTERS, PAY_WAITS, shiftForHold,
 } from "@/lib/rules";
 import { HttpError } from "./http";
-import { notify } from "./notify";
+import { bell, notify, sendDailySummaries } from "./notify";
+import { appUrl } from "./auth";
+import { sendEmail } from "./email";
 import { charge } from "./stripe";
 import { recordEvent } from "./tests";
 
@@ -52,7 +54,7 @@ export async function startHold(devId: string, reason: string) {
       }
       await recordEvent(tx, t.id, "paused", "Your tests are paused until you pay what you owe", false);
     });
-    for (const c of ahead) await notify(c.contract.tester.email, `Your call on “${c.contract.title}” was cancelled`, [`${PAUSED_FOR_TESTERS} Your call on ${fmtDateTime(c.startsAt)} was cancelled. Nothing counts against you.`], `/app/sessions/${c.contractId}`);
+    for (const c of ahead) await notify(c.contract.tester.email, callCancelledLine(c.startsAt, "paused"), [callCancelledLine(c.startsAt, "paused"), PAUSED_FOR_TESTERS], `/app/sessions/${c.contractId}`);
   }
   await notify(dev.email, "Your tests are paused", ["Your tests are paused until you pay what you owe: no new testers, invites or calls, and Pay waits.", "Testers can still send work. Pay what you owe in Payments to resume at once."], "/app/payments");
   return true;
@@ -107,7 +109,6 @@ export async function chargebackOpened(paymentIntentId: string) {
     await db.$transaction((tx) => recordEvent(tx, c.testId, "chargeback", `Your bank reversed your ${money(p.amountCents)} payment for ${what}`, false, {}, c.id));
   }
   await startHold(p.developerId, "chargeback");
-  for (const a of admins()) await notify(a, "A chargeback opened", [`A bank reversed a ${money(p.amountCents)} payment (payment ${p.id}). Resolve it in the Stripe dashboard, then in admin.`], "/admin");
   return true;
 }
 
@@ -162,23 +163,43 @@ export async function runDaily(now = new Date()) {
   // 2. Failed charges not paid within 3 days start a hold.
   const late = await db.payment.findMany({ where: { status: "failed", settledAt: null, owedUntil: { lt: now } }, distinct: ["developerId"] });
   for (const p of late) if (await startHold(p.developerId, "unpaid")) out.holds++;
-  // 3. 30 days on hold: alert the admins to close the tests.
-  const long = await db.user.findMany({ where: { holdStartedAt: { lt: new Date(now.getTime() - HOLD_ALERT_DAYS * 86_400_000) }, holdAlertedAt: null } });
-  for (const u of long) {
-    for (const a of admins()) await notify(a, "A developer has been on hold for 30 days", [`${u.email} has been on a payment hold since ${fmtDate(u.holdStartedAt!)}. Close their tests in admin.`], "/admin");
-    await db.user.update({ where: { id: u.id }, data: { holdAlertedAt: now } });
-    out.alerts++;
+  // 3. The admin daily digest: ONE email listing every case that needs the team (no per-event admin emails).
+  const cases = await adminCases(now);
+  if (cases.length) {
+    const text = [`${cases.length} case${cases.length === 1 ? "" : "s"} need the team today:`, "", ...cases.map((c) => `• ${c.text} ${appUrl()}${c.link}`), "", "Playtest"].join("\n");
+    for (const a of admins()) await sendEmail({ to: a, subject: `Playtest admin digest: ${cases.length} case${cases.length === 1 ? "" : "s"}`, text }).catch((e) => console.error("[email] digest:", e.message));
+    out.alerts = cases.length;
   }
+  await sendDailySummaries();
   // 4. Open until heads-ups, 3 days and 1 day before (developer and working testers).
   const closing = await db.test.findMany({ where: { status: { in: ["open", "closed"] }, openUntil: { gt: now } }, include: { developer: true, contracts: { where: { status: "working" }, include: { tester: true } } } });
   for (const t of closing) {
     const which = headsUpDue(t.openUntil, now, t.notified3d, t.notified1d);
     if (!which) continue;
+    // Bell notifications only, never emailed.
     const line = headsUpLine(t.title, t.openUntil!, fmtDate);
-    await notify(t.developer.email, line, [line], `/app/tests/${t.id}`);
-    for (const c of t.contracts) await notify(c.tester.email, line, [line], `/app/sessions/${c.id}`);
+    await bell(t.developerId, line, `/app/tests/${t.id}`);
+    for (const c of t.contracts) await bell(c.testerId, line, `/app/sessions/${c.id}`);
     await db.test.update({ where: { id: t.id }, data: which === "1d" ? { notified1d: true, notified3d: true } : { notified3d: true } });
     out.headsUps++;
   }
   return out;
+}
+
+/** Every case that needs the team: the admin page shows this list, and the daily digest emails it. */
+export async function adminCases(now = new Date()) {
+  const [disputes, noShows, chargebacks, holds, payouts] = await Promise.all([
+    db.dispute.findMany({ where: { status: "open" }, include: { submission: { include: { review: true } } } }),
+    db.call.findMany({ where: { noShowBy: { not: null }, noShowAt: { gt: new Date(now.getTime() - 14 * 86_400_000) } }, include: { contract: true } }),
+    db.payment.findMany({ where: { chargeback: "open" } }),
+    db.user.findMany({ where: { holdStartedAt: { lt: new Date(now.getTime() - HOLD_ALERT_DAYS * 86_400_000) } } }),
+    db.payment.findMany({ where: { OR: [{ transferStatus: "waiting" }, { status: "failed", settledAt: null, owedUntil: { not: null } }] } }),
+  ]);
+  return [
+    ...disputes.map((d) => ({ kind: "dispute", text: d.submission?.review?.auto && d.submission.review.agreedCents == null ? `Flagged extra work: “${d.reason}”` : `Dispute: “${d.reason}”`, link: "/admin#disputes" })),
+    ...noShows.map((c) => ({ kind: "no-show", text: `No-show report on “${c.contract.title}” (${fmtDateTime(c.startsAt)}), by the ${c.noShowBy}`, link: "/admin#no-shows" })),
+    ...chargebacks.map((p) => ({ kind: "chargeback", text: `Open chargeback: ${money(p.amountCents)}`, link: "/admin#holds" })),
+    ...holds.map((u) => ({ kind: "hold", text: `${u.email} on a payment hold since ${fmtDate(u.holdStartedAt!)} (30 days): close their tests`, link: "/admin#holds" })),
+    ...payouts.map((p) => ({ kind: "payout", text: p.transferStatus === "waiting" ? `Payout waiting for a payout account: ${money(p.testerCents)}` : `Failed charge still owed: ${money(p.amountCents)}`, link: "/admin#payouts" })),
+  ];
 }
