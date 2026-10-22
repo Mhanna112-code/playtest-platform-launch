@@ -37,7 +37,7 @@ export async function ownChanges(userId: string, testId: string, since: Date, ta
 export async function devChanges(devId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db): Promise<TestEventLike[]> {
   const events = await tx.testEvent.findMany({ where: { testId, createdAt: { gt: since }, kind: { in: [...DEV_STOP_KINDS] } }, orderBy: { createdAt: "asc" }, take: 100 });
   const theirs = events.filter((e) => !e.text.startsWith("You "));
-  return [...theirs, ...(await devPaymentChanges(testId, since, tx)), ...(await ownChanges(devId, testId, since, tab, tx))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  return [...theirs, ...(await devPaymentChanges(devId, testId, since, tx)), ...(await ownChanges(devId, testId, since, tab, tx))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }
 
 async function subKinds(ids: (string | null)[], tx: Tx | typeof db = db) {
@@ -47,42 +47,56 @@ async function subKinds(ids: (string | null)[], tx: Tx | typeof db = db) {
 const pieceLabel = (p: { kind: string; callId: string | null; submissionId: string | null }, kinds: Map<string, string>) =>
   p.kind === "dispute" ? "dispute decision" : p.callId ? "live call" : kinds.get(p.submissionId ?? "") === "recording" ? "recording" : "written answers";
 
+const day = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
 /**
- * (NEWEST+3, payments) The developer's payment changes on THIS test only: a charge declined, a daily retry declined,
- * a delayed payment that went through. (Chargebacks and admin decisions are events; a hold shows as the paused banner.)
+ * (NEWEST+3, payments ACROSS TESTS) The developer's payment problems on ANY of their tests, naming the test: an owed
+ * charge declined, a daily retry declined, a failed payment that went through (retry or paid off), a chargeback opened
+ * or resolved. (A declined Pay press the developer repeats is their own action: reason E from another tab. Ordinary
+ * successful payments stay on their own test. A hold shows as the paused banner.)
  */
-export async function devPaymentChanges(testId: string, since: Date, tx: Tx | typeof db = db): Promise<TestEventLike[]> {
-  const contracts = await tx.contract.findMany({ where: { testId }, select: { id: true, tester: true } });
-  const name = new Map(contracts.map((c) => [c.id, displayName(c.tester)]));
+export async function devPaymentChanges(devId: string, testId: string, since: Date, tx: Tx | typeof db = db): Promise<TestEventLike[]> {
   const pays = await tx.payment.findMany({
-    where: { contractId: { in: contracts.map((c) => c.id) }, OR: [{ status: "failed", createdAt: { gt: since } }, { status: "failed", retriedAt: { gt: since } }, { settledAt: { gt: since } }] },
+    where: { developerId: devId, contractId: { not: null }, OR: [{ status: "failed", owedUntil: { not: null }, createdAt: { gt: since } }, { status: "failed", owedUntil: { not: null }, retriedAt: { gt: since } }, { settledAt: { gt: since } }] },
     take: 100,
   });
+  const contracts = await tx.contract.findMany({ where: { id: { in: pays.map((p) => p.contractId!) } }, select: { id: true, tester: true, test: { select: { title: true } } } });
+  const cmap = new Map(contracts.map((c) => [c.id, c]));
   const kinds = await subKinds(pays.map((p) => p.submissionId), tx);
   const out: TestEventLike[] = [];
+  const now = new Date();
   for (const p of pays) {
-    const what = `your ${money(p.amountCents)} payment to ${name.get(p.contractId!) ?? "a tester"} for the ${pieceLabel(p, kinds)}`;
-    if (p.settledAt && p.settledAt > since) out.push({ kind: "payment", text: `Your delayed ${money(p.amountCents)} payment to ${name.get(p.contractId!) ?? "a tester"} for the ${pieceLabel(p, kinds)} went through`, createdAt: p.settledAt });
-    else if (p.status === "failed" && p.retriedAt && p.retriedAt > since) out.push({ kind: "payment", text: `Today's retry of ${what} was declined`, createdAt: p.retriedAt });
-    else if (p.status === "failed" && p.createdAt > since) out.push({ kind: "payment", text: `${what[0].toUpperCase()}${what.slice(1)} was declined`, createdAt: p.createdAt });
+    const c = cmap.get(p.contractId!);
+    const title = c?.test.title ?? "a test";
+    const who = `${money(p.amountCents)} to ${c ? displayName(c.tester) : "a tester"} for the ${pieceLabel(p, kinds)}`;
+    const next = p.owedUntil && p.owedUntil > now ? ` · we'll retry tomorrow · pay by ${day(p.owedUntil)} to avoid a pause` : " · pay what you owe in Payments";
+    if (p.settledAt && p.settledAt > since) out.push({ kind: "payment", text: `Payment went through on ${title}: ${who}`, createdAt: p.settledAt });
+    else if (p.status === "failed" && p.retriedAt && p.retriedAt > since) out.push({ kind: "payment", text: `Retry failed on ${title}: ${who}${next}`, createdAt: p.retriedAt });
+    else if (p.status === "failed" && p.createdAt > since) out.push({ kind: "payment", text: `Payment failed on ${title}: ${who}${next}`, createdAt: p.createdAt });
   }
+  // Chargebacks opened / resolved on the developer's OTHER tests (this test's come as its own events).
+  const others = await tx.testEvent.findMany({ where: { kind: "chargeback", createdAt: { gt: since }, testId: { not: testId }, test: { developerId: devId } }, include: { test: { select: { title: true } } }, take: 50 });
+  for (const e of others) out.push({ kind: "chargeback", text: `On ${e.test.title}: ${e.text[0].toLowerCase()}${e.text.slice(1)}`, createdAt: e.createdAt });
   return out;
 }
 
 /**
- * (NEWEST+3, payments) The tester's payment changes on their own session: a payment delayed (an owed charge or one
- * deferred by a hold; a declined Pay the developer must press again is not a payment yet), a delayed payment that
- * arrived, the team's decision on their dispute. Never the words "failed", "hold" or "chargeback".
+ * (NEWEST+3, payments ACROSS this developer's tests) The tester's OWN payments: delayed (an owed charge or one deferred
+ * by a hold; a declined Pay the developer must press again is not a payment yet) or a delayed payment that arrived,
+ * on any of their sessions with this developer, naming the test; the team's decision on their dispute (this session).
+ * Never the words "failed", "hold" or "chargeback"; never other testers' payments.
  */
-export async function testerPaymentChanges(contractId: string, since: Date): Promise<TestEventLike[]> {
+export async function testerPaymentChanges(testerId: string, contractId: string, since: Date): Promise<TestEventLike[]> {
+  const me = await db.contract.findUniqueOrThrow({ where: { id: contractId }, select: { test: { select: { developerId: true } } } });
   const [pays, disputes] = await Promise.all([
-    db.payment.findMany({ where: { contractId, OR: [{ status: "failed", owedUntil: { not: null }, createdAt: { gt: since } }, { status: "deferred", createdAt: { gt: since } }, { settledAt: { gt: since } }] }, take: 50 }),
+    db.payment.findMany({ where: { testerId, developerId: me.test.developerId, contractId: { not: null }, OR: [{ status: "failed", owedUntil: { not: null }, createdAt: { gt: since } }, { status: "deferred", createdAt: { gt: since } }, { settledAt: { gt: since } }] }, take: 50 }),
     db.dispute.findMany({ where: { contractId, decidedAt: { gt: since } } }),
   ]);
+  const titles = new Map((await db.contract.findMany({ where: { id: { in: pays.map((p) => p.contractId!) } }, select: { id: true, title: true } })).map((c) => [c.id, c.title]));
   const kinds = await subKinds(pays.map((p) => p.submissionId));
   const out: TestEventLike[] = [];
   for (const p of pays) {
-    const what = `${money(p.amountCents)} for your ${pieceLabel(p, kinds) === "dispute decision" ? "dispute" : pieceLabel(p, kinds)}`;
+    const what = `${money(p.amountCents)} for your ${pieceLabel(p, kinds) === "dispute decision" ? "dispute" : pieceLabel(p, kinds)} on ${titles.get(p.contractId!) ?? "a test"}`;
     if (p.settledAt && p.settledAt > since) out.push({ kind: "payment", text: `A delayed payment of ${what} arrived`, createdAt: p.settledAt });
     else out.push({ kind: "payment", text: `The payment of ${what} is delayed`, createdAt: p.createdAt });
   }

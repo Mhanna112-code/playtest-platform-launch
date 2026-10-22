@@ -22,6 +22,14 @@ and look, but this version deliberately drops most of its complexity.
     tester, the developer's side added, admin dispute decision; applications; Switch/Keep; invite answers.
   - Tester: paid / rejected, payment delayed (never "failed", "hold" or "chargeback"), payment arrived after a delay,
     their dispute's admin decision. Chargebacks are never shown to testers.
+  - ACROSS TESTS (overrides the next line for these events): the developer's payment FAILED / retried, chargeback
+    opened, and the clearing events (a failed payment that went through on retry or was paid off, chargeback resolved)
+    show in the top box and stop once on EVERY test page and Edit page of that developer, naming the test ("Payment
+    failed on Harbor Run: $8 to Ana Silva · we'll retry tomorrow · pay by Oct 25 to avoid a pause."). Successful
+    ordinary payments stay this-test only.
+  - Tester, same logic within this developer's tests: the tester's OWN payment delayed / the delayed payment arrived
+    shows on every session page they have with THIS developer, naming the test; ordinary paid/rejected stay this-test
+    only. Never other testers' payments, never "failed"/"hold"/"chargeback".
   - Payment events from the developer's OTHER tests don't show here; a hold shows on every test as the existing
     paused banner/refusals (not a top-box line per failure).
 - The Edit page's Save follows the SAME rule as the test-page buttons: it stops once for every developer reason

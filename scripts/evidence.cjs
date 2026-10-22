@@ -842,17 +842,24 @@ async function signIn(page, email) {
     const subC = sql(`select id from "Submission" where "contractId" = '${SCara}' and kind = 'written'`);
     sql(`update "Submission" set "payBy" = now() - interval '1 minute' where id = '${subC}'`);
     await runCron();
+    const devOther = await dev.context().newPage();
+    await devOther.goto(`/app/tests/${T21}`);
     sql(`update "User" set "stripePaymentMethodId" = 'pm_card_declined' where id = '${devId}'`);
     const ch = await apiPost(t3, `/api/sessions/${SCara}/choose`, { submissionId: subC, choice: "charge", tickedCents: 800 });
     check("Cara charged; the card was declined (owed)", sql(`select count(*) from "Payment" where "submissionId" = '${subC}' and status = 'failed' and "owedUntil" is not null`) === "1", JSON.stringify(ch.body));
-    const devDeclined = await dev.waitForSelector("[data-live-top] >> text=for the written answers was declined", { timeout: 35000 }).then(() => true, () => false);
-    check("developer's top box: the payment was declined (this test only)", devDeclined);
+    const devDeclined = await dev.waitForSelector("[data-live-top] >> text=Payment failed on Tide Pool: $8.00 to Cara Diaz", { timeout: 35000 }).then(() => true, () => false);
+    check("developer's top box: 'Payment failed on Tide Pool ... pay by ... to avoid a pause'", devDeclined && (await has(dev, "[data-live-top] >> text=to avoid a pause")));
     await dev.evaluate(() => window.scrollTo(0, 0));
     await shot(dev, "top-box-declined-developer");
-    const delayed = await tab2.waitForSelector("[data-live-top] >> text=The payment of $8.00 for your written answers is delayed", { timeout: 35000 }).then(() => true, () => false);
+    const delayed = await tab2.waitForSelector("[data-live-top] >> text=The payment of $8.00 for your written answers on Tide Pool is delayed", { timeout: 35000 }).then(() => true, () => false);
     const topText = delayed ? await tab2.locator("[data-live-top]").innerText() : "";
     check("tester's top box: 'delayed', never failed/hold/chargeback", delayed && !/fail|hold|chargeback/i.test(topText), topText);
     await shot(tab2, "top-box-delayed-tester");
+    // Across tests: the developer's other test page (opened before) names the failure on Tide Pool too.
+    const otherDeclined = await devOther.waitForSelector("[data-live-top] >> text=Payment failed on Tide Pool", { timeout: 35000 }).then(() => true, () => false);
+    check("developer's OTHER test page shows the failure, naming Tide Pool", otherDeclined);
+    await shot(devOther, "top-box-other-test-developer");
+    await devOther.close();
     sql(`update "User" set "stripePaymentMethodId" = ${pmBefore ? `'${pmBefore}'` : "NULL"} where id = '${devId}'`);
     const owedPaid = await apiPost(dev, "/api/payments/owed", { confirmed: true });
     check("the developer paid what they owe", sql(`select count(*) from "Payment" where "submissionId" = '${subC}' and status = 'failed' and "settledAt" is null`) === "0", JSON.stringify(owedPaid.body));

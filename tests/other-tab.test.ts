@@ -199,27 +199,50 @@ describe("payments and disputes, only for this test", () => {
   const fail = (contractId: string, devId: string, testerId: string, submissionId: string, extra: Record<string, unknown> = {}) =>
     db.payment.create({ data: { kind: "review", contractId, submissionId, developerId: devId, testerId, amountCents: 800, feeCents: 160, testerCents: 640, status: "failed", owedUntil: new Date(Date.now() + 3 * 86_400_000), ...extra } });
 
-  it("a declined payment on another test of the same developer neither shows nor stops here", async () => {
+  it("a payment failure on test A shows and stops on test B and B's Edit page, naming A; a success on A doesn't", async () => {
     const { dev, testId: A } = await setup();
-    const { tester, sessionId: SA } = await joined(A);
+    const ana = await joined(A);
     const { POST: postTest } = await import("@/app/api/tests/route");
-    const r = await json(await postTest(req("/api/tests", { cookie: dev.cookie, body: { title: "Other", description: "x", buildUrl: "https://example.com/o", category: "Action", devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Q?"], openUntil: "" } })));
-    const T2 = r.body.id as string;
-    const other = await joined(T2, "Ben Carter", "he");
-    await sact(other.sessionId, "written", other.tester.cookie, { answers: ["b"] });
+    const r = await json(await postTest(req("/api/tests", { cookie: dev.cookie, body: { title: "Night Ferry", description: "x", buildUrl: "https://example.com/o", category: "Action", devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Q?"], openUntil: "" } })));
+    const B = r.body.id as string;
+    const ben = await joined(B, "Ben Carter", "he");
+    await sact(ana.sessionId, "written", ana.tester.cookie, { answers: ["a", "b"] });
     const pageLoaded = seen();
     await later();
-    const sub = await db.submission.findFirstOrThrow({ where: { contractId: other.sessionId } });
-    await fail(other.sessionId, dev.user.id, other.tester.user.id, sub.id);
-    // Test A: nothing for the developer or for Ana.
-    expect((await live(dev.cookie, `test:${A}`, pageLoaded)).body.changes).toEqual([]);
-    expect((await live(tester.cookie, `session:${SA}`, pageLoaded)).body.changes).toEqual([]);
-    expect((await act(A, "next-round", dev.cookie, { seenAt: pageLoaded })).body.error?.code).not.toBe("stop_once");
-    // The other test: the developer sees it and stops once; Ben reads only "delayed".
-    const line = "Your $8.00 payment to Ben Carter for the written answers was declined";
-    expect((await live(dev.cookie, `test:${T2}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([line]);
-    expect(texts(await act(T2, "stop", dev.cookie, { seenAt: pageLoaded }))).toEqual([line]);
-    expect((await live(other.tester.cookie, `session:${other.sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual(["The payment of $8.00 for your written answers is delayed"]);
+    // A success on A: nothing on B.
+    const subA = await db.submission.findFirstOrThrow({ where: { contractId: ana.sessionId } });
+    await pay(dev.cookie, { kind: "submission", id: subA.id, amount: "10.00", tickedCents: 1000 });
+    expect((await live(dev.cookie, `test:${B}`, pageLoaded)).body.changes).toEqual([]);
+    // A failure on A (owed): shows and stops on B (test page and Edit's Save), naming Harbor Run.
+    await fail(ana.sessionId, dev.user.id, ana.tester.user.id, subA.id);
+    const line = expect.stringMatching(/^Payment failed on Harbor Run: \$8\.00 to Ana Silva for the written answers · we'll retry tomorrow · pay by .+ to avoid a pause$/);
+    expect((await live(dev.cookie, `test:${B}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([line]);
+    expect(texts(await act(B, "stop", dev.cookie, { seenAt: pageLoaded }))).toEqual([line]);
+    const v = (await db.test.findUniqueOrThrow({ where: { id: B } })).version;
+    const e = await act(B, "edit", dev.cookie, { version: v, fields: { description: "y" }, seenAt: pageLoaded });
+    expect(e.body.error.code).toBe("changed");
+    expect(texts(e)).toEqual([line]);
+    // Ben (another tester) never reads Ana's payment.
+    expect((await live(ben.tester.cookie, `session:${ben.sessionId}`, pageLoaded)).body.changes).toEqual([]);
+  });
+
+  it("the tester's own delay on test A shows on their session on B with the same developer, not with another developer", async () => {
+    const { dev, testId: A } = await setup();
+    const ana = await joined(A);
+    const { POST: postTest } = await import("@/app/api/tests/route");
+    const B = (await json(await postTest(req("/api/tests", { cookie: dev.cookie, body: { title: "Night Ferry", description: "x", buildUrl: "https://example.com/o", category: "Action", devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Q?"], openUntil: "" } })))).body.id as string;
+    const onB = await act(B, "join", ana.tester.cookie, { listingVersion: 1 });
+    const other = await setup({ title: "Elsewhere" });
+    const onC = await act(other.testId, "join", ana.tester.cookie, { listingVersion: 1 });
+    await sact(ana.sessionId, "written", ana.tester.cookie, { answers: ["a", "b"] });
+    const pageLoaded = seen();
+    await later();
+    const subA = await db.submission.findFirstOrThrow({ where: { contractId: ana.sessionId } });
+    await fail(ana.sessionId, dev.user.id, ana.tester.user.id, subA.id);
+    const delayed = "The payment of $8.00 for your written answers on Harbor Run is delayed";
+    expect((await live(ana.tester.cookie, `session:${onB.body.sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([delayed]);
+    expect(texts(await sact(onB.body.sessionId, "leave", ana.tester.cookie, { seenAt: pageLoaded }))).toEqual([delayed]);
+    expect((await live(ana.tester.cookie, `session:${onC.body.sessionId}`, pageLoaded)).body.changes).toEqual([]);
   });
 
   it("a tester never reads 'failed', 'hold' or 'chargeback': delayed, arrived, the team's decision", async () => {
@@ -236,13 +259,13 @@ describe("payments and disputes, only for this test", () => {
     await db.testEvent.create({ data: { testId, kind: "chargeback", text: "Your bank reversed your $5.00 payment for Ana Silva's written answers", contractId: sessionId } });
     await db.testEvent.create({ data: { testId, kind: "paused", text: "Your tests are paused until you pay what you owe" } });
     const before = await live(tester.cookie, `session:${sessionId}`, pageLoaded);
-    expect(before.body.changes.map((c: { text: string }) => c.text)).toEqual(["The payment of $8.00 for your written answers is delayed"]);
+    expect(before.body.changes.map((c: { text: string }) => c.text)).toEqual(["The payment of $8.00 for your written answers on Harbor Run is delayed"]);
     await later();
     await db.payment.update({ where: { id: p.id }, data: { status: "charged", settledAt: new Date() } });
     const d = await db.dispute.findFirstOrThrow({ where: { contractId: sessionId } });
     await db.dispute.update({ where: { id: d.id }, data: { status: "decided", decidedCents: 800, decidedAt: new Date() } });
     const lines: string[] = (await live(tester.cookie, `session:${sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text);
-    expect(lines).toEqual(expect.arrayContaining(["A delayed payment of $8.00 for your written answers arrived", "The team decided your dispute: the pay was raised to $8.00"]));
+    expect(lines).toEqual(expect.arrayContaining(["A delayed payment of $8.00 for your written answers on Harbor Run arrived", "The team decided your dispute: the pay was raised to $8.00"]));
     for (const t of lines) expect(t).not.toMatch(/fail|hold|chargeback|reversed|bank/i);
     const stop = await sact(sessionId, "leave", tester.cookie, { seenAt: pageLoaded });
     expect(stop.body.error.code).toBe("stop_once");

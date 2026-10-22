@@ -49,7 +49,7 @@ export async function testerChanges(testerId: string, contractId: string, testId
   for (const call of calls) out.push({ kind: "cancelled", text: `Your call on ${fmtDateTime(call.startsAt)} was cancelled`, createdAt: call.cancelledAt! });
   // (F) the listing's info (title, description, devices, languages) changed.
   out.push(...(await db.testEvent.findMany({ where: { testId, kind: "info", createdAt: { gt: seenAt } } })));
-  out.push(...(await testerPaymentChanges(contractId, seenAt)));
+  out.push(...(await testerPaymentChanges(testerId, contractId, seenAt)));
   out.push(...(await ownChanges(testerId, testId, seenAt, tab)));
   return out.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }

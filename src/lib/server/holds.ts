@@ -184,7 +184,7 @@ export async function resolveChargeback(paymentId: string) {
   if (!p || p.chargeback !== "open") throw new HttpError(409, "not_open", "That chargeback isn't open.");
   await db.payment.update({ where: { id: p.id }, data: { chargeback: "resolved" } });
   const pc = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId } }) : null;
-  if (pc) await logEvent(pc.testId, "admin", `The team resolved the bank reversal of your ${money(p.amountCents)} payment`, pc.id);
+  if (pc) await logEvent(pc.testId, "chargeback", `The team resolved the bank reversal of your ${money(p.amountCents)} payment`, pc.id);
   await liftHoldIfClear(p.developerId);
   return { ok: true };
 }
