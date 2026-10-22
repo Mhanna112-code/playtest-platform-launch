@@ -8,18 +8,22 @@ and look, but this version deliberately drops most of its complexity.
 - Repeat is "Daily" or "Weekly", 2-8 calls, exactly 1 time (never with "choose one"). Every occurrence is
   clash-checked; once accepted each is an ordinary call (cancelled/paid alone). A daily/weekly set is shown as ONE
   line ("Weekly: Mon 10:00 AM · 4 calls, next Nov 9 [Show calls]").
-- LIMIT (replaces "3 pending per side"): up to 3 items per tester, counting BOTH sides' pending requests and booked
-  calls together; a daily/weekly set (pending or booked) counts as 1. Shown as "3 of 3 used". A 4th is refused under
-  the button: "Ana Silva already has 3 calls or requests with you. Wait until one takes place, or withdraw or cancel
-  one." A slot frees when a call takes place or is cancelled, or a request closes. Select all: the stop-once box
-  names testers at 3 of 3 and sends to the rest on confirm. Tester-side refusal: "You already have 3 calls or
-  requests in this test. ..." (same rule).
+- LIMITS (replace "3 pending per side" and the combined count):
+  - BOOKED: up to 3 different booked times per tester at once; a single call = 1, a daily/weekly set = 1. Shown on
+    the tester's row as "2 of 3 booked" (no total-calls count).
+    Accepting (or auto-match) that would make a 4th is refused under the button: "Ana Silva already has 3 booked
+    times with you. Wait until one is over or cancel one." (tester side: "You already have 3 booked times in this
+    test."). A slot frees when a single call takes place or is cancelled, or a set's last call is over or all its
+    remaining calls are cancelled.
+  - REQUESTS: up to 3 pending requests per tester (both sides together), each with up to 3 times or one daily/weekly
+    time. A 4th is refused: "You already have 3 requests waiting with Ana Silva. Withdraw one or wait for an answer."
+  - Select all: the stop-once box names testers at a limit and sends to the rest on confirm.
 - Developer panel, top to bottom:
   1) The rate line ("Calls you request use each tester's contract rate. A tester can ask for a different rate if they
      request a call.").
   2) The tick box list: "Select all", then ONE ROW PER TESTER with their terms, like the parts listing: name ·
      deadline · each part sent/not sent and paid so far of its terms ("Written sent, paid $8 of $8 · Recording not
-     sent · Live call $40/h, $40 paid so far") · "2 of 3 used".
+     sent · Live call $40/h, $40 paid so far") · "2 of 3 booked".
   3) [Request a time] (goes to everyone ticked).
   4) Underneath: per-tester blocks for the TICKED testers with their Booked calls ([Cancel]), daily/weekly sets
      ([Show calls]), and Waiting requests (theirs: [Accept]/[Decline]; yours: [Withdraw]). When NOTHING is ticked,

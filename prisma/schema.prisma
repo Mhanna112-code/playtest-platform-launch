@@ -363,6 +363,8 @@ model Call {
   cancelNote  String    @default("")
   /// Optional "Ask $___ for this" when booking
   askedCents  Int?
+  /// The daily/weekly set this call belongs to (the request it came from); shown as one line
+  setId          String?
   /// Each side's first Join (the call page shows "Both joined at …"; the length defaults from then to the booked end)
   devJoinedAt    DateTime?
   testerJoinedAt DateTime?
@@ -522,6 +524,8 @@ model CallRequest {
   askRateCents Int?
   /// "Choose one": up to 3 possible times (startsAt is the first). Weekly: one time repeated `weeks` weeks (2-8).
   times        DateTime[]
+  /// Repeat: "daily" | "weekly" ("" = choose one); `weeks` is the number of calls (2-8)
+  repeat       String    @default("")
   weeks        Int       @default(0)
   callId       String?
   decidedAt    DateTime?

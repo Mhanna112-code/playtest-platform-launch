@@ -10,16 +10,17 @@ import { testerGate } from "./testerGate";
 // Calls are ALWAYS requests (owner rules). Every call starts as a request from one side and is booked only when the
 // other side accepts, or by auto-match. A request is ONE of:
 //   "Choose one": up to 3 possible times; the other side picks one → 1 call.
-//   "Weekly": 1 time repeated weekly for 2–8 weeks; accepting books every week (each an ordinary call afterwards).
+//   "Daily"/"Weekly": 1 time repeated 2–8 times; accepting books them all (each an ordinary call afterwards).
 // The developer requests with one or more ticked testers (the first tester to accept takes the whole request); the
 // developer never sets a price. The tester can "Ask $___/h" on their own requests only; a different ask never books on
-// the tester's side. Limits: at most 3 pending requests per side with the same person in the same test. Clash checks:
+// the tester's side. Limit: 3 items per tester per test (both sides' pending requests and booked calls; a daily/weekly set = 1). Clash checks:
 // sending refuses overlaps with calls/requests between the same two; accepting refuses overlaps with anyone's calls.
 
 type Side = "developer" | "tester";
 type U = { id: string; email: string; name: string };
-const WEEK = 7 * 86_400_000;
-export const MAX_PENDING = 3;
+const DAY_MS = 86_400_000;
+/** Up to 3 items per tester per test: both sides' pending requests and booked calls; a daily/weekly set counts as 1. */
+export const MAX_ITEMS = 3;
 
 async function ctx(userId: string, contractId: string) {
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { tester: true, test: { include: { developer: true } } } });
@@ -40,23 +41,24 @@ export const rateLabel = (rateCents: number | null, contractRate: number | null)
   rateCents == null ? "Not in your contract" : `${rateCents === contractRate ? "Contract" : "Agreed"} ${money(rateCents).replace(/\.00$/, "")}/h`;
 
 /** The times a request covers: its options ("choose one") or every week ("weekly"). */
-export const requestTimes = (r: { times: Date[]; startsAt: Date; weeks: number }) =>
-  r.weeks > 0 ? Array.from({ length: r.weeks }, (_, k) => new Date(r.startsAt.getTime() + k * WEEK)) : r.times.length ? r.times : [r.startsAt];
+export const requestTimes = (r: { times: Date[]; startsAt: Date; weeks: number; repeat?: string }) =>
+  r.weeks > 0 ? Array.from({ length: r.weeks }, (_, k) => new Date(r.startsAt.getTime() + k * (r.repeat === "daily" ? 1 : 7) * DAY_MS)) : r.times.length ? r.times : [r.startsAt];
 const overlaps = (a: Date, am: number, b: Date, bm: number) => a.getTime() < b.getTime() + bm * 60_000 && b.getTime() < a.getTime() + am * 60_000;
 
 /** Read the request's kind and times from the form: times[] (1–3, choose one) or startsAt + weeks (2–8, weekly). */
 function readKind(body: Record<string, unknown>) {
-  const weeks = Number(body.weeks ?? 0) || 0;
+  const weeks = Number(body.weeks ?? body.count ?? 0) || 0;
+  const repeat = weeks ? (body.repeat === "daily" ? "daily" : "weekly") : "";
   const raw = Array.isArray(body.times) ? body.times : body.startsAt ? [body.startsAt] : [];
   const times = raw.map((x) => new Date(String(x))).filter((d) => !isNaN(d.getTime()));
   if (!times.length) throw new HttpError(400, "bad_time", "Pick a time in the future.");
   if (times.some((d) => d.getTime() < Date.now() + 5 * 60_000)) throw new HttpError(400, "bad_time", "Pick times in the future.");
   if (weeks) {
-    if (times.length !== 1) throw new HttpError(400, "bad_kind", "A weekly request has exactly one time.");
-    if (weeks < 2 || weeks > 8) throw new HttpError(400, "bad_weeks", "Weekly calls repeat for 2 to 8 weeks.");
+    if (times.length !== 1) throw new HttpError(400, "bad_kind", `A ${repeat} request has exactly one time.`);
+    if (weeks < 2 || weeks > 8) throw new HttpError(400, "bad_weeks", `${repeat === "daily" ? "Daily" : "Weekly"} calls repeat 2 to 8 times.`);
   } else if (times.length > 3) throw new HttpError(400, "bad_kind", "Offer up to 3 times to choose from.");
   times.sort((a, b) => a.getTime() - b.getTime());
-  return { weeks, times, startsAt: times[0] };
+  return { weeks, repeat, times, startsAt: times[0] };
 }
 
 /** Sending: a time overlapping a booked call or a pending request between the same two people is refused. */
@@ -97,16 +99,23 @@ async function acceptClash(c: Ctx["c"], side: Side, times: Date[], minutes: numb
   return clashes;
 }
 
-async function pendingWith(contractId: string, side: Side) {
-  return db.callRequest.count({ where: { contractId, fromSide: side, status: "pending", startsAt: { gt: new Date() } } });
+/** Items used with this tester in this test: pending requests (either side) + booked calls still ahead (a set = 1). */
+export async function itemsUsed(contractId: string) {
+  const now = new Date();
+  const [reqs, calls] = await Promise.all([
+    db.callRequest.count({ where: { contractId, status: "pending", startsAt: { gt: now } } }),
+    db.call.findMany({ where: { contractId, status: "booked", startsAt: { gt: now } }, select: { setId: true } }),
+  ]);
+  return reqs + new Set(calls.map((c, i) => c.setId ?? `single-${i}`)).size;
 }
-const limitLine = (name: string) => `You already have ${MAX_PENDING} requests waiting with ${name}. Withdraw one or wait for an answer.`;
+const devLimitLine = (name: string) => `${name} already has ${MAX_ITEMS} calls or requests with you. Wait until one takes place, or withdraw or cancel one.`;
+const testerLimitLine = `You already have ${MAX_ITEMS} calls or requests in this test. Wait until one takes place, or withdraw or cancel one.`;
 
 /** Book one call at this time between the two, at the agreed rate. */
-async function bookAt(contractId: string, startsAt: Date, minutes: number, rateCents: number | null) {
+async function bookAt(contractId: string, startsAt: Date, minutes: number, rateCents: number | null, setId: string | null = null) {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: true, tester: true } });
   const slot = await db.callSlot.create({ data: { testId: c.testId, startsAt, minutes, allowedTesterIds: [c.testerId], status: "booked" } });
-  const call = await db.call.create({ data: { slotId: slot.id, contractId, startsAt, minutes, rateCents } });
+  const call = await db.call.create({ data: { slotId: slot.id, contractId, startsAt, minutes, rateCents, setId } });
   await db.$transaction((tx) => recordEvent(tx, c.testId, "booked", `${displayName(c.tester)} booked a call for ${fmtDateTime(startsAt)}`, false, {}, contractId));
   return call;
 }
@@ -139,8 +148,8 @@ async function refusals(c: Ctx["c"], side: Side) {
   if (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) throw new HttpError(409, "gone", "This time isn't available.");
 }
 
-const bellFor = (name: string, k: { weeks: number; times: Date[] }) =>
-  k.weeks ? `${name} asked for weekly calls: ${k.times[0].toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })}, ${k.weeks} weeks`
+const bellFor = (name: string, k: { weeks: number; times: Date[]; repeat?: string }) =>
+  k.weeks ? `${name} asked for ${k.repeat === "daily" ? "daily" : "weekly"} calls: ${k.times[0].toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })}, ${k.weeks} ${k.repeat === "daily" ? "days" : "weeks"}`
   : k.times.length > 1 ? `${name} asked for a call: pick one of ${k.times.length} times`
   : `${name} asked for a call: ${fmtDateTime(k.times[0])}`;
 
@@ -179,20 +188,20 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     const minutes = x.c.liveMinutes ?? x.c.test.liveMinutes ?? 30;
     const clash = await sendClash(x.c.id, requestTimes(kind), minutes, displayName(x.c.tester));
     if (clash) blocked.push(clash);
-    else if ((await pendingWith(x.c.id, "developer")) >= MAX_PENDING) atLimit.push(displayName(x.c.tester));
+    else if ((await itemsUsed(x.c.id)) >= MAX_ITEMS) atLimit.push(displayName(x.c.tester));
     else ok.push(x);
   }
   if (all.length === 1 && blocked.length) throw new HttpError(409, "clash", blocked[0]);
-  if (all.length === 1 && atLimit.length) throw new HttpError(409, "limit", limitLine(atLimit[0]));
-  if (!ok.length) throw new HttpError(409, "limit", [...blocked, ...atLimit.map(limitLine)].join(" "));
+  if (all.length === 1 && atLimit.length) throw new HttpError(409, "limit", devLimitLine(atLimit[0]));
+  if (!ok.length) throw new HttpError(409, "limit", [...blocked, ...atLimit.map(devLimitLine)].join(" "));
   if ((blocked.length || atLimit.length) && body.limitConfirmed !== true && body.confirmed !== true) {
-    const text = [...blocked, ...(atLimit.length ? [`${atLimit.join(" and ")} ${atLimit.length === 1 ? "has" : "have"} ${MAX_PENDING} requests waiting with you already.`] : [])].join(" ");
+    const text = [...blocked, ...(atLimit.length ? [`${atLimit.join(" and ")} ${atLimit.length === 1 ? "is" : "are"} at ${MAX_ITEMS} of ${MAX_ITEMS} calls or requests with you.`] : [])].join(" ");
     throw new HttpError(409, "stop_once", "Press again to send to the others.", { changes: [{ text, at: new Date() }], tail: `Press again to send to the others (${ok.map((x) => displayName(x.c.tester)).join(", ")}).`, limit: true });
   }
   const batchId = randomBytes(8).toString("hex");
   for (const { c } of ok) {
     const minutes = c.liveMinutes ?? c.test.liveMinutes ?? 30;
-    await db.callRequest.create({ data: { testId, contractId: c.id, fromSide: "developer", startsAt: kind.startsAt, times: kind.weeks ? [kind.startsAt] : kind.times, weeks: kind.weeks, minutes, batchId } });
+    await db.callRequest.create({ data: { testId, contractId: c.id, fromSide: "developer", startsAt: kind.startsAt, times: kind.weeks ? [kind.startsAt] : kind.times, weeks: kind.weeks, repeat: kind.repeat, minutes, batchId } });
     const line = bellFor(displayName(dev), kind);
     await notify(c.tester.email, line, [line, `Rate: ${rateLabel(c.liveRateCents, c.liveRateCents)}. Accept or decline it on your session page.`], `/app/sessions/${c.id}`);
   }
@@ -240,9 +249,9 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   }
   const clash = await sendClash(contractId, requestTimes(kind), minutes, devName);
   if (clash) throw new HttpError(409, "clash", clash);
-  if ((await pendingWith(contractId, "tester")) >= MAX_PENDING) throw new HttpError(409, "limit", limitLine(devName));
+  if ((await itemsUsed(contractId)) >= MAX_ITEMS) throw new HttpError(409, "limit", testerLimitLine);
   const r = await db.callRequest.create({
-    data: { testId: c.testId, contractId, fromSide: "tester", startsAt: kind.startsAt, times: kind.weeks ? [kind.startsAt] : kind.times, weeks: kind.weeks, minutes, askRateCents: ask == null || ask === c.liveRateCents ? null : ask, batchId: closedCopy ? `ask-${closedCopy}` : "" },
+    data: { testId: c.testId, contractId, fromSide: "tester", startsAt: kind.startsAt, times: kind.weeks ? [kind.startsAt] : kind.times, weeks: kind.weeks, repeat: kind.repeat, minutes, askRateCents: ask == null || ask === c.liveRateCents ? null : ask, batchId: closedCopy ? `ask-${closedCopy}` : "" },
   });
   await db.$transaction((tx) => recordEvent(tx, c.testId, "requested", `${displayName(c.tester)} requested ${kind.weeks ? `weekly calls (${kind.weeks} weeks) from` : "a call for"} ${fmtDateTime(kind.startsAt)}${r.askRateCents != null ? ` and asks ${money(r.askRateCents)}/h` : ""}`, false, {}, contractId));
   const line = bellFor(displayName(c.tester), kind);
@@ -298,13 +307,13 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     }
     let first = null;
     for (const t of times) {
-      const call = await bookAt(contractId, t, r.minutes, rate);
+      const call = await bookAt(contractId, t, r.minutes, rate, r.weeks ? r.id : null);
       first = first ?? call;
     }
     await db.callRequest.update({ where: { id: r.id }, data: { status: "booked", callId: first!.id, decidedAt: new Date() } });
     if (side === "tester") await closeBatch(r.batchId, r.id, displayName(c.tester));
     else if (r.batchId.startsWith("ask-")) await closeBatch(r.batchId.slice(4), r.id, displayName(c.tester)); // the rest of the developer's batch
-    const what = r.weeks ? `${r.weeks} weekly calls from ${fmtDateTime(times[0])}` : fmtDateTime(times[0]);
+    const what = r.weeks ? `${r.weeks} ${r.repeat === "daily" ? "daily" : "weekly"} calls from ${fmtDateTime(times[0])}` : fmtDateTime(times[0]);
     await notify(other.email, `Booked: ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#calls` : `/app/sessions/${c.id}`);
     return { booked: true, callId: first!.id, calls: times.length };
   }
