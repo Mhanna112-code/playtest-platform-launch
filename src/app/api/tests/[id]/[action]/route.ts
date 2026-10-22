@@ -1,7 +1,7 @@
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
-import { devCancelCall, offerTimes, removeTime, reportNoShow, setCallLength } from "@/lib/server/calls";
+import { devCancelCall, reportNoShow, setCallLength } from "@/lib/server/calls";
 import { cancelInvite, inviteGaps, inviteTesters } from "@/lib/server/invites";
-import { answerRequest, requestTime } from "@/lib/server/requests";
+import { answerRequest, devRequestTime } from "@/lib/server/requests";
 import { apply, decideApplication, join, withdrawApplication } from "@/lib/server/joining";
 import { addDevSide } from "@/lib/server/payments";
 import { sendChat, sendMessage } from "@/lib/server/messages";
@@ -30,10 +30,6 @@ export async function POST(req: Request, { params }: Ctx) {
         return ok(await endEarly(u, id, body));
       case "next-round":
         return ok(await nextRound(u, id, body));
-      case "offer-times":
-        return ok(await offerTimes(u, id, body));
-      case "remove-time":
-        return ok(await removeTime(u, id, body));
       case "cancel-call":
         return ok(await devCancelCall(u, id, body));
       case "call-length":
@@ -45,7 +41,7 @@ export async function POST(req: Request, { params }: Ctx) {
       case "invite":
         return ok(await inviteTesters(u, id, body));
       case "request-time":
-        return ok(await requestTime(u, String(body.contractId ?? ""), body));
+        return ok(await devRequestTime(u, id, body));
       case "answer-request":
         return ok(await answerRequest(u, String(body.contractId ?? ""), body));
       case "invite-check":

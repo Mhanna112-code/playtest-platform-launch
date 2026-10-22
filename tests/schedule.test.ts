@@ -4,7 +4,7 @@ import { GET as cronGET } from "@/app/api/cron/daily/route";
 import { POST as invitePOST } from "@/app/api/invites/[id]/route";
 import * as R from "@/lib/rules";
 import { json, makeUser, req } from "./helpers";
-import { act, joined, sact, seen, setup } from "./fixtures";
+import { act, bookCall, joined, sact, seen, setup } from "./fixtures";
 
 const DAY = 86_400_000;
 const cron = () => cronGET(new Request("http://localhost:3400/api/cron/daily", { headers: { authorization: "Bearer cron-test" } }));
@@ -68,9 +68,7 @@ describe("notification schedule", () => {
   it("admin digest every 3 days; each no-show appears in a digest once", async () => {
     const { testId, dev } = await setup();
     const { tester, sessionId } = await joined(testId);
-    await act(testId, "offer-times", dev.cookie, { seenAt: seen(), confirmed: true, times: [new Date(Date.now() + 2 * DAY).toISOString()] });
-    const slot = await db.callSlot.findFirstOrThrow({ where: { testId } });
-    await sact(sessionId, "book", tester.cookie, { seenAt: seen(), confirmed: true, slotId: slot.id });
+    await bookCall(testId, dev.cookie, sessionId, tester.cookie, 48);
     const call = await db.call.findFirstOrThrow({ where: { contractId: sessionId } });
     await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 60_000), noShowBy: "tester", noShowNote: "Nobody came", noShowAt: new Date() } });
     await db.appState.deleteMany({ where: { key: "adminDigestAt" } });

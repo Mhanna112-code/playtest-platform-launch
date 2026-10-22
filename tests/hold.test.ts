@@ -10,7 +10,7 @@ import { POST as owedPOST } from "@/app/api/payments/owed/route";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { startHold } from "@/lib/server/holds";
 import { json, makeUser, req } from "./helpers";
-import { act, joined, listingBody, sact, seen, setup } from "./fixtures";
+import { act, bookCall, joined, listingBody, sact, seen, setup } from "./fixtures";
 
 const later = () => new Promise((r) => setTimeout(r, 5));
 const DAY = 86_400_000;
@@ -84,9 +84,7 @@ describe("payment hold", () => {
   it("only booked calls whose time comes during the hold are cancelled; the tester reads only that the test is paused", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
-    await act(testId, "offer-times", dev.cookie, { seenAt: seen(), confirmed: true, times: [new Date(Date.now() + 2 * DAY).toISOString(), new Date(Date.now() + 3 * DAY).toISOString()] });
-    const slots = await db.callSlot.findMany({ where: { testId }, orderBy: { startsAt: "asc" } });
-    await sact(sessionId, "book", tester.cookie, { seenAt: seen(), slotId: slots[0].id });
+    await bookCall(testId, dev.cookie, sessionId, tester.cookie, 48);
     await startHold(dev.user.id, "unpaid");
     const call = await db.call.findFirstOrThrow({ where: { contractId: sessionId } });
     expect(call.status).toBe("booked"); // a call after the hold may still happen
@@ -99,7 +97,7 @@ describe("payment hold", () => {
     const mail = await db.outboxEmail.findFirstOrThrow({ where: { to: tester.user.email, subject: { contains: "was cancelled" } } });
     expect(mail.text).toContain("This test is paused. Payment for your work may be delayed.");
     expect(mail.text).not.toMatch(/hold|chargeback|suspend/i);
-    expect((await sact(sessionId, "book", tester.cookie, { seenAt: seen(), slotId: slots[1].id, confirmed: true })).body.error.message).toBe("This test is paused. Payment for your work may be delayed.");
+    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), startsAt: new Date(Date.now() + 3 * DAY).toISOString(), confirmed: true })).body.error.message).toBe("This test is paused. Payment for your work may be delayed.");
     expect((await sact(sessionId, "leave", tester.cookie)).status).toBe(200); // may leave any time
   });
 });

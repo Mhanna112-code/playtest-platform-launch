@@ -6,7 +6,7 @@ import { POST as joinPOST } from "@/app/api/calls/[id]/join/route";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import * as R from "@/lib/rules";
 import { json, makeUser, req } from "./helpers";
-import { act, joined, sact, seen, setup } from "./fixtures";
+import { act, bookCall, joined, sact, seen, setup } from "./fixtures";
 
 const block = (cookie: string, userId: string, action?: string) => blocksPOST(req("/api/blocks", { cookie, body: { userId, action } })).then(json);
 const join = (cookie: string, id: string) => joinPOST(req(`/api/calls/${id}/join`, { cookie, body: {} }), { params: Promise.resolve({ id }) }).then(json);
@@ -37,9 +37,8 @@ describe("block", () => {
   async function withCall() {
     const s = await setup();
     const j = await joined(s.testId);
-    await act(s.testId, "offer-times", s.dev.cookie, { seenAt: seen(), confirmed: true, times: [inHours(48), inHours(72)] });
-    const slots = await db.callSlot.findMany({ where: { testId: s.testId }, orderBy: { startsAt: "asc" } });
-    await sact(j.sessionId, "book", j.tester.cookie, { seenAt: seen(), confirmed: true, slotId: slots[0].id });
+    await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie, 48);
+    const slots = [{ id: "" }, { id: "" }];
     await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] });
     return { ...s, ...j, slots };
   }
@@ -54,7 +53,8 @@ describe("block", () => {
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     expect((await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { payKey: randomUUID(), seenAt: seen(), confirmed: true, kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 } }))).status).toBe(200);
     expect((await sact(sessionId, "message", tester.cookie, { body: "Hello?" })).body.error.message).toBe("This chat is closed.");
-    expect((await sact(sessionId, "book", tester.cookie, { seenAt: seen(), confirmed: true, slotId: slots[1].id })).status).toBe(409);
+    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: inHours(72) })).status).toBe(409);
+    expect(slots).toHaveLength(2);
     expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [tester.user.id] })).status).toBe(200); // already in this test: skipped
     const s2 = await setup();
     expect((await act(s2.testId, "invite", s2.dev.cookie, { seenAt: seen(), testerIds: [tester.user.id] })).status).toBe(200); // a different developer can still invite

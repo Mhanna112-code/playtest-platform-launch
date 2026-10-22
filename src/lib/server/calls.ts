@@ -1,79 +1,19 @@
 import { db } from "@/lib/db";
-import { displayName, fmtDateTime, pronouns, toCents } from "@/lib/format";
-import { cancelLine, LENGTH_WAITS, checkActualMinutes, checkAsk, checkCancel, PAUSED_FOR_TESTERS, type TestEventLike } from "@/lib/rules";
+import { displayName, fmtDateTime, pronouns } from "@/lib/format";
+import { cancelLine, LENGTH_WAITS, checkActualMinutes, checkCancel, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { testerGate as sharedTesterGate } from "./testerGate";
-import { devGate, devOnHold, ownContract, ownTest, recordEvent, sessionRefusal, staleNote } from "./tests";
+import { devGate, devOnHold, ownContract, ownTest, recordEvent, staleNote } from "./tests";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
-export const MAX_TIMES_PER_PRESS = 5;
-export const MAX_TIMES_PER_TEST = 50;
 
 /** The simple room: the developer's own link if they gave one, otherwise a free Jitsi room named after the call. */
 export const roomUrl = (call: { id: string }, slot: { link: string }) => slot.link || `https://meet.jit.si/playtest-${call.id}`;
 
 const canSee = (slot: { allowedTesterIds: string[] }, testerId: string) => slot.allowedTesterIds.length === 0 || slot.allowedTesterIds.includes(testerId);
 
-// ---------- developer: the live-call panel (same stop-once gate as every developer button) ----------
-
-export async function offerTimes(dev: U, testId: string, body: Record<string, unknown>) {
-  const t0 = await ownTest(dev.id, testId);
-  const raw = Array.isArray(body.times) ? body.times.filter((x): x is string => typeof x === "string" && !!x) : [];
-  if (raw.length === 0) throw new HttpError(400, "no_times", "Pick at least one time.");
-  if (raw.length > MAX_TIMES_PER_PRESS) throw new HttpError(400, "too_many", `Up to ${MAX_TIMES_PER_PRESS} times at once.`);
-  const times = raw.map((s) => new Date(s));
-  if (times.some((d) => isNaN(d.getTime()))) throw new HttpError(400, "bad_time", "Pick each time from the date and time box.");
-  if (times.some((d) => d.getTime() < Date.now() + 5 * 60_000)) throw new HttpError(400, "past", "Pick times in the future.");
-  const minutes = Number(body.minutes) || t0.liveMinutes || 30;
-  if (minutes < 10 || minutes > 180) throw new HttpError(400, "bad_minutes", "A call lasts from 10 to 180 minutes.");
-  const link = typeof body.link === "string" ? body.link.trim().slice(0, 500) : "";
-  if (link && !/^https:\/\//i.test(link)) throw new HttpError(400, "bad_link", "The call link must start with https://");
-  const want = Array.isArray(body.allowedTesterIds) ? body.allowedTesterIds.filter((x): x is string => typeof x === "string") : [];
-
-  const slots = await db.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
-    const t = await tx.test.findUniqueOrThrow({ where: { id: testId } });
-    if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped." + (await staleNote(testId, body.seenAt)));
-    if (t.status === "closed") throw new HttpError(409, "closed", "This test was closed, so no call times can be offered.");
-    if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", "Your tests are paused, so no call times can be offered. Pay what you owe first.");
-    await devGate(tx, testId, body.seenAt, body.confirmed === true);
-    const inTest = await tx.contract.findMany({ where: { testId, status: "working" }, select: { testerId: true } });
-    const allowed = want.filter((id) => inTest.some((c) => c.testerId === id));
-    if (want.length && !allowed.length) throw new HttpError(409, "none_can_book", "None of the testers you ticked can book a call now." + (await staleNote(testId, body.seenAt)));
-    const existing = await tx.callSlot.findMany({ where: { testId, status: { in: ["open", "booked"] } } });
-    if (existing.length + times.length > MAX_TIMES_PER_TEST) throw new HttpError(409, "full", `A test can hold at most ${MAX_TIMES_PER_TEST} call times.`);
-    for (const d of times) {
-      const end = d.getTime() + minutes * 60_000;
-      const clash = existing.find((s) => s.startsAt.getTime() < end && s.startsAt.getTime() + s.minutes * 60_000 > d.getTime());
-      if (clash) throw new HttpError(409, "clash", `You already have a call time then: ${fmtDateTime(clash.startsAt)}. Pick another time.`);
-    }
-    const made = [];
-    for (const d of times) made.push(await tx.callSlot.create({ data: { testId, startsAt: d, minutes, allowedTesterIds: allowed, link } }));
-    await recordEvent(tx, testId, "offered", `You offered ${times.length} call time${times.length === 1 ? "" : "s"}`, false);
-    return made;
-  });
-  await (await import("./requests")).matchOffered(testId);
-  return { offered: slots.length };
-}
-
-export async function removeTime(dev: U, testId: string, body: Record<string, unknown>) {
-  await ownTest(dev.id, testId);
-  const slotId = String(body.slotId ?? "");
-  await db.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
-    const s = await tx.callSlot.findUnique({ where: { id: slotId } });
-    if (!s || s.testId !== testId) throw new HttpError(404, "not_found", "That call time doesn't exist.");
-    const stale = await staleNote(testId, body.seenAt);
-    if (s.status === "booked") throw new HttpError(409, "booked", "A tester already booked this time. Cancel the call instead." + stale);
-    if (s.status !== "open") throw new HttpError(409, "removed", "This time was already removed." + stale);
-    await devGate(tx, testId, body.seenAt, body.confirmed === true);
-    await tx.callSlot.update({ where: { id: s.id }, data: { status: "removed" } });
-    await recordEvent(tx, testId, "removed", `You removed the call time ${fmtDateTime(s.startsAt)}`, false);
-  });
-  return { removed: true };
-}
 
 /** Developer cancels a booked call: 24 hours or more ahead only. The time is removed. */
 export async function devCancelCall(dev: U, testId: string, body: Record<string, unknown>) {
@@ -119,41 +59,6 @@ export async function testerCallChanges(testerId: string, contractId: string, te
 
 /** Book / Cancel use the tester's one shared stop-once gate (the box shows under the pressed button). */
 const testerGate = (tester: U, c: { id: string; testId: string }, body: Record<string, unknown>) => sharedTesterGate(tester.id, c.id, c.testId, body);
-
-/** Any tester in the test may book an offered time (in their contract or not: extra). One upcoming call at a time. */
-export async function bookTime(tester: U, contractId: string, body: Record<string, unknown>) {
-  const c0 = await ownContract(tester.id, contractId);
-  const slotId = String(body.slotId ?? "");
-  const dev = c0.test.developer;
-  const askedCents = body.ask === undefined || body.ask === null || body.ask === "" ? null : toCents(body.ask);
-  if (body.ask && askedCents == null) throw new HttpError(400, "bad_ask", "Enter the amount you ask like 7.50, or leave it empty.");
-  const askOk = checkAsk(askedCents);
-  if (!askOk.ok) throw new HttpError(400, "bad_ask", askOk.message);
-  const { call, slot } = await db.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
-    const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
-    const t = await tx.test.findUniqueOrThrow({ where: { id: c0.testId } });
-    const refusal = sessionRefusal(c, t, displayName(dev));
-    if (refusal) throw new HttpError(409, "closed", refusal);
-    if (await devOnHold(t.developerId)) throw new HttpError(409, "paused", PAUSED_FOR_TESTERS);
-    if (t.status !== "open") throw new HttpError(409, "closed", t.status === "stopped" ? "This test was stopped, so calls can't be booked." : "This test was closed, so calls can't be booked.");
-    const slot = await tx.callSlot.findUnique({ where: { id: slotId } });
-    if (!slot || slot.testId !== c.testId || !canSee(slot, tester.id)) throw new HttpError(404, "not_found", "That call time doesn't exist.");
-    if ((await tx.block.count({ where: { OR: [{ blockerId: tester.id, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: tester.id }] } })) > 0) throw new HttpError(409, "gone", "This time isn't available.");
-    if (slot.status !== "open") throw new HttpError(409, "gone", slot.status === "booked" ? "Someone already booked that time. Pick another." : "That time was removed. Pick another.");
-    if (slot.startsAt <= new Date()) throw new HttpError(409, "past", "That time has passed. Pick another.");
-    const upcoming = await tx.call.findFirst({ where: { contractId, status: "booked", startsAt: { gt: new Date() } } });
-    if (upcoming) throw new HttpError(409, "has_call", `You already have a call booked: ${fmtDateTime(upcoming.startsAt)}.`);
-    await testerGate(tester, c, body);
-    await tx.callSlot.update({ where: { id: slot.id }, data: { status: "booked" } });
-    const call = await tx.call.create({ data: { slotId: slot.id, contractId, startsAt: slot.startsAt, minutes: slot.minutes, rateCents: c.liveRateCents, askedCents } });
-    await recordEvent(tx, c.testId, "booked", `${displayName(tester)} booked a call for ${fmtDateTime(slot.startsAt)}`, false, {}, c.id);
-    return { call, slot };
-  });
-  await notify(dev.email, `${displayName(tester)} booked a call for “${c0.title}”`, [`${displayName(tester)} booked a live call for ${fmtDateTime(slot.startsAt)} (${slot.minutes} min).`, call.rateCents == null ? "Live calls aren't in their listing: you decide what to pay after the call." : ""], `/app/tests/${c0.testId}#calls`);
-  await (await import("./requests")).closeOnBooking(contractId, slot.startsAt, call.id);
-  return { callId: call.id };
-}
 
 /** Tester cancels their booked call: 24 hours or more ahead only. The time opens up again for others. */
 export async function testerCancelCall(tester: U, contractId: string, body: Record<string, unknown>) {

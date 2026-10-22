@@ -13,6 +13,13 @@ and look, but this version deliberately drops most of its complexity.
   ("Nora Lane asked for a call: Thu, Nov 5 at 3:00 PM").
 - The developer never sets a price: their requests use the tester's contract call rate (or "Not in your contract").
   To change the rate they message the tester.
+- Concise line under the developer's live-call box (always shown): "Calls you request use each tester's contract
+  rate. A tester can ask for a different rate if they request a call." The tick list shows each tester's rate
+  ("Ana Silva · $40/h", "Dee Moss · not in contract"). The tester's live-call box shows only their listed rate
+  ("Live call: $40/h" or "Live call: not in your contract"), no explanation line.
+- The "Ask $___/h" box is ONLY on the tester's own "Request a time" (NOT on Accept). Accepting a developer's request
+  always books at the contract rate. A tester who wants a different rate requests the same time with an ask; that
+  closes their copy of the developer's request and waits for the developer's Accept/Decline.
 - Tester: "Request a time" with an optional "Ask $___/h" (blank = contract rate). Accept on a developer's request
   also has the optional "Ask $___/h".
 - STRICT price rule: if the tester's ask differs from the contract call rate (or the call is not in their contract

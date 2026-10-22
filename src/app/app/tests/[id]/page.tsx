@@ -17,6 +17,7 @@ import { termsRowLines } from "@/lib/server/terms";
 import { BlockButton } from "@/components/BlockButton";
 import { Applications } from "./Applications";
 import { CallRequests } from "@/components/CallRequests";
+import { rateLabel } from "@/lib/server/requests";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
@@ -53,6 +54,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const paidKinds = await paidLines(t.contracts.map((c) => c.id));
   const termsRows = await termsRowLines(t.contracts.map((c) => c.id));
   const reqs = await db.callRequest.findMany({ where: { testId: id, status: "pending", startsAt: { gt: new Date() } }, orderBy: { startsAt: "asc" } });
+  // A developer batch sent to several testers shows once per tester; that's fine: each copy is that tester's.
   const msgs = await db.message.findMany({ where: { testId: id }, orderBy: { createdAt: "asc" }, include: { sender: true }, take: 2000 });
   const pendingApps = await db.application.findMany({ where: { testId: id, status: "pending" }, orderBy: { createdAt: "asc" } });
   const appUsers = await db.user.findMany({ where: { id: { in: pendingApps.map((a) => a.testerId) } }, include: { profile: true } });
@@ -68,11 +70,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const people = new Map((await db.user.findMany({ where: { id: { in: invites.map((i) => i.testerId) } } })).map((x) => [x.id, displayName(x)]));
   const expired = inviteExpired(t, working.length);
   const soon = t.openUntil && t.openUntil > new Date() && t.openUntil.getTime() - Date.now() < 3 * 86_400_000;
-  const openSlots = await db.callSlot.findMany({ where: { testId: id, status: "open", startsAt: { gt: new Date() } }, orderBy: { startsAt: "asc" } });
   const now = new Date();
-  const nameOf = new Map(t.contracts.map((c) => [c.testerId, displayName(c.tester)]));
   const lateOf = (c: { dueAt: Date; tester: { name: string; email: string } }, x: { createdAt: Date }) => (isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(c.tester), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined);
-  const booked = t.contracts.flatMap((c) => c.calls.filter((x) => x.status === "booked" && !x.review).map((x) => ({ ...x, name: displayName(c.tester), late: lateOf(c, x) })));
+  const booked = t.contracts.flatMap((c) => c.calls.filter((x) => x.status === "booked" && !x.review).map((x) => ({ ...x, name: displayName(c.tester), late: lateOf(c, x), rateText: rateLabel(x.rateCents, c.liveRateCents) })));
   const partPaid = (id: string) => payments.filter((p) => (p.submissionId === id || p.callId === id) && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
   const payments = await db.payment.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
   return (
@@ -122,20 +122,20 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       <CallPanel
         testId={t.id}
         seenAt={seenAt}
-        minutes={t.liveMinutes ?? 30}
-        stopped={t.status === "stopped"}
-        testers={working.map((c) => ({ id: c.testerId, name: displayName(c.tester) }))}
-        open={openSlots.map((s) => ({ id: s.id, when: s.startsAt.toISOString(), minutes: s.minutes, who: s.allowedTesterIds.length ? "only " + s.allowedTesterIds.map((x) => nameOf.get(x) ?? "?").join(", ") : "all testers" }))}
-        booked={booked.map((b) => ({ id: b.id, when: b.startsAt.toISOString(), minutes: b.minutes, name: b.name, room: roomUrl(b, b.slot), canCancel: !cancelNeedsReason(b.startsAt, now), started: b.startsAt <= now, reported: !!b.noShowBy, late: b.late }))}
+        booked={booked.map((b) => ({ id: b.id, when: b.startsAt.toISOString(), minutes: b.minutes, name: b.name, room: roomUrl(b, b.slot), canCancel: !cancelNeedsReason(b.startsAt, now), started: b.startsAt <= now, reported: !!b.noShowBy, late: b.late, rate: b.rateText }))}
       />
       <section className="panel" aria-label="Call requests">
         <h3>Call requests</h3>
         <CallRequests
+          side="developer"
           path={`/api/tests/${t.id}`}
           seenAt={seenAt}
           canRequest={t.status === "open" && working.length > 0}
-          targets={working.map((c) => ({ contractId: c.id, name: displayName(c.tester) }))}
-          requests={reqs.map((r) => ({ id: r.id, when: r.startsAt.toISOString(), mine: r.fromSide === "developer", who: displayName(t.contracts.find((c) => c.id === r.contractId)!.tester), contractId: r.contractId }))}
+          targets={working.map((c) => ({ contractId: c.id, name: displayName(c.tester), rate: c.liveRateCents == null ? "not in contract" : `${money(c.liveRateCents).replace(/\.00$/, "")}/h` }))}
+          requests={reqs.map((r) => {
+            const k = t.contracts.find((c) => c.id === r.contractId)!;
+            return { id: r.id, when: r.startsAt.toISOString(), mine: r.fromSide === "developer", who: displayName(k.tester), contractId: r.contractId, rate: r.askRateCents != null ? `asks ${money(r.askRateCents).replace(/\.00$/, "")}/h` : rateLabel(k.liveRateCents, k.liveRateCents) };
+          })}
         />
       </section>
       {saved && (
@@ -176,8 +176,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     {x.devJoinedAt && x.testerJoinedAt && <p className="note">Both joined at {fmtDateTime(new Date(Math.max(x.devJoinedAt.getTime(), x.testerJoinedAt.getTime())))}</p>}
                     <CallLength testId={t.id} callId={x.id} minutes={x.actualMinutes ?? defaultCallMinutes(x.startsAt, x.minutes, x.devJoinedAt, x.testerJoinedAt)} />
                     <PayBox key={x.actualMinutes ?? 0} kind="call" id={x.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} askedCents={x.askedCents} partPaidCents={partPaid(x.id)}
-                      listingCents={callReference(x.rateCents, x.actualMinutes ?? x.minutes).cents}
-                      listingText={callReference(x.rateCents, x.actualMinutes ?? x.minutes).text.replace(/^Listing: /, "")} />
+                      listingCents={callReference(x.rateCents, x.actualMinutes ?? x.minutes, c.liveRateCents).cents}
+                      listingText={callReference(x.rateCents, x.actualMinutes ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
                   </>
                 )}
               </div>

@@ -365,10 +365,11 @@ const CANCEL_WHY = { paused: "the test is paused", stopped: "the test was stoppe
 export const callCancelledLine = (startsAt: Date, why: keyof typeof CANCEL_WHY) => `Your call on ${callDay(startsAt)} was cancelled because ${CANCEL_WHY[why]}.`;
 
 /** The Pay box reference for a call: the listing rate × the entered length (or the booked length). */
-export function callReference(rateCents: number | null, minutes: number) {
+export function callReference(rateCents: number | null, minutes: number, contractRate: number | null = rateCents) {
   if (rateCents == null) return { cents: null as number | null, text: "Not in the listing" };
   const cents = callCharge(rateCents, minutes);
-  return { cents, text: `Listing: ${money(rateCents).replace(/\.00$/, "")}/h × ${minutes} min = ${money(cents)}` };
+  const label = rateCents === contractRate ? "Listing" : "Agreed";
+  return { cents, text: `${label}: ${money(rateCents).replace(/\.00$/, "")}/h × ${minutes} min = ${money(cents)}` };
 }
 
 /** "How long was the call?": whole minutes, 1 to 3 times the booked length. */

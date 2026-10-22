@@ -10,7 +10,7 @@ import * as R from "@/lib/rules";
 import { startHold } from "@/lib/server/holds";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
-import { act, joined, sact, seen, setup } from "./fixtures";
+import { act, bookCall, joined, sact, seen, setup } from "./fixtures";
 
 const DAY = 86_400_000;
 const inHours = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString();
@@ -22,9 +22,8 @@ afterEach(() => setStripeForTests(null));
 async function withCall(over: Record<string, unknown> = {}, heldAgo = false) {
   const s = await setup(over);
   const j = await joined(s.testId);
-  await act(s.testId, "offer-times", s.dev.cookie, { seenAt: seen(), confirmed: true, times: [inHours(48), inHours(96)] });
-  const slots = await db.callSlot.findMany({ where: { testId: s.testId }, orderBy: { startsAt: "asc" } });
-  await sact(j.sessionId, "book", j.tester.cookie, { seenAt: seen(), confirmed: true, slotId: slots[0].id });
+  await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie, 48);
+  const slots = [{ id: "" }, { id: "" }];
   const call = await db.call.findFirstOrThrow({ where: { contractId: j.sessionId } });
   if (heldAgo) await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 3_600_000) } });
   return { ...s, ...j, call, slots };
@@ -111,8 +110,9 @@ describe("live calls blocked during holds and on stopped/closed tests", () => {
     await sweepHeldCalls(dev.user.id);
     expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).status).toBe("cancelled");
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "was cancelled because the test is paused." } } })).toBe(1);
-    expect((await act(testId, "offer-times", dev.cookie, { seenAt: seen(), confirmed: true, times: [inHours(150)] })).body.error.message).toContain("paused");
-    expect((await sact(sessionId, "book", tester.cookie, { seenAt: seen(), confirmed: true, slotId: slots[1].id })).body.error.message).toBe("This test is paused. Payment for your work may be delayed.");
+    expect((await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: inHours(150) })).body.error.message).toBe("Pay what you owe first.");
+    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: inHours(150) })).body.error.message).toBe("This test is paused. Payment for your work may be delayed.");
+    expect(slots).toHaveLength(2);
   });
 
   it("Stop the test and End early cancel that tester's booked calls with the exact line", async () => {
@@ -128,8 +128,8 @@ describe("live calls blocked during holds and on stopped/closed tests", () => {
     const { dev, testId, tester, sessionId, call, slots } = await withCall();
     await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true, closeThis: true });
     expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).status).toBe("cancelled");
-    expect((await act(testId, "offer-times", dev.cookie, { seenAt: seen(), confirmed: true, times: [inHours(150)] })).body.error.message).toBe("This test was closed, so no call times can be offered.");
-    expect((await sact(sessionId, "book", tester.cookie, { seenAt: seen(), confirmed: true, slotId: slots[1].id })).status).toBe(409);
+    expect((await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: inHours(150) })).body.error.message).toBe("This test isn't open.");
+    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: inHours(150) })).status).toBe(409);
   });
 });
 
@@ -205,16 +205,15 @@ describe("newest owner rules", () => {
     expect(R.failedLine("Ana Silva's written answers", 800, new Date(2026, 9, 20))).toBe("Ana Silva's written answers $8.00 · card declined Oct 20");
   });
 
-  it("asked amounts are stored on written answers, recordings and call bookings", async () => {
+  it("asked amounts are stored on written answers and call requests (rate asks)", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], ask: "12.00" });
     expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId } })).askedCents).toBe(1200);
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], ask: "abc" })).status).toBe(400);
-    await act(testId, "offer-times", dev.cookie, { seenAt: seen(), confirmed: true, times: [inHours(48)] });
-    const slot = await db.callSlot.findFirstOrThrow({ where: { testId } });
-    await sact(sessionId, "book", tester.cookie, { seenAt: seen(), confirmed: true, slotId: slot.id, ask: "20" });
-    expect((await db.call.findFirstOrThrow({ where: { contractId: sessionId } })).askedCents).toBe(2000);
+    await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: inHours(48), ask: "20" });
+    expect((await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId } })).askRateCents).toBe(2000);
+    expect(dev).toBeTruthy();
   });
 
   it("several failed payments: one press retries them all; the hold lifts only when all are paid; the rest are named", async () => {

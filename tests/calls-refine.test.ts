@@ -9,7 +9,7 @@ import { invitable } from "@/lib/server/invites";
 import { decideDispute, review } from "@/lib/server/payments";
 import { liftHoldIfClear, startHold } from "@/lib/server/holds";
 import { json, makeUser, req } from "./helpers";
-import { act, joined, sact, seen, setup } from "./fixtures";
+import { act, bookCall, joined, sact, seen, setup } from "./fixtures";
 
 const join = (cookie: string, id: string) => joinPOST(req(`/api/calls/${id}/join`, { cookie, body: {} }), { params: Promise.resolve({ id }) }).then(json);
 const status = (cookie: string, id: string) => statusGET(req(`/api/calls/${id}/status`, { cookie }), { params: Promise.resolve({ id }) }).then(json);
@@ -17,10 +17,7 @@ const status = (cookie: string, id: string) => statusGET(req(`/api/calls/${id}/s
 async function booked(minutesFromNow: number) {
   const s = await setup();
   const j = await joined(s.testId);
-  await act(s.testId, "offer-times", s.dev.cookie, { seenAt: seen(), confirmed: true, times: [new Date(Date.now() + 48 * 3_600_000).toISOString()] });
-  const slot = await db.callSlot.findFirstOrThrow({ where: { testId: s.testId } });
-  await sact(j.sessionId, "book", j.tester.cookie, { seenAt: seen(), confirmed: true, slotId: slot.id });
-  const call = await db.call.findFirstOrThrow({ where: { contractId: j.sessionId } });
+  const call = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie, 48);
   await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() + minutesFromNow * 60_000) } });
   return { ...s, ...j, call };
 }
@@ -90,9 +87,7 @@ describe("calls / hold / block refinements", () => {
     const s = await setup();
     const j = await joined(s.testId);
     await db.contract.update({ where: { id: j.sessionId }, data: { dueAt: new Date(Date.now() - 86_400_000) } });
-    await act(s.testId, "offer-times", s.dev.cookie, { seenAt: seen(), confirmed: true, times: [new Date(Date.now() + 48 * 3_600_000).toISOString()] });
-    const slot = await db.callSlot.findFirstOrThrow({ where: { testId: s.testId } });
-    expect((await sact(j.sessionId, "book", j.tester.cookie, { seenAt: seen(), confirmed: true, slotId: slot.id })).status).toBe(200);
+    await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie, 48);
     const call = await db.call.findFirstOrThrow({ where: { contractId: j.sessionId } });
     const c = await db.contract.findUniqueOrThrow({ where: { id: j.sessionId } });
     expect(R.isBookedLate(call.createdAt, c.dueAt)).toBe(true);

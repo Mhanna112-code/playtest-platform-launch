@@ -15,6 +15,7 @@ import { TesterCallPanel } from "./TesterCallPanel";
 import { ChoiceBox } from "./ChoiceBox";
 import { TesterTop } from "./TesterTop";
 import { CallRequests } from "@/components/CallRequests";
+import { rateLabel } from "@/lib/server/requests";
 import { chatMessages } from "@/lib/server/messages";
 import { BlockButton } from "@/components/BlockButton";
 import { openOffer } from "@/lib/server/terms";
@@ -52,8 +53,6 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const partPaid = new Map((await db.payment.groupBy({ by: ["submissionId", "callId"], where: { contractId: c.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } })).map((g) => [g.submissionId ?? g.callId ?? "", g._sum.amountCents ?? 0]));
   const delayedSubs = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", settledAt: null, owedUntil: { not: null }, submissionId: { not: null } }, select: { submissionId: true } })).map((p) => p.submissionId!));
   const failedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", callId: { not: null } }, select: { callId: true } })).map((p) => p.callId!));
-  const slots = await db.callSlot.findMany({ where: { testId: c.testId, status: "open", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
-  const visible = slots.filter((s) => s.allowedTesterIds.length === 0 || s.allowedTesterIds.includes(u.id));
   const cancelledText = (x: { status: string; cancelledBy: string | null }) => (x.status !== "cancelled" ? "" : x.cancelledBy === "tester" ? "you cancelled it" : `cancelled by ${x.cancelledBy === "developer" ? dev : "the site"}`);
   return (
     <>
@@ -82,19 +81,19 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         sessionId={c.id}
         seenAt={seenAt}
         refusal={refusal}
-        label={c.liveRateCents != null ? `In your contract · ${c.liveRateCents === 0 ? "free" : money(testerShare(c.liveRateCents)) + "/h for you"} · ${c.liveMinutes} min` : "Not in your contract"}
-        open={visible.map((s) => ({ id: s.id, when: s.startsAt.toISOString(), minutes: s.minutes }))}
-        mine={c.calls.map((x) => ({ id: x.id, when: x.startsAt.toISOString(), minutes: x.minutes, room: roomUrl(x, x.slot), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, cancelled: blockedPair && x.status !== "cancelled" ? "not available" : cancelledText(x), late: isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined }))}
+        label={c.liveRateCents != null ? `Live call: ${money(c.liveRateCents).replace(/\.00$/, "")}/h` : "Live call: not in your contract"}
+        mine={c.calls.map((x) => ({ id: x.id, when: x.startsAt.toISOString(), minutes: x.minutes, room: roomUrl(x, x.slot), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, cancelled: blockedPair && x.status !== "cancelled" ? "not available" : cancelledText(x), rate: rateLabel(x.rateCents, c.liveRateCents), late: isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined }))}
         lateNote={now > c.dueAt ? `Your deadline was ${fmtDate(c.dueAt).replace(/, \d{4}$/, "")} (a guide, not a limit): a call you book now reads “${bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, ""))}”.` : undefined}
       />
       <section className="panel" aria-label="Call requests">
         <h3>Call requests</h3>
         <CallRequests
+          side="tester"
           path={`/api/sessions/${c.id}`}
           seenAt={seenAt}
           canRequest={!refusal && !blockedPair && !c.test.developer.holdStartedAt}
-          targets={[{ contractId: c.id, name: dev }]}
-          requests={(await db.callRequest.findMany({ where: { contractId: c.id, status: "pending", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } })).map((r) => ({ id: r.id, when: r.startsAt.toISOString(), mine: r.fromSide === "tester", who: dev, contractId: c.id }))}
+          targets={[{ contractId: c.id, name: dev, rate: "" }]}
+          requests={(await db.callRequest.findMany({ where: { contractId: c.id, status: "pending", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } })).map((r) => ({ id: r.id, when: r.startsAt.toISOString(), mine: r.fromSide === "tester", who: dev, contractId: c.id, rate: r.askRateCents != null ? `you ask ${money(r.askRateCents).replace(/\.00$/, "")}/h` : rateLabel(c.liveRateCents, c.liveRateCents) }))}
         />
       </section>
       {c.calls.filter((x) => !x.review && x.status === "booked" && x.startsAt <= now).map((x) => (

@@ -224,7 +224,8 @@ export async function runDaily(now = new Date()) {
   const due = await db.submission.findMany({
     where: { review: null, payBy: { lt: now }, contract: { test: { developer: { holdStartedAt: null } } } },
     include: { contract: { include: { tester: true, test: { include: { developer: true } } } } },
-    take: 200,
+    orderBy: { payBy: "asc" },
+    take: 1000,
   });
   for (const s of due) {
     const c = s.contract, dev = c.test.developer;
@@ -305,7 +306,7 @@ export async function runDaily(now = new Date()) {
     out.headsUps++;
   }
   // 5. The developer's unreviewed contract work: 1 week / 3 days / 1 day before day 14 (bell).
-  const upcoming = await db.submission.findMany({ where: { review: null, agreedCents: { not: null }, payBy: { gt: now }, contract: { test: { developer: { holdStartedAt: null } } } }, include: { contract: { include: { tester: true, test: true } } }, take: 500 });
+  const upcoming = await db.submission.findMany({ where: { review: null, agreedCents: { not: null }, payBy: { gt: now }, contract: { test: { developer: { holdStartedAt: null } } } }, include: { contract: { include: { tester: true, test: true } } }, orderBy: { payBy: "asc" }, take: 2000 });
   for (const s of upcoming) {
     const m = countdownDue(s.payBy, now, s.devMarks, s.updatedAt);
     if (!m) continue;

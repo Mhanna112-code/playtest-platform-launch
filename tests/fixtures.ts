@@ -30,3 +30,16 @@ export async function joined(testId: string, name = "Ana Silva", pronoun = "she"
   return { tester: t, sessionId: r.body.sessionId as string };
 }
 export const seen = () => new Date().toISOString();
+
+/** Calls are always requests: the developer requests a time with this tester and the tester accepts → booked. */
+export async function bookCall(testId: string, devCookie: string, sessionId: string, testerCookie: string, hours = 48) {
+  const startsAt = new Date(Date.now() + hours * 3_600_000);
+  startsAt.setSeconds(0, 0);
+  const r = await act(testId, "request-time", devCookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: startsAt.toISOString() });
+  expect(r.status).toBe(200);
+  const q = await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId, status: "pending", fromSide: "developer" }, orderBy: { createdAt: "desc" } });
+  const a = await sact(sessionId, "answer-request", testerCookie, { requestId: q.id, action: "accept", seenAt: seen(), confirmed: true });
+  expect(a.status).toBe(200);
+  return db.call.findFirstOrThrow({ where: { contractId: sessionId, status: "booked" }, orderBy: { createdAt: "desc" } });
+}
+export const atHours = (h: number) => { const d = new Date(Date.now() + h * 3_600_000); d.setSeconds(0, 0); return d.toISOString(); };

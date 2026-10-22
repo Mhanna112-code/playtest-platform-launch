@@ -1,5 +1,5 @@
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
-import { bookTime, reportNoShow, testerCancelCall } from "@/lib/server/calls";
+import { reportNoShow, testerCancelCall } from "@/lib/server/calls";
 import { sendMessage } from "@/lib/server/messages";
 import { finishRecording, sendRecording, startRecording } from "@/lib/server/recordings";
 import { chooseOutcome } from "@/lib/server/holds";
@@ -38,8 +38,6 @@ export async function POST(req: Request, { params }: Ctx) {
         return ok(await requestTime(u, id, body));
       case "answer-request":
         return ok(await answerRequest(u, id, body));
-      case "book":
-        return ok(await bookTime(u, id, body));
       case "cancel-call":
         return ok(await testerCancelCall(u, id, body));
       case "no-show":
