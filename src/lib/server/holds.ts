@@ -11,6 +11,7 @@ import { charge } from "./stripe";
 import { receipt } from "./payments";
 import { testerTermsGate } from "./terms";
 import { recordEvent } from "./tests";
+import { logEvent } from "./live";
 
 // Payment hold (owner rule): starts when a failed charge isn't paid within 3 days, or when a chargeback opens.
 // While on hold all the developer's tests are paused; paying everything owed (and the admin resolving chargebacks)
@@ -182,6 +183,8 @@ export async function resolveChargeback(paymentId: string) {
   const p = await db.payment.findUnique({ where: { id: paymentId } });
   if (!p || p.chargeback !== "open") throw new HttpError(409, "not_open", "That chargeback isn't open.");
   await db.payment.update({ where: { id: p.id }, data: { chargeback: "resolved" } });
+  const pc = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId } }) : null;
+  if (pc) await logEvent(pc.testId, "admin", `The team resolved the bank reversal of your ${money(p.amountCents)} payment`, pc.id);
   await liftHoldIfClear(p.developerId);
   return { ok: true };
 }
@@ -194,7 +197,7 @@ export async function closeHeldTests(devId: string) {
     await db.$transaction(async (tx) => {
       await tx.contract.updateMany({ where: { testId: t.id, status: "working" }, data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The test was closed." } });
       await tx.invite.updateMany({ where: { testId: t.id, status: "sent" }, data: { status: "cancelled" } });
-      await recordEvent(tx, t.id, "stopped", "The test was closed by the team", true, { status: "stopped", stoppedAt: new Date() });
+      await recordEvent(tx, t.id, "admin", "The test was closed by the team", true, { status: "stopped", stoppedAt: new Date() });
     });
     for (const c of cs) await notify(c.tester.email, `“${c.title}” ended`, [`“${c.title}” ended. Work you already sent stays on record.`], `/app/sessions/${c.id}`);
   }

@@ -18,6 +18,7 @@ import { CallRequests } from "@/components/CallRequests";
 import { rateLabel } from "@/lib/server/requests";
 import { chatMessages } from "@/lib/server/messages";
 import { BlockButton } from "@/components/BlockButton";
+import { LiveTop } from "@/components/LiveTop";
 import { openOffer } from "@/lib/server/terms";
 
 export const metadata = { title: "Your session · Playtest" };
@@ -54,9 +55,11 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const delayedSubs = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", settledAt: null, owedUntil: { not: null }, submissionId: { not: null } }, select: { submissionId: true } })).map((p) => p.submissionId!));
   const failedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", callId: { not: null } }, select: { callId: true } })).map((p) => p.callId!));
   const cancelledText = (x: { status: string; cancelledBy: string | null }) => (x.status !== "cancelled" ? "" : x.cancelledBy === "tester" ? "you cancelled it" : `cancelled by ${x.cancelledBy === "developer" ? dev : "the site"}`);
+  const infoChanged = (await db.testEvent.count({ where: { testId: c.testId, kind: "info", createdAt: { gt: c.joinedAt } } })) > 0;
   return (
     <>
       <AutoRefresh query={`session=${c.id}`} />
+      <LiveTop scope={`session:${c.id}`} seenAt={seenAt} seeIt="#listing" />
       <TesterTop sessionId={c.id} seenAt={seenAt} devName={dev} offer={offer && !refusal ? { id: offer.id, diff: offer.diff } : null} />
       {refusal && <p className="info">{refusal}</p>}
       {!refusal && c.test.developer.holdStartedAt && <p className="info">{PAUSED_FOR_TESTERS}</p>}
@@ -70,10 +73,22 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         <p className="text-sm">{(await paidLines([c.id])).get(c.id)}</p>
         {c.buildUrl && <p className="text-sm">Build: <a href={c.buildUrl} target="_blank" rel="noreferrer">{c.buildUrl}</a></p>}
         {c.description && <p className="whitespace-pre-wrap text-sm">{c.description}</p>}
+        {infoChanged && (
+          <details id="listing" className="text-sm">
+            <summary className="cursor-pointer">{dev} updated the listing since you joined: see it now</summary>
+            <div className="space-y-1 pt-1">
+              <p><b>Title:</b> {c.test.title}</p>
+              <p className="whitespace-pre-wrap"><b>Description:</b> {c.test.description || "(none)"}</p>
+              <p><b>Devices:</b> {c.test.devices.join(", ") || "any"}</p>
+              <p><b>Languages:</b> {c.test.languages.join(", ") || "any"}</p>
+              <p className="note">Your contract&apos;s terms stay as they are.</p>
+            </div>
+          </details>
+        )}
         {c.keepPrivate && <p className="note">You agreed to keep this build and what you see private.</p>}
         {c.status === "working" && <LeaveButton sessionId={c.id} seenAt={seenAt} />}
         {!(await db.block.count({ where: { blockerId: u.id, blockedId: c.test.developerId } })) && (
-          <BlockButton userId={c.test.developerId} name={dev} effect="Your session with them ends now (work you sent stays payable), calls between you are cancelled, and chat closes." />
+          <BlockButton seenAt={seenAt} sessionId={c.id} userId={c.test.developerId} name={dev} effect="Your session with them ends now (work you sent stays payable), calls between you are cancelled, and chat closes." />
         )}
       </div>
 

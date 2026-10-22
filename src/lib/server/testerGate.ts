@@ -2,22 +2,28 @@ import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money } from "@/lib/format";
 import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, stopOnce, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
+import { asLines, ownChanges, seenOf, tabOf } from "./live";
 
-// The tester's ONE set of stop-once reasons (owner rule), used by every tester button: Switch / Keep, Charge / Let it go,
-// Dispute, Leave, Send written, Send recording, Book, Cancel. Since the page loaded: new terms offered or changed; the
-// developer paid or rejected any of their work; call times offered / removed / taken, or a call with them cancelled.
+// The tester's ONE set of stop-once reasons (owner rule, NEWEST+3), used by every tester button on the session page:
+// Switch / Keep, Send written, Send recording, Charge / Let it go, Dispute, Leave, Block, Request a time, Accept /
+// Decline / Withdraw, Cancel call. Since the page loaded (or since the live top notice last showed changes):
+// (A) new terms; (B) the developer paid or rejected work; (C) the developer's call changes: their requests (new,
+// withdrawn, taken by another tester, closed), accepting or auto-matching the tester's own request, declining it,
+// cancelling a call; (E) anything the tester did themselves in another tab; (F) the listing's info changed.
 // Final refusals (ended early, stopped, Open until passed, already decided, holds) are checked separately and stay final.
 
-const canSee = (slot: { allowedTesterIds: string[] }, testerId: string) => slot.allowedTesterIds.length === 0 || slot.allowedTesterIds.includes(testerId);
+/** Closed because of the tester's own press (their own action, reason E). */
+const CLOSED_BY_TESTER = new Set(["you asked a different rate", "the tester left"]);
 
-export async function testerChanges(testerId: string, contractId: string, testId: string, seenAt: Date): Promise<TestEventLike[]> {
+export async function testerChanges(testerId: string, contractId: string, testId: string, seenAt: Date, tab = ""): Promise<TestEventLike[]> {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   const dev = displayName(c.test.developer);
-  const [offers, reviews, slots, calls] = await Promise.all([
+  const [offers, reviews, calls, devReqs, mine] = await Promise.all([
     db.termsOffer.findMany({ where: { contractId, createdAt: { gt: seenAt } } }),
     db.review.findMany({ where: { contractId, createdAt: { gt: seenAt }, reason: { notIn: [CHARGED_BY_TESTER, LET_GO_BY_TESTER] } }, include: { submission: true } }),
-    db.callSlot.findMany({ where: { testId, updatedAt: { gt: seenAt } } }),
     db.call.findMany({ where: { contractId, cancelledAt: { gt: seenAt }, cancelledBy: { not: "tester" } } }),
+    db.callRequest.findMany({ where: { contractId, fromSide: "developer", updatedAt: { gt: seenAt } } }),
+    db.callRequest.findMany({ where: { contractId, fromSide: "tester", status: { in: ["booked", "declined"] }, decidedAt: { gt: seenAt } } }),
   ]);
   const out: TestEventLike[] = [];
   for (const o of offers) out.push({ kind: "terms", text: `${dev} offered new terms: ${o.diff}`, createdAt: o.createdAt });
@@ -25,27 +31,36 @@ export async function testerChanges(testerId: string, contractId: string, testId
     const what = r.callId ? "your live call" : `your ${r.submission?.kind === "recording" ? "recording" : "written answers"}`;
     out.push({ kind: r.rejected ? "rejected" : "paid", text: r.rejected ? `${dev} rejected ${what}` : `${dev} paid ${money(r.amountCents)} for ${what}`, createdAt: r.createdAt });
   }
-  for (const s of slots.filter((s) => canSee(s, testerId))) {
-    const isNew = s.createdAt > seenAt;
-    if (s.status === "open") out.push({ kind: "offered", text: `${isNew ? "A new call time was offered" : "A call time opened up"}: ${fmtDateTime(s.startsAt)}`, createdAt: s.updatedAt });
-    else if (!isNew) out.push({ kind: "removed", text: `The call time ${fmtDateTime(s.startsAt)} was ${s.status === "booked" ? "taken" : "removed"}`, createdAt: s.updatedAt });
+  for (const r of devReqs) {
+    const when = fmtDateTime(r.startsAt);
+    const what = r.weeks ? `${r.repeat === "daily" ? "daily" : "weekly"} calls from ${when}` : r.times.length > 1 ? `a call (pick one of ${r.times.length} times)` : `a call for ${when}`;
+    if (r.status === "pending" && r.createdAt > seenAt) out.push({ kind: "requested", text: `${dev} requested ${what}`, createdAt: r.createdAt });
+    else if (r.status === "withdrawn") out.push({ kind: "requested", text: `${dev} withdrew the request for ${what}`, createdAt: r.updatedAt });
+    else if (r.status === "taken") out.push({ kind: "requested", text: `The call time ${when} is no longer available: another tester took it`, createdAt: r.updatedAt });
+    else if (r.status === "closed" && !CLOSED_BY_TESTER.has(r.closedReason)) out.push({ kind: "requested", text: `The call time ${when} is no longer available`, createdAt: r.updatedAt });
+    // booked / declined by the tester themselves: their own action (reason E)
   }
-  const reqs = await db.callRequest.findMany({ where: { contractId, fromSide: "developer", updatedAt: { gt: seenAt } } });
-  for (const r of reqs) out.push({ kind: "requested", text: r.status === "pending" ? `${dev} requested a call for ${fmtDateTime(r.startsAt)}` : `${dev} ${r.status === "withdrawn" ? "withdrew" : r.status} the call request for ${fmtDateTime(r.startsAt)}`, createdAt: r.updatedAt });
-  const mineDeclined = await db.callRequest.findMany({ where: { contractId, fromSide: "tester", status: "declined", updatedAt: { gt: seenAt } } });
-  for (const r of mineDeclined) out.push({ kind: "requested", text: `${dev} declined your call request for ${fmtDateTime(r.startsAt)}`, createdAt: r.updatedAt });
+  for (const r of mine) {
+    const when = fmtDateTime(r.startsAt);
+    if (r.status === "declined") out.push({ kind: "requested", text: `${dev} declined your call request for ${when}`, createdAt: r.decidedAt! });
+    else if (r.closedReason === "matched") out.push({ kind: "booked", text: `Booked: ${dev} asked for the same time, ${when}`, createdAt: r.decidedAt! });
+    else out.push({ kind: "booked", text: `${dev} accepted your call request: ${r.weeks ? `${r.weeks} ${r.repeat === "daily" ? "daily" : "weekly"} calls from ${when}` : when}`, createdAt: r.decidedAt! });
+  }
   for (const call of calls) out.push({ kind: "cancelled", text: `Your call on ${fmtDateTime(call.startsAt)} was cancelled`, createdAt: call.cancelledAt! });
-  return out;
+  // (F) the listing's info (title, description, devices, languages) changed.
+  out.push(...(await db.testEvent.findMany({ where: { testId, kind: "info", createdAt: { gt: seenAt } } })));
+  out.push(...(await ownChanges(testerId, testId, seenAt, tab)));
+  return out.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }
 
-const KINDS = ["terms", "paid", "rejected", "offered", "removed", "cancelled", "booked", "requested"];
+const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", "info", "own"];
 
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
 export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.") {
-  if (body.confirmed === true || typeof body.seenAt !== "string") return;
-  const seenAt = new Date(body.seenAt);
-  if (isNaN(seenAt.getTime())) return;
-  const changes = await testerChanges(testerId, contractId, testId, seenAt);
+  if (body.confirmed === true) return;
+  const seenAt = seenOf(body.seenAt);
+  if (!seenAt) return;
+  const changes = await testerChanges(testerId, contractId, testId, seenAt, tabOf(body));
   const r = stopOnce(changes, seenAt, false, KINDS);
-  if (!r.go) throw new HttpError(409, "stop_once", tail, { changes: r.changes.map((e) => ({ text: e.text, at: e.createdAt })), tail, top: r.changes.some((e) => e.kind === "terms") });
+  if (!r.go) throw new HttpError(409, "stop_once", tail, { changes: asLines(r.changes), tail, top: r.changes.some((e) => e.kind === "terms") });
 }

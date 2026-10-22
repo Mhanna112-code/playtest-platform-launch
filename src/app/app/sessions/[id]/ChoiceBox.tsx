@@ -3,7 +3,7 @@ import { Err } from "@/components/Err";
 import { useState } from "react";
 import { api, errOf } from "@/lib/client";
 import { money, toCents } from "@/lib/format";
-import { stopBox, type StopBox } from "@/lib/topStop";
+import { stopBox, useStopBox } from "@/lib/topStop";
 import { ChangesBox } from "@/components/ChangesBox";
 
 /**
@@ -12,7 +12,7 @@ import { ChangesBox } from "@/components/ChangesBox";
  */
 export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenAt }: { sessionId: string; submissionId: string; line: string; devName: string; cents: number; seenAt: string }) {
   const [confirmed, setConfirmed] = useState(false);
-  const [box, setBox] = useState<StopBox | null>(null);
+  const [box, setBox] = useStopBox();
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [ticked, setTicked] = useState(false);

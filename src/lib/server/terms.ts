@@ -5,6 +5,9 @@ import { newDueAt, termsDiff, type ContractTerms } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { testerGate } from "./testerGate";
+import { logEvent } from "./live";
+
+const nameOf = async (id: string) => displayName(await db.user.findUniqueOrThrow({ where: { id } }));
 
 // New terms offered to working testers (owner rule): an Edit that changes contract terms offers them to every working
 // tester; their contract changes only if they switch. Work already sent keeps its price; the deadline never moves earlier.
@@ -67,9 +70,11 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
       }),
       db.termsOffer.update({ where: { id: target.id }, data: { status: "switched", decidedAt: now } }),
     ]);
+    await logEvent(c.testId, "terms", `${await nameOf(c.testerId)} switched to the new terms`, c.id);
     return { switched: true };
   }
   await db.termsOffer.update({ where: { id: target.id }, data: { status: "kept", decidedAt: now } });
+  await logEvent(c.testId, "terms", `${await nameOf(c.testerId)} kept their current terms`, c.id);
   return { switched: false };
 }
 

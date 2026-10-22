@@ -3,7 +3,7 @@ import { displayName, fmtDate, pronouns } from "@/lib/format";
 import { andList, inviteTesterRefusal, inviteTestRefusal, MAX_ACTIVE_TESTS, termsLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
-import { asListing, devGate, needsGap, ownTest, recordEvent } from "./tests";
+import { asListing, devGate, devGateIfSeen, needsGap, ownTest, recordEvent } from "./tests";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -84,8 +84,6 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
         if (gone && p.profile && p.profile.updatedAt > seenAt) extra.push({ kind: "joined", text: `${name} removed ${gone}, which this test needs`, createdAt: p.profile.updatedAt });
         const joined = contracts.find((c) => c.testerId === p.id && c.joinedAt > seenAt);
         if (joined) extra.push({ kind: "joined", text: `${name} joined this test, so ${pronouns(p.pronoun).subj}'s no longer in your invite list`.replace("they's", "they're"), createdAt: joined.joinedAt });
-        const inv = invites.find((i) => i.testerId === p.id && i.status === "sent" && i.updatedAt > seenAt);
-        if (inv) extra.push({ kind: "joined", text: `You also did this in another tab: invited ${name}`, createdAt: inv.updatedAt });
         // A ticked tester became greyed or removed since the page loaded.
         if (p.suspendedAt && p.suspendedAt > seenAt) extra.push({ kind: "joined", text: `${name} can't be invited right now`, createdAt: p.suspendedAt });
         const blockedSince = await tx.block.findFirst({ where: { createdAt: { gt: seenAt }, OR: [{ blockerId: dev.id, blockedId: p.id }, { blockerId: p.id, blockedId: dev.id }] } });
@@ -94,7 +92,7 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
         if (lastJoin && lastJoin.testId !== testId && (await tx.contract.count({ where: { testerId: p.id, status: "working" } })) >= MAX_ACTIVE_TESTS) extra.push({ kind: "joined", text: `${name} can't join more tests right now`, createdAt: lastJoin.joinedAt });
       }
     }
-    await devGate(tx, testId, body.seenAt, body.confirmed === true, {}, extra);
+    await devGate(tx, testId, body, {}, extra);
     const gaps = people
       .filter((p) => !contracts.some((c) => c.testerId === p.id) && missingNeed(t, p.profile))
       .map((p) => `${displayName(p)} doesn't list ${missingNeed(t, p.profile)}, which this test needs.`);
@@ -145,6 +143,7 @@ export async function cancelInvite(dev: U, testId: string, body: Record<string, 
   const inv = await db.invite.findUnique({ where: { id: String(body.inviteId ?? "") }, include: { test: true } });
   if (!inv || inv.testId !== testId) throw new HttpError(404, "not_found", "That invite doesn't exist.");
   if (inv.status !== "sent") throw new HttpError(409, "gone", inv.status === "joined" ? "They already joined." : "This invite was already cancelled.");
+  await devGateIfSeen(testId, body);
   await db.invite.update({ where: { id: inv.id }, data: { status: "cancelled" } });
   return { ok: true };
 }

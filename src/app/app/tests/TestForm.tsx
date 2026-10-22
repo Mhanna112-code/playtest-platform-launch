@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
+import { useLiveAppend } from "@/lib/live";
 import { Choices } from "@/components/Choices";
 import { api, ApiError } from "@/lib/client";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
@@ -43,12 +44,13 @@ const API_FIELDS: Record<keyof F, string[]> = {
   recordingPrice: ["recordingCents"], live: ["liveRateCents", "liveMinutes"], liveRate: ["liveRateCents"], liveMinutes: ["liveMinutes"], questions: ["questions"], openUntil: ["openUntil"], joinMode: ["joinMode"],
 };
 
-export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; version: number; testersIn: number; draft: boolean } }) {
+export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; version: number; testersIn: number; draft: boolean; seenAt?: string } }) {
   const [f, setF] = useState<F>(toForm(init));
   const [touched, setTouched] = useState<Set<keyof F>>(new Set());
   const [busy, setBusy] = useState(false);
   const [errs, setErrs] = useState<string[]>([]);
   const [changes, setChanges] = useState<Change[] | null>(null);
+  useLiveAppend(changes != null, (added) => setChanges((c) => (c ? [...c, ...added] : c)));
   const [saved, setSaved] = useState("");
   const set = (p: Partial<F>) => {
     setF((o) => ({ ...o, ...p }));
@@ -69,7 +71,7 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
       const all = toApi(f);
       const fields: Record<string, unknown> = {};
       for (const k of touched) for (const a of API_FIELDS[k]) fields[a] = all[a];
-      const r = await api<{ offered: number }>(`/api/tests/${edit.id}/edit`, { version: edit.version, fields, confirmed: changes != null });
+      const r = await api<{ offered: number }>(`/api/tests/${edit.id}/edit`, { version: edit.version, fields, seenAt: edit.seenAt, confirmed: changes != null });
       window.location.href = `/app/tests/${edit.id}?saved=1&offered=${r.offered ?? 0}`;
     } catch (err) {
       if (err instanceof ApiError && err.code === "changed") setChanges(err.data.changes as Change[]);
@@ -159,7 +161,7 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
         {edit && edit.testersIn > 0 && <p className="note">Testers already working keep their contract; each is offered these new terms and can switch. Work they&apos;ve already sent keeps its price.</p>}
         <button className="btn" disabled={busy}>{busy ? "Saving…" : edit ? "Save" : "Post the test"}</button>
         {saved && <p className="ok">{saved}</p>}
-        <ChangesBox changes={changes} tail="Press Save again to save your changes on top (fields you didn't touch keep the newer values)." />
+        <ChangesBox changes={changes} tail="Press Save again to save your changes (fields you didn't touch keep the newer values)." />
         {errs.length > 0 && <p className="err-field">Fix the {errs.length === 1 ? "mistake" : `${errs.length} mistakes`} above, then press {edit ? "Save" : "Post the test"} again.</p>}
         {errs.length > 0 && (
           <ul className="err-field list-disc pl-5">

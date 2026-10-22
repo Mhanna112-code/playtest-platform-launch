@@ -41,9 +41,9 @@ describe("invites", () => {
     const pageLoaded = seen();
     await later();
     await act(testId, "join", cara.cookie, { listingVersion: 1 });
-    await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [dee.user.id] });
+    await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [dee.user.id], tab: "tab-2" });
     await db.testerProfile.update({ where: { userId: ben.user.id }, data: { languages: ["Spanish"] } });
-    const r = await act(testId, "invite", dev.cookie, { seenAt: pageLoaded, testerIds: [cara.user.id, dee.user.id, ben.user.id] });
+    const r = await act(testId, "invite", dev.cookie, { seenAt: pageLoaded, testerIds: [cara.user.id, dee.user.id, ben.user.id], tab: "tab-1" });
     expect(r.body.error.code).toBe("stop_once");
     const texts = r.body.error.changes.map((c: { text: string }) => c.text);
     expect(texts).toEqual(expect.arrayContaining(["Cara Diaz joined this test, so she's no longer in your invite list", "You also did this in another tab: invited Dee Moss", "Ben Carter removed English, which this test needs"]));

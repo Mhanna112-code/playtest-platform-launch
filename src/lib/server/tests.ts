@@ -1,9 +1,10 @@
+import { devChanges, seenOf, tabOf } from "./live";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, pronouns, toCents } from "@/lib/format";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import {
-  changedTerms, checkAsk, checkListing, checkOpenUntilChange, contractSnapshot, devStopOnce, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
+  andList, changedTerms, checkAsk, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
@@ -138,11 +139,19 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   const touched = parseListing((body.fields ?? {}) as Record<string, unknown>, true);
   let termsChanged = false;
   let switchedToAnyone = false;
+  let changedNames: string[] = [];
   const result = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
     const events = await tx.testEvent.findMany({ where: { testId, version: { gt: loaded } } });
     const gate = editCheck(loaded, t.version, events, confirmed);
+    // (NEWEST+3) Save follows the same rule as the test page's buttons: every developer reason since Edit opened
+    // (testers' actions, and anything saved or done in another tab), then any other change to the listing's version.
+    const seen = seenOf(body.seenAt);
+    const dc = !confirmed && seen ? await devChanges(dev.id, testId, seen, tabOf(body), tx) : [];
+    if (dc.length) {
+      throw new HttpError(409, "changed", "Press Save again to save your changes.", { changes: dc.map((c) => ({ text: c.text, at: c.createdAt })), version: t.version, current: asListing(t) });
+    }
     if (!gate.go) {
       throw new HttpError(409, "changed", "This test changed since you opened Edit. Press Save again to save your changes on top.", {
         changes: gate.changes.map((c) => ({ text: c.text, at: c.createdAt })), version: t.version, current: asListing(t),
@@ -166,13 +175,20 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     await recordEvent(tx, testId, listingFields.length ? "edited" : "edited_spots", `The listing was edited: ${what}`, true, {
       ...listingData(next), ...(fields.includes("openUntil") ? { notified3d: false, notified1d: false } : {}), ...(listingFields.length ? { listingVersion: { increment: 1 } } : {}),
     });
+    // (F) Listing info (title, description, devices, languages): shown to working testers and on the join page.
+    const info = fields.filter((f) => INFO_FIELDS.includes(f));
+    if (info.length) await tx.testEvent.create({ data: { testId, kind: "info", text: `${displayName(dev)} changed the ${andList(info.map((f) => FIELD_NAMES[f]))}` } });
+    changedNames = fields.map((f) => FIELD_NAMES[f]);
     return tx.test.findUniqueOrThrow({ where: { id: testId } });
   });
   // Working testers are OFFERED the new contract terms (Switch / Keep); their contract changes only if they switch.
   const offered = termsChanged ? await offerNewTerms(testId) : 0;
   if (switchedToAnyone) await (await import("./joining")).onSwitchToAnyone(testId);
-  return Object.assign(result, { offered });
+  return Object.assign(result, { offered, changed: changedNames });
 }
+
+/** (F) The listing info a working tester sees change live: title, description, devices, languages. */
+export const INFO_FIELDS: (keyof Listing)[] = ["title", "description", "devices", "languages"];
 
 const FIELD_NAMES: Record<keyof Listing, string> = {
   title: "title", description: "description", buildUrl: "build link", category: "category", devices: "devices", languages: "languages",
@@ -193,12 +209,11 @@ export async function openDraft(dev: U, testId: string) {
  * (seenAt) any tester joined, left or sent work, a call was booked/confirmed/cancelled, times were offered/removed, or a
  * payment/rejection was made, the first press stops and returns the list; the second press (confirmed) goes ahead.
  */
-export async function devGate(tx: Tx, testId: string, seenAtRaw: unknown, confirmed: boolean, extra: Record<string, unknown> = {}, extraChanges: TestEventLike[] = []) {
-  const seenAt = seenDate(seenAtRaw);
-  if (confirmed) return;
-  const events = await tx.testEvent.findMany({ where: { testId, createdAt: { gt: seenAt } } });
-  const r = devStopOnce(events, seenAt, confirmed);
-  const changes = [...(r.go ? [] : r.changes), ...extraChanges].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+export async function devGate(tx: Tx, testId: string, body: Record<string, unknown>, extra: Record<string, unknown> = {}, extraChanges: TestEventLike[] = []) {
+  const seenAt = seenDate(body.seenAt);
+  if (body.confirmed === true) return;
+  const t = await tx.test.findUniqueOrThrow({ where: { id: testId }, select: { developerId: true } });
+  const changes = [...(await devChanges(t.developerId, testId, seenAt, tabOf(body), tx)), ...extraChanges].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   if (changes.length) {
     throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: changes.map((c) => ({ text: c.text, at: c.createdAt })), ...extra });
   }
@@ -210,6 +225,11 @@ export async function devOnHold(devId: string) {
   return !!u?.holdStartedAt;
 }
 export const topPanelGate = devGate;
+
+/** The developer gate for buttons that older pages sent without a "seen" marker: gated only when the page sends one. */
+export async function devGateIfSeen(testId: string, body: Record<string, unknown>) {
+  if (seenOf(body.seenAt)) await db.$transaction((tx) => devGate(tx, testId, body));
+}
 
 /** Calls ahead are cancelled (no charge) when a tester's work ends. Their offered times open again for others. */
 export async function cancelCallsAhead(tx: Tx, contractIds: string[], note: string) {
@@ -232,7 +252,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
   const contracts = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped." + (await staleNote(testId, body.seenAt)));
-    await topPanelGate(tx, testId, body.seenAt, body.confirmed === true);
+    await topPanelGate(tx, testId, body);
     const cs = await tx.contract.findMany({ where: working(testId), include: { tester: true } });
     await tx.contract.updateMany({ where: working(testId), data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The developer stopped the test." } });
     cancelled = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
@@ -261,7 +281,7 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
     const name = displayName(c.tester);
     if (c.status === "left") throw new HttpError(409, "gone", `${name} already left the test.` + (await staleNote(testId, body.seenAt)));
     if (c.status !== "working") throw new HttpError(409, "gone", `${name}'s work already ended.` + (await staleNote(testId, body.seenAt)));
-    await topPanelGate(tx, testId, body.seenAt, body.confirmed === true);
+    await topPanelGate(tx, testId, body);
     await tx.contract.update({ where: { id: c.id }, data: { status: "ended", endKind: "early", endedAt: new Date(), endReason: reason } });
     cancelled = await cancelCallsAhead(tx, [c.id], "The developer ended the work early.");
     await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the session ended", decidedAt: new Date() } });
@@ -283,7 +303,7 @@ export async function nextRound(dev: U, testId: string, body: Record<string, unk
     const existing = await tx.test.findFirst({ where: { previousId: testId } });
     if (existing) throw new HttpError(409, "exists", "This test already has a next round." + (await staleNote(testId, body.seenAt)), { id: existing.id });
     if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", `${PAY_WAITS} Your tests are paused until then.`);
-    await topPanelGate(tx, testId, body.seenAt, body.confirmed === true);
+    await topPanelGate(tx, testId, body);
     const round = t.round + 1;
     const copy = await tx.test.create({
       data: {

@@ -7,6 +7,7 @@ import { addDevSide } from "@/lib/server/payments";
 import { sendChat, sendMessage } from "@/lib/server/messages";
 import { editTest, endEarly, nextRound, openDraft, stopTest } from "@/lib/server/tests";
 import { requireActive } from "@/lib/server/users";
+import { logTestAction } from "@/lib/server/actionText";
 
 type Ctx = { params: Promise<{ id: string; action: string }> };
 
@@ -16,10 +17,19 @@ export async function POST(req: Request, { params }: Ctx) {
     const { id, action } = await params;
     const u = await requireActive(req);
     const body = await readJson(req);
+    const res = await run(u, id, action, body);
+    const data = await res.clone().json().catch(() => null);
+    if (res.ok) await logTestAction(u.id, id, action, body, data);
+    return res;
+  });
+}
+
+async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, action: string, body: Record<string, unknown>) {
+  {
     switch (action) {
       case "edit": {
         const t = await editTest(u, id, body);
-        return ok({ version: t.version, offered: (t as { offered?: number }).offered ?? 0 });
+        return ok({ version: t.version, offered: (t as { offered?: number }).offered ?? 0, changed: (t as { changed?: string[] }).changed ?? [] });
       }
       case "open":
         await openDraft(u, id);
@@ -59,10 +69,10 @@ export async function POST(req: Request, { params }: Ctx) {
       case "apply":
         return ok(await apply(u, id, body));
       case "withdraw-application":
-        return ok(await withdrawApplication(u, id));
+        return ok(await withdrawApplication(u, id, body));
       case "application":
         return ok(await decideApplication(u, id, body));
     }
     throw new HttpError(404, "not_found", "That action doesn't exist.");
-  });
+  }
 }

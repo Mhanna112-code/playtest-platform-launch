@@ -9,6 +9,7 @@ export function AutoRefresh({ query }: { query: string }) {
   useEffect(() => {
     let alive = true;
     const tick = async () => {
+      window.dispatchEvent(new Event("live-tick")); // the live top notice checks at the same moment
       try {
         const r = await fetch(`/api/pulse?${query}`, { cache: "no-store" });
         if (!r.ok) return;

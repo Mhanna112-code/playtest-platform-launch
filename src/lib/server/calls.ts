@@ -4,7 +4,7 @@ import { cancelLine, LENGTH_WAITS, checkActualMinutes, checkCancel, type TestEve
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { testerGate as sharedTesterGate } from "./testerGate";
-import { devGate, devOnHold, ownContract, ownTest, recordEvent, staleNote } from "./tests";
+import { devGate, devGateIfSeen, devOnHold, ownContract, ownTest, recordEvent, staleNote } from "./tests";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -28,7 +28,7 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
     if (c.status === "cancelled") throw new HttpError(409, "cancelled", `The call with ${name} was already cancelled.` + (await staleNote(testId, body.seenAt)));
     const ok = checkCancel(c.startsAt, new Date(), reason);
     if (!ok.ok) throw new HttpError(400, "reason", ok.message);
-    await devGate(tx, testId, body.seenAt, body.confirmed === true);
+    await devGate(tx, testId, body);
     await tx.call.update({ where: { id: c.id }, data: { status: "cancelled", cancelledBy: "developer", cancelledAt: new Date(), cancelNote: reason } });
     await tx.callSlot.update({ where: { id: c.slotId }, data: { status: "removed" } });
     await recordEvent(tx, testId, "cancelled", `You cancelled the call with ${name} on ${fmtDateTime(c.startsAt)}`, false, {}, c.contractId);
@@ -93,6 +93,8 @@ export async function reportNoShow(user: U, callId: string, body: Record<string,
   if (call.noShowBy) throw new HttpError(409, "reported", "A problem with this call was already reported.");
   const note = typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
   if (note.length < 5) throw new HttpError(400, "bad_note", "Say what happened.");
+  if (side === "developer") await devGateIfSeen(call.contract.testId, body);
+  else await sharedTesterGate(user.id, call.contractId, call.contract.testId, body);
   await db.call.update({ where: { id: call.id }, data: { noShowBy: side, noShowNote: note, noShowAt: new Date() } });
   return { reported: true };
 }
@@ -109,6 +111,7 @@ export async function setCallLength(dev: U, testId: string, body: Record<string,
   const minutes = Number(body.minutes);
   const ok = checkActualMinutes(Number.isFinite(minutes) ? minutes : null, call.minutes);
   if (!ok.ok) throw new HttpError(400, "bad_minutes", ok.message);
+  await devGateIfSeen(testId, body);
   await db.call.update({ where: { id: call.id }, data: { actualMinutes: minutes } });
   return { minutes };
 }

@@ -24,6 +24,9 @@ export async function readJson(req: Request, limit = 100_000): Promise<Record<st
   try {
     const v = text ? JSON.parse(text) : {};
     if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error();
+    // The browser tab that sent it (reason E: "You also did this in another tab").
+    const tab = req.headers.get("x-tab");
+    if (tab && typeof v.tab !== "string") v.tab = tab.slice(0, 64);
     return v as Record<string, unknown>;
   } catch {
     throw new HttpError(400, "bad_request", "Something went wrong sending that. Reload the page and try again.");

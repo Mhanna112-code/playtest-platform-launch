@@ -6,7 +6,8 @@ import { HttpError } from "./http";
 import { notify } from "./notify";
 import { isAdmin } from "./session";
 import { cardRefusal, charge } from "./stripe";
-import { devGate, devOnHold, recordEvent } from "./tests";
+import { devGate, devGateIfSeen, devOnHold, recordEvent } from "./tests";
+import { logEvent } from "./live";
 import { testerGate } from "./testerGate";
 
 type U = { id: string; email: string; name: string; pronoun: string; isAdmin?: boolean };
@@ -65,7 +66,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0], body: R
     }
     if (c.tester.suspendedAt) throw new HttpError(409, "closed_account", `${name}'s account is closed for now, so they can't be paid.`);
     if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", PAY_WAITS);
-    await devGate(tx, c.testId, body.seenAt, body.confirmed === true, { paidSoFarCents: await paidSoFar(c.id, tx), name });
+    await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name });
     if (reject) {
       const r = checkReject(reason);
       if (!r.ok) throw new HttpError(400, "bad_reason", r.message);
@@ -137,6 +138,7 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   const ok = canDispute(review.amountCents, review.agreedCents, !!existing);
   if (!ok.ok) throw new HttpError(409, "no_dispute", ok.message);
   const d = await db.dispute.create({ data: { ...where, contractId, testerId: tester.id, reason } });
+  await logEvent(c.testId, "dispute", `${displayName(tester)} disputed the pay for their ${kind === "call" ? "live call" : (await db.submission.findUnique({ where: { id } }))?.kind === "recording" ? "recording" : "written answers"}`, contractId);
   await notify(c.test.developer.email, `${displayName(tester)} disputed a payment on “${c.title}”`, [`${displayName(tester)} thinks the pay should be higher: “${reason}”`, "Our team decides. A decision can only raise the pay, up to the listing amount."], `/app/tests/${c.testId}`);
   return d;
 }
@@ -172,6 +174,7 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
     await db.payment.create({ data: { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, ...result } });
   }
   const line = extra > 0 ? `The team raised the pay to ${money(decided!)} (${money(extra)} more).` : `The team kept the pay at ${money(review.amountCents)}.`;
+  await logEvent(c.testId, "admin", `The team decided ${displayName(c.tester)}'s dispute: ${line.replace(/^The team /, "").replace(/\.$/, "")}`, c.id);
   await notify(c.tester.email, `Your dispute on “${c.title}” was decided`, [line, ...(note ? [`Their note: “${note}”`] : [])], `/app/sessions/${c.id}`);
   await notify(c.test.developer.email, `A dispute on “${c.title}” was decided`, [line, ...(note ? [`The team's note: “${note}”`] : [])], `/app/tests/${c.testId}`);
   return { extraCents: extra };
@@ -192,6 +195,7 @@ export async function addDevSide(dev: U, testId: string, body: Record<string, un
   const text = typeof body.text === "string" ? body.text.trim().slice(0, 2000) : "";
   const ok = checkDevSide(text, !!d.devSideAt);
   if (!ok.ok) throw new HttpError(ok.message.startsWith("You already") ? 409 : 400, "dev_side", ok.message);
+  await devGateIfSeen(testId, body);
   await db.dispute.update({ where: { id: d.id }, data: { devSide: text, devSideAt: new Date() } });
   return { ok: true };
 }

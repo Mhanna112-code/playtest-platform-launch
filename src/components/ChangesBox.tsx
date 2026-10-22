@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef } from "react";
 
-export type Change = { text: string; at: string };
+export type Change = { text: string; at: string; kind?: string };
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
@@ -24,7 +24,7 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead." }
           <ul className="my-1 list-disc pl-5">
             {changes.map((c, i) => (
               <li key={i}>
-                {c.text} · {time(c.at)}
+                {c.text.startsWith("You also did this in another tab") ? `${c.text} at ${time(c.at)}` : `${c.text} · ${time(c.at)}`}
               </li>
             ))}
           </ul>

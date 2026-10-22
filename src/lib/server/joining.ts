@@ -4,6 +4,7 @@ import { displayName } from "@/lib/format";
 import { MAX_ACTIVE_TESTS, termsLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
+import { logEvent, ownChanges, seenOf, tabOf } from "./live";
 import { asListing, devGate, joinTest, ownTest } from "./tests";
 
 // Joining (owner rule): Who can join = Anyone (Join) / Apply (Apply to join → the developer Accepts or Declines) /
@@ -51,12 +52,24 @@ export async function listingChanges(testId: string, seenAt: unknown): Promise<T
   return db.testEvent.findMany({ where: { testId, kind: "edited", createdAt: { gt: d } }, orderBy: { createdAt: "asc" } });
 }
 
-/** Join / Apply stop once (box under the button) when anything about the listing changed since the page loaded. */
-async function listingGate(testId: string, body: Record<string, unknown>, verb: string) {
+const INFO_NAMES = ["title", "description", "devices", "languages"];
+
+/** The join page's stop-once reasons: (D) the listing changed (spots excepted), (E) the tester's own actions in another tab. */
+export async function joinPageChanges(userId: string, testId: string, seenAt: unknown, tab: string): Promise<TestEventLike[]> {
+  const d = seenOf(seenAt);
+  if (!d) return [];
+  // An edit of only the listing's info shows once, as the (F) line ("Nora Lane changed the description").
+  const edits = (await listingChanges(testId, seenAt)).filter((e) => !e.text.replace(/^The listing was edited: /, "").split(", ").every((f) => INFO_NAMES.includes(f)));
+  const info = await db.testEvent.findMany({ where: { testId, kind: "info", createdAt: { gt: d } } });
+  return [...edits, ...info, ...(await ownChanges(userId, testId, d, tab))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+}
+
+/** Join / Apply / Withdraw application / No thanks stop once (box under the button) for the join page's reasons. */
+export async function listingGate(userId: string, testId: string, body: Record<string, unknown>, verb: string) {
   if (body.confirmed === true) return;
-  const changes = await listingChanges(testId, body.seenAt);
+  const changes = await joinPageChanges(userId, testId, body.seenAt, tabOf(body));
   if (changes.length) {
-    const tail = `Press again to ${verb} on the current listing.`;
+    const tail = verb === "withdraw" || verb === "decline" ? "Press again to go ahead." : `Press again to ${verb} on the current listing.`;
     throw new HttpError(409, "stop_once", tail, { changes: changes.map((e) => ({ text: e.text, at: e.createdAt })), tail });
   }
 }
@@ -68,7 +81,7 @@ export async function join(tester: U, testId: string, body: Record<string, unkno
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
   const refusal = await joinRefusal(tester.id, testId);
   if (refusal) throw new HttpError(409, "refused", refusal);
-  await listingGate(testId, body, "join");
+  await listingGate(tester.id, testId, body, "join");
   if (t.joinMode === "apply" && !(await db.application.findFirst({ where: { testId, testerId: tester.id, status: "pending", changedAt: { not: null } } }))) {
     throw new HttpError(409, "apply", "This test takes applications: press Apply to join.");
   }
@@ -85,7 +98,7 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
   const refusal = await joinRefusal(tester.id, testId);
   if (refusal) throw new HttpError(409, "refused", refusal);
-  await listingGate(testId, body, "apply");
+  await listingGate(tester.id, testId, body, "apply");
   if (t.joinMode === "anyone") return { joined: true, sessionId: (await join(tester, testId, { ...body, confirmed: true })).id };
   if (t.joinMode === "invite") throw new HttpError(409, "invite_only", "This test is invite only.");
   const note = typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
@@ -100,9 +113,11 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
   return { applied: true };
 }
 
-export async function withdrawApplication(tester: { id: string }, testId: string) {
+export async function withdrawApplication(tester: { id: string }, testId: string, body: Record<string, unknown> = {}) {
+  if (await db.application.count({ where: { testId, testerId: tester.id, status: "pending" } })) await listingGate(tester.id, testId, body, "withdraw");
   const n = await db.application.updateMany({ where: { testId, testerId: tester.id, status: "pending" }, data: { status: "withdrawn", decidedAt: new Date() } });
   if (!n.count) throw new HttpError(409, "gone", "There's no pending application to withdraw.");
+  await logEvent(testId, "applied", `${displayName(await db.user.findUniqueOrThrow({ where: { id: tester.id } }))} withdrew their application`);
   return { withdrawn: true };
 }
 
@@ -121,7 +136,7 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   const seenAt = typeof body.seenAt === "string" ? new Date(body.seenAt) : null;
   if (seenAt && tester.profile && tester.profile.updatedAt > seenAt) extra.push({ kind: "profile", text: `${name} changed their profile`, createdAt: tester.profile.updatedAt });
   extra.push(...(await listingChanges(testId, body.seenAt)));
-  await db.$transaction((tx) => devGate(tx, testId, body.seenAt, body.confirmed === true, {}, extra));
+  await db.$transaction((tx) => devGate(tx, testId, body, {}, extra));
   if (body.action === "decline") {
     await db.application.update({ where: { id: a.id }, data: { status: "declined", decidedAt: new Date() } });
     await notify(tester.email, `Your application to “${(await db.test.findUniqueOrThrow({ where: { id: testId } })).title}” wasn't accepted`, ["Thanks for applying. There are other tests to find."], "/app/find");

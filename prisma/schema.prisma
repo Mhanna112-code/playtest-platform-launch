@@ -541,6 +541,8 @@ model ActionLog {
   userId    String
   testId    String
   text      String
+  /// The browser tab (page load) that did it; that tab's own presses never stop for it.
+  tab       String   @default("")
   createdAt DateTime @default(now())
 
   @@index([userId, testId, createdAt])

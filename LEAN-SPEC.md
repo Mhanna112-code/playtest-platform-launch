@@ -13,9 +13,23 @@ and look, but this version deliberately drops most of its complexity.
   listing changed (join page, as before, spots excepted); (E) ANYTHING the tester did themselves in another tab since
   this page loaded ("You also did this in another tab: sent your written answers at 3:10 PM").
 - Exceptions: Join call (time-critical) keeps only its final refusals.
+- (F) LISTING INFO: a change to the test's title, description, devices or languages (saved by the developer, in any
+  tab) is shown in the live top box AND stops once on every button of: the developer's test page, the developer's
+  Edit page (incl. Save), the tester's session page, and the join page ("Nora Lane changed the description · 3:12 PM
+  [See it]"). Other edits keep their rules (terms -> A; join-page listing changes -> D; spots only when full).
+- The Edit page's Save follows the SAME rule as the test-page buttons: it stops once for every developer reason
+  (including edits or any other action saved in another tab, and F), with the box under Save; the second press saves.
+  The Edit page has the live top box too.
 - Developer side: same principle; their own actions in another tab are a stop-once reason on every developer button.
 - The stop box under the pressed button stays live while open: new changes are added to it as the page's auto-refresh
   picks them up (like the Invite anyway box). No notices are pre-shown under buttons that weren't pressed.
+- LIVE TOP NOTICE (both sides, session/test page and join page): one box at the top of the page lists every change
+  (reasons A-E) picked up by the auto-refresh since the page was opened, newest first, with times ("Updated · 3:12 PM:
+  Nora Lane paid $8 for your written answers"), with a [Dismiss]. Changes already shown there count as seen: a press
+  stops (under the pressed button) only for changes the page hadn't shown yet.
+- SCROLL ONCE: the FIRST time the live top box gets an update after the page is opened, the page scrolls up to the
+  top box (once per page load; later updates only add lines). If the person is typing in a field at that moment, the
+  scroll waits until they leave the field (never lose what they're typing or their cursor).
 - Wording: a developer request no longer available -> "The call time Thu, Nov 5 at 3:00 PM is no longer available."
   A tester never sees another tester's name: "Another tester took this time at 2:10 PM."
 - Remove the leftover Offer-times (callSlot) checks from the stop logic.

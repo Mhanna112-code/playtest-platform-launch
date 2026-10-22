@@ -2,7 +2,7 @@
 import { Err } from "@/components/Err";
 import { useState } from "react";
 import { api, errOf } from "@/lib/client";
-import { stopBox, type StopBox } from "@/lib/topStop";
+import { stopBox, useStopBox } from "@/lib/topStop";
 import { ChangesBox } from "@/components/ChangesBox";
 
 type Rec = { id: string; filename: string; size: number; uploaded: boolean };
@@ -10,7 +10,7 @@ type Rec = { id: string; filename: string; size: number; uploaded: boolean };
 /** Upload up to 5 screen recordings (500 MB each), then send them. Can be sent again with new ones until paid. */
 export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, seenAt }: { sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean; seenAt: string }) {
   const [confirmed, setConfirmed] = useState(false);
-  const [box, setBox] = useState<StopBox | null>(null);
+  const [box, setBox] = useStopBox();
   const [progress, setProgress] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);

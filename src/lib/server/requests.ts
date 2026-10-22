@@ -113,18 +113,18 @@ const bookedLimit = (side: Side, testerName: string) =>
   side === "developer" ? `${testerName} already has ${MAX_BOOKED} booked times with you. Wait until one is over or cancel one.` : `You already have ${MAX_BOOKED} booked times in this test.`;
 
 /** Book one call at this time between the two, at the agreed rate. */
-async function bookAt(contractId: string, startsAt: Date, minutes: number, rateCents: number | null, setId: string | null = null) {
+async function bookAt(contractId: string, startsAt: Date, minutes: number, rateCents: number | null, setId: string | null = null, byDeveloper = false) {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: true, tester: true } });
   const slot = await db.callSlot.create({ data: { testId: c.testId, startsAt, minutes, allowedTesterIds: [c.testerId], status: "booked" } });
   const call = await db.call.create({ data: { slotId: slot.id, contractId, startsAt, minutes, rateCents, setId } });
-  await db.$transaction((tx) => recordEvent(tx, c.testId, "booked", `${displayName(c.tester)} booked a call for ${fmtDateTime(startsAt)}`, false, {}, contractId));
+  await db.$transaction((tx) => recordEvent(tx, c.testId, "booked", byDeveloper ? `You booked a call with ${displayName(c.tester)} for ${fmtDateTime(startsAt)}` : `${displayName(c.tester)} booked a call for ${fmtDateTime(startsAt)}`, false, {}, contractId));
   return call;
 }
 
 /** One request = one call (or one weekly run): once a copy of a developer batch books, the other copies close. */
-async function closeBatch(batchId: string, exceptId: string, takerName: string) {
+async function closeBatch(batchId: string, exceptId: string) {
   if (!batchId) return;
-  await db.callRequest.updateMany({ where: { batchId, id: { not: exceptId }, status: "pending" }, data: { status: "taken", closedReason: `${takerName} took this time at ${fmtTime(new Date())}`, decidedAt: new Date() } });
+  await db.callRequest.updateMany({ where: { batchId, id: { not: exceptId }, status: "pending" }, data: { status: "taken", closedReason: `Another tester took this time at ${fmtTime(new Date())}`, decidedAt: new Date() } });
 }
 
 /** Close pending requests (time passed, block, hold, Stop, End early, Leave). */
@@ -134,11 +134,12 @@ export async function closeRequests(where: { contractIds?: string[] }, reason: s
   return rows;
 }
 
-const refusalFor = (r: { status: string; updatedAt: Date; closedReason: string }, otherName: string, mine: boolean) => {
+const refusalFor = (r: { status: string; updatedAt: Date; closedReason: string; fromSide: string; startsAt: Date }, otherName: string, mine: boolean) => {
   if (r.status === "taken") return `${r.closedReason}.`;
   if (r.status === "withdrawn") return mine ? "You already withdrew this request." : `${otherName} withdrew this request at ${fmtTime(r.updatedAt)}.`;
   if (r.status === "declined") return mine ? `${otherName} declined this request at ${fmtTime(r.updatedAt)}.` : "You already declined this request.";
   if (r.status === "booked") return `This time was booked at ${fmtTime(r.updatedAt)}.`;
+  if (!mine && r.fromSide === "developer") return `The call time ${fmtDateTime(r.startsAt)} is no longer available.`;
   return `This request closed${r.closedReason ? `: ${r.closedReason}` : ""}.`;
 };
 
@@ -166,7 +167,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     await refusals(x.c, "developer");
     all.push(x);
   }
-  await db.$transaction((tx) => devGate(tx, testId, body.seenAt, body.confirmed === true));
+  await db.$transaction((tx) => devGate(tx, testId, body));
   // Auto-match ("choose one" only): a tester already requested one of these exact times at the contract rate.
   if (!kind.weeks) {
     for (const { c } of all) {
@@ -176,8 +177,8 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
         const clash = await acceptClash(c, "developer", [hit], match.minutes);
         if (clash.length) throw new HttpError(409, "clash", clash[0]);
         if ((await bookedTimes(c.id)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit("developer", displayName(c.tester)));
-        const call = await bookAt(c.id, hit, match.minutes, c.liveRateCents);
-        await db.callRequest.update({ where: { id: match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date() } });
+        const call = await bookAt(c.id, hit, match.minutes, c.liveRateCents, null, true);
+        await db.callRequest.update({ where: { id: match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
         const line = `Booked: you both picked ${fmtDateTime(hit)}`;
         await notify(c.tester.email, line, [line], `/app/sessions/${c.id}`);
         return { booked: true, callId: call.id, message: line };
@@ -233,7 +234,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
       if ((await bookedTimes(contractId)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit("tester", displayName(c.tester)));
       const call = await bookAt(contractId, hit, m.minutes, c.liveRateCents);
       await db.callRequest.update({ where: { id: m.id }, data: { status: "booked", callId: call.id, decidedAt: new Date() } });
-      await closeBatch(m.batchId, m.id, displayName(c.tester));
+      await closeBatch(m.batchId, m.id);
       const line = `Booked: you both picked ${fmtDateTime(hit)}`;
       await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#calls`);
       return { booked: true, callId: call.id, message: line };
@@ -280,7 +281,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   const fresh = await db.callRequest.findUniqueOrThrow({ where: { id: r.id } });
   if (fresh.status !== "pending") throw new HttpError(409, "gone", refusalFor(fresh, displayName(other), mine));
   if (action === "withdraw" ? !mine : mine) throw new HttpError(409, "not_yours", mine ? "You can't answer your own request: withdraw it instead." : "Only the person who asked can withdraw it.");
-  if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body.seenAt, body.confirmed === true));
+  if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body));
   else await testerGate(c.testerId, contractId, c.testId, body);
   if (action === "accept") {
     await refusals(c, side);
@@ -311,12 +312,12 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     if ((await bookedTimes(contractId)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit(side, displayName(c.tester)));
     let first = null;
     for (const t of times) {
-      const call = await bookAt(contractId, t, r.minutes, rate, r.weeks ? r.id : null);
+      const call = await bookAt(contractId, t, r.minutes, rate, r.weeks ? r.id : null, side === "developer");
       first = first ?? call;
     }
     await db.callRequest.update({ where: { id: r.id }, data: { status: "booked", callId: first!.id, decidedAt: new Date() } });
-    if (side === "tester") await closeBatch(r.batchId, r.id, displayName(c.tester));
-    else if (r.batchId.startsWith("ask-")) await closeBatch(r.batchId.slice(4), r.id, displayName(c.tester)); // the rest of the developer's batch
+    if (side === "tester") await closeBatch(r.batchId, r.id);
+    else if (r.batchId.startsWith("ask-")) await closeBatch(r.batchId.slice(4), r.id); // the rest of the developer's batch
     const what = r.weeks ? `${r.weeks} ${r.repeat === "daily" ? "daily" : "weekly"} calls from ${fmtDateTime(times[0])}` : fmtDateTime(times[0]);
     await notify(other.email, `Booked: ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#calls` : `/app/sessions/${c.id}`);
     return { booked: true, callId: first!.id, calls: times.length };

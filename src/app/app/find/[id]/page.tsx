@@ -5,6 +5,7 @@ import { termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, needsGap } from "@/lib/server/tests";
 import { JoinBox } from "./JoinBox";
+import { LiveTop } from "@/components/LiveTop";
 import { Chat } from "@/components/Chat";
 import { chatMessages } from "@/lib/server/messages";
 
@@ -24,11 +25,14 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   const chatClosed = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: u.id }] } })) > 0;
   const blocked = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: u.id }] } })) > 0;
   const l = asListing(t);
+  const invite = await db.invite.findFirst({ where: { testId: t.id, testerId: u.id, status: "sent" } });
+  const seenAt = new Date().toISOString();
   const closed = t.status !== "open" || testersIn >= t.spots || (t.openUntil && t.openUntil < new Date());
   return (
     <>
       <p><a href="/app/find">← All tests</a></p>
-      <div className="panel">
+      {t.developerId !== u.id && <LiveTop scope={`listing:${t.id}`} seenAt={seenAt} seeIt="#listing" />}
+      <div className="panel" id="listing">
         <h1>{t.title}</h1>
         <p className="note">by {displayName(t.developer)}{t.category && ` · ${t.category}`}</p>
         {t.description && <p className="whitespace-pre-wrap text-sm">{t.description}</p>}
@@ -76,9 +80,10 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         {t.developerId === u.id || !u.isTester || closed || blocked ? null : (
           <JoinBox
             testId={t.id}
-            seenAt={new Date().toISOString()}
+            seenAt={seenAt}
             mode={t.joinMode}
-            invited={!!(await db.invite.findFirst({ where: { testId: t.id, testerId: u.id, status: "sent" } }))}
+            invited={!!invite}
+            inviteId={invite?.id ?? null}
             application={await db.application.findUnique({ where: { testId_testerId: { testId: t.id, testerId: u.id } } }).then((a) => (a ? { status: a.status, changed: !!a.changedAt } : null))}
           />
         )}

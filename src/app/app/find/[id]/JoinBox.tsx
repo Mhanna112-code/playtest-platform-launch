@@ -2,17 +2,18 @@
 import { Err } from "@/components/Err";
 import { useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
+import { PressButton } from "@/components/PressButton";
 import { api, errOf, ApiError } from "@/lib/client";
-import { stopBox, type StopBox } from "@/lib/topStop";
+import { stopBox, useStopBox } from "@/lib/topStop";
 
 /**
  * Join or Apply to join. Stops once (box under the button) if anything about the listing changed since the page loaded;
  * the second press goes ahead on the current listing. No offers or counter-offers here.
  */
-export function JoinBox(p: { testId: string; seenAt: string; mode: string; invited: boolean; application: { status: string; changed: boolean } | null }) {
+export function JoinBox(p: { testId: string; seenAt: string; mode: string; invited: boolean; inviteId?: string | null; application: { status: string; changed: boolean } | null }) {
   const [keepPrivate, setKeepPrivate] = useState(false);
   const [note, setNote] = useState("");
-  const [box, setBox] = useState<StopBox | null>(null);
+  const [box, setBox] = useStopBox();
   const [confirmed, setConfirmed] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -56,6 +57,7 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
       <div className="space-y-2">
         <p className="info">You applied to join. You&apos;ll hear back when the developer answers.</p>
         <button className="btn-ghost" disabled={busy} onClick={() => go("withdraw-application")}>Withdraw application</button>
+        <ChangesBox changes={box?.changes ?? null} tail={box?.tail} />
         <Err text={err} />
       </div>
     );
@@ -72,7 +74,12 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
           <textarea id="note" rows={2} className="input" value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
       )}
-      <button className="btn" disabled={busy || !!done} onClick={() => go(applying ? "apply" : "join")}>{busy ? "Sending…" : applying ? "Apply to join" : "Join this test"}</button>
+      <div className="flex flex-wrap gap-2">
+        <button className="btn" disabled={busy || !!done} onClick={() => go(applying ? "apply" : "join")}>{busy ? "Sending…" : applying ? "Apply to join" : "Join this test"}</button>
+        {p.inviteId && !done && (
+          <PressButton seenAt={p.seenAt} path={`/api/invites/${p.inviteId}`} body={{}} onDone={() => (window.location.href = "/app")}>No thanks</PressButton>
+        )}
+      </div>
       {warn && (
         <div className="info space-y-2">
           <p>{warn}</p>

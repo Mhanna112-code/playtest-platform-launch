@@ -2,13 +2,13 @@
 import { Err } from "@/components/Err";
 import { useState } from "react";
 import { api, errOf } from "@/lib/client";
-import { stopBox, type StopBox } from "@/lib/topStop";
+import { stopBox, useStopBox } from "@/lib/topStop";
 import { ChangesBox } from "@/components/ChangesBox";
 
 /** Written answers: one box per question in the tester's contract. Can be updated until it's paid. */
 export function WrittenForm({ sessionId, questions, initial, initialNotes, update, seenAt }: { sessionId: string; questions: string[]; initial: string[]; initialNotes: string; update: boolean; seenAt: string }) {
   const [confirmed, setConfirmed] = useState(false);
-  const [box, setBox] = useState<StopBox | null>(null);
+  const [box, setBox] = useStopBox();
   const [answers, setAnswers] = useState<string[]>(questions.map((_, i) => initial[i] ?? ""));
   const [notes, setNotes] = useState(initialNotes);
   const [ask, setAsk] = useState("");
@@ -52,7 +52,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
 export function LeaveButton({ sessionId, seenAt }: { sessionId: string; seenAt: string }) {
   const [sure, setSure] = useState(false);
   const [err, setErr] = useState("");
-  const [box, setBox] = useState<StopBox | null>(null);
+  const [box, setBox] = useStopBox();
   const [confirmed, setConfirmed] = useState(false);
   return (
     <div className="space-y-2">
@@ -88,7 +88,7 @@ export function LeaveButton({ sessionId, seenAt }: { sessionId: string; seenAt: 
 
 /** Dispute once: only for a part in the contract paid below the listing amount. */
 export function DisputeForm({ sessionId, kind, id, seenAt }: { sessionId: string; kind: "submission" | "call"; id: string; seenAt?: string }) {
-  const [box, setBox] = useState<StopBox | null>(null);
+  const [box, setBox] = useStopBox();
   const [confirmed, setConfirmed] = useState(false);
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");

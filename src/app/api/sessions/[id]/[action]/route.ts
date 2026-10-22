@@ -8,6 +8,7 @@ import { decideTerms } from "@/lib/server/terms";
 import { openDispute } from "@/lib/server/payments";
 import { leaveTest, sendWritten } from "@/lib/server/tests";
 import { requireActive } from "@/lib/server/users";
+import { logTesterAction } from "@/lib/server/actionText";
 
 type Ctx = { params: Promise<{ id: string; action: string }> };
 
@@ -17,6 +18,15 @@ export async function POST(req: Request, { params }: Ctx) {
     const { id, action } = await params;
     const u = await requireActive(req);
     const body = await readJson(req);
+    const res = await run(u, id, action, body);
+    const data = await res.clone().json().catch(() => null);
+    if (res.ok) await logTesterAction(u.id, id, action, body, data);
+    return res;
+  });
+}
+
+async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, action: string, body: Record<string, unknown>) {
+  {
     switch (action) {
       case "leave":
         return ok(await leaveTest(u, id, body));
@@ -52,5 +62,5 @@ export async function POST(req: Request, { params }: Ctx) {
       }
     }
     throw new HttpError(404, "not_found", "That action doesn't exist.");
-  });
+  }
 }

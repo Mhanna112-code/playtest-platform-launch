@@ -234,7 +234,27 @@ export function stopOnce(events: TestEventLike[], seenAt: Date, confirmed: boole
  * (Owner, Oct 22, latest) One set of reasons for ALL the developer's stop-once buttons: the top panel (Stop, End early,
  * Next round), the live-call panel (offer/remove times, cancel a call) and Pay / Reject on each piece. Test-wide.
  */
-export const DEV_STOP_KINDS = [...STOP_ONCE_KINDS, "paid", "rejected", "chargeback", "choice", "requested", "withdrew_req", "declined_req"] as const;
+export const DEV_STOP_KINDS = [
+  ...STOP_ONCE_KINDS, "paid", "rejected", "chargeback", "choice", "requested", "withdrew_req", "declined_req",
+  // (NEWEST+3) the full set: applications, a tester's Switch/Keep, disputes, invite answers, admin decisions, listing info (F).
+  "applied", "terms", "dispute", "invite", "admin", "info",
+] as const;
+
+/**
+ * Every event kind the app records that does NOT stop the developer, and why. (Their own actions in another tab still
+ * stop them, as reason E, through the action log; events written as "You ..." are their own and come only that way.)
+ */
+export const DEV_EXEMPT_KINDS: Record<string, string> = {
+  edited: "the developer's own edit (reason E from another tab; F for listing info)",
+  edited_spots: "the developer's own edit of spots (reason E from another tab)",
+  opened: "the developer's own Open (reason E from another tab)",
+  stopped: "the developer's own Stop (reason E from another tab)",
+  ended: "the developer's own End early (reason E from another tab)",
+  next_round: "the developer's own Next round (reason E from another tab)",
+  invited: "the developer's own invites (reason E from another tab)",
+  paused: "a payment hold: every paused button refuses for good, and the page shows the hold",
+  resumed: "the hold lifted because the developer paid (their own action, reason E)",
+};
 export function devStopOnce(events: TestEventLike[], seenAt: Date, confirmed: boolean) {
   return stopOnce(events, seenAt, confirmed, DEV_STOP_KINDS);
 }

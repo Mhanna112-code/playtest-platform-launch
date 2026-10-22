@@ -60,7 +60,7 @@ describe("call requests on both sides", () => {
     expect(await db.notification.count({ where: { userId: b.tester.user.id, text: { startsWith: "Nora Lane asked for a call: " } } })).toBe(1);
     expect((await sact(a.sessionId, "answer-request", a.tester.cookie, { requestId: qa.id, action: "accept" })).body.booked).toBe(true);
     const late = await sact(b.sessionId, "answer-request", b.tester.cookie, { requestId: qb.id, action: "accept" });
-    expect(late.body.error.message).toMatch(/^Ana Silva took this time at .+\.$/);
+    expect(late.body.error.message).toMatch(/^Another tester took this time at .+\.$/);
   });
 
   it("STRICT: a tester's ask different from the contract rate never books; requesting the developer's time with an ask closes their copy; the developer accepts → agreed rate", async () => {

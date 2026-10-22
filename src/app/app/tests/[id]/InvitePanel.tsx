@@ -1,29 +1,13 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { ChangesBox, type Change } from "@/components/ChangesBox";
-import { api, ApiError } from "@/lib/client";
+import { ChangesBox } from "@/components/ChangesBox";
+import { api } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
+import { PressButton } from "@/components/PressButton";
 
 type Tester = { id: string; name: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string };
 type Sent = { id: string; name: string; status: string };
 
-/** Live lines: what changed on the test since the page loaded (polled). Shown at the bottom of the invite panel. */
-export function useLiveLines(testId: string, seenAt: string) {
-  const [lines, setLines] = useState<Change[]>([]);
-  useEffect(() => {
-    let alive = true;
-    const tick = () =>
-      api<{ changes: Change[] }>(`/api/tests/${testId}/changes?since=${encodeURIComponent(seenAt)}`)
-        .then((r) => alive && setLines(r.changes))
-        .catch(() => null);
-    const t = setInterval(tick, 20_000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
-  }, [testId, seenAt]);
-  return lines;
-}
 
 /**
  * The invite panel (test page only). Sections: Invited (Cancel invite) · People you've worked with · Suggested · Find
@@ -32,7 +16,6 @@ export function useLiveLines(testId: string, seenAt: string) {
  */
 export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester[]; sent: Sent[]; options: { devices: string[]; languages: string[]; categories: string[] } }) {
   const { press, changes, error, busy, setError } = usePress(p.seenAt);
-  const lines = useLiveLines(p.testId, p.seenAt);
   const [f, setF] = useState({ device: "", language: "", category: "" });
   const [q, setQ] = useState("");
   const [ticked, setTicked] = useState<string[]>([]);
@@ -102,9 +85,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
               <li key={s.id} className="flex items-center gap-2">
                 <span className="mr-auto">{s.name} · {s.status}</span>
                 {s.status === "waiting for them to join" && (
-                  <button className="btn-ghost" onClick={() => api(`/api/tests/${p.testId}/cancel-invite`, { inviteId: s.id }).then(() => window.location.reload()).catch((e) => setError(e instanceof ApiError ? e.message : "Try again."))}>
-                    Cancel invite
-                  </button>
+                  <PressButton seenAt={p.seenAt} path={`/api/tests/${p.testId}/cancel-invite`} body={{ inviteId: s.id }}>Cancel invite</PressButton>
                 )}
               </li>
             ))}
@@ -137,16 +118,6 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
         </div>
       )}
       {msg && <p className="info">{msg}</p>}
-      {lines.length > 0 && (
-        <div className="info">
-          <p className="font-medium">Since you opened this page:</p>
-          <ul className="list-disc pl-5">
-            {lines.map((l, i) => (
-              <li key={i}>{l.text} · {new Date(l.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</li>
-            ))}
-          </ul>
-        </div>
-      )}
     </section>
   );
 }

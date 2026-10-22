@@ -14,6 +14,7 @@ import { owedForBox, sweepHeldCalls } from "@/lib/server/holds";
 import { paidLines } from "@/lib/server/paid";
 import { termsRowLines } from "@/lib/server/terms";
 import { BlockButton } from "@/components/BlockButton";
+import { LiveTop } from "@/components/LiveTop";
 import { Applications } from "./Applications";
 import { rateLabel } from "@/lib/server/requests";
 import { AutoRefresh } from "@/components/AutoRefresh";
@@ -111,6 +112,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   return (
     <>
       <AutoRefresh query={`test=${t.id}`} />
+      <LiveTop scope={`test:${t.id}`} seenAt={seenAt} />
       <TopPanel
         id={t.id}
         title={t.title}
@@ -177,7 +179,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <p key={x.id} className="note">Call on {fmtDateTime(x.startsAt)}: {lateOf(c, x)}</p>
             ))}
             {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}
-            {blockedIds.has(c.testerId) ? <p className="note">You blocked {displayName(c.tester)}. Unblock in Settings → Blocked people.</p> : <BlockButton userId={c.testerId} name={displayName(c.tester)} effect="Their session ends now (work they sent stays payable), calls between you are cancelled, and chat closes." />}
+            {blockedIds.has(c.testerId) ? <p className="note">You blocked {displayName(c.tester)}. Unblock in Settings → Blocked people.</p> : <BlockButton seenAt={seenAt} testId={t.id} userId={c.testerId} name={displayName(c.tester)} effect="Their session ends now (work they sent stays payable), calls between you are cancelled, and chat closes." />}
             {c.submissions.length === 0 && c.calls.length === 0 && <p className="note">Nothing sent yet.</p>}
             {c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).map((x) => (
               <div key={x.id} className="space-y-2 rounded-lg border border-slate-200 p-3">
@@ -185,11 +187,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   Live call · {x.rateCents == null ? "Not in their contract" : "In their contract"} · {fmtDateTime(x.startsAt)} · {x.minutes} min booked
                 </p>
                 {x.review ? (
-                  <ReviewResult review={x.review} payments={payments.filter((p) => p.callId === x.id)} dispute={x.dispute} testId={t.id} />
+                  <ReviewResult seenAt={seenAt} review={x.review} payments={payments.filter((p) => p.callId === x.id)} dispute={x.dispute} testId={t.id} />
                 ) : (
                   <>
                     {x.devJoinedAt && x.testerJoinedAt && <p className="note">Both joined at {fmtDateTime(new Date(Math.max(x.devJoinedAt.getTime(), x.testerJoinedAt.getTime())))}</p>}
-                    <CallLength testId={t.id} callId={x.id} minutes={x.actualMinutes ?? defaultCallMinutes(x.startsAt, x.minutes, x.devJoinedAt, x.testerJoinedAt)} />
+                    <CallLength seenAt={seenAt} testId={t.id} callId={x.id} minutes={x.actualMinutes ?? defaultCallMinutes(x.startsAt, x.minutes, x.devJoinedAt, x.testerJoinedAt)} />
                     <PayBox key={x.actualMinutes ?? 0} kind="call" id={x.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} askedCents={x.askedCents} partPaidCents={partPaid(x.id)}
                       listingCents={callReference(x.rateCents, x.actualMinutes ?? x.minutes, c.liveRateCents).cents}
                       listingText={callReference(x.rateCents, x.actualMinutes ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
@@ -219,7 +221,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   </div>
                 ))}
                 {s.review ? (
-                  <ReviewResult review={s.review} payments={payments.filter((p) => p.submissionId === s.id)} dispute={s.dispute} testId={t.id} />
+                  <ReviewResult seenAt={seenAt} review={s.review} payments={payments.filter((p) => p.submissionId === s.id)} dispute={s.dispute} testId={t.id} />
                 ) : (
                   <PayBox kind="submission" id={s.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} askedCents={s.askedCents} partPaidCents={partPaid(s.id)}
                     note={s.agreedCents != null && s.payBy && !s.choiceOfferedAt ? choiceNoteLine(fmtDate(s.payBy).replace(/, \d{4}$/, ""), displayName(c.tester), chargeAmount(s.agreedCents, s.askedCents, partPaid(s.id)), pronouns(c.tester.pronoun).poss) : undefined}
@@ -251,7 +253,7 @@ type Pay = { status: string; amountCents: number; kind: string };
 type Disp = { id: string; status: string; reason: string; decidedCents: number | null; decisionNote: string; devSide: string } | null;
 
 /** What happened to a piece after Pay / Reject, for the developer. */
-function ReviewResult({ review, payments, dispute, testId }: { review: Rev; payments: Pay[]; dispute: Disp; testId: string }) {
+function ReviewResult({ review, payments, dispute, testId, seenAt }: { review: Rev; payments: Pay[]; dispute: Disp; testId: string; seenAt: string }) {
   const main = payments.find((p) => p.kind !== "dispute" && p.status !== "failed") ?? payments.find((p) => p.kind !== "dispute");
   return (
     <div className="space-y-1 rounded-lg bg-slate-50 p-3 text-sm">
@@ -271,7 +273,7 @@ function ReviewResult({ review, payments, dispute, testId }: { review: Rev; paym
         </p>
       )}
       {dispute?.devSide && <p>Your side: “{dispute.devSide}”</p>}
-      {dispute && dispute.status === "open" && !dispute.devSide && <DisputeSide testId={testId} disputeId={dispute.id} />}
+      {dispute && dispute.status === "open" && !dispute.devSide && <DisputeSide seenAt={seenAt} testId={testId} disputeId={dispute.id} />}
     </div>
   );
 }

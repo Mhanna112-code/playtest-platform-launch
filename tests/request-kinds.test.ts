@@ -81,7 +81,7 @@ describe("request kinds", () => {
     const rb = await pending(b.sessionId, "developer");
     await sact(b.sessionId, "answer-request", b.tester.cookie, { requestId: rb.id, action: "accept" });
     expect(await db.call.count({ where: { contractId: b.sessionId } })).toBe(2);
-    expect((await sact(a.sessionId, "answer-request", a.tester.cookie, { requestId: ra.id, action: "accept" })).body.error.message).toMatch(/^Ben Carter took this time at /);
+    expect((await sact(a.sessionId, "answer-request", a.tester.cookie, { requestId: ra.id, action: "accept" })).body.error.message).toMatch(/^Another tester took this time at /);
   });
 });
 

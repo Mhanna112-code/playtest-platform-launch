@@ -1,5 +1,7 @@
 "use client";
+import { useState } from "react";
 import { ApiError } from "./client";
+import { useLiveAppend } from "./live";
 import type { Change } from "@/components/ChangesBox";
 
 export type StopBox = { changes: Change[]; tail: string; top: boolean };
@@ -16,4 +18,11 @@ export function stopBox(e: unknown): StopBox | null {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
   return box;
+}
+
+/** A panel's stop box that stays live while open: changes the page picks up meanwhile are added to it. */
+export function useStopBox() {
+  const [box, setBox] = useState<StopBox | null>(null);
+  useLiveAppend(box != null, (added) => setBox((b) => (b ? { ...b, changes: [...b.changes, ...added] } : b)));
+  return [box, setBox] as const;
 }

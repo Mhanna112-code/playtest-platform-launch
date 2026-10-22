@@ -3,11 +3,11 @@ import { Err } from "@/components/Err";
 import { useEffect, useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { api, errOf } from "@/lib/client";
-import { stopBox, type StopBox } from "@/lib/topStop";
+import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
 
 /** New terms offered (Switch / Keep). Its stop-once box and refusals show directly under these buttons. */
 export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: string; seenAt: string; offer: { id: string; diff: string } | null; devName: string }) {
-  const [box, setBox] = useState<StopBox | null>(null);
+  const [box, setBox] = useStopBox();
   const [offerId, setOfferId] = useState(offer?.id ?? "");
   const [confirmed, setConfirmed] = useState(false);
   const [err, setErr] = useState("");
