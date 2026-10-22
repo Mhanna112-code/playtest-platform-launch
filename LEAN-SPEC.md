@@ -4,6 +4,10 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22) Tester deadline: KEPT as a guide (never blocks). Sent work after it reads "Sent late (deadline
+## was Oct 20)", and call bookings after it read "Booked after Ana Silva's deadline (Oct 20)" on both sides (booking
+## form, call row, developer's tester row). Open until stays the only hard stop.
+
 ## (Owner, Oct 22, calls/hold/block refinements; wins over below)
 - Cancelling a call: allowed by either side up to the call's start time (reason required within 24 hours); not after
   it starts (then only "Report a no-show"). A cancel closes the call everywhere at once, including a room someone

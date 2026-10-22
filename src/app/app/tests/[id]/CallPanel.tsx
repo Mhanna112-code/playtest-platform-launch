@@ -5,7 +5,7 @@ import { usePress } from "@/lib/usePress";
 import { JoinCall } from "@/components/JoinCall";
 
 type Slot = { id: string; when: string; minutes: number; who: string };
-type Booked = { id: string; when: string; minutes: number; name: string; room: string; canCancel: boolean; started: boolean; reported: boolean };
+type Booked = { id: string; when: string; minutes: number; name: string; room: string; canCancel: boolean; started: boolean; reported: boolean; late?: string };
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
@@ -34,7 +34,7 @@ export function CallPanel(p: { testId: string; seenAt: string; minutes: number; 
             <ul className="space-y-2 text-sm">
               {p.booked.map((b) => (
                 <li key={b.id} className="flex flex-wrap items-center gap-2">
-                  <span className="mr-auto">{fmt(b.when)} · {b.minutes} min · {b.name}</span>
+                  <span className="mr-auto">{fmt(b.when)} · {b.minutes} min · {b.name}{b.late && <span className="ml-2 badge">{b.late}</span>}</span>
                   {!b.started && <JoinCall callId={b.id} />}
                   {!b.started && (b.canCancel ? <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: b.id }, "cancel-" + b.id)}>Cancel the call</button> : (
                     <span className="inline-flex gap-2">

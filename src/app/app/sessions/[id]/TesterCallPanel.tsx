@@ -5,12 +5,12 @@ import { usePress } from "@/lib/usePress";
 import { JoinCall } from "@/components/JoinCall";
 
 type Slot = { id: string; when: string; minutes: number };
-type Mine = { id: string; when: string; minutes: number; room: string; canCancel: boolean; started: boolean; reported: boolean; cancelled: string };
+type Mine = { id: string; when: string; minutes: number; room: string; canCancel: boolean; started: boolean; reported: boolean; cancelled: string; late?: string };
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 /** The tester's live-call panel: Book / Cancel stop once for call changes since the page loaded (box under this panel). */
-export function TesterCallPanel(p: { sessionId: string; seenAt: string; label: string; open: Slot[]; mine: Mine[]; refusal: string }) {
+export function TesterCallPanel(p: { sessionId: string; seenAt: string; label: string; open: Slot[]; mine: Mine[]; refusal: string; lateNote?: string }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
   const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={error} /></div> : null);
   const [report, setReport] = useState<Record<string, string>>({});
@@ -25,11 +25,12 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; label: s
       <section className="panel" aria-label="Live call">
         <h2>Live call</h2>
         <p className="note">{p.label}</p>
+        {p.lateNote && !p.refusal && <p className="note">{p.lateNote}</p>}
         {p.mine.length > 0 && (
           <ul className="space-y-2 text-sm">
             {p.mine.map((m) => (
               <li key={m.id} className="flex flex-wrap items-center gap-2">
-                <span className="mr-auto">{fmt(m.when)} · {m.minutes} min{m.cancelled && ` · ${m.cancelled}`}</span>
+                <span className="mr-auto">{fmt(m.when)} · {m.minutes} min{m.cancelled && ` · ${m.cancelled}`}{m.late && <span className="ml-2 badge">{m.late}</span>}</span>
                 {!m.cancelled && <JoinCall callId={m.id} />}
                 {!m.cancelled && !m.started && (m.canCancel ? <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: m.id }, "cancel-" + m.id)}>Cancel</button> : (
                   <span className="inline-flex gap-2">

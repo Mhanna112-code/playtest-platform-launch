@@ -83,4 +83,18 @@ describe("calls / hold / block refinements", () => {
     await liftHoldIfClear(dev.user.id);
     expect((await db.payment.findFirstOrThrow({ where: { disputeId: d.id } })).status).not.toBe("deferred");
   });
+
+  it("booked after the deadline: allowed (a guide), labelled on both sides", async () => {
+    expect(R.bookedLateLabel("Ana Silva", new Date(2026, 9, 20), () => "Oct 20")).toBe("Booked after Ana Silva's deadline (Oct 20)");
+    expect(R.isBookedLate(new Date("2026-10-21T00:00:00Z"), new Date("2026-10-20T00:00:00Z"))).toBe(true);
+    const s = await setup();
+    const j = await joined(s.testId);
+    await db.contract.update({ where: { id: j.sessionId }, data: { dueAt: new Date(Date.now() - 86_400_000) } });
+    await act(s.testId, "offer-times", s.dev.cookie, { seenAt: seen(), confirmed: true, times: [new Date(Date.now() + 48 * 3_600_000).toISOString()] });
+    const slot = await db.callSlot.findFirstOrThrow({ where: { testId: s.testId } });
+    expect((await sact(j.sessionId, "book", j.tester.cookie, { seenAt: seen(), confirmed: true, slotId: slot.id })).status).toBe(200);
+    const call = await db.call.findFirstOrThrow({ where: { contractId: j.sessionId } });
+    const c = await db.contract.findUniqueOrThrow({ where: { id: j.sessionId } });
+    expect(R.isBookedLate(call.createdAt, c.dueAt)).toBe(true);
+  });
 });

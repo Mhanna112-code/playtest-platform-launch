@@ -558,3 +558,7 @@ export function defaultCallMinutes(startsAt: Date, minutes: number, devJoinedAt:
   return Math.max(1, Math.round((end - both) / 60_000));
 }
 export const LENGTH_WAITS = "You can enter this once the hold is lifted.";
+
+/** The tester's deadline is a guide (never blocks). A call booked after it reads this on both sides. */
+export const bookedLateLabel = (name: string, dueAt: Date, fmt: (d: Date) => string) => `Booked after ${name}'s deadline (${fmt(dueAt)})`;
+export const isBookedLate = (bookedAt: Date, dueAt: Date) => bookedAt.getTime() > dueAt.getTime();
