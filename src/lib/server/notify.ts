@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { emailDecision } from "@/lib/rules";
+import { emailDecision, summaryDue } from "@/lib/rules";
 import { appUrl } from "./auth";
 import { sendEmail } from "./email";
 
@@ -24,15 +24,17 @@ export async function bell(userId: string, text: string, link: string) {
   await db.notification.create({ data: { userId, text, link } });
 }
 
-/** Daily summary for people on "One daily summary": one email listing their new notifications. */
-export async function sendDailySummaries() {
-  const users = await db.user.findMany({ where: { emailPref: "daily", notifications: { some: { summarizedAt: null } } }, select: { id: true, email: true } });
+/** Summary emails for people on daily / weekly / monthly: one email listing their new notifications. */
+export async function sendSummaries(now = new Date()) {
+  const users = await db.user.findMany({ where: { emailPref: { in: ["daily", "weekly", "monthly"] }, notifications: { some: { summarizedAt: null } } }, select: { id: true, email: true, emailPref: true, lastSummaryAt: true } });
   for (const u of users) {
+    if (!summaryDue(u.emailPref, u.lastSummaryAt, now)) continue;
     const items = await db.notification.findMany({ where: { userId: u.id, summarizedAt: null }, orderBy: { createdAt: "asc" }, take: 100 });
     if (!items.length) continue;
     try {
       await sendEmail({ to: u.email, subject: `Your Playtest summary: ${items.length} update${items.length === 1 ? "" : "s"}`, text: [...items.map((n) => `• ${n.text}${n.link ? ` ${appUrl()}${n.link}` : ""}`), "", "Playtest"].join("\n") });
-      await db.notification.updateMany({ where: { id: { in: items.map((n) => n.id) } }, data: { summarizedAt: new Date() } });
+      await db.notification.updateMany({ where: { id: { in: items.map((n) => n.id) } }, data: { summarizedAt: now } });
+      await db.user.update({ where: { id: u.id }, data: { lastSummaryAt: now } });
     } catch (e) {
       console.error("[email] summary failed:", (e as Error).message);
     }

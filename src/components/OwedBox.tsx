@@ -3,20 +3,28 @@ import { useState } from "react";
 import { api } from "@/lib/client";
 import { money } from "@/lib/format";
 
-/** What the developer owes from failed charges, with the cut-off; on hold, every test is paused until it's paid. */
-export function OwedBox({ onHold, owed }: { onHold: boolean; owed: { amountCents: number; until: string | null }[] }) {
+type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string };
+
+/** Failed payments (each listed) and reversed payments; one button retries every failed one. */
+export function OwedBox({ onHold, owed }: { onHold: boolean; owed: Line[] }) {
   const [err, setErr] = useState("");
+  const [failing, setFailing] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const total = owed.reduce((s, o) => s + o.amountCents, 0);
-  const first = owed.find((o) => o.until)?.until;
+  const retry = owed.filter((o) => o.retry);
+  const total = retry.reduce((s, o) => s + o.amountCents, 0);
+  const first = retry.find((o) => o.until)?.until;
   return (
-    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 space-y-2">
+    <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
       {onHold ? (
         <p><b>Your tests are paused.</b> No new testers, invites or calls, and Pay waits, until you pay what you owe. Testers can still send work; their deadlines move on by the pause.</p>
       ) : (
-        <p><b>A payment failed.</b> Pay {money(total)} by {new Date(first!).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} or your tests are paused.</p>
+        first && <p><b>A payment failed.</b> Pay {money(total)} by {new Date(first).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} or your tests are paused.</p>
       )}
-      {owed.length > 0 && <p>You owe {money(total)}.</p>}
+      {owed.length > 0 && (
+        <ul className="list-disc pl-5">
+          {owed.map((o) => <li key={o.id}>{o.text}</li>)}
+        </ul>
+      )}
       <button
         className="btn"
         disabled={busy}
@@ -24,16 +32,21 @@ export function OwedBox({ onHold, owed }: { onHold: boolean; owed: { amountCents
           setBusy(true);
           setErr("");
           try {
-            await api("/api/payments/owed", {});
-            window.location.reload();
+            const r = await api<{ stillFailing: string[]; lifted: boolean }>("/api/payments/owed", {});
+            if (r.stillFailing.length) {
+              setFailing(r.stillFailing);
+              setBusy(false);
+            } else window.location.reload();
           } catch (e) {
             setErr((e as Error).message);
             setBusy(false);
           }
         }}
       >
-        Pay what you owe
+        Pay what you owe ({money(total)})
       </button>
+      {failing.length > 0 && <p className="err">Still declined: {failing.join("; ")}. Update your card in Payments and try again.</p>}
+      {owed.some((o) => !o.retry) && <p>Reversed payments can&apos;t be retried here: our team resolves them, then your tests resume.</p>}
       {err && <p className="err">{err}</p>}
     </div>
   );

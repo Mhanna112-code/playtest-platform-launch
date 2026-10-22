@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { displayName, pronouns } from "@/lib/format";
-import { isLate, payByFrom } from "@/lib/rules";
+import { checkAsk, isLate, payByFrom } from "@/lib/rules";
+import { toCents } from "@/lib/format";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { MAX_RECORDING_BYTES, MAX_RECORDINGS, uploadTarget } from "./storage";
@@ -36,9 +37,14 @@ export async function finishRecording(tester: U, contractId: string, body: Recor
   return { ok: true };
 }
 
-/** Send the uploaded recordings (or send them again with new ones, until paid). Extra work if not in the contract. */
-export async function sendRecording(tester: U, contractId: string) {
+/** Send the uploaded recordings (or send them again with new ones, until paid), with an optional asked amount. */
+export async function sendRecording(tester: U, contractId: string, body: Record<string, unknown> = {}) {
   const c0 = await ownContract(tester.id, contractId);
+  const askedCents = body.ask === undefined || body.ask === null || body.ask === "" ? null : toCents(body.ask);
+  if (body.ask && askedCents == null) throw new HttpError(400, "bad_ask", "Enter the amount you ask like 7.50, or leave it empty.");
+  const askOk = checkAsk(askedCents);
+  if (!askOk.ok) throw new HttpError(400, "bad_ask", askOk.message);
+
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   const { updated, late } = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
@@ -51,7 +57,7 @@ export async function sendRecording(tester: U, contractId: string) {
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });
     if (existing?.review) throw new HttpError(409, "paid", "Your recording was already paid for, so it can't be changed. Send anything new in the chat.");
     const now = new Date();
-    const data = { late: isLate(c.dueAt, now), updatedAt: now, payBy: payByFrom(now) };
+    const data = { late: isLate(c.dueAt, now), updatedAt: now, payBy: payByFrom(now), askedCents };
     const sub = existing
       ? await tx.submission.update({ where: { id: existing.id }, data })
       : await tx.submission.create({ data: { contractId, kind: "recording", agreedCents: c.recordingCents, ...data } });

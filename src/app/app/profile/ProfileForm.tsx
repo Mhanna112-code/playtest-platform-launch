@@ -62,9 +62,11 @@ export function ProfileForm({ init, first }: { init: Init; first?: boolean }) {
         <div>
           <label className="label" htmlFor="emailPref">Email settings</label>
           <select id="emailPref" className="input max-w-xs" value={v.emailPref ?? "each"} onChange={(e) => set({ emailPref: e.target.value })}>
-            <option value="each">Email me each update</option>
-            <option value="daily">One daily summary</option>
-            <option value="none">Don&apos;t email me</option>
+            <option value="each">Each update</option>
+            <option value="daily">Daily summary</option>
+            <option value="weekly">Weekly summary</option>
+            <option value="monthly">Monthly summary</option>
+            <option value="off">Off</option>
           </select>
           <p className="note">Sign-in links and payment receipts always send. The bell keeps everything.</p>
         </div>

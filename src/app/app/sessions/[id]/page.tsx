@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
-import { canCancelCall, canDispute, DELAYED_CALL_LINE, headsUpLine, isLate, PAUSED_FOR_TESTERS, lateLabel, termsLine, testerShare } from "@/lib/rules";
+import { cancelNeedsReason, canDispute, closesInLine, DELAYED_CALL_LINE, isLate, PAUSED_FOR_TESTERS, lateLabel, termsLine, testerShare } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
+import { sweepHeldCalls } from "@/lib/server/holds";
 import { DisputeForm, LeaveButton, WrittenForm } from "./SessionActions";
 import { Chat } from "@/components/Chat";
 import { RecordingUpload } from "./RecordingUpload";
@@ -13,7 +14,10 @@ import { TesterCallPanel } from "./TesterCallPanel";
 export const metadata = { title: "Your session · Playtest" };
 export const dynamic = "force-dynamic";
 
-const label = (inContract: boolean) => (inContract ? "In your contract" : "Extra (not in the listing): the developer decides what to pay");
+const label = (inContract: boolean) => (inContract ? "In your contract" : "Not in your contract");
+/** Listing (or "Not in your contract"), the amount asked, and what's been paid for this part. */
+const partLine = (listing: number | null, asked: number | null | undefined, paid: number) =>
+  `${listing == null ? "Not in your contract" : `Listing: ${money(listing)}`}${asked != null ? ` · You asked ${money(asked)}` : ""} · Paid so far for this part: ${money(paid)} (you get 80%)`;
 
 export default async function SessionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -35,6 +39,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const recording = c.submissions.find((s) => s.kind === "recording");
   const now = new Date();
   const seenAt = now.toISOString();
+  await sweepHeldCalls(c.test.developerId);
+  const partPaid = new Map((await db.payment.groupBy({ by: ["submissionId", "callId"], where: { contractId: c.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } })).map((g) => [g.submissionId ?? g.callId ?? "", g._sum.amountCents ?? 0]));
   const failedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", callId: { not: null } }, select: { callId: true } })).map((p) => p.callId!));
   const slots = await db.callSlot.findMany({ where: { testId: c.testId, status: "open", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
   const visible = slots.filter((s) => s.allowedTesterIds.length === 0 || s.allowedTesterIds.includes(u.id));
@@ -43,11 +49,13 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
     <>
       {refusal && <p className="info">{refusal}</p>}
       {!refusal && c.test.developer.holdStartedAt && <p className="info">{PAUSED_FOR_TESTERS}</p>}
-      {!refusal && c.test.openUntil && c.test.openUntil.getTime() - now.getTime() < 3 * 86_400_000 && <p className="info">{headsUpLine(c.title, c.test.openUntil, fmtDate)}</p>}
+      {!refusal && c.test.openUntil && c.test.openUntil > now && c.test.openUntil.getTime() - now.getTime() < 3 * 86_400_000 && (
+        <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{closesInLine(c.title, c.test.openUntil, now)}</p>
+      )}
       <div className="panel">
         <h1>{c.title}</h1>
         <p className="note">by {dev} · joined {fmtDate(c.joinedAt)} · due {fmtDate(c.dueAt)}{isLate(c.dueAt, now) && !refusal ? " (late work is still accepted and marked late)" : ""}</p>
-        <p className="text-sm"><b>Your contract (what you get):</b> {termsLine(c, true)}</p>
+        <p className="text-sm"><b>Your contract:</b> {termsLine(c, true)} (what you get)</p>
         {c.buildUrl && <p className="text-sm">Build: <a href={c.buildUrl} target="_blank" rel="noreferrer">{c.buildUrl}</a></p>}
         {c.description && <p className="whitespace-pre-wrap text-sm">{c.description}</p>}
         {c.keepPrivate && <p className="note">You agreed to keep this build and what you see private.</p>}
@@ -58,13 +66,13 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         sessionId={c.id}
         seenAt={seenAt}
         refusal={refusal}
-        label={c.liveRateCents != null ? `In your contract · ${c.liveRateCents === 0 ? "free" : money(testerShare(c.liveRateCents)) + "/h for you"} · ${c.liveMinutes} min` : "Extra (not in the listing): the developer decides what to pay"}
+        label={c.liveRateCents != null ? `In your contract · ${c.liveRateCents === 0 ? "free" : money(testerShare(c.liveRateCents)) + "/h for you"} · ${c.liveMinutes} min` : "Not in your contract"}
         open={visible.map((s) => ({ id: s.id, when: s.startsAt.toISOString(), minutes: s.minutes }))}
-        mine={c.calls.map((x) => ({ id: x.id, when: x.startsAt.toISOString(), minutes: x.minutes, room: roomUrl(x, x.slot), canCancel: canCancelCall(x.startsAt, now).ok, started: x.startsAt <= now, reported: !!x.noShowBy, cancelled: cancelledText(x) }))}
+        mine={c.calls.map((x) => ({ id: x.id, when: x.startsAt.toISOString(), minutes: x.minutes, room: roomUrl(x, x.slot), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, cancelled: cancelledText(x) }))}
       />
       {c.calls.filter((x) => !x.review && x.status === "booked" && x.startsAt <= now).map((x) => (
         <p key={x.id} className="info">
-          Live call on {fmtDateTime(x.startsAt)}: waiting for {dev} to pay.{failedCalls.has(x.id) && ` ${DELAYED_CALL_LINE}`}
+          Live call on {fmtDateTime(x.startsAt)}: waiting for {dev} to pay. {partLine(x.rateCents == null ? null : x.rateCents, x.askedCents, partPaid.get(x.id) ?? 0)}{failedCalls.has(x.id) && ` ${DELAYED_CALL_LINE}`}
         </p>
       ))}
       {c.calls.filter((x) => x.review).map((x) => (
@@ -77,6 +85,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       <section className="panel" id="written">
         <h2>Written answers</h2>
         <p className="note">{label(c.writtenCents != null)}{c.writtenCents != null && ` · ${c.writtenCents === 0 ? "free" : money(testerShare(c.writtenCents)) + " for you"}`}</p>
+        {written && <p className="text-sm">{partLine(written.agreedCents, written.askedCents, partPaid.get(written.id) ?? 0)}</p>}
         {written && (
           <p className="text-sm">
             Sent {fmtDateTime(written.updatedAt)}
@@ -101,6 +110,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       <section className="panel" id="recording">
         <h2>Screen recording</h2>
         <p className="note">{label(c.recordingCents != null)}{c.recordingCents != null && ` · ${c.recordingCents === 0 ? "free" : money(testerShare(c.recordingCents)) + " for you"}`}</p>
+        {recording && <p className="text-sm">{partLine(recording.agreedCents, recording.askedCents, partPaid.get(recording.id) ?? 0)}</p>}
         {recording && (
           <p className="text-sm">
             Sent {fmtDateTime(recording.updatedAt)}
@@ -144,7 +154,7 @@ function TesterReview({ sessionId, kind, id, review, dispute }: { sessionId: str
           {review.reason && <> · “{review.reason}”</>}
         </p>
       )}
-      {review.agreedCents == null && <p className="note">This was extra work (not in the listing): the developer&apos;s amount is final.</p>}
+      {review.agreedCents == null && <p className="note">This wasn&apos;t in your contract, so the developer&apos;s amount is final.</p>}
       {dispute && <p>{dispute.status === "open" ? "You disputed this: waiting for the team." : `The team decided: ${money(dispute.decidedCents)} in all${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : ""}.`}</p>}
       {may && <DisputeForm sessionId={sessionId} kind={kind} id={id} />}
     </div>

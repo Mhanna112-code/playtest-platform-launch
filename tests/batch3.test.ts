@@ -48,7 +48,7 @@ describe("latest batch rules", () => {
 
   it("no 'mark' wording anywhere in the app", () => {
     const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
-    const hits = walk(path.resolve(__dirname, "../src")).filter((f) => /no mark|counts against/i.test(fs.readFileSync(f, "utf8")));
+    const hits = walk(path.resolve(__dirname, "../src")).filter((f) => /no mark|counts against|extra work|Extra \(not|flag it/i.test(fs.readFileSync(f, "utf8")));
     expect(hits).toEqual([]);
   });
 });
@@ -97,9 +97,14 @@ describe("email settings and the bell", () => {
 });
 
 describe("live calls blocked during holds and on stopped/closed tests", () => {
-  it("a hold cancels booked calls with the tester's line and blocks offering and booking", async () => {
+  it("a hold cancels only calls whose time comes during it (with the tester's line) and blocks offering and booking; length entry still works", async () => {
     const { dev, testId, tester, sessionId, call, slots } = await withCall();
     await startHold(dev.user.id, "unpaid");
+    expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).status).toBe("booked");
+    await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: new Date(Date.now() - 2 * 3_600_000) } });
+    await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 60_000) } });
+    const { sweepHeldCalls } = await import("@/lib/server/holds");
+    await sweepHeldCalls(dev.user.id);
     expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).status).toBe("cancelled");
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "was cancelled because the test is paused." } } })).toBe(1);
     expect((await act(testId, "offer-times", dev.cookie, { seenAt: seen(), confirmed: true, times: [inHours(150)] })).body.error.message).toContain("paused");
@@ -151,9 +156,10 @@ describe("call length and payment problems on a call", () => {
     await chargebackOpened(p.stripePaymentIntentId!);
     expect(await db.testEvent.count({ where: { testId, kind: "chargeback", text: "Your bank reversed your $15.00 payment for Ana Silva's live call" } })).toBe(1);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
-    const { payOwed } = await import("@/lib/server/holds");
-    expect(await payOwed(dev.user)).toEqual({ paid: 1, lifted: true });
-    expect(await db.payment.count({ where: { callId: call.id, kind: "repay", status: "charged" } })).toBe(1);
+    const { payOwed, resolveChargeback } = await import("@/lib/server/holds");
+    expect(await payOwed(dev.user)).toEqual({ paid: 0, stillFailing: [], lifted: false }); // chargebacks can't be retried
+    await resolveChargeback(p.id);
+    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();
   });
 });
 
@@ -168,5 +174,61 @@ describe("leaving", () => {
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).status).toBe(200);
     expect(makeUser).toBeDefined();
+  });
+});
+
+describe("newest owner rules", () => {
+  it("rules: ask, pay start, auto-pay, cancel reason and line, heads-up line, summaries, failed lines", () => {
+    expect(R.payStart(1000, 1200)).toBe(1200);
+    expect(R.payStart(1000, null)).toBe(1000);
+    expect(R.payStart(null, null)).toBeNull();
+    expect(R.autoPayFor(1000, 600)).toBe(600);
+    expect(R.autoPayFor(1000, 1500)).toBe(1000);
+    expect(R.autoPayFor(null, 500)).toBeNull();
+    expect(R.checkAsk(-5).ok).toBe(false);
+    const now = new Date(2026, 10, 4, 15, 0);
+    const call = new Date(2026, 10, 5, 15, 0);
+    expect(R.checkCancel(new Date(now.getTime() + 20 * 3_600_000), now, "").ok).toBe(false);
+    expect(R.checkCancel(new Date(now.getTime() + 30 * 3_600_000), now, "").ok).toBe(true);
+    expect(R.cancelLine("Ben Carter", call, "car trouble")).toBe("Ben Carter cancelled the call on Thu, Nov 5 at 3:00 PM: car trouble");
+    expect(R.closesInLine("Harbor Run", new Date(now.getTime() + (2 * 24 + 4) * 3_600_000), now)).toBe("⏱ Harbor Run closes in 2 days 4 hours: send your work before then.");
+    expect(R.closesInLine("Harbor Run", new Date(now.getTime() + 5 * 3_600_000), now)).toBe("⏱ Harbor Run closes in 5 hours: send your work before then.");
+    expect(R.emailDecision("weekly", false)).toBe("summary");
+    expect(R.emailDecision("off", false)).toBe("skip");
+    expect(R.summaryDue("weekly", new Date(now.getTime() - 3 * DAY), now)).toBe(false);
+    expect(R.summaryDue("weekly", new Date(now.getTime() - 7 * DAY), now)).toBe(true);
+    expect(R.summaryDue("monthly", null, now)).toBe(true);
+    expect(R.failedLine("Ana Silva's written answers", 800, new Date(2026, 9, 20))).toBe("Ana Silva's written answers $8.00 · card declined Oct 20");
+  });
+
+  it("asked amounts are stored on written answers, recordings and call bookings", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], ask: "12.00" });
+    expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId } })).askedCents).toBe(1200);
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], ask: "abc" })).status).toBe(400);
+    await act(testId, "offer-times", dev.cookie, { seenAt: seen(), confirmed: true, times: [inHours(48)] });
+    const slot = await db.callSlot.findFirstOrThrow({ where: { testId } });
+    await sact(sessionId, "book", tester.cookie, { seenAt: seen(), confirmed: true, slotId: slot.id, ask: "20" });
+    expect((await db.call.findFirstOrThrow({ where: { contractId: sessionId } })).askedCents).toBe(2000);
+  });
+
+  it("several failed payments: one press retries them all; the hold lifts only when all are paid; the rest are named", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
+    const mk = (amountCents: number) => db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() - 1000) } });
+    await mk(800);
+    await mk(2000);
+    await startHold(dev.user.id, "unpaid");
+    setStripeForTests({ paymentIntents: { create: async (p: { amount: number }) => { if (p.amount === 2000) throw new Error("declined"); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
+    const { payOwed, owedLines } = await import("@/lib/server/holds");
+    expect((await owedLines(dev.user.id)).map((l) => l.text)).toEqual([expect.stringMatching(/^Ana Silva's written answers \$8\.00 · card declined /), expect.stringMatching(/\$20\.00 · card declined /)]);
+    const r = await payOwed(dev.user);
+    expect(r).toMatchObject({ paid: 1, lifted: false });
+    expect(r.stillFailing).toHaveLength(1);
+    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
+    setStripeForTests({ paymentIntents: { create: async () => ({ id: "pi_" + randomUUID(), status: "succeeded" }) } } as unknown as Stripe);
+    expect(await payOwed(dev.user)).toMatchObject({ paid: 1, lifted: true });
   });
 });

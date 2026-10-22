@@ -83,7 +83,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0], body: R
   const { rev, payment, c, piece, name } = reserved;
   if (reject) {
     const canDisp = rev.agreedCents != null && rev.agreedCents > 0;
-    await notify(c.tester.email, `Your ${piece.label} on “${c.title}” wasn't accepted`, [`${displayName(dev)} rejected your ${piece.label}: “${rev.reason}”`, canDisp ? "It's part of your contract, so you can dispute this once from your session page." : "It was extra work (not in the listing), so this is final."], `/app/sessions/${c.id}`);
+    await notify(c.tester.email, `Your ${piece.label} on “${c.title}” wasn't accepted`, [`${displayName(dev)} rejected your ${piece.label}: “${rev.reason}”`, canDisp ? "It's part of your contract, so you can dispute this once from your session page." : "It wasn't in your contract, so this is final."], `/app/sessions/${c.id}`);
     return { reviewId: rev.id, amountCents: 0, rejected: true, paidSoFarCents: await paidSoFar(c.id) };
   }
   let result;
@@ -127,9 +127,7 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   const review = await db.review.findFirst({ where: { ...where, contractId } });
   if (!review) throw new HttpError(409, "not_paid", "This hasn't been paid yet.");
   const existing = await db.dispute.findFirst({ where });
-  // Extra work paid $0 automatically after 14 days: the tester can flag it to the admin (once).
-  const flag = review.auto && review.agreedCents == null && !existing;
-  const ok = flag ? { ok: true as const } : canDispute(review.amountCents, review.agreedCents, !!existing);
+  const ok = canDispute(review.amountCents, review.agreedCents, !!existing);
   if (!ok.ok) throw new HttpError(409, "no_dispute", ok.message);
   const d = await db.dispute.create({ data: { ...where, contractId, testerId: tester.id, reason } });
   await notify(c.test.developer.email, `${displayName(tester)} disputed a payment on “${c.title}”`, [`${displayName(tester)} thinks the pay should be higher: “${reason}”`, "Our team decides. A decision can only raise the pay, up to the listing amount."], `/app/tests/${c.testId}`);

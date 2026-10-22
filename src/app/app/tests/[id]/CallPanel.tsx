@@ -34,7 +34,12 @@ export function CallPanel(p: { testId: string; seenAt: string; minutes: number; 
                 <li key={b.id} className="flex flex-wrap items-center gap-2">
                   <span className="mr-auto">{fmt(b.when)} · {b.minutes} min · {b.name}</span>
                   {!b.started && <a className="btn-ghost" href={b.room} target="_blank" rel="noreferrer">Join call</a>}
-                  {!b.started && (b.canCancel ? <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: b.id })}>Cancel the call</button> : <span className="note">Cancel only 24 hours or more ahead.</span>)}
+                  {!b.started && (b.canCancel ? <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: b.id })}>Cancel the call</button> : (
+                    <span className="inline-flex gap-2">
+                      <input className="input w-56" placeholder="Why? (less than 24 hours away)" value={report["c" + b.id] ?? ""} onChange={(e) => setReport({ ...report, ["c" + b.id]: e.target.value })} />
+                      <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: b.id, reason: report["c" + b.id] ?? "" })}>Cancel the call</button>
+                    </span>
+                  ))}
                   {b.started && !b.reported && (
                     <span className="inline-flex gap-2">
                       <a className="btn-ghost" href={b.room} target="_blank" rel="noreferrer">Join call</a>

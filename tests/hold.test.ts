@@ -81,19 +81,26 @@ describe("payment hold", () => {
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).status).toBe(200);
   });
 
-  it("booked calls in the hold are cancelled with no fault to the tester, who reads only that the test is paused", async () => {
+  it("only booked calls whose time comes during the hold are cancelled; the tester reads only that the test is paused", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await act(testId, "offer-times", dev.cookie, { seenAt: seen(), confirmed: true, times: [new Date(Date.now() + 2 * DAY).toISOString(), new Date(Date.now() + 3 * DAY).toISOString()] });
     const slots = await db.callSlot.findMany({ where: { testId }, orderBy: { startsAt: "asc" } });
     await sact(sessionId, "book", tester.cookie, { seenAt: seen(), slotId: slots[0].id });
     await startHold(dev.user.id, "unpaid");
+    const call = await db.call.findFirstOrThrow({ where: { contractId: sessionId } });
+    expect(call.status).toBe("booked"); // a call after the hold may still happen
+    // The hold goes on; the call's time comes while still on hold → cancelled.
+    await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: new Date(Date.now() - 2 * 3_600_000) } });
+    await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 60_000) } });
+    const { sweepHeldCalls } = await import("@/lib/server/holds");
+    await sweepHeldCalls(dev.user.id);
     expect(await db.call.findFirstOrThrow({ where: { contractId: sessionId } })).toMatchObject({ status: "cancelled", cancelledBy: "system" });
     const mail = await db.outboxEmail.findFirstOrThrow({ where: { to: tester.user.email, subject: { contains: "was cancelled" } } });
     expect(mail.text).toContain("This test is paused. Payment for your work may be delayed.");
     expect(mail.text).not.toMatch(/hold|chargeback|suspend/i);
     expect((await sact(sessionId, "book", tester.cookie, { seenAt: seen(), slotId: slots[1].id, confirmed: true })).body.error.message).toBe("This test is paused. Payment for your work may be delayed.");
-    expect((await sact(sessionId, "leave", tester.cookie)).status).toBe(200); // may leave with no mark
+    expect((await sact(sessionId, "leave", tester.cookie)).status).toBe(200); // may leave any time
   });
 });
 
@@ -129,7 +136,7 @@ describe("daily job", () => {
     expect((await cronGET(new Request("http://localhost:3400/api/cron/daily"))).status).toBe(401);
   });
 
-  it("pays the listing amount after 14 days unreviewed (extra work $0, which the tester can flag); not during a hold", async () => {
+  it("pays contract parts after 14 days unreviewed (lower of listing and asked); never parts outside the contract; not during a hold", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -141,15 +148,25 @@ describe("daily job", () => {
     await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: null } });
     await cron();
     expect(await db.review.findFirstOrThrow({ where: { submissionId: sub.id } })).toMatchObject({ amountCents: 1000, auto: true });
-    // Extra work: $0, and the tester can flag it.
+    // Outside the contract: never auto-paid; the developer gets a bell reminder every 7 days.
     const x = await setup({ writtenCents: null, questions: [] });
     const j = await joined(x.testId);
-    await sact(j.sessionId, "written", j.tester.cookie, { answers: ["extra"] });
+    await sact(j.sessionId, "written", j.tester.cookie, { answers: ["more feedback"] });
     const xs = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
     await db.submission.update({ where: { id: xs.id }, data: { payBy: new Date(Date.now() - 1000) } });
     await cron();
-    expect(await db.review.findFirstOrThrow({ where: { submissionId: xs.id } })).toMatchObject({ amountCents: 0, auto: true });
-    expect((await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: xs.id, reason: "This was a full extra report" })).status).toBe(200);
+    await cron(); // not reminded twice within 7 days
+    expect(await db.review.count({ where: { submissionId: xs.id } })).toBe(0);
+    expect(await db.notification.count({ where: { userId: x.dev.user.id, text: { contains: "still waits for you to pay or reject" } } })).toBe(1);
+    // A contract part with a lower asked amount auto-pays the asked amount.
+    const y = await setup();
+    const k = await joined(y.testId);
+    await sact(k.sessionId, "written", k.tester.cookie, { answers: ["a", "b"], ask: "6.00" });
+    const ys = await db.submission.findFirstOrThrow({ where: { contractId: k.sessionId } });
+    expect(ys.askedCents).toBe(600);
+    await db.submission.update({ where: { id: ys.id }, data: { payBy: new Date(Date.now() - 1000) } });
+    await cron();
+    expect(await db.review.findFirstOrThrow({ where: { submissionId: ys.id } })).toMatchObject({ amountCents: 600, auto: true });
   });
 
   it("a failed charge unpaid after 3 days starts a hold; Open until heads-ups go 3 days and 1 day before", async () => {

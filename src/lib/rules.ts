@@ -35,7 +35,7 @@ export const MAX_PAY_CENTS = 500_000;
 
 /**
  * The one Pay box (owner update, Oct 22): any amount from $0 up. A reason is required when the amount is below the
- * listing amount (extra work has no listing amount: any amount, no reason needed). A non-zero amount is at least the
+ * listing amount (a part outside the contract has no listing amount: any amount, no reason needed). A non-zero amount is at least the
  * smallest card charge. The "charged now: $X" tick must name exactly this amount.
  */
 export function checkPay(amountCents: number | null, listingCents: number | null, reason: string, tickedCents: number | null): Check {
@@ -48,16 +48,16 @@ export function checkPay(amountCents: number | null, listingCents: number | null
   return yes;
 }
 
-/** The listing amount for a part from the tester's contract; null = not in the listing (extra work). */
+/** The listing amount for a part from the tester's contract; null = not in the contract. */
 export function listingAmount(c: { writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null }, kind: "written" | "recording" | "call", bookedMinutes = 0) {
   if (kind === "written") return c.writtenCents;
   if (kind === "recording") return c.recordingCents;
   return c.liveRateCents == null ? null : callCharge(c.liveRateCents, bookedMinutes);
 }
 
-/** Disputes: only parts in the contract paid below the listing amount; once per part. Extra work's amount is final. */
+/** Disputes: only parts in the contract paid below the listing amount; once per part. Outside the contract, the amount is final. */
 export function canDispute(paidCents: number, listingCents: number | null, alreadyDisputed: boolean): Check {
-  if (listingCents == null) return no("This was extra work (not in the listing): the developer's amount is final.");
+  if (listingCents == null) return no("This wasn't in your contract, so the developer's amount is final.");
   if (alreadyDisputed) return no("You already disputed this payment. A part can be disputed once.");
   if (paidCents >= listingCents) return no("This part was paid the listing amount or more, so there's nothing to dispute.");
   return yes;
@@ -294,7 +294,7 @@ export const OWED_DAYS = 3; // a failed charge unpaid this long starts a payment
 export const HOLD_ALERT_DAYS = 30; // the admin is alerted to close the tests
 const DAY = 86_400_000;
 
-/** What gets paid automatically after 14 days: the listing amount; extra work $0 (the tester can flag it to the admin). */
+/** What gets paid automatically after 14 days: the listing amount (older rule; see autoPayFor). */
 export const autoPayAmount = (listingCents: number | null) => listingCents ?? 0;
 export const payByFrom = (sentAt: Date) => new Date(sentAt.getTime() + REVIEW_DAYS * DAY);
 export const owedUntilFrom = (failedAt: Date) => new Date(failedAt.getTime() + OWED_DAYS * DAY);
@@ -382,5 +382,54 @@ export const DELAYED_CALL_LINE = "Payment for this call may be delayed.";
 /** Email settings: each update / one daily summary / none. Sign-in links and payment receipts always send. */
 export function emailDecision(pref: string, always: boolean): "send" | "summary" | "skip" {
   if (always || pref === "each" || !pref) return "send";
-  return pref === "daily" ? "summary" : "skip";
+  if (pref === "off" || pref === "none") return "skip";
+  return "summary"; // daily / weekly / monthly
 }
+
+// ---------- Newest owner rules (Oct 22): asked amounts, cancelling, summaries, heads-up line ----------
+
+/** The Pay box starts at the asked amount if there is one, else the listing amount (else empty). */
+export const payStart = (listingCents: number | null, askedCents: number | null) => askedCents ?? listingCents;
+
+/** Auto-pay at 14 days: contract parts only, the listing amount or the asked amount if lower; null = never auto-paid. */
+export const autoPayFor = (listingCents: number | null, askedCents: number | null) =>
+  listingCents == null ? null : Math.min(listingCents, askedCents ?? listingCents);
+export const REMIND_DAYS = 7;
+
+/** "Ask $___ for this": optional; any amount from $0 up to the one-payment cap. */
+export function checkAsk(cents: number | null): Check {
+  if (cents == null) return yes;
+  if (!Number.isInteger(cents) || cents < 0) return no("Enter the amount you ask like 7.50, or leave it empty.");
+  if (cents > MAX_PAY_CENTS) return no(`Ask at most ${money(MAX_PAY_CENTS)}.`);
+  return yes;
+}
+
+/** Cancel a call any time; within 24 hours of it a reason is required (the other side sees it). */
+export const cancelNeedsReason = (startsAt: Date, now: Date) => startsAt.getTime() - now.getTime() < CANCEL_HOURS * 3_600_000;
+export function checkCancel(startsAt: Date, now: Date, reason: string): Check {
+  if (cancelNeedsReason(startsAt, now) && reason.trim().length < 3) return no("The call is less than 24 hours away: say why you're cancelling (the other side sees it).");
+  return yes;
+}
+const whenLong = (d: Date) =>
+  `${d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} at ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+export const cancelLine = (name: string, startsAt: Date, reason: string) => `${name} cancelled the call on ${whenLong(startsAt)}${reason.trim() ? `: ${reason.trim()}` : "."}`;
+
+/** "⏱ Harbor Run closes in 2 days 4 hours: send your work before then." */
+export function closesInLine(title: string, openUntil: Date, now: Date) {
+  const mins = Math.max(0, Math.floor((openUntil.getTime() - now.getTime()) / 60_000));
+  const d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60), m = mins % 60;
+  const pl = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  const left = d > 0 ? [pl(d, "day"), h ? pl(h, "hour") : ""].filter(Boolean).join(" ") : h > 0 ? [pl(h, "hour"), m ? pl(m, "minute") : ""].filter(Boolean).join(" ") : pl(Math.max(m, 1), "minute");
+  return `⏱ ${title} closes in ${left}: send your work before then.`;
+}
+
+/** Summary emails: daily, weekly or monthly since the last one. */
+export function summaryDue(pref: string, last: Date | null, now: Date) {
+  const days = pref === "daily" ? 1 : pref === "weekly" ? 7 : pref === "monthly" ? 30 : 0;
+  if (!days) return false;
+  return !last || now.getTime() - last.getTime() >= days * 86_400_000 - 3_600_000;
+}
+
+/** One line per failed payment in the hold box. */
+export const failedLine = (what: string, cents: number, failedAt: Date) =>
+  `${what} ${money(cents)} · card declined ${failedAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;

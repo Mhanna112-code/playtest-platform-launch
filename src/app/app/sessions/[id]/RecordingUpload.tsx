@@ -9,6 +9,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore }: 
   const [progress, setProgress] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [ask, setAsk] = useState("");
   const uploaded = recordings.filter((r) => r.uploaded);
 
   async function upload(file: File) {
@@ -54,13 +55,16 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore }: 
       )}
       {progress != null && <p className="note">Uploading… {progress}%</p>}
       {canSend && uploaded.length > 0 && (
+        <label className="block text-sm">Ask $ <input className="input inline w-24" inputMode="decimal" placeholder="optional" value={ask} onChange={(e) => setAsk(e.target.value)} /> for this</label>
+      )}
+      {canSend && uploaded.length > 0 && (
         <button
           className="btn"
           disabled={busy}
           onClick={async () => {
             setBusy(true);
             try {
-              await api(`/api/sessions/${sessionId}/recording-send`, {});
+              await api(`/api/sessions/${sessionId}/recording-send`, { ask });
               window.location.reload();
             } catch (e) {
               setErr((e as Error).message);

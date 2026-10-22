@@ -12,6 +12,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
 export function TesterCallPanel(p: { sessionId: string; seenAt: string; label: string; open: Slot[]; mine: Mine[]; refusal: string }) {
   const { press, changes, error, busy } = usePress(p.seenAt);
   const [report, setReport] = useState<Record<string, string>>({});
+  const [ask, setAsk] = useState("");
   async function go(action: string, body: Record<string, unknown>) {
     const r = await press(`/api/sessions/${p.sessionId}/${action}`, body);
     if (r) window.location.reload();
@@ -28,7 +29,12 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; label: s
               <li key={m.id} className="flex flex-wrap items-center gap-2">
                 <span className="mr-auto">{fmt(m.when)} · {m.minutes} min{m.cancelled && ` · ${m.cancelled}`}</span>
                 {!m.cancelled && <a className="btn-ghost" href={m.room} target="_blank" rel="noreferrer">Join call</a>}
-                {!m.cancelled && !m.started && (m.canCancel ? <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: m.id })}>Cancel</button> : <span className="note">Cancel only 24 hours or more ahead.</span>)}
+                {!m.cancelled && !m.started && (m.canCancel ? <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: m.id })}>Cancel</button> : (
+                  <span className="inline-flex gap-2">
+                    <input className="input w-48" placeholder="Why? (less than 24 hours away)" value={report["c" + m.id] ?? ""} onChange={(e) => setReport({ ...report, ["c" + m.id]: e.target.value })} />
+                    <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: m.id, reason: report["c" + m.id] ?? "" })}>Cancel</button>
+                  </span>
+                ))}
                 {!m.cancelled && m.started && !m.reported && (
                   <span className="inline-flex gap-2">
                     <input className="input w-56" placeholder="The developer didn't show up…" value={report[m.id] ?? ""} onChange={(e) => setReport({ ...report, [m.id]: e.target.value })} />
@@ -40,13 +46,16 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; label: s
             ))}
           </ul>
         )}
+        {!p.refusal && !upcoming && p.open.length > 0 && (
+          <label className="block text-sm">Ask $ <input className="input inline w-24" inputMode="decimal" placeholder="optional" value={ask} onChange={(e) => setAsk(e.target.value)} /> for this call</label>
+        )}
         {!p.refusal && !upcoming && (
           p.open.length === 0 ? <p className="note">No call times offered yet. You&apos;ll get an email when there are.</p> : (
             <ul className="space-y-1 text-sm">
               {p.open.map((s) => (
                 <li key={s.id} className="flex items-center gap-2">
                   <span className="mr-auto">{fmt(s.when)} · {s.minutes} min</span>
-                  <button className="btn-ghost" disabled={busy} onClick={() => go("book", { slotId: s.id })}>Book</button>
+                  <button className="btn-ghost" disabled={busy} onClick={() => go("book", { slotId: s.id, ask })}>Book</button>
                 </li>
               ))}
             </ul>

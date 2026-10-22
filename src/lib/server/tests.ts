@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, pronouns, toCents } from "@/lib/format";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import {
-  changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, devStopOnce, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
+  changedTerms, checkAsk, checkListing, checkOpenUntilChange, contractSnapshot, devStopOnce, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
@@ -376,7 +376,7 @@ export async function leaveTest(tester: U, contractId: string) {
 
 /**
  * Send (or update, until it's paid) the written answers: one answer per question in the contract. Allowed even when
- * written answers aren't in the contract (extra work) and after the deadline (marked late).
+ * written answers aren't in the contract and after the deadline (shown as sent late).
  */
 export async function sendWritten(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
@@ -384,6 +384,10 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   const answers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim().slice(0, 10_000) : "")) : [];
   if (answers.length !== qs.length || answers.some((a) => !a)) throw new HttpError(400, "bad_answers", "Answer every question before sending.");
   const notes = str(body.notes, 10_000);
+  const askedCents = body.ask === undefined || body.ask === null || body.ask === "" ? null : toCents(body.ask);
+  if (body.ask && askedCents == null) throw new HttpError(400, "bad_ask", "Enter the amount you ask like 7.50, or leave it empty.");
+  const askOk = checkAsk(askedCents);
+  if (!askOk.ok) throw new HttpError(400, "bad_ask", askOk.message);
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   const { sub, updated } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);
@@ -393,7 +397,7 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     const now = new Date();
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
     if (existing?.review) throw new HttpError(409, "paid", "Your written answers were already paid for, so they can't be changed. Send anything new in the chat.");
-    const data = { answers, notes, late: isLate(c.dueAt, now), updatedAt: now, payBy: payByFrom(now) };
+    const data = { answers, notes, late: isLate(c.dueAt, now), updatedAt: now, payBy: payByFrom(now), askedCents };
     const sub = existing
       ? await tx.submission.update({ where: { id: existing.id }, data })
       : await tx.submission.create({ data: { contractId, kind: "written", agreedCents: c.writtenCents, ...data } });

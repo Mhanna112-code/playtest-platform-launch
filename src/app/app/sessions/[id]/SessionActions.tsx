@@ -6,6 +6,7 @@ import { api } from "@/lib/client";
 export function WrittenForm({ sessionId, questions, initial, initialNotes, update }: { sessionId: string; questions: string[]; initial: string[]; initialNotes: string; update: boolean }) {
   const [answers, setAnswers] = useState<string[]>(questions.map((_, i) => initial[i] ?? ""));
   const [notes, setNotes] = useState(initialNotes);
+  const [ask, setAsk] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -14,7 +15,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     setBusy(true);
     setMsg(null);
     try {
-      await api(`/api/sessions/${sessionId}/written`, { answers, notes });
+      await api(`/api/sessions/${sessionId}/written`, { answers, notes, ask });
       window.location.reload();
     } catch (err) {
       setMsg({ ok: false, text: (err as Error).message });
@@ -34,6 +35,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
         <label className="label" htmlFor="notes">Anything else (bugs, ideas)</label>
         <textarea id="notes" rows={2} className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
+      <label className="block text-sm">Ask $ <input className="input inline w-24" inputMode="decimal" placeholder="optional" value={ask} onChange={(e) => setAsk(e.target.value)} /> for this</label>
       <button className="btn" disabled={busy}>{busy ? "Sending…" : update ? "Send the updated answers" : "Send my written answers"}</button>
       {msg && <p className={msg.ok ? "ok" : "err"}>{msg.text}</p>}
     </form>

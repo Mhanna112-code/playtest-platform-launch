@@ -22,7 +22,7 @@ export async function POST(req: Request, { params }: Ctx) {
       case "recording-done":
         return ok(await finishRecording(u, id, body));
       case "recording-send":
-        return ok(await sendRecording(u, id));
+        return ok(await sendRecording(u, id, body));
       case "message": {
         const m = await sendMessage(u, id, body.body);
         return ok({ id: m.id });

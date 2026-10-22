@@ -77,14 +77,13 @@ describe("booking and cancelling", () => {
     expect(r.body.error.message).toBe("Someone already booked that time. Pick another.");
   });
 
-  it("cancel only 24 hours or more ahead; a tester's cancel opens the time again, a developer's removes it", async () => {
+  it("cancel any time; within 24 hours a reason is required and the other side sees it; a tester's cancel reopens the time, a developer's removes it", async () => {
     const { dev, testId, tester, sessionId, slots } = await withTimes({}, [10, 48]);
     await sact(sessionId, "book", tester.cookie, { seenAt: seen(), slotId: slots[0].id });
     const near = await db.call.findFirstOrThrow({ where: { contractId: sessionId } });
-    expect((await sact(sessionId, "cancel-call", tester.cookie, { seenAt: seen(), callId: near.id })).body.error.message).toBe("Calls can only be cancelled 24 hours or more ahead.");
-    // Move it 2 days out, then cancel.
-    await db.call.update({ where: { id: near.id }, data: { startsAt: new Date(inHours(30)) } });
-    expect((await sact(sessionId, "cancel-call", tester.cookie, { seenAt: seen(), callId: near.id })).status).toBe(200);
+    expect((await sact(sessionId, "cancel-call", tester.cookie, { seenAt: seen(), callId: near.id })).body.error.message).toBe("The call is less than 24 hours away: say why you're cancelling (the other side sees it).");
+    expect((await sact(sessionId, "cancel-call", tester.cookie, { seenAt: seen(), callId: near.id, reason: "car trouble" })).status).toBe(200);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { endsWith: ": car trouble" }, AND: { text: { startsWith: "Ana Silva cancelled the call on " } } } })).toBe(1);
     expect((await db.callSlot.findUniqueOrThrow({ where: { id: slots[0].id } })).status).toBe("open");
     await sact(sessionId, "book", tester.cookie, { seenAt: seen(), slotId: slots[1].id, confirmed: true });
     const c2 = await db.call.findFirstOrThrow({ where: { contractId: sessionId, status: "booked" } });

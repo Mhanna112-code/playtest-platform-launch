@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { displayName, fmtDateTime, pronouns } from "@/lib/format";
-import { CALL_KINDS, canCancelCall, checkActualMinutes, PAUSED_FOR_TESTERS, stopOnce, type TestEventLike } from "@/lib/rules";
+import { displayName, fmtDateTime, pronouns, toCents } from "@/lib/format";
+import { CALL_KINDS, cancelLine, checkActualMinutes, checkAsk, checkCancel, PAUSED_FOR_TESTERS, stopOnce, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { devGate, devOnHold, ownContract, ownTest, recordEvent, seenDate, sessionRefusal, staleNote } from "./tests";
@@ -77,21 +77,23 @@ export async function removeTime(dev: U, testId: string, body: Record<string, un
 export async function devCancelCall(dev: U, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
   const callId = String(body.callId ?? "");
+  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 500) : "";
   const call = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
     const c = await tx.call.findUnique({ where: { id: callId }, include: { contract: { include: { tester: true } } } });
     if (!c || c.contract.testId !== testId) throw new HttpError(404, "not_found", "That call doesn't exist.");
     const name = displayName(c.contract.tester);
     if (c.status === "cancelled") throw new HttpError(409, "cancelled", `The call with ${name} was already cancelled.` + (await staleNote(testId, body.seenAt)));
-    const ok = canCancelCall(c.startsAt, new Date());
-    if (!ok.ok) throw new HttpError(409, "too_late", ok.message);
+    const ok = checkCancel(c.startsAt, new Date(), reason);
+    if (!ok.ok) throw new HttpError(400, "reason", ok.message);
     await devGate(tx, testId, body.seenAt, body.confirmed === true);
-    await tx.call.update({ where: { id: c.id }, data: { status: "cancelled", cancelledBy: "developer", cancelledAt: new Date() } });
+    await tx.call.update({ where: { id: c.id }, data: { status: "cancelled", cancelledBy: "developer", cancelledAt: new Date(), cancelNote: reason } });
     await tx.callSlot.update({ where: { id: c.slotId }, data: { status: "removed" } });
     await recordEvent(tx, testId, "cancelled", `You cancelled the call with ${name} on ${fmtDateTime(c.startsAt)}`, false, {}, c.contractId);
     return c;
   });
-  await notify(call.contract.tester.email, `Your call on “${call.contract.title}” was cancelled`, [`${displayName(dev)} cancelled your live call on ${fmtDateTime(call.startsAt)}.`], `/app/sessions/${call.contractId}`);
+  const line = cancelLine(displayName(dev), call.startsAt, reason);
+  await notify(call.contract.tester.email, line, [line], `/app/sessions/${call.contractId}`);
   return { cancelled: true };
 }
 
@@ -125,6 +127,10 @@ export async function bookTime(tester: U, contractId: string, body: Record<strin
   const c0 = await ownContract(tester.id, contractId);
   const slotId = String(body.slotId ?? "");
   const dev = c0.test.developer;
+  const askedCents = body.ask === undefined || body.ask === null || body.ask === "" ? null : toCents(body.ask);
+  if (body.ask && askedCents == null) throw new HttpError(400, "bad_ask", "Enter the amount you ask like 7.50, or leave it empty.");
+  const askOk = checkAsk(askedCents);
+  if (!askOk.ok) throw new HttpError(400, "bad_ask", askOk.message);
   const { call, slot } = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
@@ -141,7 +147,7 @@ export async function bookTime(tester: U, contractId: string, body: Record<strin
     if (upcoming) throw new HttpError(409, "has_call", `You already have a call booked: ${fmtDateTime(upcoming.startsAt)}.`);
     await testerGate(tester, c, body);
     await tx.callSlot.update({ where: { id: slot.id }, data: { status: "booked" } });
-    const call = await tx.call.create({ data: { slotId: slot.id, contractId, startsAt: slot.startsAt, minutes: slot.minutes, rateCents: c.liveRateCents } });
+    const call = await tx.call.create({ data: { slotId: slot.id, contractId, startsAt: slot.startsAt, minutes: slot.minutes, rateCents: c.liveRateCents, askedCents } });
     await recordEvent(tx, c.testId, "booked", `${displayName(tester)} booked a call for ${fmtDateTime(slot.startsAt)}`, false, {}, c.id);
     return { call, slot };
   });
@@ -153,20 +159,22 @@ export async function bookTime(tester: U, contractId: string, body: Record<strin
 export async function testerCancelCall(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
   const callId = String(body.callId ?? "");
+  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 500) : "";
   const call = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
     const call = await tx.call.findUnique({ where: { id: callId } });
     if (!call || call.contractId !== contractId) throw new HttpError(404, "not_found", "That call doesn't exist.");
     if (call.status === "cancelled") throw new HttpError(409, "cancelled", "This call was already cancelled.");
-    const ok = canCancelCall(call.startsAt, new Date());
-    if (!ok.ok) throw new HttpError(409, "too_late", ok.message);
+    const ok = checkCancel(call.startsAt, new Date(), reason);
+    if (!ok.ok) throw new HttpError(400, "reason", ok.message);
     await testerGate(tester, c0, body);
-    await tx.call.update({ where: { id: call.id }, data: { status: "cancelled", cancelledBy: "tester", cancelledAt: new Date() } });
+    await tx.call.update({ where: { id: call.id }, data: { status: "cancelled", cancelledBy: "tester", cancelledAt: new Date(), cancelNote: reason } });
     await tx.callSlot.update({ where: { id: call.slotId }, data: { status: "open" } });
     await recordEvent(tx, c0.testId, "cancelled", `${displayName(tester)} cancelled ${pronouns(tester.pronoun).poss} call on ${fmtDateTime(call.startsAt)}`, false, {}, contractId);
     return call;
   });
-  await notify(c0.test.developer.email, `${displayName(tester)} cancelled a call on “${c0.title}”`, [`${displayName(tester)} cancelled the live call on ${fmtDateTime(call.startsAt)}. The time is open again for other testers.`], `/app/tests/${c0.testId}#calls`);
+  const line = cancelLine(displayName(tester), call.startsAt, reason);
+  await notify(c0.test.developer.email, line, [line, "The time is open again for other testers."], `/app/tests/${c0.testId}#calls`);
   return { cancelled: true };
 }
 

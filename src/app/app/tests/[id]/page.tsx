@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
-import { callReference, canCancelCall, lateLabel, termsLine } from "@/lib/rules";
+import { callReference, cancelNeedsReason, closesInLine, lateLabel, termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
@@ -11,7 +11,7 @@ import { CallLength } from "./CallLength";
 import { InvitePanel } from "./InvitePanel";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { invitable, inviteExpired } from "@/lib/server/invites";
-import { owedForBox } from "@/lib/server/holds";
+import { owedForBox, sweepHeldCalls } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
 import { PayBox } from "./PayBox";
 import { TopPanel } from "./TopPanel";
@@ -43,6 +43,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const working = t.contracts.filter((c) => c.status === "working");
   const paid = await db.payment.groupBy({ by: ["contractId"], where: { contractId: { in: t.contracts.map((c) => c.id) }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } });
   const paidSoFar = (id: string) => paid.find((p) => p.contractId === id)?._sum.amountCents ?? 0;
+  await sweepHeldCalls(u.id);
   const [testers, invites, owedList] = await Promise.all([invitable(u.id, id), db.invite.findMany({ where: { testId: id, status: { in: ["sent", "joined"] } }, orderBy: { createdAt: "desc" } }), owedForBox(u.id)]);
   const people = new Map((await db.user.findMany({ where: { id: { in: invites.map((i) => i.testerId) } } })).map((x) => [x.id, displayName(x)]));
   const expired = inviteExpired(t, working.length);
@@ -51,6 +52,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const now = new Date();
   const nameOf = new Map(t.contracts.map((c) => [c.testerId, displayName(c.tester)]));
   const booked = t.contracts.flatMap((c) => c.calls.filter((x) => x.status === "booked" && !x.review).map((x) => ({ ...x, name: displayName(c.tester) })));
+  const partPaid = (id: string) => payments.filter((p) => (p.submissionId === id || p.callId === id) && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
   const payments = await db.payment.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
   return (
     <>
@@ -65,7 +67,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         working={working.map((c) => ({ contractId: c.id, name: displayName(c.tester) }))}
       />
       {(u.holdStartedAt || owedList.length > 0) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} />}
-      {soon && <p className="info">{t.title} closes on {fmtDate(t.openUntil!)}: testers should send their work before then.</p>}
+      {soon && <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{closesInLine(t.title, t.openUntil!, new Date())}</p>}
       {t.status !== "stopped" && (
         <InvitePanel
           testId={t.id}
@@ -82,7 +84,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         stopped={t.status === "stopped"}
         testers={working.map((c) => ({ id: c.testerId, name: displayName(c.tester) }))}
         open={openSlots.map((s) => ({ id: s.id, when: s.startsAt.toISOString(), minutes: s.minutes, who: s.allowedTesterIds.length ? "only " + s.allowedTesterIds.map((x) => nameOf.get(x) ?? "?").join(", ") : "all testers" }))}
-        booked={booked.map((b) => ({ id: b.id, when: b.startsAt.toISOString(), minutes: b.minutes, name: b.name, room: roomUrl(b, b.slot), canCancel: canCancelCall(b.startsAt, now).ok, started: b.startsAt <= now, reported: !!b.noShowBy }))}
+        booked={booked.map((b) => ({ id: b.id, when: b.startsAt.toISOString(), minutes: b.minutes, name: b.name, room: roomUrl(b, b.slot), canCancel: !cancelNeedsReason(b.startsAt, now), started: b.startsAt <= now, reported: !!b.noShowBy }))}
       />
       {saved && <p className="ok">Saved. New testers join on the new listing; testers already in keep their contract.</p>}
 
@@ -103,14 +105,14 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             {c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).map((x) => (
               <div key={x.id} className="space-y-2 rounded-lg border border-slate-200 p-3">
                 <p className="text-sm font-medium">
-                  Live call · {x.rateCents == null ? "Extra (not in the listing)" : "In their contract"} · {fmtDateTime(x.startsAt)} · {x.minutes} min booked
+                  Live call · {x.rateCents == null ? "Not in their contract" : "In their contract"} · {fmtDateTime(x.startsAt)} · {x.minutes} min booked
                 </p>
                 {x.review ? (
                   <ReviewResult review={x.review} payments={payments.filter((p) => p.callId === x.id)} dispute={x.dispute} />
                 ) : (
                   <>
                     <CallLength testId={t.id} callId={x.id} minutes={x.actualMinutes ?? x.minutes} />
-                    <PayBox key={x.actualMinutes ?? 0} kind="call" id={x.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)}
+                    <PayBox key={x.actualMinutes ?? 0} kind="call" id={x.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} askedCents={x.askedCents} partPaidCents={partPaid(x.id)}
                       listingCents={callReference(x.rateCents, x.actualMinutes ?? x.minutes).cents}
                       listingText={callReference(x.rateCents, x.actualMinutes ?? x.minutes).text.replace(/^Listing: /, "")} />
                   </>
@@ -120,7 +122,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             {c.submissions.map((s) => (
               <div key={s.id} className="space-y-2 rounded-lg border border-slate-200 p-3">
                 <p className="text-sm font-medium">
-                  {s.kind === "written" ? "Written answers" : "Recording"} · {s.agreedCents == null ? "Extra (not in the listing)" : "In their contract"} · sent{" "}
+                  {s.kind === "written" ? "Written answers" : "Recording"} · {s.agreedCents == null ? "Not in their contract" : "In their contract"} · sent{" "}
                   {fmtDateTime(s.updatedAt)}
                   {s.late && <span className="ml-2 badge">{lateLabel(c.dueAt, fmtDate)}</span>}
                 </p>
@@ -141,7 +143,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {s.review ? (
                   <ReviewResult review={s.review} payments={payments.filter((p) => p.submissionId === s.id)} dispute={s.dispute} />
                 ) : (
-                  <PayBox kind="submission" id={s.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)}
+                  <PayBox kind="submission" id={s.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} askedCents={s.askedCents} partPaidCents={partPaid(s.id)}
                     listingCents={s.agreedCents} listingText={`${money(s.agreedCents)} for ${s.kind === "written" ? "written answers" : "a recording"}`} />
                 )}
               </div>

@@ -8,8 +8,9 @@ import { usePress } from "@/lib/usePress";
  * The one Pay box (with Reject next to it) for a piece of sent work or a held call. Beside it: the listing amount (or
  * "Not in the listing") and what this tester has been paid so far on the test. Its stop-once box sits directly under it.
  */
-export function PayBox(p: { kind: "submission" | "call"; id: string; name: string; listingCents: number | null; listingText: string; paidSoFarCents: number; seenAt: string }) {
-  const [amount, setAmount] = useState(p.listingCents == null ? "" : (p.listingCents / 100).toFixed(2));
+export function PayBox(p: { kind: "submission" | "call"; id: string; name: string; listingCents: number | null; listingText: string; paidSoFarCents: number; seenAt: string; askedCents?: number | null; partPaidCents?: number }) {
+  const start = p.askedCents ?? p.listingCents;
+  const [amount, setAmount] = useState(start == null ? "" : (start / 100).toFixed(2));
   const [reason, setReason] = useState("");
   const [ticked, setTicked] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -33,7 +34,8 @@ export function PayBox(p: { kind: "submission" | "call"; id: string; name: strin
   return (
     <div className="space-y-2 rounded-lg bg-slate-50 p-3">
       <p className="text-sm">
-        <b>{p.listingCents == null ? "Not in the listing" : `Listing: ${p.listingText}`}</b> · You&apos;ve paid {p.name} {money(paidSoFar)} so far on this test.
+        <b>{p.listingCents == null ? "Not in their contract" : `Listing: ${p.listingText}`}</b>
+        {p.askedCents != null && <> · {p.name} asked {money(p.askedCents)}</>} · Paid so far for this part: {money(p.partPaidCents ?? 0)} · You&apos;ve paid {p.name} {money(paidSoFar)} so far on this test.
       </p>
       {!rejecting ? (
         <div className="flex flex-wrap items-end gap-2">
@@ -49,7 +51,7 @@ export function PayBox(p: { kind: "submission" | "call"; id: string; name: strin
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="note">Nothing is charged.{p.listingCents != null && p.listingCents > 0 ? ` It's in ${p.name}'s contract, so they can dispute this once.` : " It's extra work, so this is final."}</p>
+          <p className="note">Nothing is charged.{p.listingCents != null && p.listingCents > 0 ? ` It's in ${p.name}'s contract, so they can dispute this once.` : " It's not in their contract, so this is final."}</p>
           <button className="btn-danger" disabled={busy} onClick={() => go("reject")}>Reject</button>{" "}
           <button className="btn-ghost" onClick={() => setRejecting(false)}>Back to Pay</button>
         </div>
