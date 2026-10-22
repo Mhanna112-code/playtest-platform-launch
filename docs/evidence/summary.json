@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T16:41:44.951Z",
+  "run": "2026-10-22T16:46:43.985Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjrqkif00077k14tm67qumi)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjrwz2y00ep7k14jij9n8ty)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -167,9 +167,9 @@
       "title": "Auto-pay fails: owed with a 3-day cut-off (developer banner + Payments, tester line)",
       "status": "pass",
       "checks": [
-        "PASS test posted (saw: {\"id\":\"cmvjrr4gr00347k14o5f63v99\"})",
+        "PASS test posted (saw: {\"id\":\"cmvjrxlej00hm7k14vupn3fex\"})",
         "PASS both testers joined",
-        "PASS daily job ran (saw: {\"autoPaid\":2,\"holds\":0,\"alerts\":16,\"headsUps\":0})",
+        "PASS daily job ran (saw: {\"autoPaid\":2,\"holds\":0,\"alerts\":26,\"headsUps\":0})",
         "PASS developer banner with the cut-off",
         "PASS tester reads it may be delayed",
         "PASS Payments page lists both"
@@ -183,19 +183,31 @@
     {
       "id": "12",
       "title": "Cut-off passes: hold pauses every test; joins, invites, Next round, posting, Pay/Reject wait; calls inside the hold cancelled, after it kept; testers still send",
-      "status": "fail",
+      "status": "pass",
       "checks": [
-        "PASS hold started by the daily job (saw: {\"autoPaid\":0,\"holds\":1,\"alerts\":16,\"headsUps\":0})",
+        "PASS hold started by the daily job (saw: {\"autoPaid\":0,\"holds\":1,\"alerts\":26,\"headsUps\":0})",
         "PASS developer: tests paused",
         "PASS tester: paused line",
-        "FAIL tester: the call inside the hold was cancelled",
+        "PASS tester: the call inside the hold was cancelled",
         "PASS tester told why",
-        "FAIL error: locator.check: Timeout 15000ms exceeded."
+        "PASS Pay waits",
+        "PASS Next round waits",
+        "PASS join refused",
+        "PASS invite refused",
+        "PASS posting refused",
+        "PASS tester still sends"
       ],
       "screenshots": [
         "12-hold-developer.png",
         "12-hold-tester.png",
-        "12-hold-call-cancelled-tester.png"
+        "12-hold-call-cancelled-tester.png",
+        "12-hold-pay-waits-developer.png",
+        "12-hold-next-round-developer.png",
+        "12-hold-join-refused-tester.png",
+        "12-hold-invite-refused-developer.png",
+        "12-hold-posting-refused-developer.png",
+        "12-hold-tester-still-sends-developer.png",
+        "12-hold-tester-still-sends-tester.png"
       ]
     },
     {
@@ -241,19 +253,34 @@
     {
       "id": "15",
       "title": "Dispute: tester disputes, developer adds their side, admin raises pay, extra charged, receipt, paid so far updates",
-      "status": "fail",
+      "status": "pass",
       "checks": [
-        "FAIL error: locator.fill: Timeout 15000ms exceeded."
+        "PASS paid $4.00",
+        "PASS tester disputed",
+        "PASS developer's side shown",
+        "PASS admin sees both sides",
+        "PASS receipt for the extra",
+        "PASS paid so far updated (developer)",
+        "PASS paid so far updated (tester)"
       ],
-      "screenshots": []
+      "screenshots": [
+        "15-dispute-opened-developer.png",
+        "15-dispute-opened-tester.png",
+        "15-dispute-side-developer.png",
+        "15-dispute-admin-decided.png",
+        "15-dispute-receipt-developer.png",
+        "15-dispute-decided-developer.png",
+        "15-dispute-decided-tester.png"
+      ]
     },
     {
       "id": "16",
       "title": "Live updates: both pages open, lines appear within ~20 s without reloading",
-      "status": "fail",
+      "status": "pass",
       "checks": [
         "PASS tester page showed the new time without reload (saw: 18 s)",
-        "FAIL developer page showed the booking line without reload (saw: 35 s)"
+        "PASS open time turned into a booking",
+        "PASS developer page showed the booking line without reload (saw: 17 s)"
       ],
       "screenshots": [
         "16-live-before-developer.png",
@@ -265,5 +292,5 @@
       ]
     }
   ],
-  "pass": false
+  "pass": true
 }

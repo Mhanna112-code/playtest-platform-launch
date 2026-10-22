@@ -5,9 +5,7 @@ branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the 
 and look, but this version deliberately drops most of its complexity.
 
 ## (Owner, Oct 22, after the evidence batch)
-- **Withdrawing sent work:** a tester can withdraw a piece of sent work any time before it's paid or rejected
-  ("Withdraw" next to it); nothing is charged and its 14-day clock stops. They can send it again later (new clock).
-  The developer sees "Ana Silva withdrew her recording · 2:10 PM" (a stop-once reason, like "sent work").
+- (Owner: NO withdraw of sent work. Dropped.)
 - **"Pay what you owe" stops once** if the owed total changed since the page loaded ("Another payment failed
   meanwhile: Cara Diaz's recording $20.00. New total $48.00. Press again to pay $48.00."). It runs at once: all paid →
   hold lifts, "Paid $48.00, thank you" under the button, both sides update by themselves; some still fail → the

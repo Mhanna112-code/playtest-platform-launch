@@ -58,7 +58,7 @@ async function flow(id, title, fn) {
   summary.flows.push(cur);
   console.log("  " + cur.status, cur.checks.filter((c) => c.startsWith("FAIL")).join(" | "));
 }
-const sql = (q) => require("child_process").execFileSync("psql", ["-h", "localhost", "-p", "5499", "-U", "postgres", "-d", "playtest_lite", "-t", "-A", "-c", q]).toString().trim();
+const sql = (q) => require("child_process").execFileSync("psql", ["-h", "localhost", "-p", "5499", "-U", "postgres", "-d", "playtest_lite", "-t", "-A", "-c", q]).toString().split(String.fromCharCode(13)).join("").trim();
 /** Waits (up to 6 s) for the text, so checks don't race the page. */
 const has = (page, sel) => page.waitForSelector(sel.startsWith("text=") || sel.includes(">>") || sel.includes(":") ? sel : `text=${sel}`, { timeout: 6000 }).then(() => true, () => false);
 async function ctx(opts) {
@@ -553,9 +553,13 @@ async function signIn(page, email) {
     await shot(vt, "live-after-tester");
     // The tester books (from another tab): the developer's open page shows the line by itself.
     const slot = sql(`select id from "CallSlot" where "testId" = '${T11}' and status = 'open' order by "createdAt" desc limit 1`);
+    await vd.waitForTimeout(22000); // let the developer's page settle on the offered time first
+    const liBefore = await vd.locator("#calls li").count();
+    const bookedBefore = await vd.locator("#calls li", { hasText: "Ana Silva" }).count();
     await apiPost(tester, `/api/sessions/${SA}/book`, { seenAt: new Date().toISOString(), confirmed: true, slotId: slot });
     const t1 = Date.now();
-    const devSaw = await vd.waitForSelector("text=Ana Silva booked a call for", { timeout: 35000 }).then(() => true, () => false);
+    const devSaw = await vd.waitForFunction((n) => [...document.querySelectorAll("#calls li")].filter((li) => li.textContent.includes("Ana Silva")).length > n, bookedBefore, { timeout: 35000 }).then(() => true, () => false);
+    check("open time turned into a booking", liBefore >= 1);
     check("developer page showed the booking line without reload", devSaw, `${Math.round((Date.now() - t1) / 1000)} s`);
     await shot(vd, "live-after-developer");
     for (const [pg, tag] of [[vd, "developer"], [vt, "tester"]]) {
