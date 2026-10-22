@@ -4,7 +4,7 @@ import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { api, ApiError } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
 
-type Tester = { id: string; name: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean };
+type Tester = { id: string; name: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string };
 type Sent = { id: string; name: string; status: string };
 
 /** Live lines: what changed on the test since the page loaded (polled). Shown at the bottom of the invite panel. */
@@ -25,28 +25,52 @@ export function useLiveLines(testId: string, seenAt: string) {
   return lines;
 }
 
-/** The invite panel (test page only): filter testers, Select all, Invite; sent invites with Cancel invite. */
+/**
+ * The invite panel (test page only). Sections: Invited (Cancel invite) · People you've worked with · Suggested · Find
+ * testers (empty until you search). Greyed rows can't be ticked; filters only narrow what's shown. A ticked tester missing
+ * something the test needs gets an in-page confirm under Invite (Invite anyway / Cancel).
+ */
 export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester[]; sent: Sent[]; options: { devices: string[]; languages: string[]; categories: string[] } }) {
   const { press, changes, error, busy, setError } = usePress(p.seenAt);
   const lines = useLiveLines(p.testId, p.seenAt);
   const [f, setF] = useState({ device: "", language: "", category: "" });
+  const [q, setQ] = useState("");
   const [ticked, setTicked] = useState<string[]>([]);
   const [msg, setMsg] = useState("");
-  const shown = useMemo(
+  const [confirm, setConfirm] = useState<string[] | null>(null);
+  const notInvited = useMemo(
     () => p.testers.filter((t) => !t.invited && (!f.device || t.devices.includes(f.device)) && (!f.language || t.languages.includes(f.language)) && (!f.category || t.categories.includes(f.category))),
     [p.testers, f],
   );
-  const all = shown.length > 0 && shown.every((t) => ticked.includes(t.id));
+  const worked = notInvited.filter((t) => t.section === "worked");
+  const suggested = notInvited.filter((t) => t.section === "suggested");
+  const found = q.trim().length >= 2 ? notInvited.filter((t) => t.name.toLowerCase().includes(q.trim().toLowerCase())) : [];
 
-  async function invite() {
+  async function invite(anyway: boolean) {
     setMsg("");
-    const r = await press<{ message: string }>(`/api/tests/${p.testId}/invite`, { testerIds: ticked });
+    const r = await press<{ message: string }>(`/api/tests/${p.testId}/invite`, { testerIds: ticked, anyway, seenGaps: confirm ?? undefined });
     if (r) {
+      setConfirm(null);
       setMsg(r.message);
       setTicked([]);
       setTimeout(() => window.location.reload(), 1500);
     }
   }
+  // The server answers a missing need with "CONFIRM:<lines>": show it as the in-page confirm under Invite.
+  useEffect(() => {
+    if (error.startsWith("CONFIRM:")) {
+      setConfirm(error.slice(8).split("\n"));
+      setError("");
+    }
+  }, [error, setError]);
+
+  const row = (t: Tester) => (
+    <label key={t.id} className={"block " + (t.grey ? "text-slate-400" : "")}>
+      <input type="checkbox" disabled={!!t.grey} checked={!t.grey && ticked.includes(t.id)} onChange={(e) => setTicked(e.target.checked ? [...ticked, t.id] : ticked.filter((x) => x !== t.id))} /> {t.name}{" "}
+      <span className="note">· {[...t.devices, ...t.languages].join(", ")}</span>
+      {t.grey && <span className="ml-2 text-xs">{t.grey}</span>}
+    </label>
+  );
   const select = (k: keyof typeof f, label: string, opts: string[]) => (
     <select aria-label={label} className="input w-auto" value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })}>
       <option value="">{label}: any</option>
@@ -57,39 +81,15 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
   return (
     <section className="panel" id="invite" aria-label="Invite testers">
       <h2>Invite testers</h2>
-      <div className="flex flex-wrap gap-2">
-        {select("device", "Device", p.options.devices)}
-        {select("language", "Language", p.options.languages)}
-        {select("category", "Likes", p.options.categories)}
-      </div>
-      {shown.length === 0 ? <p className="note">No testers match.</p> : (
-        <div className="max-h-64 space-y-1 overflow-y-auto text-sm">
-          <label className="block font-medium">
-            <input type="checkbox" checked={all} onChange={() => setTicked(all ? [] : shown.map((t) => t.id))} /> Select all ({shown.length})
-          </label>
-          {shown.map((t) => (
-            <label key={t.id} className="block">
-              <input type="checkbox" checked={ticked.includes(t.id)} onChange={(e) => setTicked(e.target.checked ? [...ticked, t.id] : ticked.filter((x) => x !== t.id))} /> {t.name}{" "}
-              <span className="note">· {[...t.devices, ...t.languages].join(", ")}</span>
-            </label>
-          ))}
-        </div>
-      )}
-      <button className="btn" disabled={busy || ticked.length === 0} onClick={invite}>Invite</button>
-      <ChangesBox changes={changes} error={error} />
-      {msg && <p className="info">{msg}</p>}
       {p.sent.length > 0 && (
         <>
-          <h3>Sent invites</h3>
+          <h3>Invited</h3>
           <ul className="space-y-1 text-sm">
             {p.sent.map((s) => (
               <li key={s.id} className="flex items-center gap-2">
                 <span className="mr-auto">{s.name} · {s.status}</span>
                 {s.status === "waiting for them to join" && (
-                  <button
-                    className="btn-ghost"
-                    onClick={() => api(`/api/tests/${p.testId}/cancel-invite`, { inviteId: s.id }).then(() => window.location.reload()).catch((e) => setError(e instanceof ApiError ? e.message : "Try again."))}
-                  >
+                  <button className="btn-ghost" onClick={() => api(`/api/tests/${p.testId}/cancel-invite`, { inviteId: s.id }).then(() => window.location.reload()).catch((e) => setError(e instanceof ApiError ? e.message : "Try again."))}>
                     Cancel invite
                   </button>
                 )}
@@ -98,6 +98,32 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
           </ul>
         </>
       )}
+      <div className="flex flex-wrap gap-2">
+        {select("device", "Device", p.options.devices)}
+        {select("language", "Language", p.options.languages)}
+        {select("category", "Likes", p.options.categories)}
+      </div>
+      <div className="max-h-80 space-y-2 overflow-y-auto text-sm">
+        <h3>People you&apos;ve worked with</h3>
+        {worked.length ? worked.map(row) : <p className="note">Nobody yet.</p>}
+        <h3>Suggested</h3>
+        {suggested.length ? suggested.map(row) : <p className="note">No suggestions right now.</p>}
+        <h3>Find testers</h3>
+        <input className="input max-w-xs" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find testers" />
+        {found.map(row)}
+      </div>
+      <button className="btn" disabled={busy || ticked.length === 0} onClick={() => invite(false)}>Invite</button>
+      <ChangesBox changes={changes} error={error} />
+      {confirm && (
+        <div className="info space-y-2">
+          {confirm.map((l) => <p key={l}>{l}</p>)}
+          <div className="flex gap-2">
+            <button className="btn" disabled={busy} onClick={() => invite(true)}>Invite anyway</button>
+            <button className="btn-ghost" onClick={() => setConfirm(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {msg && <p className="info">{msg}</p>}
       {lines.length > 0 && (
         <div className="info">
           <p className="font-medium">Since you opened this page:</p>

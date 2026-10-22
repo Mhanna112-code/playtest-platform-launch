@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDate, pronouns } from "@/lib/format";
-import { andList, inviteTesterRefusal, inviteTestRefusal, termsLine, type TestEventLike } from "@/lib/rules";
+import { andList, inviteTesterRefusal, inviteTestRefusal, MAX_ACTIVE_TESTS, termsLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { asListing, devGate, needsGap, ownTest, recordEvent } from "./tests";
@@ -8,20 +8,43 @@ import { asListing, devGate, needsGap, ownTest, recordEvent } from "./tests";
 type U = { id: string; email: string; name: string; pronoun: string };
 
 /** Testers the developer can pick from (not already in this test). Filtering by devices/languages/categories is on the page. */
+/**
+ * The invite list (owner rule). Greyed with a neutral reason (tick disabled): already in the test, already invited
+ * ("Invited Oct 21" · Cancel invite), suspended ("Can't be invited right now"), at 10 tests ("Can't join more tests right
+ * now"). Removed silently: blocked either way, deleted accounts (no longer testers); the page's filters remove the rest.
+ */
 export async function invitable(devId: string, testId: string) {
-  const [testers, inTest, invites] = await Promise.all([
-    db.user.findMany({ where: { isTester: true, id: { not: devId } }, include: { profile: true }, orderBy: { name: "asc" }, take: 300 }),
+  const [testers, inTest, invites, blocks, active] = await Promise.all([
+    db.user.findMany({ where: { isTester: true, id: { not: devId } }, include: { profile: true }, orderBy: { createdAt: "desc" }, take: 500 }),
     db.contract.findMany({ where: { testId }, select: { testerId: true } }),
-    db.invite.findMany({ where: { testId } }),
+    db.invite.findMany({ where: { testId, status: "sent" } }),
+    db.block.findMany({ where: { OR: [{ blockerId: devId }, { blockedId: devId }] } }),
+    db.contract.groupBy({ by: ["testerId"], where: { status: "working" }, _count: { _all: true } }),
   ]);
-  const blocks = await db.block.findMany({ where: { OR: [{ blockerId: devId }, { blockedId: devId }] } });
-  const taken = new Set([...inTest.map((c) => c.testerId), ...blocks.map((b) => (b.blockerId === devId ? b.blockedId : b.blockerId))]);
+  const removed = new Set(blocks.map((b) => (b.blockerId === devId ? b.blockedId : b.blockerId)));
+  const test = await db.test.findUniqueOrThrow({ where: { id: testId } });
+  const workedWith = new Set((await db.contract.findMany({ where: { test: { developerId: devId } }, select: { testerId: true } })).map((c) => c.testerId));
+  const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return testers
-    .filter((t) => !taken.has(t.id))
-    .map((t) => ({
-      id: t.id, name: displayName(t), devices: t.profile?.devices ?? [], languages: t.profile?.languages ?? [], categories: t.profile?.categories ?? [],
-      invited: invites.some((i) => i.testerId === t.id && i.status === "sent"),
-    }));
+    .filter((t) => !removed.has(t.id))
+    .map((t) => {
+      const inv = invites.find((i) => i.testerId === t.id);
+      const n = active.find((a) => a.testerId === t.id)?._count._all ?? 0;
+      const grey = inTest.some((c) => c.testerId === t.id) ? "Already in this test" : inv ? `Invited ${fmt(inv.createdAt)}` : t.suspendedAt ? "Can't be invited right now" : n >= MAX_ACTIVE_TESTS ? "Can't join more tests right now" : null;
+      return {
+        id: t.id, name: displayName(t), devices: t.profile?.devices ?? [], languages: t.profile?.languages ?? [], categories: t.profile?.categories ?? [],
+        invited: !!inv, inviteId: inv?.id ?? null, grey,
+        gap: missingNeed(test, t.profile),
+        section: workedWith.has(t.id) ? "worked" : !needsGap(test, t.profile) ? "suggested" : "other",
+      };
+    });
+}
+
+/** What the test needs that this tester's profile doesn't list ("English"), or "". */
+function missingNeed(t: { devices: string[]; languages: string[] }, p: { devices: string[]; languages: string[] } | null) {
+  if (t.languages.length && !t.languages.some((l) => p?.languages.includes(l))) return t.languages.join(" or ");
+  if (t.devices.length && !t.devices.some((d) => p?.devices.includes(d))) return t.devices.join(" or ");
+  return "";
 }
 
 /** What the test needs that this tester's profile no longer has ("removed English"). */
@@ -63,9 +86,22 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
         if (joined) extra.push({ kind: "joined", text: `${name} joined this test, so ${pronouns(p.pronoun).subj}'s no longer in your invite list`.replace("they's", "they're"), createdAt: joined.joinedAt });
         const inv = invites.find((i) => i.testerId === p.id && i.status === "sent" && i.updatedAt > seenAt);
         if (inv) extra.push({ kind: "joined", text: `You also did this in another tab: invited ${name}`, createdAt: inv.updatedAt });
+        // A ticked tester became greyed or removed since the page loaded.
+        if (p.suspendedAt && p.suspendedAt > seenAt) extra.push({ kind: "joined", text: `${name} can't be invited right now`, createdAt: p.suspendedAt });
+        const blockedSince = await tx.block.findFirst({ where: { createdAt: { gt: seenAt }, OR: [{ blockerId: dev.id, blockedId: p.id }, { blockerId: p.id, blockedId: dev.id }] } });
+        if (blockedSince) extra.push({ kind: "joined", text: `${name} is no longer in your list`, createdAt: blockedSince.createdAt });
+        const lastJoin = await tx.contract.findFirst({ where: { testerId: p.id, status: "working", joinedAt: { gt: seenAt } }, orderBy: { joinedAt: "desc" } });
+        if (lastJoin && lastJoin.testId !== testId && (await tx.contract.count({ where: { testerId: p.id, status: "working" } })) >= MAX_ACTIVE_TESTS) extra.push({ kind: "joined", text: `${name} can't join more tests right now`, createdAt: lastJoin.joinedAt });
       }
     }
     await devGate(tx, testId, body.seenAt, body.confirmed === true, {}, extra);
+    const gaps = people
+      .filter((p) => !contracts.some((c) => c.testerId === p.id) && missingNeed(t, p.profile))
+      .map((p) => `${displayName(p)} doesn't list ${missingNeed(t, p.profile)}, which this test needs.`);
+    const seenGaps = Array.isArray(body.seenGaps) ? (body.seenGaps as unknown[]).map(String) : null;
+    if (gaps.length && (body.anyway !== true || JSON.stringify(seenGaps) !== JSON.stringify(gaps))) {
+      throw new HttpError(409, "needs_confirm", "CONFIRM:" + gaps.join("\n"), { lines: gaps });
+    }
     const invited: { id: string; name: string; email: string }[] = [];
     const others: string[] = [];
     let spotsLeft = t.spots - testersIn;

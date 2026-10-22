@@ -4,6 +4,18 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, latest: replaces parts of "Invite list: greyed vs removed")
+- Invite panel sections, in order: **Invited** (top: each sent invite with Cancel invite; invited testers are NOT
+  shown again in the lists below), **People you've worked with** (testers currently or previously in any of this
+  developer's tests), **Suggested** (testers whose profile fits this test's needs), **Find testers** (search; empty
+  until searching). The same greyed/removed rules apply in all three lists.
+- No "removed because it no longer fits a filter": filters only narrow what's shown. A tester missing something the
+  test needs (language, device, category) can still be ticked; pressing Invite shows an in-page confirm (no pop-up)
+  under the button: "Ben Carter doesn't list English, which this test needs. [Invite anyway] [Cancel]" (several
+  ticked → one confirm listing each). The confirm reacts live: if that tester's profile now fits, it disappears; if it
+  changes again, the text updates. Pressing Invite anyway after any invite stop-once reason since the page loaded
+  stops once under it first.
+
 ## (Owner, Oct 22) Invite list: greyed vs removed
 - Greyed out (tick disabled, neutral reason shown, updates live): at 10 tests ("Can't join more tests right now"),
   suspended ("Can't be invited right now"), already invited ("Invited Oct 21 · Cancel invite"), already in the test.
