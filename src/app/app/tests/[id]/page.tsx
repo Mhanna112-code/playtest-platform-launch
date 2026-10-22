@@ -134,7 +134,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           targets={working.map((c) => ({ contractId: c.id, name: displayName(c.tester), rate: c.liveRateCents == null ? "not in contract" : `${money(c.liveRateCents).replace(/\.00$/, "")}/h` }))}
           requests={reqs.map((r) => {
             const k = t.contracts.find((c) => c.id === r.contractId)!;
-            return { id: r.id, when: r.startsAt.toISOString(), mine: r.fromSide === "developer", who: displayName(k.tester), contractId: r.contractId, rate: r.askRateCents != null ? `asks ${money(r.askRateCents).replace(/\.00$/, "")}/h` : rateLabel(k.liveRateCents, k.liveRateCents) };
+            return { id: r.id, times: (r.times.length ? r.times : [r.startsAt]).map((d) => d.toISOString()), weeks: r.weeks, mine: r.fromSide === "developer", who: displayName(k.tester), contractId: r.contractId, rate: r.askRateCents != null ? `asks ${money(r.askRateCents).replace(/\.00$/, "")}/h` : rateLabel(k.liveRateCents, k.liveRateCents) };
           })}
         />
       </section>

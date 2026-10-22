@@ -4,6 +4,30 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, NEWEST+1) Request kinds, weekly, and a 2-pending limit (adds to the section below)
+- A request is ONE of: (a) "Choose one": up to 3 possible times; the other side picks one (or declines) -> 1 call;
+  (b) "Weekly": exactly 1 time, repeated weekly for 2-8 weeks; the other side accepts all or declines -> one call
+  per week. Never both. Several separate requests can each be accepted -> several calls.
+- After acceptance each weekly call is an ordinary call (cancelled and paid on its own; holds/blocks cancel only the
+  calls inside them). No series object to manage. The rate is fixed at acceptance.
+- Select all: the first tester to accept takes the whole request (their chosen time, or all weeks); others' copies
+  close; a late Accept is refused under the button.
+- Tester's "Ask $___/h" works on any kind of tester request.
+- Auto-match only for "choose one": if one of its times equals a time the other side requested and the rates match,
+  that time books. Weekly always needs Accept.
+- LIMIT: each side may have at most 3 pending requests at once with the same person in the same test (a Select-all
+  request counts once per tester; a weekly request counts as 1). Each request has up to 3 times ("choose one") or 1
+  weekly time. No limit on booked calls (clash checks prevent double booking). A 4th is refused under the button:
+  "You already have 3 requests waiting with Ana Silva. Withdraw one or wait for an answer." (Select all: names the
+  testers at the limit and sends to the rest only after the stop-once box confirms.)
+- CLASHES (start + minutes overlap), checked for every time of a request, every week of a weekly: sending is refused
+  if it overlaps a booked call or a pending request between the same two people; accepting/auto-match is refused if
+  it overlaps any booked call either person has with anyone. A tester refused because of the developer's other calls
+  only sees "This time is no longer free." (never who with). A weekly with any clashing week is refused whole,
+  naming the week(s).
+- Grouped bells: "Nora Lane asked for a call: pick one of 3 times" / "Nora Lane asked for weekly calls: Thu 3:00 PM,
+  6 weeks".
+
 ## (Owner, Oct 22, NEWEST) Calls are ALWAYS requests; no Offer times, no instant Book; tester can ask a rate
 - "Offer times" and the tester's instant "Book" are REMOVED. Every call starts as a request from one side and is
   booked only when the other side accepts (or auto-match below).

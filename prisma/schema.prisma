@@ -520,6 +520,9 @@ model CallRequest {
   batchId      String    @default("")
   /// The tester's "Ask $___/h" (null = the contract call rate)
   askRateCents Int?
+  /// "Choose one": up to 3 possible times (startsAt is the first). Weekly: one time repeated `weeks` weeks (2-8).
+  times        DateTime[]
+  weeks        Int       @default(0)
   callId       String?
   decidedAt    DateTime?
   createdAt    DateTime  @default(now())

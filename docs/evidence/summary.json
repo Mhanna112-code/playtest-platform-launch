@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T19:32:46.730Z",
+  "run": "2026-10-22T19:55:02.821Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjxukaa00077kvo7snuqky5)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjyn5y800077k6kouivnidu)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -71,14 +71,14 @@
     },
     {
       "id": "06",
-      "title": "Live call: developer offers a time, tester books it",
+      "title": "Live call: the developer requests a time, the tester accepts it",
       "status": "pass",
       "checks": [
         "PASS tester has a booked call with Join call",
         "PASS developer sees the booking"
       ],
       "screenshots": [
-        "06-time-offered.png",
+        "06-time-requested.png",
         "06-call-booked.png",
         "06-call-booked.png"
       ]
@@ -129,17 +129,17 @@
     {
       "id": "10",
       "title": "Live call payment problems: call length, declined Pay, chargeback hold, resolved",
-      "status": "pass",
+      "status": "fail",
       "checks": [
         "PASS Pay box reference = rate × 25 min",
-        "PASS tester: waiting to be paid",
+        "FAIL tester: waiting to be paid",
         "PASS declined line under Pay",
-        "PASS tester: may be delayed",
+        "FAIL tester: may be delayed",
         "PASS paid",
         "PASS webhook accepted (saw: 200)",
         "PASS stop-once line under the top panel",
         "PASS hold banner",
-        "PASS tester: paused line",
+        "FAIL tester: paused line",
         "PASS tester: call cancelled because paused",
         "PASS hold box says reversed payments are resolved by the team",
         "PASS developer resumed",
@@ -167,7 +167,7 @@
       "title": "Charge declined: owed with a 3-day cut-off (developer banner + Payments, tester line); a second failure pauses at once",
       "status": "pass",
       "checks": [
-        "PASS test posted (saw: {\"id\":\"cmvjxv9dg003m7kvoi5j2cohm\"})",
+        "PASS test posted (saw: {\"id\":\"cmvjyoah1003u7k6kzw044v6m\"})",
         "PASS both testers joined",
         "PASS tester offered the choice",
         "PASS developer banner with the cut-off",
@@ -284,8 +284,8 @@
       "title": "Live updates: both pages open, lines appear within ~20 s without reloading",
       "status": "pass",
       "checks": [
-        "PASS tester page showed the new time without reload (saw: 18 s)",
-        "PASS open time turned into a booking",
+        "PASS tester page showed the new request without reload (saw: 18 s)",
+        "PASS the developer's page was open on the calls panel",
         "PASS developer page showed the booking line without reload (saw: 17 s)"
       ],
       "screenshots": [
@@ -376,7 +376,28 @@
         "20-auto-booked-tester.png",
         "20-accept-withdrawn-refused-developer.png"
       ]
+    },
+    {
+      "id": "21",
+      "title": "Call requests with a rate ask: Select all to two testers; one asks $50/h and the developer accepts; the other's Accept is refused",
+      "status": "fail",
+      "checks": [
+        "PASS two testers in",
+        "PASS developer line about rates",
+        "PASS tick list shows each tester's rate",
+        "PASS tester sees only the listed rate",
+        "PASS nothing booked on the tester's side",
+        "PASS booked call shows Agreed $50/h",
+        "FAIL tester B's Accept refused"
+      ],
+      "screenshots": [
+        "21-select-all-developer.png",
+        "21-request-received-tester-b.png",
+        "21-asked-50-tester-a.png",
+        "21-agreed-50-developer.png",
+        "21-accept-refused-tester-b.png"
+      ]
     }
   ],
-  "pass": true
+  "pass": false
 }

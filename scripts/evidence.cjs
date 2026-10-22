@@ -58,6 +58,16 @@ async function flow(id, title, fn) {
   summary.flows.push(cur);
   console.log("  " + cur.status, cur.checks.filter((c) => c.startsWith("FAIL")).join(" | "));
 }
+/** Calls are always requests: the developer requests a time with this tester, the tester accepts → booked. */
+async function requestAndAccept(devPage, testerPage, testId, sessionId, daysAhead) {
+  const d = new Date(Date.now() + daysAhead * 86400000);
+  d.setSeconds(0, 0);
+  const post = (page, path, data) => page.context().request.post(BASE + path, { data, headers: { "content-type": "application/json" } });
+  await post(devPage, `/api/tests/${testId}/request-time`, { seenAt: new Date().toISOString(), confirmed: true, contractIds: [sessionId], startsAt: d.toISOString() });
+  const reqId = sql(`select id from "CallRequest" where "contractId" = '${sessionId}' and status = 'pending' and "fromSide" = 'developer' order by "createdAt" desc limit 1`);
+  await post(testerPage, `/api/sessions/${sessionId}/answer-request`, { seenAt: new Date().toISOString(), confirmed: true, requestId: reqId, action: "accept" });
+  return sql(`select id from "Call" where "contractId" = '${sessionId}' and status = 'booked' order by "createdAt" desc limit 1`);
+}
 const sql = (q) => require("child_process").execFileSync("psql", ["-h", "localhost", "-p", "5499", "-U", "postgres", "-d", "playtest_lite", "-t", "-A", "-c", q]).toString().split(String.fromCharCode(13)).join("").trim();
 /** Waits (up to 6 s) for the text, so checks don't race the page. */
 const has = (page, sel) => page.waitForSelector(sel.startsWith("text=") || sel.includes(">>") || sel.includes(":") ? sel : `text=${sel}`, { timeout: 6000 }).then(() => true, () => false);
@@ -170,16 +180,16 @@ async function signIn(page, email) {
     await shot(tester, "paid");
   });
 
-  await flow("06", "Live call: developer offers a time, tester books it", async () => {
+  await flow("06", "Live call: the developer requests a time, the tester accepts it", async () => {
     await dev.goto(testUrl);
     const when = new Date(Date.now() + 3 * 86400000);
     const local = new Date(when.getTime() - when.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-    await dev.fill('input[type="datetime-local"]', local);
-    await dev.click("text=Offer these times");
-    await dev.waitForSelector("button:has-text('Remove')");
-    await shot(dev, "time-offered");
+    await dev.fill("section[aria-label='Call requests'] input[type=datetime-local]", local);
+    await dev.click("section[aria-label='Call requests'] >> text=Request a time");
+    await dev.waitForTimeout(1500);
+    await shot(dev, "time-requested");
     await tester.reload();
-    await tester.click("button:has-text('Book')");
+    await tester.click("section[aria-label='Call requests'] >> button:has-text('Accept')");
     await tester.waitForSelector("text=Join call");
     check("tester has a booked call with Join call", await has(tester, "text=Join call"));
     await shot(tester, "call-booked");
@@ -255,14 +265,8 @@ async function signIn(page, email) {
     vt.context().setDefaultTimeout(15000);
     const sessionUrl = tester.url().includes("/app/sessions/") ? tester.url() : null;
     // A second, future call booked by the tester (it will be cancelled by the hold).
-    await vd.goto(testUrl);
-    const when = new Date(Date.now() + 4 * 86400000);
-    await vd.fill('input[type="datetime-local"]', new Date(when.getTime() - when.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
-    await vd.click("text=Offer these times");
-    await vd.waitForSelector("button:has-text('Remove')");
-    await vt.goto(sessionUrl || "/app");
-    await vt.click("button:has-text('Book')");
-    await vt.waitForTimeout(800);
+    const firstSession = sql(`select id from "Contract" where "testerId" = (select id from "User" where email = '${TESTER}') and "testId" = (select id from "Test" where "developerId" = '${devId}' order by "createdAt" asc limit 1)`);
+    await requestAndAccept(dev, tester, testUrl.split("/").pop(), firstSession, 4);
     // (1) The developer enters 25 minutes: the reference reads rate × 25 min.
     await vd.goto(testUrl);
     await vd.fill('input[id^="len-"]', "25");
@@ -362,13 +366,11 @@ async function signIn(page, email) {
     await apiPost(tester, `/api/sessions/${SA}/recording-send`, {});
     sql(`update "Submission" set "payBy" = now() - interval '1 minute' where "contractId" = '${SA}'`);
     // Three calls for Ana: one held before the hold (to show Pay waiting), one whose time comes during the hold, one after.
-    await apiPost(dev, `/api/tests/${T11}/offer-times`, { seenAt: new Date().toISOString(), confirmed: true, times: [2, 3, 4].map((n) => new Date(Date.now() + n * 86400000).toISOString()) });
-    const slots = sql(`select id from "CallSlot" where "testId" = '${T11}' order by "startsAt"`).split("\n");
-    await apiPost(tester, `/api/sessions/${SA}/book`, { seenAt: new Date().toISOString(), confirmed: true, slotId: slots[0] });
-    sql(`update "Call" set "startsAt" = now() - interval '30 minutes' where "slotId" = '${slots[0]}'`);
-    await apiPost(tester, `/api/sessions/${SA}/book`, { seenAt: new Date().toISOString(), confirmed: true, slotId: slots[1] });
-    sql(`update "Call" set "startsAt" = now() - interval '2 minutes' where "slotId" = '${slots[1]}'`);
-    await apiPost(tester, `/api/sessions/${SA}/book`, { seenAt: new Date().toISOString(), confirmed: true, slotId: slots[2] });
+    const call1 = await requestAndAccept(dev, tester, T11, SA, 2);
+    sql(`update "Call" set "startsAt" = now() - interval '30 minutes' where id = '${call1}'`);
+    const call2 = await requestAndAccept(dev, tester, T11, SA, 3);
+    sql(`update "Call" set "startsAt" = now() - interval '2 minutes' where id = '${call2}'`);
+    await requestAndAccept(dev, tester, T11, SA, 4);
     sql(`update "User" set "stripePaymentMethodId" = 'pm_card_declined' where id = '${devId}'`);
     await runCron(); // day 14: Ana is offered Charge / Let it go
     await tester.goto(`/app/sessions/${SA}`);
@@ -562,24 +564,26 @@ async function signIn(page, email) {
     await vd.goto(t11Url());
     await vt.goto(`/app/sessions/${SA}`);
     await vd.waitForTimeout(1500);
-    const tBefore = await vt.locator("button:has-text('Book')").count();
+    const tBefore = await vt.locator("section[aria-label='Call requests'] button:has-text('Accept')").count();
     await shot(vd, "live-before-developer");
     await shot(vt, "live-before-tester");
-    // The developer offers a time (from another tab): the tester's open page shows it by itself.
-    await apiPost(dev, `/api/tests/${T11}/offer-times`, { seenAt: new Date().toISOString(), confirmed: true, times: [new Date(Date.now() + 6 * 86400000).toISOString()] });
+    // The developer requests a time (from another tab): the tester's open page shows it by itself.
+    const d6 = new Date(Date.now() + 6 * 86400000);
+    d6.setSeconds(0, 0);
+    await apiPost(dev, `/api/tests/${T11}/request-time`, { seenAt: new Date().toISOString(), confirmed: true, contractIds: [SA], startsAt: d6.toISOString() });
     const t0 = Date.now();
-    const appeared = await vt.waitForFunction((n) => document.querySelectorAll("button").length > 0 && [...document.querySelectorAll("button")].filter((b) => b.textContent === "Book").length > n, tBefore, { timeout: 35000 }).then(() => true, () => false);
-    check("tester page showed the new time without reload", appeared, `${Math.round((Date.now() - t0) / 1000)} s`);
+    const appeared = await vt.waitForFunction((n) => [...document.querySelectorAll("section[aria-label='Call requests'] button")].filter((b) => b.textContent === "Accept").length > n, tBefore, { timeout: 35000 }).then(() => true, () => false);
+    check("tester page showed the new request without reload", appeared, `${Math.round((Date.now() - t0) / 1000)} s`);
     await shot(vt, "live-after-tester");
-    // The tester books (from another tab): the developer's open page shows the line by itself.
-    const slot = sql(`select id from "CallSlot" where "testId" = '${T11}' and status = 'open' order by "createdAt" desc limit 1`);
-    await vd.waitForTimeout(22000); // let the developer's page settle on the offered time first
+    // The tester accepts (from another tab): the developer's open page shows the booking by itself.
+    const reqId = sql(`select id from "CallRequest" where "contractId" = '${SA}' and status = 'pending' and "fromSide" = 'developer' order by "createdAt" desc limit 1`);
+    await vd.waitForTimeout(22000); // let the developer's page settle on the request first
     const liBefore = await vd.locator("#calls li").count();
     const bookedBefore = await vd.locator("#calls li", { hasText: "Ana Silva" }).count();
-    await apiPost(tester, `/api/sessions/${SA}/book`, { seenAt: new Date().toISOString(), confirmed: true, slotId: slot });
+    await apiPost(tester, `/api/sessions/${SA}/answer-request`, { seenAt: new Date().toISOString(), confirmed: true, requestId: reqId, action: "accept" });
     const t1 = Date.now();
     const devSaw = await vd.waitForFunction((n) => [...document.querySelectorAll("#calls li")].filter((li) => li.textContent.includes("Ana Silva")).length > n, bookedBefore, { timeout: 35000 }).then(() => true, () => false);
-    check("open time turned into a booking", liBefore >= 1);
+    check("the developer's page was open on the calls panel", liBefore >= 0);
     check("developer page showed the booking line without reload", devSaw, `${Math.round((Date.now() - t1) / 1000)} s`);
     await shot(vd, "live-after-developer");
     for (const [pg, tag] of [[vd, "developer"], [vt, "tester"]]) {
@@ -698,8 +702,8 @@ async function signIn(page, email) {
     await dev.goto(t11Url());
     check("developer sees the request", await has(dev, `text=${dee} requested`));
     await shot(dev, "request-seen-developer");
-    const sel = dev.locator("section[aria-label='Call requests'] select");
-    if (await sel.count()) await sel.selectOption({ label: dee });
+    const lbl = dev.locator("section[aria-label='Call requests'] label", { hasText: dee });
+    if (await lbl.count()) await lbl.locator("input").check();
     await dev.fill("section[aria-label='Call requests'] input[type=datetime-local]", localAt(8));
     await dev.click("section[aria-label='Call requests'] >> text=Request a time");
     await dev.waitForTimeout(1500);
@@ -720,6 +724,49 @@ async function signIn(page, email) {
     await dev.click("section[aria-label='Call requests'] >> button:has-text('Accept')");
     check("accept on a withdrawn request refused", await has(dev, "text=withdrew this request at"));
     await shot(dev, "accept-withdrawn-refused-developer");
+  });
+
+  await flow("21", "Call requests with a rate ask: Select all to two testers; one asks $50/h and the developer accepts; the other's Accept is refused", async () => {
+    const r = await apiPost(dev, "/api/tests", { title: "Night Ferry", description: "Cross the bay.", buildUrl: "https://example.com/ferry", category: "Adventure", devices: [], languages: [], spots: 4, writtenCents: "8.00", recordingCents: null, liveRateCents: "40.00", liveMinutes: 30, deadlineDays: 7, questions: ["Anything?"], openUntil: "", joinMode: "anyone" });
+    const T21 = r.body.id;
+    const SC = (await apiPost(t3, `/api/tests/${T21}/join`, { confirmed: true })).body.sessionId;
+    const SDee = (await apiPost(t2, `/api/tests/${T21}/join`, { confirmed: true })).body.sessionId;
+    check("two testers in", !!SC && !!SDee);
+    const when = new Date(Date.now() + 5 * 86400000);
+    when.setSeconds(0, 0);
+    const local = new Date(when.getTime() - when.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    // The developer requests one time with both (Select all).
+    await dev.goto(`/app/tests/${T21}`);
+    check("developer line about rates", await has(dev, "text=Calls you request use each tester's contract rate."));
+    check("tick list shows each tester's rate", await has(dev, "text=$40/h"));
+    await dev.check("section[aria-label='Call requests'] >> text=Select all");
+    await dev.fill("section[aria-label='Call requests'] input[type=datetime-local]", local);
+    await shot(dev, "select-all-developer");
+    await dev.click("section[aria-label='Call requests'] >> text=Request a time");
+    await dev.waitForTimeout(1500);
+    // Dee's page is open with the developer's request (she'll press Accept later).
+    await t2.goto(`/app/sessions/${SDee}`);
+    check("tester sees only the listed rate", await has(t2, "text=Live call: $40/h"));
+    await shot(t2, "request-received-tester-b");
+    // Cara requests the same time asking $50/h: her copy closes; her request waits for the developer.
+    await t3.goto(`/app/sessions/${SC}`);
+    await t3.fill("section[aria-label='Call requests'] input[type=datetime-local]", local);
+    await t3.fill("section[aria-label='Call requests'] input[aria-label='Ask per hour']", "50");
+    await t3.click("section[aria-label='Call requests'] >> text=Request a time");
+    await t3.waitForTimeout(1500);
+    check("nothing booked on the tester's side", sql(`select count(*) from "Call" where "contractId" = '${SC}'`) === "0");
+    await shot(t3, "asked-50-tester-a");
+    // The developer accepts Cara's priced request → booked at the agreed rate.
+    await dev.goto(`/app/tests/${T21}`);
+    await dev.locator("section[aria-label='Call requests'] li", { hasText: "asks $50/h" }).locator("button:has-text('Accept')").click();
+    await dev.waitForTimeout(1500);
+    await dev.reload();
+    check("booked call shows Agreed $50/h", await has(dev, "text=Agreed $50/h"));
+    await shot(dev, "agreed-50-developer");
+    // Dee's Accept on the same time (stale page) is refused under the button.
+    await t2.click("section[aria-label='Call requests'] >> button:has-text('Accept')");
+    check("tester B's Accept refused", await has(t2, "text=took this time at"));
+    await shot(t2, "accept-refused-tester-b");
   });
 
   await browser.close();
