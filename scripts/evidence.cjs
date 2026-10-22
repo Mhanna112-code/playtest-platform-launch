@@ -282,15 +282,16 @@ async function signIn(page, email) {
     // (2) Pay with a card the fake declines.
     await vd.check("text=charged now: $12.50");
     await vd.click("button:has-text('Pay')");
-    check("declined line under Pay", await has(vd, "text=Your card was declined, so Ana Silva wasn't paid $12.50 for the call."));
+    check("declined line under Pay: now owed", await has(vd, "text=Your card was declined, so Ana Silva wasn't paid $12.50 for the call yet. It's now owed"));
     await shot(vd, "2-dev-declined");
     await vt.reload();
     check("tester: may be delayed", await has(vt, "text=Payment for this call may be delayed."));
     await shot(vt, "2-tester-delayed");
     // (3) A working card: Pay succeeds; then the bank reverses it (chargeback webhook).
     sql(`update "User" set "stripePaymentMethodId" = 'pm_card_visa' where id = '${devId}'`);
-    await vd.click("button:has-text('Pay')");
-    check("paid", await has(vd, "text=Paid $12.50"));
+    await vd.reload();
+    await vd.click("button:has-text('Pay what you owe')");
+    check("paid (Pay what you owe)", await has(vd, "text=Paid $12.50, thank you"));
     await vd.waitForTimeout(1200);
     await shot(vd, "3-dev-paid");
     await vd.goto(testUrl); // page loaded: the stop-once marker is now
@@ -928,8 +929,212 @@ async function signIn(page, email) {
     await shot(t2, "blocked-tester");
   });
 
+  // ---------- Coverage flows (24, 25): every remaining stop / refusal type, and combined boxes ----------
+  let t4 = null, TK = "", SE = "", SCK = "";
+  const base = Date.now() + 40 * 86400000;
+  const atK = (d, h = 0) => { const x = new Date(base + d * 86400000 + h * 3600000); x.setMinutes(0, 0, 0); return x.toISOString(); };
+  const local = (iso) => { const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
+  const reqBox = (pg) => pg.locator("section[aria-label='Call requests']");
+  const lastDevReq = (sid) => sql(`select id from "CallRequest" where "contractId" = '${sid}' and "fromSide" = 'developer' order by "createdAt" desc limit 1`);
+
+  await flow("24", "Coverage: tester call refusals, limits, clashes, and combined stop boxes (info + call; another tab + paid)", async () => {
+    const r = await apiPost(dev, "/api/tests", { title: "Kelp Forest", description: "Swim through the kelp.", buildUrl: "https://example.com/kelp", category: "Adventure", devices: [], languages: [], spots: 4, writtenCents: "8.00", recordingCents: null, liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7, questions: ["What did you see?"], openUntil: "", joinMode: "anyone" });
+    TK = r.body.id;
+    t4 = await ctx(PHONE);
+    await signIn(t4, `tester4+${TS}@playtest.test`);
+    await t4.fill("#name", `Eve Ray ${TS % 10000}`);
+    await t4.check("text=test games and get paid");
+    await t4.click("label:has-text('Windows PC')");
+    await t4.click("label:has-text('English')");
+    await t4.click("text=Continue");
+    await t4.waitForSelector("text=Your sessions");
+    SE = (await apiPost(t4, `/api/tests/${TK}/join`, { confirmed: true })).body.sessionId;
+    SCK = (await apiPost(t3, `/api/tests/${TK}/join`, { confirmed: true })).body.sessionId;
+    check("Eve and Cara in", !!SE && !!SCK, JSON.stringify(r.body));
+    // (c) Listing info + a call change in ONE stop box (tester): Eve's page is open; the developer requests a call and edits the description.
+    await t4.goto(`/app/sessions/${SE}`);
+    await apiPost(dev, `/api/tests/${TK}/request-time`, { seenAt: new Date().toISOString(), confirmed: true, contractIds: [SE], times: [atK(1)] });
+    const v = sql(`select version from "Test" where id = '${TK}'`);
+    await apiPost(dev, `/api/tests/${TK}/edit`, { version: Number(v), fields: { description: "Swim through the kelp at dawn." }, confirmed: true });
+    await t4.fill("#a0", "Fish and a turtle.");
+    await t4.click("button:has-text('Send my written answers')");
+    check("tester stop box: listing info (F) + call change (C) together", (await has(t4, "text=Nora Lane changed the description")) && (await has(t4, "text=Nora Lane requested a call for")));
+    await shot(t4, "combined-info-and-call-tester");
+    await t4.click("button:has-text('Send my written answers')");
+    await t4.waitForTimeout(1500);
+    // (a) Another tab + a developer payment in ONE stop box (tester): tab B sends a call request; the developer pays.
+    const tabA = t4;
+    await tabA.goto(`/app/sessions/${SE}`);
+    const tabB = await t4.context().newPage();
+    await tabB.goto(`/app/sessions/${SE}`);
+    await reqBox(tabB).locator("input[aria-label='Requested time 1']").fill(local(atK(2)));
+    await tabB.getByRole("button", { name: "Request a time" }).click();
+    await tabB.waitForTimeout(1500);
+    await tabB.close();
+    const subE = sql(`select id from "Submission" where "contractId" = '${SE}' and kind = 'written'`);
+    await apiPost(dev, "/api/review", { payKey: `ev24-${TS}`, kind: "submission", id: subE, amount: "8.00", tickedCents: 800, seenAt: new Date().toISOString(), confirmed: true });
+    await tabA.click("button:has-text('Leave the test')");
+    await tabA.locator("button:has-text('Leave the test')").last().click();
+    check("tester stop box: 'You also did this in another tab' + the developer paid", (await has(tabA, "text=You also did this in another tab: sent a call request at")) && (await has(tabA, "text=Nora Lane paid $8.00 for your written answers")));
+    await shot(tabA, "combined-other-tab-and-paid-tester");
+    await tabA.click("button:has-text('Stay')");
+    // Declined: the developer declines Eve's request; her Withdraw (page not reloaded) stops once, then is refused.
+    const mine = sql(`select id from "CallRequest" where "contractId" = '${SE}' and "fromSide" = 'tester' and status = 'pending' limit 1`);
+    await tabA.reload();
+    await apiPost(dev, `/api/tests/${TK}/answer-request`, { seenAt: new Date().toISOString(), confirmed: true, contractId: SE, requestId: mine, action: "decline" });
+    await reqBox(tabA).locator("button:has-text('Withdraw')").first().click();
+    await tabA.waitForTimeout(800);
+    await reqBox(tabA).locator("button:has-text('Withdraw')").first().click();
+    check("refused: the developer declined this request", await has(tabA, "text=declined this request at"));
+    await shot(tabA, "request-declined-refused-tester");
+    // Its time passed: the developer's request's time is now in the past; Accept is refused.
+    const r1 = lastDevReq(SE);
+    sql(`update "CallRequest" set "startsAt" = now() - interval '2 minutes', times = ARRAY[now() - interval '2 minutes']::timestamp(3)[] where id = '${r1}'`);
+    await tabA.reload();
+    await reqBox(tabA).locator("button:has-text('Accept')").first().click();
+    check("refused: the call time is no longer available (its time passed)", await has(tabA, "text=is no longer available."));
+    await shot(tabA, "request-time-passed-refused-tester");
+    // "This time is no longer free": the developer has a call with Cara then; Eve can't accept the developer's request.
+    await apiPost(dev, `/api/tests/${TK}/request-time`, { seenAt: new Date().toISOString(), confirmed: true, contractIds: [SCK], times: [atK(3)] });
+    await apiPost(t3, `/api/sessions/${SCK}/answer-request`, { seenAt: new Date().toISOString(), confirmed: true, requestId: lastDevReq(SCK), action: "accept" });
+    await apiPost(dev, `/api/tests/${TK}/request-time`, { seenAt: new Date().toISOString(), confirmed: true, contractIds: [SE], times: [atK(3)] });
+    await tabA.reload();
+    await reqBox(tabA).locator("button:has-text('Accept')").first().click();
+    check("refused: 'This time is no longer free.' (never who with)", (await has(tabA, "text=This time is no longer free.")) && !(await tabA.isVisible("text=Cara Diaz")));
+    await shot(tabA, "no-longer-free-refused-tester");
+    // A weekly request whose week 2 clashes: refused whole, naming the week.
+    await apiPost(dev, `/api/tests/${TK}/request-time`, { seenAt: new Date().toISOString(), confirmed: true, contractIds: [SCK], times: [atK(11, 5)] });
+    await apiPost(t3, `/api/sessions/${SCK}/answer-request`, { seenAt: new Date().toISOString(), confirmed: true, requestId: lastDevReq(SCK), action: "accept" });
+    await apiPost(dev, `/api/tests/${TK}/request-time`, { seenAt: new Date().toISOString(), confirmed: true, contractIds: [SE], times: [atK(4, 5)], weeks: 3, repeat: "weekly" });
+    await tabA.reload();
+    await reqBox(tabA).locator("button:has-text('Accept all 3')").first().click();
+    check("weekly clash refused whole, naming week 2", await has(tabA, "text=These weeks clash: week 2"));
+    await shot(tabA, "weekly-clash-refused-tester");
+    // A clash when sending: the same time as a request already waiting between them.
+    await reqBox(tabA).locator("input[aria-label='Requested time 1']").fill(local(atK(3)));
+    await tabA.getByRole("button", { name: "Request a time" }).click();
+    check("send refused: a request is already waiting for that time", await has(tabA, "text=waiting for that time"));
+    await shot(tabA, "send-clash-refused-tester");
+    // The 3-requests limit: one more goes; the next is refused.
+    await reqBox(tabA).locator("input[aria-label='Requested time 1']").fill(local(atK(20)));
+    await tabA.getByRole("button", { name: "Request a time" }).click();
+    await tabA.waitForTimeout(2000);
+    await tabA.reload();
+    await reqBox(tabA).locator("input[aria-label='Requested time 1']").fill(local(atK(21)));
+    await tabA.getByRole("button", { name: "Request a time" }).click();
+    check("4th request refused: 3 requests waiting", await has(tabA, "text=You already have 3 requests waiting with Nora Lane."));
+    await shot(tabA, "three-requests-refused-tester");
+  });
+
+  await flow("25", "Coverage: red form mistake; automatic charge fails on another test, retried, goes through; combined developer box; top box with 3+ updates", async () => {
+    // A form mistake is red (not a blue refusal).
+    await t4.goto(`/app/sessions/${SE}`);
+    await reqBox(t4).locator("input[aria-label='Requested time 1']").fill(local(atK(22)));
+    await reqBox(t4).locator("input[aria-label='Ask per hour']").fill("abc");
+    await t4.getByRole("button", { name: "Request a time" }).click();
+    check("form mistake shown in red", await has(t4, ".err-field >> text=Enter the rate you ask like 50.00"));
+    await shot(t4, "form-mistake-red-tester");
+    // Another test (Reef) where Cara's written answers waited 14 days.
+    const rr = await apiPost(dev, "/api/tests", { title: "Reef", description: "Count the coral.", buildUrl: "https://example.com/reef", category: "Puzzle", devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["How many?"], openUntil: "", joinMode: "anyone" });
+    const TR = rr.body.id;
+    const SR = (await apiPost(t3, `/api/tests/${TR}/join`, { confirmed: true })).body.sessionId;
+    await apiPost(t3, `/api/sessions/${SR}/written`, { answers: ["Eleven."] });
+    const subR = sql(`select id from "Submission" where "contractId" = '${SR}' and kind = 'written'`);
+    sql(`update "Submission" set "payBy" = now() - interval '1 minute' where id = '${subR}'`);
+    await runCron();
+    const pmBefore = sql(`select coalesce("stripePaymentMethodId", '') from "User" where id = '${devId}'`);
+    // Both pages open: the developer's Kelp Forest page and Cara's Kelp Forest session.
+    await t3.goto(`/app/sessions/${SCK}`);
+    await t3.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await dev.goto(`/app/tests/${TK}`);
+    // The developer requests a call with Cara from another tab (API); Cara sends her Kelp Forest answers; her automatic
+    // Charge on Reef is declined (owed).
+    await apiPost(dev, `/api/tests/${TK}/request-time`, { seenAt: new Date().toISOString(), confirmed: true, contractIds: [SCK], times: [atK(31)] });
+    await apiPost(t3, `/api/sessions/${SCK}/written`, { answers: ["Kelp everywhere."] });
+    sql(`update "User" set "stripePaymentMethodId" = 'pm_card_declined' where id = '${devId}'`);
+    await apiPost(t3, `/api/sessions/${SR}/choose`, { submissionId: subR, choice: "charge", tickedCents: 800 });
+    check("Reef charge owed", sql(`select count(*) from "Payment" where "submissionId" = '${subR}' and status = 'failed' and "owedUntil" is not null`) === "1");
+    // (b) Developer, ONE stop box: the failure on Reef + Cara's action on this test.
+    await dev.click("button:has-text('Next round')");
+    await dev.click("text=Start the next round");
+    check("developer stop box: failure on another test + a tester's action here + another tab", (await has(dev, "text=Payment failed on Reef")) && (await has(dev, "text=/Cara Diaz \\d+ sent .*written answers/")) && (await has(dev, "text=You also did this in another tab: sent a call request")));
+    await shot(dev, "combined-other-test-failure-and-tester-action-developer");
+    await dev.reload();
+    // The tester reads "delayed" (naming Reef) in her Kelp Forest top box.
+    await t3.bringToFront();
+    check("tester top box: delayed on Reef", await t3.waitForSelector("[data-live-top] >> text=payment for your written answers on Reef ($8) is delayed", { timeout: 35000 }).then(() => true, () => false));
+    // The daily retry with a working card: it goes through.
+    sql(`update "User" set "stripePaymentMethodId" = ${pmBefore ? `'${pmBefore}'` : "NULL"} where id = '${devId}'`);
+    await runCron();
+    check("retried and went through", sql(`select count(*) from "Payment" where "submissionId" = '${subR}' and status = 'charged' and "settledAt" is not null`) === "1");
+    const vk = sql(`select version from "Test" where id = '${TK}'`);
+    await apiPost(dev, `/api/tests/${TK}/edit`, { version: Number(vk), fields: { description: "Swim through the kelp at noon." }, confirmed: true });
+    check("tester top box: paid on Reef", await t3.waitForSelector("[data-live-top] >> text=Nora Lane paid $8.00 for your written answers on Reef", { timeout: 35000 }).then(() => true, () => false));
+    await t3.waitForSelector("[data-live-top] >> text=Nora Lane changed the description", { timeout: 35000 }).catch(() => {});
+    const n = await t3.locator("[data-live-top] li").count();
+    check("(d) top box with 3+ updates after the scroll-once", n >= 3, n);
+    await t3.evaluate(() => window.scrollTo(0, 0));
+    await shot(t3, "top-box-many-updates-tester");
+    await dev.bringToFront();
+    check("developer top box: the retry went through on Reef", await dev.waitForSelector("[data-live-top] >> text=Payment went through on Reef", { timeout: 35000 }).then(() => true, () => false));
+    await dev.evaluate(() => window.scrollTo(0, 0));
+    await shot(dev, "top-box-retry-went-through-developer");
+  });
+
   await browser.close();
-  summary.pass = summary.flows.every((f) => f.status === "pass");
+
+  // ---------- Coverage: one screenshot per stop / failure type, plus combined cases ----------
+  const C = (type, side, flowId, screenshot) => ({ type, side, flow: flowId, screenshot });
+  const rows = [
+    C("Tester stop A: new terms (Send my recording)", "tester", "17", "17-send-stops-once-tester.png"),
+    C("Tester stop B: the developer paid (Block)", "tester", "23", "23-block-stopped-tester.png"),
+    C("Tester stop C: a developer call change (Send written)", "tester", "24", "24-combined-info-and-call-tester.png"),
+    C("Tester stop D: the listing changed (join page: Apply)", "tester", "19", "19-apply-stops-once-tester.png"),
+    C("Tester stop E: your own action in another tab (Leave)", "tester", "23", "23-tab1-leave-stopped-tester.png"),
+    C("Tester stop F: listing info changed (Send written)", "tester", "24", "24-combined-info-and-call-tester.png"),
+    C("Developer stop: testers joined / sent (top panel)", "developer", "04", "04-stop-once-box.png"),
+    C("Developer stop: chargeback (End early)", "developer", "14", "14-chargeback-stop-once-developer.png"),
+    C("Developer stop: own action in another tab + failure on another test + a tester's action (Next round)", "developer", "25", "25-combined-other-test-failure-and-tester-action-developer.png"),
+    C("Developer stop on Edit Save: a change saved in another tab", "developer", "23", "23-edit-save-stopped-developer.png"),
+    C("Live top box (tester)", "tester", "23", "23-top-box-info-tester.png"),
+    C("Live top box (developer)", "developer", "23", "23-top-box-declined-developer.png"),
+    C("Scroll once to the top box", "tester", "23", "23-top-box-viewport-tester.png"),
+    C("Payment: manual Pay declined becomes owed", "developer", "10", "10-2-dev-declined.png"),
+    C("Payment: automatic charge (tester's Charge) fails, owed with a cut-off", "developer", "11", "11-owed-developer.png"),
+    C("Payment: the daily retry goes through (named on another test)", "developer", "25", "25-top-box-retry-went-through-developer.png"),
+    C("Payment: a second failure starts the hold", "developer", "11", "11-second-failure-hold-developer.png"),
+    C("Payment: chargeback opened", "developer", "14", "14-chargeback-hold-developer.png"),
+    C("Payment: chargeback resolved", "developer", "14", "14-chargeback-resolved-developer.png"),
+    C("Payment: across-tests failure alert on another test", "developer", "23", "23-top-box-other-test-developer.png"),
+    C("Payment: the tester's 'delayed' line", "tester", "23", "23-top-box-delayed-tester.png"),
+    C("Payment: the tester's 'paid' line after the delay", "tester", "25", "25-top-box-many-updates-tester.png"),
+    C("Refusal: request taken by another tester", "tester", "21", "21-accept-refused-tester-b.png"),
+    C("Refusal: request withdrawn", "developer", "20", "20-accept-withdrawn-refused-developer.png"),
+    C("Refusal: request declined", "tester", "24", "24-request-declined-refused-tester.png"),
+    C("Refusal: request closed / its time passed", "tester", "24", "24-request-time-passed-refused-tester.png"),
+    C("Refusal: 3 booked times", "tester", "22", "22-fourth-refused-tester.png"),
+    C("Refusal: 3 booked times (developer)", "developer", "22", "22-fourth-refused-developer.png"),
+    C("Refusal: 3 requests waiting", "tester", "24", "24-three-requests-refused-tester.png"),
+    C("Refusal: a clash when sending", "tester", "24", "24-send-clash-refused-tester.png"),
+    C("Refusal: weekly clash naming the week", "tester", "24", "24-weekly-clash-refused-tester.png"),
+    C("Refusal: This time is no longer free", "tester", "24", "24-no-longer-free-refused-tester.png"),
+    C("Refusal: Join call too early", "tester", "18", "18-join-too-early-tester.png"),
+    C("Refusal: paused (hold)", "tester", "12", "12-hold-join-refused-tester.png"),
+    C("Refusal: paused (hold, developer)", "developer", "12", "12-hold-pay-waits-developer.png"),
+    C("Refusal: blocked", "developer", "18", "18-blocked-row-developer.png"),
+    C("Refusal: session ended (tester reads only that)", "tester", "18", "18-session-ended-tester.png"),
+    C("Form mistake in red", "tester", "25", "25-form-mistake-red-tester.png"),
+    C("Combined (a): another tab + the developer paid, one stop box", "tester", "24", "24-combined-other-tab-and-paid-tester.png"),
+    C("Combined (b): failure on another test + a tester's action here, one stop box", "developer", "25", "25-combined-other-test-failure-and-tester-action-developer.png"),
+    C("Combined (c): listing info + a call change, one stop box", "tester", "24", "24-combined-info-and-call-tester.png"),
+    C("Combined (d): top box with 3+ updates after the scroll-once", "tester", "25", "25-top-box-many-updates-tester.png"),
+  ];
+  summary.coverage = rows.map((r) => {
+    const f = summary.flows.find((x) => x.id === r.flow);
+    const shotOk = !!f && f.screenshots.includes(r.screenshot) && fs.existsSync(path.join(OUT, r.screenshot));
+    return { ...r, status: f && f.status === "pass" && shotOk ? "pass" : "fail" };
+  });
+  summary.pass = summary.flows.every((f) => f.status === "pass") && summary.coverage.every((c) => c.status === "pass");
   fs.writeFileSync(path.join(OUT, "summary.json"), JSON.stringify(summary, null, 2));
   console.log(summary.pass ? "ALL PASS" : "SOME FAILED", "→", OUT);
   process.exit(summary.pass ? 0 : 1);
