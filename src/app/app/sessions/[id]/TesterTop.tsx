@@ -15,7 +15,13 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
     window.addEventListener("tester-top", on);
     return () => window.removeEventListener("tester-top", on);
   }, []);
-  if (!offer) return null;
+  if (!offer)
+    return box ? (
+      <div className="space-y-2">
+        <ChangesBox changes={box.changes} tail={box.tail} />
+        <button className="btn-ghost" onClick={() => window.location.reload()}>See the new terms</button>
+      </div>
+    ) : null;
   const decide = (choice: string) =>
     api(`/api/sessions/${sessionId}/terms`, { offerId, choice, seenAt, confirmed })
       .then(() => window.location.reload())

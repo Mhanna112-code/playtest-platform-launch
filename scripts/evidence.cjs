@@ -628,6 +628,31 @@ async function signIn(page, email) {
     await both("switched-and-sent", t2);
   });
 
+  await flow("18", "Block and Join call refusals: too early to join; the developer blocks; the tester reads only that the session ended; Join refused", async () => {
+    // Ana's booked call (from flow 16) is days away: Join call is refused with the opening time.
+    await tester.goto(`/app/sessions/${SA}`);
+    await tester.click("button:has-text('Join call')");
+    check("join too early", await has(tester, "text=You can join from"));
+    await shot(tester, "join-too-early-tester");
+    // The developer blocks Ana from her tester row.
+    await dev.goto(t11Url());
+    await dev.locator(`#tester-${SA}`).locator("button:has-text('Block Ana Silva')").click();
+    await shot(dev, "block-confirm-developer");
+    await dev.locator(`#tester-${SA}`).locator("button:has-text('Yes, block Ana Silva')").click();
+    check("developer sees the block on the row", await has(dev, "text=You blocked Ana Silva."));
+    await shot(dev, "blocked-row-developer");
+    // Ana only reads a neutral line; her call was cancelled; Join is refused.
+    await tester.reload();
+    check("tester reads a neutral line", await has(tester, "text=Your session on Lighthouse Keeper ended."));
+    check("never says blocked", !(await tester.isVisible("text=blocked")));
+    await shot(tester, "session-ended-tester");
+    await dev.goto("/app/profile#blocked");
+    check("Settings → Blocked people", await has(dev, "text=Blocked people"));
+    await shot(dev, "blocked-people-developer");
+    await dev.locator("#blocked button:has-text('Unblock')").first().click();
+    await dev.waitForTimeout(1200);
+  });
+
   await browser.close();
   summary.pass = summary.flows.every((f) => f.status === "pass");
   fs.writeFileSync(path.join(OUT, "summary.json"), JSON.stringify(summary, null, 2));

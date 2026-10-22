@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T17:57:02.500Z",
+  "run": "2026-10-22T18:14:00.584Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjufece00077kx0yd7n3l4f)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjv18cn00077ki0ks396rmm)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -167,7 +167,7 @@
       "title": "Charge declined: owed with a 3-day cut-off (developer banner + Payments, tester line); a second failure pauses at once",
       "status": "pass",
       "checks": [
-        "PASS test posted (saw: {\"id\":\"cmvjug2pu003j7kx0nk9onjym\"})",
+        "PASS test posted (saw: {\"id\":\"cmvjv1x1d003j7ki0y2n3t9o7\"})",
         "PASS both testers joined",
         "PASS tester offered the choice",
         "PASS developer banner with the cut-off",
@@ -317,6 +317,25 @@
         "17-offer-box-tester.png",
         "17-switched-and-sent-developer.png",
         "17-switched-and-sent-tester.png"
+      ]
+    },
+    {
+      "id": "18",
+      "title": "Block and Join call refusals: too early to join; the developer blocks; the tester reads only that the session ended; Join refused",
+      "status": "pass",
+      "checks": [
+        "PASS join too early",
+        "PASS developer sees the block on the row",
+        "PASS tester reads a neutral line",
+        "PASS never says blocked",
+        "PASS Settings → Blocked people"
+      ],
+      "screenshots": [
+        "18-join-too-early-tester.png",
+        "18-block-confirm-developer.png",
+        "18-blocked-row-developer.png",
+        "18-session-ended-tester.png",
+        "18-blocked-people-developer.png"
       ]
     }
   ],
