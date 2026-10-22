@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
+import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
 import {
   ADMIN_DIGEST_DAYS, autoPayFor, chargeAmount, callCancelledLine, CHARGED_BY_TESTER, countdownDue, INVITE_REMIND_DAYS, choiceLine, failedLine, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, HOLD_ALERT_DAYS, owedUntilFrom, PAUSED_FOR_TESTERS, PAY_WAITS, shiftForHold,
 } from "@/lib/rules";
@@ -362,8 +362,14 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;
   if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");
   const paidForPart = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
-  const amount = choice === "charge" ? chargeAmount(s.agreedCents, s.askedCents, paidForPart) : 0;
-  if (chargeAmount(s.agreedCents, s.askedCents, paidForPart) === 0) throw new HttpError(409, "paid_in_full", "This part is already paid in full.");
+  const cap = chargeAmount(s.agreedCents, s.askedCents, paidForPart);
+  if (cap === 0) throw new HttpError(409, "paid_in_full", "This part is already paid in full.");
+  // Any amount up to the cap (the box starts at the cap); the tick must name the typed amount.
+  const typed = body.amount === undefined || body.amount === "" ? cap : toCents(body.amount);
+  if (choice === "charge" && (typed == null || typed <= 0)) throw new HttpError(400, "bad_amount", "Enter an amount like 5.00.");
+  if (choice === "charge" && typed! > cap) throw new HttpError(400, "too_much", `At most ${money(cap)}.`);
+  if (choice === "charge" && typed! > 0 && typed! < 50) throw new HttpError(400, "too_small", "The smallest card charge is $0.50.");
+  const amount = choice === "charge" ? typed! : 0;
   if (choice === "charge" && body.tickedCents !== amount) throw new HttpError(400, "tick", `Tick “charge ${displayName(dev)} ${money(amount)} now” to charge.`);
   const payKey = `choice-${s.id}`;
   const review = await db.review.create({ data: { submissionId: s.id, contractId: c.id, amountCents: amount, agreedCents: s.agreedCents, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey } }).catch(() => null);

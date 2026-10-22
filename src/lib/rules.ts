@@ -492,8 +492,12 @@ export const ADMIN_DIGEST_DAYS = 3;
 export const INVITE_REMIND_DAYS = 3;
 
 /** "Charge": the lower of listing and asked, minus what's already been paid for that part (0 = only "Close it"). */
-export const chargeAmount = (listingCents: number | null, askedCents: number | null, paidCents: number) =>
-  Math.max(0, (autoPayFor(listingCents, askedCents) ?? 0) - paidCents);
+export const chargeAmount = (listingCents: number | null, askedCents: number | null, paidCents: number) => {
+  // Owner: cap = min(this piece's ask if any, listing − already paid for that part). No room → no box.
+  if (listingCents == null) return 0;
+  const room = listingCents - paidCents;
+  return Math.max(0, askedCents != null ? Math.min(askedCents, room) : room);
+};
 
 // ---------- New terms offered to working testers (owner) ----------
 

@@ -116,6 +116,8 @@ describe("charge amount and a second failure", () => {
     expect(R.chargeAmount(1000, 800, 0)).toBe(800);
     expect(R.chargeAmount(1000, 1500, 400)).toBe(600);
     expect(R.chargeAmount(1000, null, 1000)).toBe(0); // paid in full: no Charge / Let it go at all
+    expect(R.chargeAmount(700, 200, 500)).toBe(200); // listing $7, paid $5, asked $2 → $2
+    expect(R.chargeAmount(700, 500, 500)).toBe(200); // the ask is capped by what's left of the listing
   });
 
   it("a second failed payment while one is still owed starts the hold at once", async () => {
@@ -138,5 +140,13 @@ describe("charge amount and a second failure", () => {
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "didn't review" } } })).toBe(0);
     expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "letgo" })).status).toBe(409);
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, action: "reject", reason: "Not needed any more", confirmed: true })).status).toBe(200);
+  });
+
+  it("Charge any amount up to the cap; above the cap refused; the tick names the typed amount", async () => {
+    const { tester, sessionId, sub } = await waiting14();
+    await cron();
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "12.00", tickedCents: 1200 })).body.error.message).toBe("At most $10.00.");
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "6.00", tickedCents: 1000 })).body.error.message).toBe("Tick “charge Nora Lane $6.00 now” to charge.");
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "6.00", tickedCents: 600 })).body).toMatchObject({ amountCents: 600 });
   });
 });

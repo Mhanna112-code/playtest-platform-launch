@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { api } from "@/lib/client";
-import { money } from "@/lib/format";
+import { money, toCents } from "@/lib/format";
 import { stopBox, type StopBox } from "@/lib/topStop";
 import { ChangesBox } from "@/components/ChangesBox";
 
@@ -16,9 +16,11 @@ export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenA
   const [busy, setBusy] = useState(false);
   const [ticked, setTicked] = useState(false);
   const [confirmLetGo, setConfirmLetGo] = useState(false);
+  const [amount, setAmount] = useState((cents / 100).toFixed(2));
+  const typed = toCents(amount);
   const go = (choice: string) => {
     setBusy(true);
-    api(`/api/sessions/${sessionId}/choose`, { submissionId, choice, tickedCents: choice === "charge" ? cents : undefined, seenAt, confirmed })
+    api(`/api/sessions/${sessionId}/choose`, { submissionId, choice, amount, tickedCents: choice === "charge" && ticked ? typed : undefined, seenAt, confirmed })
       .then(() => window.location.reload())
       .catch((e) => {
         const sb = stopBox(e); if (sb) { setBox(sb); setConfirmed(true); }
@@ -37,10 +39,14 @@ export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenA
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <label>
-            <input type="checkbox" checked={ticked} onChange={(e) => setTicked(e.target.checked)} /> charge {devName} {money(cents)} now
+          <label className="inline-flex items-center gap-1">
+            $ <input className="input w-24" inputMode="decimal" aria-label="Amount to charge" value={amount} onChange={(e) => { setAmount(e.target.value); setTicked(false); }} />
+            <span className="note">(up to {money(cents)})</span>
           </label>
-          <button className="btn" disabled={busy || !ticked} onClick={() => go("charge")}>{`Charge ${devName} ${money(cents)}`}</button>
+          <label>
+            <input type="checkbox" checked={ticked} disabled={typed == null} onChange={(e) => setTicked(e.target.checked)} /> charge {devName} {typed == null ? "–" : money(typed)} now
+          </label>
+          <button className="btn" disabled={busy || !ticked || typed == null} onClick={() => go("charge")}>{`Charge ${devName} ${typed == null ? "" : money(typed)}`}</button>
           <button className="btn-ghost" disabled={busy} onClick={() => setConfirmLetGo(true)}>Let it go</button>
         </div>
       )}

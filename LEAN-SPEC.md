@@ -4,6 +4,13 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, newest) Charge amount (replaces earlier Charge formulas)
+- The ask is for THIS piece of work; the listing is the most the part can be paid in total.
+- Room left on the contract = listing − already paid for that part. Charge cap = the lower of (this piece's ask, if
+  any) and (room left). Example: listing $7, already paid $5, asked $2 → cap $2. No room left → no box.
+- The tester types any amount from $0.01 up to the cap ("Charge $[ 2.00 ] (up to $2.00)"; starts at the cap); the
+  tick names the typed amount; above the cap is refused under the button ("You can charge up to $2.00 for this part.").
+
 ## (Owner, Oct 22, newest) The "Invite anyway" box
 - It stays up as long as any ticked tester doesn't meet the test's needs, updating live (adds/removes names and what
   each is missing as profiles or ticks change).
