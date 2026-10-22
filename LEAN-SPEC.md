@@ -4,6 +4,29 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, NEWEST+2) Developer live-call panel layout, daily repeats, per-tester limit (wins below)
+- Repeat is "Daily" or "Weekly", 2-8 calls, exactly 1 time (never with "choose one"). Every occurrence is
+  clash-checked; once accepted each is an ordinary call (cancelled/paid alone). A daily/weekly set is shown as ONE
+  line ("Weekly: Mon 10:00 AM · 4 calls, next Nov 9 [Show calls]").
+- LIMIT (replaces "3 pending per side"): up to 3 items per tester, counting BOTH sides' pending requests and booked
+  calls together; a daily/weekly set (pending or booked) counts as 1. Shown as "3 of 3 used". A 4th is refused under
+  the button: "Ana Silva already has 3 calls or requests with you. Wait until one takes place, or withdraw or cancel
+  one." A slot frees when a call takes place or is cancelled, or a request closes. Select all: the stop-once box
+  names testers at 3 of 3 and sends to the rest on confirm. Tester-side refusal: "You already have 3 calls or
+  requests in this test. ..." (same rule).
+- Developer panel, top to bottom:
+  1) The rate line ("Calls you request use each tester's contract rate. A tester can ask for a different rate if they
+     request a call.").
+  2) The tick box list: "Select all", then ONE ROW PER TESTER with their terms, like the parts listing: name ·
+     deadline · each part sent/not sent and paid so far of its terms ("Written sent, paid $8 of $8 · Recording not
+     sent · Live call $40/h, $40 paid so far") · "2 of 3 used".
+  3) [Request a time] (goes to everyone ticked).
+  4) Underneath: per-tester blocks for the TICKED testers with their Booked calls ([Cancel]), daily/weekly sets
+     ([Show calls]), and Waiting requests (theirs: [Accept]/[Decline]; yours: [Withdraw]). When NOTHING is ticked,
+     show every tester who has any call or request (nothing hidden by accident). Ticked testers with nothing show
+     "No calls or requests".
+- Tester page stays simple: only their own calls/requests with the developer + "Live call: $40/h".
+
 ## (Owner, Oct 22, NEWEST+1) Request kinds, weekly, and a 2-pending limit (adds to the section below)
 - A request is ONE of: (a) "Choose one": up to 3 possible times; the other side picks one (or declines) -> 1 call;
   (b) "Weekly": exactly 1 time, repeated weekly for 2-8 weeks; the other side accepts all or declines -> one call

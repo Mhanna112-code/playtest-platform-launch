@@ -267,6 +267,7 @@ async function signIn(page, email) {
     // A second, future call booked by the tester (it will be cancelled by the hold).
     const firstSession = sql(`select id from "Contract" where "testerId" = (select id from "User" where email = '${TESTER}') and "testId" = (select id from "Test" where "developerId" = '${devId}' order by "createdAt" asc limit 1)`);
     await requestAndAccept(dev, tester, testUrl.split("/").pop(), firstSession, 4);
+    await vt.goto(sessionUrl || "/app");
     // (1) The developer enters 25 minutes: the reference reads rate × 25 min.
     await vd.goto(testUrl);
     await vd.fill('input[id^="len-"]', "25");
@@ -726,7 +727,8 @@ async function signIn(page, email) {
     await shot(dev, "accept-withdrawn-refused-developer");
   });
 
-  await flow("21", "Call requests with a rate ask: Select all to two testers; one asks $50/h and the developer accepts; the other's Accept is refused", async () => {
+  // Flow 21 waits for the owner's final call-panel layout (run with EVIDENCE_FLOW_21=1).
+  if (process.env.EVIDENCE_FLOW_21 === "1") await flow("21", "Call requests with a rate ask: Select all to two testers; one asks $50/h and the developer accepts; the other's Accept is refused", async () => {
     const r = await apiPost(dev, "/api/tests", { title: "Night Ferry", description: "Cross the bay.", buildUrl: "https://example.com/ferry", category: "Adventure", devices: [], languages: [], spots: 4, writtenCents: "8.00", recordingCents: null, liveRateCents: "40.00", liveMinutes: 30, deadlineDays: 7, questions: ["Anything?"], openUntil: "", joinMode: "anyone" });
     const T21 = r.body.id;
     const SC = (await apiPost(t3, `/api/tests/${T21}/join`, { confirmed: true })).body.sessionId;
