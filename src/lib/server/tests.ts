@@ -1,4 +1,4 @@
-import { devChanges, seenOf, tabOf } from "./live";
+import { devChanges, seenOf, tabOf, withRenamed } from "./live";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, pronouns, toCents } from "@/lib/format";
@@ -95,6 +95,48 @@ export async function recordEvent(tx: Tx, testId: string, kind: string, text: st
 
 const working = (testId: string) => ({ testId, status: "working" });
 
+/**
+ * (Owner, correction 4) When the test fills, every pending application and every open invite closes (nothing reopens
+ * later). Runs inside the transaction that took the last spot. The developer's line stops once in all tabs.
+ */
+export async function closeOnFull(tx: Tx, testId: string, exceptTesterId: string | null) {
+  const t = await tx.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
+  const now = new Date();
+  const apps = await tx.application.findMany({ where: { testId, status: "pending", ...(exceptTesterId ? { testerId: { not: exceptTesterId } } : {}) } });
+  // (Correction 6) Open invites STAY open while the test is full; they're told, and told again when a spot opens.
+  const invs = await tx.invite.findMany({ where: { testId, status: "sent", ...(exceptTesterId ? { testerId: { not: exceptTesterId } } : {}) } });
+  await tx.application.updateMany({ where: { id: { in: apps.map((a) => a.id) } }, data: { status: "closed", closedReason: "full", decidedAt: now } });
+  const closed = apps.length ? `: closed ${apps.length} application${apps.length === 1 ? "" : "s"}.` : ".";
+  const open = invs.length ? ` ${invs.length} invite${invs.length === 1 ? " stays" : "s stay"} open until a spot opens.` : "";
+  await tx.testEvent.create({ data: { testId, kind: "full", text: `${t.title} is full${closed}${open}`.replace(/\.$/, "") } });
+  const people = await tx.user.findMany({ where: { id: { in: [...apps.map((a) => a.testerId), ...invs.map((i) => i.testerId)] } } });
+  const email = (id: string) => people.find((p) => p.id === id)?.email ?? "";
+  return { title: t.title, testId, dev: displayName(t.developer), apps: apps.map((a) => email(a.testerId)), invites: invs.map((i) => email(i.testerId)) };
+}
+
+export const fullInviteLine = (title: string) => `${title} is full right now. Your invite stays open; we'll tell you when a spot opens.`;
+export const spotOpenLine = (title: string, dev: string) => `A spot opened on ${title}: you can accept ${dev}'s invite now.`;
+
+export async function tellFull(f: { title: string; testId: string; dev: string; apps: string[]; invites: string[] }) {
+  for (const e of f.apps) if (e) await notify(e, `${f.title} is full, so your application was closed.`, [`${f.title} is full, so your application was closed.`], `/app/find/${f.testId}`);
+  for (const e of f.invites) if (e) await notify(e, fullInviteLine(f.title), [fullInviteLine(f.title)], `/app/find/${f.testId}`);
+}
+
+/**
+ * (Correction 6) A spot opened (someone left / was ended, or spots were raised) on a test that was full: every open
+ * invite is told (first come, first served). Closed applicants aren't. Reminders resume by themselves.
+ */
+export async function spotOpened(testId: string) {
+  const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
+  const last = await db.testEvent.findFirst({ where: { testId, kind: { in: ["full", "spot_open"] } }, orderBy: { createdAt: "desc" } });
+  if (last?.kind !== "full") return;
+  if ((await db.contract.count({ where: working(testId) })) >= t.spots) return;
+  await db.testEvent.create({ data: { testId, kind: "spot_open", text: spotOpenLine(t.title, displayName(t.developer)) } });
+  const invs = await db.invite.findMany({ where: { testId, status: "sent" } });
+  const people = await db.user.findMany({ where: { id: { in: invs.map((i) => i.testerId) } } });
+  for (const p of people) await notify(p.email, spotOpenLine(t.title, displayName(t.developer)), [spotOpenLine(t.title, displayName(t.developer))], `/app/find/${testId}`);
+}
+
 /** (NEWEST+4) Rejoining keeps exactly the time they had left when they left (hours count; if it had passed, it stays passed). */
 export const rejoinDue = (oldDue: Date, leftAt: Date | null, now: Date) => new Date(now.getTime() + (oldDue.getTime() - (leftAt ?? now).getTime()));
 
@@ -144,6 +186,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   let switchedToAnyone = false;
   let changedNames: string[] = [];
   let reinvite = false;
+  let spotsChanged = false;
+  let switchedToInvite = false;
   const result = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
@@ -152,7 +196,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // (NEWEST+3) Save follows the same rule as the test page's buttons: every developer reason since Edit opened
     // (testers' actions, and anything saved or done in another tab), then any other change to the listing's version.
     const seen = seenOf(body.seenAt);
-    const dc = !confirmed && seen ? await devChanges(dev.id, testId, seen, tabOf(body), tx) : [];
+    const dc = !confirmed && seen ? withRenamed(await devChanges(dev.id, testId, seen, tabOf(body), tx), body) : [];
     if (dc.length) {
       throw new HttpError(409, "changed", "Press Save again to save your changes.", { changes: dc.map((c) => ({ text: c.text, at: c.createdAt })), version: t.version, current: asListing(t) });
     }
@@ -179,16 +223,29 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     await recordEvent(tx, testId, listingFields.length ? "edited" : "edited_spots", `The listing was edited: ${what}`, true, {
       ...listingData(next), ...(fields.includes("openUntil") ? { notified3d: false, notified1d: false } : {}), ...(listingFields.length ? { listingVersion: { increment: 1 } } : {}),
     });
-    // (F) Listing info (title, description, devices, languages): shown to working testers and on the join page.
+    // (F) Listing info (description, devices, languages): shown to working testers and on the join page; stops once.
     const info = fields.filter((f) => INFO_FIELDS.includes(f));
     if (info.length) await tx.testEvent.create({ data: { testId, kind: "info", text: `${displayName(dev)} changed the ${andList(info.map((f) => FIELD_NAMES[f]))}` } });
+    // A title change is info only everywhere (never stops; a press notes it).
+    if (fields.includes("title")) await tx.testEvent.create({ data: { testId, kind: "renamed", text: `${displayName(dev)} renamed the test to ${next.title}` } });
     changedNames = fields.map((f) => FIELD_NAMES[f]);
-    reinvite = fields.some((f) => f !== "spots" && f !== "joinMode");
+    reinvite = fields.some((f) => CLOSING_FIELDS.includes(f));
+    spotsChanged = fields.includes("spots");
+    switchedToInvite = fields.includes("joinMode") && next.joinMode === "invite";
     return tx.test.findUniqueOrThrow({ where: { id: testId } });
   });
   // Working testers are OFFERED the new contract terms (Switch / Keep); their contract changes only if they switch.
   const offered = termsChanged ? await offerNewTerms(testId) : 0;
-  const closedApps = reinvite ? await (await import("./joining")).closeApplicationsAfterEdit(testId) : [];
+  const closedApps = reinvite ? await (await import("./joining")).closeApplicationsAfterEdit(testId) : switchedToInvite ? await (await import("./joining")).closeApplicationsAfterEdit(testId, "invite_only") : [];
+  // (Correction 4/5) Lowering spots never closes invites by itself; lowering them to the testers in fills the test.
+  if (spotsChanged) {
+    const filled = await db.$transaction(async (tx) => {
+      const t = await lockTest(tx, testId);
+      return (await tx.contract.count({ where: working(testId) })) >= t.spots ? closeOnFull(tx, testId, null) : null;
+    });
+    if (filled) await tellFull(filled);
+    else await spotOpened(testId);
+  }
   if (switchedToAnyone) await (await import("./joining")).onSwitchToAnyone(testId);
   // (NEWEST+4) Any listing change except spots / who can join re-sends open invites on the new listing.
   const { skipped: notReinvited, resent } = reinvite ? await (await import("./invites")).reinviteAfterEdit(testId) : { skipped: [], resent: [] };
@@ -196,7 +253,9 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
 }
 
 /** (F) The listing info a working tester sees change live: title, description, devices, languages. */
-export const INFO_FIELDS: (keyof Listing)[] = ["title", "description", "devices", "languages"];
+export const INFO_FIELDS: (keyof Listing)[] = ["description", "devices", "languages"];
+/** (Correction 2) The changes that close applications and re-send invites: prices / parts / questions, deadline, devices, languages, description. */
+export const CLOSING_FIELDS: (keyof Listing)[] = ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "questions", "deadlineDays", "devices", "languages", "description"];
 
 const FIELD_NAMES: Record<keyof Listing, string> = {
   title: "title", description: "description", buildUrl: "build link", category: "category", devices: "devices", languages: "languages",
@@ -221,7 +280,7 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
   const seenAt = seenDate(body.seenAt);
   if (body.confirmed === true) return;
   const t = await tx.test.findUniqueOrThrow({ where: { id: testId }, select: { developerId: true } });
-  const changes = [...(await devChanges(t.developerId, testId, seenAt, tabOf(body), tx)), ...extraChanges].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const changes = withRenamed([...(await devChanges(t.developerId, testId, seenAt, tabOf(body), tx)), ...extraChanges].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()), body);
   if (changes.length) {
     throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: changes.map((c) => ({ text: c.text, at: c.createdAt })), ...extra });
   }
@@ -298,6 +357,7 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
   });
   await tellCancelled(cancelled, "ended");
   await notify(c.tester.email, `Your work on “${c.title}” was ended early`, [`${displayName(dev)} ended your work on “${c.title}”: “${reason}”`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`);
+  await spotOpened(c.testId);
   return { ended: true };
 }
 
@@ -360,7 +420,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
   if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test games” in your profile to join tests.");
   const profile = await db.testerProfile.findUnique({ where: { userId: tester.id } });
   const seen = Number(body.listingVersion);
-  const { contract, dev } = await db.$transaction(async (tx) => {
+  const { contract, dev, filled } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.developerId === tester.id) throw new HttpError(409, "own", "You can't join your own test.");
     // (NEWEST+4) Rejoining: a tester who LEFT comes back on the current listing; one the developer ENDED only through
@@ -390,8 +450,11 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     if (old) await tx.termsOffer.updateMany({ where: { contractId: old.id, status: "open" }, data: { status: "superseded", decidedAt: new Date() } });
     await recordEvent(tx, testId, "joined", old ? `${displayName(tester)} joined again` : `${displayName(tester)} joined`, true, {}, contract.id);
     await tx.invite.updateMany({ where: { testId, testerId: tester.id, status: "sent" }, data: { status: "joined" } });
-    return { contract, dev };
+    // (Correction 4) The last spot taken: every other pending application and open invite closes, in this transaction.
+    const filled = (await tx.contract.count({ where: working(testId) })) >= t.spots ? await closeOnFull(tx, testId, tester.id) : null;
+    return { contract, dev, filled };
   });
+  if (filled) await tellFull(filled);
   await notify(dev.email, `${displayName(tester)} joined “${contract.title}”`, [`${displayName(tester)} joined your test “${contract.title}”.`, `Their deal: ${termsLine(contract)}.`], `/app/tests/${testId}`);
   return contract;
 }
@@ -425,6 +488,7 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
     return c;
   });
   await notify(c0.test.developer.email, `${displayName(tester)} left “${c.title}”`, [`${displayName(tester)} left your test “${c.title}”. Work they already sent still waits for your review.`], `/app/tests/${c.testId}`);
+  await spotOpened(c.testId);
   return { left: true };
 }
 

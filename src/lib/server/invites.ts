@@ -109,14 +109,6 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     }
     const invited: { id: string; name: string; email: string }[] = [];
     const others: string[] = [];
-    // (NEWEST+4) Spot cap, always: open invites + testers in <= spots.
-    const openInvites = await tx.invite.count({ where: { testId, status: "sent" } });
-    let spotsLeft = t.spots - testersIn - openInvites;
-    const fresh = people.filter((p) => !contracts.some((c) => c.testerId === p.id && c.status === "working") && !invites.some((i) => i.testerId === p.id && i.status === "sent"));
-    if (openInvites > 0 && fresh.length > Math.max(0, spotsLeft)) {
-      const left = t.spots - testersIn;
-      throw new HttpError(409, "spot_cap", `Only ${left} spot${left === 1 ? " is" : "s are"} left and ${openInvites} ${openInvites === 1 ? "person is" : "people are"} already invited. Cancel an invite or add spots.`);
-    }
     for (const p of people) {
       const name = displayName(p);
       if (contracts.some((c) => c.testerId === p.id && c.status === "working")) continue; // joined: no longer in the list
@@ -128,13 +120,9 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
         others.push(why);
         continue;
       }
-      if (spotsLeft <= 0) {
-        others.push(`${name} can't be invited: the test is full.`);
-        continue;
-      }
+      // (Correction 5) Invites never hold spots: any number can be open; the first to join gets a spot.
       await tx.invite.create({ data: { testId, testerId: p.id } });
       invited.push({ id: p.id, name, email: p.email });
-      spotsLeft--;
     }
     if (invited.length) await recordEvent(tx, testId, "invited", `You invited ${andList(invited.map((i) => i.name))}`, false);
     return { t, invited, others };
@@ -157,8 +145,8 @@ export async function cancelInvite(dev: U, testId: string, body: Record<string, 
 }
 
 /** An invite is live while the test can still take this tester. */
-export const inviteExpired = (t: { status: string; spots: number; openUntil: Date | null }, testersIn: number, now = new Date()) =>
-  t.status !== "open" || testersIn >= t.spots || (!!t.openUntil && t.openUntil < now);
+/** An invite is live while the test takes testers (a full test keeps its invites open: correction 6). */
+export const inviteExpired = (t: { status: string; openUntil: Date | null }, now = new Date()) => t.status !== "open" || (!!t.openUntil && t.openUntil < now);
 
 /** For the live Invite anyway box: what each ticked tester still misses right now. */
 export async function inviteGaps(devId: string, testId: string, testerIds: string[]) {
@@ -174,10 +162,9 @@ export async function inviteGaps(devId: string, testId: string, testerIds: strin
  */
 export async function reinviteAfterEdit(testId: string) {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
-  const open = await db.invite.findMany({ where: { testId, status: "sent" }, orderBy: { createdAt: "asc" } }); // earliest-invited first
+  const open = await db.invite.findMany({ where: { testId, status: "sent" }, orderBy: { createdAt: "asc" } });
   const skipped: string[] = [];
   const resent: string[] = [];
-  let spotsLeft = t.spots - (await db.contract.count({ where: { testId, status: "working" } }));
   for (const inv of open) {
     await db.invite.update({ where: { id: inv.id }, data: { status: "replaced" } });
     const p = await db.user.findUnique({ where: { id: inv.testerId } });
@@ -188,11 +175,6 @@ export async function reinviteAfterEdit(testId: string) {
     if (!p.isTester) { skipped.push(`${name} (account closed)`); continue; }
     if (p.suspendedAt || blocked) { skipped.push(`${name} (can't be invited right now)`); continue; }
     if (active >= MAX_ACTIVE_TESTS) { skipped.push(`${name} (in ${MAX_ACTIVE_TESTS} tests)`); continue; }
-    if (spotsLeft <= 0) {
-      skipped.push(`${name} (no spots left)`);
-      continue;
-    }
-    spotsLeft--;
     await db.invite.create({ data: { testId, testerId: p.id } });
     resent.push(name);
     const line = `${displayName(t.developer)} updated ${t.title}, so here's a new invite: ${termsLine(asListing(t), true)}.`;

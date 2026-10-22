@@ -73,6 +73,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           <p className="note">Turn on “test games” in your <a href="/app/profile">profile</a> to join.</p>
         ) : blocked ? (
           <p className="note">This test isn&apos;t taking new testers right now.</p>
+        ) : closed && invite && t.status === "open" && testersIn >= t.spots ? (
+          <p className="info">{t.title} is full right now. Your invite stays open; we&apos;ll tell you when a spot opens.</p>
         ) : closed ? (
           <p className="err">{t.status === "stopped" ? "This test was stopped." : testersIn >= t.spots ? "This test is full." : "This test isn't taking new testers any more."}</p>
         ) : (

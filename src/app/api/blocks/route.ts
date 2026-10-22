@@ -25,6 +25,6 @@ export async function POST(req: Request) {
     const other = await db.user.findUnique({ where: { id } });
     const testId = asTester?.testId ?? asDev?.id;
     if (testId && other) await logAction(u.id, testId, body, `blocked ${displayName(other)}`);
-    return ok(r);
+    return ok(typeof body.__note === "string" ? { ...r, note: body.__note } : r);
   });
 }

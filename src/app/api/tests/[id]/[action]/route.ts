@@ -17,8 +17,10 @@ export async function POST(req: Request, { params }: Ctx) {
     const { id, action } = await params;
     const u = await requireActive(req);
     const body = await readJson(req);
-    const res = await run(u, id, action, body);
-    const data = await res.clone().json().catch(() => null);
+    const res0 = await run(u, id, action, body);
+    const data = await res0.clone().json().catch(() => null);
+    // A rename the page hadn't shown: the press went ahead; the note goes under the button.
+    const res = res0.ok && typeof body.__note === "string" && data && typeof data === "object" ? ok({ ...data, note: body.__note }) : res0;
     if (res.ok) await logTestAction(u.id, id, action, body, data);
     return res;
   });
@@ -29,7 +31,7 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
     switch (action) {
       case "edit": {
         const t = await editTest(u, id, body);
-        return ok({ version: t.version, offered: (t as { offered?: number }).offered ?? 0, changed: (t as { changed?: string[] }).changed ?? [], notReinvited: (t as { notReinvited?: string[] }).notReinvited ?? [], resent: (t as { resent?: string[] }).resent ?? [], closedApps: (t as { closedApps?: string[] }).closedApps ?? [] });
+        return ok({ version: t.version, offered: (t as { offered?: number }).offered ?? 0, changed: (t as { changed?: string[] }).changed ?? [], notReinvited: (t as { notReinvited?: string[] }).notReinvited ?? [], resent: (t as { resent?: string[] }).resent ?? [], closedApps: (t as { closedApps?: string[] }).closedApps ?? [], spotClosed: (t as { spotClosed?: string[] }).spotClosed ?? [], spots: t.spots });
       }
       case "open":
         await openDraft(u, id);

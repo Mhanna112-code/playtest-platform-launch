@@ -46,6 +46,7 @@ export async function blockUser(me: { id: string; email: string; name: string },
   await (await import("./requests")).closeRequests({ contractIds: contracts.map((c) => c.id) }, "the session ended");
   await db.termsOffer.updateMany({ where: { status: "open", contractId: { in: contracts.map((c) => c.id) } }, data: { status: "superseded", decidedAt: now } });
   await db.invite.updateMany({ where: { status: "sent", OR: [{ testerId: otherId, test: { developerId: me.id } }, { testerId: me.id, test: { developerId: otherId } }] }, data: { status: "cancelled" } });
+  for (const c of contracts) await (await import("./tests")).spotOpened(c.testId);
   return { blocked: true, ended: contracts.length };
 }
 

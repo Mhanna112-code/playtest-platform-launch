@@ -35,5 +35,14 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
     const e = data?.error;
     throw new ApiError(res.status, e?.code ?? "server", e?.message ?? (res.status === 413 ? "That's too much to send at once. Try a smaller amount." : "Something went wrong. Try again in a moment."), e ?? {});
   }
+  // A press that went ahead with a note (e.g. "Done. Also: the test was renamed to ..."): kept for the page's top box
+  // in case the page reloads right away.
+  if (data && typeof data === "object" && typeof (data as { note?: unknown }).note === "string" && typeof window !== "undefined") {
+    try {
+      window.sessionStorage.setItem("press-note", JSON.stringify({ text: (data as { note: string }).note, at: new Date().toISOString(), path: window.location.pathname }));
+    } catch {
+      // storage blocked: the note still shows under the button
+    }
+  }
   return data as T;
 }

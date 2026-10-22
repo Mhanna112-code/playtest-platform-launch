@@ -4,7 +4,7 @@ import { displayName, fmtTime } from "@/lib/format";
 import { MAX_ACTIVE_TESTS, termsLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
-import { logEvent, ownChanges, seenOf, tabOf } from "./live";
+import { logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
 import { asListing, devGate, joinTest, ownTest } from "./tests";
 
 // Joining (owner rule): Who can join = Anyone (Join) / Apply (Apply to join → the developer Accepts or Declines) /
@@ -40,7 +40,7 @@ export async function joinRefusal(testerId: string, testId: string) {
   if (old?.status === "working") return "You've already joined this test.";
   if (old?.status === "ended" && !(await db.invite.findFirst({ where: { testId, testerId, status: "sent" } }))) return "You can't join this test again.";
   const testersIn = await db.contract.count({ where: { testId, status: "working" } });
-  if (testersIn >= t.spots) return "This test is full.";
+  if (testersIn >= t.spots) return (await db.invite.findFirst({ where: { testId, testerId, status: "sent" } })) ? `${t.title} is full right now.` : "This test is full.";
   if (await db.block.count({ where: { blockerId: testerId, blockedId: t.developerId } })) return `You blocked ${displayName(t.developer)}: unblock them in Settings → Blocked people to join.`;
   if (await db.block.count({ where: { blockerId: t.developerId, blockedId: testerId } })) return "This test isn't taking new testers right now.";
   if ((await db.contract.count({ where: { testerId, status: "working" } })) >= MAX_ACTIVE_TESTS) return "You can't join more tests right now.";
@@ -62,12 +62,17 @@ export async function joinPageChanges(userId: string, testId: string, seenAt: un
   if (!d) return [];
   // An edit of only the listing's info shows once, as the (F) line ("Nora Lane changed the description").
   const edits = (await listingChanges(testId, seenAt)).filter((e) => !e.text.replace(/^The listing was edited: /, "").split(", ").every((f) => INFO_NAMES.includes(f)));
-  const info = await db.testEvent.findMany({ where: { testId, kind: "info", createdAt: { gt: d } } });
+  const info = await db.testEvent.findMany({ where: { testId, kind: { in: ["info", "renamed"] }, createdAt: { gt: d } } });
   // (NEWEST+4, LIVE + GONE) Their application closed / their invite re-sent on the updated listing.
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
   const gone: TestEventLike[] = [];
   for (const a of await db.application.findMany({ where: { testId, testerId: userId, status: "closed", decidedAt: { gt: d } } }))
-    gone.push({ kind: "applied", text: `${displayName(t.developer)} changed the listing: your application was closed`, createdAt: a.decidedAt! });
+    gone.push({ kind: "applied", text: a.closedReason === "full" ? `${t.title} is full: your application was closed` : a.closedReason === "invite_only" ? `${displayName(t.developer)} made the test invite only: your application was closed` : `${displayName(t.developer)} changed the listing: your application was closed`, createdAt: a.decidedAt! });
+  // (Correction 6) Invited: the test filled (the invite stays open) / a spot opened.
+  if (await db.invite.findFirst({ where: { testId, testerId: userId, status: "sent" } })) {
+    for (const e of await db.testEvent.findMany({ where: { testId, kind: { in: ["full", "spot_open"] }, createdAt: { gt: d } } }))
+      gone.push({ kind: e.kind, text: e.kind === "full" ? `${t.title} is full right now. Your invite stays open; we'll tell you when a spot opens.` : e.text, createdAt: e.createdAt });
+  }
   const replaced = await db.invite.findMany({ where: { testId, testerId: userId, status: "replaced", updatedAt: { gt: d } } });
   if (replaced.length) {
     const fresh = await db.invite.findFirst({ where: { testId, testerId: userId, status: "sent" }, orderBy: { createdAt: "desc" } });
@@ -79,7 +84,7 @@ export async function joinPageChanges(userId: string, testId: string, seenAt: un
 /** Join / Apply / Withdraw application / No thanks stop once (box under the button) for the join page's reasons. */
 export async function listingGate(userId: string, testId: string, body: Record<string, unknown>, verb: string) {
   if (body.confirmed === true) return;
-  const changes = await joinPageChanges(userId, testId, body.seenAt, tabOf(body));
+  const changes = withRenamed(await joinPageChanges(userId, testId, body.seenAt, tabOf(body)), body);
   if (changes.length) {
     const tail = verb === "withdraw" || verb === "decline" ? "Press again to go ahead." : `Press again to ${verb} on the current listing.`;
     throw new HttpError(409, "stop_once", tail, { changes: changes.map((e) => ({ text: e.text, at: e.createdAt })), tail });
@@ -106,7 +111,7 @@ export async function join(tester: U, testId: string, body: Record<string, unkno
   if (refusal) throw new HttpError(409, "refused", refusal);
   await replacedInvite(tester.id, testId, body);
   await listingGate(tester.id, testId, body, "join");
-  if (t.joinMode === "apply" && !(await db.application.findFirst({ where: { testId, testerId: tester.id, status: "pending", changedAt: { not: null } } }))) {
+  if (t.joinMode === "apply" && !(await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } })) && !(await db.application.findFirst({ where: { testId, testerId: tester.id, status: "pending", changedAt: { not: null } } }))) {
     throw new HttpError(409, "apply", "This test takes applications: press Apply to join.");
   }
   if (t.joinMode === "invite" && !(await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } }))) throw new HttpError(409, "invite_only", "This test is invite only.");
@@ -155,7 +160,8 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   if (!a || a.testId !== testId) throw new HttpError(404, "not_found", "That application doesn't exist.");
   const tester = await db.user.findUniqueOrThrow({ where: { id: a.testerId }, include: { profile: true } });
   const name = displayName(tester);
-  if (a.status === "closed") throw new HttpError(409, "gone", `${name}'s application closed when you changed the listing in another tab at ${fmtTime(a.decidedAt ?? new Date())}.`);
+  if (a.status === "closed" && a.closedReason === "full") throw new HttpError(409, "gone", `${name}'s application closed when the test filled up at ${fmtTime(a.decidedAt ?? new Date())}.`);
+  if (a.status === "closed") throw new HttpError(409, "gone", a.closedReason === "invite_only" ? `${name}'s application closed when the test became invite only at ${fmtTime(a.decidedAt ?? new Date())}.` : `${name}'s application closed when you changed the listing in another tab at ${fmtTime(a.decidedAt ?? new Date())}.`);
   if (a.status !== "pending") throw new HttpError(409, "gone", a.status === "withdrawn" ? `${name} withdrew their application.` : "This application was already answered.");
   const extra: TestEventLike[] = [];
   const seenAt = typeof body.seenAt === "string" ? new Date(body.seenAt) : null;
@@ -201,17 +207,17 @@ export async function onSwitchToAnyone(testId: string) {
  * application; no invite is sent. The applicant is told (bell + email; their join page's top box), and the developer's
  * page shows the line and stops once for it.
  */
-export async function closeApplicationsAfterEdit(testId: string) {
+export async function closeApplicationsAfterEdit(testId: string, why: "listing" | "invite_only" = "listing") {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
   const pending = await db.application.findMany({ where: { testId, status: "pending" }, orderBy: { createdAt: "asc" } });
   const now = new Date();
   const names: string[] = [];
   for (const a of pending) {
-    await db.application.update({ where: { id: a.id }, data: { status: "closed", decidedAt: now } });
+    await db.application.update({ where: { id: a.id }, data: { status: "closed", decidedAt: now, closedReason: why } });
     const tester = await db.user.findUnique({ where: { id: a.testerId } });
     if (!tester) continue;
     names.push(displayName(tester));
-    const line = `${t.title}'s listing changed, so your application was closed. You can apply again on the current listing.`;
+    const line = why === "invite_only" ? `${t.title} is now invite only, so your application was closed.` : `${t.title}'s listing changed, so your application was closed. You can apply again on the current listing.`;
     await notify(tester.email, line, [line], `/app/find/${testId}`);
   }
   return names;

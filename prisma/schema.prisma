@@ -504,6 +504,8 @@ model Application {
   createdAt  DateTime  @default(now())
 
   @@unique([testId, testerId])
+  /// Why it closed: "listing" (a listing change) | "invite_only" (the test became invite only)
+  closedReason String @default("")
 }
 
 /** "Request a time" from either side (pending until the other side accepts or declines; auto-booked on a match). */

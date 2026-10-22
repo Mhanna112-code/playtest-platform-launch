@@ -237,7 +237,7 @@ export function stopOnce(events: TestEventLike[], seenAt: Date, confirmed: boole
 export const DEV_STOP_KINDS = [
   ...STOP_ONCE_KINDS, "paid", "rejected", "chargeback", "choice", "requested", "withdrew_req", "declined_req",
   // (NEWEST+3) the full set: applications, a tester's Switch/Keep, disputes, invite answers, admin decisions, listing info (F).
-  "applied", "terms", "dispute", "invite", "admin", "info",
+  "applied", "terms", "dispute", "invite", "admin", "info", "full",
 ] as const;
 
 /**
@@ -245,6 +245,8 @@ export const DEV_STOP_KINDS = [
  * stop them, as reason E, through the action log; events written as "You ..." are their own and come only that way.)
  */
 export const DEV_EXEMPT_KINDS: Record<string, string> = {
+  renamed: "info only (owner, correction 2): a top-box line; a press goes through with a note, never stops",
+  spot_open: "follows a tester leaving / being ended or the developer's own spots edit: those lines show instead",
   edited: "the developer's own edit (reason E from another tab; F for listing info)",
   edited_spots: "the developer's own edit of spots (reason E from another tab)",
   opened: "the developer's own Open (reason E from another tab)",
@@ -260,8 +262,15 @@ export const DEV_EXEMPT_KINDS: Record<string, string> = {
 export const delayedPayLine = (devName: string, label: string, cents: number, title = "") =>
   `${devName}'s payment for your ${label}${title ? ` on ${title}` : ""} (${"$" + (cents % 100 ? (cents / 100).toFixed(2) : String(cents / 100))}) is delayed. You'll be told when it arrives.`;
 
+/**
+ * (Owner, NEWEST+4 correction 2) A title change is INFO ONLY everywhere: a top-box line, never a stop. A press that the
+ * page hadn't shown it before goes through with this note under the button; a stop for other reasons lists it too.
+ */
+export const RENAMED = "renamed";
+export const renamedNote = (title: string, at: string) => `Done. Also: the test was renamed to ${title} at ${at}.`;
+
 /** The test events a tester's page reads directly; their other reasons come from their own contract's records. */
-export const TESTER_EVENT_KINDS = ["info"] as const;
+export const TESTER_EVENT_KINDS = ["info", "renamed", "full", "spot_open"] as const;
 /** Every other recorded event kind, and why a tester never sees it as such (or sees it another way). */
 export const TESTER_EXEMPT_KINDS: Record<string, string> = {
   joined: "another tester's activity is never shown to a tester",
@@ -396,7 +405,7 @@ export function inviteTestRefusal(
   if (t.openUntil && t.openUntil.getTime() < now.getTime()) return `Joining closed on ${fmt(t.openUntil)} (Open until), so nobody can be invited.`;
   if (t.paused) return "This test is paused until you pay what you owe, so nobody can be invited.";
   if (t.status !== "open") return "This test isn't taking new testers, so nobody can be invited.";
-  if (t.testersIn >= t.spots) return `This test is full (${t.testersIn} of ${t.spots} spots), so nobody can be invited. Add spots in Edit to invite more.`;
+  // (Correction 6) Inviting while the test is full is allowed: invites stay open until a spot opens.
   return "";
 }
 

@@ -20,11 +20,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const fresh = await db.invite.findFirst({ where: { testId: inv.testId, testerId: u.id, status: "sent" } });
       throw new HttpError(409, "gone", fresh ? `${displayName(t.developer)} changed the listing at ${fmtTime(inv.updatedAt)} and sent you a new invite: ${termsLine(asListing(t), true)}.` : `${displayName(t.developer)} changed the listing at ${fmtTime(inv.updatedAt)}, and this invite closed.`, fresh ? { newInviteId: fresh.id } : {});
     }
-    if (inv.status !== "sent") throw new HttpError(409, "gone", inv.status === "joined" ? "You already joined." : "This invite is closed.");
+    if (inv.status !== "sent") throw new HttpError(409, "gone", inv.status === "joined" ? "You already joined." : inv.status === "closed_full" ? "This invite closed: the test filled up." : "This invite is closed.");
     await listingGate(u.id, inv.testId, body, "decline");
     await db.invite.update({ where: { id }, data: { status: "declined" } });
     await logAction(u.id, inv.testId, body, "said no thanks to the invite");
     await logEvent(inv.testId, "invite", `${displayName(u)} said no thanks to your invite`);
-    return ok({ ok: true });
+    return ok({ ok: true, ...(typeof body.__note === "string" ? { note: body.__note } : {}) });
   });
 }

@@ -38,35 +38,6 @@ describe("a listing change re-sends open invites", () => {
     expect(old.body.error.newInviteId).toBe(fresh.id);
     expect((await act(testId, "join", ana.cookie, { listingVersion: await listingVersion(testId), inviteId: fresh.id })).status).toBe(200);
   });
-
-  it("caps invites at the spots left (open invites count); a re-send keeps the earliest-invited; lines on both sides", async () => {
-    const { dev, testId } = await setup({ joinMode: "invite", spots: 2 });
-    const ana = await makeUser({ tester: true, name: "Ana Silva", pronoun: "she" });
-    const dee = await makeUser({ tester: true, name: "Dee Moss" });
-    const cara = await makeUser({ tester: true, name: "Cara Diaz" });
-    await act(testId, "invite", dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [ana.user.id] });
-    await new Promise((r) => setTimeout(r, 5));
-    await act(testId, "invite", dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [dee.user.id] });
-    const capped = await act(testId, "invite", dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [cara.user.id] });
-    expect(capped.body.error.message).toBe("Only 2 spots are left and 2 people are already invited. Cancel an invite or add spots.");
-    const pageLoaded = seen();
-    await new Promise((r) => setTimeout(r, 5));
-    const r = await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { spots: 1, writtenCents: "11.00" }, tab: "tab-1" });
-    expect(r.body.notReinvited).toEqual(["Dee Moss (no spots left)"]);
-    expect(r.body.resent).toEqual(["Ana Silva"]);
-    expect(await db.invite.count({ where: { testId, status: "sent" } })).toBe(1);
-    expect(await db.invite.count({ where: { testId, testerId: ana.user.id, status: "sent" } })).toBe(1);
-    // The developer's other tab (reason E): one line naming the closings, and a stop once on any button.
-    const { GET: liveGET } = await import("@/app/api/live/route");
-    const lines = (await json(await liveGET(req(`/api/live?scope=test:${testId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: dev.cookie, headers: { "x-tab": "tab-2" } })))).body.changes.map((c: { text: string }) => c.text);
-    expect(lines).toEqual(["You changed the listing in another tab: re-sent Ana Silva's invite and didn't re-invite Dee Moss (no spots left)"]);
-    expect((await act(testId, "next-round", dev.cookie, { seenAt: pageLoaded, tab: "tab-2" })).body.error.code).toBe("stop_once");
-    // The saving tab itself: nothing.
-    expect((await json(await liveGET(req(`/api/live?scope=test:${testId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: dev.cookie, headers: { "x-tab": "tab-1" } })))).body.changes).toEqual([]);
-    // Ana's join page (opened before): the line and a stop once on Join.
-    const al = (await json(await liveGET(req(`/api/live?scope=listing:${testId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: ana.cookie })))).body.changes.map((c: { text: string }) => c.text);
-    expect(al).toContain("Nora Lane changed the listing: here's a new invite on the updated listing");
-  });
 });
 
 describe("applications close on a listing change", () => {
@@ -156,5 +127,142 @@ describe("rejoining restores the session", () => {
     const back = await act(testId, "join", tester.cookie, { listingVersion: await listingVersion(testId) });
     expect(back.body.sessionId).toBe(sessionId);
     expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).status).toBe("working");
+  });
+});
+
+describe("owner corrections 2 and 3", () => {
+  it("a title change is info only: never stops, never closes; a press notes it; a stop for other reasons lists it", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { joinMode: "apply" } });
+    const ben = await makeUser({ tester: true, name: "Ben Carter", pronoun: "he" });
+    await act(testId, "apply", ben.cookie, { note: "Hi" });
+    await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
+    const pageLoaded = seen();
+    await new Promise((r) => setTimeout(r, 5));
+    await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { title: "Harbor Run 2", openUntil: "" } });
+    expect((await db.application.findFirstOrThrow({ where: { testId, testerId: ben.user.id } })).status).toBe("pending");
+    // The tester's top box has the line; a press goes through with the note.
+    const { GET: liveGET } = await import("@/app/api/live/route");
+    const l = (await json(await liveGET(req(`/api/live?scope=session:${sessionId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: tester.cookie })))).body.changes.map((c: { text: string }) => c.text);
+    expect(l).toEqual(["Nora Lane renamed the test to Harbor Run 2"]);
+    const go = await sact(sessionId, "request-time", tester.cookie, { startsAt: new Date(Date.now() + 50 * 3_600_000).toISOString(), seenAt: pageLoaded });
+    expect(go.body.error ?? null).toBeNull();
+    expect(go.body.note).toMatch(/^Done\. Also: the test was renamed to Harbor Run 2 at .+\.$/);
+    // With another reason (the developer paid), the stop lists the title line too.
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
+    const stop = await sact(sessionId, "leave", tester.cookie, { seenAt: pageLoaded });
+    expect(stop.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane renamed the test to Harbor Run 2", "Nora Lane paid $10.00 for your written answers"]);
+    // The developer's other tab: goes through with the note; the join page: Apply goes through with it too.
+    // (The developer's other tab: Ben's application and Ana's sends stop it once; the rename is listed with them.)
+    const dv = await act(testId, "request-time", dev.cookie, { seenAt: pageLoaded, tab: "tab-2", contractIds: [sessionId], startsAt: new Date(Date.now() + 60 * 3_600_000).toISOString() });
+    expect(dv.body.error.changes.map((c: { text: string }) => c.text)).toContain("Nora Lane renamed the test to Harbor Run 2");
+    const cara = await makeUser({ tester: true, name: "Cara Diaz" });
+    const ap = await act(testId, "apply", cara.cookie, { note: "x", seenAt: pageLoaded });
+    expect(ap.body.error ?? null).toBeNull();
+    expect(ap.body.note).toMatch(/^Done\. Also: the test was renamed to Harbor Run 2 at /);
+  });
+
+  it("description changes stay a stop reason on the session page", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    const pageLoaded = seen();
+    await new Promise((r) => setTimeout(r, 5));
+    await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { description: "Other words" } });
+    const r = await sact(sessionId, "leave", tester.cookie, { seenAt: pageLoaded });
+    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane changed the description"]);
+  });
+
+  it("switching to Invite only keeps invites open but closes pending applications (told; Accept refused; lines)", async () => {
+    const { dev, testId } = await setup({ joinMode: "apply" });
+    const ana = await makeUser({ tester: true, name: "Ana Silva", pronoun: "she" });
+    await act(testId, "apply", ana.cookie, { note: "Hi" });
+    const dee = await makeUser({ tester: true, name: "Dee Moss" });
+    await act(testId, "invite", dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [dee.user.id] });
+    const pageLoaded = seen();
+    await new Promise((r) => setTimeout(r, 5));
+    const r = await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { joinMode: "invite" }, tab: "tab-1" });
+    expect(r.body.closedApps).toEqual(["Ana Silva"]);
+    expect(await db.invite.count({ where: { testId, testerId: dee.user.id, status: "sent" } })).toBe(1);
+    const app = await db.application.findFirstOrThrow({ where: { testId, testerId: ana.user.id } });
+    expect(app.status).toBe("closed");
+    expect(await db.notification.count({ where: { userId: ana.user.id, text: "Harbor Run is now invite only, so your application was closed." } })).toBe(1);
+    const acc = await act(testId, "application", dev.cookie, { applicationId: app.id, action: "accept", seenAt: pageLoaded, confirmed: true, tab: "tab-2" });
+    expect(acc.body.error.message).toMatch(/^Ana Silva's application closed when the test became invite only at .+\.$/);
+    const stop = await act(testId, "stop", dev.cookie, { seenAt: pageLoaded, tab: "tab-2" });
+    expect(stop.body.error.changes.map((c: { text: string }) => c.text)).toContain("You changed the listing in another tab: closed Ana Silva's application");
+    const { GET: liveGET } = await import("@/app/api/live/route");
+    const al = (await json(await liveGET(req(`/api/live?scope=listing:${testId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: ana.cookie })))).body.changes.map((c: { text: string }) => c.text);
+    expect(al).toContain("Nora Lane made the test invite only: your application was closed");
+    const ben = await makeUser({ tester: true, name: "Ben Carter" });
+    expect((await act(testId, "apply", ben.cookie, { note: "x" })).body.error.message).toBe("This test is invite only.");
+  });
+
+});
+
+describe("when the test fills (correction 4) and no invite cap (correction 5)", () => {
+  it("any number of invites; the last spot taken closes the other applications; invites stay open and wait; a spot opening tells them", async () => {
+    const { dev, testId } = await setup({ joinMode: "apply", spots: 1 });
+    const ana = await makeUser({ tester: true, name: "Ana Silva", pronoun: "she" });
+    const ben = await makeUser({ tester: true, name: "Ben Carter", pronoun: "he" });
+    const dee = await makeUser({ tester: true, name: "Dee Moss" });
+    const eve = await makeUser({ tester: true, name: "Eve Ray" });
+    await act(testId, "apply", ana.cookie, { note: "a" });
+    await act(testId, "apply", ben.cookie, { note: "b" });
+    // Invites never hold spots: two open invites on a 1-spot test.
+    expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [dee.user.id, eve.user.id] })).body.message).toBe("Invited Dee Moss and Eve Ray.");
+    const pageLoaded = seen();
+    await new Promise((r) => setTimeout(r, 5));
+    const appA = await db.application.findFirstOrThrow({ where: { testId, testerId: ana.user.id } });
+    expect((await act(testId, "application", dev.cookie, { applicationId: appA.id, action: "accept", seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect(await db.application.count({ where: { testId, status: "closed", closedReason: "full" } })).toBe(1);
+    expect(await db.invite.count({ where: { testId, status: "sent" } })).toBe(2);
+    expect(await db.notification.count({ where: { userId: ben.user.id, text: "Harbor Run is full, so your application was closed." } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dee.user.id, text: "Harbor Run is full right now. Your invite stays open; we'll tell you when a spot opens." } })).toBe(1);
+    // The developer: the line stops once (all tabs); Accept on Ben's is refused for good.
+    const stop = await act(testId, "stop", dev.cookie, { seenAt: pageLoaded });
+    expect(stop.body.error.changes.map((c: { text: string }) => c.text)).toContain("Harbor Run is full: closed 1 application. 2 invites stay open until a spot opens");
+    const appB = await db.application.findFirstOrThrow({ where: { testId, testerId: ben.user.id } });
+    expect((await act(testId, "application", dev.cookie, { applicationId: appB.id, action: "accept", seenAt: seen(), confirmed: true })).body.error.message).toMatch(/^Ben Carter's application closed when the test filled up at /);
+    // Dee's Accept (Join) while full: refused; her join page says so.
+    expect((await act(testId, "join", dee.cookie, { listingVersion: await listingVersion(testId) })).body.error.message).toBe("Harbor Run is full right now.");
+    const { GET: liveGET } = await import("@/app/api/live/route");
+    const dl = (await json(await liveGET(req(`/api/live?scope=listing:${testId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: dee.cookie })))).body.changes.map((c: { text: string }) => c.text);
+    expect(dl).toContain("Harbor Run is full right now. Your invite stays open; we'll tell you when a spot opens.");
+    // The developer raises spots: a spot opened, both invited testers are told; Ben (closed) isn't; Dee joins.
+    await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { spots: 2 } });
+    expect(await db.notification.count({ where: { userId: dee.user.id, text: "A spot opened on Harbor Run: you can accept Nora Lane's invite now." } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: eve.user.id, text: "A spot opened on Harbor Run: you can accept Nora Lane's invite now." } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: ben.user.id, text: { startsWith: "A spot opened" } } })).toBe(0);
+    expect((await act(testId, "join", dee.cookie, { listingVersion: await listingVersion(testId) })).status).toBe(200);
+    expect(await db.application.count({ where: { testId, status: "pending" } })).toBe(0); // nothing reopens
+  });
+
+  it("two testers joining for the last spot at the same moment: one gets it, the other is refused; the rest close", async () => {
+    const { dev, testId } = await setup({ spots: 1 });
+    const a = await makeUser({ tester: true, name: "Ana Silva" });
+    const b = await makeUser({ tester: true, name: "Ben Carter" });
+    const c = await makeUser({ tester: true, name: "Cara Diaz" });
+    await act(testId, "invite", dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [c.user.id] });
+    const [ra, rb] = await Promise.all([act(testId, "join", a.cookie, { listingVersion: 1 }), act(testId, "join", b.cookie, { listingVersion: 1 })]);
+    expect([ra.status, rb.status].sort()).toEqual([200, 409]);
+    expect(await db.contract.count({ where: { testId, status: "working" } })).toBe(1);
+    expect(await db.invite.count({ where: { testId, status: "sent" } })).toBe(1); // invites stay open while full
+  });
+
+  it("lowering spots to the testers in fills the test (closes applications, invites wait); raising them opens a spot", async () => {
+    const { dev, testId } = await setup({ spots: 3 });
+    await joined(testId);
+    await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { joinMode: "apply" } });
+    const ben = await makeUser({ tester: true, name: "Ben Carter" });
+    await act(testId, "apply", ben.cookie, { note: "b" });
+    const dee = await makeUser({ tester: true, name: "Dee Moss" });
+    await act(testId, "invite", dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [dee.user.id] });
+    await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { spots: 2 } });
+    expect(await db.application.count({ where: { testId, status: "pending" } })).toBe(1);
+    await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { spots: 1 } });
+    expect(await db.application.count({ where: { testId, status: "closed", closedReason: "full" } })).toBe(1);
+    expect(await db.invite.count({ where: { testId, status: "sent" } })).toBe(1);
   });
 });

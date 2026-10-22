@@ -5,7 +5,32 @@ branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the 
 and look, but this version deliberately drops most of its complexity.
 
 ## (Owner, Oct 22, NEWEST+4) Listing changes re-invite; applications; rejoining restores work
-- (Owner correction 2) WHICH changes close applications / re-send invites: prices, parts, written questions, tester deadline, devices/languages, DESCRIPTION. NOT: title, Open until, spots, who can join (those keep the application/invite open). TITLE changes are also removed from the tester SESSION page's top box and stop reasons (they still show on the join page).
+- (Owner correction 6, replaces the invite part of correction 4) WHEN THE TEST FILLS: pending APPLICATIONS close (as in
+  correction 4). Open INVITES STAY OPEN: the invite shows "Harbor Run is full right now. Your invite stays open; we'll
+  tell you when a spot opens." with Accept refused under the button ("Harbor Run is full right now."). Invited testers
+  get one notice when it fills (same text) and one when a spot opens (someone leaves or is ended, or spots are raised):
+  "A spot opened on Harbor Run: you can accept Nora Lane's invite now." (bell + email + join-page top box; first come,
+  first served). The 3-day invite reminders pause while the test is full and resume when it has a spot. Closed
+  applicants are NOT told about openings (they may apply again). Developer top box when it fills: "Harbor Run is full ·
+  3:10 PM: closed 2 applications. 1 invite stays open until a spot opens."
+- (Owner correction 5) NO SPOT CAP ON INVITES: any number of invites can be open, whatever the spots; lowering spots
+  does NOT close invites; re-sent invites are never limited by spots (drop "Not re-invited: … (no spots left)" and the
+  "Only 2 spots are left…" refusal). Invites stay open when the test fills (correction 6).
+- (Owner correction 4) WHEN THE TEST FILLS (the last spot is taken): every pending application and every open invite
+  CLOSES at once. Applicants: "Harbor Run is full, so your application was closed." Invited testers: "Harbor Run
+  filled up, so Nora Lane's invite was closed." Developer top box (all tabs): "Harbor Run is full · 3:10 PM: closed 2
+  applications and 1 invite." (stop once, as any tester action). Presses on them -> blue final refusal under the
+  button. Nothing reopens if a spot frees later (applicants may apply again; the developer may invite again).
+  Invites do NOT hold spots: first come, first served (the spot cap only limits how many invites can be open).
+- (Owner correction 3) LOWERING SPOTS below testers in + open invites: Save closes the MOST RECENT invites past the
+  cap and names them in the Save result ("Spots are now 3: closed Sam Lee's invite."); each closed tester is told
+  ("Nora Lane's invite to Harbor Run was withdrawn: the test has fewer spots now."). Description, devices and
+  languages changes stay in the tester SESSION page's top box AND stop once there. Switching Who can join to Invite
+  only keeps sent invites open but CLOSES every pending application (owner): applicants are told "Harbor Run is now
+  invite only, so your application was closed."; the Save result names them; Accept/Decline on one is refused under
+  the button ("Ana Silva's application closed when the test became invite only at 3:10 PM."). New applications are
+  refused "This test is invite only."
+- (Owner correction 2) WHICH changes close applications / re-send invites: prices, parts, written questions, tester deadline, devices/languages, DESCRIPTION. NOT: title, Open until, spots, who can join (those keep the application/invite open). TITLE changes are INFO ONLY everywhere (tester session page, join page, developer's other tabs): a top-box line ("Nora Lane renamed the test to Harbor Run 2 · 3:12 PM") and, if a press happens before the page showed it, the press GOES THROUGH and a blue note under the button mentions it ("Done. Also: the test was renamed to Harbor Run 2 at 3:12 PM."). A title change never stops a press.
 - (Owner correction) A saved listing change (anything except spots / who can join):
   - APPLICATIONS: every pending application CLOSES (no invite is sent). The applicant is told (bell + email + join-page
     top box): "Harbor Run's listing changed, so your application was closed. You can apply again on the current

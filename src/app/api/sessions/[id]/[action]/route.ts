@@ -18,8 +18,10 @@ export async function POST(req: Request, { params }: Ctx) {
     const { id, action } = await params;
     const u = await requireActive(req);
     const body = await readJson(req);
-    const res = await run(u, id, action, body);
-    const data = await res.clone().json().catch(() => null);
+    const res0 = await run(u, id, action, body);
+    const data = await res0.clone().json().catch(() => null);
+    // A rename the page hadn't shown: the press went ahead; the note goes under the button.
+    const res = res0.ok && typeof body.__note === "string" && data && typeof data === "object" ? ok({ ...data, note: body.__note }) : res0;
     if (res.ok) await logTesterAction(u.id, id, action, body, data);
     return res;
   });

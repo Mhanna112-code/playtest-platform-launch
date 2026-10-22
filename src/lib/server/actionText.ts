@@ -65,8 +65,9 @@ export async function logTestAction(userId: string, testId: string, action: stri
   let text = "";
   switch (action) {
     case "edit": {
-      const r = (result ?? {}) as { changed?: string[]; closedApps?: string[]; resent?: string[]; notReinvited?: string[] };
+      const r = (result ?? {}) as { changed?: string[]; closedApps?: string[]; resent?: string[]; notReinvited?: string[]; spotClosed?: string[] };
       const closings = [
+        ...(r.spotClosed ?? []).map((n) => `closed ${n}'s invite (fewer spots)`),
         ...(r.closedApps ?? []).map((n) => `closed ${n}'s application`),
         ...(r.resent ?? []).map((n) => `re-sent ${n}'s invite`),
         ...(r.notReinvited ?? []).map((n) => `didn't re-invite ${n}`),

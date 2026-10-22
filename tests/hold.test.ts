@@ -49,7 +49,7 @@ describe("invites", () => {
     expect(texts).toEqual(expect.arrayContaining(["Cara Diaz joined this test, so she's no longer in your invite list", "You also did this in another tab: invited Dee Moss", "Ben Carter removed English, which this test needs"]));
     await joined(testId, "Eve Ray");
     const full = await act(testId, "invite", dev.cookie, { seenAt: pageLoaded, testerIds: [ben.user.id], confirmed: true });
-    expect(full.body.error.message).toBe("This test is full (2 of 2 spots), so nobody can be invited. Add spots in Edit to invite more.");
+    expect(full.body.error?.message ?? "").not.toContain("full"); // (correction 6) inviting while full is allowed: the invite waits for a spot
     await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
     expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [ben.user.id], confirmed: true })).body.error.message).toMatch(/^This test was stopped on .+, so nobody can be invited\.$/);
   });

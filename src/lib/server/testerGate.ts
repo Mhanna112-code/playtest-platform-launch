@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money } from "@/lib/format";
 import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, stopOnce, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
-import { asLines, ownChanges, seenOf, tabOf, testerPaymentChanges } from "./live";
+import { asLines, ownChanges, seenOf, tabOf, testerPaymentChanges, withRenamed } from "./live";
 
 // The tester's ONE set of stop-once reasons (owner rule, NEWEST+3), used by every tester button on the session page:
 // Switch / Keep, Send written, Send recording, Charge / Let it go, Dispute, Leave, Block, Request a time, Accept /
@@ -54,7 +54,7 @@ export async function testerChanges(testerId: string, contractId: string, testId
   }
   for (const call of calls) out.push({ kind: "cancelled", text: `Your call on ${fmtDateTime(call.startsAt)} was cancelled`, createdAt: call.cancelledAt! });
   // (F) the listing's info (title, description, devices, languages) changed.
-  out.push(...(await db.testEvent.findMany({ where: { testId, kind: "info", createdAt: { gt: seenAt } } })));
+  out.push(...(await db.testEvent.findMany({ where: { testId, kind: { in: ["info", "renamed"] }, createdAt: { gt: seenAt } } })));
   out.push(...(await testerPaymentChanges(testerId, contractId, seenAt)));
   out.push(...(await ownChanges(testerId, testId, seenAt, tab)));
   return out.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
@@ -67,7 +67,7 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   if (body.confirmed === true) return;
   const seenAt = seenOf(body.seenAt);
   if (!seenAt) return;
-  const changes = await testerChanges(testerId, contractId, testId, seenAt, tabOf(body));
-  const r = stopOnce(changes, seenAt, false, KINDS);
+  const changes = withRenamed(await testerChanges(testerId, contractId, testId, seenAt, tabOf(body)), body);
+  const r = stopOnce(changes, seenAt, false, [...KINDS, "renamed"]);
   if (!r.go) throw new HttpError(409, "stop_once", tail, { changes: asLines(r.changes), tail, top: r.changes.some((e) => e.kind === "terms") });
 }

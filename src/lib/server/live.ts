@@ -35,7 +35,7 @@ export async function ownChanges(userId: string, testId: string, since: Date, ta
  * through the action log, so the tab that did them never stops for them.
  */
 export async function devChanges(devId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db): Promise<TestEventLike[]> {
-  const events = await tx.testEvent.findMany({ where: { testId, createdAt: { gt: since }, kind: { in: [...DEV_STOP_KINDS] } }, orderBy: { createdAt: "asc" }, take: 100 });
+  const events = await tx.testEvent.findMany({ where: { testId, createdAt: { gt: since }, kind: { in: [...DEV_STOP_KINDS, "renamed"] } }, orderBy: { createdAt: "asc" }, take: 100 });
   const theirs = events.filter((e) => !e.text.startsWith("You "));
   return [...theirs, ...(await devPaymentChanges(devId, testId, since, tx)), ...(await ownChanges(devId, testId, since, tab, tx))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }
@@ -117,4 +117,19 @@ export async function logEvent(testId: string, kind: string, text: string, contr
   await db.testEvent.create({ data: { testId, kind, text, contractId } });
 }
 
-export const asLines = (changes: TestEventLike[]) => changes.map((e) => ({ text: e.text, at: e.createdAt, ...(e.kind === "info" ? { kind: "info" } : {}) }));
+/**
+ * A stop decision with renamed lines (info only): stops only for the other lines (and then lists the renamed ones too);
+ * otherwise the press goes ahead and the body carries the note for the response.
+ */
+export function withRenamed(changes: TestEventLike[], body: Record<string, unknown>): TestEventLike[] {
+  const stopping = changes.filter((c) => c.kind !== "renamed");
+  if (stopping.length) return changes;
+  const last = changes.filter((c) => c.kind === "renamed").pop();
+  if (last) {
+    const title = last.text.replace(/^.* renamed the test to /, "");
+    body.__note = `Done. Also: the test was renamed to ${title} at ${last.createdAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}.`;
+  }
+  return [];
+}
+
+export const asLines = (changes: TestEventLike[]) => changes.map((e) => ({ text: e.text, at: e.createdAt, ...(e.kind === "info" || e.kind === "renamed" ? { kind: e.kind } : {}) }));

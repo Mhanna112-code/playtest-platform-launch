@@ -21,6 +21,8 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
     try {
       const r = await api<T>(path, { ...body, seenAt, confirmed: changes != null });
       setChanges(null);
+      const note = (r as { note?: unknown } | null)?.note;
+      if (typeof note === "string") setError(note); // shown under the button (blue)
       return r;
     } catch (e) {
       if (e instanceof ApiError && e.code === "stop_once") {

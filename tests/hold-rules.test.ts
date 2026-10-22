@@ -31,7 +31,7 @@ describe("payment hold, auto-pay and Open until rules", () => {
   });
   it("invite refusals use the exact wording and never reveal blocks or suspensions", () => {
     const t = { status: "open", spots: 6, testersIn: 6, openUntil: null, stoppedAt: null, paused: false };
-    expect(R.inviteTestRefusal(t, now, fmt)).toBe("This test is full (6 of 6 spots), so nobody can be invited. Add spots in Edit to invite more.");
+    expect(R.inviteTestRefusal(t, now, fmt)).toBe(""); // (correction 6) inviting while full is allowed
     expect(R.inviteTestRefusal({ ...t, status: "stopped", stoppedAt: new Date("2026-10-22T10:00:00Z") }, now, fmt)).toBe("This test was stopped on 2026-10-22, so nobody can be invited.");
     expect(R.inviteTestRefusal({ ...t, testersIn: 1, openUntil: new Date("2026-10-20T00:00:00Z") }, now, fmt)).toBe("Joining closed on 2026-10-20 (Open until), so nobody can be invited.");
     expect(R.inviteTestRefusal({ ...t, testersIn: 1 }, now, fmt)).toBe("");

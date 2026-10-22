@@ -29,6 +29,19 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt }: { scope: strin
     else go();
   }
 
+  // A note from a press that went ahead just before the page reloaded ("Done. Also: the test was renamed ...").
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem("press-note");
+      if (!raw) return;
+      window.sessionStorage.removeItem("press-note");
+      const n = JSON.parse(raw) as { text: string; at: string; path: string };
+      if (Date.now() - new Date(n.at).getTime() < 60_000) setLines((old) => [...old, { text: n.text, at: n.at }]);
+    } catch {
+      // nothing to show
+    }
+  }, []);
+
   useEffect(() => {
     let alive = true;
     const tick = async () => {
