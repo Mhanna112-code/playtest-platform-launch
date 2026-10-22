@@ -150,7 +150,7 @@ export async function sweepHeldCalls(devId: string) {
 export async function chargebackOpened(paymentIntentId: string) {
   const p = await db.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId } });
   if (!p || p.chargeback === "open") return false;
-  await db.payment.update({ where: { id: p.id }, data: { chargeback: "open" } });
+  await db.payment.update({ where: { id: p.id }, data: { chargeback: "open", chargebackAt: new Date() } });
   const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } }) : null;
   if (c) {
     const what = p.kind === "call" ? `${displayName(c.tester)}'s live call` : p.submissionId ? `${displayName(c.tester)}'s ${(await db.submission.findUnique({ where: { id: p.submissionId } }))?.kind === "recording" ? "recording" : "written answers"}` : displayName(c.tester);
@@ -245,10 +245,22 @@ export async function runDaily(now = new Date()) {
   // 2. Failed charges not paid within 3 days start a hold.
   const late = await db.payment.findMany({ where: { status: "failed", settledAt: null, owedUntil: { lt: now } }, distinct: ["developerId"] });
   for (const p of late) if (await startHold(p.developerId, "unpaid")) out.holds++;
-  // 3. The admin digest: ONE email every 3 days listing everything open (no per-event admin emails).
+  // 3a. Admin: a daily email only when there are NEW disputes or NEW chargebacks since the last one.
+  const lastDaily = await db.appState.findUnique({ where: { key: "adminDailyAt" } });
+  const since = lastDaily ? new Date(lastDaily.value) : new Date(0);
+  const [newDisputes, newChargebacks] = await Promise.all([
+    db.dispute.findMany({ where: { createdAt: { gt: since } } }),
+    db.payment.findMany({ where: { chargeback: "open", chargebackAt: { gt: since } } }),
+  ]);
+  if (newDisputes.length + newChargebacks.length) {
+    const lines = [...newDisputes.map((d) => `• New dispute: “${d.reason}” ${appUrl()}/admin#disputes`), ...newChargebacks.map((p) => `• New chargeback: ${money(p.amountCents)} ${appUrl()}/admin#holds`)];
+    for (const a of admins()) await sendEmail({ to: a, subject: `Playtest: ${lines.length} new dispute${lines.length === 1 ? "" : "s"} or chargeback${lines.length === 1 ? "" : "s"}`, text: [...lines, "", "Playtest"].join("\n") }).catch((e) => console.error("[email] admin daily:", e.message));
+  }
+  await db.appState.upsert({ where: { key: "adminDailyAt" }, update: { value: now.toISOString() }, create: { key: "adminDailyAt", value: now.toISOString() } });
+  // 3b. The admin digest: ONE email every 3 days with everything else (failed payments, holds, 30-day holds, no-shows once, payouts).
   const last = await db.appState.findUnique({ where: { key: "adminDigestAt" } });
   const digestDue = !last || now.getTime() - new Date(last.value).getTime() >= ADMIN_DIGEST_DAYS * 86_400_000 - 3_600_000;
-  const cases = digestDue ? await adminCases(now, true) : [];
+  const cases = digestDue ? (await adminCases(now, true)).filter((c) => c.kind !== "dispute" && c.kind !== "chargeback") : [];
   if (digestDue) await db.appState.upsert({ where: { key: "adminDigestAt" }, update: { value: now.toISOString() }, create: { key: "adminDigestAt", value: now.toISOString() } });
   if (cases.length) {
     await db.call.updateMany({ where: { noShowBy: { not: null }, noShowDigestedAt: null }, data: { noShowDigestedAt: now } });
@@ -303,14 +315,14 @@ export async function adminCases(now = new Date(), forDigest = false) {
     db.dispute.findMany({ where: { status: "open" }, include: { submission: { include: { review: true } } } }),
     db.call.findMany({ where: forDigest ? { noShowBy: { not: null }, noShowDigestedAt: null } : { noShowBy: { not: null }, noShowAt: { gt: new Date(now.getTime() - 14 * 86_400_000) } }, include: { contract: true } }),
     db.payment.findMany({ where: { chargeback: "open" } }),
-    db.user.findMany({ where: { holdStartedAt: { lt: new Date(now.getTime() - HOLD_ALERT_DAYS * 86_400_000) } } }),
+    db.user.findMany({ where: { holdStartedAt: { not: null } } }),
     db.payment.findMany({ where: { OR: [{ transferStatus: "waiting" }, { status: "failed", settledAt: null, owedUntil: { not: null } }] } }),
   ]);
   return [
     ...disputes.map((d) => ({ kind: "dispute", text: `Dispute: “${d.reason}”`, link: "/admin#disputes" })),
     ...noShows.map((c) => ({ kind: "no-show", text: `No-show report on “${c.contract.title}” (${fmtDateTime(c.startsAt)}), by the ${c.noShowBy}`, link: "/admin#no-shows" })),
     ...chargebacks.map((p) => ({ kind: "chargeback", text: `Open chargeback: ${money(p.amountCents)}`, link: "/admin#holds" })),
-    ...holds.map((u) => ({ kind: "hold", text: `${u.email} on a payment hold since ${fmtDate(u.holdStartedAt!)} (30 days): close their tests`, link: "/admin#holds" })),
+    ...holds.map((u) => ({ kind: "hold", text: u.holdStartedAt! < new Date(now.getTime() - HOLD_ALERT_DAYS * 86_400_000) ? `${u.email} on a payment hold since ${fmtDate(u.holdStartedAt!)} (30 days): close their tests` : `${u.email} on a payment hold since ${fmtDate(u.holdStartedAt!)}`, link: "/admin#holds" })),
     ...payouts.map((p) => ({ kind: "payout", text: p.transferStatus === "waiting" ? `Payout waiting for a payout account: ${money(p.testerCents)}` : `Failed charge still owed: ${money(p.amountCents)}`, link: "/admin#payouts" })),
   ];
 }

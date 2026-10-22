@@ -82,4 +82,15 @@ describe("notification schedule", () => {
     await cron(); // within 3 days: no digest
     expect(await digests()).toBe(before + 1);
   });
+
+  it("failed payments and holds go in the 3-day digest, not in the daily new-cases email", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 4321, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + 2 * DAY), retriedAt: new Date() } });
+    await db.appState.deleteMany({ where: { key: "adminDigestAt" } });
+    await cron();
+    const digest = await db.outboxEmail.findFirstOrThrow({ where: { to: "owner@playtest.test", subject: { startsWith: "Playtest admin digest" } }, orderBy: { createdAt: "desc" } });
+    expect(digest.text).toContain("Failed charge still owed: $43.21");
+    expect(digest.text).not.toContain("Dispute:");
+  });
 });

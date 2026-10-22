@@ -92,8 +92,11 @@ describe("email settings and the bell", () => {
     expect(await db.outboxEmail.count({ where: { to: "owner@playtest.test" } })).toBe(before);
     await db.appState.deleteMany({ where: { key: "adminDigestAt" } });
     await cron();
-    const digest = await db.outboxEmail.findFirstOrThrow({ where: { to: "owner@playtest.test", subject: { startsWith: "Playtest admin digest" } }, orderBy: { createdAt: "desc" } });
-    expect(digest.text).toContain("Dispute: “I answered every question”");
+    const daily = await db.outboxEmail.findFirstOrThrow({ where: { to: "owner@playtest.test", subject: { startsWith: "Playtest: " }, text: { contains: "I answered every question" } }, orderBy: { createdAt: "desc" } });
+    expect(daily.text).toContain("New dispute: “I answered every question”");
+    const n = await db.outboxEmail.count({ where: { to: "owner@playtest.test", text: { contains: "I answered every question" } } });
+    await cron(); // not new any more: no second email about it
+    expect(await db.outboxEmail.count({ where: { to: "owner@playtest.test", text: { contains: "I answered every question" } } })).toBe(n);
   });
 });
 
