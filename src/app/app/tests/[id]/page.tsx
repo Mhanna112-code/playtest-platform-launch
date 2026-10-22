@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
-import { lateLabel, termsLine } from "@/lib/rules";
+import { canCancelCall, lateLabel, listingAmount, termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
+import { roomUrl } from "@/lib/server/calls";
+import { CallPanel } from "./CallPanel";
 import { PayBox } from "./PayBox";
 import { TopPanel } from "./TopPanel";
 
@@ -20,7 +22,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     include: {
       contracts: {
         orderBy: { joinedAt: "asc" },
-        include: { tester: true, submissions: { include: { review: true, dispute: true, recordings: true }, orderBy: { sentAt: "asc" } } },
+        include: {
+          tester: true,
+          submissions: { include: { review: true, dispute: true, recordings: true }, orderBy: { sentAt: "asc" } },
+          calls: { include: { review: true, dispute: true, slot: true }, orderBy: { startsAt: "asc" } },
+        },
       },
     },
   });
@@ -29,6 +35,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const working = t.contracts.filter((c) => c.status === "working");
   const paid = await db.payment.groupBy({ by: ["contractId"], where: { contractId: { in: t.contracts.map((c) => c.id) }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } });
   const paidSoFar = (id: string) => paid.find((p) => p.contractId === id)?._sum.amountCents ?? 0;
+  const openSlots = await db.callSlot.findMany({ where: { testId: id, status: "open", startsAt: { gt: new Date() } }, orderBy: { startsAt: "asc" } });
+  const now = new Date();
+  const nameOf = new Map(t.contracts.map((c) => [c.testerId, displayName(c.tester)]));
+  const booked = t.contracts.flatMap((c) => c.calls.filter((x) => x.status === "booked" && !x.review).map((x) => ({ ...x, name: displayName(c.tester) })));
   const payments = await db.payment.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
   return (
     <>
@@ -41,6 +51,15 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         nextRoundId={next?.id ?? null}
         spotsLine={`${working.length} of ${t.spots} spots used`}
         working={working.map((c) => ({ contractId: c.id, name: displayName(c.tester) }))}
+      />
+      <CallPanel
+        testId={t.id}
+        seenAt={seenAt}
+        minutes={t.liveMinutes ?? 30}
+        stopped={t.status === "stopped"}
+        testers={working.map((c) => ({ id: c.testerId, name: displayName(c.tester) }))}
+        open={openSlots.map((s) => ({ id: s.id, when: s.startsAt.toISOString(), minutes: s.minutes, who: s.allowedTesterIds.length ? "only " + s.allowedTesterIds.map((x) => nameOf.get(x) ?? "?").join(", ") : "all testers" }))}
+        booked={booked.map((b) => ({ id: b.id, when: b.startsAt.toISOString(), minutes: b.minutes, name: b.name, room: roomUrl(b, b.slot), canCancel: canCancelCall(b.startsAt, now).ok, started: b.startsAt <= now, reported: !!b.noShowBy }))}
       />
       {saved && <p className="ok">Saved. New testers join on the new listing; testers already in keep their contract.</p>}
 
@@ -57,7 +76,21 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             <p className="note">
               Their contract: {termsLine(c)} · joined {fmtDate(c.joinedAt)}
             </p>
-            {c.submissions.length === 0 && <p className="note">Nothing sent yet.</p>}
+            {c.submissions.length === 0 && c.calls.length === 0 && <p className="note">Nothing sent yet.</p>}
+            {c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).map((x) => (
+              <div key={x.id} className="space-y-2 rounded-lg border border-slate-200 p-3">
+                <p className="text-sm font-medium">
+                  Live call · {x.rateCents == null ? "Extra (not in the listing)" : "In their contract"} · {fmtDateTime(x.startsAt)} · {x.minutes} min booked
+                </p>
+                {x.review ? (
+                  <ReviewResult review={x.review} payments={payments.filter((p) => p.callId === x.id)} dispute={x.dispute} />
+                ) : (
+                  <PayBox kind="call" id={x.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)}
+                    listingCents={x.rateCents == null ? null : listingAmount({ writtenCents: null, recordingCents: null, liveRateCents: x.rateCents }, "call", x.minutes)}
+                    listingText={`${money(x.rateCents)}/h × ${x.minutes} min booked = ${money(listingAmount({ writtenCents: null, recordingCents: null, liveRateCents: x.rateCents }, "call", x.minutes))}`} />
+                )}
+              </div>
+            ))}
             {c.submissions.map((s) => (
               <div key={s.id} className="space-y-2 rounded-lg border border-slate-200 p-3">
                 <p className="text-sm font-medium">

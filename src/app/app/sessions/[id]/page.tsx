@@ -1,10 +1,12 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
-import { canDispute, isLate, lateLabel, termsLine, testerShare } from "@/lib/rules";
+import { canCancelCall, canDispute, isLate, lateLabel, termsLine, testerShare } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
+import { roomUrl } from "@/lib/server/calls";
 import { DisputeForm, LeaveButton, WrittenForm } from "./SessionActions";
+import { TesterCallPanel } from "./TesterCallPanel";
 
 export const metadata = { title: "Your session · Playtest" };
 export const dynamic = "force-dynamic";
@@ -16,13 +18,21 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const u = await requirePageUser();
   const c = await db.contract.findUnique({
     where: { id },
-    include: { test: { include: { developer: true } }, submissions: { include: { review: true, dispute: true, recordings: true } } },
+    include: {
+      test: { include: { developer: true } },
+      submissions: { include: { review: true, dispute: true, recordings: true } },
+      calls: { include: { review: true, dispute: true, slot: true }, orderBy: { startsAt: "asc" } },
+    },
   });
   if (!c || c.testerId !== u.id) notFound();
   const dev = displayName(c.test.developer);
   const refusal = sessionRefusal(c, c.test, dev);
   const written = c.submissions.find((s) => s.kind === "written");
   const now = new Date();
+  const seenAt = now.toISOString();
+  const slots = await db.callSlot.findMany({ where: { testId: c.testId, status: "open", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
+  const visible = slots.filter((s) => s.allowedTesterIds.length === 0 || s.allowedTesterIds.includes(u.id));
+  const cancelledText = (x: { status: string; cancelledBy: string | null }) => (x.status !== "cancelled" ? "" : x.cancelledBy === "tester" ? "you cancelled it" : `cancelled by ${x.cancelledBy === "developer" ? dev : "the site"}`);
   return (
     <>
       {refusal && <p className="info">{refusal}</p>}
@@ -35,6 +45,21 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         {c.keepPrivate && <p className="note">You agreed to keep this build and what you see private.</p>}
         {c.status === "working" && <LeaveButton sessionId={c.id} />}
       </div>
+
+      <TesterCallPanel
+        sessionId={c.id}
+        seenAt={seenAt}
+        refusal={refusal}
+        label={c.liveRateCents != null ? `In your contract · ${c.liveRateCents === 0 ? "free" : money(testerShare(c.liveRateCents)) + "/h for you"} · ${c.liveMinutes} min` : "Extra (not in the listing): the developer decides what to pay"}
+        open={visible.map((s) => ({ id: s.id, when: s.startsAt.toISOString(), minutes: s.minutes }))}
+        mine={c.calls.map((x) => ({ id: x.id, when: x.startsAt.toISOString(), minutes: x.minutes, room: roomUrl(x, x.slot), canCancel: canCancelCall(x.startsAt, now).ok, started: x.startsAt <= now, reported: !!x.noShowBy, cancelled: cancelledText(x) }))}
+      />
+      {c.calls.filter((x) => x.review).map((x) => (
+        <section key={x.id} className="panel">
+          <h3>Live call on {fmtDateTime(x.startsAt)}</h3>
+          <TesterReview sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} />
+        </section>
+      ))}
 
       <section className="panel" id="written">
         <h2>Written answers</h2>

@@ -1,4 +1,5 @@
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
+import { devCancelCall, offerTimes, removeTime, reportNoShow } from "@/lib/server/calls";
 import { editTest, endEarly, joinTest, nextRound, openDraft, stopTest } from "@/lib/server/tests";
 import { requireActive } from "@/lib/server/users";
 
@@ -24,6 +25,14 @@ export async function POST(req: Request, { params }: Ctx) {
         return ok(await endEarly(u, id, body));
       case "next-round":
         return ok(await nextRound(u, id, body));
+      case "offer-times":
+        return ok(await offerTimes(u, id, body));
+      case "remove-time":
+        return ok(await removeTime(u, id, body));
+      case "cancel-call":
+        return ok(await devCancelCall(u, id, body));
+      case "no-show":
+        return ok(await reportNoShow(u, String(body.callId ?? ""), body));
       case "join": {
         const c = await joinTest(u, id, body);
         return ok({ sessionId: c.id });
