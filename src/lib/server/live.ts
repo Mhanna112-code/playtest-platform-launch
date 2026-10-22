@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, money } from "@/lib/format";
-import { DEV_STOP_KINDS, type TestEventLike } from "@/lib/rules";
+import { DEV_STOP_KINDS, delayedPayLine, type TestEventLike } from "@/lib/rules";
 
 type Tx = Prisma.TransactionClient;
 
@@ -87,18 +87,26 @@ export async function devPaymentChanges(devId: string, testId: string, since: Da
  * Never the words "failed", "hold" or "chargeback"; never other testers' payments.
  */
 export async function testerPaymentChanges(testerId: string, contractId: string, since: Date): Promise<TestEventLike[]> {
-  const me = await db.contract.findUniqueOrThrow({ where: { id: contractId }, select: { test: { select: { developerId: true } } } });
+  const me = await db.contract.findUniqueOrThrow({ where: { id: contractId }, select: { test: { select: { developerId: true, developer: true } } } });
   const [pays, disputes] = await Promise.all([
-    db.payment.findMany({ where: { testerId, developerId: me.test.developerId, contractId: { not: null }, OR: [{ status: "failed", owedUntil: { not: null }, createdAt: { gt: since } }, { status: "deferred", createdAt: { gt: since } }, { settledAt: { gt: since } }] }, take: 50 }),
+    db.payment.findMany({ where: { testerId, developerId: me.test.developerId, contractId: { not: null }, OR: [{ status: "failed", createdAt: { gt: since } }, { status: "deferred", createdAt: { gt: since } }, { settledAt: { gt: since } }] }, orderBy: { createdAt: "asc" }, take: 50 }),
     db.dispute.findMany({ where: { contractId, decidedAt: { gt: since } } }),
   ]);
   const titles = new Map((await db.contract.findMany({ where: { id: { in: pays.map((p) => p.contractId!) } }, select: { id: true, title: true } })).map((c) => [c.id, c.title]));
   const kinds = await subKinds(pays.map((p) => p.submissionId));
   const out: TestEventLike[] = [];
+  const manual = new Set<string>();
   for (const p of pays) {
-    const what = `${money(p.amountCents)} for your ${pieceLabel(p, kinds) === "dispute decision" ? "dispute" : pieceLabel(p, kinds)} on ${titles.get(p.contractId!) ?? "a test"}`;
+    const label = pieceLabel(p, kinds) === "dispute decision" ? "dispute" : pieceLabel(p, kinds);
+    const what = `${money(p.amountCents)} for your ${label} on ${titles.get(p.contractId!) ?? "a test"}`;
     if (p.settledAt && p.settledAt > since) out.push({ kind: "payment", text: `A delayed payment of ${what} arrived`, createdAt: p.settledAt });
-    else out.push({ kind: "payment", text: `The payment of ${what} is delayed`, createdAt: p.createdAt });
+    else if (p.status === "failed" && !p.owedUntil) {
+      // A declined manual Pay (owner, DECLINED PAY PRESS): once per piece, in the developer's name.
+      const key = p.submissionId ?? p.callId ?? p.id;
+      if (manual.has(key)) continue;
+      manual.add(key);
+      out.push({ kind: "payment", text: delayedPayLine(displayName(me.test.developer), label, p.amountCents), createdAt: p.createdAt });
+    } else out.push({ kind: "payment", text: `The payment of ${what} is delayed`, createdAt: p.createdAt });
   }
   for (const d of disputes) {
     const r = await db.review.findFirst({ where: d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! } });

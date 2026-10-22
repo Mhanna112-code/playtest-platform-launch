@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import type Stripe from "stripe";
+import { afterEach, describe, expect, it } from "vitest";
+import { setStripeForTests } from "@/lib/server/stripe";
 import { db } from "@/lib/db";
 import { DEV_EXEMPT_KINDS, DEV_STOP_KINDS, TESTER_EVENT_KINDS, TESTER_EXEMPT_KINDS } from "@/lib/rules";
 import { POST as reviewPOST } from "@/app/api/review/route";
@@ -14,6 +16,7 @@ import { act, atHours, joined, sact, seen, setup } from "./fixtures";
 // (Owner, Oct 22, NEWEST+3) Every button stops once, including for your own actions in another tab.
 
 const later = () => new Promise((r) => setTimeout(r, 5));
+afterEach(() => setStripeForTests(null));
 const pay = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), seenAt: seen(), confirmed: true, ...body } })).then(json);
 const texts = (r: { body: { error: { changes: { text: string }[] } } }) => r.body.error.changes.map((c) => c.text);
 const live = (cookie: string, scope: string, since: string, tab = "") =>
@@ -224,6 +227,47 @@ describe("payments and disputes, only for this test", () => {
     expect(texts(e)).toEqual([line]);
     // Ben (another tester) never reads Ana's payment.
     expect((await live(ben.tester.cookie, `session:${ben.sessionId}`, pageLoaded)).body.changes).toEqual([]);
+  });
+
+  it("a manual Pay decline is not a debt for the developer (nothing on A or B); the tester is told 'delayed' (bell, top box, stop once); a later Pay notifies once", async () => {
+    const { dev, testId: A } = await setup();
+    const ana = await joined(A);
+    const { POST: postTest } = await import("@/app/api/tests/route");
+    const B = (await json(await postTest(req("/api/tests", { cookie: dev.cookie, body: { title: "Night Ferry", description: "x", buildUrl: "https://example.com/o", category: "Action", devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Q?"], openUntil: "" } })))).body.id as string;
+    await sact(ana.sessionId, "written", ana.tester.cookie, { answers: ["a", "b"] });
+    await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
+    await db.user.update({ where: { id: ana.tester.user.id }, data: { stripeAccountId: "acct_" + randomUUID(), payoutsReady: true } });
+    let decline = true;
+    setStripeForTests({
+      paymentIntents: { create: async () => { if (decline) throw new Error("declined"); return { id: "pi_" + randomUUID(), status: "succeeded" }; } },
+      webhooks: { constructEvent: (raw: string) => JSON.parse(raw) },
+    } as unknown as Stripe);
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: ana.sessionId } });
+    const pageLoaded = seen();
+    await later();
+    const notesBefore = await db.notification.count({ where: { userId: ana.tester.user.id } });
+    const r = await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { payKey: randomUUID(), seenAt: pageLoaded, kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, tab: "tab-1" } })).then(json);
+    expect(r.body.error.code).toBe("card_failed");
+    expect(await db.payment.count({ where: { submissionId: sub.id, status: "failed" } })).toBe(1);
+    for (const t of [A, B]) {
+      expect((await live(dev.cookie, `test:${t}`, pageLoaded, "tab-2")).body.changes).toEqual([]);
+      expect((await act(t, "next-round", dev.cookie, { seenAt: pageLoaded, tab: "tab-2" })).body.error?.code).not.toBe("stop_once");
+    }
+    // The tester: one bell, the top-box line and a stop once, worded without failed / declined / card.
+    const delayed = "Nora Lane's payment for your written answers ($10) is delayed. You'll be told when it arrives.";
+    const bells = await db.notification.findMany({ where: { userId: ana.tester.user.id }, orderBy: { createdAt: "asc" } });
+    expect(bells.slice(notesBefore).map((n) => n.text)).toEqual([delayed]);
+    expect((await live(ana.tester.cookie, `session:${ana.sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([delayed]);
+    const st = await sact(ana.sessionId, "leave", ana.tester.cookie, { seenAt: pageLoaded });
+    expect(texts(st)).toEqual([delayed]);
+    for (const t of [delayed, ...bells.map((n) => n.text)]) expect(t).not.toMatch(/fail|declin|card/i);
+    // A later successful Pay: exactly one more notification for the tester (the normal paid line).
+    decline = false;
+    const afterDecline = await db.notification.count({ where: { userId: ana.tester.user.id } });
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
+    const after = await db.notification.findMany({ where: { userId: ana.tester.user.id }, orderBy: { createdAt: "asc" } });
+    expect(after.length).toBe(afterDecline + 1);
+    expect(after[after.length - 1].text).toMatch(/^You were paid for your written answers/);
   });
 
   it("the tester's own delay on test A shows on their session on B with the same developer, not with another developer", async () => {

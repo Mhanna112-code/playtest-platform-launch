@@ -30,6 +30,11 @@ and look, but this version deliberately drops most of its complexity.
   - Tester, same logic within this developer's tests: the tester's OWN payment delayed / the delayed payment arrived
     shows on every session page they have with THIS developer, naming the test; ordinary paid/rejected stay this-test
     only. Never other testers' payments, never "failed"/"hold"/"chargeback".
+  - DECLINED PAY PRESS (owner): when the developer's Pay is declined at the press, the developer sees it under Pay (not a
+    debt, no retry/hold, no developer top-box line on other tests), AND the tester is told at once (bell + top box +
+    stop once on every session page with this developer): "Nora Lane's payment for your written answers ($8) is
+    delayed. You'll be told when it arrives." When the developer later pays it -> the normal paid line ("…paid $8…");
+    if they reject it instead -> the normal rejected line. Never "failed"/"declined"/"card" wording to the tester.
   - Payment events from the developer's OTHER tests don't show here; a hold shows on every test as the existing
     paused banner/refusals (not a top-box line per failure).
 - The Edit page's Save follows the SAME rule as the test-page buttons: it stops once for every developer reason

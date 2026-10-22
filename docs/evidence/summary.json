@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T22:03:32.426Z",
+  "run": "2026-10-22T22:13:09.426Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvk38fwn00077k68s926ebvk)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvk3krsp00077kagrkvsgcl2)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -129,20 +129,21 @@
     {
       "id": "10",
       "title": "Live call payment problems: call length, declined Pay, chargeback hold, resolved",
-      "status": "fail",
+      "status": "pass",
       "checks": [
         "PASS Pay box reference = rate × 25 min",
         "PASS tester: waiting to be paid",
         "PASS declined line under Pay",
         "PASS tester: may be delayed",
-        "FAIL paid",
+        "PASS paid",
         "PASS webhook accepted (saw: 200)",
-        "FAIL stop-once line under the top panel",
+        "PASS stop-once line under the top panel",
         "PASS hold banner",
-        "FAIL tester: paused line",
-        "FAIL tester: call cancelled because paused",
-        "FAIL hold box says reversed payments are resolved by the team",
-        "FAIL error: locator.click: Timeout 15000ms exceeded."
+        "PASS tester: paused line",
+        "PASS tester: call cancelled because paused",
+        "PASS hold box says reversed payments are resolved by the team",
+        "PASS developer resumed",
+        "PASS tester resumed (no paused line)"
       ],
       "screenshots": [
         "10-1-dev-call-length.png",
@@ -153,7 +154,12 @@
         "10-3-dev-chargeback-stop-once.png",
         "10-3-dev-hold-banner.png",
         "10-3-tester-paused.png",
-        "10-3-tester-call-cancelled.png"
+        "10-3-tester-call-cancelled.png",
+        "10-4-admin-resolved.png",
+        "10-4-dev-resumed.png",
+        "10-4-tester-resumed.png",
+        "10-live-call-payment-problems-developer.webm",
+        "10-live-call-payment-problems-tester.webm"
       ]
     },
     {
@@ -161,9 +167,9 @@
       "title": "Charge declined: owed with a 3-day cut-off (developer banner + Payments, tester line); a second failure pauses at once",
       "status": "fail",
       "checks": [
-        "FAIL test posted (saw: {\"error\":{\"code\":\"on_hold\",\"message\":\"Pay what you owe first. New tests can't be posted while payments are on hold.\"}})",
-        "FAIL both testers joined",
-        "FAIL error: apiRequestContext.put: Invalid URL"
+        "PASS test posted (saw: {\"id\":\"cmvk3li2i00477kag1eys45gn\"})",
+        "PASS both testers joined",
+        "FAIL error: Unexpected end of JSON input"
       ],
       "screenshots": []
     },
@@ -182,11 +188,15 @@
       "status": "fail",
       "checks": [
         "FAIL both failures listed with one button",
+        "FAIL total-changed stop",
+        "FAIL the one still failing is named",
         "FAIL error: page.click: Timeout 15000ms exceeded."
       ],
       "screenshots": [
         "13-several-owed-developer.png",
-        "13-several-owed-tester.png"
+        "13-several-owed-tester.png",
+        "13-several-total-changed-developer.png",
+        "13-several-one-still-failing-developer.png"
       ]
     },
     {
@@ -195,9 +205,16 @@
       "status": "fail",
       "checks": [
         "PASS webhook accepted (saw: 200)",
-        "FAIL error: page.click: Timeout 15000ms exceeded."
+        "FAIL stop-once line",
+        "FAIL hold banner",
+        "FAIL tester paused line",
+        "FAIL error: locator.click: Timeout 15000ms exceeded."
       ],
-      "screenshots": []
+      "screenshots": [
+        "14-chargeback-stop-once-developer.png",
+        "14-chargeback-hold-developer.png",
+        "14-chargeback-hold-tester.png"
+      ]
     },
     {
       "id": "15",
@@ -229,11 +246,24 @@
     {
       "id": "17",
       "title": "New terms offered: Edit → the tester's top box → Send stops once → Switch → the next send is priced under the new terms",
-      "status": "fail",
+      "status": "pass",
       "checks": [
-        "FAIL error: page.setInputFiles: Timeout 15000ms exceeded."
+        "PASS Edit explains the offer",
+        "PASS Save result names the offer",
+        "PASS tester row: on original terms",
+        "PASS tester's top stop-once box",
+        "PASS top box offers the new terms",
+        "PASS recording priced under the new terms ($20.00) (saw: 2000)",
+        "PASS tester row: switched"
       ],
-      "screenshots": []
+      "screenshots": [
+        "17-edit-developer.png",
+        "17-saved-developer.png",
+        "17-send-stops-once-tester.png",
+        "17-offer-box-tester.png",
+        "17-switched-and-sent-developer.png",
+        "17-switched-and-sent-tester.png"
+      ]
     },
     {
       "id": "18",
@@ -256,11 +286,21 @@
     {
       "id": "20",
       "title": "Call requests: both sides pick the same time → booked at once; accepting a withdrawn request is refused",
-      "status": "fail",
+      "status": "pass",
       "checks": [
-        "FAIL error: page.fill: Timeout 15000ms exceeded."
+        "PASS tester's request is listed",
+        "PASS developer sees the request",
+        "PASS booked at once (both picked the same time) (saw: 1)",
+        "PASS tester told: you both picked",
+        "PASS accept on a withdrawn request refused"
       ],
-      "screenshots": []
+      "screenshots": [
+        "20-requested-tester.png",
+        "20-request-seen-developer.png",
+        "20-auto-booked-developer.png",
+        "20-auto-booked-tester.png",
+        "20-accept-withdrawn-refused-developer.png"
+      ]
     },
     {
       "id": "21",

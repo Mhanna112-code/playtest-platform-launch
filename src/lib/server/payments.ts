@@ -1,9 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, money, toCents } from "@/lib/format";
-import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, declinedLine, canDispute, checkDisputeDecision, checkPay, checkReject, MAX_PAY_CENTS, PAY_WAITS, testerShare } from "@/lib/rules";
+import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, declinedLine, canDispute, checkDisputeDecision, delayedPayLine, checkPay, checkReject, MAX_PAY_CENTS, PAY_WAITS, testerShare } from "@/lib/rules";
 import { HttpError } from "./http";
-import { notify } from "./notify";
+import { bell, notify } from "./notify";
 import { isAdmin } from "./session";
 import { cardRefusal, charge } from "./stripe";
 import { devGate, devGateIfSeen, devOnHold, recordEvent } from "./tests";
@@ -101,7 +101,12 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0], body: R
       db.payment.update({ where: { id: payment!.id }, data: { status: "failed", failure: (e as Error).message } }),
       db.review.delete({ where: { id: rev.id } }),
     ]);
-    if (e instanceof HttpError && e.code === "card_failed") throw new HttpError(402, "card_failed", declinedLine(name, rev.amountCents, piece.label));
+    if (e instanceof HttpError && e.code === "card_failed") {
+      // The tester is told at once (bell; their top box and stop-once read the declined payment): never "failed".
+      const tl = delayedPayLine(displayName(dev), piece.label === "call" ? "live call" : piece.label, rev.amountCents);
+      await bell(c.testerId, tl, `/app/sessions/${c.id}`);
+      throw new HttpError(402, "card_failed", declinedLine(name, rev.amountCents, piece.label));
+    }
     throw e;
   }
   await db.$transaction(async (tx) => {

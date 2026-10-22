@@ -256,6 +256,10 @@ export const DEV_EXEMPT_KINDS: Record<string, string> = {
   resumed: "the hold lifted because the developer paid (their own action, reason E)",
 };
 
+/** (Owner, NEWEST+3) A declined manual Pay, as the tester reads it (never "failed", "declined" or "card"). */
+export const delayedPayLine = (devName: string, label: string, cents: number) =>
+  `${devName}'s payment for your ${label} (${"$" + (cents % 100 ? (cents / 100).toFixed(2) : String(cents / 100))}) is delayed. You'll be told when it arrives.`;
+
 /** The test events a tester's page reads directly; their other reasons come from their own contract's records. */
 export const TESTER_EVENT_KINDS = ["info"] as const;
 /** Every other recorded event kind, and why a tester never sees it as such (or sees it another way). */

@@ -1,5 +1,4 @@
-import { HttpError, handle, ok, readJson } from "@/lib/server/http";
-import { toCents } from "@/lib/format";
+import { handle, ok, readJson } from "@/lib/server/http";
 import { review } from "@/lib/server/payments";
 import { requireActive } from "@/lib/server/users";
 import { logReview } from "@/lib/server/actionText";
@@ -9,14 +8,9 @@ export async function POST(req: Request) {
   return handle(async () => {
     const u = await requireActive(req);
     const body = await readJson(req);
-    try {
-      const r = await review(u, body);
-      await logReview(u.id, body, r);
-      return ok(r);
-    } catch (e) {
-      // A declined Pay is the developer's own press: their other tabs read it as reason E.
-      if (e instanceof HttpError && e.code === "card_failed") await logReview(u.id, body, { amountCents: toCents(body.amount) ?? 0, status: "failed" });
-      throw e;
-    }
+    // A declined Pay is refused under Pay and is not a debt: nothing is logged or shown anywhere else.
+    const r = await review(u, body);
+    await logReview(u.id, body, r);
+    return ok(r);
   });
 }

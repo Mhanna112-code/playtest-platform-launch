@@ -210,7 +210,8 @@ export async function runDaily(now = new Date()) {
   // 0. Retry every owed payment once a day (before the cut-off and during holds). Chargebacks are never retried.
   const retry = await db.payment.findMany({ where: { status: "failed", owedUntil: { not: null }, settledAt: null, OR: [{ retriedAt: null }, { retriedAt: { lt: new Date(now.getTime() - 23 * 3_600_000) } }] } });
   for (const p of retry) {
-    const [d, t] = await Promise.all([db.user.findUniqueOrThrow({ where: { id: p.developerId } }), db.user.findUniqueOrThrow({ where: { id: p.testerId } })]);
+    const [d, t] = await Promise.all([db.user.findUnique({ where: { id: p.developerId } }), db.user.findUnique({ where: { id: p.testerId } })]);
+    if (!d || !t) continue; // a row with no people (never retried; one bad row never stops the daily job)
     try {
       const r = await charge(d, t, p.amountCents, `retry-${p.id}-${now.toISOString().slice(0, 10)}`, "Playtest: daily retry of an amount owed");
       await db.payment.update({ where: { id: p.id }, data: { ...r, settledAt: now, retriedAt: now, failure: "" } });
