@@ -397,7 +397,7 @@ export const headsUpLine = (title: string, openUntil: Date, fmt: (d: Date) => st
 
 /** Invite: reasons the whole press is refused for good. */
 export function inviteTestRefusal(
-  t: { status: string; spots: number; testersIn: number; openUntil: Date | null; stoppedAt: Date | null; paused: boolean },
+  t: { status: string; spots: number; testersIn: number; openUntil: Date | null; stoppedAt: Date | null; paused: boolean; title?: string },
   now: Date,
   fmt: (d: Date) => string,
 ) {
@@ -405,7 +405,8 @@ export function inviteTestRefusal(
   if (t.openUntil && t.openUntil.getTime() < now.getTime()) return `Joining closed on ${fmt(t.openUntil)} (Open until), so nobody can be invited.`;
   if (t.paused) return "This test is paused until you pay what you owe, so nobody can be invited.";
   if (t.status !== "open") return "This test isn't taking new testers, so nobody can be invited.";
-  // (Correction 6) Inviting while the test is full is allowed: invites stay open until a spot opens.
+  // New invites wait for spots (open ones stay open while full: correction 6).
+  if (t.testersIn >= t.spots) return `${t.title ?? "This test"} is full. Add spots to invite more people.`;
   return "";
 }
 
