@@ -12,6 +12,9 @@ import { InvitePanel } from "./InvitePanel";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { invitable, inviteExpired } from "@/lib/server/invites";
 import { owedForBox, sweepHeldCalls } from "@/lib/server/holds";
+import { paidLines } from "@/lib/server/paid";
+import { AutoRefresh } from "@/components/AutoRefresh";
+import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
 import { PayBox } from "./PayBox";
 import { TopPanel } from "./TopPanel";
@@ -44,6 +47,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const paid = await db.payment.groupBy({ by: ["contractId"], where: { contractId: { in: t.contracts.map((c) => c.id) }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } });
   const paidSoFar = (id: string) => paid.find((p) => p.contractId === id)?._sum.amountCents ?? 0;
   await sweepHeldCalls(u.id);
+  const paidKinds = await paidLines(t.contracts.map((c) => c.id));
   const [testers, invites, owedList] = await Promise.all([invitable(u.id, id), db.invite.findMany({ where: { testId: id, status: { in: ["sent", "joined"] } }, orderBy: { createdAt: "desc" } }), owedForBox(u.id)]);
   const people = new Map((await db.user.findMany({ where: { id: { in: invites.map((i) => i.testerId) } } })).map((x) => [x.id, displayName(x)]));
   const expired = inviteExpired(t, working.length);
@@ -56,6 +60,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const payments = await db.payment.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
   return (
     <>
+      <AutoRefresh query={`test=${t.id}`} />
       <TopPanel
         id={t.id}
         title={t.title}
@@ -101,6 +106,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             <p className="note">
               Their contract: {termsLine(c)} · joined {fmtDate(c.joinedAt)}
             </p>
+            <p className="text-sm">{paidKinds.get(c.id)}</p>
             {c.submissions.length === 0 && c.calls.length === 0 && <p className="note">Nothing sent yet.</p>}
             {c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).map((x) => (
               <div key={x.id} className="space-y-2 rounded-lg border border-slate-200 p-3">
@@ -108,7 +114,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   Live call · {x.rateCents == null ? "Not in their contract" : "In their contract"} · {fmtDateTime(x.startsAt)} · {x.minutes} min booked
                 </p>
                 {x.review ? (
-                  <ReviewResult review={x.review} payments={payments.filter((p) => p.callId === x.id)} dispute={x.dispute} />
+                  <ReviewResult review={x.review} payments={payments.filter((p) => p.callId === x.id)} dispute={x.dispute} testId={t.id} />
                 ) : (
                   <>
                     <CallLength testId={t.id} callId={x.id} minutes={x.actualMinutes ?? x.minutes} />
@@ -141,7 +147,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   </div>
                 ))}
                 {s.review ? (
-                  <ReviewResult review={s.review} payments={payments.filter((p) => p.submissionId === s.id)} dispute={s.dispute} />
+                  <ReviewResult review={s.review} payments={payments.filter((p) => p.submissionId === s.id)} dispute={s.dispute} testId={t.id} />
                 ) : (
                   <PayBox kind="submission" id={s.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} askedCents={s.askedCents} partPaidCents={partPaid(s.id)}
                     listingCents={s.agreedCents} listingText={`${money(s.agreedCents)} for ${s.kind === "written" ? "written answers" : "a recording"}`} />
@@ -168,11 +174,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
 
 type Rev = { amountCents: number; rejected: boolean; reason: string; createdAt: Date };
 type Pay = { status: string; amountCents: number; kind: string };
-type Disp = { status: string; reason: string; decidedCents: number | null; decisionNote: string } | null;
+type Disp = { id: string; status: string; reason: string; decidedCents: number | null; decisionNote: string; devSide: string } | null;
 
 /** What happened to a piece after Pay / Reject, for the developer. */
-function ReviewResult({ review, payments, dispute }: { review: Rev; payments: Pay[]; dispute: Disp }) {
-  const main = payments.find((p) => p.kind !== "dispute");
+function ReviewResult({ review, payments, dispute, testId }: { review: Rev; payments: Pay[]; dispute: Disp; testId: string }) {
+  const main = payments.find((p) => p.kind !== "dispute" && p.status !== "failed") ?? payments.find((p) => p.kind !== "dispute");
   return (
     <div className="space-y-1 rounded-lg bg-slate-50 p-3 text-sm">
       {review.rejected ? (
@@ -190,6 +196,8 @@ function ReviewResult({ review, payments, dispute }: { review: Rev; payments: Pa
           {dispute.status === "open" ? `Disputed: “${dispute.reason}” · waiting for the team.` : `Dispute decided: total ${money(dispute.decidedCents)}${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : ""}.`}
         </p>
       )}
+      {dispute?.devSide && <p>Your side: “{dispute.devSide}”</p>}
+      {dispute && dispute.status === "open" && !dispute.devSide && <DisputeSide testId={testId} disputeId={dispute.id} />}
     </div>
   );
 }

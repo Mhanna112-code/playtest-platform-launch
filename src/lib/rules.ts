@@ -394,7 +394,7 @@ export const payStart = (listingCents: number | null, askedCents: number | null)
 /** Auto-pay at 14 days: contract parts only, the listing amount or the asked amount if lower; null = never auto-paid. */
 export const autoPayFor = (listingCents: number | null, askedCents: number | null) =>
   listingCents == null ? null : Math.min(listingCents, askedCents ?? listingCents);
-export const REMIND_DAYS = 7;
+export const REMIND_DAYS = 3;
 
 /** "Ask $___ for this": optional; any amount from $0 up to the one-payment cap. */
 export function checkAsk(cents: number | null): Check {
@@ -433,3 +433,17 @@ export function summaryDue(pref: string, last: Date | null, now: Date) {
 /** One line per failed payment in the hold box. */
 export const failedLine = (what: string, cents: number, failedAt: Date) =>
   `${what} ${money(cents)} · card declined ${failedAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+
+/** "Paid so far: written answers $10.00 · recording $0.00 · live calls $12.50 (25 min)" for one tester on a test. */
+export function paidByKind(parts: { kind: "written" | "recording" | "call"; amountCents: number; minutes?: number | null }[]) {
+  const sum = (k: string) => parts.filter((p) => p.kind === k).reduce((a, p) => a + p.amountCents, 0);
+  const mins = parts.filter((p) => p.kind === "call").reduce((a, p) => a + (p.minutes ?? 0), 0);
+  return `Paid so far: written answers ${money(sum("written"))} · recording ${money(sum("recording"))} · live calls ${money(sum("call"))} (${mins} min)`;
+}
+
+/** The developer adds their side to a dispute once. */
+export function checkDevSide(text: string, already: boolean): Check {
+  if (already) return no("You already added your side to this dispute.");
+  if (text.trim().length < 5) return no("Write your side in a sentence or two.");
+  return yes;
+}

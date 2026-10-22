@@ -295,6 +295,9 @@ model Dispute {
   contractId   String
   testerId     String
   reason       String
+  /// The developer's side, added once (shown under the piece; the admin sees both)
+  devSide      String      @default("")
+  devSideAt    DateTime?
   /// "open" | "decided"
   status       String     @default("open")
   /// The total pay the admin decided (never below what was paid)

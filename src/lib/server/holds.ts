@@ -8,6 +8,7 @@ import { bell, notify, sendSummaries } from "./notify";
 import { appUrl } from "./auth";
 import { sendEmail } from "./email";
 import { charge } from "./stripe";
+import { receipt } from "./payments";
 import { recordEvent } from "./tests";
 
 // Payment hold (owner rule): starts when a failed charge isn't paid within 3 days, or when a chargeback opens.
@@ -89,6 +90,7 @@ export async function payOwed(dev: { id: string }) {
     try {
       const r = await charge(u, tester, p.amountCents, `owed-${p.id}-${Date.now()}`, "Playtest: amount owed");
       await db.payment.update({ where: { id: p.id }, data: { ...r, settledAt: new Date(), failure: "" } });
+      await receipt(u.email, "an amount you owed", p.amountCents, r.status, "/app/payments");
     } catch {
       stillFailing.push(lines.find((l) => l.id === p.id)?.text ?? money(p.amountCents));
     }
@@ -190,6 +192,7 @@ export async function runDaily(now = new Date()) {
     try {
       const r = await charge(dev, c.tester, amount, payKey, `Playtest: automatic payment on “${c.title}”`);
       await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, ...r } });
+      if (amount > 0) await receipt(dev.email, `${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} (paid automatically after 14 days)`, amount, r.status, `/app/tests/${c.testId}`);
     } catch (e) {
       await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "failed", failure: (e as Error).message, owedUntil: owedUntilFrom(now) } });
       await notify(dev.email, "A payment failed: pay within 3 days", [`The automatic ${money(amount)} payment for ${displayName(c.tester)}'s work on “${c.title}” failed.`, `Pay it by ${fmtDateTime(owedUntilFrom(now))} or your tests are paused.`], "/app/payments");

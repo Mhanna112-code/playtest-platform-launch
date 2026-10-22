@@ -67,7 +67,7 @@ export function CallPanel(p: { testId: string; seenAt: string; minutes: number; 
         {!p.stopped && (
           <div className="space-y-2 rounded-lg border border-slate-200 p-3">
             <h3>Offer call times</h3>
-            <p className="note">Up to 5 at once, {p.minutes} min each. Any tester in the test can book (it&apos;s extra for testers without a live call in their contract).</p>
+            <p className="note">Up to 5 at once, {p.minutes} min each. Any tester in the test can book, even without a live call in their contract.</p>
             {times.map((t, i) => (
               <input key={i} type="datetime-local" aria-label={`Time ${i + 1}`} className="input max-w-xs" value={t} onChange={(e) => setTimes(times.map((x, j) => (j === i ? e.target.value : x)))} />
             ))}

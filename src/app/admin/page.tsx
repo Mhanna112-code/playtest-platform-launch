@@ -63,7 +63,7 @@ export default async function AdminPage() {
                 {r?.rejected ? " (rejected)" : ""}, listing {money(r?.agreedCents)}
               </p>
               <p>
-                Tester: “{d.reason}”{r?.reason ? ` · Developer: “${r.reason}”` : ""}
+                Tester: “{d.reason}”{r?.reason ? ` · Developer's note when paying: “${r.reason}”` : ""}{d.devSide ? ` · Developer's side: “${d.devSide}”` : ""}
               </p>
               {d.status === "open" ? (
                 <AdminButton action="decide" id={d.id} label="Decide" fields={[{ name: "total", label: "Total pay ($)", ph: "Total pay, e.g. 10.00" }, { name: "note", label: "Note to both" }]} />

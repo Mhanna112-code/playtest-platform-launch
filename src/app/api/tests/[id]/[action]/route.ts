@@ -1,6 +1,7 @@
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { devCancelCall, offerTimes, removeTime, reportNoShow, setCallLength } from "@/lib/server/calls";
 import { cancelInvite, inviteTesters } from "@/lib/server/invites";
+import { addDevSide } from "@/lib/server/payments";
 import { sendMessage } from "@/lib/server/messages";
 import { editTest, endEarly, joinTest, nextRound, openDraft, stopTest } from "@/lib/server/tests";
 import { requireActive } from "@/lib/server/users";
@@ -37,6 +38,8 @@ export async function POST(req: Request, { params }: Ctx) {
         return ok(await setCallLength(u, id, body));
       case "no-show":
         return ok(await reportNoShow(u, String(body.callId ?? ""), body));
+      case "dispute-side":
+        return ok(await addDevSide(u, id, body));
       case "invite":
         return ok(await inviteTesters(u, id, body));
       case "cancel-invite":

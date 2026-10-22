@@ -6,6 +6,8 @@ import { requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
 import { sweepHeldCalls } from "@/lib/server/holds";
+import { paidLines } from "@/lib/server/paid";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeForm, LeaveButton, WrittenForm } from "./SessionActions";
 import { Chat } from "@/components/Chat";
 import { RecordingUpload } from "./RecordingUpload";
@@ -47,6 +49,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const cancelledText = (x: { status: string; cancelledBy: string | null }) => (x.status !== "cancelled" ? "" : x.cancelledBy === "tester" ? "you cancelled it" : `cancelled by ${x.cancelledBy === "developer" ? dev : "the site"}`);
   return (
     <>
+      <AutoRefresh query={`session=${c.id}`} />
       {refusal && <p className="info">{refusal}</p>}
       {!refusal && c.test.developer.holdStartedAt && <p className="info">{PAUSED_FOR_TESTERS}</p>}
       {!refusal && c.test.openUntil && c.test.openUntil > now && c.test.openUntil.getTime() - now.getTime() < 3 * 86_400_000 && (
@@ -56,6 +59,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         <h1>{c.title}</h1>
         <p className="note">by {dev} · joined {fmtDate(c.joinedAt)} · due {fmtDate(c.dueAt)}{isLate(c.dueAt, now) && !refusal ? " (late work is still accepted and marked late)" : ""}</p>
         <p className="text-sm"><b>Your contract:</b> {termsLine(c, true)} (what you get)</p>
+        <p className="text-sm">{(await paidLines([c.id])).get(c.id)}</p>
         {c.buildUrl && <p className="text-sm">Build: <a href={c.buildUrl} target="_blank" rel="noreferrer">{c.buildUrl}</a></p>}
         {c.description && <p className="whitespace-pre-wrap text-sm">{c.description}</p>}
         {c.keepPrivate && <p className="note">You agreed to keep this build and what you see private.</p>}
@@ -139,7 +143,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
 }
 
 type Rev = { amountCents: number; agreedCents: number | null; rejected: boolean; reason: string; createdAt: Date };
-type Disp = { status: string; decidedCents: number | null; decisionNote: string } | null;
+type Disp = { status: string; decidedCents: number | null; decisionNote: string; devSide: string } | null;
 
 /** What the developer did with a piece, as the tester reads it (they see what they get; never holds or chargebacks). */
 function TesterReview({ sessionId, kind, id, review, dispute }: { sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
@@ -156,6 +160,7 @@ function TesterReview({ sessionId, kind, id, review, dispute }: { sessionId: str
       )}
       {review.agreedCents == null && <p className="note">This wasn&apos;t in your contract, so the developer&apos;s amount is final.</p>}
       {dispute && <p>{dispute.status === "open" ? "You disputed this: waiting for the team." : `The team decided: ${money(dispute.decidedCents)} in all${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : ""}.`}</p>}
+      {dispute?.devSide && <p>The developer&apos;s side: “{dispute.devSide}”</p>}
       {may && <DisputeForm sessionId={sessionId} kind={kind} id={id} />}
     </div>
   );

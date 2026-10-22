@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, money, toCents } from "@/lib/format";
-import { callReference, declinedLine, canDispute, checkDisputeDecision, checkPay, checkReject, MAX_PAY_CENTS, PAY_WAITS, testerShare } from "@/lib/rules";
+import { callReference, checkDevSide, declinedLine, canDispute, checkDisputeDecision, checkPay, checkReject, MAX_PAY_CENTS, PAY_WAITS, testerShare } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { isAdmin } from "./session";
@@ -113,6 +113,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0], body: R
     `/app/sessions/${c.id}`,
     { always: true },
   );
+  if (rev.amountCents > 0) await receipt(dev.email, `${name}'s ${piece.label}`, rev.amountCents, result.status, `/app/tests/${c.testId}`);
   return { reviewId: rev.id, amountCents: rev.amountCents, status: result.status, rejected: false, paidSoFarCents: await paidSoFar(c.id) };
 }
 
@@ -158,10 +159,30 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
       await db.dispute.update({ where: { id: d.id }, data: { status: "open", decidedCents: null, decidedAt: null } });
       throw e;
     }
+    await receipt(c.test.developer.email, `the dispute decision on ${displayName(c.tester)}'s work`, extra, result.status, `/app/tests/${c.testId}`);
     await db.payment.create({ data: { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, ...result } });
   }
   const line = extra > 0 ? `The team raised the pay to ${money(decided!)} (${money(extra)} more).` : `The team kept the pay at ${money(review.amountCents)}.`;
   await notify(c.tester.email, `Your dispute on “${c.title}” was decided`, [line, ...(note ? [`Their note: “${note}”`] : [])], `/app/sessions/${c.id}`);
   await notify(c.test.developer.email, `A dispute on “${c.title}” was decided`, [line, ...(note ? [`The team's note: “${note}”`] : [])], `/app/tests/${c.testId}`);
   return { extraCents: extra };
+}
+
+/** A payment receipt to the developer for every payment that goes through: bell + email, always sent. */
+export async function receipt(devEmail: string, what: string, cents: number, status: string, path: string) {
+  const line = `Receipt: you paid ${money(cents)} for ${what}`;
+  await notify(devEmail, line, [line + ".", status === "not_set_up" ? "Payments aren't set up yet, so this was recorded and nothing was charged." : "Charged to your saved card."], path, { always: true });
+}
+
+/** The developer adds their side to a dispute once; it shows under that piece of work and the admin sees both. */
+export async function addDevSide(dev: U, testId: string, body: Record<string, unknown>) {
+  const d = await db.dispute.findUnique({ where: { id: String(body.disputeId ?? "") } });
+  const c = d ? await db.contract.findUnique({ where: { id: d.contractId }, include: { test: true } }) : null;
+  if (!d || !c || c.testId !== testId || c.test.developerId !== dev.id) throw new HttpError(404, "not_found", "That dispute doesn't exist.");
+  if (d.status !== "open") throw new HttpError(409, "decided", "This dispute was already decided.");
+  const text = typeof body.text === "string" ? body.text.trim().slice(0, 2000) : "";
+  const ok = checkDevSide(text, !!d.devSideAt);
+  if (!ok.ok) throw new HttpError(ok.message.startsWith("You already") ? 409 : 400, "dev_side", ok.message);
+  await db.dispute.update({ where: { id: d.id }, data: { devSide: text, devSideAt: new Date() } });
+  return { ok: true };
 }
