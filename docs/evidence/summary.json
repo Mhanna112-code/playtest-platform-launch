@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T17:11:11.267Z",
+  "run": "2026-10-22T17:18:45.123Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjssfcw00077ktooyf88s9e)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjt25jv00077k3sw2s3xwai)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -167,7 +167,7 @@
       "title": "Auto-pay fails: owed with a 3-day cut-off (developer banner + Payments, tester line)",
       "status": "pass",
       "checks": [
-        "PASS test posted (saw: {\"id\":\"cmvjst35e003g7ktoomwysxei\"})",
+        "PASS test posted (saw: {\"id\":\"cmvjt2tvc003j7k3s9j7dfug8\"})",
         "PASS both testers joined",
         "PASS tester offered the choice",
         "PASS both charges declined and owed (saw: 2)",
@@ -187,7 +187,7 @@
       "title": "Cut-off passes: hold pauses every test; joins, invites, Next round, posting, Pay/Reject wait; calls inside the hold cancelled, after it kept; testers still send",
       "status": "pass",
       "checks": [
-        "PASS hold started by the daily job (saw: {\"autoPaid\":0,\"holds\":1,\"alerts\":46,\"headsUps\":0,\"choices\":0,\"retried\":0})",
+        "PASS hold started by the daily job (saw: {\"autoPaid\":0,\"holds\":1,\"alerts\":0,\"headsUps\":0,\"choices\":0,\"retried\":0})",
         "PASS developer: tests paused",
         "PASS tester: paused line",
         "PASS tester: the call inside the hold was cancelled",

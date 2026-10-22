@@ -21,6 +21,13 @@ and look, but this version deliberately drops most of its complexity.
   the page); the tester's Charge / Let it go are hidden while paused, and a press from an old page is refused with
   "This test is paused: you can choose once it resumes." If the developer paid or rejected meanwhile, Charge / Let it
   go is refused for good ("Nora Lane paid $8.00 for this meanwhile.").
+- **(Owner) Charge amount with earlier payments:** Charge = the lower of listing and asked, MINUS what's already been
+  paid for that part (e.g. listing $8, paid $3 earlier for it → "Charge Nora Lane $5.00"). If nothing is left to
+  charge, only "Close it" shows. Parts outside the contract never get Charge / Let it go.
+- **In-page confirmations (no pop-ups):** Charge is disabled until the tick "Charge Nora Lane $5.00 now" is ticked.
+  Let it go swaps the two buttons for one line "Close this with nothing more paid? [Yes, let it go] [Keep it]".
+- **(Owner) A second failed payment starts the hold at once:** the first failure gives the 3-day cut-off; if another
+  payment fails while one is still owed, the hold starts immediately (bell + email to the developer).
 - **(Owner, notification schedule; wins over earlier frequencies)**
   - Countdown pattern for deadlines: 1 month before (if more than a month away), 1 week before, 3 days before,
     1 day before. Used for Open until (developer + working testers: bell + yellow ⏱ line) and for the developer's
