@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
-import { useLiveAppend } from "@/lib/live";
+import { mergeChanges, useLiveAppend } from "@/lib/live";
 import { Choices } from "@/components/Choices";
 import { api, ApiError } from "@/lib/client";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
@@ -50,7 +50,7 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
   const [busy, setBusy] = useState(false);
   const [errs, setErrs] = useState<string[]>([]);
   const [changes, setChanges] = useState<Change[] | null>(null);
-  useLiveAppend(changes != null, (added) => setChanges((c) => (c ? [...c, ...added] : c)));
+  useLiveAppend(changes != null, (added) => setChanges((c) => (c ? mergeChanges(c, added) : c)));
   const [saved, setSaved] = useState("");
   const set = (p: Partial<F>) => {
     setF((o) => ({ ...o, ...p }));

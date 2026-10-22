@@ -27,6 +27,13 @@ export function announce(added: Change[]) {
   if (added.length) window.dispatchEvent(new CustomEvent(LIVE_EVENT, { detail: added }));
 }
 
+const ck = (c: Change) => `${new Date(c.at).getTime()}|${c.text}`;
+/** Adds newly picked-up changes to an open box, skipping any it already lists. */
+export function mergeChanges(old: Change[], added: Change[]) {
+  const have = new Set(old.map(ck));
+  return [...old, ...added.filter((c) => !have.has(ck(c)))];
+}
+
 /** While a stop box is open, new changes the page picks up are added to it. */
 export function useLiveAppend(open: boolean, add: (added: Change[]) => void) {
   const cb = useRef(add);

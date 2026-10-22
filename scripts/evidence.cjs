@@ -810,6 +810,87 @@ async function signIn(page, email) {
     await shot(dev, "fourth-refused-developer");
   });
 
+  await flow("23", "Every button stops once: your own other-tab actions, Block after a payment, listing info (F), the live top box", async () => {
+    const r = await apiPost(dev, "/api/tests", { title: "Tide Pool", description: "Explore the rock pools.", buildUrl: "https://example.com/tide", category: "Adventure", devices: [], languages: [], spots: 4, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["What did you find?"], openUntil: "", joinMode: "anyone" });
+    const T = r.body.id;
+    const SCara = (await apiPost(t3, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
+    const SDee3 = (await apiPost(t2, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
+    check("two testers in", !!SCara && !!SDee3, JSON.stringify(r.body));
+    // --- E: Cara has her session open in two tabs. Tab 2 sends the written answers; tab 1's Leave stops once.
+    const tab1 = t3;
+    const tab2 = await t3.context().newPage();
+    await tab1.goto(`/app/sessions/${SCara}`);
+    await tab2.goto(`/app/sessions/${SCara}`);
+    await tab2.fill("#a0", "A crab and two starfish.");
+    await tab2.click("button:has-text('Send my written answers')");
+    await tab2.waitForTimeout(1500);
+    check("tab 2 sent the answers", sql(`select count(*) from "Submission" where "contractId" = '${SCara}' and kind = 'written'`) === "1");
+    await shot(tab2, "tab2-sent-tester");
+    await tab1.click("button:has-text('Leave the test')");
+    await tab1.locator("button:has-text('Leave the test')").last().click();
+    check("tab 1 Leave stopped once: 'You also did this in another tab'", await has(tab1, "text=You also did this in another tab: sent your written answers at"));
+    await shot(tab1, "tab1-leave-stopped-tester");
+    await tab1.locator("button:has-text('Leave the test')").last().click();
+    await tab1.waitForTimeout(2000);
+    check("second press left the test", sql(`select status from "Contract" where id = '${SCara}'`) === "left");
+    await shot(tab1, "tab1-left-tester");
+    await tab2.close();
+    // --- F + live top box: Dee's session page is open (scrolled down); the developer's Edit is open in tab 1.
+    await apiPost(t2, `/api/sessions/${SDee3}/written`, { answers: ["Seaweed everywhere."] });
+    const devTab1 = dev;
+    const devTab2 = await dev.context().newPage();
+    await devTab1.goto(`/app/tests/${T}/edit`);
+    await t2.goto(`/app/sessions/${SDee3}`);
+    await t2.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    const y0 = await t2.evaluate(() => window.scrollY);
+    // Tab 2: the developer changes the description and saves.
+    await devTab2.goto(`/app/tests/${T}/edit`);
+    await devTab2.fill("#description", "Explore the rock pools at low tide.");
+    await devTab2.click("button:has-text('Save')");
+    await devTab2.waitForURL(`**/app/tests/${T}?saved=1**`);
+    // Edit tab 1 (opened before the other tab's save): Save stops once under Save; the second press saves.
+    await devTab1.selectOption("#category", "Puzzle");
+    await devTab1.click("button:has-text('Save')");
+    check("Edit tab 1: Save stopped once with the other tab's change", await has(devTab1, "text=Nora Lane changed the description"));
+    await shot(devTab1, "edit-save-stopped-developer");
+    await devTab1.click("button:has-text('Save')");
+    await devTab1.waitForURL(`**/app/tests/${T}?saved=1**`).catch(() => {});
+    check("second Save saved", sql(`select category from "Test" where id = '${T}'`) === "Puzzle");
+    await devTab2.close();
+    // Dee's page: the top box shows the change by itself within ~20 s, and scrolls up to it once.
+    const t0 = Date.now();
+    const sawInfo = await t2.waitForSelector("[data-live-top] >> text=Nora Lane changed the description", { timeout: 35000 }).then(() => true, () => false);
+    check("tester's top box: 'Nora Lane changed the description' with See it", sawInfo && (await has(t2, "[data-live-top] >> text=See it")), `${Math.round((Date.now() - t0) / 1000)} s`);
+    await t2.waitForTimeout(1200);
+    const y1 = await t2.evaluate(() => window.scrollY);
+    check("the page scrolled up to the top box once", y0 > 200 && y1 < y0, `${y0} → ${y1}`);
+    await t2.screenshot({ path: path.join(OUT, "23-top-box-viewport-tester.png") });
+    cur.screenshots.push("23-top-box-viewport-tester.png");
+    await shot(t2, "top-box-info-tester");
+    // --- Block after the developer paid: Dee's page (not refreshed) stops once under "Yes, block".
+    await t2.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await t2.click("button:has-text('Block Nora Lane')");
+    const sub = sql(`select id from "Submission" where "contractId" = '${SDee3}' and kind = 'written'`);
+    const paid = await apiPost(dev, "/api/review", { payKey: `ev23-${TS}`, kind: "submission", id: sub, amount: "8.00", tickedCents: 800, seenAt: new Date().toISOString(), confirmed: true });
+    check("developer paid Dee $8", paid.status === 200, JSON.stringify(paid.body));
+    await t2.click("button:has-text('Yes, block Nora Lane')");
+    check("Block stopped once: the developer paid", await has(t2, "text=Nora Lane paid $8.00 for your written answers"));
+    const y2 = await t2.evaluate(() => window.scrollY);
+    await shot(t2, "block-stopped-tester");
+    // The top box picks the payment up too (newest first) without scrolling again; the open stop box stays as is.
+    const sawPaid = await t2.waitForSelector("[data-live-top] >> text=Nora Lane paid $8.00 for your written answers", { timeout: 35000 }).then(() => true, () => false);
+    await t2.waitForTimeout(1200);
+    const y3 = await t2.evaluate(() => window.scrollY);
+    check("top box lists the payment above the description change", sawPaid && (await t2.locator("[data-live-top] li").first().innerText()).includes("paid $8.00"));
+    check("no second scroll", Math.abs(y3 - y2) < 5, `${y2} → ${y3}`);
+    check("the stop box lists the payment once", (await t2.locator("div.info li", { hasText: "paid $8.00 for your written answers" }).count()) === 2); // one in the top box, one under the button
+    await shot(t2, "top-box-and-stop-box-tester");
+    await t2.click("button:has-text('Yes, block Nora Lane')");
+    await t2.waitForTimeout(2000);
+    check("second press blocked", sql(`select count(*) from "Block" where "blockedId" = '${devId}' and "blockerId" = (select "testerId" from "Contract" where id = '${SDee3}')`) === "1");
+    await shot(t2, "blocked-tester");
+  });
+
   await browser.close();
   summary.pass = summary.flows.every((f) => f.status === "pass");
   fs.writeFileSync(path.join(OUT, "summary.json"), JSON.stringify(summary, null, 2));

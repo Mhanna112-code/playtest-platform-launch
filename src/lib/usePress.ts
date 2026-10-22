@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { api, ApiError, errOf } from "./client";
 import type { Change } from "@/components/ChangesBox";
-import { useLiveAppend } from "./live";
+import { mergeChanges, useLiveAppend } from "./live";
 
 /**
  * A panel's presses: sends the page's "seen" marker. If the server stops once, the box lists the changes directly under
@@ -36,6 +36,6 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
     }
   }
   // The open box stays live: changes the page picks up meanwhile are added to it.
-  useLiveAppend(changes != null, (added) => setChanges((c) => (c ? [...c, ...added] : c)));
+  useLiveAppend(changes != null, (added) => setChanges((c) => (c ? mergeChanges(c, added) : c)));
   return { press, changes, error, busy, setError, at };
 }
