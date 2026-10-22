@@ -71,6 +71,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const now = new Date();
   const lateOf = (c: { dueAt: Date; tester: { name: string; email: string } }, x: { createdAt: Date }) => (isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(c.tester), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined);
   const partPaid = (id: string) => payments.filter((p) => (p.submissionId === id || p.callId === id) && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
+  const payments = await db.payment.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
   // The developer's live-call panel: one row per working tester (terms like the parts listing) and their calls/requests.
   const whole = (c: number | null) => money(c).replace(/\.00$/, "");
   const devTesters: DevTester[] = working.map((c) => {
@@ -107,7 +108,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       })),
     };
   });
-  const payments = await db.payment.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
   return (
     <>
       <AutoRefresh query={`test=${t.id}`} />

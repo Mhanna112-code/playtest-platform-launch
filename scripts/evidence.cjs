@@ -184,6 +184,7 @@ async function signIn(page, email) {
     await dev.goto(testUrl);
     const when = new Date(Date.now() + 3 * 86400000);
     const local = new Date(when.getTime() - when.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    await dev.check("section[aria-label='Call requests'] label:has-text('Ana Silva') input");
     await dev.fill("section[aria-label='Call requests'] input[type=datetime-local]", local);
     await dev.click("section[aria-label='Call requests'] >> text=Request a time");
     await dev.waitForTimeout(1500);
@@ -727,12 +728,12 @@ async function signIn(page, email) {
     await shot(dev, "accept-withdrawn-refused-developer");
   });
 
-  // Flow 21 waits for the owner's final call-panel layout (run with EVIDENCE_FLOW_21=1).
-  if (process.env.EVIDENCE_FLOW_21 === "1") await flow("21", "Call requests with a rate ask: Select all to two testers; one asks $50/h and the developer accepts; the other's Accept is refused", async () => {
+  let T21 = "", SC = "", SDee = "";
+  await flow("21", "Call requests with a rate ask: Select all to two testers; one asks $50/h and the developer accepts; the other's Accept is refused", async () => {
     const r = await apiPost(dev, "/api/tests", { title: "Night Ferry", description: "Cross the bay.", buildUrl: "https://example.com/ferry", category: "Adventure", devices: [], languages: [], spots: 4, writtenCents: "8.00", recordingCents: null, liveRateCents: "40.00", liveMinutes: 30, deadlineDays: 7, questions: ["Anything?"], openUntil: "", joinMode: "anyone" });
-    const T21 = r.body.id;
-    const SC = (await apiPost(t3, `/api/tests/${T21}/join`, { confirmed: true })).body.sessionId;
-    const SDee = (await apiPost(t2, `/api/tests/${T21}/join`, { confirmed: true })).body.sessionId;
+    T21 = r.body.id;
+    SC = (await apiPost(t3, `/api/tests/${T21}/join`, { confirmed: true })).body.sessionId;
+    SDee = (await apiPost(t2, `/api/tests/${T21}/join`, { confirmed: true })).body.sessionId;
     check("two testers in", !!SC && !!SDee);
     const when = new Date(Date.now() + 5 * 86400000);
     when.setSeconds(0, 0);
@@ -740,7 +741,7 @@ async function signIn(page, email) {
     // The developer requests one time with both (Select all).
     await dev.goto(`/app/tests/${T21}`);
     check("developer line about rates", await has(dev, "text=Calls you request use each tester's contract rate."));
-    check("tick list shows each tester's rate", await has(dev, "text=$40/h"));
+    check("tick list shows each tester's terms and booked count", await has(dev, "text=0 of 3 booked"));
     await dev.check("section[aria-label='Call requests'] >> text=Select all");
     await dev.fill("section[aria-label='Call requests'] input[type=datetime-local]", local);
     await shot(dev, "select-all-developer");
@@ -769,6 +770,44 @@ async function signIn(page, email) {
     await t2.click("section[aria-label='Call requests'] >> button:has-text('Accept')");
     check("tester B's Accept refused", await has(t2, "text=took this time at"));
     await shot(t2, "accept-refused-tester-b");
+  });
+
+  await flow("22", "Developer live-call panel: one tester with a booked call, a weekly set and a waiting request; another at 3 of 3 refused", async () => {
+    // Times 9 h 17 min off the hour of earlier flows, so they never clash with the developer's other calls.
+    const at = (days) => { const d = new Date(Date.now() + days * 86400000 + (9 * 60 + 17) * 60000); d.setSeconds(0, 0); return d.toISOString(); };
+    const devReq = (contractId, extra) => apiPost(dev, `/api/tests/${T21}/request-time`, { seenAt: new Date().toISOString(), confirmed: true, contractIds: [contractId], ...extra });
+    const lastReq = (contractId) => sql(`select id from "CallRequest" where "contractId" = '${contractId}' and status = 'pending' and "fromSide" = 'developer' order by "createdAt" desc limit 1`);
+    const accept = (page, sid) => apiPost(page, `/api/sessions/${sid}/answer-request`, { seenAt: new Date().toISOString(), confirmed: true, requestId: lastReq(sid), action: "accept" });
+    // Cara: (already one booked call from flow 21) + a weekly set (3 weeks) + a waiting request.
+    await devReq(SC, { times: [at(6)], weeks: 3, repeat: "weekly" });
+    const wk = await accept(t3, SC);
+    check("weekly set booked (3 calls)", wk.body.calls === 3, JSON.stringify(wk.body));
+    await devReq(SC, { times: [at(7)] });
+    // Dee: three booked times (3 of 3).
+    for (const d of [8, 9, 10]) {
+      await devReq(SDee, { times: [at(d)] });
+      const r = await accept(t2, SDee);
+      check(`Dee's call on day ${d} booked`, r.body.booked === true, JSON.stringify(r.body));
+    }
+    // A 4th for Dee: requested, but her Accept is refused under the button.
+    await devReq(SDee, { times: [at(11)] });
+    await t2.goto(`/app/sessions/${SDee}`);
+    await t2.locator("section[aria-label='Call requests'] li").last().locator("button:has-text('Accept')").click();
+    check("4th booked time refused for the tester", await has(t2, "text=You already have 3 booked times in this test."));
+    await shot(t2, "fourth-refused-tester");
+    // The full developer panel with both testers.
+    await dev.goto(`/app/tests/${T21}`);
+    check("rate line", await has(dev, "text=Calls you request use each tester's contract rate."));
+    check("Dee at 3 of 3 booked", await has(dev, "text=3 of 3 booked"));
+    check("weekly set shown as one line", await has(dev, "text=Weekly:"));
+    await dev.locator("section[aria-label='Call requests'] button:has-text('Show calls')").first().click();
+    await shot(dev, "full-panel-developer");
+    // The developer's own Accept on a 4th is refused too: Dee requests a time; the developer accepts.
+    await apiPost(t2, `/api/sessions/${SDee}/request-time`, { seenAt: new Date().toISOString(), confirmed: true, times: [at(12)] });
+    await dev.reload();
+    await dev.locator("section[aria-label='Call requests'] li", { hasText: "requested" }).filter({ hasText: "Dee" }).locator("button:has-text('Accept')").first().click();
+    check("4th booked time refused for the developer", await has(dev, "text=already has 3 booked times with you"));
+    await shot(dev, "fourth-refused-developer");
   });
 
   await browser.close();

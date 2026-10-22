@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T20:06:52.933Z",
+  "run": "2026-10-22T20:30:21.643Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjz2dbc00077kn4wbca1w4p)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjzwl7100h17kzwe2f3it30)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -167,7 +167,7 @@
       "title": "Charge declined: owed with a 3-day cut-off (developer banner + Payments, tester line); a second failure pauses at once",
       "status": "pass",
       "checks": [
-        "PASS test posted (saw: {\"id\":\"cmvjz32sf003u7kn4p69yigcv\"})",
+        "PASS test posted (saw: {\"id\":\"cmvjzxafm00ko7kzw6bjb5xg6\"})",
         "PASS both testers joined",
         "PASS tester offered the choice",
         "PASS developer banner with the cut-off",
@@ -375,6 +375,48 @@
         "20-auto-booked-developer.png",
         "20-auto-booked-tester.png",
         "20-accept-withdrawn-refused-developer.png"
+      ]
+    },
+    {
+      "id": "21",
+      "title": "Call requests with a rate ask: Select all to two testers; one asks $50/h and the developer accepts; the other's Accept is refused",
+      "status": "pass",
+      "checks": [
+        "PASS two testers in",
+        "PASS developer line about rates",
+        "PASS tick list shows each tester's terms and booked count",
+        "PASS tester sees only the listed rate",
+        "PASS nothing booked on the tester's side",
+        "PASS booked call shows Agreed $50/h",
+        "PASS tester B's Accept refused"
+      ],
+      "screenshots": [
+        "21-select-all-developer.png",
+        "21-request-received-tester-b.png",
+        "21-asked-50-tester-a.png",
+        "21-agreed-50-developer.png",
+        "21-accept-refused-tester-b.png"
+      ]
+    },
+    {
+      "id": "22",
+      "title": "Developer live-call panel: one tester with a booked call, a weekly set and a waiting request; another at 3 of 3 refused",
+      "status": "pass",
+      "checks": [
+        "PASS weekly set booked (3 calls) (saw: {\"booked\":true,\"callId\":\"cmvk0021b00v27kzwbs8reeun\",\"calls\":3})",
+        "PASS Dee's call on day 8 booked (saw: {\"booked\":true,\"callId\":\"cmvk0025g00vz7kzwq1ve0fkj\",\"calls\":1})",
+        "PASS Dee's call on day 9 booked (saw: {\"booked\":true,\"callId\":\"cmvk0029400we7kzw9zi4nz5t\",\"calls\":1})",
+        "PASS Dee's call on day 10 booked (saw: {\"booked\":true,\"callId\":\"cmvk002ce00wt7kzwsj76us67\",\"calls\":1})",
+        "PASS 4th booked time refused for the tester",
+        "PASS rate line",
+        "PASS Dee at 3 of 3 booked",
+        "PASS weekly set shown as one line",
+        "PASS 4th booked time refused for the developer"
+      ],
+      "screenshots": [
+        "22-fourth-refused-tester.png",
+        "22-full-panel-developer.png",
+        "22-fourth-refused-developer.png"
       ]
     }
   ],
