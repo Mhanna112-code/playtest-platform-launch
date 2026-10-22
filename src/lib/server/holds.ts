@@ -80,9 +80,18 @@ export async function liftHoldIfClear(devId: string) {
 }
 
 /** "Pay what you owe": retry every failed charge still owed; lifts the hold when all are paid. */
-export async function payOwed(dev: { id: string }) {
+/**
+ * "Pay what you owe": stops once if the owed total changed since the page loaded (seenTotalCents); the second press
+ * pays at once. Every failed charge is retried; any still failing is named with the card's reason and the hold stays.
+ */
+export async function payOwed(dev: { id: string }, body: Record<string, unknown> = {}) {
   const u = await db.user.findUniqueOrThrow({ where: { id: dev.id } });
   const list = await owed(dev.id);
+  const total = list.reduce((a, p) => a + p.amountCents, 0);
+  const seen = typeof body.seenTotalCents === "number" ? body.seenTotalCents : null;
+  if (seen != null && seen !== total && body.confirmed !== true) {
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text: `What you owe changed: now ${money(total)} (it was ${money(seen)} when you opened this page)`, at: new Date() }], totalCents: total });
+  }
   const lines = await owedLines(dev.id);
   const stillFailing: string[] = [];
   for (const p of list) {
@@ -91,8 +100,9 @@ export async function payOwed(dev: { id: string }) {
       const r = await charge(u, tester, p.amountCents, `owed-${p.id}-${Date.now()}`, "Playtest: amount owed");
       await db.payment.update({ where: { id: p.id }, data: { ...r, settledAt: new Date(), failure: "" } });
       await receipt(u.email, "an amount you owed", p.amountCents, r.status, "/app/payments");
-    } catch {
-      stillFailing.push(lines.find((l) => l.id === p.id)?.text ?? money(p.amountCents));
+    } catch (e) {
+      const why = (e as HttpError).data?.stripe ?? (e as Error).message;
+      stillFailing.push(`${lines.find((l) => l.id === p.id)?.text ?? money(p.amountCents)} (${String(why).replace(/\.$/, "")})`);
     }
   }
   // Chargebacks can't be retried here: the admin resolves them (Mark resolved). The hold lifts only when all are paid.

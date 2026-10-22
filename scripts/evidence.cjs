@@ -448,6 +448,12 @@ async function signIn(page, email) {
     await dev.goto(t11Url());
     check("both failures listed with one button", await has(dev, "text=Pay what you owe ($25.00)"));
     await both("several-owed");
+    // Another failed payment arrives after the page loaded: the first press stops once with the new total.
+    const tid = sql(`select id from "User" where email = '${TESTER}'`);
+    sql(`insert into "Payment" (id, kind, "contractId", "developerId", "testerId", "amountCents", "feeCents", "testerCents", status, "owedUntil", "createdAt") values ('ev_${TS}', 'review', '${SA}', '${devId}', '${tid}', 500, 0, 0, 'failed', now() + interval '3 days', now())`);
+    await dev.click("button:has-text('Pay what you owe')");
+    check("total-changed stop", await has(dev, "text=What you owe changed: now $30.00"));
+    await shot(dev, "several-total-changed-developer");
     await dev.click("button:has-text('Pay what you owe')");
     check("the one still failing is named", await has(dev, "text=Still declined: Ana Silva's recording $15.00"));
     await shot(dev, "several-one-still-failing-developer");

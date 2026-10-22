@@ -6,7 +6,6 @@ import { requireUser } from "@/lib/server/session";
 export async function POST(req: Request) {
   return handle(async () => {
     const u = await requireUser(req);
-    await readJson(req);
-    return ok(await payOwed(u));
+    return ok(await payOwed(u, await readJson(req)));
   });
 }
