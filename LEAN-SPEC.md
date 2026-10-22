@@ -6,6 +6,18 @@ and look, but this version deliberately drops most of its complexity.
 
 ## (Owner, Oct 22, after the evidence batch)
 - (Owner: NO withdraw of sent work. Dropped.)
+- **Charge / Let it go is back (replaces automatic 14-day pay):** when a CONTRACT part has waited 14 days unreviewed,
+  the tester decides: "Charge Nora Lane $8.00" (listing amount, or the asked amount if lower) or "Let it go" (closed,
+  nothing charged). Bell + email to the tester at day 14 ("Nora Lane didn't review your written answers in 14 days:
+  charge $8.00 or let it go"), reminders every 3 days; if they haven't chosen within 14 more days, it's charged
+  automatically. The developer can still Pay or Reject until the tester chooses (Pay/Reject then stops once if the
+  tester chose meanwhile, final if already charged/let go). Parts outside the contract never get this choice (the
+  developer decides; reminders every 3 days).
+- During a hold (including a chargeback hold) the 14-day clocks and the tester's choice wait; the tester sees only
+  "This test is paused. Payment for your work may be delayed."; after the hold the clocks carry on.
+- **Daily retry (owner: keep):** the daily job retries every owed payment once a day, both before the cut-off
+  (payment failure) and during a hold. Success → receipt to the developer, bell to both sides, and the hold lifts if
+  nothing else is owed. Chargebacks are never retried: they stay until the admin marks them resolved.
 - **"Pay what you owe" stops once** if the owed total changed since the page loaded ("Another payment failed
   meanwhile: Cara Diaz's recording $20.00. New total $48.00. Press again to pay $48.00."). It runs at once: all paid →
   hold lifts, "Paid $48.00, thank you" under the button, both sides update by themselves; some still fail → the

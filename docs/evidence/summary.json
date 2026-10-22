@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T16:46:43.985Z",
+  "run": "2026-10-22T16:51:33.449Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjrwz2y00ep7k14jij9n8ty)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjs36ru00077k5ock47y86f)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -167,9 +167,9 @@
       "title": "Auto-pay fails: owed with a 3-day cut-off (developer banner + Payments, tester line)",
       "status": "pass",
       "checks": [
-        "PASS test posted (saw: {\"id\":\"cmvjrxlej00hm7k14vupn3fex\"})",
+        "PASS test posted (saw: {\"id\":\"cmvjs3rjv00347k5oukwxlqcw\"})",
         "PASS both testers joined",
-        "PASS daily job ran (saw: {\"autoPaid\":2,\"holds\":0,\"alerts\":26,\"headsUps\":0})",
+        "PASS daily job ran (saw: {\"autoPaid\":2,\"holds\":0,\"alerts\":32,\"headsUps\":0})",
         "PASS developer banner with the cut-off",
         "PASS tester reads it may be delayed",
         "PASS Payments page lists both"
@@ -185,7 +185,7 @@
       "title": "Cut-off passes: hold pauses every test; joins, invites, Next round, posting, Pay/Reject wait; calls inside the hold cancelled, after it kept; testers still send",
       "status": "pass",
       "checks": [
-        "PASS hold started by the daily job (saw: {\"autoPaid\":0,\"holds\":1,\"alerts\":26,\"headsUps\":0})",
+        "PASS hold started by the daily job (saw: {\"autoPaid\":0,\"holds\":1,\"alerts\":32,\"headsUps\":0})",
         "PASS developer: tests paused",
         "PASS tester: paused line",
         "PASS tester: the call inside the hold was cancelled",
@@ -216,6 +216,7 @@
       "status": "pass",
       "checks": [
         "PASS both failures listed with one button",
+        "PASS total-changed stop",
         "PASS the one still failing is named",
         "PASS hold lifted",
         "PASS tester deadline moved on 2 days (saw: 2026-10-29 → 2026-10-31)",
@@ -225,6 +226,7 @@
       "screenshots": [
         "13-several-owed-developer.png",
         "13-several-owed-tester.png",
+        "13-several-total-changed-developer.png",
         "13-several-one-still-failing-developer.png",
         "13-several-all-paid-developer.png",
         "13-several-all-paid-tester.png"
