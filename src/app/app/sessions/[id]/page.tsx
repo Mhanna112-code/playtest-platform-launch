@@ -93,7 +93,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           seenAt={seenAt}
           canRequest={!refusal && !blockedPair && !c.test.developer.holdStartedAt}
           targets={[{ contractId: c.id, name: dev, rate: "" }]}
-          requests={(await db.callRequest.findMany({ where: { contractId: c.id, status: "pending", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } })).map((r) => ({ id: r.id, times: (r.times.length ? r.times : [r.startsAt]).map((d) => d.toISOString()), weeks: r.weeks, mine: r.fromSide === "tester", who: dev, contractId: c.id, rate: r.askRateCents != null ? `you ask ${money(r.askRateCents).replace(/\.00$/, "")}/h` : rateLabel(c.liveRateCents, c.liveRateCents) }))}
+          requests={(await db.callRequest.findMany({ where: { contractId: c.id, status: "pending", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } })).map((r) => ({ id: r.id, times: (r.times.length ? r.times : [r.startsAt]).map((d) => d.toISOString()), weeks: r.weeks, repeat: r.repeat, mine: r.fromSide === "tester", who: dev, contractId: c.id, rate: r.askRateCents != null ? `you ask ${money(r.askRateCents).replace(/\.00$/, "")}/h` : rateLabel(c.liveRateCents, c.liveRateCents) }))}
         />
       </section>
       {c.calls.filter((x) => !x.review && x.status === "booked" && x.startsAt <= now).map((x) => (

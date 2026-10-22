@@ -4,9 +4,8 @@ import { displayName, fmtDate, fmtDateTime, money, pronouns } from "@/lib/format
 import { bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, defaultCallMinutes, choiceNoteLine, closesInLine, lateLabel, termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
-import { roomUrl } from "@/lib/server/calls";
 import { Chat } from "@/components/Chat";
-import { CallPanel } from "./CallPanel";
+import { DevCallPanel, type DevCall, type DevTester } from "./DevCallPanel";
 import { CallLength } from "./CallLength";
 import { InvitePanel } from "./InvitePanel";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
@@ -16,7 +15,6 @@ import { paidLines } from "@/lib/server/paid";
 import { termsRowLines } from "@/lib/server/terms";
 import { BlockButton } from "@/components/BlockButton";
 import { Applications } from "./Applications";
-import { CallRequests } from "@/components/CallRequests";
 import { rateLabel } from "@/lib/server/requests";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
@@ -72,8 +70,43 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const soon = t.openUntil && t.openUntil > new Date() && t.openUntil.getTime() - Date.now() < 3 * 86_400_000;
   const now = new Date();
   const lateOf = (c: { dueAt: Date; tester: { name: string; email: string } }, x: { createdAt: Date }) => (isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(c.tester), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined);
-  const booked = t.contracts.flatMap((c) => c.calls.filter((x) => x.status === "booked" && !x.review).map((x) => ({ ...x, name: displayName(c.tester), late: lateOf(c, x), rateText: rateLabel(x.rateCents, c.liveRateCents) })));
   const partPaid = (id: string) => payments.filter((p) => (p.submissionId === id || p.callId === id) && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
+  // The developer's live-call panel: one row per working tester (terms like the parts listing) and their calls/requests.
+  const whole = (c: number | null) => money(c).replace(/\.00$/, "");
+  const devTesters: DevTester[] = working.map((c) => {
+    const subOf = (kind: string) => c.submissions.find((x) => x.kind === kind);
+    const part = (label: string, cents: number | null, kind: string) => {
+      if (cents == null) return null;
+      const sub = subOf(kind);
+      return sub ? `${label} sent, paid ${whole(partPaid(sub.id))} of ${whole(cents)}` : `${label} not sent`;
+    };
+    const callPaid = payments.filter((x) => x.contractId === c.id && x.callId && (x.status === "charged" || x.status === "not_set_up")).reduce((a, x) => a + x.amountCents, 0);
+    const terms = [
+      `due ${fmtDate(c.dueAt).replace(/, \d{4}$/, "")}`,
+      part("Written", c.writtenCents, "written"),
+      part("Recording", c.recordingCents, "recording"),
+      c.liveRateCents != null ? `Live call ${whole(c.liveRateCents)}/h, ${whole(callPaid)} paid so far` : "Live call not in contract",
+    ].filter(Boolean).join(" · ");
+    const toCall = (x: (typeof c.calls)[number]): DevCall => ({ id: x.id, when: x.startsAt.toISOString(), minutes: x.minutes, rate: rateLabel(x.rateCents, c.liveRateCents), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, late: lateOf(c, x) });
+    const live = c.calls.filter((x) => x.status === "booked" && !x.review);
+    const setIds = [...new Set(live.filter((x) => x.setId).map((x) => x.setId!))];
+    const sets = setIds.map((sid) => {
+      const cs = live.filter((x) => x.setId === sid).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+      const daily = cs.length > 1 && cs[1].startsAt.getTime() - cs[0].startsAt.getTime() < 2 * 86_400_000;
+      const next = cs.find((x) => x.startsAt > now) ?? cs[cs.length - 1];
+      return { id: sid, label: `${daily ? "Daily" : "Weekly"}: ${cs[0].startsAt.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })} · ${cs.length} calls, next ${fmtDate(next.startsAt).replace(/, \d{4}$/, "")} · ${rateLabel(cs[0].rateCents, c.liveRateCents)}`, calls: cs.map(toCall) };
+    });
+    const booked = new Set(c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => x.setId ?? x.id)).size;
+    return {
+      contractId: c.id, name: displayName(c.tester), terms, booked,
+      calls: live.filter((x) => !x.setId).map(toCall),
+      sets,
+      requests: reqs.filter((r) => r.contractId === c.id).map((r) => ({
+        id: r.id, times: (r.times.length ? r.times : [r.startsAt]).map((d) => d.toISOString()), weeks: r.weeks, repeat: r.repeat, mine: r.fromSide === "developer",
+        rate: r.askRateCents != null ? `asks ${whole(r.askRateCents)}/h` : rateLabel(c.liveRateCents, c.liveRateCents),
+      })),
+    };
+  });
   const payments = await db.payment.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
   return (
     <>
@@ -119,25 +152,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           sent={invites.map((i) => ({ id: i.id, name: people.get(i.testerId) ?? "?", status: i.status === "joined" ? "joined" : expired ? "expired" : "waiting for them to join" }))}
         />
       )}
-      <CallPanel
-        testId={t.id}
-        seenAt={seenAt}
-        booked={booked.map((b) => ({ id: b.id, when: b.startsAt.toISOString(), minutes: b.minutes, name: b.name, room: roomUrl(b, b.slot), canCancel: !cancelNeedsReason(b.startsAt, now), started: b.startsAt <= now, reported: !!b.noShowBy, late: b.late, rate: b.rateText }))}
-      />
-      <section className="panel" aria-label="Call requests">
-        <h3>Call requests</h3>
-        <CallRequests
-          side="developer"
-          path={`/api/tests/${t.id}`}
-          seenAt={seenAt}
-          canRequest={t.status === "open" && working.length > 0}
-          targets={working.map((c) => ({ contractId: c.id, name: displayName(c.tester), rate: c.liveRateCents == null ? "not in contract" : `${money(c.liveRateCents).replace(/\.00$/, "")}/h` }))}
-          requests={reqs.map((r) => {
-            const k = t.contracts.find((c) => c.id === r.contractId)!;
-            return { id: r.id, times: (r.times.length ? r.times : [r.startsAt]).map((d) => d.toISOString()), weeks: r.weeks, mine: r.fromSide === "developer", who: displayName(k.tester), contractId: r.contractId, rate: r.askRateCents != null ? `asks ${money(r.askRateCents).replace(/\.00$/, "")}/h` : rateLabel(k.liveRateCents, k.liveRateCents) };
-          })}
-        />
-      </section>
+      <DevCallPanel testId={t.id} seenAt={seenAt} canRequest={t.status === "open"} testers={devTesters} />
       {saved && (
         <p className="ok">
           {Number(offered) > 0 ? `Saved. Offered the new terms to ${offered} working tester${Number(offered) === 1 ? "" : "s"}.` : "Saved. New testers join on the new listing; testers already in keep their contract."}

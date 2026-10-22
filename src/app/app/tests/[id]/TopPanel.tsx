@@ -51,7 +51,7 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
               </button>
             )}
             <a className="btn-ghost" href={`/app/tests/${p.id}/edit`}>Edit</a>
-            <a className="btn-ghost" href="#calls">Offer call times / book</a>
+            <a className="btn-ghost" href="#calls">Live calls</a>
             <button className="btn-ghost" onClick={() => setOpen(open === "end" ? "" : "end")} disabled={p.working.length === 0}>
               End early
             </button>
