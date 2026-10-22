@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T18:59:25.876Z",
+  "run": "2026-10-22T19:32:46.730Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjwnndq00077kgse4q6dqw8)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjxukaa00077kvo7snuqky5)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -167,7 +167,7 @@
       "title": "Charge declined: owed with a 3-day cut-off (developer banner + Payments, tester line); a second failure pauses at once",
       "status": "pass",
       "checks": [
-        "PASS test posted (saw: {\"id\":\"cmvjwoh3o003m7kgs5nz5uahs\"})",
+        "PASS test posted (saw: {\"id\":\"cmvjxv9dg003m7kvoi5j2cohm\"})",
         "PASS both testers joined",
         "PASS tester offered the choice",
         "PASS developer banner with the cut-off",
@@ -356,6 +356,25 @@
         "19-application-developer.png",
         "19-accepted-developer.png",
         "19-accepted-tester.png"
+      ]
+    },
+    {
+      "id": "20",
+      "title": "Call requests: both sides pick the same time → booked at once; accepting a withdrawn request is refused",
+      "status": "pass",
+      "checks": [
+        "PASS tester's request is listed",
+        "PASS developer sees the request",
+        "PASS booked at once (both picked the same time) (saw: 1)",
+        "PASS tester told: you both picked",
+        "PASS accept on a withdrawn request refused"
+      ],
+      "screenshots": [
+        "20-requested-tester.png",
+        "20-request-seen-developer.png",
+        "20-auto-booked-developer.png",
+        "20-auto-booked-tester.png",
+        "20-accept-withdrawn-refused-developer.png"
       ]
     }
   ],

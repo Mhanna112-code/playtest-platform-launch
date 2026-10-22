@@ -680,6 +680,48 @@ async function signIn(page, email) {
     await both("accepted", t3);
   });
 
+  await flow("20", "Call requests: both sides pick the same time → booked at once; accepting a withdrawn request is refused", async () => {
+    const localAt = (days) => {
+      const d = new Date(Date.now() + days * 86400000);
+      d.setSeconds(0, 0);
+      return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    };
+    const dee = deeName;
+    // Dee requests a time.
+    await t2.goto(`/app/sessions/${SD}`);
+    await t2.fill("section[aria-label='Call requests'] input[type=datetime-local]", localAt(8));
+    await t2.click("section[aria-label='Call requests'] >> text=Request a time");
+    await t2.waitForTimeout(1500);
+    check("tester's request is listed", await has(t2, "text=You requested"));
+    await shot(t2, "requested-tester");
+    // The developer requests the same time with Dee: booked at once.
+    await dev.goto(t11Url());
+    check("developer sees the request", await has(dev, `text=${dee} requested`));
+    await shot(dev, "request-seen-developer");
+    const sel = dev.locator("section[aria-label='Call requests'] select");
+    if (await sel.count()) await sel.selectOption({ label: dee });
+    await dev.fill("section[aria-label='Call requests'] input[type=datetime-local]", localAt(8));
+    await dev.click("section[aria-label='Call requests'] >> text=Request a time");
+    await dev.waitForTimeout(1500);
+    const booked = sql(`select count(*) from "Call" where "contractId" = '${SD}' and status = 'booked' and "startsAt" > now() + interval '7 days'`);
+    check("booked at once (both picked the same time)", Number(booked) >= 1, booked);
+    await t2.goto("/app/notifications");
+    check("tester told: you both picked", await has(t2, "text=Booked: you both picked"));
+    await both("auto-booked", t2);
+    // Accepting a request withdrawn meanwhile: refused for good under Accept.
+    await t2.goto(`/app/sessions/${SD}`);
+    await t2.fill("section[aria-label='Call requests'] input[type=datetime-local]", localAt(9));
+    await t2.click("section[aria-label='Call requests'] >> text=Request a time");
+    await t2.waitForTimeout(1500);
+    await dev.goto(t11Url()); // the developer's page shows the request
+    await t2.reload();
+    await t2.click("section[aria-label='Call requests'] >> button:has-text('Withdraw')");
+    await t2.waitForTimeout(1500);
+    await dev.click("section[aria-label='Call requests'] >> button:has-text('Accept')");
+    check("accept on a withdrawn request refused", await has(dev, "text=withdrew this request at"));
+    await shot(dev, "accept-withdrawn-refused-developer");
+  });
+
   await browser.close();
   summary.pass = summary.flows.every((f) => f.status === "pass");
   fs.writeFileSync(path.join(OUT, "summary.json"), JSON.stringify(summary, null, 2));
