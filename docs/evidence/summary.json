@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T15:25:30.663Z",
+  "run": "2026-10-22T16:01:51.726Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjp0i32000z7ky4bjmkafuv)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjqbfsk00547k3ooqyafwwz)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -95,6 +95,35 @@
         "07-chat.png",
         "07-payments.png",
         "07-admin.png"
+      ]
+    },
+    {
+      "id": "08",
+      "title": "Invite: the developer invites a tester from the test page; the tester sees the invite",
+      "status": "pass",
+      "checks": [
+        "PASS box under Invite names who was invited",
+        "PASS tester sees the invite"
+      ],
+      "screenshots": [
+        "08-invite-panel.png",
+        "08-invited.png",
+        "08-invite-received.png"
+      ]
+    },
+    {
+      "id": "09",
+      "title": "Payment hold: tests pause, the tester reads only 'paused', Pay what you owe lifts it",
+      "status": "pass",
+      "checks": [
+        "PASS developer sees the paused box",
+        "PASS tester reads only that the test is paused",
+        "PASS hold lifted"
+      ],
+      "screenshots": [
+        "09-paused.png",
+        "09-paused.png",
+        "09-resumed.png"
       ]
     }
   ],

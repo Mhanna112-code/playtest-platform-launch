@@ -182,6 +182,42 @@ async function signIn(page, email) {
     await shot(admin, "admin");
   });
 
+  await flow("08", "Invite: the developer invites a tester from the test page; the tester sees the invite", async () => {
+    const t2 = await ctx(PHONE);
+    await signIn(t2, `tester2+${TS}@playtest.test`);
+    await t2.fill("#name", `Dee Moss ${TS % 10000}`);
+    await t2.check("text=test games and get paid");
+    await t2.click("label:has-text('Mac')");
+    await t2.click("label:has-text('English')");
+    await t2.click("text=Continue");
+    await t2.waitForSelector("text=Your sessions");
+    await dev.goto(testUrl);
+    await dev.selectOption('select[aria-label="Device"]', "Mac");
+    await dev.check(`#invite label:has-text('Dee Moss ${TS % 10000}') input`);
+    await shot(dev, "invite-panel");
+    await dev.click("#invite button:has-text('Invite')");
+    check("box under Invite names who was invited", await has(dev, `text=Invited Dee Moss ${TS % 10000}.`));
+    await shot(dev, "invited");
+    await t2.reload();
+    check("tester sees the invite", await has(t2, "text=invited you to"));
+    await shot(t2, "invite-received");
+  });
+
+  await flow("09", "Payment hold: tests pause, the tester reads only 'paused', Pay what you owe lifts it", async () => {
+    const { execFileSync } = require("child_process");
+    execFileSync("psql", ["-h", "localhost", "-p", "5499", "-U", "postgres", "-d", "playtest_lite", "-c", `update "User" set "holdStartedAt" = now() - interval '1 day', "holdReason" = 'unpaid' where email = '${DEV}'`]);
+    await dev.goto(testUrl);
+    check("developer sees the paused box", await has(dev, "text=Your tests are paused."));
+    await shot(dev, "paused");
+    await tester.reload();
+    check("tester reads only that the test is paused", await has(tester, "text=This test is paused. Payment for your work may be delayed."));
+    await shot(tester, "paused");
+    await dev.click("button:has-text('Pay what you owe')");
+    const lifted = await dev.waitForSelector("text=Your tests are paused.", { state: "detached", timeout: 8000 }).then(() => true, () => false);
+    check("hold lifted", lifted);
+    await shot(dev, "resumed");
+  });
+
   await browser.close();
   summary.pass = summary.flows.every((f) => f.status === "pass");
   fs.writeFileSync(path.join(OUT, "summary.json"), JSON.stringify(summary, null, 2));
