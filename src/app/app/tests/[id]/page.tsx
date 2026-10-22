@@ -16,6 +16,7 @@ import { paidLines } from "@/lib/server/paid";
 import { termsRowLines } from "@/lib/server/terms";
 import { BlockButton } from "@/components/BlockButton";
 import { Applications } from "./Applications";
+import { CallRequests } from "@/components/CallRequests";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
@@ -51,6 +52,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   await sweepHeldCalls(u.id);
   const paidKinds = await paidLines(t.contracts.map((c) => c.id));
   const termsRows = await termsRowLines(t.contracts.map((c) => c.id));
+  const reqs = await db.callRequest.findMany({ where: { testId: id, status: "pending", startsAt: { gt: new Date() } }, orderBy: { startsAt: "asc" } });
   const msgs = await db.message.findMany({ where: { testId: id }, orderBy: { createdAt: "asc" }, include: { sender: true }, take: 2000 });
   const pendingApps = await db.application.findMany({ where: { testId: id, status: "pending" }, orderBy: { createdAt: "asc" } });
   const appUsers = await db.user.findMany({ where: { id: { in: pendingApps.map((a) => a.testerId) } }, include: { profile: true } });
@@ -126,6 +128,16 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         open={openSlots.map((s) => ({ id: s.id, when: s.startsAt.toISOString(), minutes: s.minutes, who: s.allowedTesterIds.length ? "only " + s.allowedTesterIds.map((x) => nameOf.get(x) ?? "?").join(", ") : "all testers" }))}
         booked={booked.map((b) => ({ id: b.id, when: b.startsAt.toISOString(), minutes: b.minutes, name: b.name, room: roomUrl(b, b.slot), canCancel: !cancelNeedsReason(b.startsAt, now), started: b.startsAt <= now, reported: !!b.noShowBy, late: b.late }))}
       />
+      <section className="panel" aria-label="Call requests">
+        <h3>Call requests</h3>
+        <CallRequests
+          path={`/api/tests/${t.id}`}
+          seenAt={seenAt}
+          canRequest={t.status === "open" && working.length > 0}
+          targets={working.map((c) => ({ contractId: c.id, name: displayName(c.tester) }))}
+          requests={reqs.map((r) => ({ id: r.id, when: r.startsAt.toISOString(), mine: r.fromSide === "developer", who: displayName(t.contracts.find((c) => c.id === r.contractId)!.tester), contractId: r.contractId }))}
+        />
+      </section>
       {saved && (
         <p className="ok">
           {Number(offered) > 0 ? `Saved. Offered the new terms to ${offered} working tester${Number(offered) === 1 ? "" : "s"}.` : "Saved. New testers join on the new listing; testers already in keep their contract."}

@@ -1,6 +1,7 @@
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { devCancelCall, offerTimes, removeTime, reportNoShow, setCallLength } from "@/lib/server/calls";
 import { cancelInvite, inviteGaps, inviteTesters } from "@/lib/server/invites";
+import { answerRequest, requestTime } from "@/lib/server/requests";
 import { apply, decideApplication, join, withdrawApplication } from "@/lib/server/joining";
 import { addDevSide } from "@/lib/server/payments";
 import { sendChat, sendMessage } from "@/lib/server/messages";
@@ -43,6 +44,10 @@ export async function POST(req: Request, { params }: Ctx) {
         return ok(await addDevSide(u, id, body));
       case "invite":
         return ok(await inviteTesters(u, id, body));
+      case "request-time":
+        return ok(await requestTime(u, String(body.contractId ?? ""), body));
+      case "answer-request":
+        return ok(await answerRequest(u, String(body.contractId ?? ""), body));
       case "invite-check":
         return ok(await inviteGaps(u.id, id, Array.isArray(body.testerIds) ? body.testerIds.map(String) : []));
       case "cancel-invite":

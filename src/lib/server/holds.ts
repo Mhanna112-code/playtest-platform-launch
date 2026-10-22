@@ -49,6 +49,12 @@ export async function startHold(devId: string, reason: string) {
   const tests = await db.test.findMany({ where: { developerId: devId, status: { in: ["open", "closed", "draft"] } } });
   for (const t of tests) {
     // Calls are not cancelled now: only a booked call whose time comes while still on hold (sweepHeldCalls).
+    // Pending call requests close (both told).
+    for (const r of await (await import("./requests")).closeRequests({ contractIds: (await db.contract.findMany({ where: { testId: t.id }, select: { id: true } })).map((x) => x.id) }, "the test is paused")) {
+      const k = await db.contract.findUniqueOrThrow({ where: { id: r.contractId }, include: { tester: true } });
+      await notify(k.tester.email, `Your call request for ${fmtDateTime(r.startsAt)} closed`, ["It closed because the test is paused."], `/app/sessions/${k.id}`);
+      await bell(devId, `The call request for ${fmtDateTime(r.startsAt)} closed: the test is paused.`, `/app/tests/${t.id}#calls`);
+    }
     await db.$transaction((tx) => recordEvent(tx, t.id, "paused", "Your tests are paused until you pay what you owe", false));
   }
   await notify(dev.email, "Your tests are paused", ["Your tests are paused until you pay what you owe: no new testers, invites or calls, and Pay waits.", "Testers can still send work. Pay what you owe in Payments to resume at once."], "/app/payments");

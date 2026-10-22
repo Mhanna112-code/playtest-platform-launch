@@ -43,6 +43,7 @@ export async function blockUser(me: { id: string; email: string; name: string },
     if (c.testerId === otherId) await notify(c.tester.email, `Your session on ${c.title} ended.`, [`Your session on ${c.title} ended. Work you sent is still reviewed.`], `/app/sessions/${c.id}`);
     else await notify(c.test.developer.email, `${displayName(c.tester)}'s session on ${c.title} ended.`, [`${displayName(c.tester)}'s session on ${c.title} ended.`], `/app/tests/${c.testId}`);
   }
+  await (await import("./requests")).closeRequests({ contractIds: contracts.map((c) => c.id) }, "the session ended");
   await db.termsOffer.updateMany({ where: { status: "open", contractId: { in: contracts.map((c) => c.id) } }, data: { status: "superseded", decidedAt: now } });
   await db.invite.updateMany({ where: { status: "sent", OR: [{ testerId: otherId, test: { developerId: me.id } }, { testerId: me.id, test: { developerId: otherId } }] }, data: { status: "cancelled" } });
   return { blocked: true, ended: contracts.length };

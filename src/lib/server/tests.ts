@@ -236,6 +236,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
     const cs = await tx.contract.findMany({ where: working(testId), include: { tester: true } });
     await tx.contract.updateMany({ where: working(testId), data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The developer stopped the test." } });
     cancelled = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
+    await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test was stopped", decidedAt: new Date() } });
     await tx.callSlot.updateMany({ where: { testId, status: "open" }, data: { status: "removed" } });
     await recordEvent(tx, testId, "stopped", "The test was stopped", true, { status: "stopped", stoppedAt: new Date() });
     return cs;
@@ -263,6 +264,7 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
     await topPanelGate(tx, testId, body.seenAt, body.confirmed === true);
     await tx.contract.update({ where: { id: c.id }, data: { status: "ended", endKind: "early", endedAt: new Date(), endReason: reason } });
     cancelled = await cancelCallsAhead(tx, [c.id], "The developer ended the work early.");
+    await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the session ended", decidedAt: new Date() } });
     await recordEvent(tx, testId, "ended", `You ended ${name}'s work early`, false, {}, c.id);
     return c;
   });
@@ -384,6 +386,7 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
     await testerGate(tester.id, contractId, c.testId, body);
     await tx.contract.update({ where: { id: c.id }, data: { status: "left", endedAt: new Date() } });
     await cancelCallsAhead(tx, [c.id], `${displayName(tester)} left the test.`);
+    await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the tester left", decidedAt: new Date() } });
     await recordEvent(tx, c.testId, "left", `${displayName(tester)} left the test`, true, {}, c.id);
     return c;
   });

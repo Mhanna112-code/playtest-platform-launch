@@ -54,6 +54,7 @@ export async function offerTimes(dev: U, testId: string, body: Record<string, un
     await recordEvent(tx, testId, "offered", `You offered ${times.length} call time${times.length === 1 ? "" : "s"}`, false);
     return made;
   });
+  await (await import("./requests")).matchOffered(testId);
   return { offered: slots.length };
 }
 
@@ -150,6 +151,7 @@ export async function bookTime(tester: U, contractId: string, body: Record<strin
     return { call, slot };
   });
   await notify(dev.email, `${displayName(tester)} booked a call for “${c0.title}”`, [`${displayName(tester)} booked a live call for ${fmtDateTime(slot.startsAt)} (${slot.minutes} min).`, call.rateCents == null ? "Live calls aren't in their listing: you decide what to pay after the call." : ""], `/app/tests/${c0.testId}#calls`);
+  await (await import("./requests")).closeOnBooking(contractId, slot.startsAt, call.id);
   return { callId: call.id };
 }
 

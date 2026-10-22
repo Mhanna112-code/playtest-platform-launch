@@ -30,11 +30,15 @@ export async function testerChanges(testerId: string, contractId: string, testId
     if (s.status === "open") out.push({ kind: "offered", text: `${isNew ? "A new call time was offered" : "A call time opened up"}: ${fmtDateTime(s.startsAt)}`, createdAt: s.updatedAt });
     else if (!isNew) out.push({ kind: "removed", text: `The call time ${fmtDateTime(s.startsAt)} was ${s.status === "booked" ? "taken" : "removed"}`, createdAt: s.updatedAt });
   }
+  const reqs = await db.callRequest.findMany({ where: { contractId, fromSide: "developer", updatedAt: { gt: seenAt } } });
+  for (const r of reqs) out.push({ kind: "requested", text: r.status === "pending" ? `${dev} requested a call for ${fmtDateTime(r.startsAt)}` : `${dev} ${r.status === "withdrawn" ? "withdrew" : r.status} the call request for ${fmtDateTime(r.startsAt)}`, createdAt: r.updatedAt });
+  const mineDeclined = await db.callRequest.findMany({ where: { contractId, fromSide: "tester", status: "declined", updatedAt: { gt: seenAt } } });
+  for (const r of mineDeclined) out.push({ kind: "requested", text: `${dev} declined your call request for ${fmtDateTime(r.startsAt)}`, createdAt: r.updatedAt });
   for (const call of calls) out.push({ kind: "cancelled", text: `Your call on ${fmtDateTime(call.startsAt)} was cancelled`, createdAt: call.cancelledAt! });
   return out;
 }
 
-const KINDS = ["terms", "paid", "rejected", "offered", "removed", "cancelled", "booked"];
+const KINDS = ["terms", "paid", "rejected", "offered", "removed", "cancelled", "booked", "requested"];
 
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
 export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.") {

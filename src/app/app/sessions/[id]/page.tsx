@@ -14,6 +14,7 @@ import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
 import { ChoiceBox } from "./ChoiceBox";
 import { TesterTop } from "./TesterTop";
+import { CallRequests } from "@/components/CallRequests";
 import { chatMessages } from "@/lib/server/messages";
 import { BlockButton } from "@/components/BlockButton";
 import { openOffer } from "@/lib/server/terms";
@@ -86,6 +87,16 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         mine={c.calls.map((x) => ({ id: x.id, when: x.startsAt.toISOString(), minutes: x.minutes, room: roomUrl(x, x.slot), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, cancelled: blockedPair && x.status !== "cancelled" ? "not available" : cancelledText(x), late: isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined }))}
         lateNote={now > c.dueAt ? `Your deadline was ${fmtDate(c.dueAt).replace(/, \d{4}$/, "")} (a guide, not a limit): a call you book now reads “${bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, ""))}”.` : undefined}
       />
+      <section className="panel" aria-label="Call requests">
+        <h3>Call requests</h3>
+        <CallRequests
+          path={`/api/sessions/${c.id}`}
+          seenAt={seenAt}
+          canRequest={!refusal && !blockedPair && !c.test.developer.holdStartedAt}
+          targets={[{ contractId: c.id, name: dev }]}
+          requests={(await db.callRequest.findMany({ where: { contractId: c.id, status: "pending", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } })).map((r) => ({ id: r.id, when: r.startsAt.toISOString(), mine: r.fromSide === "tester", who: dev, contractId: c.id }))}
+        />
+      </section>
       {c.calls.filter((x) => !x.review && x.status === "booked" && x.startsAt <= now).map((x) => (
         <p key={x.id} className="info">
           Live call on {fmtDateTime(x.startsAt)}: waiting for {dev} to pay. {partLine(callReference(x.rateCents, x.actualMinutes ?? x.minutes).cents, x.askedCents, partPaid.get(x.id) ?? 0)}{failedCalls.has(x.id) && ` ${DELAYED_CALL_LINE}`}
