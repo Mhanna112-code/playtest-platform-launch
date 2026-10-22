@@ -4,6 +4,22 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, NEWEST+3) Every button stops once, including for your own actions in another tab
+- ONE rule for every tester button on the session page AND the join/listing page (Switch/Keep, Send written, Send
+  recording, Charge/Let it go, Dispute, Leave, BLOCK, Request a time, Accept/Decline/Withdraw, Cancel call; Join,
+  Apply, Withdraw application, Accept invite, No thanks): the first press stops once for any reason, the second press
+  goes ahead. Reasons: (A) new terms; (B) developer paid/rejected; (C) developer call changes, INCLUDING the developer
+  accepting the tester's own request, an auto-match booking, and a developer request being taken or closed; (D) the
+  listing changed (join page, as before, spots excepted); (E) ANYTHING the tester did themselves in another tab since
+  this page loaded ("You also did this in another tab: sent your written answers at 3:10 PM").
+- Exceptions: Join call (time-critical) keeps only its final refusals.
+- Developer side: same principle; their own actions in another tab are a stop-once reason on every developer button.
+- The stop box under the pressed button stays live while open: new changes are added to it as the page's auto-refresh
+  picks them up (like the Invite anyway box). No notices are pre-shown under buttons that weren't pressed.
+- Wording: a developer request no longer available -> "The call time Thu, Nov 5 at 3:00 PM is no longer available."
+  A tester never sees another tester's name: "Another tester took this time at 2:10 PM."
+- Remove the leftover Offer-times (callSlot) checks from the stop logic.
+
 ## (Owner, Oct 22, NEWEST+2) Developer live-call panel layout, daily repeats, per-tester limit (wins below)
 - Repeat is "Daily" or "Weekly", 2-8 calls, exactly 1 time (never with "choose one"). Every occurrence is
   clash-checked; once accepted each is an ordinary call (cancelled/paid alone). A daily/weekly set is shown as ONE

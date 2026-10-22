@@ -534,3 +534,14 @@ model CallRequest {
 
   @@index([contractId, status])
 }
+
+/// Everything a person did on a test (from any tab): reason E for the stop-once boxes ("You also did this in another tab").
+model ActionLog {
+  id        String   @id @default(cuid())
+  userId    String
+  testId    String
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([userId, testId, createdAt])
+}
