@@ -347,7 +347,7 @@ async function signIn(page, email) {
     await shot(tp, `${name}-tester`);
   };
 
-  await flow("11", "Auto-pay fails: owed with a 3-day cut-off (developer banner + Payments, tester line)", async () => {
+  await flow("11", "Charge declined: owed with a 3-day cut-off (developer banner + Payments, tester line); a second failure pauses at once", async () => {
     const day = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
     const r = await apiPost(dev, "/api/tests", { title: "Lighthouse Keeper", description: "Keep the light on.", buildUrl: "https://example.com/lighthouse", category: "Puzzle", devices: [], languages: [], spots: 5, writtenCents: "10.00", recordingCents: "15.00", liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7, questions: ["What did you think?"], openUntil: day(10) });
     T11 = r.body.id;
@@ -361,29 +361,6 @@ async function signIn(page, email) {
     await apiPost(tester, `/api/sessions/${SA}/recording-done`, { recordingId: st.body.recordingId });
     await apiPost(tester, `/api/sessions/${SA}/recording-send`, {});
     sql(`update "Submission" set "payBy" = now() - interval '1 minute' where "contractId" = '${SA}'`);
-    sql(`update "User" set "stripePaymentMethodId" = 'pm_card_declined' where id = '${devId}'`);
-    await runCron(); // day 14: Ana is offered Charge / Let it go
-    await tester.goto(`/app/sessions/${SA}`);
-    check("tester offered the choice", await has(tester, "text=didn't review your written answers in 14 days: charge $10.00 or let it go"));
-    await shot(tester, "choice-offered-tester");
-    await tester.click("button:has-text('Charge Nora Lane')");
-    await tester.waitForTimeout(1500);
-    await tester.click("button:has-text('Charge Nora Lane')"); // the recording too
-    await tester.waitForTimeout(1500);
-    const owedN = sql(`select count(*) from "Payment" where "developerId" = '${devId}' and status = 'failed' and "settledAt" is null and "owedUntil" is not null`);
-    check("both charges declined and owed", Number(owedN) >= 2, owedN);
-    await dev.goto(t11Url());
-    check("developer banner with the cut-off", await has(dev, "text=A payment failed. Pay $25.00 by"));
-    await tester.goto(`/app/sessions/${SA}`);
-    check("tester reads it may be delayed", await has(tester, "text=Payment for this part may be delayed."));
-    await both("owed");
-    await dev.goto("/app/payments");
-    check("Payments page lists both", await has(dev, "text=Ana Silva's recording $15.00 · card declined"));
-    await shot(dev, "owed-payments-page-developer");
-  });
-
-  let t3 = null;
-  await flow("12", "Cut-off passes: hold pauses every test; joins, invites, Next round, posting, Pay/Reject wait; calls inside the hold cancelled, after it kept; testers still send", async () => {
     // Three calls for Ana: one held before the hold (to show Pay waiting), one whose time comes during the hold, one after.
     await apiPost(dev, `/api/tests/${T11}/offer-times`, { seenAt: new Date().toISOString(), confirmed: true, times: [2, 3, 4].map((n) => new Date(Date.now() + n * 86400000).toISOString()) });
     const slots = sql(`select id from "CallSlot" where "testId" = '${T11}' order by "startsAt"`).split("\n");
@@ -392,9 +369,37 @@ async function signIn(page, email) {
     await apiPost(tester, `/api/sessions/${SA}/book`, { seenAt: new Date().toISOString(), confirmed: true, slotId: slots[1] });
     sql(`update "Call" set "startsAt" = now() - interval '2 minutes' where "slotId" = '${slots[1]}'`);
     await apiPost(tester, `/api/sessions/${SA}/book`, { seenAt: new Date().toISOString(), confirmed: true, slotId: slots[2] });
+    sql(`update "User" set "stripePaymentMethodId" = 'pm_card_declined' where id = '${devId}'`);
+    await runCron(); // day 14: Ana is offered Charge / Let it go
+    await tester.goto(`/app/sessions/${SA}`);
+    check("tester offered the choice", await has(tester, "text=didn't review your written answers in 14 days: charge $10.00 or let it go"));
+    await shot(tester, "choice-offered-tester");
+    await tester.check("text=charge Nora Lane $10.00 now");
+    await tester.click("button:has-text('Charge Nora Lane')");
+    await tester.waitForTimeout(1500);
+    await dev.goto(t11Url());
+    check("developer banner with the cut-off", await has(dev, "text=A payment failed. Pay $10.00 by"));
+    await tester.goto(`/app/sessions/${SA}`);
+    check("tester reads it may be delayed", await has(tester, "text=Payment for this part may be delayed."));
+    await both("owed");
+    await dev.goto("/app/payments");
+    check("Payments page lists it", await has(dev, "text=Ana Silva's written answers $10.00 · card declined"));
+    await shot(dev, "owed-payments-page-developer");
+    // A second failed payment while one is still owed starts the hold at once.
+    await tester.check("text=charge Nora Lane $15.00 now");
+    await tester.click("button:has-text('Charge Nora Lane')");
+    await tester.waitForTimeout(1500);
+    await dev.goto(t11Url());
+    check("second failure: tests paused at once", await has(dev, "text=Your tests are paused."));
+    await tester.goto(`/app/sessions/${SA}`);
+    await both("second-failure-hold");
+  });
+
+  let t3 = null;
+  await flow("12", "Hold pauses every test; joins, invites, Next round, posting, Pay/Reject wait; calls inside the hold cancelled, after it kept; testers still send", async () => {
     sql(`update "Payment" set "owedUntil" = now() - interval '1 minute' where "developerId" = '${devId}' and status = 'failed' and "settledAt" is null and "owedUntil" is not null`);
-    const out = await runCron();
-    check("hold started by the daily job", out.holds >= 1, JSON.stringify(out));
+    await runCron(); // the cut-off passes (the hold is already on from the second failure in flow 11)
+    check("hold on", sql(`select "holdStartedAt" is not null from "User" where id = '${devId}'`) === "t");
     sql(`update "User" set "holdStartedAt" = now() - interval '10 minutes' where id = '${devId}'`);
     await dev.goto(t11Url());
     check("developer: tests paused", await has(dev, "text=Your tests are paused."));

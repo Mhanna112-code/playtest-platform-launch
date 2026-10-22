@@ -1,24 +1,46 @@
 "use client";
 import { useState } from "react";
 import { api } from "@/lib/client";
+import { money } from "@/lib/format";
 
-/** Day 14 without a review: charge the developer (listing, or the asked amount if lower) or let it go. */
-export function ChoiceBox({ sessionId, submissionId, line }: { sessionId: string; submissionId: string; line: string; by?: string }) {
+/**
+ * Day 14 without a review: charge the developer (the lower of listing and asked, minus what's already been paid for this
+ * part) or let it go. Charge needs its tick; Let it go asks once in place. Nothing left to charge: only "Close it".
+ */
+export function ChoiceBox({ sessionId, submissionId, line, devName, cents }: { sessionId: string; submissionId: string; line: string; devName: string; cents: number }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [ticked, setTicked] = useState(false);
+  const [confirmLetGo, setConfirmLetGo] = useState(false);
   const go = (choice: string) => {
     setBusy(true);
-    api(`/api/sessions/${sessionId}/choose`, { submissionId, choice }).then(() => window.location.reload()).catch((e) => { setErr((e as Error).message); setBusy(false); });
+    api(`/api/sessions/${sessionId}/choose`, { submissionId, choice, tickedCents: choice === "charge" ? cents : undefined })
+      .then(() => window.location.reload())
+      .catch((e) => {
+        setErr((e as Error).message);
+        setBusy(false);
+      });
   };
-  const devName = line.split(" didn't review")[0];
-  const [amount] = line.match(/\$[\d.,]+/) ?? [""];
   return (
     <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
       <p>{line}.</p>
-      <div className="flex flex-wrap gap-2">
-        <button className="btn" disabled={busy} onClick={() => go("charge")}>{`Charge ${devName} ${amount}`}</button>
-        <button className="btn-ghost" disabled={busy} onClick={() => go("letgo")}>Let it go</button>
-      </div>
+      {cents === 0 ? (
+        <button className="btn-ghost" disabled={busy} onClick={() => go("letgo")}>Close it</button>
+      ) : confirmLetGo ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span>Close this with nothing more paid?</span>
+          <button className="btn-ghost" disabled={busy} onClick={() => go("letgo")}>Yes, let it go</button>
+          <button className="btn-ghost" disabled={busy} onClick={() => setConfirmLetGo(false)}>Keep it</button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <label>
+            <input type="checkbox" checked={ticked} onChange={(e) => setTicked(e.target.checked)} /> charge {devName} {money(cents)} now
+          </label>
+          <button className="btn" disabled={busy || !ticked} onClick={() => go("charge")}>{`Charge ${devName} ${money(cents)}`}</button>
+          <button className="btn-ghost" disabled={busy} onClick={() => setConfirmLetGo(true)}>Let it go</button>
+        </div>
+      )}
       {err && <p className="err">{err}</p>}
     </div>
   );

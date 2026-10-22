@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
 import {
-  ADMIN_DIGEST_DAYS, autoPayFor, callCancelledLine, CHARGED_BY_TESTER, countdownDue, INVITE_REMIND_DAYS, choiceLine, failedLine, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, HOLD_ALERT_DAYS, owedUntilFrom, PAUSED_FOR_TESTERS, PAY_WAITS, shiftForHold,
+  ADMIN_DIGEST_DAYS, autoPayFor, chargeAmount, callCancelledLine, CHARGED_BY_TESTER, countdownDue, INVITE_REMIND_DAYS, choiceLine, failedLine, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, HOLD_ALERT_DAYS, owedUntilFrom, PAUSED_FOR_TESTERS, PAY_WAITS, shiftForHold,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { bell, notify, sendSummaries } from "./notify";
@@ -333,7 +333,10 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   if (dev.holdStartedAt) throw new HttpError(409, "paused", "This test is paused: you can choose once it resumes.");
   const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;
   if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");
-  const amount = choice === "charge" ? autoPayFor(s.agreedCents, s.askedCents) ?? 0 : 0;
+  const paidForPart = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
+  const amount = choice === "charge" ? chargeAmount(s.agreedCents, s.askedCents, paidForPart) : 0;
+  if (choice === "charge" && amount === 0) throw new HttpError(409, "nothing_left", "Nothing is left to charge for this part: close it instead.");
+  if (choice === "charge" && body.tickedCents !== amount) throw new HttpError(400, "tick", `Tick “charge ${displayName(dev)} ${money(amount)} now” to charge.`);
   const payKey = `choice-${s.id}`;
   const review = await db.review.create({ data: { submissionId: s.id, contractId: c.id, amountCents: amount, agreedCents: s.agreedCents, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey } }).catch(() => null);
   if (!review) throw new HttpError(409, "done", "This was already settled.");
@@ -352,6 +355,9 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
     const now = new Date();
     await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "failed", failure: (e as Error).message, owedUntil: owedUntilFrom(now) } });
     await notify(c.tester.email, `Payment for your work on “${c.title}” may be delayed`, ["Payment for your work may be delayed."], `/app/sessions/${c.id}`);
+    // A second failed payment while one is still owed starts the hold at once.
+    const stillOwed = await db.payment.count({ where: { developerId: dev.id, status: "failed", settledAt: null, owedUntil: { not: null } } });
+    if (stillOwed >= 2) await startHold(dev.id, "unpaid");
     await notify(dev.email, "A payment failed: pay within 3 days", [`${displayName(tester)} charged ${money(amount)} for their ${label} on “${c.title}”, and your card was declined.`, `Pay it by ${fmtDateTime(owedUntilFrom(now))} or your tests are paused.`], "/app/payments");
   }
   await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their ${label}`, false, {}, c.id));

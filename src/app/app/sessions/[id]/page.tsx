@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
-import { autoPayFor, choiceLine, callReference, cancelNeedsReason, canDispute, closesInLine, DELAYED_CALL_LINE, isLate, PAUSED_FOR_TESTERS, lateLabel, termsLine, testerShare } from "@/lib/rules";
+import { chargeAmount, choiceLine, callReference, cancelNeedsReason, canDispute, closesInLine, DELAYED_CALL_LINE, isLate, PAUSED_FOR_TESTERS, lateLabel, termsLine, testerShare } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
@@ -99,7 +99,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           </p>
         )}
         {written && !written.review && written.choiceOfferedAt && written.choiceBy && !c.test.developer.holdStartedAt && (
-          <ChoiceBox sessionId={c.id} submissionId={written.id} line={choiceLine(dev, "written", autoPayFor(written.agreedCents, written.askedCents) ?? 0)} by={fmtDate(written.choiceBy)} />
+          <ChoiceBox sessionId={c.id} submissionId={written.id} devName={dev} cents={chargeAmount(written.agreedCents, written.askedCents, partPaid.get(written.id) ?? 0)} line={choiceLine(dev, "written", chargeAmount(written.agreedCents, written.askedCents, partPaid.get(written.id) ?? 0))} />
         )}
         {written && delayedSubs.has(written.id) ? <p className="info">Payment for this part may be delayed.</p> : written?.review && <TesterReview sessionId={c.id} kind="submission" id={written.id} review={written.review} dispute={written.dispute} />}
         {written?.review ? (
@@ -127,7 +127,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           </p>
         )}
         {recording && !recording.review && recording.choiceOfferedAt && recording.choiceBy && !c.test.developer.holdStartedAt && (
-          <ChoiceBox sessionId={c.id} submissionId={recording.id} line={choiceLine(dev, "recording", autoPayFor(recording.agreedCents, recording.askedCents) ?? 0)} by={fmtDate(recording.choiceBy)} />
+          <ChoiceBox sessionId={c.id} submissionId={recording.id} devName={dev} cents={chargeAmount(recording.agreedCents, recording.askedCents, partPaid.get(recording.id) ?? 0)} line={choiceLine(dev, "recording", chargeAmount(recording.agreedCents, recording.askedCents, partPaid.get(recording.id) ?? 0))} />
         )}
         {recording && delayedSubs.has(recording.id) ? <p className="info">Payment for this part may be delayed.</p> : recording?.review && <TesterReview sessionId={c.id} kind="submission" id={recording.id} review={recording.review} dispute={recording.dispute} />}
         <RecordingUpload

@@ -485,3 +485,7 @@ export function countdownDue(deadline: Date | null, now: Date, sent: string[], s
 
 export const ADMIN_DIGEST_DAYS = 3;
 export const INVITE_REMIND_DAYS = 3;
+
+/** "Charge": the lower of listing and asked, minus what's already been paid for that part (0 = only "Close it"). */
+export const chargeAmount = (listingCents: number | null, askedCents: number | null, paidCents: number) =>
+  Math.max(0, (autoPayFor(listingCents, askedCents) ?? 0) - paidCents);

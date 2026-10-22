@@ -30,7 +30,8 @@ describe("Charge / Let it go at day 14", () => {
     const line = "Nora Lane didn't review your written answers in 14 days: charge $8.00 or let it go";
     expect(await db.notification.count({ where: { userId: tester.user.id, text: line } })).toBe(1);
     expect(await db.outboxEmail.count({ where: { to: tester.user.email, subject: line } })).toBe(1);
-    const r = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" });
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe("Tick “charge Nora Lane $8.00 now” to charge.");
+    const r = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 800 });
     expect(r.body).toMatchObject({ choice: "charge", amountCents: 800 });
     expect(await db.outboxEmail.count({ where: { to: dev.user.email, subject: { startsWith: "Receipt: you paid $8.00" } } })).toBe(1);
     // The developer's Pay is now final, naming the tester's choice.
@@ -106,5 +107,24 @@ describe("daily retry of owed payments", () => {
     await cron();
     expect(calls).toBe(1);
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).retriedAt).not.toBeNull();
+  });
+});
+
+describe("charge amount and a second failure", () => {
+  it("charge = lower of listing and asked minus what's already been paid for that part", async () => {
+    const R = await import("@/lib/rules");
+    expect(R.chargeAmount(1000, 800, 0)).toBe(800);
+    expect(R.chargeAmount(1000, 1500, 400)).toBe(600);
+    expect(R.chargeAmount(1000, null, 1000)).toBe(0); // nothing left: only "Close it"
+  });
+
+  it("a second failed payment while one is still owed starts the hold at once", async () => {
+    const { tester, sessionId, sub, dev } = await waiting14();
+    await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
+    await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 500, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + 2 * 86_400_000), retriedAt: new Date() } });
+    await cron();
+    setStripeForTests({ paymentIntents: { create: async () => { throw new Error("declined"); } } } as unknown as Stripe);
+    await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000 });
+    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
   });
 });

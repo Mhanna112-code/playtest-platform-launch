@@ -149,7 +149,7 @@ describe("daily job", () => {
     await cron(); // day 14: the tester is offered the choice
     expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0);
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).not.toBeNull();
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" })).body).toMatchObject({ amountCents: 1000 });
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000 })).body).toMatchObject({ amountCents: 1000 });
     // Outside the contract: never auto-paid; the developer gets a bell reminder every 7 days.
     const x = await setup({ writtenCents: null, questions: [] });
     const j = await joined(x.testId);
@@ -168,7 +168,7 @@ describe("daily job", () => {
     expect(ys.askedCents).toBe(600);
     await db.submission.update({ where: { id: ys.id }, data: { payBy: new Date(Date.now() - 1000) } });
     await cron();
-    expect((await sact(k.sessionId, "choose", k.tester.cookie, { submissionId: ys.id, choice: "charge" })).body).toMatchObject({ amountCents: 600 });
+    expect((await sact(k.sessionId, "choose", k.tester.cookie, { submissionId: ys.id, choice: "charge", tickedCents: 600 })).body).toMatchObject({ amountCents: 600 });
     // Asked higher than the listing: Charge uses the listing (the lower one).
     const z = await setup();
     const m = await joined(z.testId);
@@ -176,7 +176,7 @@ describe("daily job", () => {
     const zs = await db.submission.findFirstOrThrow({ where: { contractId: m.sessionId } });
     await db.submission.update({ where: { id: zs.id }, data: { payBy: new Date(Date.now() - 1000) } });
     await cron();
-    expect((await sact(m.sessionId, "choose", m.tester.cookie, { submissionId: zs.id, choice: "charge" })).body).toMatchObject({ amountCents: 1000 });
+    expect((await sact(m.sessionId, "choose", m.tester.cookie, { submissionId: zs.id, choice: "charge", tickedCents: 1000 })).body).toMatchObject({ amountCents: 1000 });
   });
 
   it("a failed charge unpaid after 3 days starts a hold; Open until heads-ups go 3 days and 1 day before", async () => {
