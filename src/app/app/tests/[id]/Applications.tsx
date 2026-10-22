@@ -1,6 +1,5 @@
 "use client";
 import { ChangesBox } from "@/components/ChangesBox";
-import { useState } from "react";
 import { usePress } from "@/lib/usePress";
 
 type App = { id: string; name: string; note: string; profile: string };

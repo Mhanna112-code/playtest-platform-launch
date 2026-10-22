@@ -13,6 +13,8 @@ and look, but this version deliberately drops most of its complexity.
   first served). The 3-day invite reminders pause while the test is full and resume when it has a spot. Closed
   applicants are NOT told about openings (they may apply again). Developer top box when it fills: "Harbor Run is full ·
   3:10 PM: closed 2 applications. 1 invite stays open until a spot opens."
+  Sending NEW invites while the test is full is NOT allowed: Invite is refused under the button, "Harbor Run is full.
+  Add spots to invite more people." (invites already open stay open).
 - (Owner correction 5) NO SPOT CAP ON INVITES: any number of invites can be open, whatever the spots; lowering spots
   does NOT close invites; re-sent invites are never limited by spots (drop "Not re-invited: … (no spots left)" and the
   "Only 2 spots are left…" refusal). Invites stay open when the test fills (correction 6).

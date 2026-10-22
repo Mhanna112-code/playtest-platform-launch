@@ -67,7 +67,7 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
       </div>
     );
   if (p.mode === "invite" && !p.invited) return <p className="note">This test is invite only.</p>;
-  const applying = p.mode === "apply";
+  const applying = p.mode === "apply" && !p.invited; // an invited tester just joins
   return (
     <div className="space-y-2">
       <label className="block text-sm">

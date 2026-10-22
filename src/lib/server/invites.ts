@@ -4,7 +4,6 @@ import { andList, inviteTesterRefusal, inviteTestRefusal, MAX_ACTIVE_TESTS, term
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { asListing, devGate, devGateIfSeen, needsGap, ownTest, recordEvent } from "./tests";
-import { logEvent } from "./live";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 

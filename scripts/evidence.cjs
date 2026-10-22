@@ -1141,6 +1141,35 @@ async function signIn(page, email) {
     check("new terms on the contract (Written $9.60)", await has(t4, "text=Written $9.60"));
     check("old work kept with its payment", await has(t4, "text=paid $10.00"));
     await shot(t4, "rejoined-session-restored-tester");
+    // (d) The test fills: Cara's Accept takes the last spot; Eve's invite stays open; her Join is refused; a spot opens.
+    const rs = await apiPost(dev, "/api/tests", { title: "Shoal", description: "Swim with the fish.", buildUrl: "https://example.com/shoal", category: "Casual", devices: [], languages: [], spots: 1, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["How many fish?"], openUntil: "", joinMode: "apply" });
+    const TS2 = rs.body.id;
+    await apiPost(dev, `/api/tests/${TS2}/invite`, { seenAt: new Date().toISOString(), confirmed: true, testerIds: [eveId] });
+    await apiPost(t3, `/api/tests/${TS2}/apply`, { note: "Fish!" });
+    await t4.goto(`/app/find/${TS2}`);
+    const appC = sql(`select id from "Application" where "testId" = '${TS2}' and status = 'pending' limit 1`);
+    await apiPost(dev, `/api/tests/${TS2}/application`, { seenAt: new Date().toISOString(), confirmed: true, applicationId: appC, action: "accept" });
+    check("the test is full; Eve's invite stays open", sql(`select count(*) from "Invite" where "testId" = '${TS2}' and status = 'sent'`) === "1");
+    await t4.bringToFront();
+    check("Eve's top box: full right now, the invite stays open", await t4.waitForSelector("[data-live-top] >> text=Shoal is full right now. Your invite stays open", { timeout: 35000 }).then(() => true, () => false));
+    await t4.click("button:has-text('Join this test')");
+    check("Join refused while full (blue, under the button)", await has(t4, "p.err:text-is('Shoal is full right now.')"));
+    await shot(t4, "full-invite-refused-tester");
+    await edit(TS2, { spots: 2 });
+    check("Eve's top box: a spot opened", await t4.waitForSelector("[data-live-top] >> text=A spot opened on Shoal: you can accept Nora Lane's invite now.", { timeout: 35000 }).then(() => true, () => false));
+    await shot(t4, "spot-opened-tester");
+    for (let i = 0; i < 3 && !t4.url().includes("/app/sessions/"); i++) {
+      await t4.click("button:has-text('Join this test')");
+      await t4.waitForTimeout(1500);
+    }
+    check("Eve joined after the spot opened", t4.url().includes("/app/sessions/"), t4.url());
+    // (e) A title change is info only: Eve's press goes through with a note.
+    await edit(TS2, { title: "Shoal 2" });
+    await t4.fill("#a0", "Twelve fish.");
+    await t4.click("button:has-text('Send my written answers')");
+    await t4.waitForTimeout(2500);
+    check("sent (not stopped) and the note shows: renamed", (await has(t4, "text=Done. Also: the test was renamed to Shoal 2 at")) && sql(`select count(*) from "Submission" s join "Contract" c on c.id = s."contractId" where c."testId" = '${TS2}' and c."testerId" = '${eveId}'`) === "1");
+    await shot(t4, "renamed-note-tester");
   });
 
   await browser.close();
@@ -1195,6 +1224,9 @@ async function signIn(page, email) {
     C("Closed application: Accept from another tab gets one final notice", "developer", "26", "26-closed-application-accept-refused-developer.png"),
     C("Closed application in the tester's join-page top box", "tester", "26", "26-application-closed-top-box-tester.png"),
     C("Rejoin: the old session restored with the new prices", "tester", "26", "26-rejoined-session-restored-tester.png"),
+    C("Test full: the invite stays open, Join refused", "tester", "26", "26-full-invite-refused-tester.png"),
+    C("A spot opened: the invited tester is told", "tester", "26", "26-spot-opened-tester.png"),
+    C("Title change is info only: the press went through with a note", "tester", "26", "26-renamed-note-tester.png"),
   ];
   summary.coverage = rows.map((r) => {
     const f = summary.flows.find((x) => x.id === r.flow);
