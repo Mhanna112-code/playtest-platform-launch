@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T16:01:51.726Z",
+  "run": "2026-10-22T16:17:10.920Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjqbfsk00547k3ooqyafwwz)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjquzfu00077kzo2stmrgrq)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -57,16 +57,14 @@
     {
       "id": "05",
       "title": "Developer pays with the one Pay box; the tester sees it",
-      "status": "pass",
+      "status": "fail",
       "checks": [
         "PASS listing amount beside the box",
         "PASS paid so far",
-        "PASS tester sees what they get"
+        "FAIL error: page.waitForSelector: Timeout 15000ms exceeded."
       ],
       "screenshots": [
-        "05-pay-box.png",
-        "05-paid.png",
-        "05-paid.png"
+        "05-pay-box.png"
       ]
     },
     {
@@ -86,16 +84,11 @@
     {
       "id": "07",
       "title": "Chat, payments page and admin",
-      "status": "pass",
+      "status": "fail",
       "checks": [
-        "PASS payments page",
-        "PASS admin page (saw: http://localhost:3400/admin)"
+        "FAIL error: page.waitForSelector: Timeout 15000ms exceeded."
       ],
-      "screenshots": [
-        "07-chat.png",
-        "07-payments.png",
-        "07-admin.png"
-      ]
+      "screenshots": []
     },
     {
       "id": "08",
@@ -125,7 +118,41 @@
         "09-paused.png",
         "09-resumed.png"
       ]
+    },
+    {
+      "id": "10",
+      "title": "Live call payment problems: call length, declined Pay, chargeback hold, Pay what you owe",
+      "status": "pass",
+      "checks": [
+        "PASS Pay box reference = rate × 25 min",
+        "PASS tester: waiting to be paid",
+        "PASS declined line under Pay",
+        "PASS tester: may be delayed",
+        "PASS paid",
+        "PASS webhook accepted (saw: 200)",
+        "PASS stop-once line under the top panel",
+        "PASS hold banner",
+        "PASS tester: paused line",
+        "PASS tester: call cancelled because paused",
+        "PASS developer resumed",
+        "PASS tester resumed (no paused line)"
+      ],
+      "screenshots": [
+        "10-1-dev-call-length.png",
+        "10-1-tester-waiting.png",
+        "10-2-dev-declined.png",
+        "10-2-tester-delayed.png",
+        "10-3-dev-paid.png",
+        "10-3-dev-chargeback-stop-once.png",
+        "10-3-dev-hold-banner.png",
+        "10-3-tester-paused.png",
+        "10-3-tester-call-cancelled.png",
+        "10-4-dev-resumed.png",
+        "10-4-tester-resumed.png",
+        "10-live-call-payment-problems-developer.webm",
+        "10-live-call-payment-problems-tester.webm"
+      ]
     }
   ],
-  "pass": true
+  "pass": false
 }

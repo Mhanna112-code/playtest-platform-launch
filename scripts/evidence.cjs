@@ -5,7 +5,24 @@
 /* eslint-disable */
 const fs = require("fs");
 const path = require("path");
-const { chromium } = require("C:/Users/march/Projects/playtest-platform/node_modules/playwright");
+const os = require("os");
+const PW = "C:/Users/march/Projects/playtest-platform/node_modules/playwright";
+// Video needs Playwright's ffmpeg: use the ffmpeg-static copy in playtest-platform through a private browsers path.
+(function useLocalFfmpeg() {
+  if (process.env.PLAYWRIGHT_BROWSERS_PATH) return;
+  const cache = path.join(process.env.LOCALAPPDATA || "", "ms-playwright");
+  if (fs.existsSync(cache) && fs.readdirSync(cache).some((d) => /^ffmpeg-/.test(d))) return;
+  const rev = require(PW + "/node_modules/playwright-core/browsers.json").browsers.find((b) => b.name === "ffmpeg").revision;
+  const src = "C:/Users/march/Projects/playtest-platform/node_modules/ffmpeg-static/ffmpeg.exe";
+  if (!fs.existsSync(src)) return;
+  const dst = path.join(os.tmpdir(), "playtest-lite-evidence-pw", `ffmpeg-${rev}`, "ffmpeg-win64.exe");
+  if (!fs.existsSync(dst)) {
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.copyFileSync(src, dst);
+  }
+  process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(os.tmpdir(), "playtest-lite-evidence-pw");
+})();
+const { chromium } = require(PW);
 
 const BASE = process.env.BASE || "http://localhost:3400";
 const OUT = path.join(__dirname, "..", "docs", "evidence");
@@ -15,7 +32,7 @@ const PHONE = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isM
 const DESKTOP = { viewport: { width: 1280, height: 900 } };
 
 fs.mkdirSync(OUT, { recursive: true });
-for (const f of fs.readdirSync(OUT)) if (/\.png$/.test(f) || f === "summary.json") fs.rmSync(path.join(OUT, f));
+for (const f of fs.readdirSync(OUT)) if (/\.(png|webm)$/.test(f) || f === "summary.json") fs.rmSync(path.join(OUT, f));
 const summary = { run: new Date(TS).toISOString(), base: BASE, flows: [] };
 let browser, cur;
 
@@ -216,6 +233,88 @@ async function signIn(page, email) {
     const lifted = await dev.waitForSelector("text=Your tests are paused.", { state: "detached", timeout: 8000 }).then(() => true, () => false);
     check("hold lifted", lifted);
     await shot(dev, "resumed");
+  });
+
+  await flow("10", "Live call payment problems: call length, declined Pay, chargeback hold, Pay what you owe", async () => {
+    const { execFileSync } = require("child_process");
+    const sql = (q) => execFileSync("psql", ["-h", "localhost", "-p", "5499", "-U", "postgres", "-d", "playtest_lite", "-t", "-A", "-c", q]).toString().trim();
+    const devId = sql(`select id from "User" where email = '${DEV}'`);
+    // The call from flow 06 becomes a held call (it started an hour ago); the developer's saved card is one the fake declines.
+    sql(`update "Call" c set "startsAt" = now() - interval '1 hour' from "Contract" k where c."contractId" = k.id and k."testId" = (select "testId" from "Contract" where "testerId" = (select id from "User" where email = '${TESTER}') limit 1) and c.status = 'booked'`);
+    sql(`update "User" set "stripeCustomerId" = 'cus_fake_${TS}', "stripePaymentMethodId" = 'pm_card_declined' where id = '${devId}'`);
+    const vdir = fs.mkdtempSync(path.join(os.tmpdir(), "pt-video-"));
+    const vd = await (await browser.newContext({ ...DESKTOP, baseURL: BASE, storageState: await dev.context().storageState(), recordVideo: { dir: vdir, size: DESKTOP.viewport } })).newPage();
+    const vt = await (await browser.newContext({ ...PHONE, baseURL: BASE, storageState: await tester.context().storageState(), recordVideo: { dir: vdir, size: PHONE.viewport } })).newPage();
+    vd.context().setDefaultTimeout(15000);
+    vt.context().setDefaultTimeout(15000);
+    const sessionUrl = tester.url().includes("/app/sessions/") ? tester.url() : null;
+    // A second, future call booked by the tester (it will be cancelled by the hold).
+    await vd.goto(testUrl);
+    const when = new Date(Date.now() + 4 * 86400000);
+    await vd.fill('input[type="datetime-local"]', new Date(when.getTime() - when.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+    await vd.click("text=Offer these times");
+    await vd.waitForSelector("button:has-text('Remove')");
+    await vt.goto(sessionUrl || "/app");
+    await vt.click("button:has-text('Book')");
+    await vt.waitForTimeout(800);
+    // (1) The developer enters 25 minutes: the reference reads rate × 25 min.
+    await vd.goto(testUrl);
+    await vd.fill('input[id^="len-"]', "25");
+    await vd.click("text=Save the length");
+    check("Pay box reference = rate × 25 min", await has(vd, "text=Listing: $30/h × 25 min = $12.50"));
+    await shot(vd, "1-dev-call-length");
+    await vt.reload();
+    check("tester: waiting to be paid", await has(vt, "text=waiting for Nora Lane to pay"));
+    await shot(vt, "1-tester-waiting");
+    // (2) Pay with a card the fake declines.
+    await vd.check("text=charged now: $12.50");
+    await vd.click("button:has-text('Pay')");
+    check("declined line under Pay", await has(vd, "text=Your card was declined, so Ana Silva wasn't paid $12.50 for the call."));
+    await shot(vd, "2-dev-declined");
+    await vt.reload();
+    check("tester: may be delayed", await has(vt, "text=Payment for this call may be delayed."));
+    await shot(vt, "2-tester-delayed");
+    // (3) A working card: Pay succeeds; then the bank reverses it (chargeback webhook).
+    sql(`update "User" set "stripePaymentMethodId" = 'pm_card_visa' where id = '${devId}'`);
+    await vd.click("button:has-text('Pay')");
+    check("paid", await has(vd, "text=Paid $12.50"));
+    await vd.waitForTimeout(1200);
+    await shot(vd, "3-dev-paid");
+    await vd.goto(testUrl); // page loaded: the stop-once marker is now
+    const pi = sql(`select "stripePaymentIntentId" from "Payment" where "developerId" = '${devId}' and kind = 'call' and status = 'charged' order by "createdAt" desc limit 1`);
+    const hook = await fetch(`${BASE}/api/stripe/webhook`, { method: "POST", headers: { "stripe-signature": "fake", "content-type": "application/json" }, body: JSON.stringify({ type: "charge.dispute.created", data: { object: { payment_intent: pi } } }) });
+    check("webhook accepted", hook.ok, hook.status);
+    await vd.click("button:has-text('End early')");
+    await vd.fill("#reason", "Checking the stop-once box");
+    await vd.click("text=End their work now");
+    check("stop-once line under the top panel", await has(vd, "text=Your bank reversed your $12.50 payment for Ana Silva's live call"));
+    await shot(vd, "3-dev-chargeback-stop-once");
+    await vd.reload();
+    check("hold banner", await has(vd, "text=Your tests are paused."));
+    await shot(vd, "3-dev-hold-banner");
+    await vt.reload();
+    check("tester: paused line", await has(vt, "text=This test is paused. Payment for your work may be delayed."));
+    await shot(vt, "3-tester-paused");
+    await vt.goto("/app/notifications");
+    check("tester: call cancelled because paused", await has(vt, "text=was cancelled because the test is paused."));
+    await shot(vt, "3-tester-call-cancelled");
+    // (4) Pay what you owe: resumed on both sides.
+    await vd.click("button:has-text('Pay what you owe')");
+    const lifted = await vd.waitForSelector("text=Your tests are paused.", { state: "detached", timeout: 10000 }).then(() => true, () => false);
+    check("developer resumed", lifted);
+    await shot(vd, "4-dev-resumed");
+    await vt.goto(sessionUrl || "/app");
+    check("tester resumed (no paused line)", !(await vt.isVisible("text=This test is paused.")));
+    await shot(vt, "4-tester-resumed");
+    for (const [pg, tag] of [[vd, "developer"], [vt, "tester"]]) {
+      const v = pg.video();
+      await pg.context().close();
+      if (v) {
+        const file = `10-live-call-payment-problems-${tag}.webm`;
+        await v.saveAs(path.join(OUT, file)).catch(() => {});
+        cur.screenshots.push(file);
+      }
+    }
   });
 
   await browser.close();

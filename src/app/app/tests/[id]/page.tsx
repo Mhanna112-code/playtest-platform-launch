@@ -11,7 +11,7 @@ import { CallLength } from "./CallLength";
 import { InvitePanel } from "./InvitePanel";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { invitable, inviteExpired } from "@/lib/server/invites";
-import { owed } from "@/lib/server/holds";
+import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
 import { PayBox } from "./PayBox";
 import { TopPanel } from "./TopPanel";
@@ -43,7 +43,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const working = t.contracts.filter((c) => c.status === "working");
   const paid = await db.payment.groupBy({ by: ["contractId"], where: { contractId: { in: t.contracts.map((c) => c.id) }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } });
   const paidSoFar = (id: string) => paid.find((p) => p.contractId === id)?._sum.amountCents ?? 0;
-  const [testers, invites, owedList] = await Promise.all([invitable(u.id, id), db.invite.findMany({ where: { testId: id, status: { in: ["sent", "joined"] } }, orderBy: { createdAt: "desc" } }), owed(u.id)]);
+  const [testers, invites, owedList] = await Promise.all([invitable(u.id, id), db.invite.findMany({ where: { testId: id, status: { in: ["sent", "joined"] } }, orderBy: { createdAt: "desc" } }), owedForBox(u.id)]);
   const people = new Map((await db.user.findMany({ where: { id: { in: invites.map((i) => i.testerId) } } })).map((x) => [x.id, displayName(x)]));
   const expired = inviteExpired(t, working.length);
   const soon = t.openUntil && t.openUntil > new Date() && t.openUntil.getTime() - Date.now() < 3 * 86_400_000;
@@ -64,7 +64,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         spotsLine={`${working.length} of ${t.spots} spots used`}
         working={working.map((c) => ({ contractId: c.id, name: displayName(c.tester) }))}
       />
-      {(u.holdStartedAt || owedList.length > 0) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList.map((p) => ({ amountCents: p.amountCents, until: p.owedUntil!.toISOString() }))} />}
+      {(u.holdStartedAt || owedList.length > 0) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} />}
       {soon && <p className="info">{t.title} closes on {fmtDate(t.openUntil!)}: testers should send their work before then.</p>}
       {t.status !== "stopped" && (
         <InvitePanel

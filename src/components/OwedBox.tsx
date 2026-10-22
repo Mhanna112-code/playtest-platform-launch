@@ -4,11 +4,11 @@ import { api } from "@/lib/client";
 import { money } from "@/lib/format";
 
 /** What the developer owes from failed charges, with the cut-off; on hold, every test is paused until it's paid. */
-export function OwedBox({ onHold, owed }: { onHold: boolean; owed: { amountCents: number; until: string }[] }) {
+export function OwedBox({ onHold, owed }: { onHold: boolean; owed: { amountCents: number; until: string | null }[] }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const total = owed.reduce((s, o) => s + o.amountCents, 0);
-  const first = owed[0]?.until;
+  const first = owed.find((o) => o.until)?.until;
   return (
     <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 space-y-2">
       {onHold ? (

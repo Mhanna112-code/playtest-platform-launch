@@ -150,6 +150,10 @@ describe("call length and payment problems on a call", () => {
     const { chargebackOpened } = await import("@/lib/server/holds");
     await chargebackOpened(p.stripePaymentIntentId!);
     expect(await db.testEvent.count({ where: { testId, kind: "chargeback", text: "Your bank reversed your $15.00 payment for Ana Silva's live call" } })).toBe(1);
+    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
+    const { payOwed } = await import("@/lib/server/holds");
+    expect(await payOwed(dev.user)).toEqual({ paid: 1, lifted: true });
+    expect(await db.payment.count({ where: { callId: call.id, kind: "repay", status: "charged" } })).toBe(1);
   });
 });
 

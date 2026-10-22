@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { fmtDateTime, money } from "@/lib/format";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { stripeOn } from "@/lib/server/stripe";
-import { owed } from "@/lib/server/holds";
+import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
 
 export const metadata = { title: "Payments · Playtest" };
@@ -26,7 +26,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     <>
       <h1>Payments</h1>
       {!on && <p className="info">{MESSAGES.off}</p>}
-      {u.isDeveloper && (await owed(u.id).then((o) => (u.holdStartedAt || o.length ? <OwedBox onHold={!!u.holdStartedAt} owed={o.map((p) => ({ amountCents: p.amountCents, until: p.owedUntil!.toISOString() }))} /> : null)))}
+      {u.isDeveloper && (await owedForBox(u.id).then((o) => (u.holdStartedAt || o.length ? <OwedBox onHold={!!u.holdStartedAt} owed={o} /> : null)))}
       {q.error && q.error !== "off" && <p className="err">{MESSAGES[q.error]}</p>}
       {q.saved === "card" && <p className="ok">Card saved.</p>}
       {q.saved === "payout" && <p className="ok">Your payout account is connected.</p>}

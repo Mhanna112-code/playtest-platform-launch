@@ -94,8 +94,16 @@ export async function payOwed(dev: { id: string }) {
     const r = await charge(u, tester, p.amountCents, `owed-${p.id}-${Date.now()}`, "Playtest: amount owed");
     await db.payment.update({ where: { id: p.id }, data: { ...r, settledAt: new Date(), failure: "" } });
   }
+  // A reversed payment (chargeback) is owed again: paying it back lifts the hold at once.
+  const reversed = await db.payment.findMany({ where: { developerId: dev.id, chargeback: "open" } });
+  for (const p of reversed) {
+    const tester = await db.user.findUniqueOrThrow({ where: { id: p.testerId } });
+    const r = await charge(u, tester, p.amountCents, `repay-${p.id}`, "Playtest: reversed payment paid back");
+    await db.payment.create({ data: { kind: "repay", contractId: p.contractId, callId: p.callId, submissionId: p.submissionId, developerId: p.developerId, testerId: p.testerId, ...r, transferStatus: "none" } });
+    await db.payment.update({ where: { id: p.id }, data: { chargeback: "repaid" } });
+  }
   const lifted = await liftHoldIfClear(dev.id);
-  return { paid: list.length, lifted };
+  return { paid: list.length + reversed.length, lifted };
 }
 
 /** Stripe dispute (the developer's bank reversed a payment): a developer stop-once reason, and a hold starts. */
@@ -202,4 +210,10 @@ export async function adminCases(now = new Date()) {
     ...holds.map((u) => ({ kind: "hold", text: `${u.email} on a payment hold since ${fmtDate(u.holdStartedAt!)} (30 days): close their tests`, link: "/admin#holds" })),
     ...payouts.map((p) => ({ kind: "payout", text: p.transferStatus === "waiting" ? `Payout waiting for a payout account: ${money(p.testerCents)}` : `Failed charge still owed: ${money(p.amountCents)}`, link: "/admin#payouts" })),
   ];
+}
+
+/** For the "Pay what you owe" box: failed charges (with their cut-off) and reversed payments. */
+export async function owedForBox(devId: string) {
+  const [failed, reversed] = await Promise.all([owed(devId), db.payment.findMany({ where: { developerId: devId, chargeback: "open" } })]);
+  return [...failed.map((p) => ({ amountCents: p.amountCents, until: p.owedUntil!.toISOString() })), ...reversed.map((p) => ({ amountCents: p.amountCents, until: null }))];
 }

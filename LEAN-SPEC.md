@@ -4,6 +4,29 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, newest: wins over everything below)
+- **No "extra work" flag or button anywhere.** Testers can always send all three kinds (written answers, recording,
+  live call booking). Their contract stays recorded and is shown in the tester's top panel ("Your contract: written
+  $8, recording $12, live call $40/h"); a part outside it just says "Not in your contract" next to its Send.
+- **Asking an amount when sending:** each Send has an optional "Ask $___ for this" box. Both sides see, with the work:
+  the listing amount (or "Not in your contract"), the amount asked, and "Paid so far for this part: $Z". The
+  developer's Pay box shows the same three and starts at the asked amount if there is one, else the listing amount.
+- **Auto-pay at 14 days:** contract parts pay the listing amount (or the asked amount if lower). Parts outside the
+  contract are NOT auto-paid: they keep waiting and the developer gets a bell reminder every 7 days. (No admin flag.)
+- **No "mark"** wording anywhere, including the tester profile.
+- **Open until heads-up:** bell notification AND a small yellow line with a timer icon at the top of the test page
+  and the tester's session page ("⏱ Harbor Run closes in 2 days 4 hours: send your work before then.").
+- **Email settings:** "Each update" (default) / "Daily summary" / "Weekly summary" / "Monthly summary" / "Off". Sign-in
+  links and payment receipts always send. The bell keeps everything.
+- **Cancelling a call:** either side can cancel any time; within 24 hours of the call a reason is required, and the
+  other side sees it ("Ben Carter cancelled the call on Thu, Nov 5 at 3:00 PM: car trouble."). No penalties.
+- **Calls during a payment hold:** only booked calls whose time falls inside the hold are cancelled (tester told,
+  "…because the test is paused"); calls after the hold lifts stay booked. During the hold the developer can still enter
+  a call's length; Pay/Reject wait.
+- **Several failed payments:** the hold box lists each one ("Ana Silva's written answers $8.00 · card declined
+  Oct 20"…) with one "Pay what you owe ($28.00)" button that retries them all; the hold lifts only when all are paid.
+  If some still fail, the box says which. Chargebacks can't be retried: the admin resolves them (Mark resolved).
+
 ## (Owner, Oct 22, latest batch: wins over the sections below)
 - **Leaving:** testers can leave any time; there are no "marks" in this version, so no "with no mark" wording
   anywhere. Sent work stays payable after leaving. Tester hold line: "This test is paused. Payment for your work may
