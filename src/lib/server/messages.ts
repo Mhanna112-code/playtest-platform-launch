@@ -9,7 +9,8 @@ export async function chatFor(userId: string, contractId: string) {
 }
 
 export async function sendMessage(user: { id: string }, contractId: string, raw: unknown) {
-  await chatFor(user.id, contractId);
+  const c = await chatFor(user.id, contractId);
+  if ((await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) > 0) throw new HttpError(409, "closed", "This chat is closed.");
   const body = typeof raw === "string" ? raw.trim().slice(0, 4000) : "";
   if (!body) throw new HttpError(400, "empty", "Type a message first.");
   return db.message.create({ data: { contractId, senderId: user.id, body } });

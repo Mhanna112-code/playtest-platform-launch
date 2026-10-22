@@ -138,6 +138,7 @@ export async function bookTime(tester: U, contractId: string, body: Record<strin
     if (t.status !== "open") throw new HttpError(409, "closed", t.status === "stopped" ? "This test was stopped, so calls can't be booked." : "This test was closed, so calls can't be booked.");
     const slot = await tx.callSlot.findUnique({ where: { id: slotId } });
     if (!slot || slot.testId !== c.testId || !canSee(slot, tester.id)) throw new HttpError(404, "not_found", "That call time doesn't exist.");
+    if ((await tx.block.count({ where: { OR: [{ blockerId: tester.id, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: tester.id }] } })) > 0) throw new HttpError(409, "gone", "This time isn't available.");
     if (slot.status !== "open") throw new HttpError(409, "gone", slot.status === "booked" ? "Someone already booked that time. Pick another." : "That time was removed. Pick another.");
     if (slot.startsAt <= new Date()) throw new HttpError(409, "past", "That time has passed. Pick another.");
     const upcoming = await tx.call.findFirst({ where: { contractId, status: "booked", startsAt: { gt: new Date() } } });

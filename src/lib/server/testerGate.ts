@@ -43,5 +43,5 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   if (isNaN(seenAt.getTime())) return;
   const changes = await testerChanges(testerId, contractId, testId, seenAt);
   const r = stopOnce(changes, seenAt, false, KINDS);
-  if (!r.go) throw new HttpError(409, "stop_once", tail, { changes: r.changes.map((e) => ({ text: e.text, at: e.createdAt })), tail });
+  if (!r.go) throw new HttpError(409, "stop_once", tail, { changes: r.changes.map((e) => ({ text: e.text, at: e.createdAt })), tail, top: r.changes.some((e) => e.kind === "terms") });
 }

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { api } from "@/lib/client";
 import { stopBox, type StopBox } from "@/lib/topStop";
@@ -10,6 +10,11 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
   const [offerId, setOfferId] = useState(offer?.id ?? "");
   const [confirmed, setConfirmed] = useState(false);
   const [err, setErr] = useState("");
+  useEffect(() => {
+    const on = (e: Event) => setBox((e as CustomEvent).detail as StopBox);
+    window.addEventListener("tester-top", on);
+    return () => window.removeEventListener("tester-top", on);
+  }, []);
   if (!offer) return null;
   const decide = (choice: string) =>
     api(`/api/sessions/${sessionId}/terms`, { offerId, choice, seenAt, confirmed })

@@ -73,7 +73,8 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
       if (contracts.some((c) => c.testerId === p.id)) continue; // joined: no longer in the list
       if (invites.some((i) => i.testerId === p.id && i.status === "sent")) continue; // already invited
       const active = await tx.contract.count({ where: { testerId: p.id, status: "working" } });
-      const why = inviteTesterRefusal(name, { suspended: !!p.suspendedAt, blocked: false, deleted: !p.isTester, activeTests: active });
+      const blocked = (await tx.block.count({ where: { OR: [{ blockerId: dev.id, blockedId: p.id }, { blockerId: p.id, blockedId: dev.id }] } })) > 0;
+      const why = inviteTesterRefusal(name, { suspended: !!p.suspendedAt, blocked, deleted: !p.isTester, activeTests: active });
       if (why) {
         others.push(why);
         continue;

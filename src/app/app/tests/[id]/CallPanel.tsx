@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
+import { JoinCall } from "@/components/JoinCall";
 
 type Slot = { id: string; when: string; minutes: number; who: string };
 type Booked = { id: string; when: string; minutes: number; name: string; room: string; canCancel: boolean; started: boolean; reported: boolean };
@@ -34,7 +35,7 @@ export function CallPanel(p: { testId: string; seenAt: string; minutes: number; 
               {p.booked.map((b) => (
                 <li key={b.id} className="flex flex-wrap items-center gap-2">
                   <span className="mr-auto">{fmt(b.when)} · {b.minutes} min · {b.name}</span>
-                  {!b.started && <a className="btn-ghost" href={b.room} target="_blank" rel="noreferrer">Join call</a>}
+                  {!b.started && <JoinCall callId={b.id} />}
                   {!b.started && (b.canCancel ? <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: b.id }, "cancel-" + b.id)}>Cancel the call</button> : (
                     <span className="inline-flex gap-2">
                       <input className="input w-56" placeholder="Why? (less than 24 hours away)" value={report["c" + b.id] ?? ""} onChange={(e) => setReport({ ...report, ["c" + b.id]: e.target.value })} />
@@ -43,7 +44,7 @@ export function CallPanel(p: { testId: string; seenAt: string; minutes: number; 
                   ))}
                   {b.started && !b.reported && (
                     <span className="inline-flex gap-2">
-                      <a className="btn-ghost" href={b.room} target="_blank" rel="noreferrer">Join call</a>
+                      <JoinCall callId={b.id} />
                       <input className="input w-56" placeholder={`${b.name} didn't show up / was late…`} value={report[b.id] ?? ""} onChange={(e) => setReport({ ...report, [b.id]: e.target.value })} />
                       <button className="btn-ghost" disabled={busy} onClick={() => go("no-show", { callId: b.id, note: report[b.id] ?? "" }, "noshow-" + b.id)}>Report a problem</button>
                     </span>
@@ -79,6 +80,7 @@ export function CallPanel(p: { testId: string; seenAt: string; minutes: number; 
             <fieldset className="text-sm">
               <legend className="label">Who can book</legend>
               <label className="mr-4"><input type="radio" checked={all} onChange={() => setAll(true)} /> All testers</label>
+              {all && <span className="note mr-4">People you&apos;ve blocked can&apos;t book.</span>}
               <label><input type="radio" checked={!all} onChange={() => setAll(false)} /> Only:</label>
               {!all && p.testers.map((t) => (
                 <label key={t.id} className="ml-3"><input type="checkbox" checked={ticked.includes(t.id)} onChange={(e) => setTicked(e.target.checked ? [...ticked, t.id] : ticked.filter((x) => x !== t.id))} /> {t.name}</label>

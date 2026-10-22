@@ -80,7 +80,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
           {sentBefore ? "Send the updated recordings" : "Send my recording"}
         </button>
       )}
-      <ChangesBox changes={box?.changes ?? null} tail={box?.tail} />
+      <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {err && <p className="err">{err}</p>}
     </div>
   );

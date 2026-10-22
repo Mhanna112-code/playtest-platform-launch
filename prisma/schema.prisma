@@ -465,3 +465,14 @@ model TermsOffer {
 
   @@index([contractId, createdAt])
 }
+
+/// Either side can block the other. Never revealed to the blocked person.
+model Block {
+  id        String   @id @default(cuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+}

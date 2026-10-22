@@ -14,6 +14,7 @@ import { invitable, inviteExpired } from "@/lib/server/invites";
 import { owedForBox, sweepHeldCalls } from "@/lib/server/holds";
 import { paidLines } from "@/lib/server/paid";
 import { termsRowLines } from "@/lib/server/terms";
+import { BlockButton } from "@/components/BlockButton";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
@@ -50,6 +51,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   await sweepHeldCalls(u.id);
   const paidKinds = await paidLines(t.contracts.map((c) => c.id));
   const termsRows = await termsRowLines(t.contracts.map((c) => c.id));
+  const blockedIds = new Set((await db.block.findMany({ where: { blockerId: u.id } })).map((b) => b.blockedId));
   const [testers, invites, owedList] = await Promise.all([invitable(u.id, id), db.invite.findMany({ where: { testId: id, status: { in: ["sent", "joined"] } }, orderBy: { createdAt: "desc" } }), owedForBox(u.id)]);
   const people = new Map((await db.user.findMany({ where: { id: { in: invites.map((i) => i.testerId) } } })).map((x) => [x.id, displayName(x)]));
   const expired = inviteExpired(t, working.length);
@@ -114,6 +116,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             </p>
             <p className="text-sm">{paidKinds.get(c.id)}</p>
             {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}
+            {blockedIds.has(c.testerId) ? <p className="note">You blocked {displayName(c.tester)}. Unblock in Settings → Blocked people.</p> : <BlockButton userId={c.testerId} name={displayName(c.tester)} effect="Their session ends now (work they sent stays payable), calls between you are cancelled, and chat closes." />}
             {c.submissions.length === 0 && c.calls.length === 0 && <p className="note">Nothing sent yet.</p>}
             {c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).map((x) => (
               <div key={x.id} className="space-y-2 rounded-lg border border-slate-200 p-3">

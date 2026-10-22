@@ -42,7 +42,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       </div>
       <label className="block text-sm">Ask $ <input className="input inline w-24" inputMode="decimal" placeholder="optional" value={ask} onChange={(e) => setAsk(e.target.value)} /> for this</label>
       <button className="btn" disabled={busy}>{busy ? "Sending…" : update ? "Send the updated answers" : "Send my written answers"}</button>
-      <ChangesBox changes={box?.changes ?? null} tail={box?.tail} />
+      <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {msg && <p className={msg.ok ? "ok" : "err"}>{msg.text}</p>}
     </form>
   );
@@ -77,7 +77,7 @@ export function LeaveButton({ sessionId, seenAt }: { sessionId: string; seenAt: 
             Leave the test
           </button>{" "}
           <button className="btn-ghost" onClick={() => setSure(false)}>Stay</button>
-          <ChangesBox changes={box?.changes ?? null} tail={box?.tail} />
+          <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
         </div>
       )}
       {err && <p className="err">{err}</p>}
@@ -120,7 +120,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt }: { sessionId: string
       >
         Send the dispute
       </button>
-      <ChangesBox changes={box?.changes ?? null} tail={box?.tail} />
+      <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {err && <p className="err">{err}</p>}
     </div>
   );

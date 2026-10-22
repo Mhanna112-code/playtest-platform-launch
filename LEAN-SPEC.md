@@ -4,6 +4,22 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, very latest)
+- **Placement refinement:** tester stop-once boxes appear under the pressed button for every reason EXCEPT new terms:
+  when new terms are the reason, the page scrolls to the offer box at the top (Switch / Keep) and the line shows
+  there. Every press always brings the user to where the result is shown.
+- **Block (both sides can block the other):** from a tester row / the test page (developer) or the session page /
+  chat (tester). Effects at once: their sessions together end (the tester's sent work stays payable and reviewable;
+  disputes still allowed), booked calls between them are cancelled, neither can book or join a call with the other,
+  no invites or joins to the blocker's tests, chat between them closes. Never revealed: the blocked side reads
+  neutral lines ("Your session on Harbor Run ended.", "Ben Carter can't be invited right now.", "This time isn't
+  available."). Unblock from Settings → Blocked people (nothing reopens by itself).
+- "Who can book: anyone" shows the hint "People you've blocked can't book."
+- Join call is refused (blue, under Join) when: the call was cancelled; it hasn't opened yet (opens 10 min before:
+  "You can join from 2:50 PM."); it's over (30 min after its end); the test is paused (hold), stopped, or the tester's
+  session ended or they left; either side blocked the other ("This call isn't available."); the call was reported as a
+  no-show.
+
 ## (Owner, Oct 22, newest: placement) EVERY stop-once box and every refusal, on both sides, is a BLUE notice
 ## directly under the button that was pressed (the page scrolls to it). This replaces "top of the session page" and
 ## "under the panel" placements. Live lines (bell, auto-updating lines) are unchanged.

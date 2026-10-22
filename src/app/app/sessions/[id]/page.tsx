@@ -14,6 +14,7 @@ import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
 import { ChoiceBox } from "./ChoiceBox";
 import { TesterTop } from "./TesterTop";
+import { BlockButton } from "@/components/BlockButton";
 import { openOffer } from "@/lib/server/terms";
 
 export const metadata = { title: "Your session · Playtest" };
@@ -70,6 +71,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         {c.description && <p className="whitespace-pre-wrap text-sm">{c.description}</p>}
         {c.keepPrivate && <p className="note">You agreed to keep this build and what you see private.</p>}
         {c.status === "working" && <LeaveButton sessionId={c.id} seenAt={seenAt} />}
+        {!(await db.block.count({ where: { blockerId: u.id, blockedId: c.test.developerId } })) && (
+          <BlockButton userId={c.test.developerId} name={dev} effect="Your session with them ends now (work you sent stays payable), calls between you are cancelled, and chat closes." />
+        )}
       </div>
 
       <TesterCallPanel

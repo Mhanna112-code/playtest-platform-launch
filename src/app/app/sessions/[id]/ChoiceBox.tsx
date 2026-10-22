@@ -46,7 +46,7 @@ export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenA
           <button className="btn-ghost" disabled={busy} onClick={() => setConfirmLetGo(true)}>Let it go</button>
         </div>
       )}
-      <ChangesBox changes={box?.changes ?? null} tail={box?.tail} />
+      <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {err && <p className="err">{err}</p>}
     </div>
   );

@@ -242,8 +242,9 @@ export function checkReject(reason: string): Check {
 }
 
 /** The one line a tester reads (and every later press is refused with) once their work was ended by the developer. */
-export function endedLine(c: { status: string; endKind: string; endedAt: Date | null }, devName: string, fmt: (d: Date) => string) {
+export function endedLine(c: { status: string; endKind: string; endedAt: Date | null; title?: string }, devName: string, fmt: (d: Date) => string) {
   if (c.status !== "ended" || !c.endedAt) return "";
+  if (c.endKind === "blocked") return `Your session on ${c.title ?? "this test"} ended.`; // neutral: a block is never revealed
   if (c.endKind === "stopped") return `${devName} stopped the test on ${fmt(c.endedAt)}. Work you sent is still reviewed.`;
   return `${devName} ended your session early on ${fmt(c.endedAt)}. Work you sent is still reviewed.`;
 }
@@ -523,3 +524,27 @@ export const newDueAt = (dueAt: Date, joinedAt: Date, days: number) => new Date(
 /** The Pay box line about day 14: "If you don't pay or reject by Nov 5, Ana Silva can charge you $8.00, her contract price, or let it go." */
 export const choiceNoteLine = (by: string, name: string, cents: number, poss: string) =>
   `If you don't pay or reject by ${by}, ${name} can charge you ${money(cents)}, ${poss} contract price, or let it go.`;
+
+// ---------- Join call (owner) ----------
+
+export const JOIN_OPENS_MIN = 10;
+export const JOIN_CLOSES_AFTER_END_MIN = 30;
+
+/** Why Join call can't open the room now, or "". Shown in blue under Join. */
+export function joinCallRefusal(
+  x: { status: string; startsAt: Date; minutes: number; noShow: boolean; paused: boolean; testStatus: string; contractStatus: string; blocked: boolean; side: "tester" | "developer" },
+  now: Date,
+  fmtTime: (d: Date) => string,
+) {
+  if (x.status === "cancelled") return "This call was cancelled.";
+  if (x.blocked) return "This call isn't available.";
+  if (x.noShow) return "This call was reported as a no-show.";
+  if (x.paused) return "This test is paused.";
+  if (x.testStatus === "stopped") return "This test was stopped.";
+  if (x.contractStatus === "left") return x.side === "tester" ? "You left this test." : "They left the test.";
+  if (x.contractStatus === "ended") return x.side === "tester" ? "Your session ended." : "Their session ended.";
+  const opens = new Date(x.startsAt.getTime() - JOIN_OPENS_MIN * 60_000);
+  if (now < opens) return `You can join from ${fmtTime(opens)}.`;
+  if (now.getTime() > x.startsAt.getTime() + (x.minutes + JOIN_CLOSES_AFTER_END_MIN) * 60_000) return "This call is over.";
+  return "";
+}

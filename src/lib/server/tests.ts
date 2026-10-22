@@ -9,6 +9,7 @@ import { HttpError } from "./http";
 import { notify } from "./notify";
 import { offerNewTerms, testerTermsGate } from "./terms";
 import { testerGate } from "./testerGate";
+import { blockPartners } from "./blocks";
 import { callCancelledLine } from "@/lib/rules";
 
 type Tx = Prisma.TransactionClient;
@@ -300,7 +301,7 @@ export async function nextRound(dev: U, testId: string, body: Record<string, unk
 /** Open tests the tester can join (not their own, not full, not already joined). */
 export async function findTests(tester: U) {
   const tests = await db.test.findMany({
-    where: { status: "open", developerId: { not: tester.id }, developer: { suspendedAt: null }, contracts: { none: { testerId: tester.id } } },
+    where: { status: "open", developerId: { notIn: [tester.id, ...(await blockPartners(tester.id))] }, developer: { suspendedAt: null }, contracts: { none: { testerId: tester.id } } },
     include: { _count: { select: { contracts: { where: { status: "working" } } } }, developer: { select: { name: true, email: true } } },
     orderBy: { createdAt: "desc" },
     take: 100,
@@ -338,6 +339,8 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
         listingVersion: t.listingVersion, terms: termsLine(asListing(t), true), questions: t.questions,
       });
     }
+    if (await tx.block.count({ where: { blockerId: tester.id, blockedId: t.developerId } })) throw new HttpError(409, "blocked", `You blocked ${displayName(dev)}: unblock them in Settings → Blocked people to join.`);
+    if (await tx.block.count({ where: { blockerId: t.developerId, blockedId: tester.id } })) throw new HttpError(409, "closed", "This test isn't taking new testers right now.");
     const gap = needsGap(t, profile);
     if (gap) throw new HttpError(409, "needs", gap);
     const contract = await tx.contract.create({
