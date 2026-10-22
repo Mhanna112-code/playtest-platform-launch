@@ -284,8 +284,18 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
       if (!chosen) throw new HttpError(400, "pick", "Pick one of the times.");
       times = [chosen];
     }
-    const clashes = await acceptClash(c, side, times, r.minutes);
-    if (clashes.length) throw new HttpError(409, "clash", r.weeks ? `These weeks clash: ${clashes.join(" ")}` : clashes[0]);
+    if (r.weeks) {
+      // Weekly: every week is checked; any clash refuses the whole request and names the week(s).
+      const bad: string[] = [];
+      for (const [i, t] of times.entries()) {
+        const cl = await acceptClash(c, side, [t], r.minutes);
+        if (cl.length) bad.push(`week ${i + 1} (${fmtDateTime(t)}): ${cl[0]}`);
+      }
+      if (bad.length) throw new HttpError(409, "clash", `These weeks clash: ${bad.join(" ")}`);
+    } else {
+      const clashes = await acceptClash(c, side, times, r.minutes);
+      if (clashes.length) throw new HttpError(409, "clash", clashes[0]);
+    }
     let first = null;
     for (const t of times) {
       const call = await bookAt(contractId, t, r.minutes, rate);
