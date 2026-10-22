@@ -4,6 +4,18 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, newest addition)
+- **Paid per part, everywhere the developer sees a tester's work:** a line per kind, e.g. "Paid Ana Silva so far:
+  written $8.00 · recording $0.00 · live calls $16.67 (25 min of 1 call)". Same on the tester's own page.
+- **Reminders for unreviewed work outside the contract: every 3 days** (not 7).
+- **Payment receipts to the developer:** every payment that goes through sends the developer a bell notification
+  and a receipt email (always sent, like sign-in links): "Paid Ana Silva $8.00 for written answers on Harbor Run."
+- **Developer's side in a dispute:** when a tester disputes, the developer gets a bell + email and can add their
+  side once (text, optional file) before the admin decides; the admin sees both. The dispute shows on the developer's
+  test page under that piece of work ("Ana Silva disputed: … · Add your side").
+- **Pages update by themselves** while open (about every 20 seconds): paid/rejected lines, paused/resumed lines, the
+  stop-once boxes' live lines, dispute status. Nothing needs a manual reload.
+
 ## (Owner, Oct 22, newest: wins over everything below)
 - **No "extra work" flag or button anywhere.** Testers can always send all three kinds (written answers, recording,
   live call booking). Their contract stays recorded and is shown in the tester's top panel ("Your contract: written

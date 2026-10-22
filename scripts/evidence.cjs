@@ -58,6 +58,7 @@ async function flow(id, title, fn) {
   summary.flows.push(cur);
   console.log("  " + cur.status, cur.checks.filter((c) => c.startsWith("FAIL")).join(" | "));
 }
+const sql = (q) => require("child_process").execFileSync("psql", ["-h", "localhost", "-p", "5499", "-U", "postgres", "-d", "playtest_lite", "-t", "-A", "-c", q]).toString().trim();
 /** Waits (up to 6 s) for the text, so checks don't race the page. */
 const has = (page, sel) => page.waitForSelector(sel.startsWith("text=") || sel.includes(">>") || sel.includes(":") ? sel : `text=${sel}`, { timeout: 6000 }).then(() => true, () => false);
 async function ctx(opts) {
@@ -133,7 +134,7 @@ async function signIn(page, email) {
     await shot(tester, "listing");
     await tester.click("text=Join this test");
     await tester.waitForURL(/\/app\/sessions\//);
-    check("session page shows the contract", await has(tester, "text=Your contract (what you get)"));
+    check("session page shows the contract", await has(tester, "text=Your contract:"));
     await shot(tester, "session");
   });
 
@@ -152,6 +153,7 @@ async function signIn(page, email) {
   });
 
   await flow("05", "Developer pays with the one Pay box; the tester sees it", async () => {
+    sql(`update "User" set "stripeCustomerId" = 'cus_fake_${TS}', "stripePaymentMethodId" = 'pm_card_visa' where email = '${DEV}'`);
     await dev.goto(testUrl);
     check("listing amount beside the box", await has(dev, "text=Listing: $10.00 for written answers"));
     check("paid so far", await has(dev, "text=You've paid Ana Silva $0.00 so far on this test."));
@@ -186,7 +188,7 @@ async function signIn(page, email) {
 
   await flow("07", "Chat, payments page and admin", async () => {
     await tester.fill('input[placeholder^="Message"]', "Thanks! Happy to test round 2.");
-    await tester.click("form >> text=Send");
+    await tester.click("#chat button:has-text('Send')");
     await tester.waitForSelector("text=Happy to test round 2");
     await shot(tester, "chat");
     await dev.goto("/app/payments");
@@ -235,7 +237,7 @@ async function signIn(page, email) {
     await shot(dev, "resumed");
   });
 
-  await flow("10", "Live call payment problems: call length, declined Pay, chargeback hold, Pay what you owe", async () => {
+  await flow("10", "Live call payment problems: call length, declined Pay, chargeback hold, resolved", async () => {
     const { execFileSync } = require("child_process");
     const sql = (q) => execFileSync("psql", ["-h", "localhost", "-p", "5499", "-U", "postgres", "-d", "playtest_lite", "-t", "-A", "-c", q]).toString().trim();
     const devId = sql(`select id from "User" where email = '${DEV}'`);
@@ -289,6 +291,8 @@ async function signIn(page, email) {
     await vd.click("text=End their work now");
     check("stop-once line under the top panel", await has(vd, "text=Your bank reversed your $12.50 payment for Ana Silva's live call"));
     await shot(vd, "3-dev-chargeback-stop-once");
+    sql(`update "User" set "holdStartedAt" = now() - interval '5 minutes' where id = '${devId}'`);
+    sql(`update "Call" set "startsAt" = now() - interval '1 minute' where status = 'booked' and "startsAt" > now() and "contractId" in (select id from "Contract" where "testId" in (select id from "Test" where "developerId" = '${devId}'))`);
     await vd.reload();
     check("hold banner", await has(vd, "text=Your tests are paused."));
     await shot(vd, "3-dev-hold-banner");
@@ -298,8 +302,15 @@ async function signIn(page, email) {
     await vt.goto("/app/notifications");
     check("tester: call cancelled because paused", await has(vt, "text=was cancelled because the test is paused."));
     await shot(vt, "3-tester-call-cancelled");
-    // (4) Pay what you owe: resumed on both sides.
-    await vd.click("button:has-text('Pay what you owe')");
+    // (4) A reversed payment can't be retried: the team marks it resolved, then both sides resume.
+    check("hold box says reversed payments are resolved by the team", await has(vd, "text=Reversed payments can't be retried here"));
+    const adm = await ctx(DESKTOP);
+    await signIn(adm, ADMIN);
+    await adm.goto("/admin");
+    await adm.locator("p", { hasText: "Chargeback open: $12.50" }).first().locator("button:has-text('Mark resolved')").click();
+    await adm.waitForTimeout(1200);
+    await shot(adm, "4-admin-resolved");
+    await vd.reload();
     const lifted = await vd.waitForSelector("text=Your tests are paused.", { state: "detached", timeout: 10000 }).then(() => true, () => false);
     check("developer resumed", lifted);
     await shot(vd, "4-dev-resumed");

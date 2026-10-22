@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T16:17:10.920Z",
+  "run": "2026-10-22T16:27:32.524Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjquzfu00077kzo2stmrgrq)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjr89zz00397kcob29r7wr7)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -57,14 +57,16 @@
     {
       "id": "05",
       "title": "Developer pays with the one Pay box; the tester sees it",
-      "status": "fail",
+      "status": "pass",
       "checks": [
         "PASS listing amount beside the box",
         "PASS paid so far",
-        "FAIL error: page.waitForSelector: Timeout 15000ms exceeded."
+        "PASS tester sees what they get"
       ],
       "screenshots": [
-        "05-pay-box.png"
+        "05-pay-box.png",
+        "05-paid.png",
+        "05-paid.png"
       ]
     },
     {
@@ -84,11 +86,16 @@
     {
       "id": "07",
       "title": "Chat, payments page and admin",
-      "status": "fail",
+      "status": "pass",
       "checks": [
-        "FAIL error: page.waitForSelector: Timeout 15000ms exceeded."
+        "PASS payments page",
+        "PASS admin page (saw: http://localhost:3400/admin)"
       ],
-      "screenshots": []
+      "screenshots": [
+        "07-chat.png",
+        "07-payments.png",
+        "07-admin.png"
+      ]
     },
     {
       "id": "08",
@@ -121,7 +128,7 @@
     },
     {
       "id": "10",
-      "title": "Live call payment problems: call length, declined Pay, chargeback hold, Pay what you owe",
+      "title": "Live call payment problems: call length, declined Pay, chargeback hold, resolved",
       "status": "pass",
       "checks": [
         "PASS Pay box reference = rate × 25 min",
@@ -134,6 +141,7 @@
         "PASS hold banner",
         "PASS tester: paused line",
         "PASS tester: call cancelled because paused",
+        "PASS hold box says reversed payments are resolved by the team",
         "PASS developer resumed",
         "PASS tester resumed (no paused line)"
       ],
@@ -147,6 +155,7 @@
         "10-3-dev-hold-banner.png",
         "10-3-tester-paused.png",
         "10-3-tester-call-cancelled.png",
+        "10-4-admin-resolved.png",
         "10-4-dev-resumed.png",
         "10-4-tester-resumed.png",
         "10-live-call-payment-problems-developer.webm",
@@ -154,5 +163,5 @@
       ]
     }
   ],
-  "pass": false
+  "pass": true
 }
