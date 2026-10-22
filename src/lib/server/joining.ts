@@ -73,7 +73,7 @@ export async function join(tester: U, testId: string, body: Record<string, unkno
     throw new HttpError(409, "apply", "This test takes applications: press Apply to join.");
   }
   if (t.joinMode === "invite" && !(await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } }))) throw new HttpError(409, "invite_only", "This test is invite only.");
-  const c = await joinTest(tester, testId, { ...body, listingVersion: t.listingVersion, confirmed: true });
+  const c = await joinTest(tester, testId, { ...body, listingVersion: t.listingVersion, confirmed: true, anyway: body.anyway === true });
   await db.application.updateMany({ where: { testId, testerId: tester.id, status: "pending" }, data: { status: "joined", decidedAt: new Date() } });
   return c;
 }
@@ -130,7 +130,7 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   const refusal = await joinRefusal(tester.id, testId);
   if (refusal) throw new HttpError(409, "refused", refusal.replace("You've already joined", `${name} already joined`).replace("You can't join more tests right now.", `${name} can't join more tests right now.`));
   const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
-  const c = await joinTest({ ...tester, isTester: true }, testId, { listingVersion: t.listingVersion, confirmed: true });
+  const c = await joinTest({ ...tester, isTester: true }, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true });
   await db.application.update({ where: { id: a.id }, data: { status: "accepted", decidedAt: new Date() } });
   await notify(tester.email, `You're in: ${t.title}`, [`You're in: ${t.title}. Your contract: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { always: false });
   return { accepted: true, sessionId: c.id };
@@ -146,7 +146,7 @@ export async function onSwitchToAnyone(testId: string) {
   for (const a of pending) {
     const tester = await db.user.findUniqueOrThrow({ where: { id: a.testerId } });
     if (sameListingIgnoringMode(a.listing, listingSnapshot(t)) && !(await joinRefusal(tester.id, testId))) {
-      const c = await joinTest(tester, testId, { listingVersion: t.listingVersion, confirmed: true });
+      const c = await joinTest(tester, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true });
       await db.application.update({ where: { id: a.id }, data: { status: "joined", decidedAt: new Date() } });
       await notify(tester.email, `You're in: ${t.title}`, [`You're in: ${t.title}.`], `/app/sessions/${c.id}`);
     } else {

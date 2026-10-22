@@ -1,6 +1,7 @@
 "use client";
+import { Err } from "@/components/Err";
 import { useState } from "react";
-import { api } from "@/lib/client";
+import { api, errOf } from "@/lib/client";
 import { stopBox, type StopBox } from "@/lib/topStop";
 import { ChangesBox } from "@/components/ChangesBox";
 
@@ -34,7 +35,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
       await api(`/api/sessions/${sessionId}/recording-done`, { recordingId });
       window.location.reload();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(errOf(e));
       setBusy(false);
       setProgress(null);
     }
@@ -72,7 +73,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
               window.location.reload();
             } catch (e) {
               const sb = stopBox(e); if (sb) { setBox(sb); setConfirmed(true); }
-              else setErr((e as Error).message);
+              else setErr(errOf(e));
               setBusy(false);
             }
           }}
@@ -81,7 +82,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
         </button>
       )}
       <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
-      {err && <p className="err">{err}</p>}
+      <Err text={err} />
     </div>
   );
 }

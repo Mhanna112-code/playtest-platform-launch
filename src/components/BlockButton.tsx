@@ -1,6 +1,7 @@
 "use client";
+import { Err } from "@/components/Err";
 import { useState } from "react";
-import { api } from "@/lib/client";
+import { api, errOf } from "@/lib/client";
 
 /** Block someone (asks once in place). They are never told. */
 export function BlockButton({ userId, name, effect }: { userId: string; name: string; effect: string }) {
@@ -11,12 +12,12 @@ export function BlockButton({ userId, name, effect }: { userId: string; name: st
     <span className="inline-flex flex-col gap-1 text-sm">
       <span>Block {name}? {effect} They aren&apos;t told. You can unblock in Settings → Blocked people.</span>
       <span className="flex gap-2">
-        <button className="btn-danger" onClick={() => api("/api/blocks", { userId }).then(() => window.location.reload()).catch((e) => setErr((e as Error).message))}>
+        <button className="btn-danger" onClick={() => api("/api/blocks", { userId }).then(() => window.location.reload()).catch((e) => setErr(errOf(e)))}>
           Yes, block {name}
         </button>
         <button className="btn-ghost" onClick={() => setSure(false)}>Cancel</button>
       </span>
-      {err && <span className="err">{err}</span>}
+      <Err text={err} />
     </span>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
+import { Err } from "@/components/Err";
 import { useState } from "react";
-import { api } from "@/lib/client";
+import { api, errOf } from "@/lib/client";
 
 export function WaitlistForm() {
   const [email, setEmail] = useState("");
@@ -20,7 +21,7 @@ export function WaitlistForm() {
           await api("/api/waitlist", { email, role });
           setDone(true);
         } catch (e2) {
-          setErr((e2 as Error).message);
+          setErr(errOf(e2));
         } finally {
           setBusy(false);
         }
@@ -33,7 +34,7 @@ export function WaitlistForm() {
         <option value="both">Both</option>
       </select>
       <button className="btn" disabled={busy}>Join the waitlist</button>
-      {err && <p className="err basis-full">{err}</p>}
+      <Err text={err} />
     </form>
   );
 }

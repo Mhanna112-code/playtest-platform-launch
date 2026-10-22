@@ -1,6 +1,7 @@
 "use client";
+import { Err } from "@/components/Err";
 import { useState } from "react";
-import { api } from "@/lib/client";
+import { api, errOf } from "@/lib/client";
 import { stopBox, type StopBox } from "@/lib/topStop";
 import { ChangesBox } from "@/components/ChangesBox";
 
@@ -23,7 +24,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       window.location.reload();
     } catch (err) {
       const sb = stopBox(err); if (sb) { setBox(sb); setConfirmed(true); }
-      else setMsg({ ok: false, text: (err as Error).message });
+      else setMsg({ ok: false, text: errOf(err) });
       setBusy(false);
     }
   }
@@ -43,7 +44,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       <label className="block text-sm">Ask $ <input className="input inline w-24" inputMode="decimal" placeholder="optional" value={ask} onChange={(e) => setAsk(e.target.value)} /> for this</label>
       <button className="btn" disabled={busy}>{busy ? "Sending…" : update ? "Send the updated answers" : "Send my written answers"}</button>
       <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
-      {msg && <p className={msg.ok ? "ok" : "err"}>{msg.text}</p>}
+      {msg && (msg.ok ? <p className="ok">{msg.text}</p> : <Err text={msg.text} />)}
     </form>
   );
 }
@@ -70,7 +71,7 @@ export function LeaveButton({ sessionId, seenAt }: { sessionId: string; seenAt: 
                   if (sb) {
                     setBox(sb);
                     setConfirmed(true);
-                  } else setErr((e as Error).message);
+                  } else setErr(errOf(e));
                 })
             }
           >
@@ -80,7 +81,7 @@ export function LeaveButton({ sessionId, seenAt }: { sessionId: string; seenAt: 
           <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
         </div>
       )}
-      {err && <p className="err">{err}</p>}
+      <Err text={err} />
     </div>
   );
 }
@@ -113,7 +114,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt }: { sessionId: string
             if (sb) {
               setBox(sb);
               setConfirmed(true);
-            } else setErr((e as Error).message);
+            } else setErr(errOf(e));
             setBusy(false);
           }
         }}
@@ -121,7 +122,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt }: { sessionId: string
         Send the dispute
       </button>
       <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
-      {err && <p className="err">{err}</p>}
+      <Err text={err} />
     </div>
   );
 }

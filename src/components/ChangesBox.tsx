@@ -15,6 +15,7 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead." }
     if ((changes || error) && ref.current) ref.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [changes, error]);
   if (!changes && !error) return null;
+  if (!changes && error && error.startsWith("\u0001")) return <p ref={ref as unknown as React.RefObject<HTMLParagraphElement>} className="err-field basis-full">{error.slice(1)}</p>;
   return (
     <div ref={ref} className="info basis-full" role="status" aria-live="polite">
       {changes && (

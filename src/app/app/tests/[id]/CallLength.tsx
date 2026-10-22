@@ -1,6 +1,7 @@
 "use client";
+import { Err } from "@/components/Err";
 import { useState } from "react";
-import { api } from "@/lib/client";
+import { api, errOf } from "@/lib/client";
 
 /** "How long was the call?": sets the Pay box reference (rate × these minutes) and its starting amount. */
 export function CallLength({ testId, callId, minutes }: { testId: string; callId: string; minutes: number }) {
@@ -14,11 +15,11 @@ export function CallLength({ testId, callId, minutes }: { testId: string; callId
       </div>
       <button
         className="btn-ghost"
-        onClick={() => api(`/api/tests/${testId}/call-length`, { callId, minutes: Number(v) }).then(() => window.location.reload()).catch((e) => setErr((e as Error).message))}
+        onClick={() => api(`/api/tests/${testId}/call-length`, { callId, minutes: Number(v) }).then(() => window.location.reload()).catch((e) => setErr(errOf(e)))}
       >
         Save the length
       </button>
-      {err && <p className="err basis-full">{err}</p>}
+      <Err text={err} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
+import { Err } from "@/components/Err";
 import { useState } from "react";
-import { api } from "@/lib/client";
+import { api, errOf } from "@/lib/client";
 import { money, toCents } from "@/lib/format";
 import { stopBox, type StopBox } from "@/lib/topStop";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -24,7 +25,7 @@ export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenA
       .then(() => window.location.reload())
       .catch((e) => {
         const sb = stopBox(e); if (sb) { setBox(sb); setConfirmed(true); }
-        else setErr((e as Error).message);
+        else setErr(errOf(e));
         setBusy(false);
       });
   };
@@ -51,7 +52,7 @@ export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenA
         </div>
       )}
       <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
-      {err && <p className="err">{err}</p>}
+      <Err text={err} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { api, ApiError } from "./client";
+import { api, ApiError, errOf } from "./client";
 import type { Change } from "@/components/ChangesBox";
 
 /**
@@ -27,7 +27,7 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
         onStop?.(e.data);
       } else {
         setChanges(null);
-        setError((e as Error).message);
+        setError(errOf(e));
       }
       return null;
     } finally {

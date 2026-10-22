@@ -4,6 +4,27 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, newest) Call requests on both sides (adds to offered times + instant Book)
+- Developer: "Offer times" (as now: open times anyone allowed can book instantly) AND "Request a time" with one
+  tester (pending until that tester accepts or declines). Tester: "Book" an offered time (instant, as now) AND
+  "Request a time" (pending until the developer accepts or declines). Each side can Withdraw its own pending request.
+- Auto-match: if one side has a pending request for a time and the other side books it, offers it, accepts it or
+  requests the same time, it is BOOKED at once ("Booked: you both picked Thu, Nov 5 at 3:00 PM") and the pending
+  request closes. Requests also close when their time passes, on a block, a hold, Stop, End early or Leave.
+- Both sides can cancel a booked call (reason within 24h; not after start), as now.
+- Stops: Accept / Decline / Withdraw on a request that was booked, withdrawn, declined or closed meanwhile → final
+  refusal, blue, under that button, saying what happened ("Ana Silva withdrew this request at 2:10 PM."). Call changes
+  by the other side (requests made/withdrawn/declined, times offered/removed, bookings/cancellations) are stop-once
+  reasons: the developer's set already includes them; for the tester they are reason (C) and stop ALL tester buttons
+  (Send written/recording, Switch/Keep, Charge/Let it go, Dispute, Leave, Book, Cancel, Request a time,
+  Accept/Decline/Withdraw a request), blue under the pressed button. Pages show call updates live.
+- During a hold no requests can be made or accepted; pending ones close (both told).
+
+## (Owner, Oct 22, decisions) Sending during a hold: KEPT allowed. Calls: reason only within 24h, no late-cancel fee.
+## Joining with a missing device/language: WARN in-page ("This test needs an iPhone. Join anyway?"), never refuse.
+## Form mistakes (validation): RED at the field (and a short red line under the button); blue is only for stop-once
+## and refusals. Moves: removed for good.
+
 ## (Owner, Oct 22, newest) Charge amount (replaces earlier Charge formulas)
 - The ask is for THIS piece of work; the listing is the most the part can be paid in total.
 - Room left on the contract = listing − already paid for that part. Charge cap = the lower of (this piece's ask, if

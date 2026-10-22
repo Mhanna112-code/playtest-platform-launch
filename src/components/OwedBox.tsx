@@ -1,7 +1,8 @@
 "use client";
+import { Err } from "@/components/Err";
 import { useState } from "react";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
-import { api, ApiError } from "@/lib/client";
+import { api, ApiError, errOf } from "@/lib/client";
 import { money } from "@/lib/format";
 
 type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string };
@@ -53,7 +54,7 @@ export function OwedBox({ onHold, owed }: { onHold: boolean; owed: Line[] }) {
             if (e instanceof ApiError && e.code === "stop_once") {
               setChanges(e.data.changes as Change[]);
               if (typeof e.data.totalCents === "number") setTotal(e.data.totalCents);
-            } else setErr((e as Error).message);
+            } else setErr(errOf(e));
             setBusy(false);
           }
         }}
@@ -68,7 +69,7 @@ export function OwedBox({ onHold, owed }: { onHold: boolean; owed: Line[] }) {
         </p>
       )}
       {owed.some((o) => !o.retry) && <p>Reversed payments can&apos;t be retried here: our team resolves them, then your tests resume.</p>}
-      {err && <p className="err">{err}</p>}
+      <Err text={err} />
     </div>
   );
 }

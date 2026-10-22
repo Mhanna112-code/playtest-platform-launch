@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { api } from "@/lib/client";
+import { api, errOf } from "@/lib/client";
 
 export function VerifyButton({ token }: { token: string }) {
   const [busy, setBusy] = useState(false);
@@ -12,7 +12,7 @@ export function VerifyButton({ token }: { token: string }) {
       await api("/api/auth/verify", { token });
       window.location.href = "/app";
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(errOf(e));
       setBusy(false);
     }
   }

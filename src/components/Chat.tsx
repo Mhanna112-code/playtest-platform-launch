@@ -1,7 +1,8 @@
 "use client";
+import { Err } from "@/components/Err";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/client";
+import { api, errOf } from "@/lib/client";
 
 type Msg = { id: string; mine: boolean; who: string; body: string; at: string };
 
@@ -33,7 +34,7 @@ export function Chat({ path, extra = {}, messages, other, closed }: { path: stri
             setText("");
             router.refresh();
           } catch (e2) {
-            setErr((e2 as Error).message);
+            setErr(errOf(e2));
           } finally {
             setBusy(false);
           }
@@ -42,7 +43,7 @@ export function Chat({ path, extra = {}, messages, other, closed }: { path: stri
         <input className="input" aria-label={`Message ${other}`} placeholder={`Message ${other}…`} value={text} onChange={(e) => setText(e.target.value)} />
         <button className="btn" disabled={busy || !text.trim()}>Send</button>
       </form>}
-      {err && <p className="err">{err}</p>}
+      <Err text={err} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
+import { Err } from "@/components/Err";
 import { useState } from "react";
-import { api } from "@/lib/client";
+import { api, errOf } from "@/lib/client";
 import { isEmail } from "@/lib/format";
 
 export function LoginForm() {
@@ -17,7 +18,7 @@ export function LoginForm() {
     try {
       setSent(await api<{ email: string; devOutbox: boolean }>("/api/auth/request", { email: email.trim() }));
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(errOf(e));
     } finally {
       setBusy(false);
     }
@@ -47,7 +48,7 @@ export function LoginForm() {
       <button className="btn" disabled={busy}>
         {busy ? "Sending…" : "Email me a link"}
       </button>
-      {err && <p className="err basis-full">{err}</p>}
+      <Err text={err} />
     </form>
   );
 }

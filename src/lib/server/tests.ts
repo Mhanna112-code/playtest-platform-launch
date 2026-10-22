@@ -348,7 +348,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     if (await tx.block.count({ where: { blockerId: tester.id, blockedId: t.developerId } })) throw new HttpError(409, "blocked", `You blocked ${displayName(dev)}: unblock them in Settings → Blocked people to join.`);
     if (await tx.block.count({ where: { blockerId: t.developerId, blockedId: tester.id } })) throw new HttpError(409, "closed", "This test isn't taking new testers right now.");
     const gap = needsGap(t, profile);
-    if (gap) throw new HttpError(409, "needs", gap);
+    if (gap && body.anyway !== true) throw new HttpError(409, "needs", `${gap.replace(/ Add .*$/, "")} You don't list it in your profile. Join anyway?`);
     const contract = await tx.contract.create({
       data: { testId, testerId: tester.id, ...contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion }, new Date(), body.keepPrivate === true) },
     });

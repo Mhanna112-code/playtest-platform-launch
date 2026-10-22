@@ -1,6 +1,7 @@
 "use client";
+import { Err } from "@/components/Err";
 import { useState } from "react";
-import { api } from "@/lib/client";
+import { api, errOf } from "@/lib/client";
 
 /** Join call: opens the room, or shows why not (blue, under the button). */
 export function JoinCall({ callId }: { callId: string }) {
@@ -15,13 +16,13 @@ export function JoinCall({ callId }: { callId: string }) {
             const r = await api<{ url: string }>(`/api/calls/${callId}/join`, {});
             window.open(r.url, "_blank");
           } catch (e) {
-            setErr((e as Error).message);
+            setErr(errOf(e));
           }
         }}
       >
         Join call
       </button>
-      {err && <span className="err">{err}</span>}
+      <Err text={err} />
     </span>
   );
 }

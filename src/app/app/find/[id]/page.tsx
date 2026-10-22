@@ -70,9 +70,10 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           <p className="note">This test isn&apos;t taking new testers right now.</p>
         ) : closed ? (
           <p className="err">{t.status === "stopped" ? "This test was stopped." : testersIn >= t.spots ? "This test is full." : "This test isn't taking new testers any more."}</p>
-        ) : gap ? (
-          <p className="err">{gap}</p>
         ) : (
+          <>{gap && <p className="info">{gap.replace(/ Add .*$/, "")} You don&apos;t list it in your profile.</p>}</>
+        )}
+        {t.developerId === u.id || !u.isTester || closed || blocked ? null : (
           <JoinBox
             testId={t.id}
             seenAt={new Date().toISOString()}

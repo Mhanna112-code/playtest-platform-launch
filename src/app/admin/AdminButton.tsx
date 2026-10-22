@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { api } from "@/lib/client";
+import { api, errOf } from "@/lib/client";
 
 /** A small admin action: optional text/amount inputs, one button, the result or refusal in plain words. */
 export function AdminButton({ action, id, label, fields = [], danger }: { action: string; id: string; label: string; fields?: { name: string; label: string; ph?: string }[]; danger?: boolean }) {
@@ -23,7 +23,7 @@ export function AdminButton({ action, id, label, fields = [], danger }: { action
             setMsg({ ok: true, text: "Done." });
             setTimeout(() => window.location.reload(), 600);
           } catch (e) {
-            setMsg({ ok: false, text: (e as Error).message });
+            setMsg({ ok: false, text: errOf(e) });
           } finally {
             setBusy(false);
           }

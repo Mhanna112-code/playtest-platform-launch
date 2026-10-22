@@ -1,7 +1,8 @@
 "use client";
+import { Err } from "@/components/Err";
 import { useEffect, useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
-import { api } from "@/lib/client";
+import { api, errOf } from "@/lib/client";
 import { stopBox, type StopBox } from "@/lib/topStop";
 
 /** New terms offered (Switch / Keep). Its stop-once box and refusals show directly under these buttons. */
@@ -32,7 +33,7 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
           setConfirmed(true);
           const next = (e as { data?: { offerId?: string } }).data?.offerId;
           if (next) setOfferId(next);
-        } else setErr((e as Error).message);
+        } else setErr(errOf(e));
       });
   return (
     <div className="info space-y-2">
@@ -45,7 +46,7 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
         <button className="btn-ghost" onClick={() => decide("keep")}>Keep my current terms</button>
       </div>
       <ChangesBox changes={box?.changes ?? null} tail={box?.tail} />
-      {err && <p className="err">{err}</p>}
+      <Err text={err} />
     </div>
   );
 }

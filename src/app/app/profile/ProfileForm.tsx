@@ -1,7 +1,8 @@
 "use client";
+import { Err } from "@/components/Err";
 import { useState } from "react";
 import { Choices } from "@/components/Choices";
-import { api } from "@/lib/client";
+import { api, errOf } from "@/lib/client";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 
 type Init = { name: string; pronoun: string; isDeveloper: boolean; isTester: boolean; devices: string[]; categories: string[]; languages: string[]; bio: string; emailPref?: string };
@@ -21,7 +22,7 @@ export function ProfileForm({ init, first }: { init: Init; first?: boolean }) {
       if (first) window.location.href = "/app";
       else setMsg({ ok: true, text: "Saved." });
     } catch (err) {
-      setMsg({ ok: false, text: (err as Error).message });
+      setMsg({ ok: false, text: errOf(err) });
     } finally {
       setBusy(false);
     }
@@ -72,7 +73,7 @@ export function ProfileForm({ init, first }: { init: Init; first?: boolean }) {
         </div>
       )}
       <button className="btn" disabled={busy}>{busy ? "Saving…" : first ? "Continue" : "Save"}</button>
-      {msg && <p className={msg.ok ? "ok" : "err"}>{msg.text}</p>}
+      {msg && (msg.ok ? <p className="ok">{msg.text}</p> : <Err text={msg.text} />)}
     </form>
   );
 }

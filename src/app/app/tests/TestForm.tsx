@@ -82,10 +82,13 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
     }
   }
 
+  // Mark the field a mistake is about (red at the field).
+  const FIELD_WORDS: Partial<Record<keyof F, RegExp>> = { title: /title/i, writtenPrice: /written answers price/i, recordingPrice: /recording price/i, liveRate: /live call rate/i, liveMinutes: /call lasts/i, spots: /spots/i, deadlineDays: /deadline/i, openUntil: /open until/i, buildUrl: /build link/i };
+  const bad = (k: keyof F) => !!FIELD_WORDS[k] && errs.some((e) => FIELD_WORDS[k]!.test(e));
   const text = (k: keyof F, label: string, opts: { req?: boolean; ph?: string; type?: string; cls?: string } = {}) => (
     <div>
       <label className={"label" + (opts.req ? " req" : "")} htmlFor={k}>{label}</label>
-      <input id={k} type={opts.type ?? "text"} className={"input " + (opts.cls ?? "")} placeholder={opts.ph} value={f[k] as string} onChange={(e) => set({ [k]: e.target.value } as Partial<F>)} />
+      <input id={k} type={opts.type ?? "text"} className={"input " + (opts.cls ?? "") + (bad(k) ? " field-bad" : "")} placeholder={opts.ph} value={f[k] as string} onChange={(e) => set({ [k]: e.target.value } as Partial<F>)} />
     </div>
   );
 
@@ -157,8 +160,9 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
         <button className="btn" disabled={busy}>{busy ? "Saving…" : edit ? "Save" : "Post the test"}</button>
         {saved && <p className="ok">{saved}</p>}
         <ChangesBox changes={changes} tail="Press Save again to save your changes on top (fields you didn't touch keep the newer values)." />
+        {errs.length > 0 && <p className="err-field">Fix the {errs.length === 1 ? "mistake" : `${errs.length} mistakes`} above, then press {edit ? "Save" : "Post the test"} again.</p>}
         {errs.length > 0 && (
-          <ul className="err list-disc pl-5">
+          <ul className="err-field list-disc pl-5">
             {errs.map((e) => <li key={e}>{e}</li>)}
           </ul>
         )}

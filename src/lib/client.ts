@@ -5,6 +5,12 @@ export class ApiError extends Error {
   }
 }
 
+/** Marks a form mistake (red) as opposed to a refusal (blue). */
+export const FIELD = "\u0001";
+export const isFieldError = (e: unknown) => e instanceof ApiError && (e.status === 400 || e.status === 413);
+/** The text to show for an error: form mistakes carry the FIELD mark so they render red; refusals render blue. */
+export const errOf = (e: unknown) => (isFieldError(e) ? FIELD : "") + (e as Error).message;
+
 export async function api<T = unknown>(path: string, body?: unknown, method?: string): Promise<T> {
   let res: Response;
   try {
