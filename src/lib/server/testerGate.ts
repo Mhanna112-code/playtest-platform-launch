@@ -27,7 +27,13 @@ export async function testerChanges(testerId: string, contractId: string, testId
   ]);
   const out: TestEventLike[] = [];
   for (const o of offers) out.push({ kind: "terms", text: `${dev} offered new terms: ${o.diff}`, createdAt: o.createdAt });
+  const owed = await db.payment.findMany({ where: { contractId, status: "failed", owedUntil: { not: null }, settledAt: null }, select: { submissionId: true, callId: true } });
+  const owedKeys = new Set(owed.map((p) => p.submissionId ?? p.callId));
+  const settledLate = await db.payment.findMany({ where: { contractId, settledAt: { not: null } }, select: { submissionId: true, callId: true } });
+  const lateKeys = new Set(settledLate.map((p) => p.submissionId ?? p.callId));
   for (const r of reviews) {
+    // Owed (or paid late): the "delayed" line and, when it goes through, the paid line come from the payment.
+    if (!r.rejected && (owedKeys.has(r.submissionId ?? r.callId) || lateKeys.has(r.submissionId ?? r.callId))) continue;
     const what = r.callId ? "your live call" : `your ${r.submission?.kind === "recording" ? "recording" : "written answers"}`;
     out.push({ kind: r.rejected ? "rejected" : "paid", text: r.rejected ? `${dev} rejected ${what}` : `${dev} paid ${money(r.amountCents)} for ${what}`, createdAt: r.createdAt });
   }

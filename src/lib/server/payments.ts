@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { displayName, money, toCents } from "@/lib/format";
-import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, declinedLine, canDispute, checkDisputeDecision, delayedPayLine, checkPay, checkReject, MAX_PAY_CENTS, PAY_WAITS, testerShare } from "@/lib/rules";
+import { displayName, fmtDateTime, money, toCents } from "@/lib/format";
+import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, declinedLine, canDispute, checkDisputeDecision, delayedPayLine, owedPayLine, owedUntilFrom, checkPay, checkReject, MAX_PAY_CENTS, PAY_WAITS, testerShare } from "@/lib/rules";
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
 import { isAdmin } from "./session";
@@ -62,6 +62,8 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0], body: R
     if (already) {
       if (already.reason === CHARGED_BY_TESTER) throw new HttpError(409, "reviewed", `${name} already charged ${money(already.amountCents)} for this.`);
       if (already.reason === LET_GO_BY_TESTER) throw new HttpError(409, "reviewed", `${name} let this go: nothing was charged.`);
+      const owedNow = !already.rejected && (await tx.payment.findFirst({ where: { ...piece.where, status: "failed", owedUntil: { not: null }, settledAt: null } }));
+      if (owedNow) throw new HttpError(409, "owed", `This ${money(already.amountCents)} is owed: pay it with “Pay what you owe” in Payments.`);
       throw new HttpError(409, "reviewed", already.rejected ? "You already rejected this." : `You already paid ${money(already.amountCents)} for this.`);
     }
     if (c.tester.suspendedAt) throw new HttpError(409, "closed_account", `${name}'s account is closed for now, so they can't be paid.`);
@@ -96,18 +98,22 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0], body: R
   try {
     result = await charge(dev, c.tester, rev.amountCents, payKey, `Playtest: ${piece.label} on “${c.title}”`);
   } catch (e) {
-    // Not charged: free the piece so the developer can press Pay again after fixing the card.
-    await db.$transaction([
-      db.payment.update({ where: { id: payment!.id }, data: { status: "failed", failure: (e as Error).message } }),
-      db.review.delete({ where: { id: rev.id } }),
-    ]);
-    if (e instanceof HttpError && e.code === "card_failed") {
-      // The tester is told at once (bell; their top box and stop-once read the declined payment): never "failed".
-      const tl = delayedPayLine(displayName(dev), piece.label === "call" ? "live call" : piece.label, rev.amountCents);
-      await bell(c.testerId, tl, `/app/sessions/${c.id}`);
-      throw new HttpError(402, "card_failed", declinedLine(name, rev.amountCents, piece.label));
+    if (!(e instanceof HttpError && e.code === "card_failed")) {
+      // Not a card decline (nothing was tried): free the piece so the developer can press Pay again.
+      await db.$transaction([db.payment.update({ where: { id: payment!.id }, data: { status: "failed", failure: (e as Error).message } }), db.review.delete({ where: { id: rev.id } })]);
+      throw e;
     }
-    throw e;
+    // (Owner, DECLINED PAY PRESS) Declined at the press: like any other failed payment it is OWED (daily retry,
+    // 3-day cut-off; a second failure starts the hold at once). The review stays; there's no second Pay on it.
+    const now = new Date();
+    const by = owedUntilFrom(now);
+    await db.payment.update({ where: { id: payment!.id }, data: { status: "failed", failure: (e as Error).message, owedUntil: by } });
+    const stillOwed = await db.payment.count({ where: { developerId: dev.id, status: "failed", settledAt: null, owedUntil: { not: null } } });
+    if (stillOwed >= 2) await (await import("./holds")).startHold(dev.id, "unpaid");
+    // The tester is told at once (bell; their top box and stop-once read the owed payment): never "failed".
+    await bell(c.testerId, delayedPayLine(displayName(dev), piece.label, rev.amountCents), `/app/sessions/${c.id}`);
+    await notify(dev.email, "A payment failed: pay within 3 days", [`Your card was declined for ${name}'s ${piece.label} on “${c.title}” (${money(rev.amountCents)}).`, `Pay it by ${fmtDateTime(by)} or your tests are paused.`], "/app/payments");
+    throw new HttpError(402, "card_failed", owedPayLine(name, rev.amountCents, piece.label, fmtDateTime(by)));
   }
   await db.$transaction(async (tx) => {
     await tx.payment.update({ where: { id: payment!.id }, data: result });

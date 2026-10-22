@@ -126,15 +126,36 @@ describe("Stripe (test mode, faked)", () => {
     expect(await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } })).toMatchObject({ status: "charged", transferStatus: "sent", stripePaymentIntentId: "pi_1" });
   });
 
-  it("needs a card first; a declined card charges nothing and the developer can press Pay again", async () => {
+  it("needs a card first; a declined Pay becomes owed (retry, 3-day cut-off); no second Pay on it", async () => {
     fake(true);
     const { dev, sub } = await sent();
     expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).body.error.message).toBe("Add a card in Payments first, then press Pay again.");
     await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_1" } });
     const r = await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     expect(r.status).toBe(402);
-    expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0);
-    expect((await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } })).status).toBe("failed");
+    expect(r.body.error.message).toMatch(/^Your card was declined, so Ana Silva wasn't paid \$10\.00 for the written answers yet\. It's now owed: we'll retry tomorrow, or pay it in Payments by .+ to avoid a pause\.$/);
+    expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(1);
+    const p = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } });
+    expect(p.status).toBe("failed");
+    const days = (p.owedUntil!.getTime() - p.createdAt.getTime()) / 86_400_000;
+    expect(Math.round(days)).toBe(3);
+    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();
+    // No second Pay on it: "Pay what you owe" covers it.
+    expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).body.error.message).toBe("This $10.00 is owed: pay it with “Pay what you owe” in Payments.");
+  });
+
+  it("a second failure while one is owed starts the hold at once", async () => {
+    fake(true);
+    const a = await sent();
+    const b = await sent();
+    for (const x of [a, b]) await db.user.update({ where: { id: x.dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_1" } });
+    // Same developer for both: move b's test to a's developer.
+    const tb = await db.submission.findUniqueOrThrow({ where: { id: b.sub.id }, include: { contract: true } });
+    await db.test.update({ where: { id: tb.contract.testId }, data: { developerId: a.dev.user.id } });
+    expect((await payReq(a.dev.cookie, { kind: "submission", id: a.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(402);
+    expect((await db.user.findUniqueOrThrow({ where: { id: a.dev.user.id } })).holdStartedAt).toBeNull();
+    expect((await payReq(a.dev.cookie, { kind: "submission", id: b.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(402);
+    expect((await db.user.findUniqueOrThrow({ where: { id: a.dev.user.id } })).holdStartedAt).not.toBeNull();
   });
 });
 

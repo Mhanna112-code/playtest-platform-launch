@@ -229,7 +229,7 @@ describe("payments and disputes, only for this test", () => {
     expect((await live(ben.tester.cookie, `session:${ben.sessionId}`, pageLoaded)).body.changes).toEqual([]);
   });
 
-  it("a manual Pay decline is not a debt for the developer (nothing on A or B); the tester is told 'delayed' (bell, top box, stop once); a later Pay notifies once", async () => {
+  it("a declined Pay becomes owed: the alert shows on another test; the tester reads 'delayed' (bell, top box, stop once), then 'paid' once", async () => {
     const { dev, testId: A } = await setup();
     const ana = await joined(A);
     const { POST: postTest } = await import("@/app/api/tests/route");
@@ -248,26 +248,27 @@ describe("payments and disputes, only for this test", () => {
     const notesBefore = await db.notification.count({ where: { userId: ana.tester.user.id } });
     const r = await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { payKey: randomUUID(), seenAt: pageLoaded, kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, tab: "tab-1" } })).then(json);
     expect(r.body.error.code).toBe("card_failed");
-    expect(await db.payment.count({ where: { submissionId: sub.id, status: "failed" } })).toBe(1);
-    for (const t of [A, B]) {
-      expect((await live(dev.cookie, `test:${t}`, pageLoaded, "tab-2")).body.changes).toEqual([]);
-      expect((await act(t, "next-round", dev.cookie, { seenAt: pageLoaded, tab: "tab-2" })).body.error?.code).not.toBe("stop_once");
-    }
-    // The tester: one bell, the top-box line and a stop once, worded without failed / declined / card.
+    const owed = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id, status: "failed" } });
+    expect(owed.owedUntil).not.toBeNull();
+    // The developer's other test names the failure (top box and stop once).
+    const alert = expect.stringMatching(/^Payment failed on Harbor Run: \$10\.00 to Ana Silva for the written answers · we'll retry tomorrow · pay by .+ to avoid a pause$/);
+    expect((await live(dev.cookie, `test:${B}`, pageLoaded, "tab-2")).body.changes.map((c: { text: string }) => c.text)).toEqual([alert]);
+    expect(texts(await act(B, "next-round", dev.cookie, { seenAt: pageLoaded, tab: "tab-2" }))).toEqual([alert]);
+    // The tester: one bell, the top-box line and a stop once, worded without failed / declined / card / hold.
     const delayed = "Nora Lane's payment for your written answers ($10) is delayed. You'll be told when it arrives.";
     const bells = await db.notification.findMany({ where: { userId: ana.tester.user.id }, orderBy: { createdAt: "asc" } });
     expect(bells.slice(notesBefore).map((n) => n.text)).toEqual([delayed]);
     expect((await live(ana.tester.cookie, `session:${ana.sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([delayed]);
-    const st = await sact(ana.sessionId, "leave", ana.tester.cookie, { seenAt: pageLoaded });
-    expect(texts(st)).toEqual([delayed]);
-    for (const t of [delayed, ...bells.map((n) => n.text)]) expect(t).not.toMatch(/fail|declin|card/i);
-    // A later successful Pay: exactly one more notification for the tester (the normal paid line).
+    expect(texts(await sact(ana.sessionId, "leave", ana.tester.cookie, { seenAt: pageLoaded }))).toEqual([delayed]);
+    for (const t of [delayed, ...bells.map((n) => n.text)]) expect(t).not.toMatch(/fail|declin|card|hold/i);
+    // It goes through ("Pay what you owe"): exactly one more notification, the normal paid line; the top box says paid.
     decline = false;
     const afterDecline = await db.notification.count({ where: { userId: ana.tester.user.id } });
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
+    const { payOwed } = await import("@/lib/server/holds");
+    expect((await payOwed(dev.user)).paid).toBe(1);
     const after = await db.notification.findMany({ where: { userId: ana.tester.user.id }, orderBy: { createdAt: "asc" } });
-    expect(after.length).toBe(afterDecline + 1);
-    expect(after[after.length - 1].text).toMatch(/^You were paid for your written answers/);
+    expect(after.map((n) => n.text).slice(afterDecline)).toEqual(["Nora Lane paid $10.00 for your written answers"]);
+    expect((await live(ana.tester.cookie, `session:${ana.sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([delayed, "Nora Lane paid $10.00 for your written answers"]);
   });
 
   it("the tester's own delay on test A shows on their session on B with the same developer, not with another developer", async () => {
@@ -283,7 +284,7 @@ describe("payments and disputes, only for this test", () => {
     await later();
     const subA = await db.submission.findFirstOrThrow({ where: { contractId: ana.sessionId } });
     await fail(ana.sessionId, dev.user.id, ana.tester.user.id, subA.id);
-    const delayed = "The payment of $8.00 for your written answers on Harbor Run is delayed";
+    const delayed = "Nora Lane's payment for your written answers on Harbor Run ($8) is delayed. You'll be told when it arrives.";
     expect((await live(ana.tester.cookie, `session:${onB.body.sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([delayed]);
     expect(texts(await sact(onB.body.sessionId, "leave", ana.tester.cookie, { seenAt: pageLoaded }))).toEqual([delayed]);
     expect((await live(ana.tester.cookie, `session:${onC.body.sessionId}`, pageLoaded)).body.changes).toEqual([]);
@@ -303,13 +304,13 @@ describe("payments and disputes, only for this test", () => {
     await db.testEvent.create({ data: { testId, kind: "chargeback", text: "Your bank reversed your $5.00 payment for Ana Silva's written answers", contractId: sessionId } });
     await db.testEvent.create({ data: { testId, kind: "paused", text: "Your tests are paused until you pay what you owe" } });
     const before = await live(tester.cookie, `session:${sessionId}`, pageLoaded);
-    expect(before.body.changes.map((c: { text: string }) => c.text)).toEqual(["The payment of $8.00 for your written answers on Harbor Run is delayed"]);
+    expect(before.body.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane's payment for your written answers ($8) is delayed. You'll be told when it arrives."]);
     await later();
     await db.payment.update({ where: { id: p.id }, data: { status: "charged", settledAt: new Date() } });
     const d = await db.dispute.findFirstOrThrow({ where: { contractId: sessionId } });
     await db.dispute.update({ where: { id: d.id }, data: { status: "decided", decidedCents: 800, decidedAt: new Date() } });
     const lines: string[] = (await live(tester.cookie, `session:${sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text);
-    expect(lines).toEqual(expect.arrayContaining(["A delayed payment of $8.00 for your written answers on Harbor Run arrived", "The team decided your dispute: the pay was raised to $8.00"]));
+    expect(lines).toEqual(expect.arrayContaining(["Nora Lane paid $8.00 for your written answers", "The team decided your dispute: the pay was raised to $8.00"]));
     for (const t of lines) expect(t).not.toMatch(/fail|hold|chargeback|reversed|bank/i);
     const stop = await sact(sessionId, "leave", tester.cookie, { seenAt: pageLoaded });
     expect(stop.body.error.code).toBe("stop_once");

@@ -152,9 +152,10 @@ describe("call length and payment problems on a call", () => {
       webhooks: { constructEvent: (raw: string) => JSON.parse(raw) },
     } as unknown as Stripe);
     const r = await pay(dev.cookie, { kind: "call", id: call.id, amount: "15.00", tickedCents: 1500 });
-    expect(r.body.error.message).toBe("Your card was declined, so Ana Silva wasn't paid $15.00 for the call. Update your card in Payments, then press Pay again.");
+    expect(r.body.error.message).toMatch(/^Your card was declined, so Ana Silva wasn't paid \$15\.00 for the call yet\. It's now owed: /);
     decline = false;
-    expect((await pay(dev.cookie, { kind: "call", id: call.id, amount: "15.00", tickedCents: 1500 })).status).toBe(200);
+    const { payOwed: payNow } = await import("@/lib/server/holds");
+    expect((await payNow(dev.user)).paid).toBe(1);
     const p = await db.payment.findFirstOrThrow({ where: { callId: call.id, status: "charged" } });
     const { chargebackOpened } = await import("@/lib/server/holds");
     await chargebackOpened(p.stripePaymentIntentId!);

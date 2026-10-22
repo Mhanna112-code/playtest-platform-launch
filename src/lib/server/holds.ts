@@ -127,6 +127,7 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
       const r = await charge(u, tester, p.amountCents, `owed-${p.id}-${Date.now()}`, "Playtest: amount owed");
       await db.payment.update({ where: { id: p.id }, data: { ...r, settledAt: new Date(), failure: "" } });
       await receipt(u.email, "an amount you owed", p.amountCents, r.status, "/app/payments");
+      await tellArrived(p, tester.email, displayName(u));
     } catch (e) {
       const why = (e as HttpError).data?.stripe ?? (e as Error).message;
       stillFailing.push(`${lines.find((l) => l.id === p.id)?.text ?? money(p.amountCents)} (${String(why).replace(/\.$/, "")})`);
@@ -135,6 +136,14 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
   // Chargebacks can't be retried here: the admin resolves them (Mark resolved). The hold lifts only when all are paid.
   const lifted = await liftHoldIfClear(dev.id);
   return { paid: list.length - stillFailing.length, stillFailing, lifted };
+}
+
+/** The tester's one notice when a delayed payment goes through: the normal paid line. */
+async function tellArrived(p: { contractId: string | null; submissionId: string | null; callId: string | null; kind: string; amountCents: number }, email: string, devName: string) {
+  const sub = p.submissionId ? await db.submission.findUnique({ where: { id: p.submissionId } }) : null;
+  const label = p.kind === "dispute" ? "dispute" : p.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers";
+  const line = `${devName} paid ${money(p.amountCents)} for your ${label}`;
+  await notify(email, line, [line + "."], p.contractId ? `/app/sessions/${p.contractId}` : "/app/payments");
 }
 
 /** One line per failed payment ("Ana Silva's written answers $8.00 · card declined Oct 20"), plus open chargebacks. */
@@ -216,7 +225,7 @@ export async function runDaily(now = new Date()) {
       const r = await charge(d, t, p.amountCents, `retry-${p.id}-${now.toISOString().slice(0, 10)}`, "Playtest: daily retry of an amount owed");
       await db.payment.update({ where: { id: p.id }, data: { ...r, settledAt: now, retriedAt: now, failure: "" } });
       await receipt(d.email, "an amount you owed (retried today)", p.amountCents, r.status, "/app/payments");
-      await notify(t.email, "A delayed payment for your work went through.", ["A delayed payment for your work went through."], p.contractId ? `/app/sessions/${p.contractId}` : "/app/payments");
+      await tellArrived(p, t.email, displayName(d));
       await liftHoldIfClear(d.id);
       out.retried++;
     } catch {

@@ -257,8 +257,8 @@ export const DEV_EXEMPT_KINDS: Record<string, string> = {
 };
 
 /** (Owner, NEWEST+3) A declined manual Pay, as the tester reads it (never "failed", "declined" or "card"). */
-export const delayedPayLine = (devName: string, label: string, cents: number) =>
-  `${devName}'s payment for your ${label} (${"$" + (cents % 100 ? (cents / 100).toFixed(2) : String(cents / 100))}) is delayed. You'll be told when it arrives.`;
+export const delayedPayLine = (devName: string, label: string, cents: number, title = "") =>
+  `${devName}'s payment for your ${label}${title ? ` on ${title}` : ""} (${"$" + (cents % 100 ? (cents / 100).toFixed(2) : String(cents / 100))}) is delayed. You'll be told when it arrives.`;
 
 /** The test events a tester's page reads directly; their other reasons come from their own contract's records. */
 export const TESTER_EVENT_KINDS = ["info"] as const;
@@ -438,6 +438,9 @@ export function checkActualMinutes(minutes: number | null, booked: number): Chec
 /** A declined Pay, shown under that Pay button. */
 export const declinedLine = (name: string, cents: number, label: string) =>
   `Your card was declined, so ${name} wasn't paid ${money(cents)} for the ${label === "live call" ? "call" : label}. Update your card in Payments, then press Pay again.`;
+/** (Owner, DECLINED PAY PRESS) A Pay declined at the press becomes owed like any other failed payment. */
+export const owedPayLine = (name: string, cents: number, label: string, by: string) =>
+  `Your card was declined, so ${name} wasn't paid ${money(cents)} for the ${label === "live call" ? "call" : label} yet. It's now owed: we'll retry tomorrow, or pay it in Payments by ${by} to avoid a pause.`;
 export const DELAYED_CALL_LINE = "Payment for this call may be delayed.";
 
 /** Email settings: each update / one daily summary / none. Sign-in links and payment receipts always send. */

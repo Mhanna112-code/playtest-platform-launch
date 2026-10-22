@@ -92,7 +92,7 @@ describe("daily retry of owed payments", () => {
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "charged" });
     expect(calls).toBeGreaterThanOrEqual(1);
     expect(await db.outboxEmail.count({ where: { to: dev.user.email, subject: { startsWith: "Receipt: you paid $9.00" } } })).toBe(1);
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: "A delayed payment for your work went through." } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { endsWith: "paid $9.00 for your written answers" } } })).toBe(1);
     // The open chargeback is never retried and keeps the hold until the admin resolves it.
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
   });
