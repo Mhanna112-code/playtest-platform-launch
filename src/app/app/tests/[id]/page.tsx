@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { displayName, fmtDate, fmtDateTime } from "@/lib/format";
+import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
 import { lateLabel, termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
+import { PayBox } from "./PayBox";
 import { TopPanel } from "./TopPanel";
 
 export const metadata = { title: "Test · Playtest" };
@@ -26,6 +27,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   if (!t || t.developerId !== u.id) notFound();
   const next = await db.test.findFirst({ where: { previousId: id }, select: { id: true } });
   const working = t.contracts.filter((c) => c.status === "working");
+  const paid = await db.payment.groupBy({ by: ["contractId"], where: { contractId: { in: t.contracts.map((c) => c.id) }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } });
+  const paidSoFar = (id: string) => paid.find((p) => p.contractId === id)?._sum.amountCents ?? 0;
+  const payments = await db.payment.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
   return (
     <>
       <TopPanel
@@ -69,11 +73,45 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     </div>
                   ))}
                 {s.notes && <p className="whitespace-pre-wrap text-sm">Notes: {s.notes}</p>}
+                {s.review ? (
+                  <ReviewResult review={s.review} payments={payments.filter((p) => p.submissionId === s.id)} dispute={s.dispute} />
+                ) : (
+                  <PayBox kind="submission" id={s.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)}
+                    listingCents={s.agreedCents} listingText={`${money(s.agreedCents)} for ${s.kind === "written" ? "written answers" : "a recording"}`} />
+                )}
               </div>
             ))}
           </div>
         ))}
       </section>
     </>
+  );
+}
+
+type Rev = { amountCents: number; rejected: boolean; reason: string; createdAt: Date };
+type Pay = { status: string; amountCents: number; kind: string };
+type Disp = { status: string; reason: string; decidedCents: number | null; decisionNote: string } | null;
+
+/** What happened to a piece after Pay / Reject, for the developer. */
+function ReviewResult({ review, payments, dispute }: { review: Rev; payments: Pay[]; dispute: Disp }) {
+  const main = payments.find((p) => p.kind !== "dispute");
+  return (
+    <div className="space-y-1 rounded-lg bg-slate-50 p-3 text-sm">
+      {review.rejected ? (
+        <p><b>Rejected</b> {fmtDateTime(review.createdAt)}: “{review.reason}” · nothing charged</p>
+      ) : (
+        <p>
+          <b>Paid {money(review.amountCents)}</b> {fmtDateTime(review.createdAt)}
+          {main?.status === "charged" && review.amountCents > 0 && " · ✓ charged now"}
+          {main?.status === "not_set_up" && " · payments not set up: recorded, nothing charged"}
+          {review.reason && <> · “{review.reason}”</>}
+        </p>
+      )}
+      {dispute && (
+        <p>
+          {dispute.status === "open" ? `Disputed: “${dispute.reason}” · waiting for the team.` : `Dispute decided: total ${money(dispute.decidedCents)}${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : ""}.`}
+        </p>
+      )}
+    </div>
   );
 }

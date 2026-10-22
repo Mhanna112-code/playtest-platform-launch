@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
-import { isLate, lateLabel, termsLine, testerShare } from "@/lib/rules";
+import { canDispute, isLate, lateLabel, termsLine, testerShare } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
-import { LeaveButton, WrittenForm } from "./SessionActions";
+import { DisputeForm, LeaveButton, WrittenForm } from "./SessionActions";
 
 export const metadata = { title: "Your session · Playtest" };
 export const dynamic = "force-dynamic";
@@ -45,6 +45,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             {written.late && <span className="ml-2 badge">{lateLabel(c.dueAt, fmtDate)}</span>}
           </p>
         )}
+        {written?.review && <TesterReview sessionId={c.id} kind="submission" id={written.id} review={written.review} dispute={written.dispute} />}
         {written?.review ? (
           writtenQuestions(c).map((q, i) => (
             <div key={i} className="text-sm">
@@ -59,5 +60,28 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         )}
       </section>
     </>
+  );
+}
+
+type Rev = { amountCents: number; agreedCents: number | null; rejected: boolean; reason: string; createdAt: Date };
+type Disp = { status: string; decidedCents: number | null; decisionNote: string } | null;
+
+/** What the developer did with a piece, as the tester reads it (they see what they get; never holds or chargebacks). */
+function TesterReview({ sessionId, kind, id, review, dispute }: { sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
+  const may = canDispute(review.amountCents, review.agreedCents, !!dispute).ok;
+  return (
+    <div className="space-y-2 rounded-lg bg-slate-50 p-3 text-sm">
+      {review.rejected ? (
+        <p><b>Not accepted</b> ({fmtDateTime(review.createdAt)}): “{review.reason}”</p>
+      ) : (
+        <p>
+          <b>Paid {money(review.amountCents)}</b>: you get {money(testerShare(review.amountCents))} ({fmtDateTime(review.createdAt)})
+          {review.reason && <> · “{review.reason}”</>}
+        </p>
+      )}
+      {review.agreedCents == null && <p className="note">This was extra work (not in the listing): the developer&apos;s amount is final.</p>}
+      {dispute && <p>{dispute.status === "open" ? "You disputed this: waiting for the team." : `The team decided: ${money(dispute.decidedCents)} in all${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : ""}.`}</p>}
+      {may && <DisputeForm sessionId={sessionId} kind={kind} id={id} />}
+    </div>
   );
 }

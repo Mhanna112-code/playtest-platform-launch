@@ -206,7 +206,7 @@ model Recording {
   createdAt    DateTime    @default(now())
 }
 
-/// The developer's one Pay press for a piece of sent work or a held call.
+/// The developer's one Pay (or Reject) press for a piece of sent work or a held call. One per piece.
 model Review {
   id           String      @id @default(cuid())
   submissionId String?     @unique
@@ -218,6 +218,8 @@ model Review {
   /// The listing amount shown beside the box; null = not in the listing
   agreedCents  Int?
   reason       String      @default("")
+  /// Reject: nothing charged (amountCents 0); a contract part can still be disputed once
+  rejected     Boolean     @default(false)
   /// Idempotency: one charge per press, never twice
   payKey       String      @unique
   createdAt    DateTime    @default(now())
@@ -225,7 +227,7 @@ model Review {
   @@index([contractId])
 }
 
-/// Every charge (or attempted charge). status: "charged" | "not_set_up" | "failed"
+/// Every charge (or attempted charge). status: "pending" | "charged" | "not_set_up" (no Stripe key: recorded only) | "failed"
 model Payment {
   id           String   @id @default(cuid())
   /// "review" | "call" | "dispute"
@@ -233,6 +235,7 @@ model Payment {
   submissionId String?
   callId       String?
   disputeId    String?
+  contractId   String?
   developerId  String
   testerId     String
   amountCents  Int
@@ -240,6 +243,9 @@ model Payment {
   testerCents  Int
   status       String
   stripePaymentIntentId String?
+  /// The tester's share: "sent" (to their Stripe account with the charge), "waiting" (no payout account yet), "none"
+  transferStatus String @default("none")
+  stripeTransferId String?
   failure      String   @default("")
   createdAt    DateTime @default(now())
 

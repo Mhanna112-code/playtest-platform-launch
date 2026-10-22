@@ -4,6 +4,20 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, latest: wins over everything below) One set of stop-once reasons for the developer
+- **The reasons (test-wide, since the page loaded):** any tester **left**, **joined**, **sent work** (new or updated),
+  a live call was **booked, confirmed or cancelled** (either side), call times **offered or removed**, or a **payment
+  or rejection** was made (e.g. in another tab).
+- **The developer's buttons that stop once for ALL of these:** the top panel (Stop the test, End early, Next round),
+  the live-call panel (offer/remove times, confirm/cancel a call), and **Pay / Reject** on each piece of work or call.
+- **Where the box shows:** directly under the pressed button's area: under the top title panel, under the live-call
+  panel, or under that Pay/Reject. Pressing again goes ahead; a final refusal (can't happen any more) shows there too.
+- **Reject:** next to Pay on each piece of work/call. A reason is required; nothing is charged; for a contract part
+  the tester may dispute once (an admin can only raise the pay); for extra work it's final. Pay and Reject on the same
+  piece are mutually exclusive: the second one pressed (other tab) is refused for good ("You already paid $8 for this.").
+- **Tester side** stays as before: Book / Cancel in their live-call panel stop once for call changes, with the box
+  under their live-call panel.
+
 ## (Owner update, Oct 22) Extra work and one Pay box: these override rules 2–3 and the "can only send parts in
 ## the contract" line in rule 4
 - **Testers may send written answers, send a recording, and book live calls even when that part is not in their

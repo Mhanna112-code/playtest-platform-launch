@@ -63,3 +63,37 @@ export function LeaveButton({ sessionId }: { sessionId: string }) {
     </div>
   );
 }
+
+/** Dispute once: only for a part in the contract paid below the listing amount. */
+export function DisputeForm({ sessionId, kind, id }: { sessionId: string; kind: "submission" | "call"; id: string }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  if (!open) return <button className="btn-ghost" onClick={() => setOpen(true)}>Dispute the pay</button>;
+  return (
+    <div className="space-y-2">
+      <label className="label req" htmlFor={`d-${id}`}>Why should the pay be higher? (the team and the developer read it)</label>
+      <textarea id={`d-${id}`} rows={3} className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+      <p className="note">You can dispute this once. Our team decides; a decision can only raise the pay, up to the listing amount.</p>
+      <button
+        className="btn"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setErr("");
+          try {
+            await api(`/api/sessions/${sessionId}/dispute`, { kind, id, reason });
+            window.location.reload();
+          } catch (e) {
+            setErr((e as Error).message);
+            setBusy(false);
+          }
+        }}
+      >
+        Send the dispute
+      </button>
+      {err && <p className="err">{err}</p>}
+    </div>
+  );
+}

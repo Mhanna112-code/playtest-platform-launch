@@ -7,7 +7,7 @@ import type { Change } from "@/components/ChangesBox";
  * A panel's presses: sends the page's "seen" marker. If the server stops once, the box lists the changes and the next
  * press in this panel is sent as confirmed. A refusal shows its plain sentence in the same place.
  */
-export function usePress(seenAt: string) {
+export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>) => void) {
   const [changes, setChanges] = useState<Change[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -22,6 +22,7 @@ export function usePress(seenAt: string) {
     } catch (e) {
       if (e instanceof ApiError && e.code === "stop_once") {
         setChanges((e.data.changes as Change[]) ?? []);
+        onStop?.(e.data);
       } else {
         setChanges(null);
         setError((e as Error).message);

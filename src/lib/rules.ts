@@ -210,7 +210,6 @@ export function termsLine(t: Pick<Listing, "writtenCents" | "recordingCents" | "
  * Tester: Book / Cancel in their live-call panel, for call changes they can see (box under that panel).
  */
 export const STOP_ONCE_KINDS = ["joined", "left", "sent", "booked", "confirmed", "cancelled", "offered", "removed"] as const;
-// ("paid" only stops the Pay box, below.)
 export const CALL_KINDS = ["booked", "confirmed", "cancelled", "offered", "removed"] as const;
 export type TestEventLike = { kind: string; text: string; createdAt: Date; version?: number | null };
 
@@ -228,10 +227,18 @@ export function stopOnce(events: TestEventLike[], seenAt: Date, confirmed: boole
   return changes.length ? { go: false, changes } : { go: true };
 }
 
-/** What stops the Pay press once: that tester sent new/updated work, left, booked or cancelled a call, or was paid (other tab). */
-export const PAY_KINDS = ["sent", "left", "booked", "cancelled", "paid"] as const;
-export function payStopOnce(events: (TestEventLike & { contractId?: string | null })[], seenAt: Date, confirmed: boolean, contractId: string) {
-  return stopOnce(events.filter((e) => e.contractId === contractId), seenAt, confirmed, PAY_KINDS);
+/**
+ * (Owner, Oct 22, latest) One set of reasons for ALL the developer's stop-once buttons: the top panel (Stop, End early,
+ * Next round), the live-call panel (offer/remove times, cancel a call) and Pay / Reject on each piece. Test-wide.
+ */
+export const DEV_STOP_KINDS = [...STOP_ONCE_KINDS, "paid", "rejected"] as const;
+export function devStopOnce(events: TestEventLike[], seenAt: Date, confirmed: boolean) {
+  return stopOnce(events, seenAt, confirmed, DEV_STOP_KINDS);
+}
+
+/** Reject: nothing is charged; a reason is required. */
+export function checkReject(reason: string): Check {
+  return reason.trim().length < 5 ? no("Say why you're rejecting it (the tester reads it).") : yes;
 }
 
 /** The one line a tester reads (and every later press is refused with) once their work was ended by the developer. */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   callCharge, canCancelCall, canDispute, changedTerms, checkDisputeDecision, checkListing, checkPay, isLate, lateLabel, listingAmount,
-  CALL_KINDS, contractSnapshot, editCheck, endedLine, payStopOnce, testerRefusal, joinCheck, mergeEdit, splitFee, stopOnce, stopOnceChanges, termsLine, type Listing,
+  CALL_KINDS, checkReject, contractSnapshot, devStopOnce, editCheck, endedLine, testerRefusal, joinCheck, mergeEdit, splitFee, stopOnce, stopOnceChanges, termsLine, type Listing,
 } from "@/lib/rules";
 
 const listing = (over: Partial<Listing> = {}): Listing => ({
@@ -176,16 +176,21 @@ describe("stop once", () => {
   });
 });
 
-describe("Pay stops once", () => {
+describe("one stop-once reason set for every developer button", () => {
   const seen = at(10);
-  const e = (kind: string, min: number, contractId: string) => ({ ...ev(kind, min, `${kind} by ${contractId}`), contractId });
-  it("stops for that tester's new work, leaving, call booked/cancelled, or another payment to them", () => {
-    for (const k of ["sent", "left", "booked", "cancelled", "paid"]) expect(payStopOnce([e(k, 11, "ana")], seen, false, "ana").go).toBe(false);
+  it("any tester's change, call change, payment or rejection anywhere on the test stops the first press", () => {
+    for (const k of ["joined", "left", "sent", "booked", "confirmed", "cancelled", "offered", "removed", "paid", "rejected"]) {
+      expect(devStopOnce([ev(k, 11)], seen, false).go).toBe(false);
+    }
   });
-  it("ignores other testers and other kinds", () => {
-    expect(payStopOnce([e("sent", 11, "ben"), e("paid", 12, "ben"), e("joined", 13, "ana"), e("offered", 14, "ana")], seen, false, "ana")).toEqual({ go: true });
+  it("edits, stops, ends and round changes don't stop", () => {
+    expect(devStopOnce([ev("edited", 11), ev("stopped", 12), ev("ended", 13), ev("next_round", 14), ev("opened", 15)], seen, false)).toEqual({ go: true });
   });
-  it("the second press pays", () => expect(payStopOnce([e("paid", 11, "ana")], seen, true, "ana")).toEqual({ go: true }));
+  it("the second press goes ahead", () => expect(devStopOnce([ev("paid", 11)], seen, true)).toEqual({ go: true }));
+  it("reject needs a reason", () => {
+    expect(checkReject("").ok).toBe(false);
+    expect(checkReject("Didn't follow the questions").ok).toBe(true);
+  });
 });
 
 describe("ended sessions", () => {

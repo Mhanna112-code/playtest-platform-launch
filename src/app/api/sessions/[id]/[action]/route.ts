@@ -1,4 +1,5 @@
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
+import { openDispute } from "@/lib/server/payments";
 import { leaveTest, sendWritten } from "@/lib/server/tests";
 import { requireActive } from "@/lib/server/users";
 
@@ -13,6 +14,10 @@ export async function POST(req: Request, { params }: Ctx) {
     switch (action) {
       case "leave":
         return ok(await leaveTest(u, id));
+      case "dispute": {
+        const d = await openDispute(u, id, body);
+        return ok({ id: d.id });
+      }
       case "written": {
         const s = await sendWritten(u, id, body);
         return ok({ id: s.id });

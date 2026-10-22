@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, pronouns, toCents } from "@/lib/format";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import {
-  changedTerms, checkListing, contractSnapshot, editCheck, isLate, joinCheck, testerRefusal, LISTING_FIELDS, mergeEdit, stopOnce, termsLine, type Listing,
+  changedTerms, checkListing, contractSnapshot, devStopOnce, editCheck, isLate, joinCheck, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
@@ -103,7 +103,7 @@ export async function staleNote(testId: string, seenAt: unknown) {
   return n ? " Refresh to see the latest." : "";
 }
 
-const seenDate = (v: unknown) => {
+export const seenDate = (v: unknown) => {
   const d = typeof v === "string" ? new Date(v) : null;
   if (!d || isNaN(d.getTime())) throw new HttpError(400, "bad_request", "This page is out of date. Refresh to see the latest.");
   return d;
@@ -171,17 +171,19 @@ export async function openDraft(dev: U, testId: string) {
 // ---------- developer: the top panel's big buttons (stop once) ----------
 
 /**
- * Every top-panel press goes through here. If since the page loaded (seenAt) a tester joined, left, sent work,
- * booked or cancelled a call, the first press stops and returns the list; the second press (confirmed) goes ahead.
+ * The one stop-once gate for every developer button (top panel, live-call panel, Pay / Reject). If since the page loaded
+ * (seenAt) any tester joined, left or sent work, a call was booked/confirmed/cancelled, times were offered/removed, or a
+ * payment/rejection was made, the first press stops and returns the list; the second press (confirmed) goes ahead.
  */
-export async function topPanelGate(tx: Tx, testId: string, seenAtRaw: unknown, confirmed: boolean) {
+export async function devGate(tx: Tx, testId: string, seenAtRaw: unknown, confirmed: boolean, extra: Record<string, unknown> = {}) {
   const seenAt = seenDate(seenAtRaw);
   const events = await tx.testEvent.findMany({ where: { testId, createdAt: { gt: seenAt } } });
-  const r = stopOnce(events, seenAt, confirmed);
+  const r = devStopOnce(events, seenAt, confirmed);
   if (!r.go) {
-    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: r.changes.map((c) => ({ text: c.text, at: c.createdAt })) });
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: r.changes.map((c) => ({ text: c.text, at: c.createdAt })), ...extra });
   }
 }
+export const topPanelGate = devGate;
 
 /** Calls ahead are cancelled (no charge) when a tester's work ends. Their offered times open again for others. */
 async function cancelCallsAhead(tx: Tx, contractIds: string[], note: string) {
