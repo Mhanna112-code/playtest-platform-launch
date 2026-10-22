@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T18:24:02.540Z",
+  "run": "2026-10-22T18:44:36.128Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjve48600077k1or3rywhu2)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjw4k9b00077kzcueob0u0l)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -167,7 +167,7 @@
       "title": "Charge declined: owed with a 3-day cut-off (developer banner + Payments, tester line); a second failure pauses at once",
       "status": "pass",
       "checks": [
-        "PASS test posted (saw: {\"id\":\"cmvjveswn003j7k1oj85dceem\"})",
+        "PASS test posted (saw: {\"id\":\"cmvjw591g003j7kzcrw8kalej\"})",
         "PASS both testers joined",
         "PASS tester offered the choice",
         "PASS developer banner with the cut-off",
@@ -336,6 +336,26 @@
         "18-blocked-row-developer.png",
         "18-session-ended-tester.png",
         "18-blocked-people-developer.png"
+      ]
+    },
+    {
+      "id": "19",
+      "title": "Apply to join: the test takes applications; Apply stops once after a listing change; the developer accepts",
+      "status": "pass",
+      "checks": [
+        "PASS Apply to join shown",
+        "PASS Apply stops once (listing changed)",
+        "PASS application sent",
+        "PASS developer sees the application",
+        "PASS tester is in",
+        "PASS tester sees the session"
+      ],
+      "screenshots": [
+        "19-apply-stops-once-tester.png",
+        "19-applied-tester.png",
+        "19-application-developer.png",
+        "19-accepted-developer.png",
+        "19-accepted-tester.png"
       ]
     }
   ],

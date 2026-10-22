@@ -653,6 +653,33 @@ async function signIn(page, email) {
     await dev.waitForTimeout(1200);
   });
 
+  await flow("19", "Apply to join: the test takes applications; Apply stops once after a listing change; the developer accepts", async () => {
+    // A fresh test that takes applications.
+    const r = await apiPost(dev, "/api/tests", { title: "Signal Fire", description: "Light the beacons.", buildUrl: "https://example.com/signal", category: "Puzzle", devices: [], languages: [], spots: 4, writtenCents: "9.00", recordingCents: null, liveRateCents: null, liveMinutes: 30, deadlineDays: 7, questions: ["How did it feel?"], openUntil: "", joinMode: "apply" });
+    const T19 = r.body.id;
+    await t3.goto(`/app/find/${T19}`); // Cara's page loads (the "seen" marker)
+    check("Apply to join shown", await has(t3, "button:has-text('Apply to join')"));
+    // The developer edits the listing meanwhile: Apply stops once under the button.
+    const v = sql(`select version from "Test" where id = '${T19}'`);
+    await apiPost(dev, `/api/tests/${T19}/edit`, { version: Number(v), fields: { writtenCents: "11.00" }, confirmed: true });
+    await t3.fill("#note", "I love beacon puzzles.");
+    await t3.click("button:has-text('Apply to join')");
+    check("Apply stops once (listing changed)", await has(t3, "text=The listing was edited: written answers price"));
+    await shot(t3, "apply-stops-once-tester");
+    await t3.click("button:has-text('Apply to join')");
+    check("application sent", await has(t3, "text=Application sent."));
+    await shot(t3, "applied-tester");
+    await dev.goto(`/app/tests/${T19}`);
+    check("developer sees the application", await has(dev, "text=I love beacon puzzles."));
+    await shot(dev, "application-developer");
+    await dev.locator("section[aria-label='Applications'] button:has-text('Accept')").first().click();
+    await dev.waitForTimeout(1500);
+    check("tester is in", await has(dev, `text=Cara Diaz ${TS % 10000}`));
+    await t3.goto("/app");
+    check("tester sees the session", await has(t3, "text=Signal Fire"));
+    await both("accepted", t3);
+  });
+
   await browser.close();
   summary.pass = summary.flows.every((f) => f.status === "pass");
   fs.writeFileSync(path.join(OUT, "summary.json"), JSON.stringify(summary, null, 2));

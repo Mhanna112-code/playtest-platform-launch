@@ -4,6 +4,13 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22) Chat reach and notifications
+- A developer and a tester can chat about a test when the tester is in it, was in it (finished/left/ended), is
+  invited to it (open invite), or has applied (pending application). Not after a block.
+- Bell notifications for new messages: when the test is open and the tester is in it / invited / applied, the bell
+  reads "Nora Lane · Harbor Run: <first words>" and links to that chat; otherwise (test closed, or they're no longer
+  in it) it's a plain "New message from Nora Lane" linking to the chat. Emails follow each person's email setting.
+
 ## (Owner, Oct 22) Joining: Join, Apply to join, invite only (no offers / counter-offers on the join page)
 - Test setting "Who can join": Anyone (tester presses Join) / Apply (tester presses Apply to join, optional note;
   the developer Accepts or Declines) / Invite only.
