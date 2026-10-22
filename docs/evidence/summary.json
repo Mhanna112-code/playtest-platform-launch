@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T17:18:45.123Z",
+  "run": "2026-10-22T17:24:47.388Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjt25jv00077k3sw2s3xwai)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjt9xso00077kjok1ei0yyt)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -164,30 +164,32 @@
     },
     {
       "id": "11",
-      "title": "Auto-pay fails: owed with a 3-day cut-off (developer banner + Payments, tester line)",
+      "title": "Charge declined: owed with a 3-day cut-off (developer banner + Payments, tester line); a second failure pauses at once",
       "status": "pass",
       "checks": [
-        "PASS test posted (saw: {\"id\":\"cmvjt2tvc003j7k3s9j7dfug8\"})",
+        "PASS test posted (saw: {\"id\":\"cmvjtalyo003j7kjoxhc4augm\"})",
         "PASS both testers joined",
         "PASS tester offered the choice",
-        "PASS both charges declined and owed (saw: 2)",
         "PASS developer banner with the cut-off",
         "PASS tester reads it may be delayed",
-        "PASS Payments page lists both"
+        "PASS Payments page lists it",
+        "PASS second failure: tests paused at once"
       ],
       "screenshots": [
         "11-choice-offered-tester.png",
         "11-owed-developer.png",
         "11-owed-tester.png",
-        "11-owed-payments-page-developer.png"
+        "11-owed-payments-page-developer.png",
+        "11-second-failure-hold-developer.png",
+        "11-second-failure-hold-tester.png"
       ]
     },
     {
       "id": "12",
-      "title": "Cut-off passes: hold pauses every test; joins, invites, Next round, posting, Pay/Reject wait; calls inside the hold cancelled, after it kept; testers still send",
+      "title": "Hold pauses every test; joins, invites, Next round, posting, Pay/Reject wait; calls inside the hold cancelled, after it kept; testers still send",
       "status": "pass",
       "checks": [
-        "PASS hold started by the daily job (saw: {\"autoPaid\":0,\"holds\":1,\"alerts\":0,\"headsUps\":0,\"choices\":0,\"retried\":0})",
+        "PASS hold on",
         "PASS developer: tests paused",
         "PASS tester: paused line",
         "PASS tester: the call inside the hold was cancelled",
@@ -282,7 +284,7 @@
       "title": "Live updates: both pages open, lines appear within ~20 s without reloading",
       "status": "pass",
       "checks": [
-        "PASS tester page showed the new time without reload (saw: 18 s)",
+        "PASS tester page showed the new time without reload (saw: 17 s)",
         "PASS open time turned into a booking",
         "PASS developer page showed the booking line without reload (saw: 17 s)"
       ],

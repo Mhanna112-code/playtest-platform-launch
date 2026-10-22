@@ -36,8 +36,9 @@ and look, but this version deliberately drops most of its complexity.
   - Tester gets "Work sent" confirmations too (bell + email per setting).
   - Invites: first invite bell + email, then a bell reminder every 3 days until the tester joins, presses "No thanks",
     or the invite expires.
-  - Admin: ONE digest email every 3 days (not daily) listing everything open; each no-show report appears in a
-    digest once.
+  - Admin (owner, latest): a DAILY email only when there are new disputes or new chargebacks (these have deadlines);
+    everything else (failed payments, holds, holds over 30 days, no-show reports once, failed payouts) goes in ONE
+    digest email every 3 days. The admin page always shows the full list.
   - "Pay what you owe first." refusal under Pay/Reject includes a link "Pay what you owe ↑" that jumps to the hold box
     at the top of the page.
 - **Payment-failure notices (frequency):** developer: on the failure (bell + email), each failed daily retry (bell
