@@ -5,6 +5,7 @@ import { canCancelCall, lateLabel, listingAmount, termsLine } from "@/lib/rules"
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
+import { Chat } from "@/components/Chat";
 import { CallPanel } from "./CallPanel";
 import { PayBox } from "./PayBox";
 import { TopPanel } from "./TopPanel";
@@ -26,6 +27,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           tester: true,
           submissions: { include: { review: true, dispute: true, recordings: true }, orderBy: { sentAt: "asc" } },
           calls: { include: { review: true, dispute: true, slot: true }, orderBy: { startsAt: "asc" } },
+          messages: { orderBy: { createdAt: "asc" }, include: { sender: true }, take: 300 },
         },
       },
     },
@@ -106,6 +108,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     </div>
                   ))}
                 {s.notes && <p className="whitespace-pre-wrap text-sm">Notes: {s.notes}</p>}
+                {s.recordings.filter((r) => r.uploadedAt).map((r) => (
+                  <div key={r.id} className="text-sm">
+                    <video controls preload="metadata" className="max-h-72 w-full rounded bg-black" src={`/api/recordings/${r.id}/file`} />
+                    <a href={`/api/recordings/${r.id}/file`} target="_blank" rel="noreferrer">{r.filename}</a>
+                  </div>
+                ))}
                 {s.review ? (
                   <ReviewResult review={s.review} payments={payments.filter((p) => p.submissionId === s.id)} dispute={s.dispute} />
                 ) : (
@@ -114,6 +122,17 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 )}
               </div>
             ))}
+            <details className="text-sm">
+              <summary className="cursor-pointer">Chat with {displayName(c.tester)} ({c.messages.length})</summary>
+              <div className="pt-2">
+                <Chat
+                  path={`/api/tests/${t.id}/message`}
+                  extra={{ contractId: c.id }}
+                  other={displayName(c.tester)}
+                  messages={c.messages.map((m) => ({ id: m.id, mine: m.senderId === u.id, who: m.senderId === u.id ? "You" : displayName(m.sender), body: m.body, at: m.createdAt.toISOString() }))}
+                />
+              </div>
+            </details>
           </div>
         ))}
       </section>

@@ -6,6 +6,8 @@ import { requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
 import { DisputeForm, LeaveButton, WrittenForm } from "./SessionActions";
+import { Chat } from "@/components/Chat";
+import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
 
 export const metadata = { title: "Your session · Playtest" };
@@ -22,12 +24,15 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       test: { include: { developer: true } },
       submissions: { include: { review: true, dispute: true, recordings: true } },
       calls: { include: { review: true, dispute: true, slot: true }, orderBy: { startsAt: "asc" } },
+      recordings: { orderBy: { createdAt: "asc" } },
+      messages: { orderBy: { createdAt: "asc" }, include: { sender: true }, take: 300 },
     },
   });
   if (!c || c.testerId !== u.id) notFound();
   const dev = displayName(c.test.developer);
   const refusal = sessionRefusal(c, c.test, dev);
   const written = c.submissions.find((s) => s.kind === "written");
+  const recording = c.submissions.find((s) => s.kind === "recording");
   const now = new Date();
   const seenAt = now.toISOString();
   const slots = await db.callSlot.findMany({ where: { testId: c.testId, status: "open", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
@@ -83,6 +88,33 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         ) : (
           <WrittenForm sessionId={c.id} questions={writtenQuestions(c)} initial={(written?.answers as string[]) ?? []} initialNotes={written?.notes ?? ""} update={!!written} />
         )}
+      </section>
+
+      <section className="panel" id="recording">
+        <h2>Screen recording</h2>
+        <p className="note">{label(c.recordingCents != null)}{c.recordingCents != null && ` · ${c.recordingCents === 0 ? "free" : money(testerShare(c.recordingCents)) + " for you"}`}</p>
+        {recording && (
+          <p className="text-sm">
+            Sent {fmtDateTime(recording.updatedAt)}
+            {recording.late && <span className="ml-2 badge">{lateLabel(c.dueAt, fmtDate)}</span>}
+          </p>
+        )}
+        {recording?.review && <TesterReview sessionId={c.id} kind="submission" id={recording.id} review={recording.review} dispute={recording.dispute} />}
+        <RecordingUpload
+          sessionId={c.id}
+          canSend={!refusal && !recording?.review}
+          sentBefore={!!recording}
+          recordings={c.recordings.map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, uploaded: !!r.uploadedAt }))}
+        />
+      </section>
+
+      <section className="panel" id="chat">
+        <h2>Chat with {dev}</h2>
+        <Chat
+          path={`/api/sessions/${c.id}/message`}
+          other={dev}
+          messages={c.messages.map((m) => ({ id: m.id, mine: m.senderId === u.id, who: m.senderId === u.id ? "You" : displayName(m.sender), body: m.body, at: m.createdAt.toISOString() }))}
+        />
       </section>
     </>
   );

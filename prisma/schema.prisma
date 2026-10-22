@@ -203,6 +203,8 @@ model Recording {
   filename     String
   sizeBytes    Int
   contentType  String
+  /// Set once the upload finished
+  uploadedAt   DateTime?
   createdAt    DateTime    @default(now())
 }
 

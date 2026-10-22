@@ -1,5 +1,6 @@
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { devCancelCall, offerTimes, removeTime, reportNoShow } from "@/lib/server/calls";
+import { sendMessage } from "@/lib/server/messages";
 import { editTest, endEarly, joinTest, nextRound, openDraft, stopTest } from "@/lib/server/tests";
 import { requireActive } from "@/lib/server/users";
 
@@ -33,6 +34,10 @@ export async function POST(req: Request, { params }: Ctx) {
         return ok(await devCancelCall(u, id, body));
       case "no-show":
         return ok(await reportNoShow(u, String(body.callId ?? ""), body));
+      case "message": {
+        const m = await sendMessage(u, String(body.contractId ?? ""), body.body);
+        return ok({ id: m.id });
+      }
       case "join": {
         const c = await joinTest(u, id, body);
         return ok({ sessionId: c.id });
