@@ -17,6 +17,13 @@ and look, but this version deliberately drops most of its complexity.
   tab) is shown in the live top box AND stops once on every button of: the developer's test page, the developer's
   Edit page (incl. Save), the tester's session page, and the join page ("Nora Lane changed the description · 3:12 PM
   [See it]"). Other edits keep their rules (terms -> A; join-page listing changes -> D; spots only when full).
+- PAYMENTS AND DISPUTES (both sides, top box + stop once on every button), ONLY for this test:
+  - Developer: payment succeeded / failed (and retried), refunds, chargeback opened/resolved, dispute opened by a
+    tester, the developer's side added, admin dispute decision; applications; Switch/Keep; invite answers.
+  - Tester: paid / rejected, payment delayed (never "failed", "hold" or "chargeback"), payment arrived after a delay,
+    their dispute's admin decision. Chargebacks are never shown to testers.
+  - Payment events from the developer's OTHER tests don't show here; a hold shows on every test as the existing
+    paused banner/refusals (not a top-box line per failure).
 - The Edit page's Save follows the SAME rule as the test-page buttons: it stops once for every developer reason
   (including edits or any other action saved in another tab, and F), with the box under Save; the second press saves.
   The Edit page has the live top box too.

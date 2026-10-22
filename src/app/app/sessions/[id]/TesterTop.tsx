@@ -15,7 +15,7 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
     const on = (e: Event) => setBox((e as CustomEvent).detail as StopBox);
     window.addEventListener("tester-top", on);
     return () => window.removeEventListener("tester-top", on);
-  }, []);
+  }, [setBox]);
   if (!offer)
     return box ? (
       <div className="space-y-2">

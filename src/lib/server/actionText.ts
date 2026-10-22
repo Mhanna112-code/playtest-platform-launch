@@ -112,7 +112,7 @@ export async function logTestAction(userId: string, testId: string, action: stri
 }
 
 /** Pay / Reject on a piece of work or a call. */
-export async function logReview(userId: string, body: B, result: { amountCents?: number; rejected?: boolean; repeated?: boolean }) {
+export async function logReview(userId: string, body: B, result: { amountCents?: number; rejected?: boolean; repeated?: boolean; status?: string }) {
   if (result.repeated) return;
   const id = s(body.id);
   const piece = body.kind === "call"
@@ -120,5 +120,6 @@ export async function logReview(userId: string, body: B, result: { amountCents?:
     : await db.submission.findUnique({ where: { id }, include: { contract: { include: { tester: true } } } }).then((x) => x && { c: x.contract, label: x.kind === "recording" ? "recording" : "written answers" });
   if (!piece) return;
   const name = displayName(piece.c.tester);
-  await logAction(userId, piece.c.testId, body, result.rejected ? `rejected ${name}'s ${piece.label}` : `paid ${name} ${money(result.amountCents ?? 0)} for the ${piece.label}`);
+  const text = result.rejected ? `rejected ${name}'s ${piece.label}` : result.status === "failed" ? `tried to pay ${name} ${money(result.amountCents ?? 0)} for the ${piece.label} (declined)` : `paid ${name} ${money(result.amountCents ?? 0)} for the ${piece.label}`;
+  await logAction(userId, piece.c.testId, body, text);
 }

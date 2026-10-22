@@ -255,6 +255,38 @@ export const DEV_EXEMPT_KINDS: Record<string, string> = {
   paused: "a payment hold: every paused button refuses for good, and the page shows the hold",
   resumed: "the hold lifted because the developer paid (their own action, reason E)",
 };
+
+/** The test events a tester's page reads directly; their other reasons come from their own contract's records. */
+export const TESTER_EVENT_KINDS = ["info"] as const;
+/** Every other recorded event kind, and why a tester never sees it as such (or sees it another way). */
+export const TESTER_EXEMPT_KINDS: Record<string, string> = {
+  joined: "another tester's activity is never shown to a tester",
+  left: "another tester's activity (their own Leave is reason E)",
+  sent: "the tester's own work (reason E from another tab)",
+  booked: "read from their own call requests (reason C), never other testers' calls",
+  cancelled: "read from their own calls (reason C)",
+  requested: "read from their own call requests (reason C)",
+  withdrew_req: "read from their own call requests (reason C)",
+  declined_req: "read from their own call requests (reason C)",
+  paid: "read from the developer's review of their own work (reason B)",
+  rejected: "read from the developer's review of their own work (reason B)",
+  choice: "their own Charge / Let it go offer: shown on the page itself",
+  chargeback: "chargebacks are never shown to testers",
+  applied: "applications are the developer's; their own Apply is reason E",
+  terms: "their own Switch / Keep (reason E); new terms are read from the offer (reason A)",
+  dispute: "their own dispute (reason E); the decision is read from the dispute itself",
+  invite: "their own invite answer (reason E)",
+  admin: "the team's decision on their dispute is read from the dispute; other admin actions end the session (final refusal)",
+  edited: "terms changes come as an offer (reason A); listing info as F",
+  edited_spots: "spots never stop a tester",
+  opened: "a draft opening never affects a working tester",
+  stopped: "the session ends: every button refuses for good",
+  ended: "the session ends: every button refuses for good",
+  next_round: "a new round never changes a working tester's contract",
+  invited: "the developer's invites to others",
+  paused: "a hold shows as the paused banner and refusals",
+  resumed: "the paused banner goes away",
+};
 export function devStopOnce(events: TestEventLike[], seenAt: Date, confirmed: boolean) {
   return stopOnce(events, seenAt, confirmed, DEV_STOP_KINDS);
 }

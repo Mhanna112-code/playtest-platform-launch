@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { DEV_EXEMPT_KINDS, DEV_STOP_KINDS } from "@/lib/rules";
+import { DEV_EXEMPT_KINDS, DEV_STOP_KINDS, TESTER_EVENT_KINDS, TESTER_EXEMPT_KINDS } from "@/lib/rules";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { POST as blocksPOST } from "@/app/api/blocks/route";
 import { POST as invitePOST } from "@/app/api/invites/[id]/route";
@@ -172,7 +172,7 @@ describe("(F) listing info", () => {
   });
 });
 
-describe("the developer's reason set is complete", () => {
+describe("both sides' reason sets are complete", () => {
   it("every event kind the app records either stops the developer or is exempt with a reason", () => {
     const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
     const kinds = new Set<string>();
@@ -184,11 +184,70 @@ describe("the developer's reason set is complete", () => {
       for (const m of src.matchAll(/testEvent\.create\(\{ data: \{ testId, kind: "([a-z_]+)"/g)) kinds.add(m[1]);
     }
     expect(kinds.size).toBeGreaterThan(20);
-    const stops = new Set<string>(DEV_STOP_KINDS);
-    for (const k of kinds) {
-      const exempt = DEV_EXEMPT_KINDS[k];
-      expect(stops.has(k) || (exempt && exempt.length > 10), `event kind "${k}" neither stops the developer nor is exempt with a reason`).toBe(true);
-      expect(stops.has(k) && !!exempt, `event kind "${k}" is both`).toBe(false);
+    for (const [side, stopKinds, exemptKinds] of [["developer", DEV_STOP_KINDS, DEV_EXEMPT_KINDS], ["tester", TESTER_EVENT_KINDS, TESTER_EXEMPT_KINDS]] as const) {
+      const stops = new Set<string>(stopKinds);
+      for (const k of kinds) {
+        const exempt = (exemptKinds as Record<string, string>)[k];
+        expect(stops.has(k) || (!!exempt && exempt.length > 10), `event kind "${k}" neither reaches the ${side} nor is exempt with a reason`).toBe(true);
+        expect(stops.has(k) && !!exempt, `event kind "${k}" is both for the ${side}`).toBe(false);
+      }
     }
+  });
+});
+
+describe("payments and disputes, only for this test", () => {
+  const fail = (contractId: string, devId: string, testerId: string, submissionId: string, extra: Record<string, unknown> = {}) =>
+    db.payment.create({ data: { kind: "review", contractId, submissionId, developerId: devId, testerId, amountCents: 800, feeCents: 160, testerCents: 640, status: "failed", owedUntil: new Date(Date.now() + 3 * 86_400_000), ...extra } });
+
+  it("a declined payment on another test of the same developer neither shows nor stops here", async () => {
+    const { dev, testId: A } = await setup();
+    const { tester, sessionId: SA } = await joined(A);
+    const { POST: postTest } = await import("@/app/api/tests/route");
+    const r = await json(await postTest(req("/api/tests", { cookie: dev.cookie, body: { title: "Other", description: "x", buildUrl: "https://example.com/o", category: "Action", devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Q?"], openUntil: "" } })));
+    const T2 = r.body.id as string;
+    const other = await joined(T2, "Ben Carter", "he");
+    await sact(other.sessionId, "written", other.tester.cookie, { answers: ["b"] });
+    const pageLoaded = seen();
+    await later();
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: other.sessionId } });
+    await fail(other.sessionId, dev.user.id, other.tester.user.id, sub.id);
+    // Test A: nothing for the developer or for Ana.
+    expect((await live(dev.cookie, `test:${A}`, pageLoaded)).body.changes).toEqual([]);
+    expect((await live(tester.cookie, `session:${SA}`, pageLoaded)).body.changes).toEqual([]);
+    expect((await act(A, "next-round", dev.cookie, { seenAt: pageLoaded })).body.error?.code).not.toBe("stop_once");
+    // The other test: the developer sees it and stops once; Ben reads only "delayed".
+    const line = "Your $8.00 payment to Ben Carter for the written answers was declined";
+    expect((await live(dev.cookie, `test:${T2}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([line]);
+    expect(texts(await act(T2, "stop", dev.cookie, { seenAt: pageLoaded }))).toEqual([line]);
+    expect((await live(other.tester.cookie, `session:${other.sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual(["The payment of $8.00 for your written answers is delayed"]);
+  });
+
+  it("a tester never reads 'failed', 'hold' or 'chargeback': delayed, arrived, the team's decision", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400, reason: "Short answers" });
+    await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question", seenAt: seen(), confirmed: true });
+    const pageLoaded = seen();
+    await later();
+    const p = await fail(sessionId, dev.user.id, tester.user.id, sub.id, { failure: "card_declined" });
+    await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 500, feeCents: 100, testerCents: 400, status: "charged", chargeback: "open", chargebackAt: new Date(), stripePaymentIntentId: "pi_" + randomUUID() } });
+    await db.testEvent.create({ data: { testId, kind: "chargeback", text: "Your bank reversed your $5.00 payment for Ana Silva's written answers", contractId: sessionId } });
+    await db.testEvent.create({ data: { testId, kind: "paused", text: "Your tests are paused until you pay what you owe" } });
+    const before = await live(tester.cookie, `session:${sessionId}`, pageLoaded);
+    expect(before.body.changes.map((c: { text: string }) => c.text)).toEqual(["The payment of $8.00 for your written answers is delayed"]);
+    await later();
+    await db.payment.update({ where: { id: p.id }, data: { status: "charged", settledAt: new Date() } });
+    const d = await db.dispute.findFirstOrThrow({ where: { contractId: sessionId } });
+    await db.dispute.update({ where: { id: d.id }, data: { status: "decided", decidedCents: 800, decidedAt: new Date() } });
+    const lines: string[] = (await live(tester.cookie, `session:${sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text);
+    expect(lines).toEqual(expect.arrayContaining(["A delayed payment of $8.00 for your written answers arrived", "The team decided your dispute: the pay was raised to $8.00"]));
+    for (const t of lines) expect(t).not.toMatch(/fail|hold|chargeback|reversed|bank/i);
+    const stop = await sact(sessionId, "leave", tester.cookie, { seenAt: pageLoaded });
+    expect(stop.body.error.code).toBe("stop_once");
+    for (const t of texts(stop)) expect(t).not.toMatch(/fail|hold|chargeback|reversed|bank/i);
+    // The developer's side lists the chargeback (an event on this test).
+    expect((await live(dev.cookie, `test:${testId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual(expect.arrayContaining(["Your bank reversed your $5.00 payment for Ana Silva's written answers"]));
   });
 });

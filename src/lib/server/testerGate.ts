@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money } from "@/lib/format";
 import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, stopOnce, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
-import { asLines, ownChanges, seenOf, tabOf } from "./live";
+import { asLines, ownChanges, seenOf, tabOf, testerPaymentChanges } from "./live";
 
 // The tester's ONE set of stop-once reasons (owner rule, NEWEST+3), used by every tester button on the session page:
 // Switch / Keep, Send written, Send recording, Charge / Let it go, Dispute, Leave, Block, Request a time, Accept /
@@ -49,11 +49,12 @@ export async function testerChanges(testerId: string, contractId: string, testId
   for (const call of calls) out.push({ kind: "cancelled", text: `Your call on ${fmtDateTime(call.startsAt)} was cancelled`, createdAt: call.cancelledAt! });
   // (F) the listing's info (title, description, devices, languages) changed.
   out.push(...(await db.testEvent.findMany({ where: { testId, kind: "info", createdAt: { gt: seenAt } } })));
+  out.push(...(await testerPaymentChanges(contractId, seenAt)));
   out.push(...(await ownChanges(testerId, testId, seenAt, tab)));
   return out.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }
 
-const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", "info", "own"];
+const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", "info", "payment", "admin", "own"];
 
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
 export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.") {

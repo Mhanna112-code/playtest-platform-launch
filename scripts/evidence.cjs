@@ -834,6 +834,28 @@ async function signIn(page, email) {
     await tab1.waitForTimeout(2000);
     check("second press left the test", sql(`select status from "Contract" where id = '${SCara}'`) === "left");
     await shot(tab1, "tab1-left-tester");
+    // --- Payments: Cara charges after 14 days, the developer's card is declined. The developer's top box names it;
+    // Cara's other tab reads only "delayed".
+    await tab2.goto(`/app/sessions/${SCara}`);
+    await dev.goto(`/app/tests/${T}`);
+    const pmBefore = sql(`select coalesce("stripePaymentMethodId", '') from "User" where id = '${devId}'`);
+    const subC = sql(`select id from "Submission" where "contractId" = '${SCara}' and kind = 'written'`);
+    sql(`update "Submission" set "payBy" = now() - interval '1 minute' where id = '${subC}'`);
+    await runCron();
+    sql(`update "User" set "stripePaymentMethodId" = 'pm_card_declined' where id = '${devId}'`);
+    const ch = await apiPost(t3, `/api/sessions/${SCara}/choose`, { submissionId: subC, choice: "charge", tickedCents: 800 });
+    check("Cara charged; the card was declined (owed)", sql(`select count(*) from "Payment" where "submissionId" = '${subC}' and status = 'failed' and "owedUntil" is not null`) === "1", JSON.stringify(ch.body));
+    const devDeclined = await dev.waitForSelector("[data-live-top] >> text=for the written answers was declined", { timeout: 35000 }).then(() => true, () => false);
+    check("developer's top box: the payment was declined (this test only)", devDeclined);
+    await dev.evaluate(() => window.scrollTo(0, 0));
+    await shot(dev, "top-box-declined-developer");
+    const delayed = await tab2.waitForSelector("[data-live-top] >> text=The payment of $8.00 for your written answers is delayed", { timeout: 35000 }).then(() => true, () => false);
+    const topText = delayed ? await tab2.locator("[data-live-top]").innerText() : "";
+    check("tester's top box: 'delayed', never failed/hold/chargeback", delayed && !/fail|hold|chargeback/i.test(topText), topText);
+    await shot(tab2, "top-box-delayed-tester");
+    sql(`update "User" set "stripePaymentMethodId" = ${pmBefore ? `'${pmBefore}'` : "NULL"} where id = '${devId}'`);
+    const owedPaid = await apiPost(dev, "/api/payments/owed", { confirmed: true });
+    check("the developer paid what they owe", sql(`select count(*) from "Payment" where "submissionId" = '${subC}' and status = 'failed' and "settledAt" is null`) === "0", JSON.stringify(owedPaid.body));
     await tab2.close();
     // --- F + live top box: Dee's session page is open (scrolled down); the developer's Edit is open in tab 1.
     await apiPost(t2, `/api/sessions/${SDee3}/written`, { answers: ["Seaweed everywhere."] });
