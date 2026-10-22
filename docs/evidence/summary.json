@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T22:31:12.624Z",
+  "run": "2026-10-22T22:50:02.280Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvk47zv401557k4goesc4u00)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvk4w73m00077kg4vpufjz6c)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -129,13 +129,13 @@
     {
       "id": "10",
       "title": "Live call payment problems: call length, declined Pay, chargeback hold, resolved",
-      "status": "pass",
+      "status": "fail",
       "checks": [
         "PASS Pay box reference = rate × 25 min",
         "PASS tester: waiting to be paid",
-        "PASS declined line under Pay",
-        "PASS tester: may be delayed",
-        "PASS paid",
+        "PASS declined line under Pay: now owed",
+        "FAIL tester: may be delayed",
+        "PASS paid (Pay what you owe)",
         "PASS webhook accepted (saw: 200)",
         "PASS stop-once line under the top panel",
         "PASS hold banner",
@@ -167,7 +167,7 @@
       "title": "Charge declined: owed with a 3-day cut-off (developer banner + Payments, tester line); a second failure pauses at once",
       "status": "pass",
       "checks": [
-        "PASS test posted (saw: {\"id\":\"cmvk48pi001967k4ghafv1jcn\"})",
+        "PASS test posted (saw: {\"id\":\"cmvk4x2nb00457kg4j0t4h61z\"})",
         "PASS both testers joined",
         "PASS tester offered the choice",
         "PASS developer banner with the cut-off",
@@ -403,10 +403,10 @@
       "title": "Developer live-call panel: one tester with a booked call, a weekly set and a waiting request; another at 3 of 3 refused",
       "status": "pass",
       "checks": [
-        "PASS weekly set booked (3 calls) (saw: {\"booked\":true,\"callId\":\"cmvk4bkkd01kr7k4gurl8353f\",\"calls\":3})",
-        "PASS Dee's call on day 8 booked (saw: {\"booked\":true,\"callId\":\"cmvk4bkoy01lr7k4g0pjm8ajl\",\"calls\":1})",
-        "PASS Dee's call on day 9 booked (saw: {\"booked\":true,\"callId\":\"cmvk4bkto01m87k4goraup8ig\",\"calls\":1})",
-        "PASS Dee's call on day 10 booked (saw: {\"booked\":true,\"callId\":\"cmvk4bkx801mp7k4gxqfs0ulh\",\"calls\":1})",
+        "PASS weekly set booked (3 calls) (saw: {\"booked\":true,\"callId\":\"cmvk4zxyv00fz7kg40328xtnn\",\"calls\":3})",
+        "PASS Dee's call on day 8 booked (saw: {\"booked\":true,\"callId\":\"cmvk4zy2v00gz7kg4mxczqhfm\",\"calls\":1})",
+        "PASS Dee's call on day 9 booked (saw: {\"booked\":true,\"callId\":\"cmvk4zy9300hg7kg4yfnssnmb\",\"calls\":1})",
+        "PASS Dee's call on day 10 booked (saw: {\"booked\":true,\"callId\":\"cmvk4zycl00hx7kg43ail9bu8\",\"calls\":1})",
         "PASS 4th booked time refused for the tester",
         "PASS rate line",
         "PASS Dee at 3 of 3 booked",
@@ -422,22 +422,22 @@
     {
       "id": "23",
       "title": "Every button stops once: your own other-tab actions, Block after a payment, listing info (F), the live top box",
-      "status": "pass",
+      "status": "fail",
       "checks": [
-        "PASS two testers in (saw: {\"id\":\"cmvk4bm7d01nb7k4gj2mgol7y\"})",
+        "PASS two testers in (saw: {\"id\":\"cmvk4zzn100ij7kg43xc8kw19\"})",
         "PASS tab 2 sent the answers",
         "PASS tab 1 Leave stopped once: 'You also did this in another tab'",
         "PASS second press left the test",
         "PASS Cara charged; the card was declined (owed) (saw: {\"choice\":\"charge\",\"amountCents\":800,\"status\":\"failed\"})",
         "PASS developer's top box: 'Payment failed on Tide Pool ... pay by ... to avoid a pause'",
-        "PASS tester's top box: 'delayed', never failed/hold/chargeback (saw: Updated · 5:34 PM: You also did this in another tab: charged for your written answers\nUpdated · 5:34 PM: The payment of $8.00 for your written answers on Tide P)",
+        "FAIL tester's top box: 'delayed', never failed/hold/chargeback (saw: )",
         "PASS developer's OTHER test page shows the failure, naming Tide Pool",
         "PASS the developer paid what they owe (saw: {\"paid\":1,\"stillFailing\":[],\"lifted\":false})",
         "PASS Edit tab 1: Save stopped once with the other tab's change",
         "PASS second Save saved",
-        "PASS tester's top box: 'Nora Lane changed the description' with See it (saw: 18 s)",
+        "PASS tester's top box: 'Nora Lane changed the description' with See it (saw: 17 s)",
         "PASS the page scrolled up to the top box once (saw: 1007 → 133)",
-        "PASS developer paid Dee $8 (saw: {\"reviewId\":\"cmvk4coik01pf7k4g1ubh6d4t\",\"amountCents\":800,\"status\":\"charged\",\"rejected\":false,\"paidSoFarCents\":800})",
+        "PASS developer paid Dee $8 (saw: {\"reviewId\":\"cmvk51t8a00kq7kg4q40sk1go\",\"amountCents\":800,\"status\":\"charged\",\"rejected\":false,\"paidSoFarCents\":800})",
         "PASS Block stopped once: the developer paid",
         "PASS top box lists the payment above the description change",
         "PASS no second scroll (only the new line's height) (saw: 205 → 183)",
@@ -458,7 +458,341 @@
         "23-top-box-and-stop-box-tester.png",
         "23-blocked-tester.png"
       ]
+    },
+    {
+      "id": "24",
+      "title": "Coverage: tester call refusals, limits, clashes, and combined stop boxes (info + call; another tab + paid)",
+      "status": "fail",
+      "checks": [
+        "PASS Eve and Cara in (saw: {\"id\":\"cmvk52a9i00ld7kg48m0uhuc4\"})",
+        "PASS tester stop box: listing info (F) + call change (C) together",
+        "PASS tester stop box: 'You also did this in another tab' + the developer paid",
+        "PASS refused: the developer declined this request",
+        "FAIL error: locator.click: Timeout 15000ms exceeded."
+      ],
+      "screenshots": [
+        "24-combined-info-and-call-tester.png",
+        "24-combined-other-tab-and-paid-tester.png",
+        "24-request-declined-refused-tester.png"
+      ]
+    },
+    {
+      "id": "25",
+      "title": "Coverage: red form mistake; automatic charge fails on another test, retried, goes through; combined developer box; top box with 3+ updates",
+      "status": "pass",
+      "checks": [
+        "PASS form mistake shown in red",
+        "PASS Reef charge owed",
+        "PASS developer stop box: failure on another test + a tester's action here + another tab",
+        "PASS tester top box: delayed on Reef",
+        "PASS retried and went through",
+        "PASS tester top box: paid on Reef",
+        "PASS (d) top box with 3+ updates after the scroll-once (saw: 5)",
+        "PASS developer top box: the retry went through on Reef"
+      ],
+      "screenshots": [
+        "25-form-mistake-red-tester.png",
+        "25-combined-other-test-failure-and-tester-action-developer.png",
+        "25-top-box-many-updates-tester.png",
+        "25-top-box-retry-went-through-developer.png"
+      ]
     }
   ],
-  "pass": true
+  "coverage": [
+    {
+      "type": "Tester stop A: new terms (Send my recording)",
+      "side": "tester",
+      "flow": "17",
+      "screenshot": "17-send-stops-once-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Tester stop B: the developer paid (Block)",
+      "side": "tester",
+      "flow": "23",
+      "screenshot": "23-block-stopped-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Tester stop C: a developer call change (Send written)",
+      "side": "tester",
+      "flow": "24",
+      "screenshot": "24-combined-info-and-call-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Tester stop D: the listing changed (join page: Apply)",
+      "side": "tester",
+      "flow": "19",
+      "screenshot": "19-apply-stops-once-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Tester stop E: your own action in another tab (Leave)",
+      "side": "tester",
+      "flow": "23",
+      "screenshot": "23-tab1-leave-stopped-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Tester stop F: listing info changed (Send written)",
+      "side": "tester",
+      "flow": "24",
+      "screenshot": "24-combined-info-and-call-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Developer stop: testers joined / sent (top panel)",
+      "side": "developer",
+      "flow": "04",
+      "screenshot": "04-stop-once-box.png",
+      "status": "pass"
+    },
+    {
+      "type": "Developer stop: chargeback (End early)",
+      "side": "developer",
+      "flow": "14",
+      "screenshot": "14-chargeback-stop-once-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Developer stop: own action in another tab + failure on another test + a tester's action (Next round)",
+      "side": "developer",
+      "flow": "25",
+      "screenshot": "25-combined-other-test-failure-and-tester-action-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Developer stop on Edit Save: a change saved in another tab",
+      "side": "developer",
+      "flow": "23",
+      "screenshot": "23-edit-save-stopped-developer.png",
+      "status": "fail"
+    },
+    {
+      "type": "Live top box (tester)",
+      "side": "tester",
+      "flow": "23",
+      "screenshot": "23-top-box-info-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Live top box (developer)",
+      "side": "developer",
+      "flow": "23",
+      "screenshot": "23-top-box-declined-developer.png",
+      "status": "fail"
+    },
+    {
+      "type": "Scroll once to the top box",
+      "side": "tester",
+      "flow": "23",
+      "screenshot": "23-top-box-viewport-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Payment: manual Pay declined becomes owed",
+      "side": "developer",
+      "flow": "10",
+      "screenshot": "10-2-dev-declined.png",
+      "status": "fail"
+    },
+    {
+      "type": "Payment: automatic charge (tester's Charge) fails, owed with a cut-off",
+      "side": "developer",
+      "flow": "11",
+      "screenshot": "11-owed-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Payment: the daily retry goes through (named on another test)",
+      "side": "developer",
+      "flow": "25",
+      "screenshot": "25-top-box-retry-went-through-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Payment: a second failure starts the hold",
+      "side": "developer",
+      "flow": "11",
+      "screenshot": "11-second-failure-hold-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Payment: chargeback opened",
+      "side": "developer",
+      "flow": "14",
+      "screenshot": "14-chargeback-hold-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Payment: chargeback resolved",
+      "side": "developer",
+      "flow": "14",
+      "screenshot": "14-chargeback-resolved-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Payment: across-tests failure alert on another test",
+      "side": "developer",
+      "flow": "23",
+      "screenshot": "23-top-box-other-test-developer.png",
+      "status": "fail"
+    },
+    {
+      "type": "Payment: the tester's 'delayed' line",
+      "side": "tester",
+      "flow": "23",
+      "screenshot": "23-top-box-delayed-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Payment: the tester's 'paid' line after the delay",
+      "side": "tester",
+      "flow": "25",
+      "screenshot": "25-top-box-many-updates-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Refusal: request taken by another tester",
+      "side": "tester",
+      "flow": "21",
+      "screenshot": "21-accept-refused-tester-b.png",
+      "status": "pass"
+    },
+    {
+      "type": "Refusal: request withdrawn",
+      "side": "developer",
+      "flow": "20",
+      "screenshot": "20-accept-withdrawn-refused-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Refusal: request declined",
+      "side": "tester",
+      "flow": "24",
+      "screenshot": "24-request-declined-refused-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Refusal: request closed / its time passed",
+      "side": "tester",
+      "flow": "24",
+      "screenshot": "24-request-time-passed-refused-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Refusal: 3 booked times",
+      "side": "tester",
+      "flow": "22",
+      "screenshot": "22-fourth-refused-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Refusal: 3 booked times (developer)",
+      "side": "developer",
+      "flow": "22",
+      "screenshot": "22-fourth-refused-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Refusal: 3 requests waiting",
+      "side": "tester",
+      "flow": "24",
+      "screenshot": "24-three-requests-refused-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Refusal: a clash when sending",
+      "side": "tester",
+      "flow": "24",
+      "screenshot": "24-send-clash-refused-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Refusal: weekly clash naming the week",
+      "side": "tester",
+      "flow": "24",
+      "screenshot": "24-weekly-clash-refused-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Refusal: This time is no longer free",
+      "side": "tester",
+      "flow": "24",
+      "screenshot": "24-no-longer-free-refused-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Refusal: Join call too early",
+      "side": "tester",
+      "flow": "18",
+      "screenshot": "18-join-too-early-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Refusal: paused (hold)",
+      "side": "tester",
+      "flow": "12",
+      "screenshot": "12-hold-join-refused-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Refusal: paused (hold, developer)",
+      "side": "developer",
+      "flow": "12",
+      "screenshot": "12-hold-pay-waits-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Refusal: blocked",
+      "side": "developer",
+      "flow": "18",
+      "screenshot": "18-blocked-row-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Refusal: session ended (tester reads only that)",
+      "side": "tester",
+      "flow": "18",
+      "screenshot": "18-session-ended-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Form mistake in red",
+      "side": "tester",
+      "flow": "25",
+      "screenshot": "25-form-mistake-red-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Combined (a): another tab + the developer paid, one stop box",
+      "side": "tester",
+      "flow": "24",
+      "screenshot": "24-combined-other-tab-and-paid-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Combined (b): failure on another test + a tester's action here, one stop box",
+      "side": "developer",
+      "flow": "25",
+      "screenshot": "25-combined-other-test-failure-and-tester-action-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Combined (c): listing info + a call change, one stop box",
+      "side": "tester",
+      "flow": "24",
+      "screenshot": "24-combined-info-and-call-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Combined (d): top box with 3+ updates after the scroll-once",
+      "side": "tester",
+      "flow": "25",
+      "screenshot": "25-top-box-many-updates-tester.png",
+      "status": "pass"
+    }
+  ],
+  "pass": false
 }

@@ -855,7 +855,7 @@ async function signIn(page, email) {
     await dev.evaluate(() => window.scrollTo(0, 0));
     await shot(dev, "top-box-declined-developer");
     await tab2.bringToFront();
-    const delayed = await tab2.waitForSelector("[data-live-top] >> text=The payment of $8.00 for your written answers on Tide Pool is delayed", { timeout: 35000 }).then(() => true, () => false);
+    const delayed = await tab2.waitForSelector("[data-live-top] >> text=payment for your written answers ($8) is delayed. You'll be told when it arrives.", { timeout: 35000 }).then(() => true, () => false);
     const topText = delayed ? await tab2.locator("[data-live-top]").innerText() : "";
     check("tester's top box: 'delayed', never failed/hold/chargeback", delayed && !/fail|hold|chargeback/i.test(topText), topText);
     await shot(tab2, "top-box-delayed-tester");
@@ -989,8 +989,10 @@ async function signIn(page, email) {
     await shot(tabA, "request-declined-refused-tester");
     // Its time passed: the developer's request's time is now in the past; Accept is refused.
     const r1 = lastDevReq(SE);
-    sql(`update "CallRequest" set "startsAt" = now() - interval '2 minutes', times = ARRAY[now() - interval '2 minutes']::timestamp(3)[] where id = '${r1}'`);
+    // (The time is set 15 s ahead so the row still shows; Accept is pressed once it has passed.)
+    sql(`update "CallRequest" set "startsAt" = now() + interval '15 seconds', times = ARRAY[now() + interval '15 seconds']::timestamp(3)[] where id = '${r1}'`);
     await tabA.reload();
+    await tabA.waitForTimeout(17000);
     await reqBox(tabA).locator("button:has-text('Accept')").first().click();
     check("refused: the call time is no longer available (its time passed)", await has(tabA, "text=is no longer available."));
     await shot(tabA, "request-time-passed-refused-tester");

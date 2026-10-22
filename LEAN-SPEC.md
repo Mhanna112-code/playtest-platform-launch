@@ -4,6 +4,25 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, NEWEST+4) Listing changes re-invite; applications; rejoining restores work
+- INVITES: when the developer saves a listing change (anything except spots / who can join), every OPEN invite closes
+  and a NEW invite on the new listing is sent to the same testers ("Nora Lane updated Harbor Run, so here's a new
+  invite: written $10, recording $12." bell + email; the 3-day reminder clock restarts). Testers who can't be invited
+  any more (greyed/removed reasons) are not re-invited; the Save result names them ("Not re-invited: Dee Moss (in 10
+  tests)."). Accept on an old invite is refused under the button: "This invite was replaced by a new one with the
+  current listing." (the new invite is shown right there).
+- APPLICATIONS: if the listing changed since a tester applied, the developer's Accept does NOT join them; under Accept:
+  "Ana Silva applied before your changes, so she'll be asked to join on the current listing." The tester gets "Harbor
+  Run changed since you applied: join on the current listing, or withdraw your application." (as with the switch to
+  Anyone). Unchanged listing -> Accept joins at once (as now).
+- REJOINING: a tester who LEFT can join again (normal Join/Apply/Invite rules, spots, refusals, 10-test limit) on the
+  CURRENT listing. Their old session is RESTORED (same session page): sent work, reviews, payments, paid so far, chat,
+  disputes and call history are all still there. New terms apply to work sent after rejoining; work already sent keeps
+  the price it was sent under. Their deadline restarts from the rejoin date. Cancelled calls / closed requests stay
+  closed. A tester the developer ENDED can only come back through a new invite from the developer; Join for them is
+  refused: "You can't join this test again." (neutral; a block is never revealed). Wording fix for others: never
+  "You've already joined this test." for someone who left.
+
 ## (Owner, Oct 22, NEWEST+3) Every button stops once, including for your own actions in another tab
 - ONE rule for every tester button on the session page AND the join/listing page (Switch/Keep, Send written, Send
   recording, Charge/Let it go, Dispute, Leave, BLOCK, Request a time, Accept/Decline/Withdraw, Cancel call; Join,

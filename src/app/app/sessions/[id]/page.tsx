@@ -53,6 +53,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const blockedPair = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: u.id }] } })) > 0;
   const partPaid = new Map((await db.payment.groupBy({ by: ["submissionId", "callId"], where: { contractId: c.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } })).map((g) => [g.submissionId ?? g.callId ?? "", g._sum.amountCents ?? 0]));
   const delayedSubs = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", settledAt: null, owedUntil: { not: null }, submissionId: { not: null } }, select: { submissionId: true } })).map((p) => p.submissionId!));
+  const owedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", settledAt: null, owedUntil: { not: null }, callId: { not: null } }, select: { callId: true } })).map((p) => p.callId!));
   const failedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", callId: { not: null } }, select: { callId: true } })).map((p) => p.callId!));
   const cancelledText = (x: { status: string; cancelledBy: string | null }) => (x.status !== "cancelled" ? "" : x.cancelledBy === "tester" ? "you cancelled it" : `cancelled by ${x.cancelledBy === "developer" ? dev : "the site"}`);
   const infoChanged = (await db.testEvent.count({ where: { testId: c.testId, kind: "info", createdAt: { gt: c.joinedAt } } })) > 0;
@@ -119,7 +120,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       {c.calls.filter((x) => x.review).map((x) => (
         <section key={x.id} className="panel">
           <h3>Live call on {fmtDateTime(x.startsAt)}</h3>
-          <TesterReview sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} />
+          {owedCalls.has(x.id) ? <p className="info">{DELAYED_CALL_LINE}</p> : <TesterReview sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} />}
         </section>
       ))}
 
