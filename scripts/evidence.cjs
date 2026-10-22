@@ -38,6 +38,7 @@ let browser, cur;
 
 async function shot(page, name) {
   const file = `${cur.id}-${name}.png`;
+  await page.bringToFront(); // a background tab (several tabs in one browser) never renders its screenshot
   await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(OUT, file), fullPage: true });
   cur.screenshots.push(file);
@@ -847,15 +848,18 @@ async function signIn(page, email) {
     sql(`update "User" set "stripePaymentMethodId" = 'pm_card_declined' where id = '${devId}'`);
     const ch = await apiPost(t3, `/api/sessions/${SCara}/choose`, { submissionId: subC, choice: "charge", tickedCents: 800 });
     check("Cara charged; the card was declined (owed)", sql(`select count(*) from "Payment" where "submissionId" = '${subC}' and status = 'failed' and "owedUntil" is not null`) === "1", JSON.stringify(ch.body));
+    await dev.bringToFront();
     const devDeclined = await dev.waitForSelector("[data-live-top] >> text=Payment failed on Tide Pool: $8.00 to Cara Diaz", { timeout: 35000 }).then(() => true, () => false);
     check("developer's top box: 'Payment failed on Tide Pool ... pay by ... to avoid a pause'", devDeclined && (await has(dev, "[data-live-top] >> text=to avoid a pause")));
     await dev.evaluate(() => window.scrollTo(0, 0));
     await shot(dev, "top-box-declined-developer");
+    await tab2.bringToFront();
     const delayed = await tab2.waitForSelector("[data-live-top] >> text=The payment of $8.00 for your written answers on Tide Pool is delayed", { timeout: 35000 }).then(() => true, () => false);
     const topText = delayed ? await tab2.locator("[data-live-top]").innerText() : "";
     check("tester's top box: 'delayed', never failed/hold/chargeback", delayed && !/fail|hold|chargeback/i.test(topText), topText);
     await shot(tab2, "top-box-delayed-tester");
     // Across tests: the developer's other test page (opened before) names the failure on Tide Pool too.
+    await devOther.bringToFront();
     const otherDeclined = await devOther.waitForSelector("[data-live-top] >> text=Payment failed on Tide Pool", { timeout: 35000 }).then(() => true, () => false);
     check("developer's OTHER test page shows the failure, naming Tide Pool", otherDeclined);
     await shot(devOther, "top-box-other-test-developer");
@@ -888,11 +892,13 @@ async function signIn(page, email) {
     await devTab2.close();
     // Dee's page: the top box shows the change by itself within ~20 s, and scrolls up to it once.
     const t0 = Date.now();
+    await t2.bringToFront();
     const sawInfo = await t2.waitForSelector("[data-live-top] >> text=Nora Lane changed the description", { timeout: 35000 }).then(() => true, () => false);
     check("tester's top box: 'Nora Lane changed the description' with See it", sawInfo && (await has(t2, "[data-live-top] >> text=See it")), `${Math.round((Date.now() - t0) / 1000)} s`);
     await t2.waitForTimeout(1200);
     const y1 = await t2.evaluate(() => window.scrollY);
     check("the page scrolled up to the top box once", y0 > 200 && y1 < y0, `${y0} → ${y1}`);
+    await t2.bringToFront();
     await t2.screenshot({ path: path.join(OUT, "23-top-box-viewport-tester.png") });
     cur.screenshots.push("23-top-box-viewport-tester.png");
     await shot(t2, "top-box-info-tester");
@@ -907,11 +913,13 @@ async function signIn(page, email) {
     const y2 = await t2.evaluate(() => window.scrollY);
     await shot(t2, "block-stopped-tester");
     // The top box picks the payment up too (newest first) without scrolling again; the open stop box stays as is.
+    await t2.bringToFront();
     const sawPaid = await t2.waitForSelector("[data-live-top] >> text=Nora Lane paid $8.00 for your written answers", { timeout: 35000 }).then(() => true, () => false);
     await t2.waitForTimeout(1200);
     const y3 = await t2.evaluate(() => window.scrollY);
     check("top box lists the payment above the description change", sawPaid && (await t2.locator("[data-live-top] li").first().innerText()).includes("paid $8.00"));
-    check("no second scroll", Math.abs(y3 - y2) < 5, `${y2} → ${y3}`);
+    // A new line in the top box shifts the page by its height; it never jumps back up to the box a second time.
+    check("no second scroll (only the new line's height)", Math.abs(y3 - y2) < 60, `${y2} → ${y3}`);
     check("the stop box lists the payment once", (await t2.locator("div.info li", { hasText: "paid $8.00 for your written answers" }).count()) === 2); // one in the top box, one under the button
     await shot(t2, "top-box-and-stop-box-tester");
     await t2.click("button:has-text('Yes, block Nora Lane')");

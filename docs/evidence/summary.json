@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T22:13:09.426Z",
+  "run": "2026-10-22T22:31:12.624Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvk3krsp00077kagrkvsgcl2)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvk47zv401557k4goesc4u00)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -165,74 +165,128 @@
     {
       "id": "11",
       "title": "Charge declined: owed with a 3-day cut-off (developer banner + Payments, tester line); a second failure pauses at once",
-      "status": "fail",
+      "status": "pass",
       "checks": [
-        "PASS test posted (saw: {\"id\":\"cmvk3li2i00477kag1eys45gn\"})",
+        "PASS test posted (saw: {\"id\":\"cmvk48pi001967k4ghafv1jcn\"})",
         "PASS both testers joined",
-        "FAIL error: Unexpected end of JSON input"
+        "PASS tester offered the choice",
+        "PASS developer banner with the cut-off",
+        "PASS tester reads it may be delayed",
+        "PASS Payments page lists it",
+        "PASS second failure: tests paused at once"
       ],
-      "screenshots": []
+      "screenshots": [
+        "11-choice-offered-tester.png",
+        "11-owed-developer.png",
+        "11-owed-tester.png",
+        "11-owed-payments-page-developer.png",
+        "11-second-failure-hold-developer.png",
+        "11-second-failure-hold-tester.png"
+      ]
     },
     {
       "id": "12",
       "title": "Hold pauses every test; joins, invites, Next round, posting, Pay/Reject wait; calls inside the hold cancelled, after it kept; testers still send",
-      "status": "fail",
+      "status": "pass",
       "checks": [
-        "FAIL error: Unexpected end of JSON input"
+        "PASS hold on",
+        "PASS developer: tests paused",
+        "PASS tester: paused line",
+        "PASS tester: the call inside the hold was cancelled",
+        "PASS tester told why",
+        "PASS Pay waits",
+        "PASS Next round waits",
+        "PASS join refused",
+        "PASS invite refused",
+        "PASS posting refused",
+        "PASS tester still sends"
       ],
-      "screenshots": []
+      "screenshots": [
+        "12-hold-developer.png",
+        "12-hold-tester.png",
+        "12-hold-call-cancelled-tester.png",
+        "12-hold-pay-waits-developer.png",
+        "12-hold-next-round-developer.png",
+        "12-hold-join-refused-tester.png",
+        "12-hold-invite-refused-developer.png",
+        "12-hold-posting-refused-developer.png",
+        "12-hold-tester-still-sends-developer.png",
+        "12-hold-tester-still-sends-tester.png"
+      ]
     },
     {
       "id": "13",
       "title": "Several failed payments: listed, one still failing, then all paid; hold lifts and deadlines / Open until move on",
-      "status": "fail",
+      "status": "pass",
       "checks": [
-        "FAIL both failures listed with one button",
-        "FAIL total-changed stop",
-        "FAIL the one still failing is named",
-        "FAIL error: page.click: Timeout 15000ms exceeded."
+        "PASS both failures listed with one button",
+        "PASS total-changed stop",
+        "PASS the one still failing is named",
+        "PASS hold lifted",
+        "PASS tester deadline moved on 2 days (saw: 2026-10-29 → 2026-11-01)",
+        "PASS Open until moved on 2 days (saw: 2026-11-01 → 2026-11-04)",
+        "PASS tester no longer paused"
       ],
       "screenshots": [
         "13-several-owed-developer.png",
         "13-several-owed-tester.png",
         "13-several-total-changed-developer.png",
-        "13-several-one-still-failing-developer.png"
+        "13-several-one-still-failing-developer.png",
+        "13-several-all-paid-developer.png",
+        "13-several-all-paid-tester.png"
       ]
     },
     {
       "id": "14",
       "title": "Chargeback on written work: stop-once line and hold; admin marks it resolved",
-      "status": "fail",
+      "status": "pass",
       "checks": [
         "PASS webhook accepted (saw: 200)",
-        "FAIL stop-once line",
-        "FAIL hold banner",
-        "FAIL tester paused line",
-        "FAIL error: locator.click: Timeout 15000ms exceeded."
+        "PASS stop-once line",
+        "PASS hold banner",
+        "PASS tester paused line",
+        "PASS developer resumed"
       ],
       "screenshots": [
         "14-chargeback-stop-once-developer.png",
         "14-chargeback-hold-developer.png",
-        "14-chargeback-hold-tester.png"
+        "14-chargeback-hold-tester.png",
+        "14-chargeback-admin-resolved.png",
+        "14-chargeback-resolved-developer.png",
+        "14-chargeback-resolved-tester.png"
       ]
     },
     {
       "id": "15",
       "title": "Dispute: tester disputes, developer adds their side, admin raises pay, extra charged, receipt, paid so far updates",
-      "status": "fail",
+      "status": "pass",
       "checks": [
-        "FAIL error: locator.fill: Timeout 15000ms exceeded."
+        "PASS paid $4.00",
+        "PASS tester disputed",
+        "PASS developer's side shown",
+        "PASS admin sees both sides",
+        "PASS receipt for the extra",
+        "PASS paid so far updated (developer)",
+        "PASS paid so far updated (tester)"
       ],
-      "screenshots": []
+      "screenshots": [
+        "15-dispute-opened-developer.png",
+        "15-dispute-opened-tester.png",
+        "15-dispute-side-developer.png",
+        "15-dispute-admin-decided.png",
+        "15-dispute-receipt-developer.png",
+        "15-dispute-decided-developer.png",
+        "15-dispute-decided-tester.png"
+      ]
     },
     {
       "id": "16",
       "title": "Live updates: both pages open, lines appear within ~20 s without reloading",
-      "status": "fail",
+      "status": "pass",
       "checks": [
-        "FAIL tester page showed the new request without reload (saw: 35 s)",
+        "PASS tester page showed the new request without reload (saw: 18 s)",
         "PASS the developer's page was open on the calls panel",
-        "FAIL developer page showed the booking line without reload (saw: 35 s)"
+        "PASS developer page showed the booking line without reload (saw: 17 s)"
       ],
       "screenshots": [
         "16-live-before-developer.png",
@@ -268,20 +322,41 @@
     {
       "id": "18",
       "title": "Block and Join call refusals: too early to join; the developer blocks; the tester reads only that the session ended; Join refused",
-      "status": "fail",
+      "status": "pass",
       "checks": [
-        "FAIL error: page.click: Timeout 15000ms exceeded."
+        "PASS join too early",
+        "PASS developer sees the block on the row",
+        "PASS tester reads a neutral line",
+        "PASS never says blocked",
+        "PASS Settings → Blocked people"
       ],
-      "screenshots": []
+      "screenshots": [
+        "18-join-too-early-tester.png",
+        "18-block-confirm-developer.png",
+        "18-blocked-row-developer.png",
+        "18-session-ended-tester.png",
+        "18-blocked-people-developer.png"
+      ]
     },
     {
       "id": "19",
       "title": "Apply to join: the test takes applications; Apply stops once after a listing change; the developer accepts",
-      "status": "fail",
+      "status": "pass",
       "checks": [
-        "FAIL error: Cannot read properties of null (reading 'goto')"
+        "PASS Apply to join shown",
+        "PASS Apply stops once (listing changed)",
+        "PASS application sent",
+        "PASS developer sees the application",
+        "PASS tester is in",
+        "PASS tester sees the session"
       ],
-      "screenshots": []
+      "screenshots": [
+        "19-apply-stops-once-tester.png",
+        "19-applied-tester.png",
+        "19-application-developer.png",
+        "19-accepted-developer.png",
+        "19-accepted-tester.png"
+      ]
     },
     {
       "id": "20",
@@ -305,30 +380,85 @@
     {
       "id": "21",
       "title": "Call requests with a rate ask: Select all to two testers; one asks $50/h and the developer accepts; the other's Accept is refused",
-      "status": "fail",
+      "status": "pass",
       "checks": [
-        "FAIL error: Cannot read properties of null (reading 'context')"
+        "PASS two testers in",
+        "PASS developer line about rates",
+        "PASS tick list shows each tester's terms and booked count",
+        "PASS tester sees only the listed rate",
+        "PASS nothing booked on the tester's side",
+        "PASS booked call shows Agreed $50/h",
+        "PASS tester B's Accept refused"
       ],
-      "screenshots": []
+      "screenshots": [
+        "21-select-all-developer.png",
+        "21-request-received-tester-b.png",
+        "21-asked-50-tester-a.png",
+        "21-agreed-50-developer.png",
+        "21-accept-refused-tester-b.png"
+      ]
     },
     {
       "id": "22",
       "title": "Developer live-call panel: one tester with a booked call, a weekly set and a waiting request; another at 3 of 3 refused",
-      "status": "fail",
+      "status": "pass",
       "checks": [
-        "FAIL error: Cannot read properties of null (reading 'context')"
+        "PASS weekly set booked (3 calls) (saw: {\"booked\":true,\"callId\":\"cmvk4bkkd01kr7k4gurl8353f\",\"calls\":3})",
+        "PASS Dee's call on day 8 booked (saw: {\"booked\":true,\"callId\":\"cmvk4bkoy01lr7k4g0pjm8ajl\",\"calls\":1})",
+        "PASS Dee's call on day 9 booked (saw: {\"booked\":true,\"callId\":\"cmvk4bkto01m87k4goraup8ig\",\"calls\":1})",
+        "PASS Dee's call on day 10 booked (saw: {\"booked\":true,\"callId\":\"cmvk4bkx801mp7k4gxqfs0ulh\",\"calls\":1})",
+        "PASS 4th booked time refused for the tester",
+        "PASS rate line",
+        "PASS Dee at 3 of 3 booked",
+        "PASS weekly set shown as one line",
+        "PASS 4th booked time refused for the developer"
       ],
-      "screenshots": []
+      "screenshots": [
+        "22-fourth-refused-tester.png",
+        "22-full-panel-developer.png",
+        "22-fourth-refused-developer.png"
+      ]
     },
     {
       "id": "23",
       "title": "Every button stops once: your own other-tab actions, Block after a payment, listing info (F), the live top box",
-      "status": "fail",
+      "status": "pass",
       "checks": [
-        "FAIL error: Cannot read properties of null (reading 'context')"
+        "PASS two testers in (saw: {\"id\":\"cmvk4bm7d01nb7k4gj2mgol7y\"})",
+        "PASS tab 2 sent the answers",
+        "PASS tab 1 Leave stopped once: 'You also did this in another tab'",
+        "PASS second press left the test",
+        "PASS Cara charged; the card was declined (owed) (saw: {\"choice\":\"charge\",\"amountCents\":800,\"status\":\"failed\"})",
+        "PASS developer's top box: 'Payment failed on Tide Pool ... pay by ... to avoid a pause'",
+        "PASS tester's top box: 'delayed', never failed/hold/chargeback (saw: Updated · 5:34 PM: You also did this in another tab: charged for your written answers\nUpdated · 5:34 PM: The payment of $8.00 for your written answers on Tide P)",
+        "PASS developer's OTHER test page shows the failure, naming Tide Pool",
+        "PASS the developer paid what they owe (saw: {\"paid\":1,\"stillFailing\":[],\"lifted\":false})",
+        "PASS Edit tab 1: Save stopped once with the other tab's change",
+        "PASS second Save saved",
+        "PASS tester's top box: 'Nora Lane changed the description' with See it (saw: 18 s)",
+        "PASS the page scrolled up to the top box once (saw: 1007 → 133)",
+        "PASS developer paid Dee $8 (saw: {\"reviewId\":\"cmvk4coik01pf7k4g1ubh6d4t\",\"amountCents\":800,\"status\":\"charged\",\"rejected\":false,\"paidSoFarCents\":800})",
+        "PASS Block stopped once: the developer paid",
+        "PASS top box lists the payment above the description change",
+        "PASS no second scroll (only the new line's height) (saw: 205 → 183)",
+        "PASS the stop box lists the payment once",
+        "PASS second press blocked"
       ],
-      "screenshots": []
+      "screenshots": [
+        "23-tab2-sent-tester.png",
+        "23-tab1-leave-stopped-tester.png",
+        "23-tab1-left-tester.png",
+        "23-top-box-declined-developer.png",
+        "23-top-box-delayed-tester.png",
+        "23-top-box-other-test-developer.png",
+        "23-edit-save-stopped-developer.png",
+        "23-top-box-viewport-tester.png",
+        "23-top-box-info-tester.png",
+        "23-block-stopped-tester.png",
+        "23-top-box-and-stop-box-tester.png",
+        "23-blocked-tester.png"
+      ]
     }
   ],
-  "pass": false
+  "pass": true
 }
