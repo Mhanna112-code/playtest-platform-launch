@@ -1,6 +1,6 @@
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { devCancelCall, offerTimes, removeTime, reportNoShow, setCallLength } from "@/lib/server/calls";
-import { cancelInvite, inviteTesters } from "@/lib/server/invites";
+import { cancelInvite, inviteGaps, inviteTesters } from "@/lib/server/invites";
 import { apply, decideApplication, join, withdrawApplication } from "@/lib/server/joining";
 import { addDevSide } from "@/lib/server/payments";
 import { sendChat, sendMessage } from "@/lib/server/messages";
@@ -43,6 +43,8 @@ export async function POST(req: Request, { params }: Ctx) {
         return ok(await addDevSide(u, id, body));
       case "invite":
         return ok(await inviteTesters(u, id, body));
+      case "invite-check":
+        return ok(await inviteGaps(u.id, id, Array.isArray(body.testerIds) ? body.testerIds.map(String) : []));
       case "cancel-invite":
         return ok(await cancelInvite(u, id, body));
       case "message": {

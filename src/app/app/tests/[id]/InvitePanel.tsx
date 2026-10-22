@@ -48,7 +48,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
 
   async function invite(anyway: boolean) {
     setMsg("");
-    const r = await press<{ message: string }>(`/api/tests/${p.testId}/invite`, { testerIds: ticked, anyway, seenGaps: confirm ?? undefined });
+    const r = await press<{ message: string }>(`/api/tests/${p.testId}/invite`, { testerIds: ticked, anyway, seenGaps: confirm ? confirm.filter((l) => l.endsWith("which this test needs.")) : undefined });
     if (r) {
       setConfirm(null);
       setMsg(r.message);
@@ -61,8 +61,21 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
     if (error.startsWith("CONFIRM:")) {
       setConfirm(error.slice(8).split("\n"));
       setError("");
-    }
+    } else if (error.startsWith("Everyone you ticked now meets")) setConfirm(null);
   }, [error, setError]);
+  // The box stays up while anyone ticked misses a need, updating live; when everyone fits it closes with a notice.
+  useEffect(() => {
+    if (!confirm) return;
+    const t = setInterval(async () => {
+      const r = await api<{ lines: string[] }>(`/api/tests/${p.testId}/invite-check`, { testerIds: ticked }).catch(() => null);
+      if (!r) return;
+      if (!r.lines.length) {
+        setConfirm(null);
+        setMsg("Everyone you ticked now meets this test's needs. Press Invite to send.");
+      } else if (JSON.stringify(r.lines) !== JSON.stringify(confirm.filter((l) => l.endsWith("which this test needs.")))) setConfirm(r.lines);
+    }, 15_000);
+    return () => clearInterval(t);
+  }, [confirm, ticked, p.testId]);
 
   const row = (t: Tester) => (
     <label key={t.id} className={"block " + (t.grey ? "text-slate-400" : "")}>

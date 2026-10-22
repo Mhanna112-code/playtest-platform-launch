@@ -99,8 +99,14 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
       .filter((p) => !contracts.some((c) => c.testerId === p.id) && missingNeed(t, p.profile))
       .map((p) => `${displayName(p)} doesn't list ${missingNeed(t, p.profile)}, which this test needs.`);
     const seenGaps = Array.isArray(body.seenGaps) ? (body.seenGaps as unknown[]).map(String) : null;
-    if (gaps.length && (body.anyway !== true || JSON.stringify(seenGaps) !== JSON.stringify(gaps))) {
-      throw new HttpError(409, "needs_confirm", "CONFIRM:" + gaps.join("\n"), { lines: gaps });
+    if (body.anyway === true && !gaps.length) {
+      // Everyone ticked now meets the needs: nothing is sent; the box closes and a notice shows under Invite.
+      throw new HttpError(409, "needs_none", "Everyone you ticked now meets this test's needs. Press Invite to send.");
+    }
+    if (gaps.length && body.anyway !== true) throw new HttpError(409, "needs_confirm", "CONFIRM:" + gaps.join("\n"), { lines: gaps });
+    if (gaps.length && JSON.stringify(seenGaps) !== JSON.stringify(gaps)) {
+      // What's missing changed since the box showed: stop once in the box with the updated list.
+      throw new HttpError(409, "needs_confirm", "CONFIRM:" + ["What's missing changed since you looked. Press Invite anyway again to invite on this:", ...gaps].join("\n"), { lines: gaps, changed: true });
     }
     const invited: { id: string; name: string; email: string }[] = [];
     const others: string[] = [];
@@ -146,3 +152,10 @@ export async function cancelInvite(dev: U, testId: string, body: Record<string, 
 /** An invite is live while the test can still take this tester. */
 export const inviteExpired = (t: { status: string; spots: number; openUntil: Date | null }, testersIn: number, now = new Date()) =>
   t.status !== "open" || testersIn >= t.spots || (!!t.openUntil && t.openUntil < now);
+
+/** For the live Invite anyway box: what each ticked tester still misses right now. */
+export async function inviteGaps(devId: string, testId: string, testerIds: string[]) {
+  const t = await ownTest(devId, testId);
+  const people = await db.user.findMany({ where: { id: { in: testerIds } }, include: { profile: true } });
+  return { lines: people.filter((p) => missingNeed(t, p.profile)).map((p) => `${displayName(p)} doesn't list ${missingNeed(t, p.profile)}, which this test needs.`) };
+}

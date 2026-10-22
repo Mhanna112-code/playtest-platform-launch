@@ -4,6 +4,17 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, newest) The "Invite anyway" box
+- It stays up as long as any ticked tester doesn't meet the test's needs, updating live (adds/removes names and what
+  each is missing as profiles or ticks change).
+- Pressing Invite anyway:
+  - if since the box appeared everyone ticked now meets the needs → nothing is sent; the box closes and a blue notice
+    under the original Invite button says "Everyone you ticked now meets this test's needs. Press Invite to send.";
+  - if what they're missing changed → stops once in the box: lists the changes and the updated missing items; press
+    again to invite anyway;
+  - it also stops once for every Invite reason (developer reason set, ticked testers' need-affecting profile changes,
+    joined/invited elsewhere, became greyed/removed), listed in the same box.
+
 ## (Owner, Oct 22, latest: replaces parts of "Invite list: greyed vs removed")
 - Invite panel sections, in order: **Invited** (top: each sent invite with Cancel invite; invited testers are NOT
   shown again in the lists below), **People you've worked with** (testers currently or previously in any of this
