@@ -16,7 +16,7 @@ type U = { id: string; email: string; name: string; pronoun: string };
 export async function invitable(devId: string, testId: string) {
   const [testers, inTest, invites, blocks, active] = await Promise.all([
     db.user.findMany({ where: { isTester: true, id: { not: devId } }, include: { profile: true }, orderBy: { createdAt: "desc" }, take: 500 }),
-    db.contract.findMany({ where: { testId }, select: { testerId: true } }),
+    db.contract.findMany({ where: { testId, status: "working" }, select: { testerId: true } }),
     db.invite.findMany({ where: { testId, status: "sent" } }),
     db.block.findMany({ where: { OR: [{ blockerId: devId }, { blockedId: devId }] } }),
     db.contract.groupBy({ by: ["testerId"], where: { status: "working" }, _count: { _all: true } }),
@@ -111,7 +111,7 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     let spotsLeft = t.spots - testersIn;
     for (const p of people) {
       const name = displayName(p);
-      if (contracts.some((c) => c.testerId === p.id)) continue; // joined: no longer in the list
+      if (contracts.some((c) => c.testerId === p.id && c.status === "working")) continue; // joined: no longer in the list
       if (invites.some((i) => i.testerId === p.id && i.status === "sent")) continue; // already invited
       const active = await tx.contract.count({ where: { testerId: p.id, status: "working" } });
       const blocked = (await tx.block.count({ where: { OR: [{ blockerId: dev.id, blockedId: p.id }, { blockerId: p.id, blockedId: dev.id }] } })) > 0;
@@ -124,7 +124,7 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
         others.push(`${name} can't be invited: the test is full.`);
         continue;
       }
-      await tx.invite.upsert({ where: { testId_testerId: { testId, testerId: p.id } }, update: { status: "sent" }, create: { testId, testerId: p.id } });
+      await tx.invite.create({ data: { testId, testerId: p.id } });
       invited.push({ id: p.id, name, email: p.email });
       spotsLeft--;
     }
@@ -157,4 +157,30 @@ export async function inviteGaps(devId: string, testId: string, testerIds: strin
   const t = await ownTest(devId, testId);
   const people = await db.user.findMany({ where: { id: { in: testerIds } }, include: { profile: true } });
   return { lines: people.filter((p) => missingNeed(t, p.profile)).map((p) => `${displayName(p)} doesn't list ${missingNeed(t, p.profile)}, which this test needs.`) };
+}
+
+/**
+ * (Owner, NEWEST+4) A saved listing change (anything except spots / who can join) closes every open invite and sends
+ * a NEW invite on the new listing to the same testers (bell + email; the 3-day reminder clock restarts). Testers who
+ * can't be invited any more are not re-invited and are named for the Save result.
+ */
+export async function reinviteAfterEdit(testId: string) {
+  const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
+  const open = await db.invite.findMany({ where: { testId, status: "sent" } });
+  const skipped: string[] = [];
+  for (const inv of open) {
+    await db.invite.update({ where: { id: inv.id }, data: { status: "replaced" } });
+    const p = await db.user.findUnique({ where: { id: inv.testerId } });
+    if (!p) continue;
+    const name = displayName(p);
+    const active = await db.contract.count({ where: { testerId: p.id, status: "working" } });
+    const blocked = (await db.block.count({ where: { OR: [{ blockerId: t.developerId, blockedId: p.id }, { blockerId: p.id, blockedId: t.developerId }] } })) > 0;
+    if (!p.isTester) { skipped.push(`${name} (account closed)`); continue; }
+    if (p.suspendedAt || blocked) { skipped.push(`${name} (can't be invited right now)`); continue; }
+    if (active >= MAX_ACTIVE_TESTS) { skipped.push(`${name} (in ${MAX_ACTIVE_TESTS} tests)`); continue; }
+    await db.invite.create({ data: { testId, testerId: p.id } });
+    const line = `${displayName(t.developer)} updated ${t.title}, so here's a new invite: ${termsLine(asListing(t), true)}.`;
+    await notify(p.email, line, [line, "Open it and press Join to join on these terms."], `/app/find/${testId}`);
+  }
+  return skipped;
 }

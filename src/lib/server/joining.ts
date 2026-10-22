@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { displayName } from "@/lib/format";
+import { displayName, pronouns } from "@/lib/format";
 import { MAX_ACTIVE_TESTS, termsLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
@@ -36,7 +36,9 @@ export async function joinRefusal(testerId: string, testId: string) {
   if (t.openUntil && t.openUntil < new Date()) return "This test isn't taking new testers any more.";
   if (t.status !== "open") return "This test isn't taking new testers any more.";
   if (t.developer.holdStartedAt) return "This test is paused, so it isn't taking new testers right now.";
-  if (await db.contract.findUnique({ where: { testId_testerId: { testId, testerId } } })) return "You've already joined this test.";
+  const old = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId } } });
+  if (old?.status === "working") return "You've already joined this test.";
+  if (old?.status === "ended" && !(await db.invite.findFirst({ where: { testId, testerId, status: "sent" } }))) return "You can't join this test again.";
   const testersIn = await db.contract.count({ where: { testId, status: "working" } });
   if (testersIn >= t.spots) return "This test is full.";
   if (await db.block.count({ where: { blockerId: testerId, blockedId: t.developerId } })) return `You blocked ${displayName(t.developer)}: unblock them in Settings → Blocked people to join.`;
@@ -74,6 +76,16 @@ export async function listingGate(userId: string, testId: string, body: Record<s
   }
 }
 
+/** Accept on an invite a listing change replaced: refused under the button, with the new invite right there. */
+async function replacedInvite(testerId: string, testId: string, body: Record<string, unknown>) {
+  if (typeof body.inviteId !== "string" || !body.inviteId) return;
+  const inv = await db.invite.findUnique({ where: { id: body.inviteId } });
+  if (!inv || inv.testerId !== testerId || inv.status !== "replaced") return;
+  const fresh = await db.invite.findFirst({ where: { testId, testerId, status: "sent" }, orderBy: { createdAt: "desc" } });
+  const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
+  throw new HttpError(409, "invite_replaced", "This invite was replaced by a new one with the current listing.", fresh ? { newInviteId: fresh.id, terms: termsLine(asListing(t), true), listingVersion: t.listingVersion } : {});
+}
+
 /** Join (Who can join = Anyone, or an invited tester on an invite-only test). */
 export async function join(tester: U, testId: string, body: Record<string, unknown>) {
   if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test games” in your profile to join tests.");
@@ -81,6 +93,7 @@ export async function join(tester: U, testId: string, body: Record<string, unkno
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
   const refusal = await joinRefusal(tester.id, testId);
   if (refusal) throw new HttpError(409, "refused", refusal);
+  await replacedInvite(tester.id, testId, body);
   await listingGate(tester.id, testId, body, "join");
   if (t.joinMode === "apply" && !(await db.application.findFirst({ where: { testId, testerId: tester.id, status: "pending", changedAt: { not: null } } }))) {
     throw new HttpError(409, "apply", "This test takes applications: press Apply to join.");
@@ -137,6 +150,15 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   if (seenAt && tester.profile && tester.profile.updatedAt > seenAt) extra.push({ kind: "profile", text: `${name} changed their profile`, createdAt: tester.profile.updatedAt });
   extra.push(...(await listingChanges(testId, body.seenAt)));
   await db.$transaction((tx) => devGate(tx, testId, body, {}, extra));
+  // (NEWEST+4) The listing changed since they applied: Accept asks them to join on the current listing instead.
+  const tNow = await db.test.findUniqueOrThrow({ where: { id: testId } });
+  if (body.action !== "decline" && a.listing && !sameListingIgnoringMode(a.listing, listingSnapshot(tNow))) {
+    if (!a.changedAt) {
+      await db.application.update({ where: { id: a.id }, data: { changedAt: new Date() } });
+      await notify(tester.email, `${tNow.title} changed since you applied`, [`${tNow.title} changed since you applied: join on the current listing, or withdraw your application.`], `/app/find/${testId}`);
+    }
+    return { asked: true, message: `${name} applied before your changes, so ${pronouns(tester.pronoun).subj}'ll be asked to join on the current listing.` };
+  }
   if (body.action === "decline") {
     await db.application.update({ where: { id: a.id }, data: { status: "declined", decidedAt: new Date() } });
     await notify(tester.email, `Your application to “${(await db.test.findUniqueOrThrow({ where: { id: testId } })).title}” wasn't accepted`, ["Thanks for applying. There are other tests to find."], "/app/find");

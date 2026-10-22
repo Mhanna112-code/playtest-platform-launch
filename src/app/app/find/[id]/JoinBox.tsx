@@ -19,12 +19,13 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState("");
   const [warn, setWarn] = useState("");
+  const [inviteId, setInviteId] = useState(p.inviteId ?? "");
 
   async function go(action: "join" | "apply" | "withdraw-application", anyway = false) {
     setBusy(true);
     setErr("");
     try {
-      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { keepPrivate, note, seenAt: p.seenAt, confirmed, anyway });
+      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { keepPrivate, note, seenAt: p.seenAt, confirmed, anyway, inviteId });
       if (r.sessionId) window.location.href = `/app/sessions/${r.sessionId}`;
       else if (action === "withdraw-application") window.location.reload();
       else setDone("Application sent. You'll hear back when the developer answers.");
@@ -33,6 +34,10 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
       if (sb) {
         setBox(sb);
         setConfirmed(true);
+      } else if (e instanceof ApiError && e.code === "invite_replaced") {
+        // The new invite is shown right here; the next press joins on it.
+        setErr(`${e.message}${e.data.terms ? ` New invite: ${String(e.data.terms)}.` : ""}`);
+        if (typeof e.data.newInviteId === "string") setInviteId(e.data.newInviteId);
       } else if (e instanceof ApiError && e.code === "needs") setWarn(e.message);
       else setErr(errOf(e));
     } finally {
@@ -40,7 +45,7 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
     }
   }
 
-  if (p.application?.status === "pending" && p.application.changed && p.mode === "anyone")
+  if (p.application?.status === "pending" && p.application.changed && p.mode !== "invite")
     return (
       <div className="info space-y-2">
         <p>This test changed since you applied.</p>
@@ -77,7 +82,7 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
       <div className="flex flex-wrap gap-2">
         <button className="btn" disabled={busy || !!done} onClick={() => go(applying ? "apply" : "join")}>{busy ? "Sending…" : applying ? "Apply to join" : "Join this test"}</button>
         {p.inviteId && !done && (
-          <PressButton seenAt={p.seenAt} path={`/api/invites/${p.inviteId}`} body={{}} onDone={() => (window.location.href = "/app")}>No thanks</PressButton>
+          <PressButton seenAt={p.seenAt} path={`/api/invites/${inviteId}`} body={{}} onDone={() => (window.location.href = "/app")}>No thanks</PressButton>
         )}
       </div>
       {warn && (

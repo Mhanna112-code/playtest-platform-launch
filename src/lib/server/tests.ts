@@ -140,6 +140,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   let termsChanged = false;
   let switchedToAnyone = false;
   let changedNames: string[] = [];
+  let reinvite = false;
   const result = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
@@ -179,12 +180,15 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const info = fields.filter((f) => INFO_FIELDS.includes(f));
     if (info.length) await tx.testEvent.create({ data: { testId, kind: "info", text: `${displayName(dev)} changed the ${andList(info.map((f) => FIELD_NAMES[f]))}` } });
     changedNames = fields.map((f) => FIELD_NAMES[f]);
+    reinvite = fields.some((f) => f !== "spots" && f !== "joinMode");
     return tx.test.findUniqueOrThrow({ where: { id: testId } });
   });
   // Working testers are OFFERED the new contract terms (Switch / Keep); their contract changes only if they switch.
   const offered = termsChanged ? await offerNewTerms(testId) : 0;
   if (switchedToAnyone) await (await import("./joining")).onSwitchToAnyone(testId);
-  return Object.assign(result, { offered, changed: changedNames });
+  // (NEWEST+4) Any listing change except spots / who can join re-sends open invites on the new listing.
+  const notReinvited = reinvite ? await (await import("./invites")).reinviteAfterEdit(testId) : [];
+  return Object.assign(result, { offered, changed: changedNames, notReinvited });
 }
 
 /** (F) The listing info a working tester sees change live: title, description, devices, languages. */
@@ -355,7 +359,11 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
   const { contract, dev } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.developerId === tester.id) throw new HttpError(409, "own", "You can't join your own test.");
-    if (await tx.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } })) throw new HttpError(409, "already", "You've already joined this test.");
+    // (NEWEST+4) Rejoining: a tester who LEFT comes back on the current listing; one the developer ENDED only through
+    // a new invite. Their old session is restored (work, reviews, payments, chat, disputes, call history).
+    const old = await tx.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } });
+    if (old && old.status === "working") throw new HttpError(409, "already", "You've already joined this test.");
+    if (old && old.status === "ended" && !(await tx.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } }))) throw new HttpError(409, "not_again", "You can't join this test again.");
     const dev = await tx.user.findUniqueOrThrow({ where: { id: t.developerId } });
     if (dev.suspendedAt) throw new HttpError(409, "closed", "This test isn't taking new testers any more.");
     if (dev.holdStartedAt) throw new HttpError(409, "paused", "This test is paused, so it isn't taking new testers right now.");
@@ -371,10 +379,12 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     if (await tx.block.count({ where: { blockerId: t.developerId, blockedId: tester.id } })) throw new HttpError(409, "closed", "This test isn't taking new testers right now.");
     const gap = needsGap(t, profile);
     if (gap && body.anyway !== true) throw new HttpError(409, "needs", `${gap.replace(/ Add .*$/, "")} You don't list it in your profile. Join anyway?`);
-    const contract = await tx.contract.create({
-      data: { testId, testerId: tester.id, ...contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion }, new Date(), body.keepPrivate === true) },
-    });
-    await recordEvent(tx, testId, "joined", `${displayName(tester)} joined`, true, {}, contract.id);
+    const snap = contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion }, new Date(), body.keepPrivate === true);
+    const contract = old
+      ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null } })
+      : await tx.contract.create({ data: { testId, testerId: tester.id, ...snap } });
+    if (old) await tx.termsOffer.updateMany({ where: { contractId: old.id, status: "open" }, data: { status: "superseded", decidedAt: new Date() } });
+    await recordEvent(tx, testId, "joined", old ? `${displayName(tester)} joined again` : `${displayName(tester)} joined`, true, {}, contract.id);
     await tx.invite.updateMany({ where: { testId, testerId: tester.id, status: "sent" }, data: { status: "joined" } });
     return { contract, dev };
   });

@@ -26,9 +26,9 @@ import { TopPanel } from "./TopPanel";
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
 
-export default async function TestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; offered?: string }> }) {
+export default async function TestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; offered?: string; skipped?: string }> }) {
   const { id } = await params;
-  const { saved, offered } = await searchParams;
+  const { saved, offered, skipped } = await searchParams;
   const u = await requirePageUser();
   const seenAt = new Date().toISOString();
   const t = await db.test.findUnique({
@@ -158,6 +158,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {saved && (
         <p className="ok">
           {Number(offered) > 0 ? `Saved. Offered the new terms to ${offered} working tester${Number(offered) === 1 ? "" : "s"}.` : "Saved. New testers join on the new listing; testers already in keep their contract."}
+          {skipped && ` Not re-invited: ${skipped.slice(0, 500)}.`}
         </p>
       )}
 

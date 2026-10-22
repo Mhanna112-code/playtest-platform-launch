@@ -424,14 +424,14 @@ model Invite {
   testId    String
   test      Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
   testerId  String
-  /// "sent" | "cancelled" | "joined" | "declined" (the tester pressed "No thanks")
+  /// "sent" | "cancelled" | "joined" | "declined" (the tester pressed "No thanks") | "replaced" (a listing change sent a new one)
   status    String   @default("sent")
   /// Bell reminder every 3 days until they join, decline, or the invite expires
   remindedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([testId, testerId])
+  @@index([testId, testerId])
 }
 
 /// The bell: every update for a user, whatever their email setting.

@@ -71,8 +71,8 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
       const all = toApi(f);
       const fields: Record<string, unknown> = {};
       for (const k of touched) for (const a of API_FIELDS[k]) fields[a] = all[a];
-      const r = await api<{ offered: number }>(`/api/tests/${edit.id}/edit`, { version: edit.version, fields, seenAt: edit.seenAt, confirmed: changes != null });
-      window.location.href = `/app/tests/${edit.id}?saved=1&offered=${r.offered ?? 0}`;
+      const r = await api<{ offered: number; notReinvited?: string[] }>(`/api/tests/${edit.id}/edit`, { version: edit.version, fields, seenAt: edit.seenAt, confirmed: changes != null });
+      window.location.href = `/app/tests/${edit.id}?saved=1&offered=${r.offered ?? 0}${r.notReinvited?.length ? `&skipped=${encodeURIComponent(r.notReinvited.join(", "))}` : ""}`;
     } catch (err) {
       if (err instanceof ApiError && err.code === "changed") setChanges(err.data.changes as Change[]);
       else {

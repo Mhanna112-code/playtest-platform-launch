@@ -18,7 +18,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   const t = await db.test.findUnique({ where: { id }, include: { developer: true } });
   if (!t || t.status === "draft") notFound();
   const mine = await db.contract.findUnique({ where: { testId_testerId: { testId: id, testerId: u.id } } });
-  if (mine) redirect(`/app/sessions/${mine.id}`);
+  if (mine && mine.status === "working") redirect(`/app/sessions/${mine.id}`);
   const testersIn = await db.contract.count({ where: { testId: id, status: "working" } });
   const gap = needsGap(t, await db.testerProfile.findUnique({ where: { userId: u.id } }));
   const canChat = !!(await db.invite.findFirst({ where: { testId: t.id, testerId: u.id, status: "sent" } })) || !!(await db.application.findFirst({ where: { testId: t.id, testerId: u.id, status: "pending" } }));
@@ -52,6 +52,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           </>
         )}
         <p className="note">Everything above is fixed in your contract when you join: neither side can change it later.</p>
+        {mine && mine.status === "left" && <p className="info">You left this test. Joining again restores your session: work you sent, payments and chat stay; new work is on the current listing.</p>}
         {canChat && (
           <details className="text-sm">
             <summary className="cursor-pointer">Chat with {displayName(t.developer)}</summary>
