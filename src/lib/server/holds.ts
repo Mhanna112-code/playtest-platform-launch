@@ -187,6 +187,7 @@ export async function runDaily(now = new Date()) {
     }
     const amount = auto;
     const payKey = `auto-${s.id}`;
+    let failed = false;
     const review = await db.review.create({ data: { submissionId: s.id, contractId: c.id, amountCents: amount, agreedCents: s.agreedCents, reason: "Paid automatically: not reviewed within 14 days.", payKey, auto: true } }).catch(() => null);
     if (!review) continue;
     try {
@@ -195,10 +196,12 @@ export async function runDaily(now = new Date()) {
       if (amount > 0) await receipt(dev.email, `${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} (paid automatically after 14 days)`, amount, r.status, `/app/tests/${c.testId}`);
     } catch (e) {
       await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "failed", failure: (e as Error).message, owedUntil: owedUntilFrom(now) } });
+      failed = true;
       await notify(dev.email, "A payment failed: pay within 3 days", [`The automatic ${money(amount)} payment for ${displayName(c.tester)}'s work on “${c.title}” failed.`, `Pay it by ${fmtDateTime(owedUntilFrom(now))} or your tests are paused.`], "/app/payments");
     }
     await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} was paid automatically (${money(amount)})`, false, {}, c.id));
-    await notify(c.tester.email, `You were paid for your work on “${c.title}”`, [`Your work was paid automatically: ${money(amount)}.`], `/app/sessions/${c.id}`, { always: true });
+    if (failed) await notify(c.tester.email, `Payment for your work on “${c.title}” may be delayed`, ["Payment for your work may be delayed."], `/app/sessions/${c.id}`);
+    else await notify(c.tester.email, `You were paid for your work on “${c.title}”`, [`Your work was paid automatically: ${money(amount)}.`], `/app/sessions/${c.id}`, { always: true });
     out.autoPaid++;
   }
   // 2. Failed charges not paid within 3 days start a hold.

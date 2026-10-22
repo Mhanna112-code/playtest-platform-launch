@@ -4,6 +4,17 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, after the evidence batch)
+- **Withdrawing sent work:** a tester can withdraw a piece of sent work any time before it's paid or rejected
+  ("Withdraw" next to it); nothing is charged and its 14-day clock stops. They can send it again later (new clock).
+  The developer sees "Ana Silva withdrew her recording · 2:10 PM" (a stop-once reason, like "sent work").
+- **"Pay what you owe" stops once** if the owed total changed since the page loaded ("Another payment failed
+  meanwhile: Cara Diaz's recording $20.00. New total $48.00. Press again to pay $48.00."). It runs at once: all paid →
+  hold lifts, "Paid $48.00, thank you" under the button, both sides update by themselves; some still fail → the
+  failing ones are named with the card's reason and a link to update the card; the hold stays.
+- **Daily retry:** the daily job also retries owed payments once a day; success lifts the hold (if nothing else is
+  owed) with a receipt and a bell notice to both sides.
+
 ## (Owner, Oct 22, newest addition)
 - **Paid per part, everywhere the developer sees a tester's work:** a line per kind, e.g. "Paid Ana Silva so far:
   written $8.00 · recording $0.00 · live calls $16.67 (25 min of 1 call)". Same on the tester's own page.

@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T16:35:19.400Z",
+  "run": "2026-10-22T16:41:44.951Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjriajh006b7k9cg0munfjv)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjrqkif00077k14tm67qumi)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -161,7 +161,109 @@
         "10-live-call-payment-problems-developer.webm",
         "10-live-call-payment-problems-tester.webm"
       ]
+    },
+    {
+      "id": "11",
+      "title": "Auto-pay fails: owed with a 3-day cut-off (developer banner + Payments, tester line)",
+      "status": "pass",
+      "checks": [
+        "PASS test posted (saw: {\"id\":\"cmvjrr4gr00347k14o5f63v99\"})",
+        "PASS both testers joined",
+        "PASS daily job ran (saw: {\"autoPaid\":2,\"holds\":0,\"alerts\":16,\"headsUps\":0})",
+        "PASS developer banner with the cut-off",
+        "PASS tester reads it may be delayed",
+        "PASS Payments page lists both"
+      ],
+      "screenshots": [
+        "11-owed-developer.png",
+        "11-owed-tester.png",
+        "11-owed-payments-page-developer.png"
+      ]
+    },
+    {
+      "id": "12",
+      "title": "Cut-off passes: hold pauses every test; joins, invites, Next round, posting, Pay/Reject wait; calls inside the hold cancelled, after it kept; testers still send",
+      "status": "fail",
+      "checks": [
+        "PASS hold started by the daily job (saw: {\"autoPaid\":0,\"holds\":1,\"alerts\":16,\"headsUps\":0})",
+        "PASS developer: tests paused",
+        "PASS tester: paused line",
+        "FAIL tester: the call inside the hold was cancelled",
+        "PASS tester told why",
+        "FAIL error: locator.check: Timeout 15000ms exceeded."
+      ],
+      "screenshots": [
+        "12-hold-developer.png",
+        "12-hold-tester.png",
+        "12-hold-call-cancelled-tester.png"
+      ]
+    },
+    {
+      "id": "13",
+      "title": "Several failed payments: listed, one still failing, then all paid; hold lifts and deadlines / Open until move on",
+      "status": "pass",
+      "checks": [
+        "PASS both failures listed with one button",
+        "PASS the one still failing is named",
+        "PASS hold lifted",
+        "PASS tester deadline moved on 2 days (saw: 2026-10-29 → 2026-10-31)",
+        "PASS Open until moved on 2 days (saw: 2026-11-01 → 2026-11-04)",
+        "PASS tester no longer paused"
+      ],
+      "screenshots": [
+        "13-several-owed-developer.png",
+        "13-several-owed-tester.png",
+        "13-several-one-still-failing-developer.png",
+        "13-several-all-paid-developer.png",
+        "13-several-all-paid-tester.png"
+      ]
+    },
+    {
+      "id": "14",
+      "title": "Chargeback on written work: stop-once line and hold; admin marks it resolved",
+      "status": "pass",
+      "checks": [
+        "PASS webhook accepted (saw: 200)",
+        "PASS stop-once line",
+        "PASS hold banner",
+        "PASS tester paused line",
+        "PASS developer resumed"
+      ],
+      "screenshots": [
+        "14-chargeback-stop-once-developer.png",
+        "14-chargeback-hold-developer.png",
+        "14-chargeback-hold-tester.png",
+        "14-chargeback-admin-resolved.png",
+        "14-chargeback-resolved-developer.png",
+        "14-chargeback-resolved-tester.png"
+      ]
+    },
+    {
+      "id": "15",
+      "title": "Dispute: tester disputes, developer adds their side, admin raises pay, extra charged, receipt, paid so far updates",
+      "status": "fail",
+      "checks": [
+        "FAIL error: locator.fill: Timeout 15000ms exceeded."
+      ],
+      "screenshots": []
+    },
+    {
+      "id": "16",
+      "title": "Live updates: both pages open, lines appear within ~20 s without reloading",
+      "status": "fail",
+      "checks": [
+        "PASS tester page showed the new time without reload (saw: 18 s)",
+        "FAIL developer page showed the booking line without reload (saw: 35 s)"
+      ],
+      "screenshots": [
+        "16-live-before-developer.png",
+        "16-live-before-tester.png",
+        "16-live-after-tester.png",
+        "16-live-after-developer.png",
+        "16-live-updates-developer.webm",
+        "16-live-updates-tester.webm"
+      ]
     }
   ],
-  "pass": true
+  "pass": false
 }

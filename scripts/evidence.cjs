@@ -83,7 +83,8 @@ async function signIn(page, email) {
   const dev = await ctx(DESKTOP);
   const tester = await ctx(PHONE);
   let testUrl = "";
-  let adminPage = null; // signed in once (sign-in links are rate-limited per email)
+  let adminPage = null;
+  let t2 = null; // signed in once (sign-in links are rate-limited per email)
 
   await flow("01", "Landing page and waitlist (phone)", async () => {
     const p = await ctx(PHONE);
@@ -204,7 +205,7 @@ async function signIn(page, email) {
   });
 
   await flow("08", "Invite: the developer invites a tester from the test page; the tester sees the invite", async () => {
-    const t2 = await ctx(PHONE);
+    t2 = await ctx(PHONE);
     await signIn(t2, `tester2+${TS}@playtest.test`);
     await t2.fill("#name", `Dee Moss ${TS % 10000}`);
     await t2.check("text=test games and get paid");
@@ -324,6 +325,244 @@ async function signIn(page, email) {
       await pg.context().close();
       if (v) {
         const file = `10-live-call-payment-problems-${tag}.webm`;
+        await v.saveAs(path.join(OUT, file)).catch(() => {});
+        cur.screenshots.push(file);
+      }
+    }
+  });
+
+  // ---------- Payment / pause evidence set (flows 11–16), STRIPE_FAKE + CRON_SECRET ----------
+  const apiPost = async (page, p, data = {}) => {
+    const r = await page.context().request.post(BASE + p, { data, headers: { "content-type": "application/json" } });
+    return { status: r.status(), body: await r.json().catch(() => ({})) };
+  };
+  const runCron = () => fetch(`${BASE}/api/cron/daily`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "evidence-cron"}` } }).then((r) => r.json());
+  const devId = sql(`select id from "User" where email = '${DEV}'`);
+  const deeName = `Dee Moss ${TS % 10000}`;
+  let T11 = "", SA = "", SD = "";
+  const t11Url = () => `/app/tests/${T11}`;
+  const both = async (name, tp = tester) => {
+    await shot(dev, `${name}-developer`);
+    await shot(tp, `${name}-tester`);
+  };
+
+  await flow("11", "Auto-pay fails: owed with a 3-day cut-off (developer banner + Payments, tester line)", async () => {
+    const day = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+    const r = await apiPost(dev, "/api/tests", { title: "Lighthouse Keeper", description: "Keep the light on.", buildUrl: "https://example.com/lighthouse", category: "Puzzle", devices: [], languages: [], spots: 5, writtenCents: "10.00", recordingCents: "15.00", liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7, questions: ["What did you think?"], openUntil: day(10) });
+    T11 = r.body.id;
+    check("test posted", !!T11, JSON.stringify(r.body));
+    SA = (await apiPost(tester, `/api/tests/${T11}/join`, { listingVersion: 1 })).body.sessionId;
+    SD = (await apiPost(t2, `/api/tests/${T11}/join`, { listingVersion: 1 })).body.sessionId;
+    check("both testers joined", !!SA && !!SD);
+    await apiPost(tester, `/api/sessions/${SA}/written`, { answers: ["Moody and calm, I liked it."] });
+    const st = await apiPost(tester, `/api/sessions/${SA}/recording-start`, { filename: "run.webm", size: 16, contentType: "video/webm" });
+    await tester.context().request.put(BASE + st.body.uploadUrl, { data: Buffer.from("tiny test video!"), headers: { "content-type": "video/webm" } });
+    await apiPost(tester, `/api/sessions/${SA}/recording-done`, { recordingId: st.body.recordingId });
+    await apiPost(tester, `/api/sessions/${SA}/recording-send`, {});
+    sql(`update "Submission" set "payBy" = now() - interval '1 minute' where "contractId" = '${SA}'`);
+    sql(`update "User" set "stripePaymentMethodId" = 'pm_card_declined' where id = '${devId}'`);
+    const out = await runCron();
+    check("daily job ran", out.autoPaid >= 2, JSON.stringify(out));
+    await dev.goto(t11Url());
+    check("developer banner with the cut-off", await has(dev, "text=A payment failed. Pay $25.00 by"));
+    await tester.goto(`/app/sessions/${SA}`);
+    check("tester reads it may be delayed", await has(tester, "text=Payment for this part may be delayed."));
+    await both("owed");
+    await dev.goto("/app/payments");
+    check("Payments page lists both", await has(dev, "text=Ana Silva's recording $15.00 · card declined"));
+    await shot(dev, "owed-payments-page-developer");
+  });
+
+  let t3 = null;
+  await flow("12", "Cut-off passes: hold pauses every test; joins, invites, Next round, posting, Pay/Reject wait; calls inside the hold cancelled, after it kept; testers still send", async () => {
+    // Three calls for Ana: one held before the hold (to show Pay waiting), one whose time comes during the hold, one after.
+    await apiPost(dev, `/api/tests/${T11}/offer-times`, { seenAt: new Date().toISOString(), confirmed: true, times: [2, 3, 4].map((n) => new Date(Date.now() + n * 86400000).toISOString()) });
+    const slots = sql(`select id from "CallSlot" where "testId" = '${T11}' order by "startsAt"`).split("\n");
+    await apiPost(tester, `/api/sessions/${SA}/book`, { seenAt: new Date().toISOString(), confirmed: true, slotId: slots[0] });
+    sql(`update "Call" set "startsAt" = now() - interval '30 minutes' where "slotId" = '${slots[0]}'`);
+    await apiPost(tester, `/api/sessions/${SA}/book`, { seenAt: new Date().toISOString(), confirmed: true, slotId: slots[1] });
+    sql(`update "Call" set "startsAt" = now() - interval '2 minutes' where "slotId" = '${slots[1]}'`);
+    await apiPost(tester, `/api/sessions/${SA}/book`, { seenAt: new Date().toISOString(), confirmed: true, slotId: slots[2] });
+    sql(`update "Payment" set "owedUntil" = now() - interval '1 minute' where "developerId" = '${devId}' and status = 'failed' and "settledAt" is null and "owedUntil" is not null`);
+    const out = await runCron();
+    check("hold started by the daily job", out.holds >= 1, JSON.stringify(out));
+    sql(`update "User" set "holdStartedAt" = now() - interval '10 minutes' where id = '${devId}'`);
+    await dev.goto(t11Url());
+    check("developer: tests paused", await has(dev, "text=Your tests are paused."));
+    await tester.goto(`/app/sessions/${SA}`);
+    check("tester: paused line", await has(tester, "text=This test is paused. Payment for your work may be delayed."));
+    check("tester: the call inside the hold was cancelled", await has(tester, "text=cancelled by the site"));
+    await both("hold");
+    await tester.goto("/app/notifications");
+    check("tester told why", await has(tester, "text=was cancelled because the test is paused."));
+    await shot(tester, "hold-call-cancelled-tester");
+    // Pay waits on the held call.
+    await dev.goto(t11Url());
+    const callBox = dev.locator("div.rounded-lg", { hasText: "Live call · In their contract" }).filter({ hasText: "Amount" }).first();
+    await callBox.locator("input[type=checkbox]").check();
+    await callBox.locator("button:has-text('Pay')").click();
+    check("Pay waits", await has(dev, "text=Pay what you owe first."));
+    await shot(dev, "hold-pay-waits-developer");
+    // Next round, posting and invites wait.
+    await dev.click("button:has-text('Next round')");
+    await dev.click("text=Start the next round");
+    check("Next round waits", await has(dev, "text=Your tests are paused until then."));
+    await shot(dev, "hold-next-round-developer");
+    // A new tester can't join; the developer can't invite them.
+    t3 = await ctx(PHONE);
+    await signIn(t3, `tester3+${TS}@playtest.test`);
+    await t3.fill("#name", `Cara Diaz ${TS % 10000}`);
+    await t3.check("text=test games and get paid");
+    await t3.click("label:has-text('Windows PC')");
+    await t3.click("label:has-text('English')");
+    await t3.click("text=Continue");
+    await t3.waitForSelector("text=Your sessions");
+    await t3.goto(`/app/find/${T11}`);
+    await t3.click("text=Join this test");
+    check("join refused", await has(t3, "text=This test is paused, so it isn't taking new testers right now."));
+    await shot(t3, "hold-join-refused-tester");
+    await dev.goto(t11Url());
+    await dev.check(`#invite label:has-text('Cara Diaz ${TS % 10000}') input`);
+    await dev.click("#invite button:has-text('Invite')");
+    check("invite refused", await has(dev, "text=This test is paused until you pay what you owe, so nobody can be invited."));
+    await shot(dev, "hold-invite-refused-developer");
+    await dev.goto("/app/tests/new");
+    await dev.fill("#title", "Another game");
+    await dev.fill("#questions", "Anything?");
+    await dev.click("text=Post the test");
+    check("posting refused", await has(dev, "text=New tests can't be posted while payments are on hold."));
+    await shot(dev, "hold-posting-refused-developer");
+    // A tester still sends work during the hold.
+    await t2.goto(`/app/sessions/${SD}`);
+    await t2.fill("#a0", "Beautiful lighthouse, the stairs puzzle was hard.");
+    await t2.click("text=Send my written answers");
+    check("tester still sends", await has(t2, "text=Sent "));
+    await dev.goto(t11Url());
+    await both("hold-tester-still-sends", t2);
+  });
+
+  await flow("13", "Several failed payments: listed, one still failing, then all paid; hold lifts and deadlines / Open until move on", async () => {
+    sql(`update "User" set "holdStartedAt" = now() - interval '2 days', "stripePaymentMethodId" = 'pm_card_partial' where id = '${devId}'`);
+    const dueBefore = sql(`select to_char("dueAt", 'YYYY-MM-DD') from "Contract" where id = '${SA}'`);
+    const ouBefore = sql(`select to_char("openUntil", 'YYYY-MM-DD') from "Test" where id = '${T11}'`);
+    await dev.goto(t11Url());
+    check("both failures listed with one button", await has(dev, "text=Pay what you owe ($25.00)"));
+    await both("several-owed");
+    await dev.click("button:has-text('Pay what you owe')");
+    check("the one still failing is named", await has(dev, "text=Still declined: Ana Silva's recording $15.00"));
+    await shot(dev, "several-one-still-failing-developer");
+    sql(`update "User" set "stripePaymentMethodId" = 'pm_card_visa' where id = '${devId}'`);
+    await dev.reload();
+    await dev.click("button:has-text('Pay what you owe ($15.00)')");
+    const lifted = await dev.waitForSelector("text=Your tests are paused.", { state: "detached", timeout: 10000 }).then(() => true, () => false);
+    check("hold lifted", lifted);
+    const dueAfter = sql(`select to_char("dueAt", 'YYYY-MM-DD') from "Contract" where id = '${SA}'`);
+    const ouAfter = sql(`select to_char("openUntil", 'YYYY-MM-DD') from "Test" where id = '${T11}'`);
+    check("tester deadline moved on 2 days", dueAfter !== dueBefore, `${dueBefore} → ${dueAfter}`);
+    check("Open until moved on 2 days", ouAfter !== ouBefore, `${ouBefore} → ${ouAfter}`);
+    await tester.goto(`/app/sessions/${SA}`);
+    check("tester no longer paused", !(await tester.isVisible("text=This test is paused.")));
+    await both("several-all-paid");
+  });
+
+  await flow("14", "Chargeback on written work: stop-once line and hold; admin marks it resolved", async () => {
+    await dev.goto(t11Url());
+    const pi = sql(`select p."stripePaymentIntentId" from "Payment" p join "Submission" s on s.id = p."submissionId" where s."contractId" = '${SA}' and s.kind = 'written' and p.status = 'charged' order by p."createdAt" desc limit 1`);
+    const hook = await fetch(`${BASE}/api/stripe/webhook`, { method: "POST", headers: { "stripe-signature": "fake", "content-type": "application/json" }, body: JSON.stringify({ type: "charge.dispute.created", data: { object: { payment_intent: pi } } }) });
+    check("webhook accepted", hook.ok, hook.status);
+    await dev.click("button:has-text('End early')");
+    await dev.fill("#reason", "Checking the stop-once box");
+    await dev.click("text=End their work now");
+    check("stop-once line", await has(dev, "text=Your bank reversed your $10.00 payment for Ana Silva's written answers"));
+    await shot(dev, "chargeback-stop-once-developer");
+    await dev.reload();
+    check("hold banner", await has(dev, "text=Your tests are paused."));
+    await tester.reload();
+    check("tester paused line", await has(tester, "text=This test is paused. Payment for your work may be delayed."));
+    await both("chargeback-hold");
+    const adm = adminPage || (await ctx(DESKTOP));
+    if (!adminPage) await signIn(adm, ADMIN);
+    await adm.goto("/admin");
+    await adm.locator("p", { hasText: DEV }).filter({ hasText: "Chargeback open" }).first().locator("button:has-text('Mark resolved')").click();
+    await adm.waitForTimeout(1200);
+    await shot(adm, "chargeback-admin-resolved");
+    await dev.reload();
+    check("developer resumed", !(await dev.isVisible("text=Your tests are paused.")));
+    await tester.reload();
+    await both("chargeback-resolved");
+  });
+
+  await flow("15", "Dispute: tester disputes, developer adds their side, admin raises pay, extra charged, receipt, paid so far updates", async () => {
+    await dev.goto(t11Url());
+    const card = dev.locator(`#tester-${SD}`);
+    const box = card.locator("div.rounded-lg", { hasText: "Written answers" }).filter({ hasText: "Amount" }).first();
+    await box.locator("input[id^='amt-']").fill("4.00");
+    await box.locator("textarea").fill("Only one short answer.");
+    await box.locator("input[type=checkbox]").check();
+    await box.locator("button:has-text('Pay')").click();
+    check("paid $4.00", await has(dev, "text=Paid $4.00"));
+    await dev.waitForTimeout(1200);
+    await t2.goto(`/app/sessions/${SD}`);
+    await t2.click("text=Dispute the pay");
+    await t2.fill("textarea[id^='d-']", "I answered the one question fully, as asked.");
+    await t2.click("text=Send the dispute");
+    check("tester disputed", await has(t2, "text=You disputed this: waiting for the team."));
+    await both("dispute-opened", t2);
+    await dev.goto(t11Url());
+    await dev.fill(`#tester-${SD} textarea[id^='side-']`, "The answer was a single sentence.");
+    await dev.click(`#tester-${SD} >> text=Send your side`);
+    check("developer's side shown", await has(dev, "text=Your side: “The answer was a single sentence.”"));
+    await shot(dev, "dispute-side-developer");
+    const adm = adminPage;
+    await adm.goto("/admin");
+    const row = adm.locator("#disputes div", { hasText: deeName }).filter({ hasText: "Decide" }).first();
+    check("admin sees both sides", await row.innerText().then((t) => t.includes("Developer's side")));
+    await row.locator("input").nth(0).fill("10.00");
+    await row.locator("input").nth(1).fill("The answer covered the question.");
+    await row.locator("button:has-text('Decide')").click();
+    await adm.waitForTimeout(1200);
+    await shot(adm, "dispute-admin-decided");
+    await dev.goto("/app/notifications");
+    check("receipt for the extra", await has(dev, "text=Receipt: you paid $6.00"));
+    await shot(dev, "dispute-receipt-developer");
+    await dev.goto(t11Url());
+    check("paid so far updated (developer)", await has(dev, "text=written answers $10.00"));
+    await t2.reload();
+    check("paid so far updated (tester)", await has(t2, "text=written answers $10.00"));
+    await both("dispute-decided", t2);
+  });
+
+  await flow("16", "Live updates: both pages open, lines appear within ~20 s without reloading", async () => {
+    // Ana's upcoming call is cancelled first so she can book again.
+    const c3 = sql(`select id from "Call" where "contractId" = '${SA}' and status = 'booked' and "startsAt" > now() limit 1`);
+    if (c3) await apiPost(tester, `/api/sessions/${SA}/cancel-call`, { seenAt: new Date().toISOString(), confirmed: true, callId: c3 });
+    const vdir = fs.mkdtempSync(path.join(os.tmpdir(), "pt-video16-"));
+    const vd = await (await browser.newContext({ ...DESKTOP, baseURL: BASE, storageState: await dev.context().storageState(), recordVideo: { dir: vdir, size: DESKTOP.viewport } })).newPage();
+    const vt = await (await browser.newContext({ ...PHONE, baseURL: BASE, storageState: await tester.context().storageState(), recordVideo: { dir: vdir, size: PHONE.viewport } })).newPage();
+    await vd.goto(t11Url());
+    await vt.goto(`/app/sessions/${SA}`);
+    await vd.waitForTimeout(1500);
+    const tBefore = await vt.locator("button:has-text('Book')").count();
+    await shot(vd, "live-before-developer");
+    await shot(vt, "live-before-tester");
+    // The developer offers a time (from another tab): the tester's open page shows it by itself.
+    await apiPost(dev, `/api/tests/${T11}/offer-times`, { seenAt: new Date().toISOString(), confirmed: true, times: [new Date(Date.now() + 6 * 86400000).toISOString()] });
+    const t0 = Date.now();
+    const appeared = await vt.waitForFunction((n) => document.querySelectorAll("button").length > 0 && [...document.querySelectorAll("button")].filter((b) => b.textContent === "Book").length > n, tBefore, { timeout: 35000 }).then(() => true, () => false);
+    check("tester page showed the new time without reload", appeared, `${Math.round((Date.now() - t0) / 1000)} s`);
+    await shot(vt, "live-after-tester");
+    // The tester books (from another tab): the developer's open page shows the line by itself.
+    const slot = sql(`select id from "CallSlot" where "testId" = '${T11}' and status = 'open' order by "createdAt" desc limit 1`);
+    await apiPost(tester, `/api/sessions/${SA}/book`, { seenAt: new Date().toISOString(), confirmed: true, slotId: slot });
+    const t1 = Date.now();
+    const devSaw = await vd.waitForSelector("text=Ana Silva booked a call for", { timeout: 35000 }).then(() => true, () => false);
+    check("developer page showed the booking line without reload", devSaw, `${Math.round((Date.now() - t1) / 1000)} s`);
+    await shot(vd, "live-after-developer");
+    for (const [pg, tag] of [[vd, "developer"], [vt, "tester"]]) {
+      const v = pg.video();
+      await pg.context().close();
+      if (v) {
+        const file = `16-live-updates-${tag}.webm`;
         await v.saveAs(path.join(OUT, file)).catch(() => {});
         cur.screenshots.push(file);
       }

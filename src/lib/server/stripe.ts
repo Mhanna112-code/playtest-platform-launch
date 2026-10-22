@@ -18,7 +18,7 @@ let fakeN = 0;
 const fakeStripe = {
   paymentIntents: {
     create: async (p: { payment_method?: string; amount: number }) => {
-      if (p.payment_method === "pm_card_declined") throw new Error("Your card was declined.");
+      if (p.payment_method === "pm_card_declined" || (p.payment_method === "pm_card_partial" && p.amount === 1500)) throw new Error("Your card was declined.");
       return { id: `pi_fake_${Date.now()}_${++fakeN}`, status: "succeeded", amount: p.amount };
     },
   },

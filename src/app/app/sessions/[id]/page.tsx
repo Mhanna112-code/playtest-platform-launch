@@ -43,6 +43,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const seenAt = now.toISOString();
   await sweepHeldCalls(c.test.developerId);
   const partPaid = new Map((await db.payment.groupBy({ by: ["submissionId", "callId"], where: { contractId: c.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } })).map((g) => [g.submissionId ?? g.callId ?? "", g._sum.amountCents ?? 0]));
+  const delayedSubs = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", settledAt: null, owedUntil: { not: null }, submissionId: { not: null } }, select: { submissionId: true } })).map((p) => p.submissionId!));
   const failedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", callId: { not: null } }, select: { callId: true } })).map((p) => p.callId!));
   const slots = await db.callSlot.findMany({ where: { testId: c.testId, status: "open", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
   const visible = slots.filter((s) => s.allowedTesterIds.length === 0 || s.allowedTesterIds.includes(u.id));
@@ -96,7 +97,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             {written.late && <span className="ml-2 badge">{lateLabel(c.dueAt, fmtDate)}</span>}
           </p>
         )}
-        {written?.review && <TesterReview sessionId={c.id} kind="submission" id={written.id} review={written.review} dispute={written.dispute} />}
+        {written && delayedSubs.has(written.id) ? <p className="info">Payment for this part may be delayed.</p> : written?.review && <TesterReview sessionId={c.id} kind="submission" id={written.id} review={written.review} dispute={written.dispute} />}
         {written?.review ? (
           writtenQuestions(c).map((q, i) => (
             <div key={i} className="text-sm">
@@ -121,7 +122,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             {recording.late && <span className="ml-2 badge">{lateLabel(c.dueAt, fmtDate)}</span>}
           </p>
         )}
-        {recording?.review && <TesterReview sessionId={c.id} kind="submission" id={recording.id} review={recording.review} dispute={recording.dispute} />}
+        {recording && delayedSubs.has(recording.id) ? <p className="info">Payment for this part may be delayed.</p> : recording?.review && <TesterReview sessionId={c.id} kind="submission" id={recording.id} review={recording.review} dispute={recording.dispute} />}
         <RecordingUpload
           sessionId={c.id}
           canSend={!refusal && !recording?.review}
