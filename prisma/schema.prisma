@@ -1,0 +1,323 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/// Money is always whole cents (Int).
+
+model User {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  name        String    @default("")
+  /// "she" | "he" | "they" | "" (blank: wording uses "they")
+  pronoun     String    @default("")
+  isDeveloper Boolean   @default(false)
+  isTester    Boolean   @default(false)
+  isAdmin     Boolean   @default(false)
+  suspendedAt DateTime?
+  suspendNote String    @default("")
+  createdAt   DateTime  @default(now())
+
+  /// Stripe: developer's customer + saved card; tester's Connect account
+  stripeCustomerId      String? @unique
+  stripePaymentMethodId String?
+  stripeAccountId       String? @unique
+  payoutsReady          Boolean @default(false)
+
+  sessions  Session[]
+  profile   TesterProfile?
+  tests     Test[]
+  contracts Contract[]
+  messages  Message[]
+}
+
+/// One-use sign-in link tokens (only the SHA-256 hash is stored)
+model LoginToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  email     String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email, createdAt])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model TesterProfile {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  devices    String[]
+  categories String[]
+  languages  String[]
+  bio        String   @default("")
+  updatedAt  DateTime @updatedAt
+}
+
+model Test {
+  id          String   @id @default(cuid())
+  developerId String
+  developer   User     @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  title       String
+  description String   @default("")
+  buildUrl    String   @default("")
+  category    String   @default("")
+  /// Devices a tester needs (any one of them); empty = any device
+  devices     String[]
+  languages   String[]
+  spots       Int
+  /// Prices in cents; null = this kind of work isn't offered; 0 = free
+  writtenCents   Int?
+  recordingCents Int?
+  /// Live call: hourly rate (cents) and booked length (minutes); null = no live call
+  liveRateCents Int?
+  liveMinutes   Int?
+  /// Each tester's deadline: days from their own join
+  deadlineDays  Int
+  /// Questions for written answers (array of strings)
+  questions     Json     @default("[]")
+  /// "draft" | "open" | "closed" (no new joiners) | "stopped" (for good)
+  status        String   @default("open")
+  round         Int      @default(1)
+  previousId    String?
+  /// Any change to the test (edit, join that used a spot, next round, stop): checked by Edit's Save
+  version       Int      @default(1)
+  /// Changes to the listing's terms only: checked by Join
+  listingVersion Int     @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  stoppedAt     DateTime?
+
+  contracts Contract[]
+  slots     CallSlot[]
+  events    TestEvent[]
+
+  @@index([developerId])
+  @@index([status])
+}
+
+/// What happened on a test: feeds the stop-once box (top panel) and Edit's "what changed" list.
+model TestEvent {
+  id        String   @id @default(cuid())
+  testId    String
+  test      Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  /// "joined" | "left" | "sent" | "booked" | "cancelled" | "edited" | "next_round" | "stopped" | "ended" | "closed" | "opened"
+  kind      String
+  text      String
+  /// The test's version after this event (when it changed the version)
+  version   Int?
+  createdAt DateTime @default(now())
+
+  @@index([testId, createdAt])
+}
+
+/// A tester's place in a test. Every term is copied from the listing at join and never changes.
+model Contract {
+  id        String   @id @default(cuid())
+  testId    String
+  test      Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  testerId  String
+  tester    User     @relation(fields: [testerId], references: [id], onDelete: Cascade)
+  /// The listing version the tester joined on
+  listingVersion Int
+  title          String
+  buildUrl       String
+  description    String
+  writtenCents   Int?
+  recordingCents Int?
+  liveRateCents  Int?
+  liveMinutes    Int?
+  deadlineDays   Int
+  questions      Json
+  keepPrivate    Boolean  @default(false)
+  joinedAt       DateTime @default(now())
+  dueAt          DateTime
+  /// "working" | "left" | "ended" (developer ended early / stopped the test)
+  status         String   @default("working")
+  endedAt        DateTime?
+  endReason      String   @default("")
+  /// After End early the tester may still send until this time
+  sendUntil      DateTime?
+
+  submissions Submission[]
+  recordings  Recording[]
+  calls       Call[]
+  messages    Message[]
+
+  @@unique([testId, testerId])
+  @@index([testerId])
+}
+
+/// Sent work: "written" (answers to the contract's questions) or "recording" (uploaded recordings).
+model Submission {
+  id         String   @id @default(cuid())
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  kind       String
+  /// Written: array of answers, one per question
+  answers    Json     @default("[]")
+  notes      String   @default("")
+  /// The agreed price for this part, from the contract
+  agreedCents Int
+  sentAt     DateTime @default(now())
+
+  recordings Recording[]
+  review     Review?
+  dispute    Dispute?
+
+  @@unique([contractId, kind])
+}
+
+model Recording {
+  id           String      @id @default(cuid())
+  contractId   String
+  contract     Contract    @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  submissionId String?
+  submission   Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+  storageKey   String
+  filename     String
+  sizeBytes    Int
+  contentType  String
+  createdAt    DateTime    @default(now())
+}
+
+model Review {
+  id           String     @id @default(cuid())
+  submissionId String     @unique
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  amountCents  Int
+  agreedCents  Int
+  reason       String     @default("")
+  createdAt    DateTime   @default(now())
+}
+
+/// Every charge (or attempted charge). status: "charged" | "not_set_up" | "failed"
+model Payment {
+  id           String   @id @default(cuid())
+  /// "review" | "call" | "dispute"
+  kind         String
+  submissionId String?
+  callId       String?
+  disputeId    String?
+  developerId  String
+  testerId     String
+  amountCents  Int
+  feeCents     Int
+  testerCents  Int
+  status       String
+  stripePaymentIntentId String?
+  failure      String   @default("")
+  createdAt    DateTime @default(now())
+
+  @@index([developerId])
+  @@index([testerId])
+}
+
+model Dispute {
+  id           String     @id @default(cuid())
+  submissionId String     @unique
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  testerId     String
+  reason       String
+  /// "open" | "decided"
+  status       String     @default("open")
+  /// The total pay the admin decided (never below what was paid)
+  decidedCents Int?
+  decisionNote String     @default("")
+  decidedById  String?
+  decidedAt    DateTime?
+  createdAt    DateTime   @default(now())
+}
+
+/// A call time the developer offers. Booked by one tester.
+model CallSlot {
+  id          String   @id @default(cuid())
+  testId      String
+  test        Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  startsAt    DateTime
+  minutes     Int
+  /// Empty = every tester with a live call in their contract can book; otherwise only these tester ids
+  allowedTesterIds String[]
+  /// Optional meeting link; without one the call uses the site's simple room page
+  link        String   @default("")
+  /// "open" | "booked" | "removed"
+  status      String   @default("open")
+  createdAt   DateTime @default(now())
+
+  calls Call[]
+
+  @@index([testId, startsAt])
+}
+
+model Call {
+  id          String    @id @default(cuid())
+  slotId      String
+  slot        CallSlot  @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  contractId  String
+  contract    Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  startsAt    DateTime
+  minutes     Int
+  rateCents   Int
+  /// "booked" | "cancelled" | "done"
+  status      String    @default("booked")
+  cancelledBy String?
+  cancelledAt DateTime?
+  cancelNote  String    @default("")
+  /// Entered by the developer after the call
+  lengthMinutes Int?
+  lengthReason  String  @default("")
+  lengthAt      DateTime?
+  /// No-show report: who reported ("developer" | "tester"), what happened; an admin can read it
+  noShowBy      String?
+  noShowNote    String  @default("")
+  noShowAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([contractId])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  senderId   String
+  sender     User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body       String
+  createdAt  DateTime @default(now())
+
+  @@index([contractId, createdAt])
+}
+
+/// Emails written instead of sent when RESEND_API_KEY is empty (/dev/outbox)
+model OutboxEmail {
+  id        String   @id @default(cuid())
+  to        String
+  subject   String
+  text      String
+  html      String   @default("")
+  createdAt DateTime @default(now())
+}
+
+model WaitlistEntry {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  /// "developer" | "tester" | "both"
+  role      String   @default("both")
+  createdAt DateTime @default(now())
+}
