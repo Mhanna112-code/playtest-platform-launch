@@ -513,9 +513,13 @@ model CallRequest {
   fromSide     String
   startsAt     DateTime
   minutes      Int
-  /// "pending" | "booked" | "declined" | "withdrawn" | "closed"
+  /// "pending" | "booked" | "declined" | "withdrawn" | "closed" | "taken" (another tester accepted this batch first)
   status       String    @default("pending")
   closedReason String    @default("")
+  /// A developer request sent to several testers shares one batch: the first Accept books it
+  batchId      String    @default("")
+  /// The tester's "Ask $___/h" (null = the contract call rate)
+  askRateCents Int?
   callId       String?
   decidedAt    DateTime?
   createdAt    DateTime  @default(now())

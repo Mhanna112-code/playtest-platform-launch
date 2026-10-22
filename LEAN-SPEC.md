@@ -4,6 +4,29 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, NEWEST) Calls are ALWAYS requests; no Offer times, no instant Book; tester can ask a rate
+- "Offer times" and the tester's instant "Book" are REMOVED. Every call starts as a request from one side and is
+  booked only when the other side accepts (or auto-match below).
+- Developer: "Request a time" -> pick one or more working testers (tick list with "Select all"). One request = ONE
+  call: the first tester to Accept books it; everyone else's copy closes, and an Accept pressed on a closed copy is
+  refused under the button ("Ana Silva took this time at 2:10 PM."). One grouped bell per request batch
+  ("Nora Lane asked for a call: Thu, Nov 5 at 3:00 PM").
+- The developer never sets a price: their requests use the tester's contract call rate (or "Not in your contract").
+  To change the rate they message the tester.
+- Tester: "Request a time" with an optional "Ask $___/h" (blank = contract rate). Accept on a developer's request
+  also has the optional "Ask $___/h".
+- STRICT price rule: if the tester's ask differs from the contract call rate (or the call is not in their contract
+  and they ask a rate), nothing books on the tester's side. Accepting with a different ask turns that tester's copy
+  into a TESTER request (same time, asked rate) that the developer must Accept/Decline; the developer's request stays
+  open for the other testers. Accept with no ask (or ask = contract rate) books at once.
+- Auto-match: same time requested by both sides books at once ONLY when the tester's ask is blank or equals the
+  contract rate; otherwise the tester's priced request stays pending for the developer.
+- Booked calls show the agreed rate ("Contract $40/h" or "Agreed $50/h"); the developer's Pay box after the call
+  starts at agreed rate x length (as with sends' Ask, the developer can still pay any amount or reject). Charge /
+  Let it go keeps the existing Charge-amount rule.
+- Rate asks/changes count as call changes (stop-once: developer set, tester reason C). All other rules of the
+  section below stay (Withdraw, closing on time passed/block/hold/Stop/End early/Leave, cancel rules, refusals).
+
 ## (Owner, Oct 22, newest) Call requests on both sides (adds to offered times + instant Book)
 - Developer: "Offer times" (as now: open times anyone allowed can book instantly) AND "Request a time" with one
   tester (pending until that tester accepts or declines). Tester: "Book" an offered time (instant, as now) AND
