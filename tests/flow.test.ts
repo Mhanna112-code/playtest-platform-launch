@@ -65,10 +65,11 @@ describe("join and contract snapshots", () => {
     const t0 = await db.test.findUniqueOrThrow({ where: { id: testId } });
     await act(testId, "edit", dev.cookie, { version: t0.version, fields: { writtenCents: "8.00" } });
     const ana = await makeUser({ tester: true, name: "Ana Silva" });
-    const first = await act(testId, "join", ana.cookie, { listingVersion: t0.listingVersion });
+    const first = await act(testId, "join", ana.cookie, { seenAt: new Date(Date.now() - 60_000).toISOString() });
     expect(first.status).toBe(409);
-    expect(first.body.error).toMatchObject({ code: "listing_changed", terms: expect.stringContaining("Written $6.40") });
-    const second = await act(testId, "join", ana.cookie, { listingVersion: t0.listingVersion, confirmed: true });
+    expect(first.body.error).toMatchObject({ code: "stop_once" });
+    expect(first.body.error.changes[0].text).toBe("The listing was edited: written answers price");
+    const second = await act(testId, "join", ana.cookie, { seenAt: new Date(Date.now() - 60_000).toISOString(), confirmed: true });
     expect(second.status).toBe(200);
     expect((await db.contract.findUniqueOrThrow({ where: { id: second.body.sessionId } })).writtenCents).toBe(800);
   });
@@ -78,7 +79,7 @@ describe("join and contract snapshots", () => {
     const t0 = await db.test.findUniqueOrThrow({ where: { id: testId } });
     await act(testId, "edit", dev.cookie, { version: t0.version, fields: { spots: 5 } });
     const ana = await makeUser({ tester: true });
-    expect((await act(testId, "join", ana.cookie, { listingVersion: t0.listingVersion })).status).toBe(200);
+    expect((await act(testId, "join", ana.cookie, { seenAt: new Date(Date.now() - 60_000).toISOString() })).status).toBe(200);
   });
 
   it("full, stopped and own tests refuse for good; device needs are checked", async () => {

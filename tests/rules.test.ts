@@ -7,7 +7,7 @@ import {
 const listing = (over: Partial<Listing> = {}): Listing => ({
   title: "Harbor Run", description: "A boat game", buildUrl: "https://example.com/build", category: "Action",
   devices: ["Windows PC"], languages: ["English"], spots: 5, writtenCents: 1000, recordingCents: 1500,
-  liveRateCents: 3000, liveMinutes: 30, deadlineDays: 7, questions: ["What did you like?"], openUntil: null, ...over,
+  liveRateCents: 3000, liveMinutes: 30, deadlineDays: 7, questions: ["What did you like?"], openUntil: null, joinMode: "anyone", ...over,
 });
 const at = (min: number) => new Date(Date.UTC(2026, 10, 5, 15, min));
 const ev = (kind: string, min: number, text = kind, version?: number) => ({ kind, text, createdAt: at(min), version });

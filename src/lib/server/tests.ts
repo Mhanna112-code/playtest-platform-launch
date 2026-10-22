@@ -24,6 +24,7 @@ export const asListing = (t: { [K in keyof Listing]: unknown }): Listing => ({
   liveRateCents: t.liveRateCents as number | null, liveMinutes: t.liveMinutes as number | null,
   deadlineDays: t.deadlineDays as number, questions: (t.questions as string[]) ?? [],
   openUntil: t.openUntil ? new Date(t.openUntil as string | Date).toISOString() : null,
+  joinMode: (t.joinMode as string) ?? "anyone",
 });
 
 /** Listing → database fields (Open until as a Date). */
@@ -65,6 +66,7 @@ export function parseListing(body: Record<string, unknown>, partial = false): Pa
   if (has("liveRateCents")) out.liveRateCents = price(body.liveRateCents, "live call rate");
   if (has("liveMinutes")) out.liveMinutes = body.liveMinutes === null || body.liveMinutes === "" ? null : int(body.liveMinutes);
   if (has("deadlineDays")) out.deadlineDays = int(body.deadlineDays);
+  if (has("joinMode")) out.joinMode = ["anyone", "apply", "invite"].includes(body.joinMode as string) ? (body.joinMode as string) : "anyone";
   if (has("openUntil")) {
     const v = str(body.openUntil, 40);
     out.openUntil = v ? (/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T23:59:59.000Z` : v) : null;
@@ -135,6 +137,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   const confirmed = body.confirmed === true;
   const touched = parseListing((body.fields ?? {}) as Record<string, unknown>, true);
   let termsChanged = false;
+  let switchedToAnyone = false;
   const result = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
@@ -158,19 +161,22 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (!fields.length) return t;
     const what = fields.map((f) => FIELD_NAMES[f]).join(", ");
     termsChanged = terms.some((f) => ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "deadlineDays", "questions"].includes(f));
-    await recordEvent(tx, testId, "edited", `The listing was edited: ${what}`, true, {
-      ...listingData(next), ...(fields.includes("openUntil") ? { notified3d: false, notified1d: false } : {}), ...(terms.length ? { listingVersion: { increment: 1 } } : {}),
+    const listingFields = fields.filter((f) => f !== "spots");
+    switchedToAnyone = fields.includes("joinMode") && next.joinMode === "anyone";
+    await recordEvent(tx, testId, listingFields.length ? "edited" : "edited_spots", `The listing was edited: ${what}`, true, {
+      ...listingData(next), ...(fields.includes("openUntil") ? { notified3d: false, notified1d: false } : {}), ...(listingFields.length ? { listingVersion: { increment: 1 } } : {}),
     });
     return tx.test.findUniqueOrThrow({ where: { id: testId } });
   });
   // Working testers are OFFERED the new contract terms (Switch / Keep); their contract changes only if they switch.
   const offered = termsChanged ? await offerNewTerms(testId) : 0;
+  if (switchedToAnyone) await (await import("./joining")).onSwitchToAnyone(testId);
   return Object.assign(result, { offered });
 }
 
 const FIELD_NAMES: Record<keyof Listing, string> = {
   title: "title", description: "description", buildUrl: "build link", category: "category", devices: "devices", languages: "languages",
-  openUntil: "Open until", spots: "spots", writtenCents: "written answers price", recordingCents: "recording price", liveRateCents: "live call rate",
+  openUntil: "Open until", joinMode: "who can join", spots: "spots", writtenCents: "written answers price", recordingCents: "recording price", liveRateCents: "live call rate",
   liveMinutes: "call length", deadlineDays: "deadline", questions: "questions",
 };
 
@@ -301,7 +307,7 @@ export async function nextRound(dev: U, testId: string, body: Record<string, unk
 /** Open tests the tester can join (not their own, not full, not already joined). */
 export async function findTests(tester: U) {
   const tests = await db.test.findMany({
-    where: { status: "open", developerId: { notIn: [tester.id, ...(await blockPartners(tester.id))] }, developer: { suspendedAt: null }, contracts: { none: { testerId: tester.id } } },
+    where: { status: "open", developerId: { notIn: [tester.id, ...(await blockPartners(tester.id))] }, developer: { suspendedAt: null }, contracts: { none: { testerId: tester.id } }, OR: [{ joinMode: { not: "invite" } }, { invites: { some: { testerId: tester.id, status: "sent" } } }] },
     include: { _count: { select: { contracts: { where: { status: "working" } } } }, developer: { select: { name: true, email: true } } },
     orderBy: { createdAt: "desc" },
     take: 100,

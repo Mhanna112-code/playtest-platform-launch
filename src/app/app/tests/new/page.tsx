@@ -11,7 +11,7 @@ export default async function NewTest() {
     <>
       <h1>Post a test</h1>
       <TestForm
-        init={{ title: "", description: "", buildUrl: "", category: "", devices: [], languages: [], spots: 5, writtenCents: 1000, recordingCents: null, liveRateCents: null, liveMinutes: 30, deadlineDays: 7, questions: [], openUntil: null }}
+        init={{ title: "", description: "", buildUrl: "", category: "", devices: [], languages: [], spots: 5, writtenCents: 1000, recordingCents: null, liveRateCents: null, liveMinutes: 30, deadlineDays: 7, questions: [], openUntil: null, joinMode: "anyone" }}
       />
     </>
   );

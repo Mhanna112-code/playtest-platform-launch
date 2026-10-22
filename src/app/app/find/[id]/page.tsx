@@ -55,7 +55,13 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         ) : gap ? (
           <p className="err">{gap}</p>
         ) : (
-          <JoinBox testId={t.id} listingVersion={t.listingVersion} />
+          <JoinBox
+            testId={t.id}
+            seenAt={new Date().toISOString()}
+            mode={t.joinMode}
+            invited={!!(await db.invite.findFirst({ where: { testId: t.id, testerId: u.id, status: "sent" } }))}
+            application={await db.application.findUnique({ where: { testId_testerId: { testId: t.id, testerId: u.id } } }).then((a) => (a ? { status: a.status, changed: !!a.changedAt } : null))}
+          />
         )}
       </div>
     </>

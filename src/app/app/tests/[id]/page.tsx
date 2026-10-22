@@ -15,6 +15,7 @@ import { owedForBox, sweepHeldCalls } from "@/lib/server/holds";
 import { paidLines } from "@/lib/server/paid";
 import { termsRowLines } from "@/lib/server/terms";
 import { BlockButton } from "@/components/BlockButton";
+import { Applications } from "./Applications";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
@@ -51,6 +52,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   await sweepHeldCalls(u.id);
   const paidKinds = await paidLines(t.contracts.map((c) => c.id));
   const termsRows = await termsRowLines(t.contracts.map((c) => c.id));
+  const pendingApps = await db.application.findMany({ where: { testId: id, status: "pending" }, orderBy: { createdAt: "asc" } });
+  const appUsers = await db.user.findMany({ where: { id: { in: pendingApps.map((a) => a.testerId) } }, include: { profile: true } });
+  const apps = pendingApps.map((a) => {
+    const x = appUsers.find((y) => y.id === a.testerId)!;
+    return { id: a.id, name: displayName(x), note: a.note, profile: [...(x.profile?.devices ?? []), ...(x.profile?.languages ?? [])].join(", ") };
+  });
   const blockedIds = new Set((await db.block.findMany({ where: { blockerId: u.id } })).map((b) => b.blockedId));
   const blockedBy = new Set((await db.block.findMany({ where: { blockedId: u.id } })).map((b) => b.blockerId));
   const [testers, invites, owedList] = await Promise.all([invitable(u.id, id), db.invite.findMany({ where: { testId: id, status: { in: ["sent", "joined"] } }, orderBy: { createdAt: "desc" } }), owedForBox(u.id)]);
@@ -79,6 +86,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       />
       {(u.holdStartedAt || owedList.length > 0) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} />}
       {soon && <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{closesInLine(t.title, t.openUntil!, new Date())}</p>}
+      <Applications testId={t.id} seenAt={seenAt} apps={apps} />
       {t.status !== "stopped" && (
         <InvitePanel
           testId={t.id}

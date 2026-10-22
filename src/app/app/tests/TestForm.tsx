@@ -12,7 +12,7 @@ import type { Listing } from "@/lib/rules";
 type F = {
   title: string; description: string; buildUrl: string; category: string; devices: string[]; languages: string[];
   spots: string; deadlineDays: string; written: boolean; writtenPrice: string; recording: boolean; recordingPrice: string;
-  live: boolean; liveRate: string; liveMinutes: string; questions: string; openUntil: string;
+  live: boolean; liveRate: string; liveMinutes: string; questions: string; openUntil: string; joinMode: string;
 };
 
 const dollars = (c: number | null) => (c == null ? "" : (c / 100).toFixed(2));
@@ -23,6 +23,7 @@ export function toForm(l: Listing): F {
     recording: l.recordingCents != null, recordingPrice: dollars(l.recordingCents), live: l.liveRateCents != null,
     liveRate: dollars(l.liveRateCents), liveMinutes: String(l.liveMinutes ?? 30), questions: l.questions.join("\n"),
     openUntil: l.openUntil ? l.openUntil.slice(0, 10) : "",
+    joinMode: l.joinMode ?? "anyone",
   };
 }
 
@@ -32,14 +33,14 @@ function toApi(f: F): Record<string, unknown> {
     title: f.title, description: f.description, buildUrl: f.buildUrl, category: f.category, devices: f.devices, languages: f.languages,
     spots: f.spots, deadlineDays: f.deadlineDays, writtenCents: f.written ? f.writtenPrice || "" : null,
     recordingCents: f.recording ? f.recordingPrice || "" : null, liveRateCents: f.live ? f.liveRate || "" : null,
-    liveMinutes: f.live ? f.liveMinutes : null, questions: f.questions.split("\n").map((q) => q.trim()).filter(Boolean), openUntil: f.openUntil,
+    liveMinutes: f.live ? f.liveMinutes : null, questions: f.questions.split("\n").map((q) => q.trim()).filter(Boolean), openUntil: f.openUntil, joinMode: f.joinMode,
   };
 }
 // Which API fields each form field feeds.
 const API_FIELDS: Record<keyof F, string[]> = {
   title: ["title"], description: ["description"], buildUrl: ["buildUrl"], category: ["category"], devices: ["devices"], languages: ["languages"],
   spots: ["spots"], deadlineDays: ["deadlineDays"], written: ["writtenCents"], writtenPrice: ["writtenCents"], recording: ["recordingCents"],
-  recordingPrice: ["recordingCents"], live: ["liveRateCents", "liveMinutes"], liveRate: ["liveRateCents"], liveMinutes: ["liveMinutes"], questions: ["questions"], openUntil: ["openUntil"],
+  recordingPrice: ["recordingCents"], live: ["liveRateCents", "liveMinutes"], liveRate: ["liveRateCents"], liveMinutes: ["liveMinutes"], questions: ["questions"], openUntil: ["openUntil"], joinMode: ["joinMode"],
 };
 
 export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; version: number; testersIn: number; draft: boolean } }) {
@@ -139,6 +140,14 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
           {text("openUntil", "Open until (no new testers or work after it; blank = no end)", { type: "date", cls: "max-w-[12rem]" })}
         </div>
         {edit && edit.testersIn > 0 && <p className="note">{edit.testersIn} tester{edit.testersIn === 1 ? " is" : "s are"} in: spots can&apos;t go below that.</p>}
+        <div>
+          <label className="label" htmlFor="joinMode">Who can join</label>
+          <select id="joinMode" className="input max-w-xs" value={f.joinMode} onChange={(e) => set({ joinMode: e.target.value })}>
+            <option value="anyone">Anyone (they press Join)</option>
+            <option value="apply">Apply (you accept or decline)</option>
+            <option value="invite">Invite only</option>
+          </select>
+        </div>
         <Choices label="Devices testers need (any one; none ticked = any device)" options={DEVICES} value={f.devices} onChange={(devices) => set({ devices })} />
         <Choices label="Languages testers need (any one)" options={LANGUAGES} value={f.languages} onChange={(languages) => set({ languages })} />
       </div>

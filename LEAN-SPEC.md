@@ -4,6 +4,21 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22) Joining: Join, Apply to join, invite only (no offers / counter-offers on the join page)
+- Test setting "Who can join": Anyone (tester presses Join) / Apply (tester presses Apply to join, optional note;
+  the developer Accepts or Declines) / Invite only.
+- "Test terms changed" means ANYTHING about the test listing (any Edit field, Open until, who can join) EXCEPT the
+  number of spots: a spots change never stops Join / Apply / the auto-join; only "full" refuses (for good).
+- Join and Apply to join stop once (blue, under the button) if anything about the test changed since the page loaded,
+  including a switch between Anyone / Apply / Invite only; the box lists what changed; press again to go ahead on the
+  current listing. Refused for good: full, stopped, past Open until, paused, blocked, 10 tests, already in.
+- A pending application when the developer switches the test to "Anyone can join": if nothing else about the test
+  changed since the application, the tester is joined automatically (bell + email "You're in: Harbor Run"); if
+  something else changed, the application stays and the tester is told "Harbor Run changed since you applied:
+  [Join on the current listing] [Withdraw application]".
+- Developer's Accept / Decline on applications use the developer stop-once reasons (plus "the tester changed their
+  profile" and "anything about the test changed since"), box under the button.
+
 ## (Owner, Oct 22) If the part's contract price has already been paid in full, NO Charge / Let it go box at all (not
 ## even "Close it") and no day-14 notices or reminders to the tester for that piece; the developer can still Pay or
 ## Reject it.

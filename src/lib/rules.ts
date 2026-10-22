@@ -126,11 +126,13 @@ export type Listing = {
   questions: string[];
   /** After this date (ISO): no new joiners, no sending, no booking. null = no end date */
   openUntil: string | null;
+  /** Who can join: "anyone" | "apply" | "invite" */
+  joinMode: string;
 };
 
 export const LISTING_FIELDS = [
   "title", "description", "buildUrl", "category", "devices", "languages", "spots",
-  "writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "deadlineDays", "questions", "openUntil",
+  "writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "deadlineDays", "questions", "openUntil", "joinMode",
 ] as const satisfies readonly (keyof Listing)[];
 
 /** Fields whose change alters the terms new testers join on (checked by Join). Spots only changes availability. */
@@ -141,6 +143,7 @@ export const MAX_SPOTS = 50;
 /** Check a listing's values. Returns every problem, each in a plain sentence. */
 export function checkListing(l: Listing, testersIn = 0, now = new Date()): string[] {
   const errs: string[] = [];
+  if (!["anyone", "apply", "invite"].includes(l.joinMode ?? "anyone")) errs.push("Choose who can join: anyone, apply, or invite only.");
   if (l.openUntil != null) {
     const d = new Date(l.openUntil);
     if (isNaN(d.getTime())) errs.push("Enter the Open until date like 2026-12-01.");

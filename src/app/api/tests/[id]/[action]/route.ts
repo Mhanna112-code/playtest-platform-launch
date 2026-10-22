@@ -1,9 +1,10 @@
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { devCancelCall, offerTimes, removeTime, reportNoShow, setCallLength } from "@/lib/server/calls";
 import { cancelInvite, inviteTesters } from "@/lib/server/invites";
+import { apply, decideApplication, join, withdrawApplication } from "@/lib/server/joining";
 import { addDevSide } from "@/lib/server/payments";
 import { sendMessage } from "@/lib/server/messages";
-import { editTest, endEarly, joinTest, nextRound, openDraft, stopTest } from "@/lib/server/tests";
+import { editTest, endEarly, nextRound, openDraft, stopTest } from "@/lib/server/tests";
 import { requireActive } from "@/lib/server/users";
 
 type Ctx = { params: Promise<{ id: string; action: string }> };
@@ -49,9 +50,15 @@ export async function POST(req: Request, { params }: Ctx) {
         return ok({ id: m.id });
       }
       case "join": {
-        const c = await joinTest(u, id, body);
+        const c = await join(u, id, body);
         return ok({ sessionId: c.id });
       }
+      case "apply":
+        return ok(await apply(u, id, body));
+      case "withdraw-application":
+        return ok(await withdrawApplication(u, id));
+      case "application":
+        return ok(await decideApplication(u, id, body));
     }
     throw new HttpError(404, "not_found", "That action doesn't exist.");
   });
