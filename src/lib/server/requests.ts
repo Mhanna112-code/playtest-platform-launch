@@ -19,8 +19,10 @@ import { testerGate } from "./testerGate";
 type Side = "developer" | "tester";
 type U = { id: string; email: string; name: string };
 const DAY_MS = 86_400_000;
-/** Up to 3 items per tester per test: both sides' pending requests and booked calls; a daily/weekly set counts as 1. */
-export const MAX_ITEMS = 3;
+/** Limits per tester per test: up to 3 booked times (a single call = 1, a daily/weekly set = 1) and up to 3 pending
+ * requests (both sides together). */
+export const MAX_BOOKED = 3;
+export const MAX_REQUESTS = 3;
 
 async function ctx(userId: string, contractId: string) {
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { tester: true, test: { include: { developer: true } } } });
@@ -99,17 +101,16 @@ async function acceptClash(c: Ctx["c"], side: Side, times: Date[], minutes: numb
   return clashes;
 }
 
-/** Items used with this tester in this test: pending requests (either side) + booked calls still ahead (a set = 1). */
-export async function itemsUsed(contractId: string) {
-  const now = new Date();
-  const [reqs, calls] = await Promise.all([
-    db.callRequest.count({ where: { contractId, status: "pending", startsAt: { gt: now } } }),
-    db.call.findMany({ where: { contractId, status: "booked", startsAt: { gt: now } }, select: { setId: true } }),
-  ]);
-  return reqs + new Set(calls.map((c, i) => c.setId ?? `single-${i}`)).size;
+/** Booked times still ahead with this tester (a single call = 1, a daily/weekly set = 1). */
+export async function bookedTimes(contractId: string) {
+  const calls = await db.call.findMany({ where: { contractId, status: "booked", startsAt: { gt: new Date() } }, select: { setId: true, id: true } });
+  return new Set(calls.map((c) => c.setId ?? c.id)).size;
 }
-const devLimitLine = (name: string) => `${name} already has ${MAX_ITEMS} calls or requests with you. Wait until one takes place, or withdraw or cancel one.`;
-const testerLimitLine = `You already have ${MAX_ITEMS} calls or requests in this test. Wait until one takes place, or withdraw or cancel one.`;
+/** Pending requests with this tester (both sides together). */
+export const pendingRequests = (contractId: string) => db.callRequest.count({ where: { contractId, status: "pending", startsAt: { gt: new Date() } } });
+const requestLimitLine = (name: string) => `You already have ${MAX_REQUESTS} requests waiting with ${name}. Withdraw one or wait for an answer.`;
+const bookedLimit = (side: Side, testerName: string) =>
+  side === "developer" ? `${testerName} already has ${MAX_BOOKED} booked times with you. Wait until one is over or cancel one.` : `You already have ${MAX_BOOKED} booked times in this test.`;
 
 /** Book one call at this time between the two, at the agreed rate. */
 async function bookAt(contractId: string, startsAt: Date, minutes: number, rateCents: number | null, setId: string | null = null) {
@@ -174,6 +175,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
       if (match && hit) {
         const clash = await acceptClash(c, "developer", [hit], match.minutes);
         if (clash.length) throw new HttpError(409, "clash", clash[0]);
+        if ((await bookedTimes(c.id)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit("developer", displayName(c.tester)));
         const call = await bookAt(c.id, hit, match.minutes, c.liveRateCents);
         await db.callRequest.update({ where: { id: match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date() } });
         const line = `Booked: you both picked ${fmtDateTime(hit)}`;
@@ -188,14 +190,14 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     const minutes = x.c.liveMinutes ?? x.c.test.liveMinutes ?? 30;
     const clash = await sendClash(x.c.id, requestTimes(kind), minutes, displayName(x.c.tester));
     if (clash) blocked.push(clash);
-    else if ((await itemsUsed(x.c.id)) >= MAX_ITEMS) atLimit.push(displayName(x.c.tester));
+    else if ((await pendingRequests(x.c.id)) >= MAX_REQUESTS) atLimit.push(displayName(x.c.tester));
     else ok.push(x);
   }
   if (all.length === 1 && blocked.length) throw new HttpError(409, "clash", blocked[0]);
-  if (all.length === 1 && atLimit.length) throw new HttpError(409, "limit", devLimitLine(atLimit[0]));
-  if (!ok.length) throw new HttpError(409, "limit", [...blocked, ...atLimit.map(devLimitLine)].join(" "));
+  if (all.length === 1 && atLimit.length) throw new HttpError(409, "limit", requestLimitLine(atLimit[0]));
+  if (!ok.length) throw new HttpError(409, "limit", [...blocked, ...atLimit.map(requestLimitLine)].join(" "));
   if ((blocked.length || atLimit.length) && body.limitConfirmed !== true && body.confirmed !== true) {
-    const text = [...blocked, ...(atLimit.length ? [`${atLimit.join(" and ")} ${atLimit.length === 1 ? "is" : "are"} at ${MAX_ITEMS} of ${MAX_ITEMS} calls or requests with you.`] : [])].join(" ");
+    const text = [...blocked, ...(atLimit.length ? [`${atLimit.join(" and ")} already ${atLimit.length === 1 ? "has" : "have"} ${MAX_REQUESTS} requests waiting with you.`] : [])].join(" ");
     throw new HttpError(409, "stop_once", "Press again to send to the others.", { changes: [{ text, at: new Date() }], tail: `Press again to send to the others (${ok.map((x) => displayName(x.c.tester)).join(", ")}).`, limit: true });
   }
   const batchId = randomBytes(8).toString("hex");
@@ -228,6 +230,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
       if (!hit) continue;
       const clash = await acceptClash(c, "tester", [hit], m.minutes);
       if (clash.length) throw new HttpError(409, "clash", clash[0]);
+      if ((await bookedTimes(contractId)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit("tester", displayName(c.tester)));
       const call = await bookAt(contractId, hit, m.minutes, c.liveRateCents);
       await db.callRequest.update({ where: { id: m.id }, data: { status: "booked", callId: call.id, decidedAt: new Date() } });
       await closeBatch(m.batchId, m.id, displayName(c.tester));
@@ -249,7 +252,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   }
   const clash = await sendClash(contractId, requestTimes(kind), minutes, devName);
   if (clash) throw new HttpError(409, "clash", clash);
-  if ((await itemsUsed(contractId)) >= MAX_ITEMS) throw new HttpError(409, "limit", testerLimitLine);
+  if ((await pendingRequests(contractId)) >= MAX_REQUESTS) throw new HttpError(409, "limit", requestLimitLine(devName));
   const r = await db.callRequest.create({
     data: { testId: c.testId, contractId, fromSide: "tester", startsAt: kind.startsAt, times: kind.weeks ? [kind.startsAt] : kind.times, weeks: kind.weeks, repeat: kind.repeat, minutes, askRateCents: ask == null || ask === c.liveRateCents ? null : ask, batchId: closedCopy ? `ask-${closedCopy}` : "" },
   });
@@ -305,6 +308,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
       const clashes = await acceptClash(c, side, times, r.minutes);
       if (clashes.length) throw new HttpError(409, "clash", clashes[0]);
     }
+    if ((await bookedTimes(contractId)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit(side, displayName(c.tester)));
     let first = null;
     for (const t of times) {
       const call = await bookAt(contractId, t, r.minutes, rate, r.weeks ? r.id : null);
