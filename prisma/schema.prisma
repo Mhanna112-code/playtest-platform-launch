@@ -361,6 +361,9 @@ model Call {
   cancelNote  String    @default("")
   /// Optional "Ask $___ for this" when booking
   askedCents  Int?
+  /// Each side's first Join (the call page shows "Both joined at …"; the length defaults from then to the booked end)
+  devJoinedAt    DateTime?
+  testerJoinedAt DateTime?
   /// The actual length the developer entered after the call (sets the Pay box reference); null = booked length
   actualMinutes Int?
   /// No-show report: who reported ("developer" | "tester"), what happened; an admin can read it

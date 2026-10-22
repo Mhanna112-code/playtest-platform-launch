@@ -1,0 +1,86 @@
+import { randomUUID } from "node:crypto";
+import { describe, expect, it } from "vitest";
+import { db } from "@/lib/db";
+import { POST as joinPOST } from "@/app/api/calls/[id]/join/route";
+import { GET as statusGET } from "@/app/api/calls/[id]/status/route";
+import { POST as blocksPOST } from "@/app/api/blocks/route";
+import * as R from "@/lib/rules";
+import { invitable } from "@/lib/server/invites";
+import { decideDispute, review } from "@/lib/server/payments";
+import { liftHoldIfClear, startHold } from "@/lib/server/holds";
+import { json, makeUser, req } from "./helpers";
+import { act, joined, sact, seen, setup } from "./fixtures";
+
+const join = (cookie: string, id: string) => joinPOST(req(`/api/calls/${id}/join`, { cookie, body: {} }), { params: Promise.resolve({ id }) }).then(json);
+const status = (cookie: string, id: string) => statusGET(req(`/api/calls/${id}/status`, { cookie }), { params: Promise.resolve({ id }) }).then(json);
+
+async function booked(minutesFromNow: number) {
+  const s = await setup();
+  const j = await joined(s.testId);
+  await act(s.testId, "offer-times", s.dev.cookie, { seenAt: seen(), confirmed: true, times: [new Date(Date.now() + 48 * 3_600_000).toISOString()] });
+  const slot = await db.callSlot.findFirstOrThrow({ where: { testId: s.testId } });
+  await sact(j.sessionId, "book", j.tester.cookie, { seenAt: seen(), confirmed: true, slotId: slot.id });
+  const call = await db.call.findFirstOrThrow({ where: { contractId: j.sessionId } });
+  await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() + minutesFromNow * 60_000) } });
+  return { ...s, ...j, call };
+}
+
+describe("calls / hold / block refinements", () => {
+  it("cancel up to the start (reason inside 24h); not after it starts", async () => {
+    expect(R.checkCancel(new Date(Date.now() - 1000), new Date(), "reason").ok).toBe(false);
+    const { tester, sessionId, call } = await booked(-5);
+    expect((await sact(sessionId, "cancel-call", tester.cookie, { callId: call.id, reason: "late" })).body.error.message).toMatch(/^The call has started/);
+  });
+
+  it("each side's first Join is recorded; the length defaults from both joined to the booked end", async () => {
+    const { dev, tester, call } = await booked(-5);
+    expect((await join(tester.cookie, call.id)).body.url).toBe(`/app/calls/${call.id}`);
+    await join(dev.cookie, call.id);
+    const c = await db.call.findUniqueOrThrow({ where: { id: call.id } });
+    expect(c.devJoinedAt && c.testerJoinedAt).toBeTruthy();
+    expect((await status(dev.cookie, call.id)).body.bothJoinedAt).toBeTruthy();
+    expect(R.defaultCallMinutes(new Date("2026-11-05T15:00:00Z"), 30, new Date("2026-11-05T15:05:00Z"), new Date("2026-11-05T15:02:00Z"))).toBe(25);
+    expect(R.defaultCallMinutes(new Date("2026-11-05T15:00:00Z"), 30, null, null)).toBe(30);
+  });
+
+  it("no length entry during a hold", async () => {
+    const { dev, testId, call } = await booked(-60);
+    await startHold(dev.user.id, "unpaid");
+    expect((await act(testId, "call-length", dev.cookie, { callId: call.id, minutes: 25 })).body.error.message).toBe("You can enter this once the hold is lifted.");
+  });
+
+  it("a cancel or a block closes the room (status line) for both", async () => {
+    const { dev, tester, call, testId } = await booked(-5);
+    expect((await status(tester.cookie, call.id)).body.line).toBe("");
+    await blocksPOST(req("/api/blocks", { cookie: dev.cookie, body: { userId: tester.user.id } }));
+    expect((await status(tester.cookie, call.id)).body.line).toBe("This call isn't available.");
+    expect((await status(dev.cookie, call.id)).body.line).toBe("This call isn't available.");
+    expect((await invitable(dev.user.id, testId)).some((x) => x.id === tester.user.id)).toBe(false); // Invite hidden for that tester
+  });
+
+  it("after a block the new-terms offer is withdrawn", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
+    await act(testId, "edit", dev.cookie, { version: v, fields: { writtenCents: "12.00" }, confirmed: true });
+    await blocksPOST(req("/api/blocks", { cookie: tester.cookie, body: { userId: dev.user.id } }));
+    expect(await db.termsOffer.count({ where: { contractId: sessionId, status: "open" } })).toBe(0);
+  });
+
+  it("an admin decision that charges the developer during a hold is charged after the hold lifts", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    await review(dev.user, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400, reason: "Short answers here", payKey: randomUUID(), seenAt: seen(), confirmed: true });
+    await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question fully" });
+    const d = await db.dispute.findFirstOrThrow({ where: { submissionId: sub.id } });
+    await startHold(dev.user.id, "unpaid");
+    const admin = await makeUser();
+    await db.user.update({ where: { id: admin.user.id }, data: { isAdmin: true } });
+    await decideDispute({ ...admin.user, isAdmin: true }, d.id, { total: "10.00" });
+    expect(await db.payment.findFirstOrThrow({ where: { disputeId: d.id } })).toMatchObject({ status: "deferred", amountCents: 600 });
+    await liftHoldIfClear(dev.user.id);
+    expect((await db.payment.findFirstOrThrow({ where: { disputeId: d.id } })).status).not.toBe("deferred");
+  });
+});

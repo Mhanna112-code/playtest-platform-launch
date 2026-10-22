@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, pronouns, toCents } from "@/lib/format";
-import { cancelLine, checkActualMinutes, checkAsk, checkCancel, PAUSED_FOR_TESTERS, type TestEventLike } from "@/lib/rules";
+import { cancelLine, LENGTH_WAITS, checkActualMinutes, checkAsk, checkCancel, PAUSED_FOR_TESTERS, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { testerGate as sharedTesterGate } from "./testerGate";
@@ -198,6 +198,7 @@ export async function setCallLength(dev: U, testId: string, body: Record<string,
   if (call.status !== "booked") throw new HttpError(409, "cancelled", "This call was cancelled.");
   if (call.startsAt > new Date()) throw new HttpError(409, "not_yet", "You can enter the length once the call has started.");
   if (call.review) throw new HttpError(409, "paid", "This call was already paid, so its length can't change.");
+  if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", LENGTH_WAITS);
   const minutes = Number(body.minutes);
   const ok = checkActualMinutes(Number.isFinite(minutes) ? minutes : null, call.minutes);
   if (!ok.ok) throw new HttpError(400, "bad_minutes", ok.message);

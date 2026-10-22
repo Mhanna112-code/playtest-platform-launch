@@ -4,6 +4,22 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, calls/hold/block refinements; wins over below)
+- Cancelling a call: allowed by either side up to the call's start time (reason required within 24 hours); not after
+  it starts (then only "Report a no-show"). A cancel closes the call everywhere at once, including a room someone
+  already joined early in another tab ("This call was cancelled." replaces the room/Join).
+- Join opens 10 minutes before; joining early changes nothing. Each side's first Join is recorded; the call page shows
+  "Both joined at 3:02 PM" when both have. The developer still enters the length (default: from when both joined to
+  the booked end).
+- Hold: entering a call length is NOT allowed during a hold ("You can enter this once the hold is lifted."). A call
+  already in progress when a hold starts runs to its booked end; calls that would start during the hold are
+  cancelled. Any admin decision that charges the developer is charged after the hold lifts.
+- Block during a call in progress: the room closes at once for both ("This call isn't available.").
+- After a block, buttons that can no longer be used are hidden (not just refused): the tester's Join / No thanks on
+  the blocker's invite (invite cancelled), the new-terms offer box (withdrawn), Book/Join for calls with that person,
+  chat input (replaced by "This chat is closed."); developer: Invite for that tester, Pay/Reject stay (sent work is
+  still payable).
+
 ## (Owner, Oct 22, very latest)
 - **Placement refinement:** tester stop-once boxes appear under the pressed button for every reason EXCEPT new terms:
   when new terms are the reason, the page scrolls to the offer box at the top (Switch / Keep) and the line shows

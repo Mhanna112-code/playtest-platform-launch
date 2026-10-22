@@ -157,7 +157,10 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   // Claim the dispute first so two admins can't charge twice.
   const claimed = await db.dispute.updateMany({ where: { id: d.id, status: "open" }, data: { status: "decided", decidedCents: decided!, decisionNote: note, decidedById: admin.id, decidedAt: new Date() } });
   if (claimed.count !== 1) throw new HttpError(409, "decided", "This dispute was already decided.");
-  if (extra > 0) {
+  if (extra > 0 && c.test.developer.holdStartedAt) {
+    // Charged after the hold lifts (see liftHoldIfClear).
+    await db.payment.create({ data: { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, amountCents: extra, feeCents: 0, testerCents: 0, status: "deferred" } });
+  } else if (extra > 0) {
     let result;
     try {
       result = await charge(c.test.developer, c.tester, extra, `dispute-${d.id}`, `Playtest: dispute decision on “${c.title}”`);

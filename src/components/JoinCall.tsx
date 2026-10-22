@@ -13,7 +13,7 @@ export function JoinCall({ callId }: { callId: string }) {
           setErr("");
           try {
             const r = await api<{ url: string }>(`/api/calls/${callId}/join`, {});
-            window.open(r.url, "_blank", "noopener");
+            window.open(r.url, "_blank");
           } catch (e) {
             setErr((e as Error).message);
           }

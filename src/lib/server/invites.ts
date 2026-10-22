@@ -14,7 +14,8 @@ export async function invitable(devId: string, testId: string) {
     db.contract.findMany({ where: { testId }, select: { testerId: true } }),
     db.invite.findMany({ where: { testId } }),
   ]);
-  const taken = new Set(inTest.map((c) => c.testerId));
+  const blocks = await db.block.findMany({ where: { OR: [{ blockerId: devId }, { blockedId: devId }] } });
+  const taken = new Set([...inTest.map((c) => c.testerId), ...blocks.map((b) => (b.blockerId === devId ? b.blockedId : b.blockerId))]);
   return testers
     .filter((t) => !taken.has(t.id))
     .map((t) => ({

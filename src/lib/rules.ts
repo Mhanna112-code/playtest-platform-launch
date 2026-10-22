@@ -408,6 +408,7 @@ export function checkAsk(cents: number | null): Check {
 /** Cancel a call any time; within 24 hours of it a reason is required (the other side sees it). */
 export const cancelNeedsReason = (startsAt: Date, now: Date) => startsAt.getTime() - now.getTime() < CANCEL_HOURS * 3_600_000;
 export function checkCancel(startsAt: Date, now: Date, reason: string): Check {
+  if (now.getTime() >= startsAt.getTime()) return no("The call has started, so it can't be cancelled. Report a no-show instead if someone didn't come.");
   if (cancelNeedsReason(startsAt, now) && reason.trim().length < 3) return no("The call is less than 24 hours away: say why you're cancelling (the other side sees it).");
   return yes;
 }
@@ -548,3 +549,12 @@ export function joinCallRefusal(
   if (now.getTime() > x.startsAt.getTime() + (x.minutes + JOIN_CLOSES_AFTER_END_MIN) * 60_000) return "This call is over.";
   return "";
 }
+
+/** The length's default: from when both joined to the booked end (at least 1 minute); else the booked length. */
+export function defaultCallMinutes(startsAt: Date, minutes: number, devJoinedAt: Date | null, testerJoinedAt: Date | null) {
+  if (!devJoinedAt || !testerJoinedAt) return minutes;
+  const both = Math.max(devJoinedAt.getTime(), testerJoinedAt.getTime(), startsAt.getTime());
+  const end = startsAt.getTime() + minutes * 60_000;
+  return Math.max(1, Math.round((end - both) / 60_000));
+}
+export const LENGTH_WAITS = "You can enter this once the hold is lifted.";

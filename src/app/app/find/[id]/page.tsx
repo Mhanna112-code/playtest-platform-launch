@@ -18,6 +18,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   if (mine) redirect(`/app/sessions/${mine.id}`);
   const testersIn = await db.contract.count({ where: { testId: id, status: "working" } });
   const gap = needsGap(t, await db.testerProfile.findUnique({ where: { userId: u.id } }));
+  const blocked = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: u.id }] } })) > 0;
   const l = asListing(t);
   const closed = t.status !== "open" || testersIn >= t.spots || (t.openUntil && t.openUntil < new Date());
   return (
@@ -47,6 +48,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           <p className="note">This is your test.</p>
         ) : !u.isTester ? (
           <p className="note">Turn on “test games” in your <a href="/app/profile">profile</a> to join.</p>
+        ) : blocked ? (
+          <p className="note">This test isn&apos;t taking new testers right now.</p>
         ) : closed ? (
           <p className="err">{t.status === "stopped" ? "This test was stopped." : testersIn >= t.spots ? "This test is full." : "This test isn't taking new testers any more."}</p>
         ) : gap ? (

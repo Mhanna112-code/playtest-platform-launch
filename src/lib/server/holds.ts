@@ -77,6 +77,17 @@ export async function liftHoldIfClear(devId: string) {
     }
     await tx.user.update({ where: { id: devId }, data: { holdStartedAt: null, holdReason: "", holdAlertedAt: null } });
   });
+  // Admin decisions that charge the developer were waiting for the hold to lift: charge them now.
+  for (const p of await db.payment.findMany({ where: { developerId: devId, status: "deferred" } })) {
+    const tester = await db.user.findUniqueOrThrow({ where: { id: p.testerId } });
+    try {
+      const r = await charge(dev, tester, p.amountCents, `deferred-${p.id}`, "Playtest: team decision charged after the hold");
+      await db.payment.update({ where: { id: p.id }, data: { ...r } });
+      await receipt(dev.email, "a team decision (charged after the hold lifted)", p.amountCents, r.status, "/app/payments");
+    } catch {
+      await db.payment.update({ where: { id: p.id }, data: { status: "failed", owedUntil: owedUntilFrom(new Date()) } });
+    }
+  }
   await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause."], "/app");
   const testers = await db.contract.findMany({ where: { status: "working", test: { developerId: devId } }, include: { tester: true } });
   for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`);

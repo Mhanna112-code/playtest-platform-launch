@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, pronouns } from "@/lib/format";
-import { callReference, cancelNeedsReason, chargeAmount, choiceNoteLine, closesInLine, lateLabel, termsLine } from "@/lib/rules";
+import { callReference, cancelNeedsReason, chargeAmount, defaultCallMinutes, choiceNoteLine, closesInLine, lateLabel, termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
@@ -52,6 +52,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const paidKinds = await paidLines(t.contracts.map((c) => c.id));
   const termsRows = await termsRowLines(t.contracts.map((c) => c.id));
   const blockedIds = new Set((await db.block.findMany({ where: { blockerId: u.id } })).map((b) => b.blockedId));
+  const blockedBy = new Set((await db.block.findMany({ where: { blockedId: u.id } })).map((b) => b.blockerId));
   const [testers, invites, owedList] = await Promise.all([invitable(u.id, id), db.invite.findMany({ where: { testId: id, status: { in: ["sent", "joined"] } }, orderBy: { createdAt: "desc" } }), owedForBox(u.id)]);
   const people = new Map((await db.user.findMany({ where: { id: { in: invites.map((i) => i.testerId) } } })).map((x) => [x.id, displayName(x)]));
   const expired = inviteExpired(t, working.length);
@@ -127,7 +128,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   <ReviewResult review={x.review} payments={payments.filter((p) => p.callId === x.id)} dispute={x.dispute} testId={t.id} />
                 ) : (
                   <>
-                    <CallLength testId={t.id} callId={x.id} minutes={x.actualMinutes ?? x.minutes} />
+                    {x.devJoinedAt && x.testerJoinedAt && <p className="note">Both joined at {fmtDateTime(new Date(Math.max(x.devJoinedAt.getTime(), x.testerJoinedAt.getTime())))}</p>}
+                    <CallLength testId={t.id} callId={x.id} minutes={x.actualMinutes ?? defaultCallMinutes(x.startsAt, x.minutes, x.devJoinedAt, x.testerJoinedAt)} />
                     <PayBox key={x.actualMinutes ?? 0} kind="call" id={x.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} askedCents={x.askedCents} partPaidCents={partPaid(x.id)}
                       listingCents={callReference(x.rateCents, x.actualMinutes ?? x.minutes).cents}
                       listingText={callReference(x.rateCents, x.actualMinutes ?? x.minutes).text.replace(/^Listing: /, "")} />
@@ -169,6 +171,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <summary className="cursor-pointer">Chat with {displayName(c.tester)} ({c.messages.length})</summary>
               <div className="pt-2">
                 <Chat
+                  closed={blockedIds.has(c.testerId) || blockedBy.has(c.testerId)}
                   path={`/api/tests/${t.id}/message`}
                   extra={{ contractId: c.id }}
                   other={displayName(c.tester)}

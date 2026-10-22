@@ -6,7 +6,7 @@ import { api } from "@/lib/client";
 type Msg = { id: string; mine: boolean; who: string; body: string; at: string };
 
 /** The simple chat between the developer and one tester. New messages show on send or when the page is reloaded. */
-export function Chat({ path, extra = {}, messages, other }: { path: string; extra?: Record<string, unknown>; messages: Msg[]; other: string }) {
+export function Chat({ path, extra = {}, messages, other, closed }: { path: string; extra?: Record<string, unknown>; messages: Msg[]; other: string; closed?: boolean }) {
   const router = useRouter();
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
@@ -22,7 +22,7 @@ export function Chat({ path, extra = {}, messages, other }: { path: string; extr
           </li>
         ))}
       </ul>
-      <form
+      {closed ? <p className="note">This chat is closed.</p> : <form
         className="flex gap-2"
         onSubmit={async (e) => {
           e.preventDefault();
@@ -41,7 +41,7 @@ export function Chat({ path, extra = {}, messages, other }: { path: string; extr
       >
         <input className="input" aria-label={`Message ${other}`} placeholder={`Message ${other}…`} value={text} onChange={(e) => setText(e.target.value)} />
         <button className="btn" disabled={busy || !text.trim()}>Send</button>
-      </form>
+      </form>}
       {err && <p className="err">{err}</p>}
     </div>
   );
