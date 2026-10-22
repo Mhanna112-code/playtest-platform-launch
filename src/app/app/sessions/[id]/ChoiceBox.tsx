@@ -2,22 +2,25 @@
 import { useState } from "react";
 import { api } from "@/lib/client";
 import { money } from "@/lib/format";
+import { topStop } from "@/lib/topStop";
 
 /**
  * Day 14 without a review: charge the developer (the lower of listing and asked, minus what's already been paid for this
  * part) or let it go. Charge needs its tick; Let it go asks once in place. Nothing left to charge: only "Close it".
  */
-export function ChoiceBox({ sessionId, submissionId, line, devName, cents }: { sessionId: string; submissionId: string; line: string; devName: string; cents: number }) {
+export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenAt }: { sessionId: string; submissionId: string; line: string; devName: string; cents: number; seenAt: string }) {
+  const [confirmed, setConfirmed] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [ticked, setTicked] = useState(false);
   const [confirmLetGo, setConfirmLetGo] = useState(false);
   const go = (choice: string) => {
     setBusy(true);
-    api(`/api/sessions/${sessionId}/choose`, { submissionId, choice, tickedCents: choice === "charge" ? cents : undefined })
+    api(`/api/sessions/${sessionId}/choose`, { submissionId, choice, tickedCents: choice === "charge" ? cents : undefined, seenAt, confirmed })
       .then(() => window.location.reload())
       .catch((e) => {
-        setErr((e as Error).message);
+        if (topStop(e)) setConfirmed(true);
+        else setErr((e as Error).message);
         setBusy(false);
       });
   };

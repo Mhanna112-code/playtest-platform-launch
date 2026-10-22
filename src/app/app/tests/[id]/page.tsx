@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
-import { callReference, cancelNeedsReason, closesInLine, lateLabel, termsLine } from "@/lib/rules";
+import { displayName, fmtDate, fmtDateTime, money, pronouns } from "@/lib/format";
+import { callReference, cancelNeedsReason, chargeAmount, choiceNoteLine, closesInLine, lateLabel, termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
@@ -13,6 +13,7 @@ import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { invitable, inviteExpired } from "@/lib/server/invites";
 import { owedForBox, sweepHeldCalls } from "@/lib/server/holds";
 import { paidLines } from "@/lib/server/paid";
+import { termsRowLines } from "@/lib/server/terms";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
@@ -22,9 +23,9 @@ import { TopPanel } from "./TopPanel";
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
 
-export default async function TestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
+export default async function TestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; offered?: string }> }) {
   const { id } = await params;
-  const { saved } = await searchParams;
+  const { saved, offered } = await searchParams;
   const u = await requirePageUser();
   const seenAt = new Date().toISOString();
   const t = await db.test.findUnique({
@@ -48,6 +49,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const paidSoFar = (id: string) => paid.find((p) => p.contractId === id)?._sum.amountCents ?? 0;
   await sweepHeldCalls(u.id);
   const paidKinds = await paidLines(t.contracts.map((c) => c.id));
+  const termsRows = await termsRowLines(t.contracts.map((c) => c.id));
   const [testers, invites, owedList] = await Promise.all([invitable(u.id, id), db.invite.findMany({ where: { testId: id, status: { in: ["sent", "joined"] } }, orderBy: { createdAt: "desc" } }), owedForBox(u.id)]);
   const people = new Map((await db.user.findMany({ where: { id: { in: invites.map((i) => i.testerId) } } })).map((x) => [x.id, displayName(x)]));
   const expired = inviteExpired(t, working.length);
@@ -91,7 +93,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         open={openSlots.map((s) => ({ id: s.id, when: s.startsAt.toISOString(), minutes: s.minutes, who: s.allowedTesterIds.length ? "only " + s.allowedTesterIds.map((x) => nameOf.get(x) ?? "?").join(", ") : "all testers" }))}
         booked={booked.map((b) => ({ id: b.id, when: b.startsAt.toISOString(), minutes: b.minutes, name: b.name, room: roomUrl(b, b.slot), canCancel: !cancelNeedsReason(b.startsAt, now), started: b.startsAt <= now, reported: !!b.noShowBy }))}
       />
-      {saved && <p className="ok">Saved. New testers join on the new listing; testers already in keep their contract.</p>}
+      {saved && (
+        <p className="ok">
+          {Number(offered) > 0 ? `Saved. Offered the new terms to ${offered} working tester${Number(offered) === 1 ? "" : "s"}.` : "Saved. New testers join on the new listing; testers already in keep their contract."}
+        </p>
+      )}
 
       <section className="space-y-3">
         <h2>Testers</h2>
@@ -107,6 +113,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               Their contract: {termsLine(c)} · joined {fmtDate(c.joinedAt)}
             </p>
             <p className="text-sm">{paidKinds.get(c.id)}</p>
+            {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}
             {c.submissions.length === 0 && c.calls.length === 0 && <p className="note">Nothing sent yet.</p>}
             {c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).map((x) => (
               <div key={x.id} className="space-y-2 rounded-lg border border-slate-200 p-3">
@@ -150,6 +157,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   <ReviewResult review={s.review} payments={payments.filter((p) => p.submissionId === s.id)} dispute={s.dispute} testId={t.id} />
                 ) : (
                   <PayBox kind="submission" id={s.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} askedCents={s.askedCents} partPaidCents={partPaid(s.id)}
+                    note={s.agreedCents != null && s.payBy && !s.choiceOfferedAt ? choiceNoteLine(fmtDate(s.payBy).replace(/, \d{4}$/, ""), displayName(c.tester), chargeAmount(s.agreedCents, s.askedCents, partPaid(s.id)), pronouns(c.tester.pronoun).poss) : undefined}
                     listingCents={s.agreedCents} listingText={`${money(s.agreedCents)} for ${s.kind === "written" ? "written answers" : "a recording"}`} />
                 )}
               </div>

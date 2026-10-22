@@ -1,11 +1,13 @@
 "use client";
 import { useState } from "react";
 import { api } from "@/lib/client";
+import { topStop } from "@/lib/topStop";
 
 type Rec = { id: string; filename: string; size: number; uploaded: boolean };
 
 /** Upload up to 5 screen recordings (500 MB each), then send them. Can be sent again with new ones until paid. */
-export function RecordingUpload({ sessionId, recordings, canSend, sentBefore }: { sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean }) {
+export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, seenAt }: { sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean; seenAt: string }) {
+  const [confirmed, setConfirmed] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -64,10 +66,11 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore }: 
           onClick={async () => {
             setBusy(true);
             try {
-              await api(`/api/sessions/${sessionId}/recording-send`, { ask });
+              await api(`/api/sessions/${sessionId}/recording-send`, { ask, seenAt, confirmed });
               window.location.reload();
             } catch (e) {
-              setErr((e as Error).message);
+              if (topStop(e)) setConfirmed(true);
+              else setErr((e as Error).message);
               setBusy(false);
             }
           }}

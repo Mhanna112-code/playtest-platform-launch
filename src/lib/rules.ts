@@ -489,3 +489,37 @@ export const INVITE_REMIND_DAYS = 3;
 /** "Charge": the lower of listing and asked, minus what's already been paid for that part (0 = only "Close it"). */
 export const chargeAmount = (listingCents: number | null, askedCents: number | null, paidCents: number) =>
   Math.max(0, (autoPayFor(listingCents, askedCents) ?? 0) - paidCents);
+
+// ---------- New terms offered to working testers (owner) ----------
+
+export type ContractTerms = { writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null; liveMinutes: number | null; deadlineDays: number; questions: string[] };
+const whole = (c: number) => money(c).replace(/\.00$/, "");
+
+/** "written $8 → $10, added a recording ($12)"; "" when the contract terms are the same. */
+export function termsDiff(a: ContractTerms, b: ContractTerms) {
+  const out: string[] = [];
+  const part = (x: number | null, y: number | null, name: string, added: string, removed: string) => {
+    if (x === y) return;
+    if (x == null) out.push(`added ${added} (${whole(y!)})`);
+    else if (y == null) out.push(`removed ${removed}`);
+    else out.push(`${name} ${whole(x)} → ${whole(y)}`);
+  };
+  part(a.writtenCents, b.writtenCents, "written", "written answers", "written answers");
+  part(a.recordingCents, b.recordingCents, "recording", "a recording", "the recording");
+  if (a.liveRateCents !== b.liveRateCents) {
+    if (a.liveRateCents == null) out.push(`added a live call (${whole(b.liveRateCents!)}/h)`);
+    else if (b.liveRateCents == null) out.push("removed the live call");
+    else out.push(`live call ${whole(a.liveRateCents)}/h → ${whole(b.liveRateCents)}/h`);
+  }
+  if (a.liveRateCents != null && b.liveRateCents != null && a.liveMinutes !== b.liveMinutes) out.push(`call ${a.liveMinutes} → ${b.liveMinutes} min`);
+  if (a.deadlineDays !== b.deadlineDays) out.push(`${a.deadlineDays} → ${b.deadlineDays} days`);
+  if (JSON.stringify(a.questions) !== JSON.stringify(b.questions)) out.push("questions changed");
+  return out.join(", ");
+}
+
+/** Switching never moves the tester's deadline earlier; it moves later if the new days give more time. */
+export const newDueAt = (dueAt: Date, joinedAt: Date, days: number) => new Date(Math.max(dueAt.getTime(), joinedAt.getTime() + days * 86_400_000));
+
+/** The Pay box line about day 14: "If you don't pay or reject by Nov 5, Ana Silva can charge you $8.00, her contract price, or let it go." */
+export const choiceNoteLine = (by: string, name: string, cents: number, poss: string) =>
+  `If you don't pay or reject by ${by}, ${name} can charge you ${money(cents)}, ${poss} contract price, or let it go.`;

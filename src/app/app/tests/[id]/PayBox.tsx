@@ -8,7 +8,7 @@ import { usePress } from "@/lib/usePress";
  * The one Pay box (with Reject next to it) for a piece of sent work or a held call. Beside it: the listing amount (or
  * "Not in the listing") and what this tester has been paid so far on the test. Its stop-once box sits directly under it.
  */
-export function PayBox(p: { kind: "submission" | "call"; id: string; name: string; listingCents: number | null; listingText: string; paidSoFarCents: number; seenAt: string; askedCents?: number | null; partPaidCents?: number }) {
+export function PayBox(p: { kind: "submission" | "call"; id: string; name: string; listingCents: number | null; listingText: string; paidSoFarCents: number; seenAt: string; askedCents?: number | null; partPaidCents?: number; note?: string }) {
   const start = p.askedCents ?? p.listingCents;
   const [amount, setAmount] = useState(start == null ? "" : (start / 100).toFixed(2));
   const [reason, setReason] = useState("");
@@ -62,6 +62,7 @@ export function PayBox(p: { kind: "submission" | "call"; id: string; name: strin
           <textarea id={`why-${p.id}`} rows={2} className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
         </div>
       )}
+      {p.note && <p className="note">{p.note}</p>}
       <ChangesBox changes={changes} error={error} />
       {error === "Pay what you owe first." && <a className="text-sm" href="#owed">Pay what you owe ↑</a>}
       {done && <p className="ok">{done}</p>}

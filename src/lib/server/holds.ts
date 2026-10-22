@@ -9,6 +9,7 @@ import { appUrl } from "./auth";
 import { sendEmail } from "./email";
 import { charge } from "./stripe";
 import { receipt } from "./payments";
+import { testerTermsGate } from "./terms";
 import { recordEvent } from "./tests";
 
 // Payment hold (owner rule): starts when a failed charge isn't paid within 3 days, or when a chargeback opens.
@@ -343,6 +344,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   }
   if (!s.choiceOfferedAt) throw new HttpError(409, "not_yet", "You can choose once it has waited 14 days without a review.");
   if (dev.holdStartedAt) throw new HttpError(409, "paused", "This test is paused: you can choose once it resumes.");
+  await testerTermsGate(contractId, displayName(dev), body);
   const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;
   if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");
   const paidForPart = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;

@@ -17,7 +17,7 @@ export async function POST(req: Request, { params }: Ctx) {
     switch (action) {
       case "edit": {
         const t = await editTest(u, id, body);
-        return ok({ version: t.version });
+        return ok({ version: t.version, offered: (t as { offered?: number }).offered ?? 0 });
       }
       case "open":
         await openDraft(u, id);

@@ -68,8 +68,8 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
       const all = toApi(f);
       const fields: Record<string, unknown> = {};
       for (const k of touched) for (const a of API_FIELDS[k]) fields[a] = all[a];
-      await api(`/api/tests/${edit.id}/edit`, { version: edit.version, fields, confirmed: changes != null });
-      window.location.href = `/app/tests/${edit.id}?saved=1`;
+      const r = await api<{ offered: number }>(`/api/tests/${edit.id}/edit`, { version: edit.version, fields, confirmed: changes != null });
+      window.location.href = `/app/tests/${edit.id}?saved=1&offered=${r.offered ?? 0}`;
     } catch (err) {
       if (err instanceof ApiError && err.code === "changed") setChanges(err.data.changes as Change[]);
       else {
@@ -144,6 +144,7 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
       </div>
 
       <div className="space-y-2">
+        {edit && edit.testersIn > 0 && <p className="note">Testers already working keep their contract; each is offered these new terms and can switch. Work they&apos;ve already sent keeps its price.</p>}
         <button className="btn" disabled={busy}>{busy ? "Saving…" : edit ? "Save" : "Post the test"}</button>
         {saved && <p className="ok">{saved}</p>}
         <ChangesBox changes={changes} tail="Press Save again to save your changes on top (fields you didn't touch keep the newer values)." />

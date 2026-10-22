@@ -1,9 +1,11 @@
 "use client";
 import { useState } from "react";
 import { api } from "@/lib/client";
+import { topStop } from "@/lib/topStop";
 
 /** Written answers: one box per question in the tester's contract. Can be updated until it's paid. */
-export function WrittenForm({ sessionId, questions, initial, initialNotes, update }: { sessionId: string; questions: string[]; initial: string[]; initialNotes: string; update: boolean }) {
+export function WrittenForm({ sessionId, questions, initial, initialNotes, update, seenAt }: { sessionId: string; questions: string[]; initial: string[]; initialNotes: string; update: boolean; seenAt: string }) {
+  const [confirmed, setConfirmed] = useState(false);
   const [answers, setAnswers] = useState<string[]>(questions.map((_, i) => initial[i] ?? ""));
   const [notes, setNotes] = useState(initialNotes);
   const [ask, setAsk] = useState("");
@@ -15,10 +17,11 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     setBusy(true);
     setMsg(null);
     try {
-      await api(`/api/sessions/${sessionId}/written`, { answers, notes, ask });
+      await api(`/api/sessions/${sessionId}/written`, { answers, notes, ask, seenAt, confirmed });
       window.location.reload();
     } catch (err) {
-      setMsg({ ok: false, text: (err as Error).message });
+      if (topStop(err)) setConfirmed(true);
+      else setMsg({ ok: false, text: (err as Error).message });
       setBusy(false);
     }
   }

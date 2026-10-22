@@ -7,6 +7,7 @@ import {
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
+import { offerNewTerms, testerTermsGate } from "./terms";
 import { callCancelledLine } from "@/lib/rules";
 
 type Tx = Prisma.TransactionClient;
@@ -131,7 +132,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   const loaded = Number(body.version);
   const confirmed = body.confirmed === true;
   const touched = parseListing((body.fields ?? {}) as Record<string, unknown>, true);
-  return db.$transaction(async (tx) => {
+  let termsChanged = false;
+  const result = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
     const events = await tx.testEvent.findMany({ where: { testId, version: { gt: loaded } } });
@@ -153,11 +155,15 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const fields = LISTING_FIELDS.filter((k) => JSON.stringify(current[k]) !== JSON.stringify(next[k]));
     if (!fields.length) return t;
     const what = fields.map((f) => FIELD_NAMES[f]).join(", ");
+    termsChanged = terms.some((f) => ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "deadlineDays", "questions"].includes(f));
     await recordEvent(tx, testId, "edited", `The listing was edited: ${what}`, true, {
       ...listingData(next), ...(fields.includes("openUntil") ? { notified3d: false, notified1d: false } : {}), ...(terms.length ? { listingVersion: { increment: 1 } } : {}),
     });
     return tx.test.findUniqueOrThrow({ where: { id: testId } });
   });
+  // Working testers are OFFERED the new contract terms (Switch / Keep); their contract changes only if they switch.
+  const offered = termsChanged ? await offerNewTerms(testId) : 0;
+  return Object.assign(result, { offered });
 }
 
 const FIELD_NAMES: Record<keyof Listing, string> = {
@@ -384,6 +390,7 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   const answers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim().slice(0, 10_000) : "")) : [];
   if (answers.length !== qs.length || answers.some((a) => !a)) throw new HttpError(400, "bad_answers", "Answer every question before sending.");
   const notes = str(body.notes, 10_000);
+  await testerTermsGate(contractId, displayName(c0.test.developer), body);
   const askedCents = body.ask === undefined || body.ask === null || body.ask === "" ? null : toCents(body.ask);
   if (body.ask && askedCents == null) throw new HttpError(400, "bad_ask", "Enter the amount you ask like 7.50, or leave it empty.");
   const askOk = checkAsk(askedCents);

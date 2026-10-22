@@ -13,6 +13,8 @@ import { Chat } from "@/components/Chat";
 import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
 import { ChoiceBox } from "./ChoiceBox";
+import { TesterTop } from "./TesterTop";
+import { openOffer } from "@/lib/server/terms";
 
 export const metadata = { title: "Your session · Playtest" };
 export const dynamic = "force-dynamic";
@@ -43,6 +45,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const now = new Date();
   const seenAt = now.toISOString();
   await sweepHeldCalls(c.test.developerId);
+  const offer = await openOffer(c.id);
   const partPaid = new Map((await db.payment.groupBy({ by: ["submissionId", "callId"], where: { contractId: c.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } })).map((g) => [g.submissionId ?? g.callId ?? "", g._sum.amountCents ?? 0]));
   const delayedSubs = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", settledAt: null, owedUntil: { not: null }, submissionId: { not: null } }, select: { submissionId: true } })).map((p) => p.submissionId!));
   const failedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", callId: { not: null } }, select: { callId: true } })).map((p) => p.callId!));
@@ -52,6 +55,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   return (
     <>
       <AutoRefresh query={`session=${c.id}`} />
+      <TesterTop sessionId={c.id} seenAt={seenAt} devName={dev} offer={offer && !refusal ? { id: offer.id, diff: offer.diff } : null} />
       {refusal && <p className="info">{refusal}</p>}
       {!refusal && c.test.developer.holdStartedAt && <p className="info">{PAUSED_FOR_TESTERS}</p>}
       {!refusal && c.test.openUntil && c.test.openUntil > now && c.test.openUntil.getTime() - now.getTime() < 3 * 86_400_000 && (
@@ -99,7 +103,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           </p>
         )}
         {written && !written.review && written.choiceOfferedAt && written.choiceBy && !c.test.developer.holdStartedAt && (
-          <ChoiceBox sessionId={c.id} submissionId={written.id} devName={dev} cents={chargeAmount(written.agreedCents, written.askedCents, partPaid.get(written.id) ?? 0)} line={choiceLine(dev, "written", chargeAmount(written.agreedCents, written.askedCents, partPaid.get(written.id) ?? 0))} />
+          <ChoiceBox seenAt={seenAt} sessionId={c.id} submissionId={written.id} devName={dev} cents={chargeAmount(written.agreedCents, written.askedCents, partPaid.get(written.id) ?? 0)} line={choiceLine(dev, "written", chargeAmount(written.agreedCents, written.askedCents, partPaid.get(written.id) ?? 0))} />
         )}
         {written && delayedSubs.has(written.id) ? <p className="info">Payment for this part may be delayed.</p> : written?.review && <TesterReview sessionId={c.id} kind="submission" id={written.id} review={written.review} dispute={written.dispute} />}
         {written?.review ? (
@@ -112,7 +116,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         ) : refusal ? (
           !written && <p className="note">Nothing sent.</p>
         ) : (
-          <WrittenForm sessionId={c.id} questions={writtenQuestions(c)} initial={(written?.answers as string[]) ?? []} initialNotes={written?.notes ?? ""} update={!!written} />
+          <WrittenForm seenAt={seenAt} sessionId={c.id} questions={writtenQuestions(c)} initial={(written?.answers as string[]) ?? []} initialNotes={written?.notes ?? ""} update={!!written} />
         )}
       </section>
 
@@ -127,10 +131,11 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           </p>
         )}
         {recording && !recording.review && recording.choiceOfferedAt && recording.choiceBy && !c.test.developer.holdStartedAt && (
-          <ChoiceBox sessionId={c.id} submissionId={recording.id} devName={dev} cents={chargeAmount(recording.agreedCents, recording.askedCents, partPaid.get(recording.id) ?? 0)} line={choiceLine(dev, "recording", chargeAmount(recording.agreedCents, recording.askedCents, partPaid.get(recording.id) ?? 0))} />
+          <ChoiceBox seenAt={seenAt} sessionId={c.id} submissionId={recording.id} devName={dev} cents={chargeAmount(recording.agreedCents, recording.askedCents, partPaid.get(recording.id) ?? 0)} line={choiceLine(dev, "recording", chargeAmount(recording.agreedCents, recording.askedCents, partPaid.get(recording.id) ?? 0))} />
         )}
         {recording && delayedSubs.has(recording.id) ? <p className="info">Payment for this part may be delayed.</p> : recording?.review && <TesterReview sessionId={c.id} kind="submission" id={recording.id} review={recording.review} dispute={recording.dispute} />}
         <RecordingUpload
+          seenAt={seenAt}
           sessionId={c.id}
           canSend={!refusal && !recording?.review}
           sentBefore={!!recording}

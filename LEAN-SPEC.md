@@ -4,6 +4,23 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, latest: new terms offered to working testers; wins over "Edit never changes working testers")
+- When the developer saves Edit with a change to contract terms (a price, adding/removing a part, the live-call rate or
+  length, questions, the deadline days), every working tester is OFFERED the new terms. Their contract doesn't change
+  unless they choose. Tester's session page: a box at the TOP: "Nora Lane updated the listing: written $8 → $10, added
+  a recording ($12). [Switch to the new terms] [Keep my current terms]" (bell + email too). Switching: the new prices
+  and parts apply to work sent from then on; work already sent keeps the price it was sent under; their own deadline
+  stays (or moves later if the new days give more time, never earlier).
+- Tester-side stop once (box at the TOP of the session page): Send (written/recording) and Charge / Let it go stop
+  once if new terms were offered since the page loaded ("Nora Lane offered new terms · 3:10 PM: written $8 → $10.
+  Press again to send under your current terms, or switch first."). Switch / Keep stop once if the terms changed
+  again since (shows the newest). Book / Cancel keep their own call checks (box under the live-call panel).
+- Where the developer is told how this works: the Edit page (a line above Save: "Testers already working keep their
+  contract; each is offered these new terms and can switch. Work they've already sent keeps its price."), the Save
+  result ("Saved. Offered the new terms to 3 working testers."), each tester row on the test page ("On their original
+  terms · offered new terms Oct 22" / "Switched to the Oct 22 terms"), and the Pay box ("If you don't pay or reject by
+  Nov 5, Ana Silva can charge you $8.00, her contract price, or let it go.").
+
 ## (Owner, Oct 22, after the evidence batch)
 - (Owner: NO withdraw of sent work. Dropped.)
 - **Charge / Let it go is back (replaces automatic 14-day pay):** when a CONTRACT part has waited 14 days unreviewed,

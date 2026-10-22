@@ -7,6 +7,7 @@ import { HttpError } from "./http";
 import { notify } from "./notify";
 import { MAX_RECORDING_BYTES, MAX_RECORDINGS, uploadTarget } from "./storage";
 import { ownContract, recordEvent, sessionRefusal } from "./tests";
+import { testerTermsGate } from "./terms";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -40,6 +41,7 @@ export async function finishRecording(tester: U, contractId: string, body: Recor
 /** Send the uploaded recordings (or send them again with new ones, until paid), with an optional asked amount. */
 export async function sendRecording(tester: U, contractId: string, body: Record<string, unknown> = {}) {
   const c0 = await ownContract(tester.id, contractId);
+  await testerTermsGate(contractId, displayName(c0.test.developer), body);
   const askedCents = body.ask === undefined || body.ask === null || body.ask === "" ? null : toCents(body.ask);
   if (body.ask && askedCents == null) throw new HttpError(400, "bad_ask", "Enter the amount you ask like 7.50, or leave it empty.");
   const askOk = checkAsk(askedCents);
