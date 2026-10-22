@@ -72,10 +72,10 @@ describe("reason E: your own actions in another tab", () => {
     expect((await act(testId, "edit", dev.cookie, { version: v, fields: { description: "Sail faster" } })).status).toBe(200);
     // The edit re-sent the invite (NEWEST+4): the old one is refused; No thanks on the new one stops once for the change.
     const old = await invitePOST(req(`/api/invites/${inv.id}`, { cookie: cara.cookie, body: { seenAt: opened } }), { params: Promise.resolve({ id: inv.id }) }).then(json);
-    expect(old.body.error.message).toBe("This invite was replaced by a new one with the current listing.");
+    expect(old.body.error.message).toMatch(/^Nora Lane changed the listing at .+ and sent you a new invite: /);
     const inv2 = await db.invite.findFirstOrThrow({ where: { testId, testerId: cara.user.id, status: "sent" } });
     const nt = await invitePOST(req(`/api/invites/${inv2.id}`, { cookie: cara.cookie, body: { seenAt: opened } }), { params: Promise.resolve({ id: inv2.id }) }).then(json);
-    expect(texts(nt)).toEqual(["Nora Lane changed the description"]);
+    expect(texts(nt)).toEqual(["Nora Lane changed the description", "Nora Lane changed the listing: here's a new invite on the updated listing"]);
     expect((await invitePOST(req(`/api/invites/${inv2.id}`, { cookie: cara.cookie, body: { seenAt: opened, confirmed: true } }), { params: Promise.resolve({ id: inv2.id }) }).then(json)).status).toBe(200);
   });
 });

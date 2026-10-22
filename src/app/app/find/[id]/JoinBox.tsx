@@ -36,7 +36,7 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
         setConfirmed(true);
       } else if (e instanceof ApiError && e.code === "invite_replaced") {
         // The new invite is shown right here; the next press joins on it.
-        setErr(`${e.message}${e.data.terms ? ` New invite: ${String(e.data.terms)}.` : ""}`);
+        setErr(`${e.message}${e.data.terms ? ` ${String(e.data.terms)}. Press Join to join on it.` : ""}`);
         if (typeof e.data.newInviteId === "string") setInviteId(e.data.newInviteId);
       } else if (e instanceof ApiError && e.code === "needs") setWarn(e.message);
       else setErr(errOf(e));

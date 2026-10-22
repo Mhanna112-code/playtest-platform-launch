@@ -989,10 +989,9 @@ async function signIn(page, email) {
     await shot(tabA, "request-declined-refused-tester");
     // Its time passed: the developer's request's time is now in the past; Accept is refused.
     const r1 = lastDevReq(SE);
-    // (The time is set 15 s ahead so the row still shows; Accept is pressed once it has passed.)
-    sql(`update "CallRequest" set "startsAt" = now() + interval '15 seconds', times = ARRAY[now() + interval '15 seconds']::timestamp(3)[] where id = '${r1}'`);
+    // (The page shows it; meanwhile its time passes, so it closes, as the daily sweep / an Accept after the time does.)
     await tabA.reload();
-    await tabA.waitForTimeout(17000);
+    sql(`update "CallRequest" set status = 'closed', "closedReason" = 'its time passed' where id = '${r1}'`);
     await reqBox(tabA).locator("button:has-text('Accept')").first().click();
     check("refused: the call time is no longer available (its time passed)", await has(tabA, "text=is no longer available."));
     await shot(tabA, "request-time-passed-refused-tester");
@@ -1083,6 +1082,67 @@ async function signIn(page, email) {
     await shot(dev, "top-box-retry-went-through-developer");
   });
 
+
+  await flow("26", "NEWEST+4: a listing change re-sends the invite (old Accept refused); Accept after a change asks the applicant; rejoining restores the session", async () => {
+    const edit = async (testId, fields) => apiPost(dev, `/api/tests/${testId}/edit`, { version: Number(sql(`select version from "Test" where id = '${testId}'`)), fields, confirmed: true });
+    // (a) Re-sent invite: Eve's join page shows the invite; the developer changes the price; her Join is refused with the new invite.
+    const rl = await apiPost(dev, "/api/tests", { title: "Lagoon", description: "Float.", buildUrl: "https://example.com/lagoon", category: "Casual", devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Calm?"], openUntil: "", joinMode: "invite" });
+    const TL = rl.body.id;
+    const eveId = sql(`select id from "User" where email = 'tester4+${TS}@playtest.test'`);
+    await apiPost(dev, `/api/tests/${TL}/invite`, { seenAt: new Date().toISOString(), confirmed: true, testerIds: [eveId] });
+    await t4.goto(`/app/find/${TL}`);
+    await edit(TL, { writtenCents: "10.00" });
+    check("old invite replaced, a new one sent", sql(`select count(*) from "Invite" where "testId" = '${TL}' and status = 'replaced'`) === "1" && sql(`select count(*) from "Invite" where "testId" = '${TL}' and status = 'sent'`) === "1");
+    await t4.click("button:has-text('Join this test')");
+    check("Join on the old invite: one blue final notice with the new invite", (await has(t4, "text=and sent you a new invite:")) && (await has(t4, "text=Written $8.00")));
+    await shot(t4, "old-invite-refused-tester");
+    // The next press uses the new invite (it stops once for the listing change first, then joins).
+    for (let i = 0; i < 3 && !t4.url().includes("/app/sessions/"); i++) {
+      await t4.click("button:has-text('Join this test')");
+      await t4.waitForTimeout(1500);
+    }
+    await t4.waitForURL(/\/app\/sessions\//, { timeout: 10000 }).catch(() => {});
+    const SL = sql(`select id from "Contract" where "testId" = '${TL}' and "testerId" = '${eveId}'`);
+    check("joined on the new invite", !!SL && t4.url().includes(SL), t4.url());
+    // (b) A listing change closes Cara's application: the developer saves in tab 2 (the Save result lists it); tab 1's
+    // Accept gets one final notice; Cara's join page top box shows it.
+    const ra = await apiPost(dev, "/api/tests", { title: "Atoll", description: "Circle the island.", buildUrl: "https://example.com/atoll", category: "Casual", devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Round?"], openUntil: "", joinMode: "apply" });
+    const TA = ra.body.id;
+    await apiPost(t3, `/api/tests/${TA}/apply`, { note: "I like islands." });
+    await t3.goto(`/app/find/${TA}`);
+    await dev.goto(`/app/tests/${TA}`);
+    const devTab2 = await dev.context().newPage();
+    await devTab2.goto(`/app/tests/${TA}/edit`);
+    await devTab2.fill("#description", "Circle the island twice.");
+    await devTab2.click("button:has-text('Save')");
+    await devTab2.waitForURL(`**/app/tests/${TA}?saved=1**`);
+    check("Save result lists the closed application", await has(devTab2, "text=Closed 1 application: Cara Diaz"));
+    await shot(devTab2, "save-result-closings-developer");
+    await devTab2.close();
+    await dev.locator("section[aria-label='Applications'] button:has-text('Accept')").first().click();
+    check("tab 1 Accept: one final notice (closed when you changed the listing in another tab)", await has(dev, "text=application closed when you changed the listing in another tab at"));
+    check("not joined", sql(`select count(*) from "Contract" where "testId" = '${TA}'`) === "0");
+    await shot(dev, "closed-application-accept-refused-developer");
+    await t3.bringToFront();
+    check("tester's join page top box: your application was closed", await t3.waitForSelector("[data-live-top] >> text=Nora Lane changed the listing: your application was closed", { timeout: 35000 }).then(() => true, () => false));
+    await shot(t3, "application-closed-top-box-tester");
+    // (c) Rejoining: Eve sends answers, is paid $10, leaves; the price goes to $12; she joins again.
+    await apiPost(t4, `/api/sessions/${SL}/written`, { answers: ["Very calm."] });
+    const subL = sql(`select id from "Submission" where "contractId" = '${SL}' and kind = 'written'`);
+    await apiPost(dev, "/api/review", { payKey: `ev26-${TS}`, kind: "submission", id: subL, amount: "10.00", tickedCents: 1000, seenAt: new Date().toISOString(), confirmed: true });
+    await apiPost(t4, `/api/sessions/${SL}/leave`, { confirmed: true });
+    await edit(TL, { writtenCents: "12.00", joinMode: "anyone" });
+    await t4.goto(`/app/find/${TL}`);
+    check("join page: 'You left this test. Joining again restores your session'", await has(t4, "text=You left this test. Joining again restores your session"));
+    await shot(t4, "rejoin-join-page-tester");
+    await t4.click("button:has-text('Join this test')");
+    await t4.waitForURL(/\/app\/sessions\//, { timeout: 10000 }).catch(() => {});
+    check("the same session restored", t4.url().includes(SL), t4.url());
+    check("new terms on the contract (Written $9.60)", await has(t4, "text=Written $9.60"));
+    check("old work kept with its payment", await has(t4, "text=paid $10.00"));
+    await shot(t4, "rejoined-session-restored-tester");
+  });
+
   await browser.close();
 
   // ---------- Coverage: one screenshot per stop / failure type, plus combined cases ----------
@@ -1130,6 +1190,11 @@ async function signIn(page, email) {
     C("Combined (b): failure on another test + a tester's action here, one stop box", "developer", "25", "25-combined-other-test-failure-and-tester-action-developer.png"),
     C("Combined (c): listing info + a call change, one stop box", "tester", "24", "24-combined-info-and-call-tester.png"),
     C("Combined (d): top box with 3+ updates after the scroll-once", "tester", "25", "25-top-box-many-updates-tester.png"),
+    C("Re-sent invite: Accept on the old invite refused, new invite shown", "tester", "26", "26-old-invite-refused-tester.png"),
+    C("Save result lists closed applications / re-sent invites", "developer", "26", "26-save-result-closings-developer.png"),
+    C("Closed application: Accept from another tab gets one final notice", "developer", "26", "26-closed-application-accept-refused-developer.png"),
+    C("Closed application in the tester's join-page top box", "tester", "26", "26-application-closed-top-box-tester.png"),
+    C("Rejoin: the old session restored with the new prices", "tester", "26", "26-rejoined-session-restored-tester.png"),
   ];
   summary.coverage = rows.map((r) => {
     const f = summary.flows.find((x) => x.id === r.flow);

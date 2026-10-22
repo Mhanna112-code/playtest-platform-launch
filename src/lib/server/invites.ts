@@ -4,6 +4,7 @@ import { andList, inviteTesterRefusal, inviteTestRefusal, MAX_ACTIVE_TESTS, term
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { asListing, devGate, devGateIfSeen, needsGap, ownTest, recordEvent } from "./tests";
+import { logEvent } from "./live";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -108,7 +109,14 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     }
     const invited: { id: string; name: string; email: string }[] = [];
     const others: string[] = [];
-    let spotsLeft = t.spots - testersIn;
+    // (NEWEST+4) Spot cap, always: open invites + testers in <= spots.
+    const openInvites = await tx.invite.count({ where: { testId, status: "sent" } });
+    let spotsLeft = t.spots - testersIn - openInvites;
+    const fresh = people.filter((p) => !contracts.some((c) => c.testerId === p.id && c.status === "working") && !invites.some((i) => i.testerId === p.id && i.status === "sent"));
+    if (openInvites > 0 && fresh.length > Math.max(0, spotsLeft)) {
+      const left = t.spots - testersIn;
+      throw new HttpError(409, "spot_cap", `Only ${left} spot${left === 1 ? " is" : "s are"} left and ${openInvites} ${openInvites === 1 ? "person is" : "people are"} already invited. Cancel an invite or add spots.`);
+    }
     for (const p of people) {
       const name = displayName(p);
       if (contracts.some((c) => c.testerId === p.id && c.status === "working")) continue; // joined: no longer in the list
@@ -142,7 +150,7 @@ export async function cancelInvite(dev: U, testId: string, body: Record<string, 
   await ownTest(dev.id, testId);
   const inv = await db.invite.findUnique({ where: { id: String(body.inviteId ?? "") }, include: { test: true } });
   if (!inv || inv.testId !== testId) throw new HttpError(404, "not_found", "That invite doesn't exist.");
-  if (inv.status !== "sent") throw new HttpError(409, "gone", inv.status === "joined" ? "They already joined." : "This invite was already cancelled.");
+  if (inv.status !== "sent") throw new HttpError(409, "gone", inv.status === "joined" ? "They already joined." : inv.status === "replaced" ? "This invite is no longer valid: it was re-sent on the new listing." : "This invite was already cancelled.");
   await devGateIfSeen(testId, body);
   await db.invite.update({ where: { id: inv.id }, data: { status: "cancelled" } });
   return { ok: true };
@@ -166,8 +174,10 @@ export async function inviteGaps(devId: string, testId: string, testerIds: strin
  */
 export async function reinviteAfterEdit(testId: string) {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
-  const open = await db.invite.findMany({ where: { testId, status: "sent" } });
+  const open = await db.invite.findMany({ where: { testId, status: "sent" }, orderBy: { createdAt: "asc" } }); // earliest-invited first
   const skipped: string[] = [];
+  const resent: string[] = [];
+  let spotsLeft = t.spots - (await db.contract.count({ where: { testId, status: "working" } }));
   for (const inv of open) {
     await db.invite.update({ where: { id: inv.id }, data: { status: "replaced" } });
     const p = await db.user.findUnique({ where: { id: inv.testerId } });
@@ -178,9 +188,15 @@ export async function reinviteAfterEdit(testId: string) {
     if (!p.isTester) { skipped.push(`${name} (account closed)`); continue; }
     if (p.suspendedAt || blocked) { skipped.push(`${name} (can't be invited right now)`); continue; }
     if (active >= MAX_ACTIVE_TESTS) { skipped.push(`${name} (in ${MAX_ACTIVE_TESTS} tests)`); continue; }
+    if (spotsLeft <= 0) {
+      skipped.push(`${name} (no spots left)`);
+      continue;
+    }
+    spotsLeft--;
     await db.invite.create({ data: { testId, testerId: p.id } });
+    resent.push(name);
     const line = `${displayName(t.developer)} updated ${t.title}, so here's a new invite: ${termsLine(asListing(t), true)}.`;
     await notify(p.email, line, [line, "Open it and press Join to join on these terms."], `/app/find/${testId}`);
   }
-  return skipped;
+  return { skipped, resent };
 }

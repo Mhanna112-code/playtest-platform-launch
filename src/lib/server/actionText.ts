@@ -65,8 +65,18 @@ export async function logTestAction(userId: string, testId: string, action: stri
   let text = "";
   switch (action) {
     case "edit": {
+      const r = (result ?? {}) as { changed?: string[]; closedApps?: string[]; resent?: string[]; notReinvited?: string[] };
+      const closings = [
+        ...(r.closedApps ?? []).map((n) => `closed ${n}'s application`),
+        ...(r.resent ?? []).map((n) => `re-sent ${n}'s invite`),
+        ...(r.notReinvited ?? []).map((n) => `didn't re-invite ${n}`),
+      ];
+      if (closings.length) {
+        text = `You changed the listing in another tab: ${andList(closings)}`;
+        break;
+      }
       // Listing info (title, description, devices, languages) shows as its own line (F), not twice.
-      const names = ((result as { changed?: string[] })?.changed ?? []).filter((n) => !["title", "description", "devices", "languages"].includes(n));
+      const names = (r.changed ?? []).filter((n) => !["title", "description", "devices", "languages"].includes(n));
       if (!names.length) return;
       text = `changed the ${andList(names)}`;
       break;

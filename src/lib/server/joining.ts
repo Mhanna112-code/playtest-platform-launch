@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { displayName, pronouns } from "@/lib/format";
+import { displayName, fmtTime } from "@/lib/format";
 import { MAX_ACTIVE_TESTS, termsLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
@@ -63,7 +63,17 @@ export async function joinPageChanges(userId: string, testId: string, seenAt: un
   // An edit of only the listing's info shows once, as the (F) line ("Nora Lane changed the description").
   const edits = (await listingChanges(testId, seenAt)).filter((e) => !e.text.replace(/^The listing was edited: /, "").split(", ").every((f) => INFO_NAMES.includes(f)));
   const info = await db.testEvent.findMany({ where: { testId, kind: "info", createdAt: { gt: d } } });
-  return [...edits, ...info, ...(await ownChanges(userId, testId, d, tab))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  // (NEWEST+4, LIVE + GONE) Their application closed / their invite re-sent on the updated listing.
+  const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
+  const gone: TestEventLike[] = [];
+  for (const a of await db.application.findMany({ where: { testId, testerId: userId, status: "closed", decidedAt: { gt: d } } }))
+    gone.push({ kind: "applied", text: `${displayName(t.developer)} changed the listing: your application was closed`, createdAt: a.decidedAt! });
+  const replaced = await db.invite.findMany({ where: { testId, testerId: userId, status: "replaced", updatedAt: { gt: d } } });
+  if (replaced.length) {
+    const fresh = await db.invite.findFirst({ where: { testId, testerId: userId, status: "sent" }, orderBy: { createdAt: "desc" } });
+    gone.push(fresh ? { kind: "invite", text: `${displayName(t.developer)} changed the listing: here's a new invite on the updated listing`, createdAt: fresh.createdAt } : { kind: "invite", text: `${displayName(t.developer)} changed the listing: your invite closed (no spots left)`, createdAt: replaced[0].updatedAt });
+  }
+  return [...edits, ...info, ...gone, ...(await ownChanges(userId, testId, d, tab))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }
 
 /** Join / Apply / Withdraw application / No thanks stop once (box under the button) for the join page's reasons. */
@@ -83,7 +93,8 @@ async function replacedInvite(testerId: string, testId: string, body: Record<str
   if (!inv || inv.testerId !== testerId || inv.status !== "replaced") return;
   const fresh = await db.invite.findFirst({ where: { testId, testerId, status: "sent" }, orderBy: { createdAt: "desc" } });
   const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
-  throw new HttpError(409, "invite_replaced", "This invite was replaced by a new one with the current listing.", fresh ? { newInviteId: fresh.id, terms: termsLine(asListing(t), true), listingVersion: t.listingVersion } : {});
+  const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
+  throw new HttpError(409, "invite_replaced", fresh ? `${displayName(dev)} changed the listing at ${fmtTime(inv.updatedAt)} and sent you a new invite:` : `${displayName(dev)} changed the listing at ${fmtTime(inv.updatedAt)}, and this invite closed.`, fresh ? { newInviteId: fresh.id, terms: termsLine(asListing(t), true), listingVersion: t.listingVersion } : {});
 }
 
 /** Join (Who can join = Anyone, or an invited tester on an invite-only test). */
@@ -144,21 +155,13 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   if (!a || a.testId !== testId) throw new HttpError(404, "not_found", "That application doesn't exist.");
   const tester = await db.user.findUniqueOrThrow({ where: { id: a.testerId }, include: { profile: true } });
   const name = displayName(tester);
+  if (a.status === "closed") throw new HttpError(409, "gone", `${name}'s application closed when you changed the listing in another tab at ${fmtTime(a.decidedAt ?? new Date())}.`);
   if (a.status !== "pending") throw new HttpError(409, "gone", a.status === "withdrawn" ? `${name} withdrew their application.` : "This application was already answered.");
   const extra: TestEventLike[] = [];
   const seenAt = typeof body.seenAt === "string" ? new Date(body.seenAt) : null;
   if (seenAt && tester.profile && tester.profile.updatedAt > seenAt) extra.push({ kind: "profile", text: `${name} changed their profile`, createdAt: tester.profile.updatedAt });
   extra.push(...(await listingChanges(testId, body.seenAt)));
   await db.$transaction((tx) => devGate(tx, testId, body, {}, extra));
-  // (NEWEST+4) The listing changed since they applied: Accept asks them to join on the current listing instead.
-  const tNow = await db.test.findUniqueOrThrow({ where: { id: testId } });
-  if (body.action !== "decline" && a.listing && !sameListingIgnoringMode(a.listing, listingSnapshot(tNow))) {
-    if (!a.changedAt) {
-      await db.application.update({ where: { id: a.id }, data: { changedAt: new Date() } });
-      await notify(tester.email, `${tNow.title} changed since you applied`, [`${tNow.title} changed since you applied: join on the current listing, or withdraw your application.`], `/app/find/${testId}`);
-    }
-    return { asked: true, message: `${name} applied before your changes, so ${pronouns(tester.pronoun).subj}'ll be asked to join on the current listing.` };
-  }
   if (body.action === "decline") {
     await db.application.update({ where: { id: a.id }, data: { status: "declined", decidedAt: new Date() } });
     await notify(tester.email, `Your application to “${(await db.test.findUniqueOrThrow({ where: { id: testId } })).title}” wasn't accepted`, ["Thanks for applying. There are other tests to find."], "/app/find");
@@ -191,4 +194,25 @@ export async function onSwitchToAnyone(testId: string) {
       await notify(tester.email, `${t.title} changed since you applied`, [`${t.title} changed since you applied: join on the current listing, or withdraw your application.`], `/app/find/${testId}`);
     }
   }
+}
+
+/**
+ * (Owner correction, NEWEST+4) A saved listing change (anything except spots / who can join) closes every pending
+ * application; no invite is sent. The applicant is told (bell + email; their join page's top box), and the developer's
+ * page shows the line and stops once for it.
+ */
+export async function closeApplicationsAfterEdit(testId: string) {
+  const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
+  const pending = await db.application.findMany({ where: { testId, status: "pending" }, orderBy: { createdAt: "asc" } });
+  const now = new Date();
+  const names: string[] = [];
+  for (const a of pending) {
+    await db.application.update({ where: { id: a.id }, data: { status: "closed", decidedAt: now } });
+    const tester = await db.user.findUnique({ where: { id: a.testerId } });
+    if (!tester) continue;
+    names.push(displayName(tester));
+    const line = `${t.title}'s listing changed, so your application was closed. You can apply again on the current listing.`;
+    await notify(tester.email, line, [line], `/app/find/${testId}`);
+  }
+  return names;
 }

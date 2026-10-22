@@ -5,20 +5,37 @@ branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the 
 and look, but this version deliberately drops most of its complexity.
 
 ## (Owner, Oct 22, NEWEST+4) Listing changes re-invite; applications; rejoining restores work
-- INVITES: when the developer saves a listing change (anything except spots / who can join), every OPEN invite closes
-  and a NEW invite on the new listing is sent to the same testers ("Nora Lane updated Harbor Run, so here's a new
-  invite: written $10, recording $12." bell + email; the 3-day reminder clock restarts). Testers who can't be invited
-  any more (greyed/removed reasons) are not re-invited; the Save result names them ("Not re-invited: Dee Moss (in 10
-  tests)."). Accept on an old invite is refused under the button: "This invite was replaced by a new one with the
-  current listing." (the new invite is shown right there).
-- APPLICATIONS: if the listing changed since a tester applied, the developer's Accept does NOT join them; under Accept:
-  "Ana Silva applied before your changes, so she'll be asked to join on the current listing." The tester gets "Harbor
-  Run changed since you applied: join on the current listing, or withdraw your application." (as with the switch to
-  Anyone). Unchanged listing -> Accept joins at once (as now).
+- (Owner correction 2) WHICH changes close applications / re-send invites: prices, parts, written questions, tester deadline, devices/languages, DESCRIPTION. NOT: title, Open until, spots, who can join (those keep the application/invite open). TITLE changes are also removed from the tester SESSION page's top box and stop reasons (they still show on the join page).
+- (Owner correction) A saved listing change (anything except spots / who can join):
+  - APPLICATIONS: every pending application CLOSES (no invite is sent). The applicant is told (bell + email + join-page
+    top box): "Harbor Run's listing changed, so your application was closed. You can apply again on the current
+    listing." The developer's Accept/Decline on a closed application is refused under the button ("Ana Silva's
+    application closed because you changed the listing at 3:10 PM."). Switching to Anyone is not a listing change
+    here: the auto-join rule stays.
+  - INVITES: every OPEN invite closes and is RE-SENT on the new listing to the same testers ("Nora Lane updated Harbor
+    Run, so here's a new invite: written $10, recording $12."; the 3-day reminder clock restarts). Accept on an old
+    invite is refused under the button and the new invite is shown right there.
+  - LIVE + GONE: closed applications and replaced invites DISAPPEAR from the lists as the page auto-refreshes. Live
+    news appears ONLY in the top box; notices under buttons appear only on press.
+    - Developer, the tab where they saved: nothing in the top box and no stop (it's their own action here); the Save
+      result lists it ("Closed 2 applications: Ana Silva, Leo Park. Invites re-sent on the new listing: Dee Moss.
+      Not re-invited: Sam Lee (no spots left).").
+    - Developer, their OTHER tabs: reason E: top box "You changed the listing in another tab · 3:10 PM: closed Ana
+      Silva's application, re-sent Dee Moss's invite" + stop once on every button. Pressing Accept/Decline on the closed
+      application there gives ONE blue final notice under the button: "Ana Silva's application closed when you changed
+      the listing in another tab at 3:10 PM."
+    - Tester (join page): top box "Nora Lane changed the listing · 3:10 PM: your application was closed" / "... here's a
+      new invite on the updated listing" + stop once on every join-page button. Pressing Accept on the old invite: one
+      blue final notice under the button: "Nora Lane changed the listing at 3:10 PM and sent you a new invite:" with the
+      new invite right there.
+  - SPOT CAP for invites (always, not only on re-send): open invites + testers in <= spots. Re-sending keeps the
+    earliest-invited first; the rest close and the Save result names them ("Not re-invited: Dee Moss (no spots
+    left)."), as do testers who can't be invited any more. The Invite button refuses past the cap: "Only 2 spots are
+    left and 2 people are already invited. Cancel an invite or add spots."
 - REJOINING: a tester who LEFT can join again (normal Join/Apply/Invite rules, spots, refusals, 10-test limit) on the
   CURRENT listing. Their old session is RESTORED (same session page): sent work, reviews, payments, paid so far, chat,
   disputes and call history are all still there. New terms apply to work sent after rejoining; work already sent keeps
-  the price it was sent under. Their deadline restarts from the rejoin date. Cancelled calls / closed requests stay
+  the price it was sent under. Their deadline = rejoin time + exactly the time they had left when they left (hours count; it may land the same day). If their deadline had already passed when they left, it stays passed (sends are labelled late, as before). Holds shift it as usual. Cancelled calls / closed requests stay
   closed. A tester the developer ENDED can only come back through a new invite from the developer; Join for them is
   refused: "You can't join this test again." (neutral; a block is never revealed). Wording fix for others: never
   "You've already joined this test." for someone who left.

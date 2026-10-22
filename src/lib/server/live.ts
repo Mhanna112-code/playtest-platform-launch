@@ -26,7 +26,7 @@ export function seenOf(v: unknown): Date | null {
 /** This person's own actions on the test since `since`, from other tabs. */
 export async function ownChanges(userId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db): Promise<TestEventLike[]> {
   const rows = await tx.actionLog.findMany({ where: { userId, testId, createdAt: { gt: since }, ...(tab ? { tab: { not: tab } } : { tab: { not: "" } }) }, orderBy: { createdAt: "asc" }, take: 50 });
-  return rows.map((r) => ({ kind: "own", text: OWN_PREFIX + r.text, createdAt: r.createdAt }));
+  return rows.map((r) => ({ kind: "own", text: r.text.startsWith("You ") ? r.text : OWN_PREFIX + r.text, createdAt: r.createdAt }));
 }
 
 /**

@@ -7,12 +7,10 @@ type App = { id: string; name: string; note: string; profile: string };
 
 export function Applications({ testId, seenAt, apps }: { testId: string; seenAt: string; apps: App[] }) {
   const { press, changes, error, busy, at } = usePress(seenAt);
-  const [asked, setAsked] = useState<Record<string, string>>({});
   if (!apps.length) return null;
   const go = async (a: App, action: "accept" | "decline") => {
-    const r = await press<{ asked?: boolean; message?: string }>(`/api/tests/${testId}/application`, { applicationId: a.id, action }, `${action}-${a.id}`);
-    if (r?.asked) setAsked({ ...asked, [a.id]: r.message ?? "" });
-    else if (r) window.location.reload();
+    const r = await press(`/api/tests/${testId}/application`, { applicationId: a.id, action }, `${action}-${a.id}`);
+    if (r) window.location.reload();
   };
   return (
     <section className="panel" aria-label="Applications">
@@ -27,7 +25,6 @@ export function Applications({ testId, seenAt, apps }: { testId: string; seenAt:
               <button className="btn-ghost" disabled={busy} onClick={() => go(a, "decline")}>Decline</button>
             </div>
             {(at === `accept-${a.id}` || at === `decline-${a.id}`) && <ChangesBox changes={changes} error={error} />}
-            {asked[a.id] && <p className="info">{asked[a.id]}</p>}
           </li>
         ))}
       </ul>

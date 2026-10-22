@@ -29,7 +29,7 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
     switch (action) {
       case "edit": {
         const t = await editTest(u, id, body);
-        return ok({ version: t.version, offered: (t as { offered?: number }).offered ?? 0, changed: (t as { changed?: string[] }).changed ?? [], notReinvited: (t as { notReinvited?: string[] }).notReinvited ?? [] });
+        return ok({ version: t.version, offered: (t as { offered?: number }).offered ?? 0, changed: (t as { changed?: string[] }).changed ?? [], notReinvited: (t as { notReinvited?: string[] }).notReinvited ?? [], resent: (t as { resent?: string[] }).resent ?? [], closedApps: (t as { closedApps?: string[] }).closedApps ?? [] });
       }
       case "open":
         await openDraft(u, id);

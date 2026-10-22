@@ -95,6 +95,9 @@ export async function recordEvent(tx: Tx, testId: string, kind: string, text: st
 
 const working = (testId: string) => ({ testId, status: "working" });
 
+/** (NEWEST+4) Rejoining keeps exactly the time they had left when they left (hours count; if it had passed, it stays passed). */
+export const rejoinDue = (oldDue: Date, leftAt: Date | null, now: Date) => new Date(now.getTime() + (oldDue.getTime() - (leftAt ?? now).getTime()));
+
 /** The developer's own test, or a refusal. Other people's tests look like they don't exist. */
 export async function ownTest(devId: string, testId: string) {
   const t = await db.test.findUnique({ where: { id: testId } });
@@ -185,10 +188,11 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   });
   // Working testers are OFFERED the new contract terms (Switch / Keep); their contract changes only if they switch.
   const offered = termsChanged ? await offerNewTerms(testId) : 0;
+  const closedApps = reinvite ? await (await import("./joining")).closeApplicationsAfterEdit(testId) : [];
   if (switchedToAnyone) await (await import("./joining")).onSwitchToAnyone(testId);
   // (NEWEST+4) Any listing change except spots / who can join re-sends open invites on the new listing.
-  const notReinvited = reinvite ? await (await import("./invites")).reinviteAfterEdit(testId) : [];
-  return Object.assign(result, { offered, changed: changedNames, notReinvited });
+  const { skipped: notReinvited, resent } = reinvite ? await (await import("./invites")).reinviteAfterEdit(testId) : { skipped: [], resent: [] };
+  return Object.assign(result, { offered, changed: changedNames, notReinvited, resent, closedApps });
 }
 
 /** (F) The listing info a working tester sees change live: title, description, devices, languages. */
@@ -381,7 +385,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     if (gap && body.anyway !== true) throw new HttpError(409, "needs", `${gap.replace(/ Add .*$/, "")} You don't list it in your profile. Join anyway?`);
     const snap = contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion }, new Date(), body.keepPrivate === true);
     const contract = old
-      ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null } })
+      ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, dueAt: rejoinDue(old.dueAt, old.endedAt, new Date()), status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null } })
       : await tx.contract.create({ data: { testId, testerId: tester.id, ...snap } });
     if (old) await tx.termsOffer.updateMany({ where: { contractId: old.id, status: "open" }, data: { status: "superseded", decidedAt: new Date() } });
     await recordEvent(tx, testId, "joined", old ? `${displayName(tester)} joined again` : `${displayName(tester)} joined`, true, {}, contract.id);
