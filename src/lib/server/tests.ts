@@ -1,0 +1,373 @@
+import { Prisma } from "@prisma/client";
+import { db } from "@/lib/db";
+import { displayName, fmtDate, fmtDateTime, pronouns, toCents } from "@/lib/format";
+import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
+import {
+  changedTerms, checkListing, contractSnapshot, editCheck, isLate, joinCheck, testerRefusal, LISTING_FIELDS, mergeEdit, stopOnce, termsLine, type Listing,
+} from "@/lib/rules";
+import { HttpError } from "./http";
+import { notify } from "./notify";
+
+type Tx = Prisma.TransactionClient;
+type U = { id: string; email: string; name: string; pronoun: string; isDeveloper: boolean; isTester: boolean };
+
+// ---------- helpers ----------
+
+export const asListing = (t: { [K in keyof Listing]: unknown }): Listing => ({
+  title: t.title as string, description: t.description as string, buildUrl: t.buildUrl as string, category: t.category as string,
+  devices: t.devices as string[], languages: t.languages as string[], spots: t.spots as number,
+  writtenCents: t.writtenCents as number | null, recordingCents: t.recordingCents as number | null,
+  liveRateCents: t.liveRateCents as number | null, liveMinutes: t.liveMinutes as number | null,
+  deadlineDays: t.deadlineDays as number, questions: (t.questions as string[]) ?? [],
+  openUntil: t.openUntil ? new Date(t.openUntil as string | Date).toISOString() : null,
+});
+
+/** Listing → database fields (Open until as a Date). */
+export const listingData = (l: Listing) => ({ ...l, openUntil: l.openUntil ? new Date(l.openUntil) : null, liveMinutes: l.liveRateCents == null ? null : l.liveMinutes });
+
+/** The written-answer questions in a contract; extra written work with no questions gets one open box. */
+export const writtenQuestions = (c: { questions: unknown }) => {
+  const qs = (c.questions as string[]) ?? [];
+  return qs.length ? qs : ["Your feedback"];
+};
+
+const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+const list = (v: unknown, allowed: string[]) => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && allowed.includes(x)))] : []);
+const int = (v: unknown) => (typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN);
+/** A price field: null/"" = not offered; "0" = free; "7.50" = $7.50. */
+function price(v: unknown, label: string): number | null {
+  if (v === null || v === undefined || v === "" || v === false) return null;
+  const c = toCents(v);
+  if (c == null) throw new HttpError(400, "bad_price", `Enter the ${label} like 7.50 (or 0 for free).`);
+  return c;
+}
+
+/** Read the listing fields the form sent. Only fields present in the body are returned (Edit sends only touched ones). */
+export function parseListing(body: Record<string, unknown>, partial = false): Partial<Listing> {
+  const out: Partial<Listing> = {};
+  const has = (k: string) => !partial || k in body;
+  if (has("title")) out.title = str(body.title, 200);
+  if (has("description")) out.description = str(body.description, 5000);
+  if (has("buildUrl")) {
+    out.buildUrl = str(body.buildUrl, 500);
+    if (out.buildUrl && !/^https?:\/\//i.test(out.buildUrl)) throw new HttpError(400, "bad_url", "The build link must start with https://");
+  }
+  if (has("category")) out.category = CATEGORIES.includes(body.category as string) ? (body.category as string) : "";
+  if (has("devices")) out.devices = list(body.devices, DEVICES);
+  if (has("languages")) out.languages = list(body.languages, LANGUAGES);
+  if (has("spots")) out.spots = int(body.spots);
+  if (has("writtenCents")) out.writtenCents = price(body.writtenCents, "written answers price");
+  if (has("recordingCents")) out.recordingCents = price(body.recordingCents, "recording price");
+  if (has("liveRateCents")) out.liveRateCents = price(body.liveRateCents, "live call rate");
+  if (has("liveMinutes")) out.liveMinutes = body.liveMinutes === null || body.liveMinutes === "" ? null : int(body.liveMinutes);
+  if (has("deadlineDays")) out.deadlineDays = int(body.deadlineDays);
+  if (has("openUntil")) {
+    const v = str(body.openUntil, 40);
+    out.openUntil = v ? (/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T23:59:59.000Z` : v) : null;
+  }
+  if (has("questions")) out.questions = Array.isArray(body.questions) ? body.questions.filter((q): q is string => typeof q === "string").map((q) => q.trim().slice(0, 500)).filter(Boolean) : [];
+  return out;
+}
+
+async function lockTest(tx: Tx, id: string) {
+  await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${id} FOR UPDATE`;
+  const t = await tx.test.findUnique({ where: { id } });
+  if (!t) throw new HttpError(404, "not_found", "This test was deleted.");
+  return t;
+}
+
+/** Record what happened. bump=true moves the test's version on (Edit's Save will notice). */
+export async function recordEvent(tx: Tx, testId: string, kind: string, text: string, bump: boolean, extra: Prisma.TestUpdateInput = {}, contractId: string | null = null) {
+  let version: number | null = null;
+  if (bump || Object.keys(extra).length) {
+    const t = await tx.test.update({ where: { id: testId }, data: { ...(bump ? { version: { increment: 1 } } : {}), ...extra } });
+    if (bump) version = t.version;
+  }
+  await tx.testEvent.create({ data: { testId, kind, text, version, contractId } });
+}
+
+const working = (testId: string) => ({ testId, status: "working" });
+
+/** The developer's own test, or a refusal. Other people's tests look like they don't exist. */
+export async function ownTest(devId: string, testId: string) {
+  const t = await db.test.findUnique({ where: { id: testId } });
+  if (!t || t.developerId !== devId) throw new HttpError(404, "not_found", "That test doesn't exist or isn't yours.");
+  return t;
+}
+
+/** " Refresh to see the latest." when something happened on the test since the page loaded. */
+export async function staleNote(testId: string, seenAt: unknown) {
+  const d = typeof seenAt === "string" ? new Date(seenAt) : null;
+  if (!d || isNaN(d.getTime())) return "";
+  const n = await db.testEvent.count({ where: { testId, createdAt: { gt: d } } });
+  return n ? " Refresh to see the latest." : "";
+}
+
+const seenDate = (v: unknown) => {
+  const d = typeof v === "string" ? new Date(v) : null;
+  if (!d || isNaN(d.getTime())) throw new HttpError(400, "bad_request", "This page is out of date. Refresh to see the latest.");
+  return d;
+};
+
+// ---------- developer: post, edit ----------
+
+export async function createTest(dev: U, body: Record<string, unknown>) {
+  if (!dev.isDeveloper) throw new HttpError(403, "not_developer", "Turn on “post tests” in your profile to post a test.");
+  const l = parseListing(body) as Listing;
+  const errs = checkListing(l);
+  if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs });
+  return db.test.create({ data: { ...listingData(l), developerId: dev.id, status: "open" } });
+}
+
+/**
+ * Save an edit. The body carries the version the page loaded and only the fields the user touched.
+ * If the test changed since: the first Save stops and lists what changed; the second (confirmed) saves the typed values on top.
+ * Edit only changes the listing for new joiners: contracts are snapshots.
+ */
+export async function editTest(dev: U, testId: string, body: Record<string, unknown>) {
+  await ownTest(dev.id, testId);
+  const loaded = Number(body.version);
+  const confirmed = body.confirmed === true;
+  const touched = parseListing((body.fields ?? {}) as Record<string, unknown>, true);
+  return db.$transaction(async (tx) => {
+    const t = await lockTest(tx, testId);
+    if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
+    const events = await tx.testEvent.findMany({ where: { testId, version: { gt: loaded } } });
+    const gate = editCheck(loaded, t.version, events, confirmed);
+    if (!gate.go) {
+      throw new HttpError(409, "changed", "This test changed since you opened Edit. Press Save again to save your changes on top.", {
+        changes: gate.changes.map((c) => ({ text: c.text, at: c.createdAt })), version: t.version, current: asListing(t),
+      });
+    }
+    const current = asListing(t);
+    const next = mergeEdit(current, touched);
+    if (next.liveRateCents == null) next.liveMinutes = null;
+    const testersIn = await tx.contract.count({ where: working(testId) });
+    const errs = checkListing(next, testersIn);
+    if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs });
+    const terms = changedTerms(current, next);
+    const fields = LISTING_FIELDS.filter((k) => JSON.stringify(current[k]) !== JSON.stringify(next[k]));
+    if (!fields.length) return t;
+    const what = fields.map((f) => FIELD_NAMES[f]).join(", ");
+    await recordEvent(tx, testId, "edited", `The listing was edited: ${what}`, true, {
+      ...listingData(next), ...(terms.length ? { listingVersion: { increment: 1 } } : {}),
+    });
+    return tx.test.findUniqueOrThrow({ where: { id: testId } });
+  });
+}
+
+const FIELD_NAMES: Record<keyof Listing, string> = {
+  title: "title", description: "description", buildUrl: "build link", category: "category", devices: "devices", languages: "languages",
+  openUntil: "Open until", spots: "spots", writtenCents: "written answers price", recordingCents: "recording price", liveRateCents: "live call rate",
+  liveMinutes: "call length", deadlineDays: "deadline", questions: "questions",
+};
+
+export async function openDraft(dev: U, testId: string) {
+  const t = await ownTest(dev.id, testId);
+  if (t.status !== "draft") throw new HttpError(409, "not_draft", t.status === "stopped" ? "This test was stopped." : "This test is already open.");
+  return db.$transaction((tx) => recordEvent(tx, testId, "opened", "The test opened for testers", true, { status: "open" }));
+}
+
+// ---------- developer: the top panel's big buttons (stop once) ----------
+
+/**
+ * Every top-panel press goes through here. If since the page loaded (seenAt) a tester joined, left, sent work,
+ * booked or cancelled a call, the first press stops and returns the list; the second press (confirmed) goes ahead.
+ */
+export async function topPanelGate(tx: Tx, testId: string, seenAtRaw: unknown, confirmed: boolean) {
+  const seenAt = seenDate(seenAtRaw);
+  const events = await tx.testEvent.findMany({ where: { testId, createdAt: { gt: seenAt } } });
+  const r = stopOnce(events, seenAt, confirmed);
+  if (!r.go) {
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: r.changes.map((c) => ({ text: c.text, at: c.createdAt })) });
+  }
+}
+
+/** Calls ahead are cancelled (no charge) when a tester's work ends. Their offered times open again for others. */
+async function cancelCallsAhead(tx: Tx, contractIds: string[], note: string) {
+  const ahead = await tx.call.findMany({ where: { contractId: { in: contractIds }, status: "booked", startsAt: { gt: new Date() } } });
+  for (const c of ahead) {
+    await tx.call.update({ where: { id: c.id }, data: { status: "cancelled", cancelledBy: "system", cancelledAt: new Date(), cancelNote: note } });
+    await tx.callSlot.update({ where: { id: c.slotId }, data: { status: "removed" } });
+  }
+  return ahead.length;
+}
+
+export async function stopTest(dev: U, testId: string, body: Record<string, unknown>) {
+  await ownTest(dev.id, testId);
+  const contracts = await db.$transaction(async (tx) => {
+    const t = await lockTest(tx, testId);
+    if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped." + (await staleNote(testId, body.seenAt)));
+    await topPanelGate(tx, testId, body.seenAt, body.confirmed === true);
+    const cs = await tx.contract.findMany({ where: working(testId), include: { tester: true } });
+    await tx.contract.updateMany({ where: working(testId), data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The developer stopped the test." } });
+    await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
+    await tx.callSlot.updateMany({ where: { testId, status: "open" }, data: { status: "removed" } });
+    await recordEvent(tx, testId, "stopped", "The test was stopped", true, { status: "stopped", stoppedAt: new Date() });
+    return cs;
+  });
+  for (const c of contracts)
+    await notify(c.tester.email, `“${c.title}” was stopped`, [`${displayName(dev)} stopped “${c.title}”. Your work on it has ended.`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`);
+  return { stopped: true, testers: contracts.length };
+}
+
+/** End one tester's work now. Work they sent is still reviewed; calls ahead are cancelled; later presses are refused. */
+export async function endEarly(dev: U, testId: string, body: Record<string, unknown>) {
+  await ownTest(dev.id, testId);
+  const reason = str(body.reason, 500);
+  if (reason.length < 5) throw new HttpError(400, "bad_reason", "Say why you're ending their work (they read it).");
+  const contractId = String(body.contractId ?? "");
+  const c = await db.$transaction(async (tx) => {
+    await lockTest(tx, testId);
+    const c = await tx.contract.findUnique({ where: { id: contractId }, include: { tester: true } });
+    if (!c || c.testId !== testId) throw new HttpError(404, "not_found", "Choose a tester.");
+    const name = displayName(c.tester);
+    if (c.status === "left") throw new HttpError(409, "gone", `${name} already left the test.` + (await staleNote(testId, body.seenAt)));
+    if (c.status !== "working") throw new HttpError(409, "gone", `${name}'s work already ended.` + (await staleNote(testId, body.seenAt)));
+    await topPanelGate(tx, testId, body.seenAt, body.confirmed === true);
+    await tx.contract.update({ where: { id: c.id }, data: { status: "ended", endKind: "early", endedAt: new Date(), endReason: reason } });
+    await cancelCallsAhead(tx, [c.id], "The developer ended the work early.");
+    await recordEvent(tx, testId, "ended", `You ended ${name}'s work early`, false, {}, c.id);
+    return c;
+  });
+  await notify(c.tester.email, `Your work on “${c.title}” was ended early`, [`${displayName(dev)} ended your work on “${c.title}”: “${reason}”`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`);
+  return { ended: true };
+}
+
+/** Next round: a draft copy of the test for the next build. Optionally stops new testers joining this one. */
+export async function nextRound(dev: U, testId: string, body: Record<string, unknown>) {
+  await ownTest(dev.id, testId);
+  return db.$transaction(async (tx) => {
+    const t = await lockTest(tx, testId);
+    if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped." + (await staleNote(testId, body.seenAt)));
+    const existing = await tx.test.findFirst({ where: { previousId: testId } });
+    if (existing) throw new HttpError(409, "exists", "This test already has a next round." + (await staleNote(testId, body.seenAt)), { id: existing.id });
+    await topPanelGate(tx, testId, body.seenAt, body.confirmed === true);
+    const round = t.round + 1;
+    const copy = await tx.test.create({
+      data: {
+        ...listingData(asListing(t)), title: `${t.title.replace(/ \(round \d+\)$/, "")} (round ${round})`, developerId: dev.id, status: "draft", round, previousId: t.id,
+        questions: t.questions as Prisma.InputJsonValue,
+      },
+    });
+    const close = body.closeThis !== false && t.status === "open";
+    await recordEvent(tx, testId, "next_round", `Round ${round} was started${close ? "; this round stopped taking new testers" : ""}`, true, close ? { status: "closed" } : {});
+    return { id: copy.id };
+  });
+}
+
+// ---------- tester: find and join ----------
+
+/** Open tests the tester can join (not their own, not full, not already joined). */
+export async function findTests(tester: U) {
+  const tests = await db.test.findMany({
+    where: { status: "open", developerId: { not: tester.id }, developer: { suspendedAt: null }, contracts: { none: { testerId: tester.id } } },
+    include: { _count: { select: { contracts: { where: { status: "working" } } } }, developer: { select: { name: true, email: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+  return tests.filter((t) => t._count.contracts < t.spots);
+}
+
+/** Why this tester's profile doesn't fit the test's needs, or "" when it does. */
+export function needsGap(t: { devices: string[]; languages: string[] }, p: { devices: string[]; languages: string[] } | null) {
+  if (t.devices.length && !t.devices.some((d) => p?.devices.includes(d))) return `This test needs one of: ${t.devices.join(", ")}. Add your device in your profile.`;
+  if (t.languages.length && !t.languages.some((l) => p?.languages.includes(l))) return `This test needs one of: ${t.languages.join(", ")}. Add the language in your profile.`;
+  return "";
+}
+
+/**
+ * Join: the tester sends the listing version they saw. A changed listing stops once and returns the new terms;
+ * the second press joins on them. Closed, stopped or full tests refuse for good. The contract is a snapshot.
+ */
+export async function joinTest(tester: U, testId: string, body: Record<string, unknown>) {
+  if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test games” in your profile to join tests.");
+  const profile = await db.testerProfile.findUnique({ where: { userId: tester.id } });
+  const seen = Number(body.listingVersion);
+  const { contract, dev } = await db.$transaction(async (tx) => {
+    const t = await lockTest(tx, testId);
+    if (t.developerId === tester.id) throw new HttpError(409, "own", "You can't join your own test.");
+    if (await tx.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } })) throw new HttpError(409, "already", "You've already joined this test.");
+    const dev = await tx.user.findUniqueOrThrow({ where: { id: t.developerId } });
+    if (dev.suspendedAt) throw new HttpError(409, "closed", "This test isn't taking new testers any more.");
+    const testersIn = await tx.contract.count({ where: working(testId) });
+    const r = joinCheck({ status: t.status, listingVersion: t.listingVersion, spots: t.spots, testersIn, openUntil: t.openUntil }, seen, body.confirmed === true);
+    if (r.result === "refused") throw new HttpError(409, "refused", r.message);
+    if (r.result === "changed") {
+      throw new HttpError(409, "listing_changed", "The developer changed this test since you opened it. Check the new terms, then press Join again to join on them.", {
+        listingVersion: t.listingVersion, terms: termsLine(asListing(t), true), questions: t.questions,
+      });
+    }
+    const gap = needsGap(t, profile);
+    if (gap) throw new HttpError(409, "needs", gap);
+    const contract = await tx.contract.create({
+      data: { testId, testerId: tester.id, ...contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion }, new Date(), body.keepPrivate === true) },
+    });
+    await recordEvent(tx, testId, "joined", `${displayName(tester)} joined`, true, {}, contract.id);
+    return { contract, dev };
+  });
+  await notify(dev.email, `${displayName(tester)} joined “${contract.title}”`, [`${displayName(tester)} joined your test “${contract.title}”.`, `Their deal: ${termsLine(contract)}.`], `/app/tests/${testId}`);
+  return contract;
+}
+
+// ---------- tester: session ----------
+
+/** The tester's own contract, or a refusal. Nobody else's sessions can be read through this. */
+export async function ownContract(testerId: string, contractId: string) {
+  const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } }, tester: true } });
+  if (!c || c.testerId !== testerId) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
+  return c;
+}
+
+/** Why a tester's press can't happen any more (with the one line their page shows), or "". Late work is allowed. */
+export function sessionRefusal(c: { status: string; endKind: string; endedAt: Date | null }, test: { openUntil: Date | null }, devName: string, now = new Date()) {
+  return testerRefusal(c, test, devName, fmtDate, now);
+}
+
+export async function leaveTest(tester: U, contractId: string) {
+  const c0 = await ownContract(tester.id, contractId);
+  const c = await db.$transaction(async (tx) => {
+    await lockTest(tx, c0.testId);
+    const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
+    const refusal = sessionRefusal(c, { openUntil: null }, displayName(c0.test.developer));
+    if (refusal) throw new HttpError(409, "gone", refusal === "You left this test." ? "You already left this test." : refusal);
+    await tx.contract.update({ where: { id: c.id }, data: { status: "left", endedAt: new Date() } });
+    await cancelCallsAhead(tx, [c.id], `${displayName(tester)} left the test.`);
+    await recordEvent(tx, c.testId, "left", `${displayName(tester)} left the test`, true, {}, c.id);
+    return c;
+  });
+  await notify(c0.test.developer.email, `${displayName(tester)} left “${c.title}”`, [`${displayName(tester)} left your test “${c.title}”. Work they already sent still waits for your review.`], `/app/tests/${c.testId}`);
+  return { left: true };
+}
+
+/**
+ * Send (or update, until it's paid) the written answers: one answer per question in the contract. Allowed even when
+ * written answers aren't in the contract (extra work) and after the deadline (marked late).
+ */
+export async function sendWritten(tester: U, contractId: string, body: Record<string, unknown>) {
+  const c0 = await ownContract(tester.id, contractId);
+  const qs = writtenQuestions(c0);
+  const answers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim().slice(0, 10_000) : "")) : [];
+  if (answers.length !== qs.length || answers.some((a) => !a)) throw new HttpError(400, "bad_answers", "Answer every question before sending.");
+  const notes = str(body.notes, 10_000);
+  const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
+  const { sub, updated } = await db.$transaction(async (tx) => {
+    const t = await lockTest(tx, c0.testId);
+    const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
+    const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
+    if (refusal) throw new HttpError(409, "closed", refusal);
+    const now = new Date();
+    const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
+    if (existing?.review) throw new HttpError(409, "paid", "Your written answers were already paid for, so they can't be changed. Send anything new in the chat.");
+    const data = { answers, notes, late: isLate(c.dueAt, now), updatedAt: now };
+    const sub = existing
+      ? await tx.submission.update({ where: { id: existing.id }, data })
+      : await tx.submission.create({ data: { contractId, kind: "written", agreedCents: c.writtenCents, ...data } });
+    await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} written answers`, false, {}, c.id);
+    return { sub, updated: !!existing };
+  });
+  await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} written answers for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} written answers${sub.late ? " (late)" : ""}. Review them and choose what to pay.`], `/app/tests/${c0.testId}`);
+  return sub;
+}
+
+export const eventLine = (e: { text: string; createdAt: Date }) => `${e.text} · ${fmtDateTime(e.createdAt)}`;

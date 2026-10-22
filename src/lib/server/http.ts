@@ -1,15 +1,15 @@
 // Small helpers for the JSON API: plain-word errors, size-limited bodies, same-origin checks.
 
 export class HttpError extends Error {
-  constructor(public status: number, public code: string, message: string) {
+  constructor(public status: number, public code: string, message: string, public data?: Record<string, unknown>) {
     super(message);
   }
 }
 
 export const ok = (data: unknown, init?: ResponseInit) => Response.json(data, init);
 
-export const fail = (status: number, code: string, message: string) =>
-  Response.json({ error: { code, message } }, { status });
+export const fail = (status: number, code: string, message: string, data?: Record<string, unknown>) =>
+  Response.json({ error: { code, message, ...(data ?? {}) } }, { status });
 
 /** Read a JSON body (max `limit` bytes). Mutating requests must be JSON, which browsers won't send cross-site without CORS. */
 export async function readJson(req: Request, limit = 100_000): Promise<Record<string, unknown>> {
@@ -45,7 +45,7 @@ export async function handle(fn: () => Promise<Response>): Promise<Response> {
   try {
     return await fn();
   } catch (e) {
-    if (e instanceof HttpError) return fail(e.status, e.code, e.message);
+    if (e instanceof HttpError) return fail(e.status, e.code, e.message, e.data);
     console.error(e);
     return fail(500, "server", "Something went wrong on our side. Try again in a moment.");
   }

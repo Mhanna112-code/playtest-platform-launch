@@ -4,6 +4,32 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner update, Oct 22) Extra work and one Pay box: these override rules 2–3 and the "can only send parts in
+## the contract" line in rule 4
+- **Testers may send written answers, send a recording, and book live calls even when that part is not in their
+  contract** (the listing). Parts in the contract are labelled "In your contract"; others "Extra (not in the listing):
+  the developer decides what to pay". Developers see the same labels.
+- **Review = one Pay button with an amount box next to it**, per piece of sent work (and per held call). No Accept /
+  pay-in-full / pay-different buttons. Beside it:
+  - "Listing: $X for written answers" (or recording, or "$Y/h × N min booked"), or "Not in the listing" for extra work;
+  - "You've paid Ana Silva $Z so far on this test."
+  - The box starts at the listing amount (or empty for extra work). Any amount from $0 up; a reason is required when
+    the amount is below the listing amount. A "charged now: $X" tick naming the exact amount must be ticked to press Pay.
+  - Pay charges the developer that amount (Stripe, test mode) and pays the tester minus the platform fee; one charge per
+    press, never twice (idempotent).
+- **Live calls:** any tester in the test may book offered times (contract or not). After the call the developer pays
+  with the same Pay box (reference: the listing rate × length, or "Not in the listing").
+- **Disputes:** only for parts in the contract paid below the listing amount; once per part; an admin can only raise
+  the pay. Extra work: the developer's amount is final.
+- **(Owner, Oct 22) Late work:** testers can still send work (and book calls) after their own deadline; it's marked
+  "Sent late (deadline was Oct 20)" for both sides. They can't send or book after the test's **Open until** date, nor
+  after the developer stopped the test or ended them early (refused with the reason).
+- **(Owner, Oct 22) Pay stops once too.** Pay re-checks what the developer saw: if since the page loaded that tester
+  sent new or updated work, left, booked or cancelled a call, or another payment to them was made (e.g. in another
+  tab), Pay does NOT go through: a box directly **under that Pay button** lists what changed and shows the updated
+  "paid so far"; pressing again pays the amount in the box. A payment that can't happen any more (already paid for that
+  same piece of work, tester account closed) is refused for good in the same place.
+
 ## The loop
 Developer posts a test → testers join (their contract is fixed at join) → testers send written answers and an
 optional screen recording, and/or do a booked live call → developer reviews sent work and **chooses how much to pay**
@@ -21,7 +47,21 @@ optional screen recording, and/or do a booked live call → developer reviews se
 3. **Live calls stay:** developer offers times (and who can book); tester books or cancels (24-hour rule as in the
    full app); join call (simple room or a link); developer enters the call length; charge = rate × length; no-show
    report. Keep it simple: no proposals/counter-proposals, no extra calls.
-4. **Stop once, only on the top panel.** The test page's top title panel holds the developer's big buttons:
+4. **(Updated Oct 22, owner) Stop once: the only checks, both sides, shown directly under the pressed button's panel.**
+   - Triggers (since the page loaded): a tester **left**, a tester **joined**, a tester **sent work**, a live call was
+     **booked, its booking accepted/confirmed, or cancelled** (by either side), or call times were offered/removed.
+   - Developer: the top-panel buttons (Stop the test, End early, Next round) show their box **under the top title
+     panel**; the live-call panel's buttons (offer times, cancel/confirm a call) show theirs **under the live-call panel**.
+   - Tester: the live-call panel's buttons (Book, Cancel) stop once for the call triggers above (a time taken, moved,
+     removed or cancelled since the page loaded) with the box **under the live-call panel**.
+   - Pressing again goes ahead (unless it can't happen any more: then a final refusal in the same place).
+   - Testers are never stopped for term changes: contracts can't change after joining. If the developer stops the
+     test or ends a tester early, the tester's page shows one line at the top of their session page ("Nora Lane ended
+     your session early on Oct 22. Work you sent is still reviewed.") and any later press is refused with that reason.
+   - A tester can only send the parts in their contract (written answers, recording, live call as agreed); the server
+     refuses anything else.
+   Earlier wording of this rule, kept for reference:
+   **Stop once, only on the top panel.** The test page's top title panel holds the developer's big buttons:
    **Offer call times / book**, **Stop the test**, **End early** (for a tester), **Next round**. If since the page
    loaded a tester **booked a live call** (or cancelled one), a tester **left**, a **new tester joined**, or a tester
    **sent work**, the press does NOT go through: a box

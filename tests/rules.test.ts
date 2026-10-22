@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
-  callCharge, canCancelCall, canDispute, changedTerms, checkCallLength, checkDisputeDecision, checkListing, checkPayAmount,
-  contractSnapshot, editCheck, joinCheck, mergeEdit, splitFee, stopOnce, stopOnceChanges, termsLine, type Listing,
+  callCharge, canCancelCall, canDispute, changedTerms, checkDisputeDecision, checkListing, checkPay, isLate, lateLabel, listingAmount,
+  CALL_KINDS, contractSnapshot, editCheck, endedLine, payStopOnce, testerRefusal, joinCheck, mergeEdit, splitFee, stopOnce, stopOnceChanges, termsLine, type Listing,
 } from "@/lib/rules";
 
 const listing = (over: Partial<Listing> = {}): Listing => ({
   title: "Harbor Run", description: "A boat game", buildUrl: "https://example.com/build", category: "Action",
   devices: ["Windows PC"], languages: ["English"], spots: 5, writtenCents: 1000, recordingCents: 1500,
-  liveRateCents: 3000, liveMinutes: 30, deadlineDays: 7, questions: ["What did you like?"], ...over,
+  liveRateCents: 3000, liveMinutes: 30, deadlineDays: 7, questions: ["What did you like?"], openUntil: null, ...over,
 });
 const at = (min: number) => new Date(Date.UTC(2026, 10, 5, 15, min));
 const ev = (kind: string, min: number, text = kind, version?: number) => ({ kind, text, createdAt: at(min), version });
@@ -25,39 +25,48 @@ describe("platform fee", () => {
   });
 });
 
-describe("pay amount at review", () => {
-  it("full price needs no reason", () => expect(checkPayAmount(1000, 1000, "")).toEqual({ ok: true }));
-  it("anything from $0 to the agreed price with a reason", () => {
-    expect(checkPayAmount(0, 1000, "Didn't answer the questions").ok).toBe(true);
-    expect(checkPayAmount(500, 1000, "Half the answers").ok).toBe(true);
+describe("the one Pay box", () => {
+  it("the listing amount with the tick: no reason needed", () => expect(checkPay(1000, 1000, "", 1000)).toEqual({ ok: true }));
+  it("any amount from $0 up, even above the listing", () => {
+    expect(checkPay(0, 1000, "Didn't answer the questions", 0).ok).toBe(true);
+    expect(checkPay(1500, 1000, "", 1500).ok).toBe(true);
   });
-  it("less than full requires a reason", () => {
-    expect(checkPayAmount(500, 1000, "")).toMatchObject({ ok: false, message: expect.stringContaining("Say why") });
-    expect(checkPayAmount(0, 1000, "  ")).toMatchObject({ ok: false });
+  it("below the listing amount needs a reason", () => {
+    expect(checkPay(500, 1000, "", 500)).toMatchObject({ ok: false, message: expect.stringContaining("Say why") });
+    expect(checkPay(500, 1000, "Half the answers", 500).ok).toBe(true);
   });
-  it("never more than agreed, never negative or fractional cents", () => {
-    expect(checkPayAmount(1001, 1000, "")).toMatchObject({ ok: false, message: "You can pay at most the agreed $10.00." });
-    expect(checkPayAmount(-1, 1000, "reason here").ok).toBe(false);
-    expect(checkPayAmount(1.5, 1000, "reason here").ok).toBe(false);
-    expect(checkPayAmount(null, 1000, "reason here").ok).toBe(false);
+  it("extra work (not in the listing): any amount, no reason", () => {
+    expect(checkPay(0, null, "", 0).ok).toBe(true);
+    expect(checkPay(700, null, "", 700).ok).toBe(true);
   });
-  it("a non-zero amount is at least the smallest card charge", () => {
-    expect(checkPayAmount(30, 1000, "reason here").ok).toBe(false);
-    expect(checkPayAmount(50, 1000, "reason here").ok).toBe(true);
+  it("the charged-now tick must name exactly the amount", () => {
+    expect(checkPay(1000, 1000, "", null)).toMatchObject({ ok: false, message: "Tick “charged now: $10.00” to pay." });
+    expect(checkPay(1000, 1000, "", 900).ok).toBe(false);
   });
-  it("a free part can only be paid $0", () => {
-    expect(checkPayAmount(0, 0, "").ok).toBe(true);
-    expect(checkPayAmount(100, 0, "").ok).toBe(false);
+  it("never negative, fractional, or under the smallest card charge", () => {
+    expect(checkPay(-1, null, "", -1).ok).toBe(false);
+    expect(checkPay(1.5, null, "", 1.5).ok).toBe(false);
+    expect(checkPay(null, null, "", null).ok).toBe(false);
+    expect(checkPay(30, null, "", 30).ok).toBe(false);
+    expect(checkPay(50, null, "", 50).ok).toBe(true);
+  });
+  it("listing amounts come from the contract; calls = rate × booked minutes", () => {
+    const c = { writtenCents: 1000, recordingCents: null, liveRateCents: 3000 };
+    expect(listingAmount(c, "written")).toBe(1000);
+    expect(listingAmount(c, "recording")).toBeNull();
+    expect(listingAmount(c, "call", 30)).toBe(1500);
+    expect(listingAmount({ ...c, liveRateCents: null }, "call", 30)).toBeNull();
   });
 });
 
 describe("disputes", () => {
-  it("once, only when paid less than agreed", () => {
+  it("only contract parts paid below the listing amount, once", () => {
     expect(canDispute(500, 1000, false).ok).toBe(true);
     expect(canDispute(1000, 1000, false).ok).toBe(false);
     expect(canDispute(500, 1000, true)).toMatchObject({ ok: false, message: expect.stringContaining("once") });
+    expect(canDispute(0, null, false)).toMatchObject({ ok: false, message: expect.stringContaining("final") });
   });
-  it("an admin can only raise pay, up to the agreed price", () => {
+  it("an admin can only raise pay, up to the listing amount", () => {
     expect(checkDisputeDecision(400, 500, 1000).ok).toBe(false);
     expect(checkDisputeDecision(1100, 500, 1000).ok).toBe(false);
     expect(checkDisputeDecision(1000, 500, 1000)).toEqual({ ok: true, extraCents: 500 });
@@ -67,25 +76,34 @@ describe("disputes", () => {
 });
 
 describe("live calls", () => {
-  it("charge = rate × length, rounded to the cent", () => {
+  it("reference = rate × length, rounded to the cent", () => {
     expect(callCharge(3000, 30)).toBe(1500);
-    expect(callCharge(3000, 20)).toBe(1000);
     expect(callCharge(1000, 7)).toBe(117); // 116.67
     expect(callCharge(0, 30)).toBe(0);
-  });
-  it("a tiny charge is raised to the smallest card charge", () => expect(callCharge(1000, 1)).toBe(50));
-  it("length: 1 minute to 3× booked; shorter than booked needs a reason", () => {
-    expect(checkCallLength(30, 30, "").ok).toBe(true);
-    expect(checkCallLength(90, 30, "").ok).toBe(true);
-    expect(checkCallLength(91, 30, "").ok).toBe(false);
-    expect(checkCallLength(20, 30, "").ok).toBe(false);
-    expect(checkCallLength(20, 30, "Started late").ok).toBe(true);
-    expect(checkCallLength(0, 30, "Nobody came").ok).toBe(false);
+    expect(callCharge(1000, 1)).toBe(50); // raised to the smallest card charge
   });
   it("cancel only 24 hours or more ahead", () => {
     const now = new Date("2026-11-05T12:00:00Z");
     expect(canCancelCall(new Date("2026-11-06T12:00:00Z"), now).ok).toBe(true);
     expect(canCancelCall(new Date("2026-11-06T11:59:00Z"), now)).toMatchObject({ ok: false, message: "Calls can only be cancelled 24 hours or more ahead." });
+  });
+});
+
+describe("late work and when testers are refused", () => {
+  const fmt = () => "Oct 22";
+  const now = new Date("2026-11-05T12:00:00Z");
+  const working = { status: "working", endKind: "", endedAt: null };
+  it("late work is allowed and marked", () => {
+    expect(isLate(new Date("2026-11-04T12:00:00Z"), now)).toBe(true);
+    expect(isLate(new Date("2026-11-06T12:00:00Z"), now)).toBe(false);
+    expect(lateLabel(new Date(), fmt)).toBe("Sent late (deadline was Oct 22)");
+    expect(testerRefusal(working, { openUntil: null }, "Nora Lane", fmt, now)).toBe("");
+  });
+  it("refused after Open until, after being ended or stopped, or after leaving", () => {
+    expect(testerRefusal(working, { openUntil: new Date("2026-11-01T00:00:00Z") }, "Nora Lane", fmt, now)).toBe("This test closed on Oct 22.");
+    expect(testerRefusal({ status: "ended", endKind: "early", endedAt: now }, { openUntil: null }, "Nora Lane", fmt, now)).toContain("ended your session early");
+    expect(testerRefusal({ status: "ended", endKind: "stopped", endedAt: now }, { openUntil: null }, "Nora Lane", fmt, now)).toContain("stopped the test");
+    expect(testerRefusal({ status: "left", endKind: "", endedAt: now }, { openUntil: null }, "Nora Lane", fmt, now)).toBe("You left this test.");
   });
 });
 
@@ -100,6 +118,10 @@ describe("listing checks", () => {
   it("spots can't go below the testers already in", () => {
     expect(checkListing(listing({ spots: 2 }), 3)).toContain("Spots can't go below the 3 testers already in.");
     expect(checkListing(listing({ spots: 3 }), 3)).toEqual([]);
+  });
+  it("Open until must be in the future", () => {
+    expect(checkListing(listing({ openUntil: "2020-01-01" }))).toContain("Open until must be a date in the future.");
+    expect(checkListing(listing({ openUntil: new Date(Date.now() + 5 * 86_400_000).toISOString() }))).toEqual([]);
   });
   it("written answers need a question", () => expect(checkListing(listing({ questions: [] }))).toContain("Add at least one question for the written answers."));
 });
@@ -120,9 +142,10 @@ describe("contract snapshot at join", () => {
     expect(c.writtenCents).toBe(1000);
   });
   it("terms line", () => expect(termsLine(listing())).toBe("Written $10.00 · Recording $15.00 · Live call $30.00/h (30 min) · 7 days"));
+  it("testers see what they get (80%)", () => expect(termsLine(listing(), true)).toBe("Written $8.00 · Recording $12.00 · Live call $24.00/h (30 min) · 7 days"));
 });
 
-describe("stop once (top panel)", () => {
+describe("stop once", () => {
   const seen = at(10);
   const events = [
     ev("joined", 5, "old join"), // before the page loaded
@@ -132,19 +155,46 @@ describe("stop once (top panel)", () => {
     ev("joined", 15, "Cara Diaz joined"),
     ev("booked", 16, "Ana Silva booked a call for Thu, Nov 5, 3:00 PM"),
     ev("cancelled", 17, "Ben Carter cancelled their call"),
+    ev("offered", 18, "You offered 2 call times"),
+    ev("removed", 19, "You removed a call time"),
   ];
-  it("lists exactly what testers did since the page loaded, oldest first", () => {
+  it("lists exactly what changed since the page loaded, oldest first", () => {
     expect(stopOnceChanges(events, seen).map((e) => e.text)).toEqual([
       "Ana Silva sent her written answers", "Ben Carter left the test", "Cara Diaz joined",
-      "Ana Silva booked a call for Thu, Nov 5, 3:00 PM", "Ben Carter cancelled their call",
+      "Ana Silva booked a call for Thu, Nov 5, 3:00 PM", "Ben Carter cancelled their call", "You offered 2 call times", "You removed a call time",
     ]);
   });
-  it("each trigger alone stops the first press: left, joined, sent, booked, cancelled", () => {
-    for (const k of ["left", "joined", "sent", "booked", "cancelled"]) expect(stopOnce([ev(k, 11)], seen, false).go).toBe(false);
+  it("each trigger alone stops the first press", () => {
+    for (const k of ["left", "joined", "sent", "booked", "confirmed", "cancelled", "offered", "removed"]) expect(stopOnce([ev(k, 11)], seen, false).go).toBe(false);
   });
-  it("other changes don't stop", () => expect(stopOnce([ev("edited", 11), ev("stopped", 12)], seen, false)).toEqual({ go: true }));
+  it("other changes don't stop", () => expect(stopOnce([ev("edited", 11), ev("stopped", 12), ev("ended", 13)], seen, false)).toEqual({ go: true }));
   it("nothing new: goes ahead at once", () => expect(stopOnce([ev("joined", 5)], seen, false)).toEqual({ go: true }));
   it("the second press goes ahead", () => expect(stopOnce(events, seen, true)).toEqual({ go: true }));
+  it("the tester's live-call panel only stops for call changes", () => {
+    expect(stopOnce([ev("joined", 11), ev("sent", 12), ev("left", 13)], seen, false, CALL_KINDS)).toEqual({ go: true });
+    for (const k of CALL_KINDS) expect(stopOnce([ev(k, 11)], seen, false, CALL_KINDS).go).toBe(false);
+  });
+});
+
+describe("Pay stops once", () => {
+  const seen = at(10);
+  const e = (kind: string, min: number, contractId: string) => ({ ...ev(kind, min, `${kind} by ${contractId}`), contractId });
+  it("stops for that tester's new work, leaving, call booked/cancelled, or another payment to them", () => {
+    for (const k of ["sent", "left", "booked", "cancelled", "paid"]) expect(payStopOnce([e(k, 11, "ana")], seen, false, "ana").go).toBe(false);
+  });
+  it("ignores other testers and other kinds", () => {
+    expect(payStopOnce([e("sent", 11, "ben"), e("paid", 12, "ben"), e("joined", 13, "ana"), e("offered", 14, "ana")], seen, false, "ana")).toEqual({ go: true });
+  });
+  it("the second press pays", () => expect(payStopOnce([e("paid", 11, "ana")], seen, true, "ana")).toEqual({ go: true }));
+});
+
+describe("ended sessions", () => {
+  const fmt = () => "Oct 22";
+  it("one line for a tester ended early or stopped", () => {
+    expect(endedLine({ status: "ended", endKind: "early", endedAt: new Date() }, "Nora Lane", fmt)).toBe("Nora Lane ended your session early on Oct 22. Work you sent is still reviewed.");
+    expect(endedLine({ status: "ended", endKind: "stopped", endedAt: new Date() }, "Nora Lane", fmt)).toBe("Nora Lane stopped the test on Oct 22. Work you sent is still reviewed.");
+    expect(endedLine({ status: "working", endKind: "", endedAt: null }, "Nora Lane", fmt)).toBe("");
+  });
 });
 
 describe("Edit version check", () => {
@@ -180,5 +230,6 @@ describe("join check", () => {
     expect(joinCheck({ ...open, status: "stopped" }, 2, true)).toEqual({ result: "refused", message: "This test was stopped." });
     expect(joinCheck({ ...open, status: "closed" }, 2, true).result).toBe("refused");
     expect(joinCheck({ ...open, testersIn: 3 }, 2, true)).toEqual({ result: "refused", message: "This test is full." });
+    expect(joinCheck({ ...open, openUntil: new Date(Date.now() - 1000) }, 2, true).result).toBe("refused");
   });
 });

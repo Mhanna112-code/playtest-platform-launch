@@ -88,8 +88,10 @@ model Test {
   /// Live call: hourly rate (cents) and booked length (minutes); null = no live call
   liveRateCents Int?
   liveMinutes   Int?
-  /// Each tester's deadline: days from their own join
+  /// Each tester's deadline: days from their own join (late work is still allowed, marked "Sent late")
   deadlineDays  Int
+  /// After this date: no new joiners, no sending, no booking (null = no end date)
+  openUntil     DateTime?
   /// Questions for written answers (array of strings)
   questions     Json     @default("[]")
   /// "draft" | "open" | "closed" (no new joiners) | "stopped" (for good)
@@ -117,9 +119,12 @@ model TestEvent {
   id        String   @id @default(cuid())
   testId    String
   test      Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
-  /// "joined" | "left" | "sent" | "booked" | "cancelled" | "edited" | "next_round" | "stopped" | "ended" | "closed" | "opened"
+  /// Stop-once kinds: "joined" | "left" | "sent" | "booked" | "confirmed" | "cancelled" | "offered" | "removed" | "paid".
+  /// Others: "edited" | "next_round" | "stopped" | "ended" | "opened"
   kind      String
   text      String
+  /// The tester this is about (for the Pay box's stop-once check), if any
+  contractId String?
   /// The test's version after this event (when it changed the version)
   version   Int?
   createdAt DateTime @default(now())
@@ -151,9 +156,9 @@ model Contract {
   /// "working" | "left" | "ended" (developer ended early / stopped the test)
   status         String   @default("working")
   endedAt        DateTime?
+  /// "early" (developer ended this tester's work) | "stopped" (the developer stopped the test)
+  endKind        String   @default("")
   endReason      String   @default("")
-  /// After End early the tester may still send until this time
-  sendUntil      DateTime?
 
   submissions Submission[]
   recordings  Recording[]
@@ -173,9 +178,13 @@ model Submission {
   /// Written: array of answers, one per question
   answers    Json     @default("[]")
   notes      String   @default("")
-  /// The agreed price for this part, from the contract
-  agreedCents Int
+  /// The listing price for this part from the contract; null = extra work (not in the listing)
+  agreedCents Int?
+  /// First sent; updated when the tester sends an updated version (allowed until it's paid)
   sentAt     DateTime @default(now())
+  updatedAt  DateTime @default(now())
+  /// Sent after the tester's own deadline
+  late       Boolean  @default(false)
 
   recordings Recording[]
   review     Review?
@@ -197,14 +206,23 @@ model Recording {
   createdAt    DateTime    @default(now())
 }
 
+/// The developer's one Pay press for a piece of sent work or a held call.
 model Review {
-  id           String     @id @default(cuid())
-  submissionId String     @unique
-  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  id           String      @id @default(cuid())
+  submissionId String?     @unique
+  submission   Submission? @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  callId       String?     @unique
+  call         Call?       @relation(fields: [callId], references: [id], onDelete: Cascade)
+  contractId   String
   amountCents  Int
-  agreedCents  Int
-  reason       String     @default("")
-  createdAt    DateTime   @default(now())
+  /// The listing amount shown beside the box; null = not in the listing
+  agreedCents  Int?
+  reason       String      @default("")
+  /// Idempotency: one charge per press, never twice
+  payKey       String      @unique
+  createdAt    DateTime    @default(now())
+
+  @@index([contractId])
 }
 
 /// Every charge (or attempted charge). status: "charged" | "not_set_up" | "failed"
@@ -229,10 +247,14 @@ model Payment {
   @@index([testerId])
 }
 
+/// Only for parts in the contract paid below the listing amount; once per part.
 model Dispute {
-  id           String     @id @default(cuid())
-  submissionId String     @unique
-  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  id           String      @id @default(cuid())
+  submissionId String?     @unique
+  submission   Submission? @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  callId       String?     @unique
+  call         Call?       @relation(fields: [callId], references: [id], onDelete: Cascade)
+  contractId   String
   testerId     String
   reason       String
   /// "open" | "decided"
@@ -259,6 +281,7 @@ model CallSlot {
   /// "open" | "booked" | "removed"
   status      String   @default("open")
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   calls Call[]
 
@@ -273,21 +296,21 @@ model Call {
   contract    Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
   startsAt    DateTime
   minutes     Int
-  rateCents   Int
-  /// "booked" | "cancelled" | "done"
+  /// The contract's hourly rate; null = extra (live calls weren't in the tester's listing)
+  rateCents   Int?
+  /// "booked" | "cancelled"
   status      String    @default("booked")
   cancelledBy String?
   cancelledAt DateTime?
   cancelNote  String    @default("")
-  /// Entered by the developer after the call
-  lengthMinutes Int?
-  lengthReason  String  @default("")
-  lengthAt      DateTime?
   /// No-show report: who reported ("developer" | "tester"), what happened; an admin can read it
   noShowBy      String?
   noShowNote    String  @default("")
   noShowAt      DateTime?
   createdAt   DateTime  @default(now())
+
+  review  Review?
+  dispute Dispute?
 
   @@index([contractId])
 }
