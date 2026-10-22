@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T17:39:44.268Z",
+  "run": "2026-10-22T17:57:02.500Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjtt5ty00077kccigbr93q4)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjufece00077kx0yd7n3l4f)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -167,7 +167,7 @@
       "title": "Charge declined: owed with a 3-day cut-off (developer banner + Payments, tester line); a second failure pauses at once",
       "status": "pass",
       "checks": [
-        "PASS test posted (saw: {\"id\":\"cmvjttuef003j7kcc6m0f2irb\"})",
+        "PASS test posted (saw: {\"id\":\"cmvjug2pu003j7kx0nk9onjym\"})",
         "PASS both testers joined",
         "PASS tester offered the choice",
         "PASS developer banner with the cut-off",
