@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
 import {
-  autoPayFor, callCancelledLine, CHARGED_AUTOMATICALLY, CHARGED_BY_TESTER, choiceLine, failedLine, headsUpDue, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, HOLD_ALERT_DAYS, owedUntilFrom, PAUSED_FOR_TESTERS, PAY_WAITS, shiftForHold,
+  autoPayFor, callCancelledLine, CHARGED_BY_TESTER, choiceLine, failedLine, headsUpDue, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, HOLD_ALERT_DAYS, owedUntilFrom, PAUSED_FOR_TESTERS, PAY_WAITS, shiftForHold,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { bell, notify, sendSummaries } from "./notify";
@@ -76,6 +76,9 @@ export async function liftHoldIfClear(devId: string) {
     }
     await tx.user.update({ where: { id: devId }, data: { holdStartedAt: null, holdReason: "", holdAlertedAt: null } });
   });
+  await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause."], "/app");
+  const testers = await db.contract.findMany({ where: { status: "working", test: { developerId: devId } }, include: { tester: true } });
+  for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`);
   return true;
 }
 
@@ -191,11 +194,12 @@ export async function runDaily(now = new Date()) {
       const r = await charge(d, t, p.amountCents, `retry-${p.id}-${now.toISOString().slice(0, 10)}`, "Playtest: daily retry of an amount owed");
       await db.payment.update({ where: { id: p.id }, data: { ...r, settledAt: now, retriedAt: now, failure: "" } });
       await receipt(d.email, "an amount you owed (retried today)", p.amountCents, r.status, "/app/payments");
-      await bell(t.id, "A delayed payment for your work went through.", p.contractId ? `/app/sessions/${p.contractId}` : "/app/payments");
+      await notify(t.email, "A delayed payment for your work went through.", ["A delayed payment for your work went through."], p.contractId ? `/app/sessions/${p.contractId}` : "/app/payments");
       await liftHoldIfClear(d.id);
       out.retried++;
     } catch {
       await db.payment.update({ where: { id: p.id }, data: { retriedAt: now } });
+      await bell(d.id, `Today's retry of ${money(p.amountCents)} you owe was declined. Pay what you owe in Payments.`, "/app/payments");
     }
   }
   // 1. Sent work not paid or rejected within 14 days: the listing amount is paid automatically (clock paused in holds).
@@ -219,37 +223,26 @@ export async function runDaily(now = new Date()) {
       const by = new Date(now.getTime() + REVIEW_DAYS * 86_400_000);
       await db.submission.update({ where: { id: s.id }, data: { choiceOfferedAt: now, choiceBy: by, remindedAt: now } });
       const line = choiceLine(displayName(dev), s.kind, auto);
-      await notify(c.tester.email, line, [line, `If you don't choose by ${fmtDate(by)}, it's charged automatically.`], `/app/sessions/${c.id}`);
+      await notify(c.tester.email, line, [line], `/app/sessions/${c.id}`);
       await db.$transaction((tx) => recordEvent(tx, c.testId, "choice", `${displayName(c.tester)} can now charge or let go of their ${s.kind === "recording" ? "recording" : "written answers"}`, false, {}, c.id));
       out.choices++;
       continue;
     }
-    if (s.choiceBy && s.choiceBy > now) {
+    {
       if (!s.remindedAt || now.getTime() - s.remindedAt.getTime() >= REMIND_DAYS * 86_400_000 - 3_600_000) {
         const line = choiceLine(displayName(dev), s.kind, auto);
-        await notify(c.tester.email, `Reminder: ${line}`, [line, `If you don't choose by ${fmtDate(s.choiceBy)}, it's charged automatically.`], `/app/sessions/${c.id}`);
+        await notify(c.tester.email, `Reminder: ${line}`, [line], `/app/sessions/${c.id}`);
         await db.submission.update({ where: { id: s.id }, data: { remindedAt: now } });
       }
       continue;
     }
-    const amount = auto;
-    const payKey = `auto-${s.id}`;
-    let failed = false;
-    const review = await db.review.create({ data: { submissionId: s.id, contractId: c.id, amountCents: amount, agreedCents: s.agreedCents, reason: CHARGED_AUTOMATICALLY, payKey, auto: true } }).catch(() => null);
-    if (!review) continue;
-    try {
-      const r = await charge(dev, c.tester, amount, payKey, `Playtest: automatic payment on “${c.title}”`);
-      await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, ...r } });
-      if (amount > 0) await receipt(dev.email, `${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} (paid automatically after 14 days)`, amount, r.status, `/app/tests/${c.testId}`);
-    } catch (e) {
-      await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "failed", failure: (e as Error).message, owedUntil: owedUntilFrom(now) } });
-      failed = true;
-      await notify(dev.email, "A payment failed: pay within 3 days", [`The automatic ${money(amount)} payment for ${displayName(c.tester)}'s work on “${c.title}” failed.`, `Pay it by ${fmtDateTime(owedUntilFrom(now))} or your tests are paused.`], "/app/payments");
-    }
-    await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} was paid automatically (${money(amount)})`, false, {}, c.id));
-    if (failed) await notify(c.tester.email, `Payment for your work on “${c.title}” may be delayed`, ["Payment for your work may be delayed."], `/app/sessions/${c.id}`);
-    else await notify(c.tester.email, `You were paid for your work on “${c.title}”`, [`Your work was paid automatically: ${money(amount)}.`], `/app/sessions/${c.id}`, { always: true });
-    out.autoPaid++;
+  }
+  // 1b. One day before the cut-off: bell + email to the developer, once.
+  const soon = await db.payment.findMany({ where: { status: "failed", settledAt: null, warnedAt: null, owedUntil: { gt: now, lt: new Date(now.getTime() + 86_400_000) } } });
+  for (const p of soon) {
+    const d = await db.user.findUniqueOrThrow({ where: { id: p.developerId } });
+    await notify(d.email, `Pay ${money(p.amountCents)} by ${fmtDateTime(p.owedUntil!)} or your tests are paused`, ["A payment you owe is still unpaid. Pay what you owe in Payments to keep your tests running."], "/app/payments");
+    await db.payment.update({ where: { id: p.id }, data: { warnedAt: now } });
   }
   // 2. Failed charges not paid within 3 days start a hold.
   const late = await db.payment.findMany({ where: { status: "failed", settledAt: null, owedUntil: { lt: now } }, distinct: ["developerId"] });
@@ -307,9 +300,12 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   const s = await db.submission.findUnique({ where: { id: String(body.submissionId ?? "") }, include: { review: true, contract: { include: { tester: true, test: { include: { developer: true } } } } } });
   if (!s || s.contractId !== contractId || s.contract.testerId !== tester.id) throw new HttpError(404, "not_found", "That work doesn't exist.");
   const c = s.contract, dev = c.test.developer, label = s.kind === "recording" ? "recording" : "written answers";
-  if (s.review) throw new HttpError(409, "done", s.review.rejected ? `${displayName(dev)} already rejected this.` : `This was already settled: ${money(s.review.amountCents)}.`);
+  if (s.review) {
+    if (s.review.reason === CHARGED_BY_TESTER || s.review.reason === LET_GO_BY_TESTER) throw new HttpError(409, "done", "You already chose for this.");
+    throw new HttpError(409, "done", s.review.rejected ? `${displayName(dev)} rejected this meanwhile.` : `${displayName(dev)} paid ${money(s.review.amountCents)} for this meanwhile.`);
+  }
   if (!s.choiceOfferedAt) throw new HttpError(409, "not_yet", "You can choose once it has waited 14 days without a review.");
-  if (dev.holdStartedAt) throw new HttpError(409, "paused", PAUSED_FOR_TESTERS);
+  if (dev.holdStartedAt) throw new HttpError(409, "paused", "This test is paused: you can choose once it resumes.");
   const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;
   if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");
   const amount = choice === "charge" ? autoPayFor(s.agreedCents, s.askedCents) ?? 0 : 0;
@@ -330,6 +326,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
     status = "failed";
     const now = new Date();
     await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "failed", failure: (e as Error).message, owedUntil: owedUntilFrom(now) } });
+    await notify(c.tester.email, `Payment for your work on “${c.title}” may be delayed`, ["Payment for your work may be delayed."], `/app/sessions/${c.id}`);
     await notify(dev.email, "A payment failed: pay within 3 days", [`${displayName(tester)} charged ${money(amount)} for their ${label} on “${c.title}”, and your card was declined.`, `Pay it by ${fmtDateTime(owedUntilFrom(now))} or your tests are paused.`], "/app/payments");
   }
   await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their ${label}`, false, {}, c.id));

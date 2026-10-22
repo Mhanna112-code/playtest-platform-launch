@@ -3,7 +3,7 @@ import { useState } from "react";
 import { api } from "@/lib/client";
 
 /** Day 14 without a review: charge the developer (listing, or the asked amount if lower) or let it go. */
-export function ChoiceBox({ sessionId, submissionId, line, by }: { sessionId: string; submissionId: string; line: string; by: string }) {
+export function ChoiceBox({ sessionId, submissionId, line }: { sessionId: string; submissionId: string; line: string; by?: string }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const go = (choice: string) => {
@@ -18,7 +18,6 @@ export function ChoiceBox({ sessionId, submissionId, line, by }: { sessionId: st
         <button className="btn" disabled={busy} onClick={() => go("charge")}>{charge.replace(/^charge/, "Charge")}</button>
         <button className="btn-ghost" disabled={busy} onClick={() => go("letgo")}>Let it go</button>
       </div>
-      <p className="note">If you don&apos;t choose by {by}, it&apos;s charged automatically.</p>
       {err && <p className="err">{err}</p>}
     </div>
   );

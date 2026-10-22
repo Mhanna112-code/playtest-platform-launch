@@ -25,7 +25,7 @@ async function waiting14(ask?: string) {
 
 describe("Charge / Let it go at day 14", () => {
   it("offers the tester the choice (bell + email), then they charge the lower of listing and asked", async () => {
-    const { tester, sessionId, sub, dev } = await waiting14("8.00");
+    const { tester, sessionId, sub, dev } = await waiting14("8.00"); // asked lower than the $10.00 listing
     await cron();
     const line = "Nora Lane didn't review your written answers in 14 days: charge $8.00 or let it go";
     expect(await db.notification.count({ where: { userId: tester.user.id, text: line } })).toBe(1);
@@ -35,6 +35,13 @@ describe("Charge / Let it go at day 14", () => {
     expect(await db.outboxEmail.count({ where: { to: dev.user.email, subject: { startsWith: "Receipt: you paid $8.00" } } })).toBe(1);
     // The developer's Pay is now final, naming the tester's choice.
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.message).toBe("Ana Silva already charged $8.00 for this.");
+  });
+
+  it("refused for good once the developer paid meanwhile", async () => {
+    const { tester, sessionId, sub, dev } = await waiting14();
+    await cron();
+    await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "8.00", tickedCents: 800, reason: "Fair for two short answers", confirmed: true });
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe("Nora Lane paid $8.00 for this meanwhile.");
   });
 
   it("let it go closes it with nothing charged", async () => {
@@ -56,20 +63,18 @@ describe("Charge / Let it go at day 14", () => {
     expect(testId).toBeTruthy();
   });
 
-  it("reminders every 3 days; charged automatically 14 days after the offer; nothing during a hold", async () => {
+  it("reminders every 3 days and never an automatic charge; during a hold the choice waits", async () => {
     const { tester, sessionId, sub, dev } = await waiting14();
     await cron();
     await db.submission.update({ where: { id: sub.id }, data: { remindedAt: new Date(Date.now() - 3 * 86_400_000) } });
     await cron();
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Reminder: Nora Lane didn't review" } } })).toBe(1);
     await startHold(dev.user.id, "unpaid");
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe("This test is paused. Payment for your work may be delayed.");
-    await db.submission.update({ where: { id: sub.id }, data: { choiceBy: new Date(Date.now() - 1000) } });
-    await cron();
-    expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0); // waits during the hold
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe("This test is paused: you can choose once it resumes.");
     await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: null } });
+    await db.submission.update({ where: { id: sub.id }, data: { choiceBy: new Date(Date.now() - 30 * 86_400_000) } });
     await cron();
-    expect(await db.review.findFirstOrThrow({ where: { submissionId: sub.id } })).toMatchObject({ amountCents: 1000, auto: true });
+    expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0); // never charged automatically
   });
 });
 

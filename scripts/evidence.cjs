@@ -365,9 +365,12 @@ async function signIn(page, email) {
     await tester.goto(`/app/sessions/${SA}`);
     check("tester offered the choice", await has(tester, "text=didn't review your written answers in 14 days: charge $10.00 or let it go"));
     await shot(tester, "choice-offered-tester");
-    sql(`update "Submission" set "choiceBy" = now() - interval '1 minute' where "contractId" = '${SA}'`);
-    const out = await runCron(); // no choice within 14 more days: charged automatically (declined)
-    check("daily job ran", out.autoPaid >= 2, JSON.stringify(out));
+    await tester.click("button:has-text('Charge Nora Lane')");
+    await tester.waitForTimeout(1500);
+    await tester.click("button:has-text('Charge Nora Lane')"); // the recording too
+    await tester.waitForTimeout(1500);
+    const owedN = sql(`select count(*) from "Payment" where "developerId" = '${devId}' and status = 'failed' and "settledAt" is null and "owedUntil" is not null`);
+    check("both charges declined and owed", Number(owedN) >= 2, owedN);
     await dev.goto(t11Url());
     check("developer banner with the cut-off", await has(dev, "text=A payment failed. Pay $25.00 by"));
     await tester.goto(`/app/sessions/${SA}`);

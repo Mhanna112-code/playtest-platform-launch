@@ -279,6 +279,8 @@ model Payment {
   owedUntil    DateTime?
   /// The daily job retries owed payments once a day
   retriedAt    DateTime?
+  /// The "1 day before the cut-off" notice was sent
+  warnedAt     DateTime?
   settledAt    DateTime?
   /// Bank reversal (Stripe dispute): "" | "open" | "resolved"
   chargeback   String   @default("")
