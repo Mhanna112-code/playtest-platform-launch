@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T16:27:32.524Z",
+  "run": "2026-10-22T16:35:19.400Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjr89zz00397kcob29r7wr7)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjriajh006b7k9cg0munfjv)",
         "PASS terms line"
       ],
       "screenshots": [

@@ -83,6 +83,7 @@ async function signIn(page, email) {
   const dev = await ctx(DESKTOP);
   const tester = await ctx(PHONE);
   let testUrl = "";
+  let adminPage = null; // signed in once (sign-in links are rate-limited per email)
 
   await flow("01", "Landing page and waitlist (phone)", async () => {
     const p = await ctx(PHONE);
@@ -196,6 +197,7 @@ async function signIn(page, email) {
     await shot(dev, "payments");
     const admin = await ctx(DESKTOP);
     await signIn(admin, ADMIN);
+    adminPage = admin;
     await admin.goto("/admin");
     check("admin page", await has(admin, "text=Disputes"), admin.url());
     await shot(admin, "admin");
@@ -304,10 +306,10 @@ async function signIn(page, email) {
     await shot(vt, "3-tester-call-cancelled");
     // (4) A reversed payment can't be retried: the team marks it resolved, then both sides resume.
     check("hold box says reversed payments are resolved by the team", await has(vd, "text=Reversed payments can't be retried here"));
-    const adm = await ctx(DESKTOP);
-    await signIn(adm, ADMIN);
+    const adm = adminPage || (await ctx(DESKTOP));
+    if (!adminPage) await signIn(adm, ADMIN);
     await adm.goto("/admin");
-    await adm.locator("p", { hasText: "Chargeback open: $12.50" }).first().locator("button:has-text('Mark resolved')").click();
+    await adm.locator("p", { hasText: DEV }).filter({ hasText: "Chargeback open" }).first().locator("button:has-text('Mark resolved')").click();
     await adm.waitForTimeout(1200);
     await shot(adm, "4-admin-resolved");
     await vd.reload();
