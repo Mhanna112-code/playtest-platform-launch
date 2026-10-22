@@ -454,3 +454,34 @@ export const choiceLine = (devName: string, kind: string, cents: number) =>
 export const CHARGED_BY_TESTER = "Charged by the tester after 14 days without a review.";
 export const LET_GO_BY_TESTER = "Let go by the tester: nothing charged.";
 export const CHARGED_AUTOMATICALLY = "Charged automatically: no choice within 14 more days.";
+
+// ---------- Notification schedule (owner) ----------
+
+export const MARKS = [
+  { mark: "1m", ms: 30 * 86_400_000, label: "in 1 month" },
+  { mark: "1w", ms: 7 * 86_400_000, label: "in 1 week" },
+  { mark: "3d", ms: 3 * 86_400_000, label: "in 3 days" },
+  { mark: "1d", ms: 1 * 86_400_000, label: "tomorrow" },
+] as const;
+
+/**
+ * Countdown pattern: 1 month before (only if it started more than a month away), 1 week, 3 days, 1 day before.
+ * Returns the one mark due now (never one already sent; skipped marks aren't sent late), or null.
+ */
+export function countdownDue(deadline: Date | null, now: Date, sent: string[], startedAt: Date) {
+  if (!deadline) return null;
+  const left = deadline.getTime() - now.getTime();
+  if (left <= 0) return null;
+  for (let i = MARKS.length - 1; i >= 0; i--) {
+    const m = MARKS[i], next = MARKS[i + 1];
+    if (left <= m.ms && (!next || left > next.ms)) {
+      if (sent.includes(m.mark)) return null;
+      if (m.mark === "1m" && deadline.getTime() - startedAt.getTime() <= m.ms) return null;
+      return m;
+    }
+  }
+  return null;
+}
+
+export const ADMIN_DIGEST_DAYS = 3;
+export const INVITE_REMIND_DAYS = 3;

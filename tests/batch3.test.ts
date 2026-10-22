@@ -90,6 +90,7 @@ describe("email settings and the bell", () => {
     await pay(dev.cookie, { kind: "submission", id: sub.id, action: "reject", reason: "Not what we asked" });
     await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question" });
     expect(await db.outboxEmail.count({ where: { to: "owner@playtest.test" } })).toBe(before);
+    await db.appState.deleteMany({ where: { key: "adminDigestAt" } });
     await cron();
     const digest = await db.outboxEmail.findFirstOrThrow({ where: { to: "owner@playtest.test", subject: { startsWith: "Playtest admin digest" } }, orderBy: { createdAt: "desc" } });
     expect(digest.text).toContain("Dispute: “I answered every question”");

@@ -44,7 +44,7 @@ describe("newest addition", () => {
     const j = await joined(s.testId);
     await sact(j.sessionId, "written", j.tester.cookie, { answers: ["more"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
-    await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000), remindedAt: new Date(Date.now() - 3 * 86_400_000) } });
+    await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000), updatedAt: new Date(Date.now() - 4 * 86_400_000), remindedAt: new Date(Date.now() - 3 * 86_400_000) } });
     await cron();
     expect(await db.notification.count({ where: { userId: s.dev.user.id, text: { contains: "still waits for you to pay or reject" } } })).toBe(1);
   });

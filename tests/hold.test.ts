@@ -155,7 +155,7 @@ describe("daily job", () => {
     const j = await joined(x.testId);
     await sact(j.sessionId, "written", j.tester.cookie, { answers: ["more feedback"] });
     const xs = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
-    await db.submission.update({ where: { id: xs.id }, data: { payBy: new Date(Date.now() - 1000) } });
+    await db.submission.update({ where: { id: xs.id }, data: { payBy: new Date(Date.now() - 1000), updatedAt: new Date(Date.now() - 4 * 86_400_000) } });
     await cron();
     await cron(); // not reminded twice within 7 days
     expect(await db.review.count({ where: { submissionId: xs.id } })).toBe(0);

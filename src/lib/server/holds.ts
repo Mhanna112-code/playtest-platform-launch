@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
 import {
-  autoPayFor, callCancelledLine, CHARGED_BY_TESTER, choiceLine, failedLine, headsUpDue, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, HOLD_ALERT_DAYS, owedUntilFrom, PAUSED_FOR_TESTERS, PAY_WAITS, shiftForHold,
+  ADMIN_DIGEST_DAYS, autoPayFor, callCancelledLine, CHARGED_BY_TESTER, countdownDue, INVITE_REMIND_DAYS, choiceLine, failedLine, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, HOLD_ALERT_DAYS, owedUntilFrom, PAUSED_FOR_TESTERS, PAY_WAITS, shiftForHold,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { bell, notify, sendSummaries } from "./notify";
@@ -211,13 +211,11 @@ export async function runDaily(now = new Date()) {
   for (const s of due) {
     const c = s.contract, dev = c.test.developer;
     const auto = autoPayFor(s.agreedCents, s.askedCents);
-    if (auto == null) {
-      // Outside the contract: never auto-paid; the developer gets a bell reminder every 7 days.
-      if (!s.remindedAt || now.getTime() - s.remindedAt.getTime() >= REMIND_DAYS * 86_400_000 - 3_600_000) {
-        await bell(dev.id, `“${c.title}”: ${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} still waits for you to pay or reject.`, `/app/tests/${c.testId}`);
-        await db.submission.update({ where: { id: s.id }, data: { remindedAt: now } });
-      }
-      continue;
+    if (auto == null) continue; // outside the contract: its own reminder every 3 days (below)
+    // After day 14: the developer is reminded daily until it's paid, rejected, charged or let go.
+    if (!s.devRemindedAt || now.getTime() - s.devRemindedAt.getTime() >= 23 * 3_600_000) {
+      await bell(dev.id, `“${c.title}”: ${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} waited over 14 days: pay or reject it (${displayName(c.tester)} can now charge or let it go).`, `/app/tests/${c.testId}`);
+      await db.submission.update({ where: { id: s.id }, data: { devRemindedAt: now } });
     }
     if (!s.choiceOfferedAt) {
       const by = new Date(now.getTime() + REVIEW_DAYS * 86_400_000);
@@ -247,10 +245,14 @@ export async function runDaily(now = new Date()) {
   // 2. Failed charges not paid within 3 days start a hold.
   const late = await db.payment.findMany({ where: { status: "failed", settledAt: null, owedUntil: { lt: now } }, distinct: ["developerId"] });
   for (const p of late) if (await startHold(p.developerId, "unpaid")) out.holds++;
-  // 3. The admin daily digest: ONE email listing every case that needs the team (no per-event admin emails).
-  const cases = await adminCases(now);
+  // 3. The admin digest: ONE email every 3 days listing everything open (no per-event admin emails).
+  const last = await db.appState.findUnique({ where: { key: "adminDigestAt" } });
+  const digestDue = !last || now.getTime() - new Date(last.value).getTime() >= ADMIN_DIGEST_DAYS * 86_400_000 - 3_600_000;
+  const cases = digestDue ? await adminCases(now, true) : [];
+  if (digestDue) await db.appState.upsert({ where: { key: "adminDigestAt" }, update: { value: now.toISOString() }, create: { key: "adminDigestAt", value: now.toISOString() } });
   if (cases.length) {
-    const text = [`${cases.length} case${cases.length === 1 ? "" : "s"} need the team today:`, "", ...cases.map((c) => `• ${c.text} ${appUrl()}${c.link}`), "", "Playtest"].join("\n");
+    await db.call.updateMany({ where: { noShowBy: { not: null }, noShowDigestedAt: null }, data: { noShowDigestedAt: now } });
+    const text = [`${cases.length} case${cases.length === 1 ? "" : "s"} need the team:`, "", ...cases.map((c) => `• ${c.text} ${appUrl()}${c.link}`), "", "Playtest"].join("\n");
     for (const a of admins()) await sendEmail({ to: a, subject: `Playtest admin digest: ${cases.length} case${cases.length === 1 ? "" : "s"}`, text }).catch((e) => console.error("[email] digest:", e.message));
     out.alerts = cases.length;
   }
@@ -260,23 +262,46 @@ export async function runDaily(now = new Date()) {
   // 4. Open until heads-ups, 3 days and 1 day before (developer and working testers).
   const closing = await db.test.findMany({ where: { status: { in: ["open", "closed"] }, openUntil: { gt: now } }, include: { developer: true, contracts: { where: { status: "working" }, include: { tester: true } } } });
   for (const t of closing) {
-    const which = headsUpDue(t.openUntil, now, t.notified3d, t.notified1d);
-    if (!which) continue;
+    const m = countdownDue(t.openUntil, now, t.notifiedMarks, t.createdAt);
+    if (!m) continue;
     // Bell notifications only, never emailed.
     const line = headsUpLine(t.title, t.openUntil!, fmtDate);
     await bell(t.developerId, line, `/app/tests/${t.id}`);
     for (const c of t.contracts) await bell(c.testerId, line, `/app/sessions/${c.id}`);
-    await db.test.update({ where: { id: t.id }, data: which === "1d" ? { notified1d: true, notified3d: true } : { notified3d: true } });
+    await db.test.update({ where: { id: t.id }, data: { notifiedMarks: { push: m.mark }, ...(m.mark === "1d" ? { notified1d: true, notified3d: true } : m.mark === "3d" ? { notified3d: true } : {}) } });
     out.headsUps++;
+  }
+  // 5. The developer's unreviewed contract work: 1 week / 3 days / 1 day before day 14 (bell).
+  const upcoming = await db.submission.findMany({ where: { review: null, agreedCents: { not: null }, payBy: { gt: now }, contract: { test: { developer: { holdStartedAt: null } } } }, include: { contract: { include: { tester: true, test: true } } }, take: 500 });
+  for (const s of upcoming) {
+    const m = countdownDue(s.payBy, now, s.devMarks, s.updatedAt);
+    if (!m) continue;
+    const name = displayName(s.contract.tester);
+    await bell(s.contract.test.developerId, `“${s.contract.title}”: review ${name}'s ${s.kind === "recording" ? "recording" : "written answers"} ${m.label === "tomorrow" ? "by tomorrow" : m.label.replace("in ", "within ")} (after that ${name} can charge or let it go).`, `/app/tests/${s.contract.testId}`);
+    await db.submission.update({ where: { id: s.id }, data: { devMarks: { push: m.mark } } });
+  }
+  // 6. Work outside the contract: no deadline, a bell to the developer every 3 days.
+  const outside = await db.submission.findMany({ where: { review: null, agreedCents: null, updatedAt: { lt: new Date(now.getTime() - REMIND_DAYS * 86_400_000 + 3_600_000) }, OR: [{ remindedAt: null }, { remindedAt: { lt: new Date(now.getTime() - REMIND_DAYS * 86_400_000 + 3_600_000) } }], contract: { test: { developer: { holdStartedAt: null } } } }, include: { contract: { include: { tester: true } } }, take: 500 });
+  for (const s of outside) {
+    await bell((await db.test.findUniqueOrThrow({ where: { id: s.contract.testId } })).developerId, `“${s.contract.title}”: ${displayName(s.contract.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} still waits for you to pay or reject.`, `/app/tests/${s.contract.testId}`);
+    await db.submission.update({ where: { id: s.id }, data: { remindedAt: now } });
+  }
+  // 7. Invites: a bell reminder every 3 days until the tester joins, says "No thanks", or the invite expires.
+  const invites = await db.invite.findMany({ where: { status: "sent", createdAt: { lt: new Date(now.getTime() - INVITE_REMIND_DAYS * 86_400_000 + 3_600_000) }, OR: [{ remindedAt: null }, { remindedAt: { lt: new Date(now.getTime() - INVITE_REMIND_DAYS * 86_400_000 + 3_600_000) } }] }, include: { test: { include: { developer: true } } }, take: 500 });
+  for (const i of invites) {
+    const testersIn = await db.contract.count({ where: { testId: i.testId, status: "working" } });
+    if (i.test.status !== "open" || testersIn >= i.test.spots || (i.test.openUntil && i.test.openUntil < now)) continue; // expired
+    await bell(i.testerId, `Reminder: ${displayName(i.test.developer)} invited you to “${i.test.title}”.`, `/app/find/${i.testId}`);
+    await db.invite.update({ where: { id: i.id }, data: { remindedAt: now } });
   }
   return out;
 }
 
 /** Every case that needs the team: the admin page shows this list, and the daily digest emails it. */
-export async function adminCases(now = new Date()) {
+export async function adminCases(now = new Date(), forDigest = false) {
   const [disputes, noShows, chargebacks, holds, payouts] = await Promise.all([
     db.dispute.findMany({ where: { status: "open" }, include: { submission: { include: { review: true } } } }),
-    db.call.findMany({ where: { noShowBy: { not: null }, noShowAt: { gt: new Date(now.getTime() - 14 * 86_400_000) } }, include: { contract: true } }),
+    db.call.findMany({ where: forDigest ? { noShowBy: { not: null }, noShowDigestedAt: null } : { noShowBy: { not: null }, noShowAt: { gt: new Date(now.getTime() - 14 * 86_400_000) } }, include: { contract: true } }),
     db.payment.findMany({ where: { chargeback: "open" } }),
     db.user.findMany({ where: { holdStartedAt: { lt: new Date(now.getTime() - HOLD_ALERT_DAYS * 86_400_000) } } }),
     db.payment.findMany({ where: { OR: [{ transferStatus: "waiting" }, { status: "failed", settledAt: null, owedUntil: { not: null } }] } }),

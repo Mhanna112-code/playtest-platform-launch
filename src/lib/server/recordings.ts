@@ -65,6 +65,7 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} recording`, false, {}, c.id);
     return { updated: !!existing, late: data.late };
   });
+  await notify(tester.email, `Work sent: your recording for “${c0.title}”`, [`Your recording was ${updated ? "updated" : "sent"} to ${displayName(c0.test.developer)}.`], `/app/sessions/${c0.id}`);
   await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} a recording for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} screen recording${late ? " (late)" : ""}. Watch it and choose what to pay.`], `/app/tests/${c0.testId}`);
   return { sent: true };
 }

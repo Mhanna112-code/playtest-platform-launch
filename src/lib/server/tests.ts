@@ -404,6 +404,7 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} written answers`, false, {}, c.id);
     return { sub, updated: !!existing };
   });
+  await notify(tester.email, `Work sent: your written answers for “${c0.title}”`, [`Your written answers were ${updated ? "updated" : "sent"} to ${displayName(c0.test.developer)}.`], `/app/sessions/${c0.id}`);
   await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} written answers for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} written answers${sub.late ? " (late)" : ""}. Review them and choose what to pay.`], `/app/tests/${c0.testId}`);
   return sub;
 }

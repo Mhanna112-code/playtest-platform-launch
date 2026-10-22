@@ -124,6 +124,8 @@ model Test {
   invites   Invite[]
   /// Open until heads-up notices sent (3 days and 1 day before)
   notified3d Boolean @default(false)
+  /// Countdown notices already sent for Open until: "1m" | "1w" | "3d" | "1d"
+  notifiedMarks String[]
   notified1d Boolean @default(false)
 
   @@index([developerId])
@@ -209,6 +211,9 @@ model Submission {
   remindedAt DateTime?
   /// Contract parts unreviewed 14 days: the tester chooses "Charge" or "Let it go" by choiceBy, else it's charged
   choiceOfferedAt DateTime?
+  /// Countdown notices to the developer before day 14 ("1w" | "3d" | "1d"), then daily after it
+  devMarks        String[]
+  devRemindedAt   DateTime?
   choiceBy        DateTime?
 
   recordings Recording[]
@@ -359,6 +364,8 @@ model Call {
   noShowBy      String?
   noShowNote    String  @default("")
   noShowAt      DateTime?
+  /// Listed in an admin digest once
+  noShowDigestedAt DateTime?
   createdAt   DateTime  @default(now())
 
   review  Review?
@@ -403,8 +410,10 @@ model Invite {
   testId    String
   test      Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
   testerId  String
-  /// "sent" | "cancelled" | "joined"
+  /// "sent" | "cancelled" | "joined" | "declined" (the tester pressed "No thanks")
   status    String   @default("sent")
+  /// Bell reminder every 3 days until they join, decline, or the invite expires
+  remindedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -424,4 +433,10 @@ model Notification {
   createdAt DateTime  @default(now())
 
   @@index([userId, createdAt])
+}
+
+/// Small app-wide values (e.g. when the last admin digest went out).
+model AppState {
+  key   String @id
+  value String
 }

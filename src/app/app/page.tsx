@@ -4,6 +4,7 @@ import { fmtDate } from "@/lib/format";
 import { termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { ProfileForm } from "./profile/ProfileForm";
+import { NoThanks } from "./NoThanks";
 
 export const metadata = { title: "Home · Playtest" };
 export const dynamic = "force-dynamic";
@@ -64,9 +65,12 @@ export default async function AppHome() {
             <Link className="btn" href="/app/find">Find tests</Link>
           </div>
           {invites.map((i) => (
-            <Link key={i.id} href={`/app/find/${i.testId}`} className="info block no-underline">
-              {i.test.developer.name || "A developer"} invited you to “{i.test.title}”. Open it and press Join.
-            </Link>
+            <div key={i.id} className="info flex flex-wrap items-center gap-2">
+              <Link href={`/app/find/${i.testId}`} className="mr-auto">
+                {i.test.developer.name || "A developer"} invited you to “{i.test.title}”. Open it and press Join.
+              </Link>
+              <NoThanks inviteId={i.id} />
+            </div>
           ))}
           {sessions.length === 0 && <p className="note">You haven&apos;t joined a test yet.</p>}
           {sessions.map((c) => (

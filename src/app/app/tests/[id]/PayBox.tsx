@@ -63,6 +63,7 @@ export function PayBox(p: { kind: "submission" | "call"; id: string; name: strin
         </div>
       )}
       <ChangesBox changes={changes} error={error} />
+      {error === "Pay what you owe first." && <a className="text-sm" href="#owed">Pay what you owe ↑</a>}
       {done && <p className="ok">{done}</p>}
     </div>
   );
