@@ -115,7 +115,7 @@ describe("charge amount and a second failure", () => {
     const R = await import("@/lib/rules");
     expect(R.chargeAmount(1000, 800, 0)).toBe(800);
     expect(R.chargeAmount(1000, 1500, 400)).toBe(600);
-    expect(R.chargeAmount(1000, null, 1000)).toBe(0); // nothing left: only "Close it"
+    expect(R.chargeAmount(1000, null, 1000)).toBe(0); // paid in full: no Charge / Let it go at all
   });
 
   it("a second failed payment while one is still owed starts the hold at once", async () => {
@@ -126,5 +126,17 @@ describe("charge amount and a second failure", () => {
     setStripeForTests({ paymentIntents: { create: async () => { throw new Error("declined"); } } } as unknown as Stripe);
     await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000 });
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
+  });
+
+  it("paid in full: no day-14 choice, notice or reminders; the developer can still Pay or Reject", async () => {
+    const { tester, sessionId, sub, dev } = await waiting14();
+    await db.payment.create({ data: { kind: "review", submissionId: sub.id, contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 1000, feeCents: 200, testerCents: 800, status: "charged" } });
+    await cron();
+    await db.submission.update({ where: { id: sub.id }, data: { remindedAt: new Date(Date.now() - 4 * 86_400_000) } });
+    await cron();
+    expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).toBeNull();
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "didn't review" } } })).toBe(0);
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "letgo" })).status).toBe(409);
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, action: "reject", reason: "Not needed any more", confirmed: true })).status).toBe(200);
   });
 });

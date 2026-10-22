@@ -7,7 +7,7 @@ import { ChangesBox } from "@/components/ChangesBox";
 
 /**
  * Day 14 without a review: charge the developer (the lower of listing and asked, minus what's already been paid for this
- * part) or let it go. Charge needs its tick; Let it go asks once in place. Nothing left to charge: only "Close it".
+ * part) or let it go. Charge needs its tick; Let it go asks once in place. (Never shown when the part is paid in full.)
  */
 export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenAt }: { sessionId: string; submissionId: string; line: string; devName: string; cents: number; seenAt: string }) {
   const [confirmed, setConfirmed] = useState(false);
@@ -29,9 +29,7 @@ export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenA
   return (
     <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
       <p>{line}.</p>
-      {cents === 0 ? (
-        <button className="btn-ghost" disabled={busy} onClick={() => go("letgo")}>Close it</button>
-      ) : confirmLetGo ? (
+      {confirmLetGo ? (
         <div className="flex flex-wrap items-center gap-2">
           <span>Close this with nothing more paid?</span>
           <button className="btn-ghost" disabled={busy} onClick={() => go("letgo")}>Yes, let it go</button>

@@ -229,6 +229,9 @@ export async function runDaily(now = new Date()) {
       await bell(dev.id, `“${c.title}”: ${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} waited over 14 days: pay or reject it (${displayName(c.tester)} can now charge or let it go).`, `/app/tests/${c.testId}`);
       await db.submission.update({ where: { id: s.id }, data: { devRemindedAt: now } });
     }
+    // Contract price already paid in full for this part: no Charge / Let it go, no day-14 notice, no reminders.
+    const paidPart = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
+    if (chargeAmount(s.agreedCents, s.askedCents, paidPart) === 0) continue;
     if (!s.choiceOfferedAt) {
       const by = new Date(now.getTime() + REVIEW_DAYS * 86_400_000);
       await db.submission.update({ where: { id: s.id }, data: { choiceOfferedAt: now, choiceBy: by, remindedAt: now } });
@@ -360,7 +363,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");
   const paidForPart = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
   const amount = choice === "charge" ? chargeAmount(s.agreedCents, s.askedCents, paidForPart) : 0;
-  if (choice === "charge" && amount === 0) throw new HttpError(409, "nothing_left", "Nothing is left to charge for this part: close it instead.");
+  if (chargeAmount(s.agreedCents, s.askedCents, paidForPart) === 0) throw new HttpError(409, "paid_in_full", "This part is already paid in full.");
   if (choice === "charge" && body.tickedCents !== amount) throw new HttpError(400, "tick", `Tick “charge ${displayName(dev)} ${money(amount)} now” to charge.`);
   const payKey = `choice-${s.id}`;
   const review = await db.review.create({ data: { submissionId: s.id, contractId: c.id, amountCents: amount, agreedCents: s.agreedCents, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey } }).catch(() => null);

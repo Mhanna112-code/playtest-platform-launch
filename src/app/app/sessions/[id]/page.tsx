@@ -108,7 +108,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             {written.late && <span className="ml-2 badge">{lateLabel(c.dueAt, fmtDate)}</span>}
           </p>
         )}
-        {written && !written.review && written.choiceOfferedAt && written.choiceBy && !c.test.developer.holdStartedAt && (
+        {written && !written.review && written.choiceOfferedAt && written.choiceBy && !c.test.developer.holdStartedAt && chargeAmount(written.agreedCents, written.askedCents, partPaid.get(written.id) ?? 0) > 0 && (
           <ChoiceBox seenAt={seenAt} sessionId={c.id} submissionId={written.id} devName={dev} cents={chargeAmount(written.agreedCents, written.askedCents, partPaid.get(written.id) ?? 0)} line={choiceLine(dev, "written", chargeAmount(written.agreedCents, written.askedCents, partPaid.get(written.id) ?? 0))} />
         )}
         {written && delayedSubs.has(written.id) ? <p className="info">Payment for this part may be delayed.</p> : written?.review && <TesterReview sessionId={c.id} kind="submission" id={written.id} review={written.review} dispute={written.dispute} />}
@@ -136,7 +136,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             {recording.late && <span className="ml-2 badge">{lateLabel(c.dueAt, fmtDate)}</span>}
           </p>
         )}
-        {recording && !recording.review && recording.choiceOfferedAt && recording.choiceBy && !c.test.developer.holdStartedAt && (
+        {recording && !recording.review && recording.choiceOfferedAt && recording.choiceBy && !c.test.developer.holdStartedAt && chargeAmount(recording.agreedCents, recording.askedCents, partPaid.get(recording.id) ?? 0) > 0 && (
           <ChoiceBox seenAt={seenAt} sessionId={c.id} submissionId={recording.id} devName={dev} cents={chargeAmount(recording.agreedCents, recording.askedCents, partPaid.get(recording.id) ?? 0)} line={choiceLine(dev, "recording", chargeAmount(recording.agreedCents, recording.askedCents, partPaid.get(recording.id) ?? 0))} />
         )}
         {recording && delayedSubs.has(recording.id) ? <p className="info">Payment for this part may be delayed.</p> : recording?.review && <TesterReview sessionId={c.id} kind="submission" id={recording.id} review={recording.review} dispute={recording.dispute} />}

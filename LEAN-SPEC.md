@@ -4,6 +4,10 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22) If the part's contract price has already been paid in full, NO Charge / Let it go box at all (not
+## even "Close it") and no day-14 notices or reminders to the tester for that piece; the developer can still Pay or
+## Reject it.
+
 ## (Owner, Oct 22) Tester deadline: KEPT as a guide (never blocks). Sent work after it reads "Sent late (deadline
 ## was Oct 20)", and call bookings after it read "Booked after Ana Silva's deadline (Oct 20)" on both sides (booking
 ## form, call row, developer's tester row). Open until stays the only hard stop.
