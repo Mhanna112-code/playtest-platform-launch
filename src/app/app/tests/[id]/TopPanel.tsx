@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { api } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
+import { useLiveLines } from "./InvitePanel";
 
 type Tester = { contractId: string; name: string };
 
@@ -12,6 +13,7 @@ type Tester = { contractId: string; name: string };
  */
 export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null }) {
   const { press, changes, error, busy } = usePress(p.seenAt);
+  const lines = useLiveLines(p.id, p.seenAt);
   const [open, setOpen] = useState<"" | "stop" | "end" | "next">("");
   const [who, setWho] = useState(p.working[0]?.contractId ?? "");
   const [reason, setReason] = useState("");
@@ -94,6 +96,7 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
         )}
       </section>
       <ChangesBox changes={changes} error={error} />
+      {!changes && !error && lines.length > 0 && <ChangesBox changes={lines} tail="Refresh to see the latest." />}
     </div>
   );
 }

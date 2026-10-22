@@ -52,8 +52,22 @@ refused with a plain sentence if it can't happen any more.
 - A tester without a finished payout account: the charge still happens and their share waits; an admin sends it from
   `/admin` once their account is ready. Stripe card disputes (chargebacks) are handled by hand in the Stripe dashboard.
 
+### Invites, payment hold, auto-pay, Open until
+
+- Invite panel on the test page (filter, Select all, Invite; Cancel invite). Invites expire when the test fills, stops
+  or passes Open until; the tester joins with the normal Join. Wording and refusals: `inviteTestRefusal` /
+  `inviteTesterRefusal` in `src/lib/rules.ts`; server in `src/lib/server/invites.ts`.
+- Payment hold (`src/lib/server/holds.ts`): starts when a failed charge isn't paid within 3 days, or when a chargeback
+  opens (Stripe webhook `charge.dispute.created` at `/api/stripe/webhook`, secret `STRIPE_WEBHOOK_SECRET`). All the
+  developer's tests pause; sending still works; Pay/Reject, posting, joining, invites, Next round and bookings wait;
+  calls in the hold are cancelled. "Pay what you owe" (or the admin resolving the chargeback) lifts it, and deadlines,
+  Open until and the 14-day review clocks move on by the pause.
+- Daily job `GET /api/cron/daily` with `Authorization: Bearer $CRON_SECRET` (`vercel.json` schedules it): pays sent
+  work unreviewed for 14 days (listing amount; extra work $0, which the tester can flag), starts holds for charges owed
+  over 3 days, alerts admins after 30 days on hold, and sends the Open until heads-ups 3 days and 1 day before.
+
 ## Deploying
 
 Set the variables from `.env.example` (DATABASE_URL + DIRECT_URL, APP_URL, RESEND_API_KEY + EMAIL_FROM, STRIPE_SECRET_KEY,
-R2_*, GOOGLE_* optionally, ADMIN_EMAILS), run `npm run db:deploy`, then `npm run build && npm start`.
+STRIPE_WEBHOOK_SECRET, CRON_SECRET, R2_*, GOOGLE_* optionally, ADMIN_EMAILS), run `npm run db:deploy`, then `npm run build && npm start`.
 For Google sign-in, the redirect URI is `APP_URL/api/auth/google/callback`.

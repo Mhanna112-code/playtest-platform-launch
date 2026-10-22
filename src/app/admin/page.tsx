@@ -27,6 +27,8 @@ export default async function AdminPage() {
   const reviews = await db.review.findMany({ where: { OR: [{ submissionId: { in: subIds } }, { callId: { in: callIds } }] } });
   const contracts = await db.contract.findMany({ where: { id: { in: disputes.map((d) => d.contractId) } }, include: { tester: true, test: { include: { developer: true } } } });
   const byId = new Map(users.map((x) => [x.id, x]));
+  const held = users.filter((x) => x.holdStartedAt);
+  const chargebacks = await db.payment.findMany({ where: { chargeback: "open" } });
   return (
     <main className="wrap space-y-6">
       <div className="flex items-center gap-4">
@@ -61,6 +63,22 @@ export default async function AdminPage() {
             </div>
           );
         })}
+      </section>
+
+      <section className="panel">
+        <h2>Payment holds and chargebacks</h2>
+        {held.length === 0 && chargebacks.length === 0 && <p className="note">None.</p>}
+        {held.map((x) => (
+          <p key={x.id} className="text-sm">
+            {x.email} · on hold since {fmtDateTime(x.holdStartedAt!)} ({x.holdReason}){x.holdAlertedAt ? " · 30 days: close their tests" : ""}{" "}
+            <AdminButton action="close-held" id={x.id} label="Close their tests" danger />
+          </p>
+        ))}
+        {chargebacks.map((p) => (
+          <p key={p.id} className="text-sm">
+            Chargeback open: {money(p.amountCents)} · {byId.get(p.developerId)?.email} · {p.stripePaymentIntentId} <AdminButton action="resolve-chargeback" id={p.id} label="Mark resolved" />
+          </p>
+        ))}
       </section>
 
       <section className="panel">

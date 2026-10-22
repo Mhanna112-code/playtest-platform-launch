@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
-import { canCancelCall, canDispute, isLate, lateLabel, termsLine, testerShare } from "@/lib/rules";
+import { canCancelCall, canDispute, headsUpLine, isLate, PAUSED_FOR_TESTERS, lateLabel, termsLine, testerShare } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
@@ -41,6 +41,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   return (
     <>
       {refusal && <p className="info">{refusal}</p>}
+      {!refusal && c.test.developer.holdStartedAt && <p className="info">{PAUSED_FOR_TESTERS}</p>}
+      {!refusal && c.test.openUntil && c.test.openUntil.getTime() - now.getTime() < 3 * 86_400_000 && <p className="info">{headsUpLine(c.title, c.test.openUntil, fmtDate)}</p>}
       <div className="panel">
         <h1>{c.title}</h1>
         <p className="note">by {dev} · joined {fmtDate(c.joinedAt)} · due {fmtDate(c.dueAt)}{isLate(c.dueAt, now) && !refusal ? " (late work is still accepted and marked late)" : ""}</p>

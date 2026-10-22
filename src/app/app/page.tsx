@@ -30,6 +30,7 @@ export default async function AppHome() {
       : [],
     u.isTester ? db.contract.findMany({ where: { testerId: u.id }, orderBy: { joinedAt: "desc" } }) : [],
   ]);
+  const invites = u.isTester ? await db.invite.findMany({ where: { testerId: u.id, status: "sent", test: { status: "open" } }, include: { test: { include: { developer: true } } } }) : [];
   return (
     <>
       {u.isDeveloper && (
@@ -62,6 +63,11 @@ export default async function AppHome() {
             <h1 className="mr-auto">Your sessions</h1>
             <Link className="btn" href="/app/find">Find tests</Link>
           </div>
+          {invites.map((i) => (
+            <Link key={i.id} href={`/app/find/${i.testId}`} className="info block no-underline">
+              {i.test.developer.name || "A developer"} invited you to “{i.test.title}”. Open it and press Join.
+            </Link>
+          ))}
           {sessions.length === 0 && <p className="note">You haven&apos;t joined a test yet.</p>}
           {sessions.map((c) => (
             <Link key={c.id} href={`/app/sessions/${c.id}`} className="panel block text-slate-900 no-underline hover:no-underline">
