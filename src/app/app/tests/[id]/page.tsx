@@ -1,12 +1,13 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
-import { canCancelCall, lateLabel, listingAmount, termsLine } from "@/lib/rules";
+import { callReference, canCancelCall, lateLabel, termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
 import { Chat } from "@/components/Chat";
 import { CallPanel } from "./CallPanel";
+import { CallLength } from "./CallLength";
 import { InvitePanel } from "./InvitePanel";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { invitable, inviteExpired } from "@/lib/server/invites";
@@ -107,9 +108,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {x.review ? (
                   <ReviewResult review={x.review} payments={payments.filter((p) => p.callId === x.id)} dispute={x.dispute} />
                 ) : (
-                  <PayBox kind="call" id={x.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)}
-                    listingCents={x.rateCents == null ? null : listingAmount({ writtenCents: null, recordingCents: null, liveRateCents: x.rateCents }, "call", x.minutes)}
-                    listingText={`${money(x.rateCents)}/h × ${x.minutes} min booked = ${money(listingAmount({ writtenCents: null, recordingCents: null, liveRateCents: x.rateCents }, "call", x.minutes))}`} />
+                  <>
+                    <CallLength testId={t.id} callId={x.id} minutes={x.actualMinutes ?? x.minutes} />
+                    <PayBox key={x.actualMinutes ?? 0} kind="call" id={x.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)}
+                      listingCents={callReference(x.rateCents, x.actualMinutes ?? x.minutes).cents}
+                      listingText={callReference(x.rateCents, x.actualMinutes ?? x.minutes).text.replace(/^Listing: /, "")} />
+                  </>
                 )}
               </div>
             ))}

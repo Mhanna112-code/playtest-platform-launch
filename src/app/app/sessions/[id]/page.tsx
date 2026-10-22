@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
-import { canCancelCall, canDispute, headsUpLine, isLate, PAUSED_FOR_TESTERS, lateLabel, termsLine, testerShare } from "@/lib/rules";
+import { canCancelCall, canDispute, DELAYED_CALL_LINE, headsUpLine, isLate, PAUSED_FOR_TESTERS, lateLabel, termsLine, testerShare } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
@@ -35,6 +35,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const recording = c.submissions.find((s) => s.kind === "recording");
   const now = new Date();
   const seenAt = now.toISOString();
+  const failedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", callId: { not: null } }, select: { callId: true } })).map((p) => p.callId!));
   const slots = await db.callSlot.findMany({ where: { testId: c.testId, status: "open", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
   const visible = slots.filter((s) => s.allowedTesterIds.length === 0 || s.allowedTesterIds.includes(u.id));
   const cancelledText = (x: { status: string; cancelledBy: string | null }) => (x.status !== "cancelled" ? "" : x.cancelledBy === "tester" ? "you cancelled it" : `cancelled by ${x.cancelledBy === "developer" ? dev : "the site"}`);
@@ -61,6 +62,11 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         open={visible.map((s) => ({ id: s.id, when: s.startsAt.toISOString(), minutes: s.minutes }))}
         mine={c.calls.map((x) => ({ id: x.id, when: x.startsAt.toISOString(), minutes: x.minutes, room: roomUrl(x, x.slot), canCancel: canCancelCall(x.startsAt, now).ok, started: x.startsAt <= now, reported: !!x.noShowBy, cancelled: cancelledText(x) }))}
       />
+      {c.calls.filter((x) => !x.review && x.status === "booked" && x.startsAt <= now).map((x) => (
+        <p key={x.id} className="info">
+          Live call on {fmtDateTime(x.startsAt)}: waiting for {dev} to pay.{failedCalls.has(x.id) && ` ${DELAYED_CALL_LINE}`}
+        </p>
+      ))}
       {c.calls.filter((x) => x.review).map((x) => (
         <section key={x.id} className="panel">
           <h3>Live call on {fmtDateTime(x.startsAt)}</h3>

@@ -4,7 +4,7 @@ import { Choices } from "@/components/Choices";
 import { api } from "@/lib/client";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 
-type Init = { name: string; pronoun: string; isDeveloper: boolean; isTester: boolean; devices: string[]; categories: string[]; languages: string[]; bio: string };
+type Init = { name: string; pronoun: string; isDeveloper: boolean; isTester: boolean; devices: string[]; categories: string[]; languages: string[]; bio: string; emailPref?: string };
 
 export function ProfileForm({ init, first }: { init: Init; first?: boolean }) {
   const [v, setV] = useState(init);
@@ -57,6 +57,17 @@ export function ProfileForm({ init, first }: { init: Init; first?: boolean }) {
             <textarea id="bio" className="input" rows={3} value={v.bio} onChange={(e) => set({ bio: e.target.value })} />
           </div>
         </>
+      )}
+      {!first && (
+        <div>
+          <label className="label" htmlFor="emailPref">Email settings</label>
+          <select id="emailPref" className="input max-w-xs" value={v.emailPref ?? "each"} onChange={(e) => set({ emailPref: e.target.value })}>
+            <option value="each">Email me each update</option>
+            <option value="daily">One daily summary</option>
+            <option value="none">Don&apos;t email me</option>
+          </select>
+          <p className="note">Sign-in links and payment receipts always send. The bell keeps everything.</p>
+        </div>
       )}
       <button className="btn" disabled={busy}>{busy ? "Saving…" : first ? "Continue" : "Save"}</button>
       {msg && <p className={msg.ok ? "ok" : "err"}>{msg.text}</p>}

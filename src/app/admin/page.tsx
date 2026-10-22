@@ -6,6 +6,7 @@ import { displayName, fmtDateTime, money } from "@/lib/format";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { isAdmin } from "@/lib/server/session";
 import { AdminButton } from "./AdminButton";
+import { adminCases } from "@/lib/server/holds";
 
 export const metadata = { title: "Admin · Playtest" };
 export const dynamic = "force-dynamic";
@@ -28,6 +29,7 @@ export default async function AdminPage() {
   const contracts = await db.contract.findMany({ where: { id: { in: disputes.map((d) => d.contractId) } }, include: { tester: true, test: { include: { developer: true } } } });
   const byId = new Map(users.map((x) => [x.id, x]));
   const held = users.filter((x) => x.holdStartedAt);
+  const cases = await adminCases();
   const chargebacks = await db.payment.findMany({ where: { chargeback: "open" } });
   return (
     <main className="wrap space-y-6">
@@ -38,6 +40,16 @@ export default async function AdminPage() {
       <h1>Admin</h1>
 
       <section className="panel">
+        <h2>Needs the team today ({cases.length})</h2>
+        <p className="note">The same list goes out once a day in the admin digest email.</p>
+        {cases.length === 0 ? <p className="note">Nothing waiting.</p> : (
+          <ul className="list-disc pl-5 text-sm">
+            {cases.map((c, i) => <li key={i}><a href={c.link}>{c.text}</a></li>)}
+          </ul>
+        )}
+      </section>
+
+      <section className="panel" id="disputes">
         <h2>Disputes</h2>
         <p className="note">A decision can only raise the pay, up to the listing amount. The extra is charged to the developer. Stripe card disputes are handled by hand in the Stripe dashboard.</p>
         {disputes.length === 0 && <p className="note">No disputes.</p>}
@@ -66,7 +78,7 @@ export default async function AdminPage() {
       </section>
 
       <section className="panel">
-        <h2>Payment holds and chargebacks</h2>
+        <h2 id="holds">Payment holds and chargebacks</h2>
         {held.length === 0 && chargebacks.length === 0 && <p className="note">None.</p>}
         {held.map((x) => (
           <p key={x.id} className="text-sm">
@@ -82,7 +94,7 @@ export default async function AdminPage() {
       </section>
 
       <section className="panel">
-        <h2>No-show reports</h2>
+        <h2 id="no-shows">No-show reports</h2>
         {noShows.length === 0 && <p className="note">None.</p>}
         {noShows.map((c) => (
           <p key={c.id} className="text-sm">
@@ -92,7 +104,7 @@ export default async function AdminPage() {
       </section>
 
       <section className="panel">
-        <h2>Payouts waiting for a payout account</h2>
+        <h2 id="payouts">Payouts waiting for a payout account</h2>
         {waiting.length === 0 && <p className="note">None.</p>}
         {waiting.map((p) => (
           <p key={p.id} className="text-sm">
