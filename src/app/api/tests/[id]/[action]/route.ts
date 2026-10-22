@@ -3,7 +3,7 @@ import { devCancelCall, offerTimes, removeTime, reportNoShow, setCallLength } fr
 import { cancelInvite, inviteTesters } from "@/lib/server/invites";
 import { apply, decideApplication, join, withdrawApplication } from "@/lib/server/joining";
 import { addDevSide } from "@/lib/server/payments";
-import { sendMessage } from "@/lib/server/messages";
+import { sendChat, sendMessage } from "@/lib/server/messages";
 import { editTest, endEarly, nextRound, openDraft, stopTest } from "@/lib/server/tests";
 import { requireActive } from "@/lib/server/users";
 
@@ -46,7 +46,7 @@ export async function POST(req: Request, { params }: Ctx) {
       case "cancel-invite":
         return ok(await cancelInvite(u, id, body));
       case "message": {
-        const m = await sendMessage(u, String(body.contractId ?? ""), body.body);
+        const m = body.testerId ? await sendChat(u, id, String(body.testerId), body.body) : await sendMessage(u, String(body.contractId ?? ""), body.body);
         return ok({ id: m.id });
       }
       case "join": {

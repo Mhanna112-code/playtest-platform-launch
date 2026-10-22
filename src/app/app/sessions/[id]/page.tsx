@@ -14,6 +14,7 @@ import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
 import { ChoiceBox } from "./ChoiceBox";
 import { TesterTop } from "./TesterTop";
+import { chatMessages } from "@/lib/server/messages";
 import { BlockButton } from "@/components/BlockButton";
 import { openOffer } from "@/lib/server/terms";
 
@@ -35,7 +36,6 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       submissions: { include: { review: true, dispute: true, recordings: true } },
       calls: { include: { review: true, dispute: true, slot: true }, orderBy: { startsAt: "asc" } },
       recordings: { orderBy: { createdAt: "asc" } },
-      messages: { orderBy: { createdAt: "asc" }, include: { sender: true }, take: 300 },
     },
   });
   if (!c || c.testerId !== u.id) notFound();
@@ -155,7 +155,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           closed={blockedPair}
           path={`/api/sessions/${c.id}/message`}
           other={dev}
-          messages={c.messages.map((m) => ({ id: m.id, mine: m.senderId === u.id, who: m.senderId === u.id ? "You" : displayName(m.sender), body: m.body, at: m.createdAt.toISOString() }))}
+          messages={(await chatMessages(c.testId, c.testerId)).map((m) => ({ id: m.id, mine: m.senderId === u.id, who: m.senderId === u.id ? "You" : displayName(m.sender), body: m.body, at: m.createdAt.toISOString() }))}
         />
       </section>
     </>

@@ -4,6 +4,16 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22) Invite list: greyed vs removed
+- Greyed out (tick disabled, neutral reason shown, updates live): at 10 tests ("Can't join more tests right now"),
+  suspended ("Can't be invited right now"), already invited ("Invited Oct 21 · Cancel invite"), already in the test.
+- Removed from the list entirely (never explained): blocked either way, deleted account, profile no longer fits a
+  filter the developer chose.
+- Invite stops once (blue, under Invite) for: the developer stop-once reasons (top-panel set), a ticked tester's
+  profile change that affects the test's needs (language, device, category), a ticked tester joining or being
+  invited elsewhere (other tab), a ticked tester becoming greyed/removed since the page loaded. Final refusals for
+  the test itself: full, stopped, past Open until, paused.
+
 ## (Owner, Oct 22) Chat reach and notifications
 - A developer and a tester can chat about a test when the tester is in it, was in it (finished/left/ended), is
   invited to it (open invite), or has applied (pending application). Not after a block.

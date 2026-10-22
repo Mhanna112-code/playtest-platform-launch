@@ -39,7 +39,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           tester: true,
           submissions: { include: { review: true, dispute: true, recordings: true }, orderBy: { sentAt: "asc" } },
           calls: { include: { review: true, dispute: true, slot: true }, orderBy: { startsAt: "asc" } },
-          messages: { orderBy: { createdAt: "asc" }, include: { sender: true }, take: 300 },
         },
       },
     },
@@ -52,8 +51,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   await sweepHeldCalls(u.id);
   const paidKinds = await paidLines(t.contracts.map((c) => c.id));
   const termsRows = await termsRowLines(t.contracts.map((c) => c.id));
+  const msgs = await db.message.findMany({ where: { testId: id }, orderBy: { createdAt: "asc" }, include: { sender: true }, take: 2000 });
   const pendingApps = await db.application.findMany({ where: { testId: id, status: "pending" }, orderBy: { createdAt: "asc" } });
   const appUsers = await db.user.findMany({ where: { id: { in: pendingApps.map((a) => a.testerId) } }, include: { profile: true } });
+  const invitedIds = (await db.invite.findMany({ where: { testId: id, status: "sent" } })).map((i) => i.testerId);
+  const preJoin = await db.user.findMany({ where: { id: { in: [...pendingApps.map((a) => a.testerId), ...invitedIds] } } });
   const apps = pendingApps.map((a) => {
     const x = appUsers.find((y) => y.id === a.testerId)!;
     return { id: a.id, name: displayName(x), note: a.note, profile: [...(x.profile?.devices ?? []), ...(x.profile?.languages ?? [])].join(", ") };
@@ -87,6 +89,25 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {(u.holdStartedAt || owedList.length > 0) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} />}
       {soon && <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{closesInLine(t.title, t.openUntil!, new Date())}</p>}
       <Applications testId={t.id} seenAt={seenAt} apps={apps} />
+      {preJoin.length > 0 && (
+        <section className="panel">
+          <h2>Chats with applicants and invited testers</h2>
+          {preJoin.map((x) => (
+            <details key={x.id} className="text-sm">
+              <summary className="cursor-pointer">Chat with {displayName(x)} ({msgs.filter((m) => m.testerId === x.id).length})</summary>
+              <div className="pt-2">
+                <Chat
+                  closed={blockedIds.has(x.id) || blockedBy.has(x.id)}
+                  path={`/api/tests/${t.id}/message`}
+                  extra={{ testerId: x.id }}
+                  other={displayName(x)}
+                  messages={msgs.filter((m) => m.testerId === x.id).map((m) => ({ id: m.id, mine: m.senderId === u.id, who: m.senderId === u.id ? "You" : displayName(m.sender), body: m.body, at: m.createdAt.toISOString() }))}
+                />
+              </div>
+            </details>
+          ))}
+        </section>
+      )}
       {t.status !== "stopped" && (
         <InvitePanel
           testId={t.id}
@@ -180,14 +201,14 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               </div>
             ))}
             <details className="text-sm">
-              <summary className="cursor-pointer">Chat with {displayName(c.tester)} ({c.messages.length})</summary>
+              <summary className="cursor-pointer">Chat with {displayName(c.tester)} ({msgs.filter((m) => m.testerId === c.testerId).length})</summary>
               <div className="pt-2">
                 <Chat
                   closed={blockedIds.has(c.testerId) || blockedBy.has(c.testerId)}
                   path={`/api/tests/${t.id}/message`}
                   extra={{ contractId: c.id }}
                   other={displayName(c.tester)}
-                  messages={c.messages.map((m) => ({ id: m.id, mine: m.senderId === u.id, who: m.senderId === u.id ? "You" : displayName(m.sender), body: m.body, at: m.createdAt.toISOString() }))}
+                  messages={msgs.filter((m) => m.testerId === c.testerId).map((m) => ({ id: m.id, mine: m.senderId === u.id, who: m.senderId === u.id ? "You" : displayName(m.sender), body: m.body, at: m.createdAt.toISOString() }))}
                 />
               </div>
             </details>

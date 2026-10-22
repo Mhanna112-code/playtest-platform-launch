@@ -5,6 +5,8 @@ import { termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, needsGap } from "@/lib/server/tests";
 import { JoinBox } from "./JoinBox";
+import { Chat } from "@/components/Chat";
+import { chatMessages } from "@/lib/server/messages";
 
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
@@ -18,6 +20,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   if (mine) redirect(`/app/sessions/${mine.id}`);
   const testersIn = await db.contract.count({ where: { testId: id, status: "working" } });
   const gap = needsGap(t, await db.testerProfile.findUnique({ where: { userId: u.id } }));
+  const canChat = !!(await db.invite.findFirst({ where: { testId: t.id, testerId: u.id, status: "sent" } })) || !!(await db.application.findFirst({ where: { testId: t.id, testerId: u.id, status: "pending" } }));
+  const chatClosed = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: u.id }] } })) > 0;
   const blocked = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: u.id }] } })) > 0;
   const l = asListing(t);
   const closed = t.status !== "open" || testersIn >= t.spots || (t.openUntil && t.openUntil < new Date());
@@ -44,6 +48,20 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           </>
         )}
         <p className="note">Everything above is fixed in your contract when you join: neither side can change it later.</p>
+        {canChat && (
+          <details className="text-sm">
+            <summary className="cursor-pointer">Chat with {displayName(t.developer)}</summary>
+            <div className="pt-2">
+              <Chat
+                closed={chatClosed}
+                path={`/api/tests/${t.id}/message`}
+                extra={{ testerId: u.id }}
+                other={displayName(t.developer)}
+                messages={(await chatMessages(t.id, u.id)).map((m) => ({ id: m.id, mine: m.senderId === u.id, who: m.senderId === u.id ? "You" : displayName(m.sender), body: m.body, at: m.createdAt.toISOString() }))}
+              />
+            </div>
+          </details>
+        )}
         {t.developerId === u.id ? (
           <p className="note">This is your test.</p>
         ) : !u.isTester ? (
