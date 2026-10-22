@@ -13,6 +13,17 @@ and look, but this version deliberately drops most of its complexity.
   automatically. The developer can still Pay or Reject until the tester chooses (Pay/Reject then stops once if the
   tester chose meanwhile, final if already charged/let go). Parts outside the contract never get this choice (the
   developer decides; reminders every 3 days).
+- (Owner) NO automatic charge if the tester never chooses: it waits, with reminders every 3 days, until they choose
+  or the developer pays/rejects. The asked amount may be higher or lower than the listing; "Charge" uses the LOWER of
+  the two for contract parts (a tester can't charge more than the contract by themselves; the developer can still pay
+  more with Pay).
+- Presses during a hold: the developer's Pay/Reject are refused with "Pay what you owe first." (the hold banner is on
+  the page); the tester's Charge / Let it go are hidden while paused, and a press from an old page is refused with
+  "This test is paused: you can choose once it resumes." If the developer paid or rejected meanwhile, Charge / Let it
+  go is refused for good ("Nora Lane paid $8.00 for this meanwhile.").
+- **Payment-failure notices (frequency):** developer: on the failure (bell + email), each failed daily retry (bell
+  only), 1 day before the cut-off (bell + email), when the hold starts and when it lifts (bell + email). Tester: once
+  when a payment for their work is delayed (bell + email per their setting), then when it's paid or the test resumes.
 - During a hold (including a chargeback hold) the 14-day clocks and the tester's choice wait; the tester sees only
   "This test is paused. Payment for your work may be delayed."; after the hold the clocks carry on.
 - **Daily retry (owner: keep):** the daily job retries every owed payment once a day, both before the cut-off

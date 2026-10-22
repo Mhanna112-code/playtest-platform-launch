@@ -205,8 +205,11 @@ model Submission {
   payBy      DateTime?
   /// Optional "Ask $___ for this" when sending
   askedCents Int?
-  /// Last 7-day bell reminder for parts outside the contract (never auto-paid)
+  /// Last reminder (every 3 days): to the developer for parts outside the contract, to the tester for a waiting choice
   remindedAt DateTime?
+  /// Contract parts unreviewed 14 days: the tester chooses "Charge" or "Let it go" by choiceBy, else it's charged
+  choiceOfferedAt DateTime?
+  choiceBy        DateTime?
 
   recordings Recording[]
   review     Review?
@@ -274,6 +277,8 @@ model Payment {
   stripeTransferId String?
   /// A failed charge the developer still owes must be paid by this time, or a payment hold starts
   owedUntil    DateTime?
+  /// The daily job retries owed payments once a day
+  retriedAt    DateTime?
   settledAt    DateTime?
   /// Bank reversal (Stripe dispute): "" | "open" | "resolved"
   chargeback   String   @default("")

@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
 import {
-  autoPayFor, callCancelledLine, failedLine, headsUpDue, headsUpLine, REMIND_DAYS, HOLD_ALERT_DAYS, owedUntilFrom, PAUSED_FOR_TESTERS, PAY_WAITS, shiftForHold,
+  autoPayFor, callCancelledLine, CHARGED_AUTOMATICALLY, CHARGED_BY_TESTER, choiceLine, failedLine, headsUpDue, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, HOLD_ALERT_DAYS, owedUntilFrom, PAUSED_FOR_TESTERS, PAY_WAITS, shiftForHold,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { bell, notify, sendSummaries } from "./notify";
@@ -70,7 +70,7 @@ export async function liftHoldIfClear(devId: string) {
       const subs = await tx.submission.findMany({ where: { contract: { testId: t.id }, review: null, payBy: { not: null } } });
       for (const s of subs) {
         const from = s.updatedAt > start ? s.updatedAt : start; // only the part of the pause after it was sent
-        await tx.submission.update({ where: { id: s.id }, data: { payBy: shiftForHold(s.payBy, from, now) } });
+        await tx.submission.update({ where: { id: s.id }, data: { payBy: shiftForHold(s.payBy, from, now), choiceBy: shiftForHold(s.choiceBy, from, now) } });
       }
       if (t.status !== "stopped") await recordEvent(tx, t.id, "resumed", "Your tests are running again", false);
     }
@@ -89,10 +89,15 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
   const list = await owed(dev.id);
   const total = list.reduce((a, p) => a + p.amountCents, 0);
   const seen = typeof body.seenTotalCents === "number" ? body.seenTotalCents : null;
-  if (seen != null && seen !== total && body.confirmed !== true) {
-    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text: `What you owe changed: now ${money(total)} (it was ${money(seen)} when you opened this page)`, at: new Date() }], totalCents: total });
-  }
   const lines = await owedLines(dev.id);
+  if (seen != null && seen !== total && body.confirmed !== true) {
+    const seenIds = Array.isArray(body.seenIds) ? (body.seenIds as unknown[]).map(String) : [];
+    const fresh = lines.filter((l) => l.retry && !seenIds.includes(l.id)).map((l) => l.text.replace(/ · card declined .*$/, ""));
+    const text = fresh.length
+      ? `Another payment failed meanwhile: ${fresh.join(", ")}. New total ${money(total)}. Press again to pay ${money(total)}.`
+      : `What you owe changed: now ${money(total)}. Press again to pay ${money(total)}.`;
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text, at: new Date() }], totalCents: total });
+  }
   const stillFailing: string[] = [];
   for (const p of list) {
     const tester = await db.user.findUniqueOrThrow({ where: { id: p.testerId } });
@@ -177,7 +182,22 @@ export async function closeHeldTests(devId: string) {
 
 /** The daily job: auto-pay after 14 days, owed charges → hold, 30-day hold alerts, Open until heads-ups. */
 export async function runDaily(now = new Date()) {
-  const out = { autoPaid: 0, holds: 0, alerts: 0, headsUps: 0 };
+  const out = { autoPaid: 0, holds: 0, alerts: 0, headsUps: 0, choices: 0, retried: 0 };
+  // 0. Retry every owed payment once a day (before the cut-off and during holds). Chargebacks are never retried.
+  const retry = await db.payment.findMany({ where: { status: "failed", owedUntil: { not: null }, settledAt: null, OR: [{ retriedAt: null }, { retriedAt: { lt: new Date(now.getTime() - 23 * 3_600_000) } }] } });
+  for (const p of retry) {
+    const [d, t] = await Promise.all([db.user.findUniqueOrThrow({ where: { id: p.developerId } }), db.user.findUniqueOrThrow({ where: { id: p.testerId } })]);
+    try {
+      const r = await charge(d, t, p.amountCents, `retry-${p.id}-${now.toISOString().slice(0, 10)}`, "Playtest: daily retry of an amount owed");
+      await db.payment.update({ where: { id: p.id }, data: { ...r, settledAt: now, retriedAt: now, failure: "" } });
+      await receipt(d.email, "an amount you owed (retried today)", p.amountCents, r.status, "/app/payments");
+      await bell(t.id, "A delayed payment for your work went through.", p.contractId ? `/app/sessions/${p.contractId}` : "/app/payments");
+      await liftHoldIfClear(d.id);
+      out.retried++;
+    } catch {
+      await db.payment.update({ where: { id: p.id }, data: { retriedAt: now } });
+    }
+  }
   // 1. Sent work not paid or rejected within 14 days: the listing amount is paid automatically (clock paused in holds).
   const due = await db.submission.findMany({
     where: { review: null, payBy: { lt: now }, contract: { test: { developer: { holdStartedAt: null } } } },
@@ -195,10 +215,27 @@ export async function runDaily(now = new Date()) {
       }
       continue;
     }
+    if (!s.choiceOfferedAt) {
+      const by = new Date(now.getTime() + REVIEW_DAYS * 86_400_000);
+      await db.submission.update({ where: { id: s.id }, data: { choiceOfferedAt: now, choiceBy: by, remindedAt: now } });
+      const line = choiceLine(displayName(dev), s.kind, auto);
+      await notify(c.tester.email, line, [line, `If you don't choose by ${fmtDate(by)}, it's charged automatically.`], `/app/sessions/${c.id}`);
+      await db.$transaction((tx) => recordEvent(tx, c.testId, "choice", `${displayName(c.tester)} can now charge or let go of their ${s.kind === "recording" ? "recording" : "written answers"}`, false, {}, c.id));
+      out.choices++;
+      continue;
+    }
+    if (s.choiceBy && s.choiceBy > now) {
+      if (!s.remindedAt || now.getTime() - s.remindedAt.getTime() >= REMIND_DAYS * 86_400_000 - 3_600_000) {
+        const line = choiceLine(displayName(dev), s.kind, auto);
+        await notify(c.tester.email, `Reminder: ${line}`, [line, `If you don't choose by ${fmtDate(s.choiceBy)}, it's charged automatically.`], `/app/sessions/${c.id}`);
+        await db.submission.update({ where: { id: s.id }, data: { remindedAt: now } });
+      }
+      continue;
+    }
     const amount = auto;
     const payKey = `auto-${s.id}`;
     let failed = false;
-    const review = await db.review.create({ data: { submissionId: s.id, contractId: c.id, amountCents: amount, agreedCents: s.agreedCents, reason: "Paid automatically: not reviewed within 14 days.", payKey, auto: true } }).catch(() => null);
+    const review = await db.review.create({ data: { submissionId: s.id, contractId: c.id, amountCents: amount, agreedCents: s.agreedCents, reason: CHARGED_AUTOMATICALLY, payKey, auto: true } }).catch(() => null);
     if (!review) continue;
     try {
       const r = await charge(dev, c.tester, amount, payKey, `Playtest: automatic payment on “${c.title}”`);
@@ -263,4 +300,38 @@ export async function adminCases(now = new Date()) {
 /** For the "Pay what you owe" box: failed charges (with their cut-off) and reversed payments. */
 export async function owedForBox(devId: string) {
   return owedLines(devId);
+}
+
+/** The tester's choice on a contract part unreviewed 14 days: "charge" (lower of listing and asked) or "letgo". */
+export async function chooseOutcome(tester: { id: string; email: string; name: string }, contractId: string, body: Record<string, unknown>) {
+  const s = await db.submission.findUnique({ where: { id: String(body.submissionId ?? "") }, include: { review: true, contract: { include: { tester: true, test: { include: { developer: true } } } } } });
+  if (!s || s.contractId !== contractId || s.contract.testerId !== tester.id) throw new HttpError(404, "not_found", "That work doesn't exist.");
+  const c = s.contract, dev = c.test.developer, label = s.kind === "recording" ? "recording" : "written answers";
+  if (s.review) throw new HttpError(409, "done", s.review.rejected ? `${displayName(dev)} already rejected this.` : `This was already settled: ${money(s.review.amountCents)}.`);
+  if (!s.choiceOfferedAt) throw new HttpError(409, "not_yet", "You can choose once it has waited 14 days without a review.");
+  if (dev.holdStartedAt) throw new HttpError(409, "paused", PAUSED_FOR_TESTERS);
+  const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;
+  if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");
+  const amount = choice === "charge" ? autoPayFor(s.agreedCents, s.askedCents) ?? 0 : 0;
+  const payKey = `choice-${s.id}`;
+  const review = await db.review.create({ data: { submissionId: s.id, contractId: c.id, amountCents: amount, agreedCents: s.agreedCents, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey } }).catch(() => null);
+  if (!review) throw new HttpError(409, "done", "This was already settled.");
+  if (choice === "letgo") {
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let their ${label} go: nothing charged`, false, {}, c.id));
+    return { choice, amountCents: 0 };
+  }
+  let status = "charged";
+  try {
+    const r = await charge(dev, c.tester, amount, payKey, `Playtest: ${label} on “${c.title}” (charged by the tester)`);
+    status = r.status;
+    await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, ...r } });
+    await receipt(dev.email, `${displayName(tester)}'s ${label} (charged by them after 14 days)`, amount, r.status, `/app/tests/${c.testId}`);
+  } catch (e) {
+    status = "failed";
+    const now = new Date();
+    await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "failed", failure: (e as Error).message, owedUntil: owedUntilFrom(now) } });
+    await notify(dev.email, "A payment failed: pay within 3 days", [`${displayName(tester)} charged ${money(amount)} for their ${label} on “${c.title}”, and your card was declined.`, `Pay it by ${fmtDateTime(owedUntilFrom(now))} or your tests are paused.`], "/app/payments");
+  }
+  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their ${label}`, false, {}, c.id));
+  return { choice, amountCents: amount, status };
 }

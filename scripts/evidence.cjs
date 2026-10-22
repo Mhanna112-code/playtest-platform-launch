@@ -361,7 +361,12 @@ async function signIn(page, email) {
     await apiPost(tester, `/api/sessions/${SA}/recording-send`, {});
     sql(`update "Submission" set "payBy" = now() - interval '1 minute' where "contractId" = '${SA}'`);
     sql(`update "User" set "stripePaymentMethodId" = 'pm_card_declined' where id = '${devId}'`);
-    const out = await runCron();
+    await runCron(); // day 14: Ana is offered Charge / Let it go
+    await tester.goto(`/app/sessions/${SA}`);
+    check("tester offered the choice", await has(tester, "text=didn't review your written answers in 14 days: charge $10.00 or let it go"));
+    await shot(tester, "choice-offered-tester");
+    sql(`update "Submission" set "choiceBy" = now() - interval '1 minute' where "contractId" = '${SA}'`);
+    const out = await runCron(); // no choice within 14 more days: charged automatically (declined)
     check("daily job ran", out.autoPaid >= 2, JSON.stringify(out));
     await dev.goto(t11Url());
     check("developer banner with the cut-off", await has(dev, "text=A payment failed. Pay $25.00 by"));
@@ -452,7 +457,7 @@ async function signIn(page, email) {
     const tid = sql(`select id from "User" where email = '${TESTER}'`);
     sql(`insert into "Payment" (id, kind, "contractId", "developerId", "testerId", "amountCents", "feeCents", "testerCents", status, "owedUntil", "createdAt") values ('ev_${TS}', 'review', '${SA}', '${devId}', '${tid}', 500, 0, 0, 'failed', now() + interval '3 days', now())`);
     await dev.click("button:has-text('Pay what you owe')");
-    check("total-changed stop", await has(dev, "text=What you owe changed: now $30.00"));
+    check("total-changed stop", await has(dev, "text=New total $30.00. Press again to pay $30.00."));
     await shot(dev, "several-total-changed-developer");
     await dev.click("button:has-text('Pay what you owe')");
     check("the one still failing is named", await has(dev, "text=Still declined: Ana Silva's recording $15.00"));

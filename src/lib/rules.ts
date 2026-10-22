@@ -231,7 +231,7 @@ export function stopOnce(events: TestEventLike[], seenAt: Date, confirmed: boole
  * (Owner, Oct 22, latest) One set of reasons for ALL the developer's stop-once buttons: the top panel (Stop, End early,
  * Next round), the live-call panel (offer/remove times, cancel a call) and Pay / Reject on each piece. Test-wide.
  */
-export const DEV_STOP_KINDS = [...STOP_ONCE_KINDS, "paid", "rejected", "chargeback"] as const;
+export const DEV_STOP_KINDS = [...STOP_ONCE_KINDS, "paid", "rejected", "chargeback", "choice"] as const;
 export function devStopOnce(events: TestEventLike[], seenAt: Date, confirmed: boolean) {
   return stopOnce(events, seenAt, confirmed, DEV_STOP_KINDS);
 }
@@ -447,3 +447,10 @@ export function checkDevSide(text: string, already: boolean): Check {
   if (text.trim().length < 5) return no("Write your side in a sentence or two.");
   return yes;
 }
+
+/** Day 14 on an unreviewed contract part: the tester chooses. */
+export const choiceLine = (devName: string, kind: string, cents: number) =>
+  `${devName} didn't review your ${kind === "recording" ? "recording" : "written answers"} in 14 days: charge ${money(cents)} or let it go`;
+export const CHARGED_BY_TESTER = "Charged by the tester after 14 days without a review.";
+export const LET_GO_BY_TESTER = "Let go by the tester: nothing charged.";
+export const CHARGED_AUTOMATICALLY = "Charged automatically: no choice within 14 more days.";

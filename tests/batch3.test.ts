@@ -239,14 +239,14 @@ describe("Pay what you owe stops once when the total changed", () => {
     const { tester, sessionId } = await joined(testId);
     await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
     const mk = (amountCents: number) => db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() - 1000) } });
-    await mk(800);
+    const seenOne = await mk(800);
     await startHold(dev.user.id, "unpaid");
     await mk(500); // another failure after the page loaded
     const { POST: owedPOST } = await import("@/app/api/payments/owed/route");
     const press = (body: Record<string, unknown>) => owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body })).then(json);
-    const first = await press({ seenTotalCents: 800 });
+    const first = await press({ seenTotalCents: 800, seenIds: [seenOne.id] });
     expect(first.status).toBe(409);
-    expect(first.body.error.changes[0].text).toBe("What you owe changed: now $13.00 (it was $8.00 when you opened this page)");
+    expect(first.body.error.changes[0].text).toBe("Another payment failed meanwhile: Ana Silva's written answers $5.00. New total $13.00. Press again to pay $13.00.");
     setStripeForTests({ paymentIntents: { create: async (p: { amount: number }) => { if (p.amount === 500) throw new Error("Your card has insufficient funds."); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
     const second = await press({ seenTotalCents: 800, confirmed: true });
     expect(second.body.paid).toBe(1);

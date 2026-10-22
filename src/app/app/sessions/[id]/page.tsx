@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
-import { callReference, cancelNeedsReason, canDispute, closesInLine, DELAYED_CALL_LINE, isLate, PAUSED_FOR_TESTERS, lateLabel, termsLine, testerShare } from "@/lib/rules";
+import { autoPayFor, choiceLine, callReference, cancelNeedsReason, canDispute, closesInLine, DELAYED_CALL_LINE, isLate, PAUSED_FOR_TESTERS, lateLabel, termsLine, testerShare } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
@@ -12,6 +12,7 @@ import { DisputeForm, LeaveButton, WrittenForm } from "./SessionActions";
 import { Chat } from "@/components/Chat";
 import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
+import { ChoiceBox } from "./ChoiceBox";
 
 export const metadata = { title: "Your session · Playtest" };
 export const dynamic = "force-dynamic";
@@ -97,6 +98,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             {written.late && <span className="ml-2 badge">{lateLabel(c.dueAt, fmtDate)}</span>}
           </p>
         )}
+        {written && !written.review && written.choiceOfferedAt && written.choiceBy && !c.test.developer.holdStartedAt && (
+          <ChoiceBox sessionId={c.id} submissionId={written.id} line={choiceLine(dev, "written", autoPayFor(written.agreedCents, written.askedCents) ?? 0)} by={fmtDate(written.choiceBy)} />
+        )}
         {written && delayedSubs.has(written.id) ? <p className="info">Payment for this part may be delayed.</p> : written?.review && <TesterReview sessionId={c.id} kind="submission" id={written.id} review={written.review} dispute={written.dispute} />}
         {written?.review ? (
           writtenQuestions(c).map((q, i) => (
@@ -121,6 +125,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             Sent {fmtDateTime(recording.updatedAt)}
             {recording.late && <span className="ml-2 badge">{lateLabel(c.dueAt, fmtDate)}</span>}
           </p>
+        )}
+        {recording && !recording.review && recording.choiceOfferedAt && recording.choiceBy && !c.test.developer.holdStartedAt && (
+          <ChoiceBox sessionId={c.id} submissionId={recording.id} line={choiceLine(dev, "recording", autoPayFor(recording.agreedCents, recording.askedCents) ?? 0)} by={fmtDate(recording.choiceBy)} />
         )}
         {recording && delayedSubs.has(recording.id) ? <p className="info">Payment for this part may be delayed.</p> : recording?.review && <TesterReview sessionId={c.id} kind="submission" id={recording.id} review={recording.review} dispute={recording.dispute} />}
         <RecordingUpload

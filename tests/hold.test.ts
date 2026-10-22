@@ -146,7 +146,11 @@ describe("daily job", () => {
     await cron();
     expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0); // clock paused
     await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: null } });
-    await cron();
+    await cron(); // day 14: the tester is offered the choice
+    expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0);
+    expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).not.toBeNull();
+    await db.submission.update({ where: { id: sub.id }, data: { choiceBy: new Date(Date.now() - 1000) } });
+    await cron(); // no choice within 14 more days: charged automatically
     expect(await db.review.findFirstOrThrow({ where: { submissionId: sub.id } })).toMatchObject({ amountCents: 1000, auto: true });
     // Outside the contract: never auto-paid; the developer gets a bell reminder every 7 days.
     const x = await setup({ writtenCents: null, questions: [] });
@@ -166,14 +170,16 @@ describe("daily job", () => {
     expect(ys.askedCents).toBe(600);
     await db.submission.update({ where: { id: ys.id }, data: { payBy: new Date(Date.now() - 1000) } });
     await cron();
+    await db.submission.update({ where: { id: ys.id }, data: { choiceBy: new Date(Date.now() - 1000) } });
+    await cron();
     expect(await db.review.findFirstOrThrow({ where: { submissionId: ys.id } })).toMatchObject({ amountCents: 600, auto: true });
   });
 
   it("a failed charge unpaid after 3 days starts a hold; Open until heads-ups go 3 days and 1 day before", async () => {
     const { dev, testId } = await setup();
     const { tester } = await joined(testId);
-    await db.payment.create({ data: { kind: "review", developerId: dev.user.id, testerId: tester.user.id, amountCents: 1000, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() - 1000) } });
-    await cron();
+    await db.payment.create({ data: { kind: "review", developerId: dev.user.id, testerId: tester.user.id, amountCents: 1000, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() - 1000), retriedAt: new Date() } });
+    await cron(); // (already retried today, so the daily retry skips it)
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdReason).toBe("unpaid");
     const h = await setup();
     const hj = await joined(h.testId);

@@ -15,6 +15,7 @@ export function OwedBox({ onHold, owed }: { onHold: boolean; owed: Line[] }) {
   const [failing, setFailing] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [changes, setChanges] = useState<Change[] | null>(null);
+  const [done, setDone] = useState("");
   const retry = owed.filter((o) => o.retry);
   const seenTotal = retry.reduce((s, o) => s + o.amountCents, 0);
   const [total, setTotal] = useState(seenTotal);
@@ -39,12 +40,15 @@ export function OwedBox({ onHold, owed }: { onHold: boolean; owed: Line[] }) {
           setErr("");
           setFailing([]);
           try {
-            const r = await api<{ stillFailing: string[]; lifted: boolean }>("/api/payments/owed", { seenTotalCents: seenTotal, confirmed: changes != null });
+            const r = await api<{ stillFailing: string[]; lifted: boolean }>("/api/payments/owed", { seenTotalCents: seenTotal, seenIds: retry.map((o) => o.id), confirmed: changes != null });
             setChanges(null);
             if (r.stillFailing.length) {
               setFailing(r.stillFailing);
               setBusy(false);
-            } else window.location.reload();
+            } else {
+              setDone(`Paid ${money(total)}, thank you`);
+              setTimeout(() => window.location.reload(), 1500);
+            }
           } catch (e) {
             if (e instanceof ApiError && e.code === "stop_once") {
               setChanges(e.data.changes as Change[]);
@@ -57,7 +61,12 @@ export function OwedBox({ onHold, owed }: { onHold: boolean; owed: Line[] }) {
         Pay what you owe ({money(total)})
       </button>
       <ChangesBox changes={changes} />
-      {failing.length > 0 && <p className="err">Still declined: {failing.join("; ")}. Your tests stay paused until everything is paid. Update your card in Payments and try again.</p>}
+      {done && <p className="ok">{done}</p>}
+      {failing.length > 0 && (
+        <p className="err">
+          Still declined: {failing.join("; ")}. Your tests stay paused until everything is paid. <a href="/app/payments">Update your card</a> and try again.
+        </p>
+      )}
       {owed.some((o) => !o.retry) && <p>Reversed payments can&apos;t be retried here: our team resolves them, then your tests resume.</p>}
       {err && <p className="err">{err}</p>}
     </div>

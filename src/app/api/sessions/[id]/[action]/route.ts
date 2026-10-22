@@ -2,6 +2,7 @@ import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { bookTime, reportNoShow, testerCancelCall } from "@/lib/server/calls";
 import { sendMessage } from "@/lib/server/messages";
 import { finishRecording, sendRecording, startRecording } from "@/lib/server/recordings";
+import { chooseOutcome } from "@/lib/server/holds";
 import { openDispute } from "@/lib/server/payments";
 import { leaveTest, sendWritten } from "@/lib/server/tests";
 import { requireActive } from "@/lib/server/users";
@@ -27,6 +28,8 @@ export async function POST(req: Request, { params }: Ctx) {
         const m = await sendMessage(u, id, body.body);
         return ok({ id: m.id });
       }
+      case "choose":
+        return ok(await chooseOutcome(u, id, body));
       case "book":
         return ok(await bookTime(u, id, body));
       case "cancel-call":

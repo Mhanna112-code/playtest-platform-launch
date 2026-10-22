@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, money, toCents } from "@/lib/format";
-import { callReference, checkDevSide, declinedLine, canDispute, checkDisputeDecision, checkPay, checkReject, MAX_PAY_CENTS, PAY_WAITS, testerShare } from "@/lib/rules";
+import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, declinedLine, canDispute, checkDisputeDecision, checkPay, checkReject, MAX_PAY_CENTS, PAY_WAITS, testerShare } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { isAdmin } from "./session";
@@ -57,7 +57,11 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0], body: R
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
     const name = displayName(c.tester);
     const already = await tx.review.findFirst({ where: piece.where });
-    if (already) throw new HttpError(409, "reviewed", already.rejected ? "You already rejected this." : `You already paid ${money(already.amountCents)} for this.`);
+    if (already) {
+      if (already.reason === CHARGED_BY_TESTER) throw new HttpError(409, "reviewed", `${name} already charged ${money(already.amountCents)} for this.`);
+      if (already.reason === LET_GO_BY_TESTER) throw new HttpError(409, "reviewed", `${name} let this go: nothing was charged.`);
+      throw new HttpError(409, "reviewed", already.rejected ? "You already rejected this." : `You already paid ${money(already.amountCents)} for this.`);
+    }
     if (c.tester.suspendedAt) throw new HttpError(409, "closed_account", `${name}'s account is closed for now, so they can't be paid.`);
     if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", PAY_WAITS);
     await devGate(tx, c.testId, body.seenAt, body.confirmed === true, { paidSoFarCents: await paidSoFar(c.id, tx), name });
