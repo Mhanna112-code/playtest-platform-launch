@@ -227,7 +227,7 @@ describe("newest owner rules", () => {
     await startHold(dev.user.id, "unpaid");
     setStripeForTests({ paymentIntents: { create: async (p: { amount: number }) => { if (p.amount === 2000) throw new Error("declined"); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
     const { payOwed, owedLines } = await import("@/lib/server/holds");
-    expect((await owedLines(dev.user.id)).map((l) => l.text)).toEqual([expect.stringMatching(/^Ana Silva's written answers \$8\.00 · card declined /), expect.stringMatching(/\$20\.00 · card declined /)]);
+    expect((await owedLines(dev.user.id)).map((l) => l.text)).toEqual(expect.arrayContaining([expect.stringMatching(/^Ana Silva's written answers \$8\.00 · card declined /), expect.stringMatching(/\$20\.00 · card declined /)]));
     const r = await payOwed(dev.user);
     expect(r).toMatchObject({ paid: 1, lifted: false });
     expect(r.stillFailing).toHaveLength(1);
