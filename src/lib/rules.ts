@@ -231,7 +231,7 @@ export function stopOnce(events: TestEventLike[], seenAt: Date, confirmed: boole
  * (Owner, Oct 22, latest) One set of reasons for ALL the developer's stop-once buttons: the top panel (Stop, End early,
  * Next round), the live-call panel (offer/remove times, cancel a call) and Pay / Reject on each piece. Test-wide.
  */
-export const DEV_STOP_KINDS = [...STOP_ONCE_KINDS, "paid", "rejected"] as const;
+export const DEV_STOP_KINDS = [...STOP_ONCE_KINDS, "paid", "rejected", "chargeback"] as const;
 export function devStopOnce(events: TestEventLike[], seenAt: Date, confirmed: boolean) {
   return stopOnce(events, seenAt, confirmed, DEV_STOP_KINDS);
 }
@@ -286,3 +286,68 @@ export function joinCheck(t: JoinState, seenListingVersion: number, confirmed: b
   if (seenListingVersion !== t.listingVersion && !confirmed) return { result: "changed" };
   return { result: "go" };
 }
+
+// ---------- Payment hold, auto-pay, Open until, invites (owner, Oct 22, newest) ----------
+
+export const REVIEW_DAYS = 14; // unpaid sent work is paid automatically after this
+export const OWED_DAYS = 3; // a failed charge unpaid this long starts a payment hold
+export const HOLD_ALERT_DAYS = 30; // the admin is alerted to close the tests
+const DAY = 86_400_000;
+
+/** What gets paid automatically after 14 days: the listing amount; extra work $0 (the tester can flag it to the admin). */
+export const autoPayAmount = (listingCents: number | null) => listingCents ?? 0;
+export const payByFrom = (sentAt: Date) => new Date(sentAt.getTime() + REVIEW_DAYS * DAY);
+export const owedUntilFrom = (failedAt: Date) => new Date(failedAt.getTime() + OWED_DAYS * DAY);
+
+/** When a hold lifts, deadlines, Open until and review clocks move on by the length of the pause. */
+export function shiftForHold<T extends Date | null>(d: T, holdStartedAt: Date, liftedAt: Date): T {
+  if (!d) return d;
+  return new Date(d.getTime() + Math.max(0, liftedAt.getTime() - holdStartedAt.getTime())) as T;
+}
+
+export const PAUSED_FOR_TESTERS = "This test is paused. Payment for your work may be delayed.";
+export const PAY_WAITS = "Pay what you owe first.";
+
+/** Open until can be moved only before it passes; once passed, it can't be extended. */
+export function checkOpenUntilChange(current: Date | null, next: Date | null, now: Date, fmt: (d: Date) => string): Check {
+  const same = (current?.getTime() ?? null) === (next?.getTime() ?? null);
+  if (same) return yes;
+  if (current && current.getTime() < now.getTime()) return no(`Joining closed on ${fmt(current)} (Open until), so it can't be extended.`);
+  return yes;
+}
+
+/** Which Open until heads-up is due now (3 days, then 1 day before), if any. */
+export function headsUpDue(openUntil: Date | null, now: Date, sent3d: boolean, sent1d: boolean): "3d" | "1d" | null {
+  if (!openUntil || openUntil.getTime() <= now.getTime()) return null;
+  const left = openUntil.getTime() - now.getTime();
+  if (left <= DAY) return sent1d ? null : "1d";
+  if (left <= 3 * DAY && !sent3d) return "3d";
+  return null;
+}
+export const headsUpLine = (title: string, openUntil: Date, fmt: (d: Date) => string) => `${title} closes on ${fmt(openUntil)}: send your work before then.`;
+
+/** Invite: reasons the whole press is refused for good. */
+export function inviteTestRefusal(
+  t: { status: string; spots: number; testersIn: number; openUntil: Date | null; stoppedAt: Date | null; paused: boolean },
+  now: Date,
+  fmt: (d: Date) => string,
+) {
+  if (t.status === "stopped") return `This test was stopped${t.stoppedAt ? ` on ${fmt(t.stoppedAt)}` : ""}, so nobody can be invited.`;
+  if (t.openUntil && t.openUntil.getTime() < now.getTime()) return `Joining closed on ${fmt(t.openUntil)} (Open until), so nobody can be invited.`;
+  if (t.paused) return "This test is paused until you pay what you owe, so nobody can be invited.";
+  if (t.status !== "open") return "This test isn't taking new testers, so nobody can be invited.";
+  if (t.testersIn >= t.spots) return `This test is full (${t.testersIn} of ${t.spots} spots), so nobody can be invited. Add spots in Edit to invite more.`;
+  return "";
+}
+
+export const MAX_ACTIVE_TESTS = 10;
+/** Invite: per-tester refusals. Never reveals a block or a suspension. */
+export function inviteTesterRefusal(name: string, x: { suspended: boolean; blocked: boolean; deleted: boolean; activeTests: number }) {
+  if (x.deleted) return `${name}'s account was closed, so they can't be invited.`;
+  if (x.suspended || x.blocked) return `${name} can't be invited right now.`;
+  if (x.activeTests >= MAX_ACTIVE_TESTS) return `${name} can't join more tests right now.`;
+  return "";
+}
+
+/** "Ana Silva", "Ana Silva and Dee Moss", "Ana, Ben and Dee". */
+export const andList = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);

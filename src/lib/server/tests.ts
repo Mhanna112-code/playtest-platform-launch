@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, pronouns, toCents } from "@/lib/format";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import {
-  changedTerms, checkListing, contractSnapshot, devStopOnce, editCheck, isLate, joinCheck, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing,
+  changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, devStopOnce, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
@@ -113,6 +113,7 @@ export const seenDate = (v: unknown) => {
 
 export async function createTest(dev: U, body: Record<string, unknown>) {
   if (!dev.isDeveloper) throw new HttpError(403, "not_developer", "Turn on “post tests” in your profile to post a test.");
+  if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", `${PAY_WAITS} New tests can't be posted while payments are on hold.`);
   const l = parseListing(body) as Listing;
   const errs = checkListing(l);
   if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs });
@@ -141,6 +142,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     }
     const current = asListing(t);
     const next = mergeEdit(current, touched);
+    const ou = checkOpenUntilChange(t.openUntil, next.openUntil ? new Date(next.openUntil) : null, new Date(), fmtDate);
+    if (!ou.ok) throw new HttpError(409, "open_until_passed", ou.message);
     if (next.liveRateCents == null) next.liveMinutes = null;
     const testersIn = await tx.contract.count({ where: working(testId) });
     const errs = checkListing(next, testersIn);
@@ -150,7 +153,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (!fields.length) return t;
     const what = fields.map((f) => FIELD_NAMES[f]).join(", ");
     await recordEvent(tx, testId, "edited", `The listing was edited: ${what}`, true, {
-      ...listingData(next), ...(terms.length ? { listingVersion: { increment: 1 } } : {}),
+      ...listingData(next), ...(fields.includes("openUntil") ? { notified3d: false, notified1d: false } : {}), ...(terms.length ? { listingVersion: { increment: 1 } } : {}),
     });
     return tx.test.findUniqueOrThrow({ where: { id: testId } });
   });
@@ -175,13 +178,21 @@ export async function openDraft(dev: U, testId: string) {
  * (seenAt) any tester joined, left or sent work, a call was booked/confirmed/cancelled, times were offered/removed, or a
  * payment/rejection was made, the first press stops and returns the list; the second press (confirmed) goes ahead.
  */
-export async function devGate(tx: Tx, testId: string, seenAtRaw: unknown, confirmed: boolean, extra: Record<string, unknown> = {}) {
+export async function devGate(tx: Tx, testId: string, seenAtRaw: unknown, confirmed: boolean, extra: Record<string, unknown> = {}, extraChanges: TestEventLike[] = []) {
   const seenAt = seenDate(seenAtRaw);
+  if (confirmed) return;
   const events = await tx.testEvent.findMany({ where: { testId, createdAt: { gt: seenAt } } });
   const r = devStopOnce(events, seenAt, confirmed);
-  if (!r.go) {
-    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: r.changes.map((c) => ({ text: c.text, at: c.createdAt })), ...extra });
+  const changes = [...(r.go ? [] : r.changes), ...extraChanges].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  if (changes.length) {
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: changes.map((c) => ({ text: c.text, at: c.createdAt })), ...extra });
   }
+}
+
+/** Is this developer on a payment hold? (All their tests are paused.) */
+export async function devOnHold(devId: string) {
+  const u = await db.user.findUnique({ where: { id: devId }, select: { holdStartedAt: true } });
+  return !!u?.holdStartedAt;
 }
 export const topPanelGate = devGate;
 
@@ -244,6 +255,7 @@ export async function nextRound(dev: U, testId: string, body: Record<string, unk
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped." + (await staleNote(testId, body.seenAt)));
     const existing = await tx.test.findFirst({ where: { previousId: testId } });
     if (existing) throw new HttpError(409, "exists", "This test already has a next round." + (await staleNote(testId, body.seenAt)), { id: existing.id });
+    if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", `${PAY_WAITS} Your tests are paused until then.`);
     await topPanelGate(tx, testId, body.seenAt, body.confirmed === true);
     const round = t.round + 1;
     const copy = await tx.test.create({
@@ -292,6 +304,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     if (await tx.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } })) throw new HttpError(409, "already", "You've already joined this test.");
     const dev = await tx.user.findUniqueOrThrow({ where: { id: t.developerId } });
     if (dev.suspendedAt) throw new HttpError(409, "closed", "This test isn't taking new testers any more.");
+    if (dev.holdStartedAt) throw new HttpError(409, "paused", "This test is paused, so it isn't taking new testers right now.");
     const testersIn = await tx.contract.count({ where: working(testId) });
     const r = joinCheck({ status: t.status, listingVersion: t.listingVersion, spots: t.spots, testersIn, openUntil: t.openUntil }, seen, body.confirmed === true);
     if (r.result === "refused") throw new HttpError(409, "refused", r.message);
@@ -306,6 +319,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
       data: { testId, testerId: tester.id, ...contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion }, new Date(), body.keepPrivate === true) },
     });
     await recordEvent(tx, testId, "joined", `${displayName(tester)} joined`, true, {}, contract.id);
+    await tx.invite.updateMany({ where: { testId, testerId: tester.id, status: "sent" }, data: { status: "joined" } });
     return { contract, dev };
   });
   await notify(dev.email, `${displayName(tester)} joined “${contract.title}”`, [`${displayName(tester)} joined your test “${contract.title}”.`, `Their deal: ${termsLine(contract)}.`], `/app/tests/${testId}`);
@@ -361,7 +375,7 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     const now = new Date();
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
     if (existing?.review) throw new HttpError(409, "paid", "Your written answers were already paid for, so they can't be changed. Send anything new in the chat.");
-    const data = { answers, notes, late: isLate(c.dueAt, now), updatedAt: now };
+    const data = { answers, notes, late: isLate(c.dueAt, now), updatedAt: now, payBy: payByFrom(now) };
     const sub = existing
       ? await tx.submission.update({ where: { id: existing.id }, data })
       : await tx.submission.create({ data: { contractId, kind: "written", agreedCents: c.writtenCents, ...data } });

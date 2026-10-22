@@ -4,7 +4,50 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
-## (Owner, Oct 22, latest: wins over everything below) One set of stop-once reasons for the developer
+## (Owner, Oct 22, newest) Invites, chargebacks, payment hold, Open until
+
+### Invite panel (test page only, never in Edit). No moves at all.
+- Filterable list of testers (devices, languages, categories), "Select all", Invite; sent invites listed with
+  Cancel invite; invites expire when the test fills, stops or passes Open until. The tester joins with the normal Join.
+  A developer may invite a tester who works on their other test (separate contract; the other one is untouched).
+- Invite stops once for the developer stop-once reasons below PLUS: a ticked tester's profile changed in a way the
+  test needs ("Ben Carter removed English, which this test needs · 3:20 PM"); a ticked tester joined meanwhile
+  ("Cara Diaz joined this test, so she's no longer in your invite list · 3:22 PM"); already invited in another tab
+  ("You also did this in another tab: invited Dee Moss · 3:24 PM").
+- Refused for good (tick cleared): full ("This test is full (6 of 6 spots), so nobody can be invited. Add spots in
+  Edit to invite more."); stopped ("This test was stopped on Oct 22, so nobody can be invited."); past Open until
+  ("Joining closed on Oct 20 (Open until), so nobody can be invited."); tester blocked you OR suspended ("Ben Carter
+  can't be invited right now." — never reveal a block or suspension); account deleted ("Ben Carter's account was
+  closed, so they can't be invited."); tester in 10 tests ("Cara Diaz can't join more tests right now.").
+- Several ticked: invite those who can be invited; the box lists only the others with reasons
+  ("Invited Ana Silva and Dee Moss. Ben Carter can't be invited right now.").
+- Where: live lines in a blue box at the bottom of the invite panel (and in the box under the top title panel);
+  on press, the blue box directly under the Invite button.
+
+### Chargebacks are a developer stop-once reason
+- The developer's bank reversing a payment (Stripe dispute webhook) is added to the reason set: "Your bank reversed
+  your $8.00 payment for Ana Silva's written answers · 2:14 PM". Testers never see "chargeback"; at most "Payment for
+  your work may be delayed." A chargeback also starts the payment hold below.
+
+### Payment hold (owner rule + agreed details)
+- Starts when a failed charge isn't paid within 3 days (the developer sees the cut-off), or when a chargeback opens.
+  Paying everything owed lifts it at once (chargebacks: when the admin resolves it).
+- During a hold: ALL the developer's tests are paused: no new joiners, invites, Next round, new call bookings; booked
+  calls in the hold are cancelled with no fault to the tester; no new tests can be posted in any way; Pay and Reject
+  wait ("Pay what you owe first."). Testers CAN still send work. Every working tester's deadline, and the test's Open
+  until, shift by the length of the pause.
+- Testers read only: "This test is paused. Payment for your work may be delayed." They may leave with no mark. Chat
+  keeps working.
+- After 30 days on hold the admin is alerted to close the tests; testers are told the test ended.
+- Review time limit: if sent work isn't paid or rejected within 14 days, the listing amount is paid automatically
+  (extra work: $0, which the tester can flag to the admin). The clock pauses during a hold.
+
+### Open until
+- Open until can be moved later only BEFORE it passes. Once it passes, joining and sending are over for good and it
+  can't be extended. Heads-up notifications (in-app and email) to the developer and working testers 3 days and 1 day
+  before ("Harbor Run closes on Oct 25: send your work before then.").
+
+## (Owner, Oct 22) One set of stop-once reasons for the developer
 - **The reasons (test-wide, since the page loaded):** any tester **left**, **joined**, **sent work** (new or updated),
   a live call was **booked, confirmed or cancelled** (either side), call times **offered or removed**, or a **payment
   or rejection** was made (e.g. in another tab).

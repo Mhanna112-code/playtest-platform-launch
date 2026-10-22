@@ -1,9 +1,9 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, pronouns } from "@/lib/format";
-import { CALL_KINDS, canCancelCall, stopOnce, type TestEventLike } from "@/lib/rules";
+import { CALL_KINDS, canCancelCall, PAUSED_FOR_TESTERS, stopOnce, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
-import { devGate, ownContract, ownTest, recordEvent, seenDate, sessionRefusal, staleNote } from "./tests";
+import { devGate, devOnHold, ownContract, ownTest, recordEvent, seenDate, sessionRefusal, staleNote } from "./tests";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -129,6 +129,7 @@ export async function bookTime(tester: U, contractId: string, body: Record<strin
     const t = await tx.test.findUniqueOrThrow({ where: { id: c0.testId } });
     const refusal = sessionRefusal(c, t, displayName(dev));
     if (refusal) throw new HttpError(409, "closed", refusal);
+    if (await devOnHold(t.developerId)) throw new HttpError(409, "paused", PAUSED_FOR_TESTERS);
     const slot = await tx.callSlot.findUnique({ where: { id: slotId } });
     if (!slot || slot.testId !== c.testId || !canSee(slot, tester.id)) throw new HttpError(404, "not_found", "That call time doesn't exist.");
     if (slot.status !== "open") throw new HttpError(409, "gone", slot.status === "booked" ? "Someone already booked that time. Pick another." : "That time was removed. Pick another.");

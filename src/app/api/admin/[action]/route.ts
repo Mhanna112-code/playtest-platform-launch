@@ -3,6 +3,7 @@ import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { decideDispute } from "@/lib/server/payments";
 import { isAdmin, requireUser } from "@/lib/server/session";
 import { sendWaitingTransfer } from "@/lib/server/stripe";
+import { closeHeldTests, resolveChargeback } from "@/lib/server/holds";
 
 type Ctx = { params: Promise<{ action: string }> };
 
@@ -23,6 +24,10 @@ export async function POST(req: Request, { params }: Ctx) {
         await db.user.update({ where: { id }, data: action === "suspend" ? { suspendedAt: new Date(), suspendNote: note } : { suspendedAt: null, suspendNote: "" } });
         return ok({ ok: true });
       }
+      case "resolve-chargeback":
+        return ok(await resolveChargeback(id));
+      case "close-held":
+        return ok(await closeHeldTests(id));
       case "transfer":
         await sendWaitingTransfer(id);
         return ok({ ok: true });

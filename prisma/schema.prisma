@@ -28,6 +28,11 @@ model User {
   stripePaymentMethodId String?
   stripeAccountId       String? @unique
   payoutsReady          Boolean @default(false)
+  /// Payment hold: set while the developer owes money (a failed charge unpaid after 3 days, or a chargeback)
+  holdStartedAt DateTime?
+  holdReason    String    @default("")
+  /// When the admin was alerted about a 30-day hold
+  holdAlertedAt DateTime?
 
   sessions  Session[]
   profile   TesterProfile?
@@ -109,6 +114,10 @@ model Test {
   contracts Contract[]
   slots     CallSlot[]
   events    TestEvent[]
+  invites   Invite[]
+  /// Open until heads-up notices sent (3 days and 1 day before)
+  notified3d Boolean @default(false)
+  notified1d Boolean @default(false)
 
   @@index([developerId])
   @@index([status])
@@ -185,6 +194,8 @@ model Submission {
   updatedAt  DateTime @default(now())
   /// Sent after the tester's own deadline
   late       Boolean  @default(false)
+  /// Not paid or rejected by then: the listing amount is paid automatically (moves on with payment holds)
+  payBy      DateTime?
 
   recordings Recording[]
   review     Review?
@@ -222,6 +233,8 @@ model Review {
   reason       String      @default("")
   /// Reject: nothing charged (amountCents 0); a contract part can still be disputed once
   rejected     Boolean     @default(false)
+  /// Paid automatically after 14 days without a review
+  auto         Boolean     @default(false)
   /// Idempotency: one charge per press, never twice
   payKey       String      @unique
   createdAt    DateTime    @default(now())
@@ -248,6 +261,12 @@ model Payment {
   /// The tester's share: "sent" (to their Stripe account with the charge), "waiting" (no payout account yet), "none"
   transferStatus String @default("none")
   stripeTransferId String?
+  /// A failed charge the developer still owes must be paid by this time, or a payment hold starts
+  owedUntil    DateTime?
+  settledAt    DateTime?
+  /// Bank reversal (Stripe dispute): "" | "open" | "resolved"
+  chargeback   String   @default("")
+  stripeChargeId String?
   failure      String   @default("")
   createdAt    DateTime @default(now())
 
@@ -351,4 +370,18 @@ model WaitlistEntry {
   /// "developer" | "tester" | "both"
   role      String   @default("both")
   createdAt DateTime @default(now())
+}
+
+/// The developer invites a tester to join (the tester joins with the normal Join). No moves.
+model Invite {
+  id        String   @id @default(cuid())
+  testId    String
+  test      Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  testerId  String
+  /// "sent" | "cancelled" | "joined"
+  status    String   @default("sent")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([testId, testerId])
 }

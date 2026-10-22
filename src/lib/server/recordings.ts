@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { displayName, pronouns } from "@/lib/format";
-import { isLate } from "@/lib/rules";
+import { isLate, payByFrom } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { MAX_RECORDING_BYTES, MAX_RECORDINGS, uploadTarget } from "./storage";
@@ -51,7 +51,7 @@ export async function sendRecording(tester: U, contractId: string) {
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });
     if (existing?.review) throw new HttpError(409, "paid", "Your recording was already paid for, so it can't be changed. Send anything new in the chat.");
     const now = new Date();
-    const data = { late: isLate(c.dueAt, now), updatedAt: now };
+    const data = { late: isLate(c.dueAt, now), updatedAt: now, payBy: payByFrom(now) };
     const sub = existing
       ? await tx.submission.update({ where: { id: existing.id }, data })
       : await tx.submission.create({ data: { contractId, kind: "recording", agreedCents: c.recordingCents, ...data } });
