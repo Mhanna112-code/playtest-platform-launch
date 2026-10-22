@@ -1,13 +1,15 @@
 "use client";
 import { useState } from "react";
 import { api } from "@/lib/client";
-import { topStop } from "@/lib/topStop";
+import { stopBox, type StopBox } from "@/lib/topStop";
+import { ChangesBox } from "@/components/ChangesBox";
 
 type Rec = { id: string; filename: string; size: number; uploaded: boolean };
 
 /** Upload up to 5 screen recordings (500 MB each), then send them. Can be sent again with new ones until paid. */
 export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, seenAt }: { sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean; seenAt: string }) {
   const [confirmed, setConfirmed] = useState(false);
+  const [box, setBox] = useState<StopBox | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -69,7 +71,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
               await api(`/api/sessions/${sessionId}/recording-send`, { ask, seenAt, confirmed });
               window.location.reload();
             } catch (e) {
-              if (topStop(e)) setConfirmed(true);
+              const sb = stopBox(e); if (sb) { setBox(sb); setConfirmed(true); }
               else setErr((e as Error).message);
               setBusy(false);
             }
@@ -78,6 +80,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
           {sentBefore ? "Send the updated recordings" : "Send my recording"}
         </button>
       )}
+      <ChangesBox changes={box?.changes ?? null} tail={box?.tail} />
       {err && <p className="err">{err}</p>}
     </div>
   );

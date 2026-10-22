@@ -4,6 +4,7 @@ import { displayName, fmtDate } from "@/lib/format";
 import { newDueAt, termsDiff, type ContractTerms } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
+import { testerGate } from "./testerGate";
 
 // New terms offered to working testers (owner rule): an Edit that changes contract terms offers them to every working
 // tester; their contract changes only if they switch. Work already sent keeps its price; the deadline never moves earlier.
@@ -36,22 +37,17 @@ export const openOffer = (contractId: string) => db.termsOffer.findFirst({ where
  * Tester-side stop once (box at the TOP of the session page): Send and Charge / Let it go stop once if new terms were
  * offered since the page loaded. The second press goes ahead under the current terms.
  */
-export async function testerTermsGate(contractId: string, devName: string, body: Record<string, unknown>) {
-  if (body.confirmed === true || typeof body.seenAt !== "string") return;
-  const seenAt = new Date(body.seenAt);
-  if (isNaN(seenAt.getTime())) return;
-  const fresh = await db.termsOffer.findMany({ where: { contractId, createdAt: { gt: seenAt } }, orderBy: { createdAt: "asc" } });
-  if (!fresh.length) return;
-  throw new HttpError(409, "stop_once", "Press again to send under your current terms, or switch first.", {
-    top: true, changes: fresh.map((o) => ({ text: `${devName} offered new terms: ${o.diff}`, at: o.createdAt })),
-    tail: "Press again to send under your current terms, or switch first.",
-  });
+export async function testerTermsGate(contractId: string, _devName: string, body: Record<string, unknown>) {
+  const c = await db.contract.findUniqueOrThrow({ where: { id: contractId } });
+  const fresh = typeof body.seenAt === "string" ? await db.termsOffer.count({ where: { contractId, createdAt: { gt: new Date(body.seenAt) } } }) : 0;
+  await testerGate(c.testerId, contractId, c.testId, body, fresh ? "Press again to send under your current terms, or switch first." : "Press again to go ahead.");
 }
 
 /** Switch to the offered terms, or keep the current ones. Stops once if the terms changed again since (shows the newest). */
 export async function decideTerms(tester: { id: string }, contractId: string, body: Record<string, unknown>) {
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== tester.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
+  await testerGate(c.testerId, contractId, c.testId, body);
   const offer = await db.termsOffer.findUnique({ where: { id: String(body.offerId ?? "") } });
   if (!offer || offer.contractId !== contractId) throw new HttpError(404, "not_found", "That offer doesn't exist.");
   const newest = await openOffer(contractId);

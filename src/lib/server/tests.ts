@@ -8,6 +8,7 @@ import {
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { offerNewTerms, testerTermsGate } from "./terms";
+import { testerGate } from "./testerGate";
 import { callCancelledLine } from "@/lib/rules";
 
 type Tx = Prisma.TransactionClient;
@@ -364,13 +365,14 @@ export function sessionRefusal(c: { status: string; endKind: string; endedAt: Da
   return testerRefusal(c, test, devName, fmtDate, now);
 }
 
-export async function leaveTest(tester: U, contractId: string) {
+export async function leaveTest(tester: U, contractId: string, body: Record<string, unknown> = {}) {
   const c0 = await ownContract(tester.id, contractId);
   const c = await db.$transaction(async (tx) => {
     await lockTest(tx, c0.testId);
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
     const refusal = sessionRefusal(c, { openUntil: null }, displayName(c0.test.developer));
     if (refusal) throw new HttpError(409, "gone", refusal === "You left this test." ? "You already left this test." : refusal);
+    await testerGate(tester.id, contractId, c.testId, body);
     await tx.contract.update({ where: { id: c.id }, data: { status: "left", endedAt: new Date() } });
     await cancelCallsAhead(tx, [c.id], `${displayName(tester)} left the test.`);
     await recordEvent(tx, c.testId, "left", `${displayName(tester)} left the test`, true, {}, c.id);

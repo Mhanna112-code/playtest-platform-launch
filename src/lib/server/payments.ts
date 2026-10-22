@@ -7,6 +7,7 @@ import { notify } from "./notify";
 import { isAdmin } from "./session";
 import { cardRefusal, charge } from "./stripe";
 import { devGate, devOnHold, recordEvent } from "./tests";
+import { testerGate } from "./testerGate";
 
 type U = { id: string; email: string; name: string; pronoun: string; isAdmin?: boolean };
 
@@ -130,6 +131,7 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   if (!c || c.testerId !== tester.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
   const where = kind === "call" ? { callId: id } : { submissionId: id };
   const review = await db.review.findFirst({ where: { ...where, contractId } });
+  if (review && !(await db.dispute.findFirst({ where }))) await testerGate(tester.id, contractId, c.testId, body);
   if (!review) throw new HttpError(409, "not_paid", "This hasn't been paid yet.");
   const existing = await db.dispute.findFirst({ where });
   const ok = canDispute(review.amountCents, review.agreedCents, !!existing);

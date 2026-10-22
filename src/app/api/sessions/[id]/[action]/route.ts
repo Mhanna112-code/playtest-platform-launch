@@ -18,7 +18,7 @@ export async function POST(req: Request, { params }: Ctx) {
     const body = await readJson(req);
     switch (action) {
       case "leave":
-        return ok(await leaveTest(u, id));
+        return ok(await leaveTest(u, id, body));
       case "recording-start":
         return ok(await startRecording(u, id, body));
       case "recording-done":

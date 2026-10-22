@@ -19,7 +19,7 @@ h3 { @apply font-semibold; }
   .label { @apply block text-sm font-medium text-slate-700 mb-1; }
   .req::after { content: " *"; @apply text-rose-600; }
   .note { @apply text-sm text-slate-600; }
-  .err { @apply text-sm text-rose-700; }
+  .err { @apply rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900; }
   .ok { @apply text-sm text-emerald-700; }
   .info { @apply rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900; }
   .badge { @apply inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700; }

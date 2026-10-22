@@ -1,12 +1,11 @@
 "use client";
 import { ApiError } from "./client";
+import type { Change } from "@/components/ChangesBox";
 
-/** A tester-side stop-once refusal shown in the box at the TOP of the session page. Returns true when handled. */
-export function topStop(e: unknown) {
-  if (e instanceof ApiError && e.code === "stop_once" && e.data.top) {
-    window.dispatchEvent(new CustomEvent("tester-top", { detail: e.data }));
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    return true;
-  }
-  return false;
+export type StopBox = { changes: Change[]; tail: string };
+
+/** A stop-once refusal from the server, for the box under the pressed button (null for anything else). */
+export function stopBox(e: unknown): StopBox | null {
+  if (e instanceof ApiError && e.code === "stop_once") return { changes: (e.data.changes as Change[]) ?? [], tail: String(e.data.tail ?? "Press again to go ahead.") };
+  return null;
 }

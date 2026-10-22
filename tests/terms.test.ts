@@ -39,7 +39,7 @@ describe("new terms offered to working testers", () => {
     expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId, kind: "written" } })).agreedCents).toBe(1000); // sent work keeps its price
   });
 
-  it("Send stops once at the top if new terms were offered since the page loaded; the second press sends under current terms", async () => {
+  it("Send stops once (box under the button) if new terms were offered since the page loaded; the second press sends under current terms", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const pageLoaded = seen();
@@ -47,7 +47,7 @@ describe("new terms offered to working testers", () => {
     await edit(testId, dev.cookie, { writtenCents: "12.00" });
     const first = await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: pageLoaded });
     expect(first.status).toBe(409);
-    expect(first.body.error).toMatchObject({ code: "stop_once", top: true });
+    expect(first.body.error).toMatchObject({ code: "stop_once", tail: "Press again to send under your current terms, or switch first." });
     expect(first.body.error.changes[0].text).toBe("Nora Lane offered new terms: written $10 → $12");
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: pageLoaded, confirmed: true })).status).toBe(200);
     expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId } })).agreedCents).toBe(1000);

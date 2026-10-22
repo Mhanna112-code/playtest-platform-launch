@@ -4,6 +4,22 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, newest: placement) EVERY stop-once box and every refusal, on both sides, is a BLUE notice
+## directly under the button that was pressed (the page scrolls to it). This replaces "top of the session page" and
+## "under the panel" placements. Live lines (bell, auto-updating lines) are unchanged.
+
+## (Owner, Oct 22: the tester's stop-once reasons)
+- One reason set for the tester's buttons, since their page loaded: (1) new terms offered / terms changed again,
+  (2) the developer **paid or rejected** any of their work, (3) the developer **offered, removed or cancelled call
+  times**, or **booked/cancelled** a call with them.
+- Buttons that stop once for ALL of these: Switch to the new terms / Keep my current terms, Charge / Let it go,
+  Dispute, Leave the test, Send written answers, Send recording, Book a call, Cancel a call. Box: under the live-call
+  panel for Book/Cancel; at the top of the session page for the rest. Press again to go ahead.
+- Final refusals (not stop-once): the developer stopped the test or ended the tester's session ("Nora Lane ended your
+  session on Oct 22."), past Open until, already decided/charged, during a hold where the action waits.
+- There is NO "ask to leave" or "ask to end early" for either side: the tester just Leaves; the developer uses End
+  early (that tester) or Stop the test (everyone).
+
 ## (Owner, Oct 22, latest: new terms offered to working testers; wins over "Edit never changes working testers")
 - When the developer saves Edit with a change to contract terms (a price, adding/removing a part, the live-call rate or
   length, questions, the deadline days), every working tester is OFFERED the new terms. Their contract doesn't change

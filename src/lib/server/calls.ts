@@ -1,9 +1,10 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, pronouns, toCents } from "@/lib/format";
-import { CALL_KINDS, cancelLine, checkActualMinutes, checkAsk, checkCancel, PAUSED_FOR_TESTERS, stopOnce, type TestEventLike } from "@/lib/rules";
+import { cancelLine, checkActualMinutes, checkAsk, checkCancel, PAUSED_FOR_TESTERS, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
-import { devGate, devOnHold, ownContract, ownTest, recordEvent, seenDate, sessionRefusal, staleNote } from "./tests";
+import { testerGate as sharedTesterGate } from "./testerGate";
+import { devGate, devOnHold, ownContract, ownTest, recordEvent, sessionRefusal, staleNote } from "./tests";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -115,12 +116,8 @@ export async function testerCallChanges(testerId: string, contractId: string, te
   return out;
 }
 
-async function testerGate(tester: U, c: { id: string; testId: string }, body: Record<string, unknown>) {
-  const seenAt = seenDate(body.seenAt);
-  const changes = await testerCallChanges(tester.id, c.id, c.testId, seenAt);
-  const r = stopOnce(changes, seenAt, body.confirmed === true, CALL_KINDS);
-  if (!r.go) throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: r.changes.map((e) => ({ text: e.text, at: e.createdAt })) });
-}
+/** Book / Cancel use the tester's one shared stop-once gate (the box shows under the pressed button). */
+const testerGate = (tester: U, c: { id: string; testId: string }, body: Record<string, unknown>) => sharedTesterGate(tester.id, c.id, c.testId, body);
 
 /** Any tester in the test may book an offered time (in their contract or not: extra). One upcoming call at a time. */
 export async function bookTime(tester: U, contractId: string, body: Record<string, unknown>) {

@@ -69,7 +69,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         {c.buildUrl && <p className="text-sm">Build: <a href={c.buildUrl} target="_blank" rel="noreferrer">{c.buildUrl}</a></p>}
         {c.description && <p className="whitespace-pre-wrap text-sm">{c.description}</p>}
         {c.keepPrivate && <p className="note">You agreed to keep this build and what you see private.</p>}
-        {c.status === "working" && <LeaveButton sessionId={c.id} />}
+        {c.status === "working" && <LeaveButton sessionId={c.id} seenAt={seenAt} />}
       </div>
 
       <TesterCallPanel
@@ -174,7 +174,7 @@ function TesterReview({ sessionId, kind, id, review, dispute }: { sessionId: str
       {review.agreedCents == null && <p className="note">This wasn&apos;t in your contract, so the developer&apos;s amount is final.</p>}
       {dispute && <p>{dispute.status === "open" ? "You disputed this: waiting for the team." : `The team decided: ${money(dispute.decidedCents)} in all${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : ""}.`}</p>}
       {dispute?.devSide && <p>The developer&apos;s side: “{dispute.devSide}”</p>}
-      {may && <DisputeForm sessionId={sessionId} kind={kind} id={id} />}
+      {may && <DisputeForm sessionId={sessionId} kind={kind} id={id} seenAt={new Date().toISOString()} />}
     </div>
   );
 }

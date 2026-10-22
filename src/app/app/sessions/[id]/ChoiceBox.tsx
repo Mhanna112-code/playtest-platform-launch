@@ -2,7 +2,8 @@
 import { useState } from "react";
 import { api } from "@/lib/client";
 import { money } from "@/lib/format";
-import { topStop } from "@/lib/topStop";
+import { stopBox, type StopBox } from "@/lib/topStop";
+import { ChangesBox } from "@/components/ChangesBox";
 
 /**
  * Day 14 without a review: charge the developer (the lower of listing and asked, minus what's already been paid for this
@@ -10,6 +11,7 @@ import { topStop } from "@/lib/topStop";
  */
 export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenAt }: { sessionId: string; submissionId: string; line: string; devName: string; cents: number; seenAt: string }) {
   const [confirmed, setConfirmed] = useState(false);
+  const [box, setBox] = useState<StopBox | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [ticked, setTicked] = useState(false);
@@ -19,7 +21,7 @@ export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenA
     api(`/api/sessions/${sessionId}/choose`, { submissionId, choice, tickedCents: choice === "charge" ? cents : undefined, seenAt, confirmed })
       .then(() => window.location.reload())
       .catch((e) => {
-        if (topStop(e)) setConfirmed(true);
+        const sb = stopBox(e); if (sb) { setBox(sb); setConfirmed(true); }
         else setErr((e as Error).message);
         setBusy(false);
       });
@@ -44,6 +46,7 @@ export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenA
           <button className="btn-ghost" disabled={busy} onClick={() => setConfirmLetGo(true)}>Let it go</button>
         </div>
       )}
+      <ChangesBox changes={box?.changes ?? null} tail={box?.tail} />
       {err && <p className="err">{err}</p>}
     </div>
   );

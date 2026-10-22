@@ -10,15 +10,16 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
 
 /** The developer's live-call panel: offer / remove times, cancel a booked call. Its stop-once box sits under this panel. */
 export function CallPanel(p: { testId: string; seenAt: string; minutes: number; open: Slot[]; booked: Booked[]; testers: { id: string; name: string }[]; stopped: boolean }) {
-  const { press, changes, error, busy } = usePress(p.seenAt);
+  const { press, changes, error, busy, at } = usePress(p.seenAt);
+  const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={error} /></div> : null);
   const [times, setTimes] = useState<string[]>([""]);
   const [all, setAll] = useState(true);
   const [ticked, setTicked] = useState<string[]>([]);
   const [link, setLink] = useState("");
   const [report, setReport] = useState<Record<string, string>>({});
 
-  async function go(action: string, body: Record<string, unknown>) {
-    const r = await press(`/api/tests/${p.testId}/${action}`, body);
+  async function go(action: string, body: Record<string, unknown>, key = action) {
+    const r = await press(`/api/tests/${p.testId}/${action}`, body, key);
     if (r) window.location.reload();
   }
 
@@ -34,20 +35,22 @@ export function CallPanel(p: { testId: string; seenAt: string; minutes: number; 
                 <li key={b.id} className="flex flex-wrap items-center gap-2">
                   <span className="mr-auto">{fmt(b.when)} · {b.minutes} min · {b.name}</span>
                   {!b.started && <a className="btn-ghost" href={b.room} target="_blank" rel="noreferrer">Join call</a>}
-                  {!b.started && (b.canCancel ? <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: b.id })}>Cancel the call</button> : (
+                  {!b.started && (b.canCancel ? <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: b.id }, "cancel-" + b.id)}>Cancel the call</button> : (
                     <span className="inline-flex gap-2">
                       <input className="input w-56" placeholder="Why? (less than 24 hours away)" value={report["c" + b.id] ?? ""} onChange={(e) => setReport({ ...report, ["c" + b.id]: e.target.value })} />
-                      <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: b.id, reason: report["c" + b.id] ?? "" })}>Cancel the call</button>
+                      <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: b.id, reason: report["c" + b.id] ?? "" }, "cancel-" + b.id)}>Cancel the call</button>
                     </span>
                   ))}
                   {b.started && !b.reported && (
                     <span className="inline-flex gap-2">
                       <a className="btn-ghost" href={b.room} target="_blank" rel="noreferrer">Join call</a>
                       <input className="input w-56" placeholder={`${b.name} didn't show up / was late…`} value={report[b.id] ?? ""} onChange={(e) => setReport({ ...report, [b.id]: e.target.value })} />
-                      <button className="btn-ghost" disabled={busy} onClick={() => go("no-show", { callId: b.id, note: report[b.id] ?? "" })}>Report a problem</button>
+                      <button className="btn-ghost" disabled={busy} onClick={() => go("no-show", { callId: b.id, note: report[b.id] ?? "" }, "noshow-" + b.id)}>Report a problem</button>
                     </span>
                   )}
                   {b.reported && <span className="note">Problem reported to the team.</span>}
+                  {box("cancel-" + b.id)}
+                  {box("noshow-" + b.id)}
                 </li>
               ))}
             </ul>
@@ -59,7 +62,8 @@ export function CallPanel(p: { testId: string; seenAt: string; minutes: number; 
             {p.open.map((s) => (
               <li key={s.id} className="flex items-center gap-2">
                 <span className="mr-auto">{fmt(s.when)} · {s.minutes} min · {s.who}</span>
-                <button className="btn-ghost" disabled={busy} onClick={() => go("remove-time", { slotId: s.id })}>Remove</button>
+                <button className="btn-ghost" disabled={busy} onClick={() => go("remove-time", { slotId: s.id }, "remove-" + s.id)}>Remove</button>
+                {box("remove-" + s.id)}
               </li>
             ))}
           </ul>
@@ -91,10 +95,10 @@ export function CallPanel(p: { testId: string; seenAt: string; minutes: number; 
             >
               Offer these times
             </button>
+            {box("offer-times")}
           </div>
         )}
       </section>
-      <ChangesBox changes={changes} error={error} />
     </div>
   );
 }

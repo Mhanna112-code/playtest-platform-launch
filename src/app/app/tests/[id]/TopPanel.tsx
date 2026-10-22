@@ -12,7 +12,8 @@ type Tester = { contractId: string; name: string };
  * Its stop-once box sits directly under this panel.
  */
 export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null }) {
-  const { press, changes, error, busy } = usePress(p.seenAt);
+  const { press, changes, error, busy, at } = usePress(p.seenAt);
+  const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={error} /> : null);
   const lines = useLiveLines(p.id, p.seenAt);
   const [open, setOpen] = useState<"" | "stop" | "end" | "next">("");
   const [who, setWho] = useState(p.working[0]?.contractId ?? "");
@@ -23,7 +24,7 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
   const STATUS: Record<string, string> = { open: "Open", closed: "Not taking new testers", stopped: "Stopped", draft: "Draft (testers can't see it yet)" };
 
   async function go(action: string, body: Record<string, unknown> = {}) {
-    const r = await press<{ id?: string }>(`/api/tests/${p.id}/${action}`, body);
+    const r = await press<{ id?: string }>(`/api/tests/${p.id}/${action}`, body, action);
     if (!r) return;
     if (action === "next-round" && r.id) window.location.href = `/app/tests/${r.id}/edit`;
     else window.location.reload();
@@ -67,6 +68,7 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
           <div className="space-y-2 rounded-lg border border-rose-200 p-3">
             <p className="text-sm">Stopping ends every tester&apos;s work now and closes the test for good. Work already sent still waits for you to pay; calls ahead are cancelled.</p>
             <button className="btn-danger" disabled={busy} onClick={() => go("stop")}>Stop the test now</button>
+            {box("stop")}
           </div>
         )}
         {open === "end" && (
@@ -81,6 +83,7 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
             <textarea id="reason" rows={2} className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
             <p className="note">Their work ends now. What they already sent still waits for you to pay; calls ahead are cancelled.</p>
             <button className="btn" disabled={busy} onClick={() => go("end-early", { contractId: who, reason })}>End their work now</button>
+            {box("end-early")}
           </div>
         )}
         {open === "next" && (
@@ -92,11 +95,11 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
               </label>
             )}
             <button className="btn" disabled={busy} onClick={() => go("next-round", { closeThis })}>Start the next round</button>
+            {box("next-round")}
           </div>
         )}
       </section>
-      <ChangesBox changes={changes} error={error} />
-      {!changes && !error && lines.length > 0 && <ChangesBox changes={lines} tail="Refresh to see the latest." />}
+      {lines.length > 0 && <ChangesBox changes={lines} tail="Refresh to see the latest." />}
     </div>
   );
 }
