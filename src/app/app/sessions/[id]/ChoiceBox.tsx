@@ -10,12 +10,13 @@ export function ChoiceBox({ sessionId, submissionId, line }: { sessionId: string
     setBusy(true);
     api(`/api/sessions/${sessionId}/choose`, { submissionId, choice }).then(() => window.location.reload()).catch((e) => { setErr((e as Error).message); setBusy(false); });
   };
-  const [charge] = line.match(/charge \$[\d.,]+/) ?? ["charge"];
+  const devName = line.split(" didn't review")[0];
+  const [amount] = line.match(/\$[\d.,]+/) ?? [""];
   return (
     <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
       <p>{line}.</p>
       <div className="flex flex-wrap gap-2">
-        <button className="btn" disabled={busy} onClick={() => go("charge")}>{charge.replace(/^charge/, "Charge")}</button>
+        <button className="btn" disabled={busy} onClick={() => go("charge")}>{`Charge ${devName} ${amount}`}</button>
         <button className="btn-ghost" disabled={busy} onClick={() => go("letgo")}>Let it go</button>
       </div>
       {err && <p className="err">{err}</p>}

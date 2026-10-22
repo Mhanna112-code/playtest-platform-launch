@@ -226,6 +226,7 @@ async function signIn(page, email) {
   });
 
   await flow("09", "Payment hold: tests pause, the tester reads only 'paused', Pay what you owe lifts it", async () => {
+    await dev.waitForTimeout(2500); // let the pending reload from the invite (flow 08) finish
     const { execFileSync } = require("child_process");
     execFileSync("psql", ["-h", "localhost", "-p", "5499", "-U", "postgres", "-d", "playtest_lite", "-c", `update "User" set "holdStartedAt" = now() - interval '1 day', "holdReason" = 'unpaid' where email = '${DEV}'`]);
     await dev.goto(testUrl);

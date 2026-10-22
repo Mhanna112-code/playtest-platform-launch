@@ -21,6 +21,18 @@ and look, but this version deliberately drops most of its complexity.
   the page); the tester's Charge / Let it go are hidden while paused, and a press from an old page is refused with
   "This test is paused: you can choose once it resumes." If the developer paid or rejected meanwhile, Charge / Let it
   go is refused for good ("Nora Lane paid $8.00 for this meanwhile.").
+- **(Owner, notification schedule; wins over earlier frequencies)**
+  - Countdown pattern for deadlines: 1 month before (if more than a month away), 1 week before, 3 days before,
+    1 day before. Used for Open until (developer + working testers: bell + yellow ⏱ line) and for the developer's
+    unreviewed CONTRACT work against its 14-day window (1 week, 3 days, 1 day before day 14), then DAILY after day 14
+    until it's paid, rejected, charged or let go. Work outside the contract has no deadline: bell every 3 days.
+  - Tester gets "Work sent" confirmations too (bell + email per setting).
+  - Invites: first invite bell + email, then a bell reminder every 3 days until the tester joins, presses "No thanks",
+    or the invite expires.
+  - Admin: ONE digest email every 3 days (not daily) listing everything open; each no-show report appears in a
+    digest once.
+  - "Pay what you owe first." refusal under Pay/Reject includes a link "Pay what you owe ↑" that jumps to the hold box
+    at the top of the page.
 - **Payment-failure notices (frequency):** developer: on the failure (bell + email), each failed daily retry (bell
   only), 1 day before the cut-off (bell + email), when the hold starts and when it lifts (bell + email). Tester: once
   when a payment for their work is delayed (bell + email per their setting), then when it's paid or the test resumes.
