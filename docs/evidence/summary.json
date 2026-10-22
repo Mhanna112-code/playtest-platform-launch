@@ -1,0 +1,102 @@
+{
+  "run": "2026-10-22T15:25:30.663Z",
+  "base": "http://localhost:3400",
+  "flows": [
+    {
+      "id": "01",
+      "title": "Landing page and waitlist (phone)",
+      "status": "pass",
+      "checks": [
+        "PASS headline shows",
+        "PASS waitlist confirms"
+      ],
+      "screenshots": [
+        "01-landing.png",
+        "01-waitlist-done.png"
+      ]
+    },
+    {
+      "id": "02",
+      "title": "Developer signs in with an email link and posts a test (desktop)",
+      "status": "pass",
+      "checks": [
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjp0i32000z7ky4bjmkafuv)",
+        "PASS terms line"
+      ],
+      "screenshots": [
+        "02-post-form.png",
+        "02-test-page.png"
+      ]
+    },
+    {
+      "id": "03",
+      "title": "Tester signs in, sets a profile, finds and joins the test (phone)",
+      "status": "pass",
+      "checks": [
+        "PASS tester sees their share (80%)",
+        "PASS session page shows the contract"
+      ],
+      "screenshots": [
+        "03-find.png",
+        "03-listing.png",
+        "03-session.png"
+      ]
+    },
+    {
+      "id": "04",
+      "title": "Stop once on the developer's top panel, then the tester sends answers",
+      "status": "pass",
+      "checks": [
+        "PASS box lists what changed"
+      ],
+      "screenshots": [
+        "04-answers-sent.png",
+        "04-stop-once-box.png"
+      ]
+    },
+    {
+      "id": "05",
+      "title": "Developer pays with the one Pay box; the tester sees it",
+      "status": "pass",
+      "checks": [
+        "PASS listing amount beside the box",
+        "PASS paid so far",
+        "PASS tester sees what they get"
+      ],
+      "screenshots": [
+        "05-pay-box.png",
+        "05-paid.png",
+        "05-paid.png"
+      ]
+    },
+    {
+      "id": "06",
+      "title": "Live call: developer offers a time, tester books it",
+      "status": "pass",
+      "checks": [
+        "PASS tester has a booked call with Join call",
+        "PASS developer sees the booking"
+      ],
+      "screenshots": [
+        "06-time-offered.png",
+        "06-call-booked.png",
+        "06-call-booked.png"
+      ]
+    },
+    {
+      "id": "07",
+      "title": "Chat, payments page and admin",
+      "status": "pass",
+      "checks": [
+        "PASS payments page",
+        "PASS admin page (saw: http://localhost:3400/admin)"
+      ],
+      "screenshots": [
+        "07-chat.png",
+        "07-payments.png",
+        "07-admin.png"
+      ]
+    }
+  ],
+  "pass": true
+}
