@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T17:24:47.388Z",
+  "run": "2026-10-22T17:39:44.268Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjt9xso00077kjok1ei0yyt)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvjtt5ty00077kccigbr93q4)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -167,7 +167,7 @@
       "title": "Charge declined: owed with a 3-day cut-off (developer banner + Payments, tester line); a second failure pauses at once",
       "status": "pass",
       "checks": [
-        "PASS test posted (saw: {\"id\":\"cmvjtalyo003j7kjoxhc4augm\"})",
+        "PASS test posted (saw: {\"id\":\"cmvjttuef003j7kcc6m0f2irb\"})",
         "PASS both testers joined",
         "PASS tester offered the choice",
         "PASS developer banner with the cut-off",
@@ -284,7 +284,7 @@
       "title": "Live updates: both pages open, lines appear within ~20 s without reloading",
       "status": "pass",
       "checks": [
-        "PASS tester page showed the new time without reload (saw: 17 s)",
+        "PASS tester page showed the new time without reload (saw: 18 s)",
         "PASS open time turned into a booking",
         "PASS developer page showed the booking line without reload (saw: 17 s)"
       ],
@@ -295,6 +295,28 @@
         "16-live-after-developer.png",
         "16-live-updates-developer.webm",
         "16-live-updates-tester.webm"
+      ]
+    },
+    {
+      "id": "17",
+      "title": "New terms offered: Edit → the tester's top box → Send stops once → Switch → the next send is priced under the new terms",
+      "status": "pass",
+      "checks": [
+        "PASS Edit explains the offer",
+        "PASS Save result names the offer",
+        "PASS tester row: on original terms",
+        "PASS tester's top stop-once box",
+        "PASS top box offers the new terms",
+        "PASS recording priced under the new terms ($20.00) (saw: 2000)",
+        "PASS tester row: switched"
+      ],
+      "screenshots": [
+        "17-edit-developer.png",
+        "17-saved-developer.png",
+        "17-send-stops-once-tester.png",
+        "17-offer-box-tester.png",
+        "17-switched-and-sent-developer.png",
+        "17-switched-and-sent-tester.png"
       ]
     }
   ],

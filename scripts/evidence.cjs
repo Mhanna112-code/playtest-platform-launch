@@ -593,6 +593,41 @@ async function signIn(page, email) {
     }
   });
 
+  await flow("17", "New terms offered: Edit → the tester's top box → Send stops once → Switch → the next send is priced under the new terms", async () => {
+    // Dee uploads a recording first (the page reloads), so the page's "seen" marker is before the Edit.
+    await t2.goto(`/app/sessions/${SD}`);
+    await t2.setInputFiles("input[type=file]", { name: "run2.webm", mimeType: "video/webm", buffer: Buffer.from("another tiny video") });
+    await t2.waitForSelector("text=run2.webm", { timeout: 15000 });
+    await t2.waitForTimeout(1000);
+    // The developer edits the recording price ($15 → $20) through the Edit page.
+    await dev.goto(`/app/tests/${T11}/edit`);
+    check("Edit explains the offer", await has(dev, "text=each is offered these new terms and can switch"));
+    await dev.fill("#recordingPrice", "20.00");
+    await shot(dev, "edit-developer");
+    await dev.click("button:has-text('Save')");
+    check("Save result names the offer", await has(dev, "text=Saved. Offered the new terms to"));
+    check("tester row: on original terms", await has(dev, "text=On their original terms · offered new terms"));
+    await shot(dev, "saved-developer");
+    // Dee's page (loaded before the Edit): Send stops once at the TOP.
+    await t2.click("button:has-text('Send my recording')");
+    check("tester's top stop-once box", await has(t2, "text=offered new terms: recording $15 → $20"));
+    await shot(t2, "send-stops-once-tester");
+    // Switch, then send: priced under the new terms.
+    await t2.reload();
+    check("top box offers the new terms", await has(t2, "text=updated the listing: recording $15 → $20"));
+    await shot(t2, "offer-box-tester");
+    await t2.click("text=Switch to the new terms");
+    await t2.waitForTimeout(1500);
+    await t2.click("button:has-text('Send my recording')");
+    await t2.waitForTimeout(1500);
+    const agreed = sql(`select "agreedCents" from "Submission" where "contractId" = '${SD}' and kind = 'recording'`);
+    check("recording priced under the new terms ($20.00)", agreed === "2000", agreed);
+    await t2.reload();
+    await dev.goto(t11Url());
+    check("tester row: switched", await has(dev, "text=Switched to the"));
+    await both("switched-and-sent", t2);
+  });
+
   await browser.close();
   summary.pass = summary.flows.every((f) => f.status === "pass");
   fs.writeFileSync(path.join(OUT, "summary.json"), JSON.stringify(summary, null, 2));
