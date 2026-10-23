@@ -50,6 +50,7 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
   const [busy, setBusy] = useState(false);
   const [errs, setErrs] = useState<string[]>([]);
   const [changes, setChanges] = useState<Change[] | null>(null);
+  const [listingEdited, setListingEdited] = useState(false);
   useLiveAppend(changes != null, (added) => setChanges((c) => (c ? mergeChanges(c, added) : c)));
   const [saved, setSaved] = useState("");
   const set = (p: Partial<F>) => {
@@ -75,7 +76,10 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
       const q = (k: string, v?: string[]) => (v?.length ? `&${k}=${encodeURIComponent(v.join(", "))}` : "");
       window.location.href = `/app/tests/${edit.id}?saved=1&offered=${r.offered ?? 0}${q("closed", r.closedApps)}${q("resent", r.resent)}${q("skipped", r.notReinvited)}${r.spotClosed?.length ? `${q("spotclosed", r.spotClosed)}&spots=${r.spots}` : ""}`;
     } catch (err) {
-      if (err instanceof ApiError && err.code === "changed") setChanges(err.data.changes as Change[]);
+      if (err instanceof ApiError && err.code === "changed") {
+        setChanges(err.data.changes as Change[]);
+        setListingEdited(err.data.listingEdited === true);
+      }
       else {
         setChanges(null);
         setErrs(err instanceof ApiError && Array.isArray(err.data.errors) ? (err.data.errors as string[]) : [(err as Error).message]);
@@ -162,7 +166,7 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
         {edit && edit.testersIn > 0 && <p className="note">Testers already working keep their contract; each is offered these new terms and can switch. Work they&apos;ve already sent keeps its price.</p>}
         <button className="btn" disabled={busy}>{busy ? "Saving…" : edit ? "Save" : "Post the test"}</button>
         {saved && <p className="ok">{saved}</p>}
-        <ChangesBox changes={changes} tail="Press Save again to save your changes (fields you didn't touch keep the newer values)." />
+        <ChangesBox changes={changes} tail={listingEdited ? "Press Save again to save your changes (fields you didn't touch keep the newer values)." : "Press Save again to save."} />
         {errs.length > 0 && <p className="err-field">Fix the {errs.length === 1 ? "mistake" : `${errs.length} mistakes`} above, then press {edit ? "Save" : "Post the test"} again.</p>}
         {errs.length > 0 && (
           <ul className="err-field list-disc pl-5">

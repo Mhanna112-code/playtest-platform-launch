@@ -63,6 +63,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const myRating = rated.tester;
   const rateBlock = myRating ? "rated" : await rateBlocker(c.id, "tester");
   const rateWarn = await rateWarning(c.id);
+  // Live calls: the request panel shows only when there's something to do or see.
+  const canRequestCall = !refusal && !blockedPair && !c.test.developer.holdStartedAt;
+  const pendingReqs = await db.callRequest.findMany({ where: { contractId: c.id, status: "pending", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
   const infoChanged = (await db.testEvent.count({ where: { testId: c.testId, kind: "info", createdAt: { gt: c.joinedAt } } })) > 0;
   return (
     <>
@@ -122,17 +125,19 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         mine={c.calls.map((x) => ({ id: x.id, when: x.startsAt.toISOString(), minutes: x.minutes, room: roomUrl(x, x.slot), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, cancelled: blockedPair && x.status !== "cancelled" ? "not available" : cancelledText(x), rate: rateLabel(x.rateCents, c.liveRateCents), late: isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined }))}
         lateNote={now > c.dueAt ? `Your deadline was ${fmtDate(c.dueAt).replace(/, \d{4}$/, "")} (a guide, not a limit): a call you book now reads “${bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, ""))}”.` : undefined}
       />
-      <section className="panel" aria-label="Call requests">
-        <h3>Call requests</h3>
-        <CallRequests
-          side="tester"
-          path={`/api/sessions/${c.id}`}
-          seenAt={seenAt}
-          canRequest={!refusal && !blockedPair && !c.test.developer.holdStartedAt}
-          targets={[{ contractId: c.id, name: dev, rate: "" }]}
-          requests={(await db.callRequest.findMany({ where: { contractId: c.id, status: "pending", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } })).map((r) => ({ id: r.id, times: (r.times.length ? r.times : [r.startsAt]).map((d) => d.toISOString()), weeks: r.weeks, repeat: r.repeat, mine: r.fromSide === "tester", who: dev, contractId: c.id, rate: r.askRateCents != null ? `you ask ${money(r.askRateCents).replace(/\.00$/, "")}/h` : rateLabel(c.liveRateCents, c.liveRateCents) }))}
-        />
-      </section>
+      {(canRequestCall || pendingReqs.length > 0) && (
+        <section className="panel" aria-label="Call requests">
+          <h2>Live call requests</h2>
+          <CallRequests
+            side="tester"
+            path={`/api/sessions/${c.id}`}
+            seenAt={seenAt}
+            canRequest={canRequestCall}
+            targets={[{ contractId: c.id, name: dev, rate: "" }]}
+            requests={pendingReqs.map((r) => ({ id: r.id, times: (r.times.length ? r.times : [r.startsAt]).map((d) => d.toISOString()), weeks: r.weeks, repeat: r.repeat, mine: r.fromSide === "tester", who: dev, contractId: c.id, rate: r.askRateCents != null ? `you ask ${money(r.askRateCents).replace(/\.00$/, "")}/h` : rateLabel(c.liveRateCents, c.liveRateCents) }))}
+          />
+        </section>
+      )}
       {c.calls.filter((x) => !x.review && x.status === "booked" && x.startsAt <= now).map((x) => (
         <p key={x.id} className="info">
           Live call on {fmtDateTime(x.startsAt)}: waiting for {dev} to pay. {partLine(callReference(x.rateCents, x.actualMinutes ?? x.minutes).cents, x.askedCents, partPaid.get(x.id) ?? 0)}{failedCalls.has(x.id) && ` ${DELAYED_CALL_LINE}`}

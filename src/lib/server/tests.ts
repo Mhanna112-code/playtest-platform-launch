@@ -202,12 +202,14 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // (testers' actions, and anything saved or done in another tab), then any other change to the listing's version.
     const seen = seenOf(body.seenAt);
     const dc = !confirmed && seen ? withRenamed(await devChanges(dev.id, testId, seen, tabOf(body), tx), body) : [];
+    // The "fields you didn't touch keep the newer values" tail only when the listing itself was saved elsewhere.
+    const listingEdited = events.some((e) => e.kind === "edited" || e.kind === "edited_spots");
     if (dc.length) {
-      throw new HttpError(409, "changed", "Press Save again to save your changes.", { changes: dc.map((c) => ({ text: c.text, at: c.createdAt })), version: t.version, current: asListing(t) });
+      throw new HttpError(409, "changed", "Press Save again to save.", { changes: dc.map((c) => ({ text: c.text, at: c.createdAt })), version: t.version, current: asListing(t), listingEdited });
     }
     if (!gate.go) {
       throw new HttpError(409, "changed", "This test changed since you opened Edit. Press Save again to save your changes on top.", {
-        changes: gate.changes.map((c) => ({ text: c.text, at: c.createdAt })), version: t.version, current: asListing(t),
+        changes: gate.changes.map((c) => ({ text: c.text, at: c.createdAt })), version: t.version, current: asListing(t), listingEdited,
       });
     }
     const current = asListing(t);

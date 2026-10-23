@@ -175,7 +175,22 @@ describe("(F) listing info", () => {
     const r = await act(testId, "edit", dev.cookie, { version: v, fields: { writtenCents: "12.00" }, seenAt: editOpened, tab: "tab-1" });
     expect(r.body.error.code).toBe("changed");
     expect(texts(r)).toEqual(["Nora Lane changed the description", "Ana Silva joined"]);
+    expect(r.body.error.listingEdited).toBe(true); // the "fields you didn't touch keep the newer values" tail
     expect((await act(testId, "edit", dev.cookie, { version: v, fields: { writtenCents: "12.00" }, seenAt: editOpened, tab: "tab-1", confirmed: true })).status).toBe(200);
+  });
+});
+
+describe("Edit Save's tail", () => {
+  it("a stop for a tester's action only (no listing edit elsewhere) uses the plain tail", async () => {
+    const { dev, testId } = await setup();
+    const editOpened = seen();
+    const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
+    await later();
+    await joined(testId);
+    const r = await act(testId, "edit", dev.cookie, { version: v, fields: { writtenCents: "12.00" }, seenAt: editOpened, tab: "tab-1" });
+    expect(r.body.error.code).toBe("changed");
+    expect(r.body.error.listingEdited).toBe(false);
+    expect(r.body.error.message).toBe("Press Save again to save.");
   });
 });
 

@@ -17,12 +17,12 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; label: s
     const r = await press(`/api/sessions/${p.sessionId}/${action}`, body, key);
     if (r) window.location.reload();
   }
+  // (Owner) Never a panel that only repeats the rate (it's in the contract line): only when there are calls.
+  if (!p.mine.length) return null;
   return (
     <div className="space-y-2" id="calls">
       <section className="panel" aria-label="Live call">
-        <h2>Live call</h2>
-        <p className="note">{p.label}</p>
-        {p.rateLine && <p className="note">{p.rateLine}</p>}
+        <h2>Your calls</h2>
         {p.lateNote && !p.refusal && <p className="note">{p.lateNote}</p>}
         {p.mine.length > 0 && (
           <ul className="space-y-2 text-sm">
