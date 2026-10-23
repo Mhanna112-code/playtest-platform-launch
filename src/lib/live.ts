@@ -38,16 +38,6 @@ export function markShownInBox(lines: Change[]) {
   for (const c of lines) shownInBox.add(ck(c));
 }
 export const wasShownInBox = (c: Change) => shownInBox.has(ck(c));
-
-/**
- * Lines a stop box under a pressed button has shown: seen. The top box still lists them, quietly: they never cause
- * its once-per-page scroll (a press never moves the page).
- */
-const shownInBox = new Set<string>();
-export function markShownInBox(lines: Change[]) {
-  for (const c of lines) shownInBox.add(ck(c));
-}
-export const wasShownInBox = (c: Change) => shownInBox.has(ck(c));
 /** Adds newly picked-up changes to an open box, skipping any it already lists. */
 export function mergeChanges(old: Change[], added: Change[]) {
   const have = new Set(old.map(ck));
