@@ -12,7 +12,12 @@ export default async function Home() {
       <nav className="flex items-center gap-4">
         <Brand />
         <span className="ml-auto" />
-        {u ? <Link className="btn" href="/app">Open the app</Link> : <Link className="btn-ghost" href="/login">Sign in</Link>}
+        {u ? <Link className="btn" href="/app">Open the app</Link> : (
+          <>
+            <Link className="nav-link" href="/login">Log in</Link>
+            <Link className="btn" href="/signup">Sign up</Link>
+          </>
+        )}
       </nav>
 
       <section className="space-y-4 pt-6">

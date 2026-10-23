@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Brand } from "@/components/Brand";
 import { db } from "@/lib/db";
 import { SignOut } from "@/components/SignOut";
+import { ResendConfirm } from "@/components/ResendConfirm";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { isAdmin } from "@/lib/server/session";
 
@@ -25,6 +26,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <SignOut />
         </nav>
       </header>
+      {!u.emailVerifiedAt && (
+        <p className="mx-auto mt-4 max-w-4xl px-4">
+          <span className="info flex flex-wrap items-center gap-2">Confirm your email: we sent a link to {u.email}. <ResendConfirm /></span>
+        </p>
+      )}
       {u.suspendedAt && (
         <p className="mx-auto mt-4 max-w-4xl px-4">
           <span className="info block">Your account is paused. You can look around, but actions are switched off. Contact support if you think this is a mistake.</span>

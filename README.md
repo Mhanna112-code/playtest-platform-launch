@@ -16,7 +16,7 @@ npx prisma migrate deploy     # or: npm run db:migrate
 npm run dev                   # http://localhost:3400
 ```
 
-- Sign in at `/login`: with no `RESEND_API_KEY`, emails go to the dev outbox at `/dev/outbox` (click the link there).
+- Sign up at `/signup` (email + password) and log in at `/login`; Forgot password emails a reset link. With no `RESEND_API_KEY`, emails (confirmation, reset) go to the dev outbox at `/dev/outbox`. Accounts made with the old email links set a password through Forgot password.
 - Admin: put your email in `ADMIN_EMAILS` and open `/admin` (disputes, no-show reports, payouts, users, tests, waitlist).
 - Without `STRIPE_SECRET_KEY`, Pay presses are recorded as "payments not set up" so the whole flow still works.
 - `npm run check` = typecheck + lint + tests + production build. Tests use the `test` schema of the local database
@@ -31,7 +31,7 @@ npm run dev                   # http://localhost:3400
 | Pay / Reject, disputes, admin decisions | `src/lib/server/payments.ts`, `src/lib/server/stripe.ts` |
 | Live calls (offer, remove, book, cancel, no-show) | `src/lib/server/calls.ts` |
 | Recordings (R2 presigned or local disk; 500 MB, 5 per session) | `src/lib/server/recordings.ts`, `src/lib/server/storage.ts` |
-| Auth (email links + Google), sessions, admin list | `src/lib/server/auth.ts`, `google.ts`, `session.ts` |
+| Auth (passwords like the full app: sign up, log in, reset, confirm email; Google if configured), sessions, admin list | `src/lib/server/passwords.ts`, `google.ts`, `session.ts` |
 | Developer test page (top panel, live-call panel, Pay boxes, chat) | `src/app/app/tests/[id]/` |
 | Tester session page (call panel, answers, recording, chat, disputes) | `src/app/app/sessions/[id]/` |
 

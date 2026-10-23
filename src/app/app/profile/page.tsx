@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { ProfileForm } from "./ProfileForm";
+import { PasswordForm } from "./PasswordForm";
 import { UnblockButton } from "@/components/BlockButton";
 import { ratingSummary } from "@/lib/server/ratings";
 
@@ -21,6 +22,7 @@ export default async function ProfilePage() {
         {rating.comments.length > 0 && <ul className="list-disc pl-5 text-sm">{rating.comments.map((c, i) => <li key={i}>“{c}”</li>)}</ul>}
       </section>
       <ProfileForm init={{ name: u.name, pronoun: u.pronoun, isDeveloper: u.isDeveloper, isTester: u.isTester, devices: p?.devices ?? [], categories: p?.categories ?? [], languages: p?.languages ?? [], bio: p?.bio ?? "", emailPref: u.emailPref }} />
+      <PasswordForm hasPassword={!!u.passwordHash} />
       <section className="panel" id="blocked">
         <h2>Blocked people</h2>
         {blocks.length === 0 ? <p className="note">You haven&apos;t blocked anyone.</p> : (

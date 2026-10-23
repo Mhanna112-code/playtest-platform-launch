@@ -81,16 +81,51 @@ async function ctx(opts) {
   c.setDefaultTimeout(15000);
   return c.newPage();
 }
+const PASSWORD = "evidence-pass-1";
+/**
+ * (NEWEST+7) Passwords: a new account signs up (email + password) and lands on /app. An account that already exists
+ * (e.g. the admin from an earlier run, made before passwords) sets one through Forgot password and the dev outbox's
+ * reset link, then logs in. The email confirmation link is clicked from the dev outbox too.
+ */
 async function signIn(page, email) {
-  await page.goto("/login");
-  await page.fill('input[type="email"]', email);
-  await page.click("text=Email me a link");
-  await page.waitForSelector("text=Check your email");
+  await page.goto("/signup");
+  await page.fill("#email", email);
+  await page.fill("#password", PASSWORD);
+  await page.click("button:has-text('Sign up')");
+  const ok = await page.waitForURL("**/app", { timeout: 8000 }).then(() => true, () => false);
+  if (!ok) {
+    // Already an account: Log in, or set a password by the reset link first.
+    await page.goto("/login");
+    await page.fill("#email", email);
+    await page.fill("#password", PASSWORD);
+    await page.click("button:has-text('Log in')");
+    if (!(await page.waitForURL("**/app", { timeout: 6000 }).then(() => true, () => false))) {
+      await page.goto("/forgot");
+      await page.fill("#email", email);
+      await page.click("button:has-text('Send the reset link')");
+      await page.waitForSelector("text=Check your email");
+      await page.goto("/dev/outbox");
+      const reset = await page.locator("div.panel", { hasText: `To ${email}` }).filter({ hasText: "Reset your password" }).first().locator("a").first().getAttribute("href");
+      await page.goto(reset);
+      await page.fill("#password", PASSWORD);
+      await page.fill("#confirm", PASSWORD);
+      await page.click("button:has-text('Save the new password')");
+      await page.waitForURL("**/login?reset=1");
+      await page.fill("#email", email);
+      await page.fill("#password", PASSWORD);
+      await page.click("button:has-text('Log in')");
+      await page.waitForURL("**/app");
+    }
+  }
+  // Confirm the email by its link (dev outbox).
+  const here = page.url();
   await page.goto("/dev/outbox");
-  const href = await page.locator("div.panel", { hasText: `To ${email}` }).first().locator("a").first().getAttribute("href");
-  await page.goto(href);
-  await page.click("text=Sign in to Playtest");
-  await page.waitForURL("**/app");
+  const box = page.locator("div.panel", { hasText: `To ${email}` }).filter({ hasText: "Confirm your email" }).first();
+  if (await box.count()) {
+    await page.goto(await box.locator("a").first().getAttribute("href"));
+    await page.waitForSelector("text=Email confirmed");
+  }
+  await page.goto(here);
 }
 
 (async () => {

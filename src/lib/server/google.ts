@@ -102,7 +102,7 @@ export async function finishGoogle(req: Request) {
   if (claims.email_verified !== true && claims.email_verified !== "true") throw new GoogleError("unverified");
   if (!isEmail(email)) throw new GoogleError("unverified");
 
-  const user = await db.user.upsert({ where: { email }, update: {}, create: { email } });
+  const user = await db.user.upsert({ where: { email }, update: {}, create: { email, emailVerifiedAt: new Date() } });
   const session = await createSession(user.id);
   return { user, cookie: sessionCookie(session.token, session.expiresAt) };
 }

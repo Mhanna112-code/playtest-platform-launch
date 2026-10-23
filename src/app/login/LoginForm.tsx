@@ -1,54 +1,27 @@
 "use client";
-import { Err } from "@/components/Err";
-import { useState } from "react";
-import { api, errOf } from "@/lib/client";
-import { isEmail } from "@/lib/format";
+import Link from "next/link";
+import { AuthForm } from "@/components/AuthForm";
+import { PasswordInput } from "@/components/PasswordInput";
 
-export function LoginForm() {
-  const [email, setEmail] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-  const [sent, setSent] = useState<{ email: string; devOutbox: boolean } | null>(null);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setErr("");
-    if (!isEmail(email.trim())) return setErr("Enter an email address like you@email.com.");
-    setBusy(true);
-    try {
-      setSent(await api<{ email: string; devOutbox: boolean }>("/api/auth/request", { email: email.trim() }));
-    } catch (e) {
-      setErr(errOf(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (sent)
-    return (
-      <div className="space-y-2" aria-live="polite">
-        <h3>Check your email</h3>
-        <p className="note">
-          We sent a sign-in link to <b>{sent.email}</b>. It works once and expires in 15 minutes.
-        </p>
-        {sent.devOutbox && (
-          <p className="note">
-            Dev mode: emails aren&apos;t sent. <a href="/dev/outbox">Open the dev outbox</a> to click the link.
-          </p>
-        )}
-        <button className="btn-ghost" type="button" onClick={() => setSent(null)}>
-          Use a different email
-        </button>
-      </div>
-    );
-
+export function LoginForm({ reset, google }: { reset: boolean; google: boolean }) {
   return (
-    <form className="flex flex-wrap gap-2" onSubmit={submit} noValidate>
-      <input className="input max-w-xs" type="email" placeholder="you@email.com" aria-label="Email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-      <button className="btn" disabled={busy}>
-        {busy ? "Sending…" : "Email me a link"}
-      </button>
-      <Err text={err} />
-    </form>
+    <AuthForm path="/api/auth/login" next="/app" submit="Log in" busy="Logging in…" footer={<p className="note">New here? <Link href="/signup">Create an account</Link></p>}>
+      {reset && <p className="ok">Password changed. Log in with the new one.</p>}
+      {google && (
+        <>
+          <a className="btn-ghost w-full" href="/api/auth/google/start">Continue with Google</a>
+          <p className="note text-center">or</p>
+        </>
+      )}
+      <div>
+        <label className="label req" htmlFor="email">Email</label>
+        <input className="input" id="email" name="email" type="email" autoComplete="email" required />
+      </div>
+      <div>
+        <label className="label req" htmlFor="password">Password</label>
+        <PasswordInput id="password" name="password" autoComplete="current-password" required />
+        <Link href="/forgot" className="mt-1 inline-block text-xs">Forgot your password?</Link>
+      </div>
+    </AuthForm>
   );
 }

@@ -1,31 +1,18 @@
 import { redirect } from "next/navigation";
-import { Brand } from "@/components/Brand";
+import { AuthShell } from "@/components/AuthShell";
 import { GOOGLE_MESSAGES, googleConfigured } from "@/lib/server/google";
 import { getPageUser } from "@/lib/server/page-auth";
 import { LoginForm } from "./LoginForm";
 
-export const metadata = { title: "Sign in · Playtest" };
+export const metadata = { title: "Log in · Playtest" };
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; reset?: string }> }) {
   if (await getPageUser()) redirect("/app");
-  const { error } = await searchParams;
+  const { error, reset } = await searchParams;
   return (
-    <main className="wrap max-w-xl space-y-4">
-      <Brand />
-      <div className="panel">
-        <h1>Sign in</h1>
-        <p className="note">No password: we email you a link. New here? The same link creates your account.</p>
-        {error && GOOGLE_MESSAGES[error] && <p className="err">{GOOGLE_MESSAGES[error]}</p>}
-        {googleConfigured() && (
-          <>
-            <a className="btn-ghost" href="/api/auth/google/start">
-              Continue with Google
-            </a>
-            <p className="note">Or get a sign-in link by email:</p>
-          </>
-        )}
-        <LoginForm />
-      </div>
-    </main>
+    <AuthShell title="Log in">
+      {error && GOOGLE_MESSAGES[error] && <p className="err">{GOOGLE_MESSAGES[error]}</p>}
+      <LoginForm reset={!!reset} google={googleConfigured()} />
+    </AuthShell>
   );
 }

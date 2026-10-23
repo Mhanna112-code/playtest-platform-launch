@@ -19,6 +19,9 @@ model User {
   isDeveloper Boolean   @default(false)
   isTester    Boolean   @default(false)
   isAdmin     Boolean   @default(false)
+  /// (NEWEST+7) bcrypt hash ("" = no password yet: set one through Forgot password)
+  passwordHash    String    @default("")
+  emailVerifiedAt DateTime?
   suspendedAt DateTime?
   suspendNote String    @default("")
   createdAt   DateTime  @default(now())
@@ -53,6 +56,8 @@ model LoginToken {
   id        String    @id @default(cuid())
   tokenHash String    @unique
   email     String
+  /// "reset" (choose a new password) | "verify" (confirm the email) | "login" (old email links, no longer issued)
+  kind      String    @default("login")
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())

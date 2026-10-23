@@ -7,6 +7,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // NEXT_DIST_DIR lets a check/build run beside a running `next dev` without overwriting its .next folder.
+  ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

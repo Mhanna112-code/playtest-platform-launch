@@ -1,34 +1,76 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { POST as requestPOST } from "@/app/api/auth/request/route";
-import { POST as verifyPOST } from "@/app/api/auth/verify/route";
+import { POST as signupPOST } from "@/app/api/auth/signup/route";
+import { POST as loginPOST } from "@/app/api/auth/login/route";
+import { POST as forgotPOST } from "@/app/api/auth/forgot/route";
+import { POST as resetPOST } from "@/app/api/auth/reset/route";
+import { POST as passwordPOST } from "@/app/api/auth/password/route";
 import { POST as logoutPOST } from "@/app/api/auth/logout/route";
 import { POST as profilePOST } from "@/app/api/profile/route";
-import { getUserFromRequest, hashToken, isAdmin } from "@/lib/server/session";
+import { confirmEmail } from "@/lib/server/passwords";
+import { getUserFromRequest, isAdmin } from "@/lib/server/session";
 import { email, json, makeUser, req } from "./helpers";
 
-async function linkFor(addr: string) {
-  const mail = await db.outboxEmail.findFirstOrThrow({ where: { to: addr }, orderBy: { createdAt: "desc" } });
-  const link = mail.text.split("\n").find((l) => l.startsWith("http"))!;
-  return { mail, link, token: new URL(link).searchParams.get("token")! };
-}
+// (Owner, Oct 22, NEWEST+7) Sign-in like the full site: passwords replace the email sign-in links.
 
-describe("email sign-in links", () => {
-  it("emails a one-use link to the dev outbox and signs in with it", async () => {
-    const addr = email("signin");
-    const res = await requestPOST(req("/api/auth/request", { body: { email: " " + addr.toUpperCase() } }));
-    expect(await json(res)).toMatchObject({ status: 200, body: { sent: true, email: addr, devOutbox: true } });
-    const { mail, link, token } = await linkFor(addr);
-    expect(mail.subject).toBe("Your Playtest sign-in link");
-    expect(link.startsWith("http://localhost:3400/login/verify?token=")).toBe(true);
-    expect(await db.loginToken.count({ where: { tokenHash: hashToken(token) } })).toBe(1);
-    const v = await verifyPOST(req("/api/auth/verify", { body: { token } }));
-    expect(v.status).toBe(200);
-    const cookie = v.headers.get("set-cookie")!;
-    expect(cookie).toMatch(/^pt_session=[\w-]+; Path=\/; HttpOnly; SameSite=Lax/);
-    const user = await getUserFromRequest(req("/app", { cookie: cookie.split(";")[0] }));
-    expect(user?.email).toBe(addr);
-    expect((await verifyPOST(req("/api/auth/verify", { body: { token } }))).status).toBe(400);
+async function lastLink(addr: string, path: string) {
+  const mail = await db.outboxEmail.findFirstOrThrow({ where: { to: addr }, orderBy: { createdAt: "desc" } });
+  const link = mail.text.split("\n").find((l) => l.includes(path))!;
+  return { mail, token: link.split(path)[1].trim() };
+}
+const cookieOf = (r: Response) => r.headers.get("set-cookie")!.split(";")[0];
+
+describe("sign up, confirm, log in, reset", () => {
+  it("signs up with email + password (signed in at once), confirms the email by link, logs in; a wrong password is red", async () => {
+    const addr = email("signup");
+    expect((await json(await signupPOST(req("/api/auth/signup", { body: { email: addr, password: "short" } })))).body.error).toMatchObject({ code: "bad_field", message: "Password must be at least 8 characters" });
+    const r = await signupPOST(req("/api/auth/signup", { body: { email: " " + addr.toUpperCase(), password: "harbor-run-1" } }));
+    expect(r.status).toBe(200);
+    const u = await getUserFromRequest(req("/app", { cookie: cookieOf(r) }));
+    expect(u?.email).toBe(addr);
+    expect(u?.passwordHash).toMatch(/^\$2[aby]\$10\$/); // bcrypt, cost 10 (as the full app)
+    expect(u?.emailVerifiedAt).toBeNull();
+    expect((await json(await signupPOST(req("/api/auth/signup", { body: { email: addr, password: "harbor-run-1" } })))).body.error.message).toBe("An account with that email already exists");
+    // Confirm the email.
+    const { mail, token } = await lastLink(addr, "/verify/");
+    expect(mail.subject).toBe("Confirm your email");
+    expect((await confirmEmail(token)).ok).toBe(true);
+    expect((await db.user.findUniqueOrThrow({ where: { email: addr } })).emailVerifiedAt).not.toBeNull();
+    // Log in; a wrong password is a form mistake (400, red).
+    const bad = await json(await loginPOST(req("/api/auth/login", { body: { email: addr, password: "wrong-pass" } })));
+    expect(bad).toMatchObject({ status: 400, body: { error: { message: "Wrong email or password" } } });
+    const good = await loginPOST(req("/api/auth/login", { body: { email: addr, password: "harbor-run-1" } }));
+    expect(good.status).toBe(200);
+    expect((await getUserFromRequest(req("/app", { cookie: cookieOf(good) })))?.email).toBe(addr);
+  });
+
+  it("Forgot password -> reset link -> new password; every device is signed out; the link works once", async () => {
+    const addr = email("reset");
+    const s1 = await signupPOST(req("/api/auth/signup", { body: { email: addr, password: "first-pass-1" } }));
+    const s2 = await loginPOST(req("/api/auth/login", { body: { email: addr, password: "first-pass-1" } }));
+    expect((await json(await forgotPOST(req("/api/auth/forgot", { body: { email: addr } })))).body).toEqual({ sent: true });
+    expect((await json(await forgotPOST(req("/api/auth/forgot", { body: { email: email("nobody") } })))).body).toEqual({ sent: true }); // same answer
+    const { mail, token } = await lastLink(addr, "/reset/");
+    expect(mail.subject).toBe("Reset your password");
+    expect((await json(await resetPOST(req("/api/auth/reset", { body: { token, password: "new-pass-12", confirm: "other" } })))).body.error.message).toBe("The two passwords don't match");
+    expect((await resetPOST(req("/api/auth/reset", { body: { token, password: "new-pass-12", confirm: "new-pass-12" } }))).status).toBe(200);
+    for (const r of [s1, s2]) expect(await getUserFromRequest(req("/app", { cookie: cookieOf(r) }))).toBeNull();
+    expect((await json(await resetPOST(req("/api/auth/reset", { body: { token, password: "again-pass-1", confirm: "again-pass-1" } })))).body.error.message).toBe("This link has expired or was already used. Ask for a new one.");
+    expect((await loginPOST(req("/api/auth/login", { body: { email: addr, password: "first-pass-1" } }))).status).toBe(400);
+    expect((await loginPOST(req("/api/auth/login", { body: { email: addr, password: "new-pass-12" } }))).status).toBe(200);
+  });
+
+  it("changing the password signs out the other devices (not this one); old accounts without a password use Forgot password", async () => {
+    const addr = email("change");
+    const here = await signupPOST(req("/api/auth/signup", { body: { email: addr, password: "first-pass-1" } }));
+    const other = await loginPOST(req("/api/auth/login", { body: { email: addr, password: "first-pass-1" } }));
+    expect((await json(await passwordPOST(req("/api/auth/password", { cookie: cookieOf(here), body: { current: "nope-nope", password: "second-pass", confirm: "second-pass" } })))).body.error.message).toBe("Your current password isn't right");
+    expect((await passwordPOST(req("/api/auth/password", { cookie: cookieOf(here), body: { current: "first-pass-1", password: "second-pass", confirm: "second-pass" } }))).status).toBe(200);
+    expect(await getUserFromRequest(req("/app", { cookie: cookieOf(here) }))).not.toBeNull();
+    expect(await getUserFromRequest(req("/app", { cookie: cookieOf(other) }))).toBeNull();
+    // An account from the old email links: no password yet.
+    const { user } = await makeUser();
+    expect((await json(await loginPOST(req("/api/auth/login", { body: { email: user.email, password: "anything-1" } })))).body.error.message).toBe("This account has no password yet. Use “Forgot your password?” to choose one.");
   });
 
   it("sign out ends the session", async () => {
@@ -36,12 +78,6 @@ describe("email sign-in links", () => {
     expect(await getUserFromRequest(req("/app", { cookie }))).not.toBeNull();
     await logoutPOST(req("/api/auth/logout", { body: {}, cookie }));
     expect(await getUserFromRequest(req("/app", { cookie }))).toBeNull();
-  });
-
-  it("rate-limits links per address", async () => {
-    const addr = email("rate");
-    for (let i = 0; i < 5; i++) expect((await requestPOST(req("/api/auth/request", { body: { email: addr } }))).status).toBe(200);
-    expect((await requestPOST(req("/api/auth/request", { body: { email: addr } }))).status).toBe(429);
   });
 });
 
