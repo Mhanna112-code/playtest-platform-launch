@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-23T04:43:45.297Z",
+  "run": "2026-10-23T06:03:16.720Z",
   "base": "http://localhost:3450",
   "flows": [
     {
@@ -635,8 +635,50 @@
         "29-suggested-and-tick-filters-developer.png",
         "29-dashboard-developer.png"
       ]
+    },
+    {
+      "id": "30",
+      "title": "NEWEST+9: profile tiles (developer: 3 + rating with the footnote; tester: Accepted parts + Rating), the overlap refusal links to the other side's request, and the remaining pages in the full app's look",
+      "status": "pass",
+      "checks": [
+        "PASS test posted (saw: {\"id\":\"cmvkkdcen00067kocfguzv6xg\"})",
+        "PASS tester joined",
+        "PASS developer paid the written answers (saw: {\"reviewId\":\"cmvkkdfv5000y7kocjp7cge32\",\"amountCents\":1000,\"status\":\"charged\",\"rejected\":false,\"paidSoFarCents\":1000})",
+        "PASS both rated (saw: [{\"rated\":true},{\"rated\":true}])",
+        "PASS developer profile: Reports reviewed",
+        "PASS developer profile: Pays on average 100% with the split line",
+        "PASS developer profile: Typical review 2 days with the charges/disputes line",
+        "PASS developer profile: Rating 5.0 ★, 1 rating",
+        "PASS developer profile: the footnote",
+        "PASS developer dashboard: the same tiles",
+        "PASS tester profile: Accepted parts, of 1 sent · 1 session",
+        "PASS tester profile: Rating 4.0 ★",
+        "PASS tester profile: no Completion / Acceptance rate tiles",
+        "PASS refused, naming her request as a link",
+        "PASS no Accept inside the refusal",
+        "PASS the link scrolls to her request and marks it (its Accept in its row) (saw: [{\"id\":\"req-cmvkkdihl00297kocwfmhno62\",\"accept\":true}])",
+        "PASS listing: header card, wants to know, Your deal",
+        "PASS payments: card with its icon heading",
+        "PASS profile: account card with the links",
+        "PASS admin page"
+      ],
+      "screenshots": [
+        "30-developer-profile-tiles-tester.png",
+        "30-dashboard-tiles-developer.png",
+        "30-tester-profile-tiles-developer.png",
+        "30-overlap-refusal-link-tester.png",
+        "30-overlap-request-marked-tester.png",
+        "30-session-tester.png",
+        "30-listing-tester.png",
+        "30-payments-developer.png",
+        "30-payments-tester.png",
+        "30-profile-developer.png",
+        "30-notifications-tester.png",
+        "30-admin.png"
+      ]
     }
   ],
+  "mergedInto": "2026-10-23T05:58:46.356Z",
   "coverage": [
     {
       "type": "Tester stop A: new terms (Send my recording)",
@@ -842,7 +884,7 @@
       "status": "pass"
     },
     {
-      "type": "Refusal: a clash when sending (the other side's request named, its Accept right there)",
+      "type": "Refusal: a clash when sending (the other side's request named; the text links to it)",
       "side": "tester",
       "flow": "24",
       "screenshot": "24-send-clash-refused-tester.png",
@@ -1147,6 +1189,83 @@
       "side": "developer",
       "flow": "29",
       "screenshot": "29-dashboard-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Developer tiles on their profile as testers see it (3 + rating, footnote)",
+      "side": "tester",
+      "flow": "30",
+      "screenshot": "30-developer-profile-tiles-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Developer tiles on their dashboard",
+      "side": "developer",
+      "flow": "30",
+      "screenshot": "30-dashboard-tiles-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Tester profile as developers see it: Accepted parts + Rating",
+      "side": "developer",
+      "flow": "30",
+      "screenshot": "30-tester-profile-tiles-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Overlap refusal: the text links to the other side's request",
+      "side": "tester",
+      "flow": "30",
+      "screenshot": "30-overlap-refusal-link-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "The linked request scrolled to and marked (Accept in its row)",
+      "side": "tester",
+      "flow": "30",
+      "screenshot": "30-overlap-request-marked-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "New layout: listing",
+      "side": "tester",
+      "flow": "30",
+      "screenshot": "30-listing-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "New layout: session with the chat",
+      "side": "tester",
+      "flow": "30",
+      "screenshot": "30-session-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "New layout: payments",
+      "side": "developer",
+      "flow": "30",
+      "screenshot": "30-payments-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "New layout: profile",
+      "side": "developer",
+      "flow": "30",
+      "screenshot": "30-profile-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "New layout: notifications",
+      "side": "tester",
+      "flow": "30",
+      "screenshot": "30-notifications-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "New layout: admin",
+      "side": "admin",
+      "flow": "30",
+      "screenshot": "30-admin.png",
       "status": "pass"
     }
   ],

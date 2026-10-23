@@ -1080,7 +1080,8 @@ async function signIn(page, email) {
     await tabA.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "30").catch(() => {});
     await tabA.getByRole("button", { name: "Request a time" }).click();
     check("send refused: the other side's waiting request is named (NEWEST+8)", await has(tabA, "text=Nora Lane already asked for"));
-    check("its Accept is right there", await has(tabA, "section[aria-label='Call requests'] >> button:has-text('Accept Nora')"));
+    await tabA.click("section[aria-label='Call requests'] a:has-text('Nora Lane already asked for')");
+    check("the refusal links to her request: it scrolls there and is marked", await has(tabA, "section[aria-label='Call requests'] li[id^='req-'][data-marked]"));
     await shot(tabA, "send-clash-refused-tester");
     // The 3-requests limit: one more goes; the next is refused.
     await reqBox(tabA).locator("input[aria-label='Requested time 1']").fill(local(atK(20)));
@@ -1508,6 +1509,106 @@ async function signIn(page, email) {
     await shot(d, "dashboard-developer");
   });
 
+  await flow("30", "NEWEST+9: profile tiles (developer: 3 + rating with the footnote; tester: Accepted parts + Rating), the overlap refusal links to the other side's request, and the remaining pages in the full app's look", async () => {
+    const DEV30 = `dev30+${TS}@playtest.test`, T30 = `tester30+${TS}@playtest.test`, T30B = `tester30b+${TS}@playtest.test`;
+    const d = await ctx(DESKTOP);
+    await signIn(d, DEV30);
+    await d.fill("#name", "Nora Lane");
+    await d.selectOption("#pronoun", "she");
+    await d.check("text=post tests for my app, game or product");
+    await d.click("text=Continue");
+    await d.waitForSelector("text=Welcome back,");
+    const r = await apiPost(d, "/api/tests", { title: "Kelp Forest", description: "Drift through the kelp and find the hidden cave.", buildUrl: "https://example.com/kelp", category: "Game: Adventure", devices: ["Windows PC"], languages: ["English"], spots: 4, writtenCents: "10.00", recordingCents: null, liveRateCents: "30.00", liveMinutes: null, deadlineDays: 7, questions: ["What did you find?", "[not required] Anything else?"], openUntil: "", joinMode: "anyone" });
+    const T = r.body.id;
+    check("test posted", !!T, JSON.stringify(r.body));
+    sql(`update "User" set "stripeCustomerId" = 'cus_fake30_${TS}', "stripePaymentMethodId" = 'pm_card_visa' where email = '${DEV30}'`);
+    const onboard = async (pg, email, name) => {
+      await signIn(pg, email);
+      await pg.fill("#name", name);
+      await pg.selectOption("#pronoun", "she");
+      await pg.check("text=test apps, games and more, and get paid");
+      await pg.click("label:has-text('Windows PC')");
+      await pg.click("label:has-text('English')");
+      await pg.click("text=Continue");
+      await pg.waitForSelector("text=Welcome back,");
+    };
+    const tp = await ctx(PHONE);
+    await onboard(tp, T30, "Ana Silva");
+    const S = (await apiPost(tp, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
+    check("tester joined", !!S);
+    await apiPost(tp, `/api/sessions/${S}/written`, { answers: ["The cave behind the third rock.", ""], seenAt: new Date().toISOString(), confirmed: true });
+    const sub = sql(`select id from "Submission" where "contractId" = '${S}' and kind = 'written'`);
+    sql(`update "Submission" set "sentAt" = (now() at time zone 'utc') - interval '2 days' where id = '${sub}'`);
+    const paid = await apiPost(d, "/api/review", { payKey: `ev30-${TS}`, seenAt: new Date().toISOString(), confirmed: true, kind: "submission", id: sub, amount: "10.00", tickedCents: 1000 });
+    check("developer paid the written answers", paid.status === 200, JSON.stringify(paid.body));
+    // Both rate: the developer's rating reveals both (blind reveal).
+    const tr = await apiPost(tp, `/api/sessions/${S}/rate`, { stars: 5, comment: "Quick review, fair pay.", seenAt: new Date().toISOString(), confirmed: true });
+    const dr = await apiPost(d, `/api/tests/${T}/rate`, { contractId: S, stars: 4, seenAt: new Date().toISOString(), confirmed: true });
+    check("both rated", tr.status === 200 && dr.status === 200, JSON.stringify([tr.body, dr.body]));
+    // Developer tiles: on their profile as testers see it, and on their dashboard.
+    await tp.goto(`/app/developers/${sql(`select id from "User" where email = '${DEV30}'`)}`);
+    check("developer profile: Reports reviewed", await has(tp, "section[aria-label='How this developer reviews'] >> text=Reports reviewed"));
+    check("developer profile: Pays on average 100% with the split line", await has(tp, "text=100% accepted in full, 0% partly, 0% rejected"));
+    check("developer profile: Typical review 2 days with the charges/disputes line", (await has(tp, "text=2 days")) && (await has(tp, "text=0 charged by testers after the review window · 0 disputes decided for testers")));
+    check("developer profile: Rating 5.0 ★, 1 rating", (await has(tp, "text=5.0 ★")) && (await has(tp, "text=1 rating")));
+    check("developer profile: the footnote", await has(tp, "text=Typical review: the median time"));
+    await shot(tp, "developer-profile-tiles-tester");
+    await d.goto("/app");
+    check("developer dashboard: the same tiles", await has(d, "section[aria-label='How this developer reviews'] >> text=Pays on average"));
+    await shot(d, "dashboard-tiles-developer");
+    // Tester tiles: Accepted parts and Rating only.
+    await d.goto(`/app/testers/${sql(`select id from "User" where email = '${T30}'`)}`);
+    check("tester profile: Accepted parts, of 1 sent · 1 session", await has(d, "text=of 1 sent · 1 session with accepted work"));
+    check("tester profile: Rating 4.0 ★", await has(d, "text=4.0 ★"));
+    check("tester profile: no Completion / Acceptance rate tiles", !(await d.isVisible("text=Completion rate")) && !(await d.isVisible("text=Acceptance rate")));
+    await shot(d, "tester-profile-tiles-developer");
+    // The overlap refusal (changed): its text links to the other side's waiting request, which scrolls into view, marked.
+    const when = new Date(Date.now() + 4 * 86400000); when.setMinutes(0, 0, 0);
+    const tp2 = await ctx(PHONE);
+    await onboard(tp2, T30B, "Ben Ito");
+    const S2 = (await apiPost(tp2, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
+    await apiPost(tp2, `/api/sessions/${S2}/message`, { body: "Hi! Is the cave on every level?" });
+    await apiPost(d, `/api/tests/${T}/message`, { testerId: sql(`select id from "User" where email = '${T30B}'`), body: "Only on level 2. Have fun!" });
+    await apiPost(d, `/api/tests/${T}/request-time`, { seenAt: new Date().toISOString(), confirmed: true, contractIds: [S2], times: [when.toISOString()], minutes: 60 });
+    await tp2.goto(`/app/sessions/${S2}`);
+    const later = new Date(when.getTime() + 15 * 60000);
+    await tp2.fill("section[aria-label='Call requests'] input[type=datetime-local]", new Date(later.getTime() - later.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+    await tp2.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "30");
+    await tp2.click("section[aria-label='Call requests'] >> text=Request a time");
+    check("refused, naming her request as a link", await has(tp2, "section[aria-label='Call requests'] a:has-text('Nora Lane already asked for')"));
+    check("no Accept inside the refusal", !(await tp2.isVisible("button:has-text(\"Accept Nora Lane's request\")")));
+    await shot(tp2, "overlap-refusal-link-tester");
+    await tp2.click("section[aria-label='Call requests'] a:has-text('Nora Lane already asked for')");
+    const marked = await tp2.evaluate(() => [...document.querySelectorAll("li[id^='req-'][data-marked]")].map((x) => ({ id: x.id, accept: [...x.querySelectorAll("button")].some((b) => b.textContent.trim() === "Accept") })));
+    check("the link scrolls to her request and marks it (its Accept in its row)", marked.length === 1 && marked[0].accept, JSON.stringify(marked));
+    await tp2.waitForTimeout(600);
+    await tp2.screenshot({ path: path.join(OUT, "30-overlap-request-marked-tester.png") });
+    cur.screenshots.push("30-overlap-request-marked-tester.png");
+    // The remaining pages in the full app's look.
+    await tp2.reload();
+    await shot(tp2, "session-tester");
+    const tl = await ctx(DESKTOP);
+    await onboard(tl, `tester30c+${TS}@playtest.test`, "Cara Diaz");
+    await tl.goto(`/app/find/${T}`);
+    check("listing: header card, wants to know, Your deal", (await has(tl, "text=Nora Lane wants to know")) && (await has(tl, "text=Your deal")));
+    await shot(tl, "listing-tester");
+    await d.goto("/app/payments");
+    check("payments: card with its icon heading", await has(d, "text=Your card (developer)"));
+    await shot(d, "payments-developer");
+    await tp.goto("/app/payments");
+    await shot(tp, "payments-tester");
+    await d.goto("/app/profile");
+    check("profile: account card with the links", (await has(d, "text=See it as testers do")) && (await has(d, "text=confirmed")));
+    await shot(d, "profile-developer");
+    await tp.goto("/app/notifications");
+    await shot(tp, "notifications-tester");
+    const adm = await ctx(DESKTOP);
+    await signIn(adm, ADMIN);
+    await adm.goto("/admin");
+    check("admin page", await has(adm, "text=Disputes"));
+    await shot(adm, "admin");
+  });
+
   await browser.close();
 
   // ---------- Coverage: one screenshot per stop / failure type, plus combined cases ----------
@@ -1548,7 +1649,7 @@ async function signIn(page, email) {
     C("Refusal: 3 booked times", "tester", "22", "22-fourth-refused-tester.png"),
     C("Refusal: 3 booked times (developer)", "developer", "22", "22-fourth-refused-developer.png"),
     C("Refusal: 3 requests waiting", "tester", "24", "24-three-requests-refused-tester.png"),
-    C("Refusal: a clash when sending (the other side's request named, its Accept right there)", "tester", "24", "24-send-clash-refused-tester.png"),
+    C("Refusal: a clash when sending (the other side's request named; the text links to it)", "tester", "24", "24-send-clash-refused-tester.png"),
     C("Refusal: weekly clash naming the week", "tester", "24", "24-weekly-clash-refused-tester.png"),
     C("Refusal: This time is no longer free", "tester", "24", "24-no-longer-free-refused-tester.png"),
     C("Refusal: Join call too early", "tester", "18", "18-join-too-early-tester.png"),
@@ -1592,6 +1693,17 @@ async function signIn(page, email) {
     C("Suggested (up to 5) and tick-box filters", "developer", "29", "29-suggested-and-tick-filters-developer.png"),
     C("New layout: developer test header", "developer", "29", "29-test-header-developer.png"),
     C("New layout: dashboards", "developer", "29", "29-dashboard-developer.png"),
+    C("Developer tiles on their profile as testers see it (3 + rating, footnote)", "tester", "30", "30-developer-profile-tiles-tester.png"),
+    C("Developer tiles on their dashboard", "developer", "30", "30-dashboard-tiles-developer.png"),
+    C("Tester profile as developers see it: Accepted parts + Rating", "developer", "30", "30-tester-profile-tiles-developer.png"),
+    C("Overlap refusal: the text links to the other side's request", "tester", "30", "30-overlap-refusal-link-tester.png"),
+    C("The linked request scrolled to and marked (Accept in its row)", "tester", "30", "30-overlap-request-marked-tester.png"),
+    C("New layout: listing", "tester", "30", "30-listing-tester.png"),
+    C("New layout: session with the chat", "tester", "30", "30-session-tester.png"),
+    C("New layout: payments", "developer", "30", "30-payments-developer.png"),
+    C("New layout: profile", "developer", "30", "30-profile-developer.png"),
+    C("New layout: notifications", "tester", "30", "30-notifications-tester.png"),
+    C("New layout: admin", "admin", "30", "30-admin.png"),
   ];
   summary.coverage = rows.map((r) => {
     const f = summary.flows.find((x) => x.id === r.flow);
