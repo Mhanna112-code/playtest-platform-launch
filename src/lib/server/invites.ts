@@ -5,6 +5,7 @@ import { HttpError } from "./http";
 import { notify } from "./notify";
 import { asListing, devGate, devGateIfSeen, needsGap, ownTest, recordEvent } from "./tests";
 import { revealedRatingsWhere } from "./ratings";
+import { doesntListTag, withYouText } from "@/lib/inviteRows";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -24,7 +25,10 @@ export async function invitable(devId: string, testId: string) {
   ]);
   const removed = new Set(blocks.map((b) => (b.blockerId === devId ? b.blockedId : b.blockerId)));
   const test = await db.test.findUniqueOrThrow({ where: { id: testId } });
-  const workedWith = new Set((await db.contract.findMany({ where: { test: { developerId: devId } }, select: { testerId: true } })).map((c) => c.testerId));
+  const withDev = await db.contract.findMany({ where: { test: { developerId: devId } }, select: { testerId: true } });
+  const workedWith = new Set(withDev.map((c) => c.testerId));
+  // (The full app's rows) "you rated 5.0/5 · 1 test with you": this developer's own ratings of them, and their tests together.
+  const mine = await db.rating.groupBy({ by: ["rateeId"], where: { raterId: devId, side: "developer" }, _avg: { stars: true } });
   const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   // (NEWEST+5) "4.6 ★ (12 ratings)" on each invite row.
   const grouped = await db.rating.groupBy({ by: ["rateeId"], where: { rateeId: { in: testers.map((t) => t.id) }, ...revealedRatingsWhere() }, _avg: { stars: true }, _count: { _all: true } });
@@ -53,6 +57,8 @@ export async function invitable(devId: string, testId: string) {
       return {
         id: t.id, name: displayName(t), devices: t.profile?.devices ?? [], languages: t.profile?.languages ?? [], categories: t.profile?.categories ?? [],
         invited: !!inv, inviteId: inv?.id ?? null, grey, rating: ratingLine(t.id),
+        tag: doesntListTag(test, t.profile),
+        detail: withYouText(mine.find((m) => m.rateeId === t.id)?._avg.stars ?? null, withDev.filter((c) => c.testerId === t.id).length),
         gap: missingNeed(test, t.profile),
         section: workedWith.has(t.id) ? "worked" : suggested.has(t.id) ? "suggested" : "other",
       };

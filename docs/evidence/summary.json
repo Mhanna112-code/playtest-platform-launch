@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-23T17:00:27.464Z",
+  "run": "2026-10-23T17:24:38.915Z",
   "base": "http://localhost:3450",
   "flows": [
     {
@@ -763,9 +763,30 @@
         "34-length-and-report-tester.png",
         "34-call-page-header-developer.png"
       ]
+    },
+    {
+      "id": "35",
+      "title": "Invite panel rows (full app format) and the Invite anyway box (in the browser): Find testers ticks only by hand, the count, 'Tick at least one tester.', the box listing each, live updates, closing with the notice, and the stop once inside it",
+      "status": "pass",
+      "checks": [
+        "PASS typing ticks nothing",
+        "PASS Invite with nothing ticked: red 'Tick at least one tester.'",
+        "PASS ticks survive the search; the count shows",
+        "PASS row: amber 'Doesn't list Korean, or Mac' and the grey detail",
+        "PASS the box lists each with what they're missing",
+        "PASS live: Ana's line went (her profile now fits)",
+        "PASS Invite anyway stops once inside the box with the new list",
+        "PASS everyone fits: the box closes, the notice under Invite",
+        "PASS Invite sends to Ana"
+      ],
+      "screenshots": [
+        "35-invite-rows-developer.png",
+        "35-invite-anyway-box-developer.png",
+        "35-invite-anyway-changed-developer.png"
+      ]
     }
   ],
-  "mergedInto": "2026-10-23T07:30:28.617Z",
+  "mergedInto": "2026-10-23T17:00:27.464Z",
   "coverage": [
     {
       "type": "Tester stop A: new terms (Send my recording)",
@@ -1451,6 +1472,27 @@
       "side": "developer",
       "flow": "34",
       "screenshot": "34-call-page-header-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Invite rows: tick, name, amber missing-needs pill, grey rated / tests with you",
+      "side": "developer",
+      "flow": "35",
+      "screenshot": "35-invite-rows-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Invite anyway box lists each ticked tester missing a need",
+      "side": "developer",
+      "flow": "35",
+      "screenshot": "35-invite-anyway-box-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Invite anyway stops once inside the box when what is missing changed",
+      "side": "developer",
+      "flow": "35",
+      "screenshot": "35-invite-anyway-changed-developer.png",
       "status": "pass"
     }
   ],

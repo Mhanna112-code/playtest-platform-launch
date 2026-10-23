@@ -188,7 +188,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           seenAt={seenAt}
           options={{ devices: t.devices, languages: t.languages }}
           testers={testers}
-          sent={invites.map((i) => ({ id: i.id, name: people.get(i.testerId) ?? "?", status: i.status === "joined" ? "joined" : expired ? "expired" : "waiting for them to join" }))}
+          sent={expired ? [] : invites.filter((i) => i.status === "sent").map((i) => ({ id: i.id, name: people.get(i.testerId) ?? "?", status: "waiting for them to join" }))}
         />
       )}
       <DevCallPanel

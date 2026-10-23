@@ -272,7 +272,7 @@ async function signIn(page, email) {
     // Tick-box filters, then Find testers by name (Suggested shows up to 5).
     await dev.click("#invite > summary"); // the fold opens
     await dev.fill("#invite input[aria-label='Find testers']", `Dee Moss ${TS % 10000}`);
-    await dev.check(`#invite label:has-text('Dee Moss ${TS % 10000}') input`);
+    await dev.check(`#invite li[data-invite-row]:has-text('Dee Moss ${TS % 10000}') input`);
     await shot(dev, "invite-panel");
     await dev.click("#invite button:has-text('Invite')");
     check("box under Invite names who was invited", await has(dev, `text=Invited Dee Moss ${TS % 10000}.`));
@@ -489,7 +489,7 @@ async function signIn(page, email) {
     await dev.goto(t11Url());
     await dev.click("#invite > summary");
     await dev.fill("#invite input[aria-label='Find testers']", `Cara Diaz ${TS % 10000}`);
-    await dev.check(`#invite label:has-text('Cara Diaz ${TS % 10000}') input`);
+    await dev.check(`#invite li[data-invite-row]:has-text('Cara Diaz ${TS % 10000}') input`);
     await dev.click("#invite button:has-text('Invite')");
     check("invite refused", await has(dev, "text=This test is paused until you pay what you owe, so nobody can be invited."));
     await shot(dev, "hold-invite-refused-developer");
@@ -1502,7 +1502,7 @@ async function signIn(page, email) {
     // (5) Suggested (up to 5) and the tick-box filters.
     await d.goto(`/app/tests/${T}`);
     await d.click("#invite > summary");
-    const sug = await d.locator("#invite h3:has-text('Suggested') ~ label").count();
+    const sug = await d.locator("#invite h3:has-text('Suggested') + ul li").count();
     check("Suggested shows up to 5", sug > 0 && sug <= 5, sug);
     await d.check("#invite fieldset:has-text('Devices') label:has-text('Mac') input");
     await d.locator("#invite").scrollIntoViewIfNeeded();
@@ -1847,6 +1847,70 @@ async function signIn(page, email) {
     cur.screenshots.push("34-call-page-header-developer.png");
   });
 
+  await flow("35", "Invite panel rows (full app format) and the Invite anyway box (in the browser): Find testers ticks only by hand, the count, 'Tick at least one tester.', the box listing each, live updates, closing with the notice, and the stop once inside it", async () => {
+    const DEV35 = `dev35+${TS}@playtest.test`;
+    const d = await ctx(DESKTOP);
+    await signIn(d, DEV35);
+    await d.fill("#name", "Nora Lane");
+    await d.selectOption("#pronoun", "she");
+    await d.check("text=post tests for my app, game or product");
+    await d.click("text=Continue");
+    await d.waitForSelector("text=Welcome back,");
+    const r = await apiPost(d, "/api/tests", { title: "Kelp Maze", description: "Find the way.", buildUrl: "https://example.com/kelpmaze", categories: ["Game"], devices: ["Mac"], languages: ["Korean"], spots: 4, writtenCents: "10.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Anything?"], openUntil: "", joinMode: "anyone" });
+    const T = r.body.id;
+    const tag = TS % 10000;
+    const mk = async (email, name) => {
+      const pg = await ctx(PHONE);
+      await signIn(pg, email);
+      await pg.fill("#name", name);
+      await pg.selectOption("#pronoun", "she");
+      await pg.check("text=test apps, games and more, and get paid");
+      await pg.click("label:has-text('Windows PC')");
+      await pg.click("label:has-text('English')");
+      await pg.click("text=Continue");
+      await pg.waitForSelector("text=Welcome back,");
+      return sql(`select id from "User" where email = '${email}'`);
+    };
+    const ana = await mk(`tester35a+${TS}@playtest.test`, `Ana Quill ${tag}`);
+    const ben = await mk(`tester35b+${TS}@playtest.test`, `Ben Quill ${tag}`);
+    await d.goto(`/app/tests/${T}`);
+    await d.click("#invite > summary");
+    // Typing a name ticks nothing; ticks are by hand and survive the search changing.
+    await d.fill("#invite input[aria-label='Find testers']", `Ana Quill ${tag}`);
+    check("typing ticks nothing", (await d.locator("#invite input[type=checkbox]:checked").count()) === 0 && (await has(d, "#invite >> text=0 selected")));
+    await d.click("#invite button:has-text('Invite')");
+    check("Invite with nothing ticked: red 'Tick at least one tester.'", await has(d, "#invite .err-field >> text=Tick at least one tester."));
+    await d.check(`#invite li[data-invite-row]:has-text('Ana Quill ${tag}') input`);
+    await d.fill("#invite input[aria-label='Find testers']", `Ben Quill ${tag}`);
+    await d.check(`#invite li[data-invite-row]:has-text('Ben Quill ${tag}') input`);
+    await d.fill("#invite input[aria-label='Find testers']", `Quill ${tag}`);
+    check("ticks survive the search; the count shows", (await d.locator("#invite input[type=checkbox]:checked").count()) === 2 && (await has(d, "#invite >> text=2 selected")));
+    check("row: amber 'Doesn't list Korean, or Mac' and the grey detail", (await has(d, `#invite li[data-invite-row]:has-text('Ana Quill ${tag}') >> text=Doesn't list Korean, or Mac`)) && (await has(d, `#invite li[data-invite-row]:has-text('Ana Quill ${tag}') >> text=not rated by you · 0 tests with you`)));
+    await d.locator("#invite").scrollIntoViewIfNeeded();
+    await shot(d, "invite-rows-developer");
+    // Invite: the box lists each ticked tester missing a need.
+    await d.click("#invite button:has-text('Invite')");
+    check("the box lists each with what they're missing", (await has(d, `[data-invite-anyway] >> text=Ana Quill ${tag} doesn't list Korean, which this test needs.`)) && (await has(d, `[data-invite-anyway] >> text=Ben Quill ${tag} doesn't list Korean, which this test needs.`)));
+    await d.locator("[data-invite-anyway]").scrollIntoViewIfNeeded();
+    await shot(d, "invite-anyway-box-developer");
+    // Live: Ana adds Korean and Mac to her profile -> her line goes (next check, within 15 s).
+    sql(`update "TesterProfile" set languages = array['English','Korean'], devices = array['Windows PC','Mac'] where "userId" = '${ana}'`);
+    await d.waitForSelector(`[data-invite-anyway] >> text=Ana Quill ${tag}`, { state: "detached", timeout: 20000 }).catch(() => {});
+    check("live: Ana's line went (her profile now fits)", !(await d.isVisible(`[data-invite-anyway] >> text=Ana Quill ${tag}`)) && (await has(d, `[data-invite-anyway] >> text=Ben Quill ${tag}`)));
+    // What's missing changes for Ben (he adds Korean: now it's Mac) -> Invite anyway stops once inside the box.
+    sql(`update "TesterProfile" set languages = array['English','Korean'] where "userId" = '${ben}'`);
+    await d.click("[data-invite-anyway] button:has-text('Invite anyway')");
+    check("Invite anyway stops once inside the box with the new list", (await has(d, "[data-invite-anyway] >> text=What's missing changed since you looked.")) && (await has(d, `[data-invite-anyway] >> text=Ben Quill ${tag} doesn't list Mac, which this test needs.`)));
+    await shot(d, "invite-anyway-changed-developer");
+    // Untick Ben -> everyone ticked meets the needs: the box closes; the notice under Invite.
+    await d.uncheck(`#invite li[data-invite-row]:has-text('Ben Quill ${tag}') input`);
+    await d.waitForSelector("[data-invite-anyway]", { state: "detached", timeout: 8000 }).catch(() => {});
+    check("everyone fits: the box closes, the notice under Invite", !(await d.isVisible("[data-invite-anyway]")) && (await has(d, "#invite >> text=Everyone you ticked now meets this test's needs. Press Invite to send.")));
+    await d.click("#invite button:has-text('Invite')");
+    await d.waitForTimeout(2500);
+    check("Invite sends to Ana", sql(`select count(*) from "Invite" where "testId" = '${T}' and "testerId" = '${ana}' and status = 'sent'`) === "1");
+  });
+
   await browser.close();
 
   // ---------- Coverage: one screenshot per stop / failure type, plus combined cases ----------
@@ -1956,6 +2020,9 @@ async function signIn(page, email) {
     C("Length entry (developer): booked / measured, up to 150 percent, by 24 h, why if shorter", "developer", "34", "34-length-entry-developer.png"),
     C("Tester: the length entered with the reason; Report a problem fold", "tester", "34", "34-length-and-report-tester.png"),
     C("Call page header: Call with ..., booked for N minutes (paid up to ...)", "developer", "34", "34-call-page-header-developer.png"),
+    C("Invite rows: tick, name, amber missing-needs pill, grey rated / tests with you", "developer", "35", "35-invite-rows-developer.png"),
+    C("Invite anyway box lists each ticked tester missing a need", "developer", "35", "35-invite-anyway-box-developer.png"),
+    C("Invite anyway stops once inside the box when what is missing changed", "developer", "35", "35-invite-anyway-changed-developer.png"),
   ];
   summary.coverage = rows.map((r) => {
     const f = summary.flows.find((x) => x.id === r.flow);
