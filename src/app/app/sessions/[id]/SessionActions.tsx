@@ -54,7 +54,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   );
 }
 
-export function LeaveButton({ sessionId, seenAt }: { sessionId: string; seenAt: string }) {
+export function LeaveButton({ sessionId, seenAt, title }: { sessionId: string; seenAt: string; title: string }) {
   const [err, setErr] = useState("");
   const [box, setBox] = useStopBox();
   const [confirmed, setConfirmed] = useState(false);
@@ -70,9 +70,15 @@ export function LeaveButton({ sessionId, seenAt }: { sessionId: string; seenAt: 
       });
   return (
     <div className="space-y-2">
-      <ConfirmButton className="btn-secondary" title="Leave this test?" confirmLabel="Leave the test" onConfirm={leave}
-        body={<p>Work you already sent is still reviewed and paid. Calls ahead are cancelled.</p>}>
-        Leave the test
+      <ConfirmButton className="btn-secondary px-3 py-1.5 text-sm text-rose-200" title={`Are you sure you want to leave “${title}”?`} confirmLabel="Leave this test" onConfirm={leave}
+        body={(
+          <ul className="list-disc space-y-1 pl-5">
+            <li>What you already sent is still reviewed and paid as usual.</li>
+            <li>The parts you haven&apos;t sent close with no pay. Calls ahead are cancelled.</li>
+            <li>You can join again later while the test is open: your session comes back.</li>
+          </ul>
+        )}>
+        Leave this test
       </ConfirmButton>
       <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       <Err text={err} />

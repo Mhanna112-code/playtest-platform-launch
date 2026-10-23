@@ -85,7 +85,11 @@ export async function logTestAction(userId: string, testId: string, action: stri
     }
     case "open": text = "opened the test"; break;
     case "stop": text = "stopped the test"; break;
-    case "end-early": text = `ended ${await contractName(s(body.contractId))}'s work early`; break;
+    case "end-early": {
+      const ids = Array.isArray(body.contractIds) ? body.contractIds.map(s) : [s(body.contractId)];
+      text = `ended ${andList(await Promise.all(ids.map(contractName)))}'s work early`;
+      break;
+    }
     case "next-round": text = "started a new round"; break;
     case "cancel-call": text = `cancelled ${await callLine(s(body.callId), true)}`; break;
     case "call-length": text = `entered the length of ${await callLine(s(body.callId), true)}`; break;

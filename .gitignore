@@ -14,3 +14,4 @@ npm-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 /.test-uploads
+.next-3450/

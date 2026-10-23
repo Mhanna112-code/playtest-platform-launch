@@ -5,20 +5,22 @@ import { useId, useRef, type ReactNode } from "react";
  * The full app's in-page confirm: a button that asks first in a small dialog on the page ("Leave this test?"), then
  * presses. The press's stop-once box or refusal still shows under this button.
  */
-export function ConfirmButton({ className, title, body, confirmLabel, onConfirm, disabled, children }: {
+export function ConfirmButton({ className, title, body, confirmLabel, onConfirm, disabled, before, children }: {
   className?: string;
   title: string;
   body: ReactNode;
   confirmLabel: string;
   onConfirm: () => void;
   disabled?: boolean;
+  /** Checked first (form mistakes show red at their field): false keeps the dialog shut. */
+  before?: () => boolean;
   children: ReactNode;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const id = useId();
   return (
     <>
-      <button type="button" aria-haspopup="dialog" className={className} disabled={disabled} onClick={() => dialog.current?.showModal()}>{children}</button>
+      <button type="button" aria-haspopup="dialog" className={className} disabled={disabled} onClick={() => { if (!before || before()) dialog.current?.showModal(); }}>{children}</button>
       <dialog ref={dialog} aria-labelledby={`${id}-t`} aria-describedby={`${id}-b`}
         className="!m-auto max-h-[calc(100dvh-2rem)] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-white/15 bg-ink-900 p-5 text-left text-ink-200 shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm">
         <h2 id={`${id}-t`} className="font-semibold text-white">{title}</h2>

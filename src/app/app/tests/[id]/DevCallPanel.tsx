@@ -10,6 +10,7 @@ import { LIVE_SECTIONS, LivePanel, LiveSection } from "@/components/LivePanel";
 import { CallTimer } from "@/components/CallTimer";
 import { ReportProblem } from "@/components/ReportProblem";
 import { CallPresence, CallTimelineLine } from "@/components/CallPresence";
+import { CancelMenu } from "@/components/CancelMenu";
 
 export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string; joinable?: boolean; report?: { byMe: boolean; note: string } | null };
 export type DevSet = { id: string; label: string; calls: DevCall[] };
@@ -36,7 +37,6 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }:
   const form = useRef<HTMLDivElement>(null);
   const minNow = useLocalMin(5);
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const [reason, setReason] = useState<Record<string, string>>({});
   const [done, setDone] = useState("");
   const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={error} link={typeof errData.requestId === "string" ? `req-${errData.requestId}` : undefined} /></div> : null);
   const go = async (path: string, body: Record<string, unknown>, key: string) => {
@@ -55,14 +55,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }:
       <span className="mr-auto">{t.name} · {fmt(c.when)} · {c.minutes} min · {c.rate}{c.late && <span className="ml-2 badge">{c.late}</span>}</span>
       {c.joinable && <JoinCall callId={c.id} />}
       {!c.started && <a href={`/api/calls/${c.id}/ics`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline"><CalendarPlus className="h-3.5 w-3.5" /> Add to calendar</a>}
-      {!c.started && (c.canCancel ? (
-        <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: c.id }, "cancel-" + c.id)}>Cancel</button>
-      ) : (
-        <span className="inline-flex gap-2">
-          <input className="input w-48" placeholder="Why? (less than 24 hours away)" value={reason[c.id] ?? ""} onChange={(e) => setReason({ ...reason, [c.id]: e.target.value })} />
-          <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: c.id, reason: reason[c.id] ?? "" }, "cancel-" + c.id)}>Cancel</button>
-        </span>
-      ))}
+      {!c.started && <CancelMenu needsReason={!c.canCancel} busy={busy} other={t.name} onCancel={(why) => go("cancel-call", { callId: c.id, reason: why }, "cancel-" + c.id)} />}
       {c.started && <ReportProblem path={`/api/tests/${testId}/no-show`} callId={c.id} otherName={t.name} seenAt={seenAt} reported={c.report ?? null} />}
       {box("cancel-" + c.id)}
       {box("noshow-" + c.id)}

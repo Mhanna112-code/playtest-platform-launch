@@ -51,6 +51,7 @@ model User {
   tests     Test[]
   contracts Contract[]
   messages  Message[]
+  chatReads ChatRead[]
 }
 
 /// One-use sign-in link tokens (only the SHA-256 hash is stored)
@@ -419,6 +420,17 @@ model Message {
 
   @@index([contractId, createdAt])
   @@index([testId, testerId, createdAt])
+}
+
+/// (NEXT-UI 4) When each person last opened a chat (per test and tester): the unread badge counts the other side's messages after it
+model ChatRead {
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  testId   String
+  testerId String
+  readAt   DateTime @default(now())
+
+  @@id([userId, testId, testerId])
 }
 
 /// Emails written instead of sent when RESEND_API_KEY is empty (/dev/outbox)

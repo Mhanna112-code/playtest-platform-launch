@@ -8,6 +8,7 @@ import { CallTimer } from "@/components/CallTimer";
 import { ReportProblem } from "@/components/ReportProblem";
 import { CallPresence, CallTimelineLine } from "@/components/CallPresence";
 import { LIVE_SECTIONS, LiveSection } from "@/components/LivePanel";
+import { CancelMenu } from "@/components/CancelMenu";
 
 type Mine = { id: string; when: string; minutes: number; room: string; canCancel: boolean; started: boolean; ended?: boolean; reported: boolean; cancelled: string; late?: string; rate?: string; joinable?: boolean; devJoinedAt?: string | null; testerJoinedAt?: string | null; joined?: string; outcome?: { label: string; tone: "grey" | "amber" | "green" | "rose" }[]; logged?: number | null; lengthText?: string; report?: { byMe: boolean; note: string } | null };
 const TONE = { grey: "", amber: "border-amber-300/40 text-amber-200", green: "border-emerald-400/40 text-emerald-200", rose: "border-rose-400/40 text-rose-200" } as const;
@@ -22,7 +23,6 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
 export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mine[]; refusal: string; lateNote?: string; devName: string }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
   const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={error} /></div> : null);
-  const [report, setReport] = useState<Record<string, string>>({});
   async function go(action: string, body: Record<string, unknown>, key = action) {
     const r = await press(`/api/sessions/${p.sessionId}/${action}`, body, key);
     if (r) window.location.reload();
@@ -44,12 +44,7 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
       )}
       {!m.cancelled && m.joinable && <JoinCall callId={m.id} />}
       {!m.cancelled && !m.ended && <a href={`/api/calls/${m.id}/ics`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline"><CalendarPlus className="h-3.5 w-3.5" /> Add to calendar</a>}
-      {!m.cancelled && !m.started && (m.canCancel ? <button className="btn-secondary px-3 py-1 text-xs" disabled={busy} onClick={() => go("cancel-call", { callId: m.id }, "cancel-" + m.id)}>Cancel</button> : (
-        <span className="inline-flex gap-2">
-          <input className="input w-48" placeholder="Why? (less than 24 hours away)" value={report["c" + m.id] ?? ""} onChange={(e) => setReport({ ...report, ["c" + m.id]: e.target.value })} />
-          <button className="btn-secondary px-3 py-1 text-xs" disabled={busy} onClick={() => go("cancel-call", { callId: m.id, reason: report["c" + m.id] ?? "" }, "cancel-" + m.id)}>Cancel</button>
-        </span>
-      ))}
+      {!m.cancelled && !m.started && <CancelMenu needsReason={!m.canCancel} busy={busy} other={p.devName} onCancel={(why) => go("cancel-call", { callId: m.id, reason: why }, "cancel-" + m.id)} />}
       {!m.cancelled && m.started && <ReportProblem path={`/api/sessions/${p.sessionId}/no-show`} callId={m.id} otherName={p.devName} seenAt={p.seenAt} reported={m.report ?? null} />}
       {m.started && !m.cancelled && m.lengthText && (
         <div className="w-full space-y-1 border-t border-white/10 pt-2">

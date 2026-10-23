@@ -19,9 +19,9 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    ticks survive search changes; count by Invite; "Tick at least one tester." red if none). Rows in the full app's
    format (amber "Doesn't list X" pill; "you rated 5.0/5 · 1 test with you"). Verify the Invite anyway box in the
    browser exactly per LEAN-SPEC.
-4. Group C controls: End early ticks + confirm popup; Stop the test confirm popup; Cancel dropdown; Chat as its own page
+4. [DONE] Group C controls: End early ticks + confirm popup; Stop the test confirm popup; Cancel dropdown; Chat as its own page
    with unread badge; Block in the hover card; Leave in its own "Can't finish?" card.
-4b. [DONE] Join anyway / Apply anyway: use the full app's popup and its behaviour
+4b. [DONE c68cff4] Join anyway / Apply anyway: use the full app's popup and its behaviour
    (integration src/app/playtests/[id]/claim-form.tsx), replacing the lean in-page warning; lists every unmet need
    (devices and languages), same lean rules (warn, never refuse).
 5. Join page (listing), dashboard and Find tests formatted EXACTLY like the full app's equivalents
@@ -65,5 +65,5 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    its notice into view (block "nearest"); never jump to the top box because of a press.
 14. [DONE 9c297bd] INVITE PANEL labels: a tester who left this test shows "Left this test", one you ended shows "You ended their work",
    to the right of their name (still tickable: a re-invite is how an ended tester can come back).
-12b. [DONE] Finish item 12's gaps: the "What's missing changed" stop inside the Invite anyway box, the owed-total check
+12b. [DONE 7832eb5] Finish item 12's gaps: the "What's missing changed" stop inside the Invite anyway box, the owed-total check
    behind "Pay what you owe", and the call-request limit confirm must also stop again for anything newer.

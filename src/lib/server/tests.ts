@@ -361,31 +361,43 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
   return { stopped: true, testers: contracts.length };
 }
 
-/** End one tester's work now. Work they sent is still reviewed; calls ahead are cancelled; later presses are refused. */
+/**
+ * End the ticked testers' work now. Work they sent is still reviewed; calls ahead are cancelled; later presses are refused.
+ * (`contractIds`: the ticks; `contractId` still works for one.) If any ticked tester is already out, nothing is ended and
+ * the refusal names them.
+ */
 export async function endEarly(dev: U, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
   const reason = str(body.reason, 500);
   if (reason.length < 5) throw new HttpError(400, "bad_reason", "Say why you're ending their work (they read it).");
-  const contractId = String(body.contractId ?? "");
+  const ids = [...new Set((Array.isArray(body.contractIds) ? body.contractIds : [body.contractId]).map((x) => String(x ?? "")).filter(Boolean))];
+  if (!ids.length) throw new HttpError(400, "none", "Tick at least one tester.");
   let cancelled: Awaited<ReturnType<typeof cancelCallsAhead>> = [];
-  const c = await db.$transaction(async (tx) => {
+  const ended = await db.$transaction(async (tx) => {
     await lockTest(tx, testId);
-    const c = await tx.contract.findUnique({ where: { id: contractId }, include: { tester: true } });
-    if (!c || c.testId !== testId) throw new HttpError(404, "not_found", "Choose a tester.");
-    const name = displayName(c.tester);
-    if (c.status === "left") throw new HttpError(409, "gone", `${name} already left the test.` + (await staleNote(testId, body.seenAt)));
-    if (c.status !== "working") throw new HttpError(409, "gone", `${name}'s work already ended.` + (await staleNote(testId, body.seenAt)));
+    const list = [];
+    for (const id of ids) {
+      const c = await tx.contract.findUnique({ where: { id }, include: { tester: true } });
+      if (!c || c.testId !== testId) throw new HttpError(404, "not_found", "Choose a tester.");
+      const name = displayName(c.tester);
+      if (c.status === "left") throw new HttpError(409, "gone", `${name} already left the test.` + (await staleNote(testId, body.seenAt)));
+      if (c.status !== "working") throw new HttpError(409, "gone", `${name}'s work already ended.` + (await staleNote(testId, body.seenAt)));
+      list.push(c);
+    }
     await topPanelGate(tx, testId, body);
-    await tx.contract.update({ where: { id: c.id }, data: { status: "ended", endKind: "early", endedAt: new Date(), endReason: reason } });
-    cancelled = await cancelCallsAhead(tx, [c.id], "The developer ended the work early.");
-    await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the session ended", decidedAt: new Date() } });
-    await recordEvent(tx, testId, "ended", `You ended ${name}'s work early`, false, {}, c.id);
-    return c;
+    for (const c of list) {
+      await tx.contract.update({ where: { id: c.id }, data: { status: "ended", endKind: "early", endedAt: new Date(), endReason: reason } });
+      cancelled = cancelled.concat(await cancelCallsAhead(tx, [c.id], "The developer ended the work early."));
+      await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the session ended", decidedAt: new Date() } });
+      await recordEvent(tx, testId, "ended", `You ended ${displayName(c.tester)}'s work early`, false, {}, c.id);
+    }
+    return list;
   });
   await tellCancelled(cancelled, "ended");
-  await notify(c.tester.email, `Your work on “${c.title}” was ended early`, [`${displayName(dev)} ended your work on “${c.title}”: “${reason}”`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`);
-  await spotOpened(c.testId);
-  return { ended: true };
+  for (const c of ended)
+    await notify(c.tester.email, `Your work on “${c.title}” was ended early`, [`${displayName(dev)} ended your work on “${c.title}”: “${reason}”`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`);
+  await spotOpened(testId);
+  return { ended: true, count: ended.length };
 }
 
 /** Next round: a draft copy of the test for the next build. Optionally stops new testers joining this one. */

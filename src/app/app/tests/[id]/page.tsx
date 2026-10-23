@@ -5,6 +5,8 @@ import { CALL_CLOSE_MS, callClosed, callOutcome, joinedWords, callJoinable, book
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
 import { Chat } from "@/components/Chat";
+import { unreadCount } from "@/lib/server/messages";
+import { MessagesSquare } from "lucide-react";
 import { DevCallPanel, type DevCall, type DevTester } from "./DevCallPanel";
 import { CallLength } from "./CallLength";
 import { InvitePanel } from "./InvitePanel";
@@ -72,6 +74,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     const x = appUsers.find((y) => y.id === a.testerId)!;
     return { id: a.id, userId: x.id, name: displayName(x), note: a.note, profile: [...(x.profile?.devices ?? []), ...(x.profile?.languages ?? []), ...(appRatings.get(x.id) ? [appRatings.get(x.id)!] : [])].join(", ") };
   });
+  // (NEXT-UI 4) Chat is its own page per session: each tester's row links to it with an unread badge.
+  const unread = new Map(await Promise.all(t.contracts.map(async (c) => [c.id, await unreadCount(u.id, t.id, c.testerId)] as const)));
   const blockedIds = new Set((await db.block.findMany({ where: { blockerId: u.id } })).map((b) => b.blockedId));
   const blockedBy = new Set((await db.block.findMany({ where: { blockedId: u.id } })).map((b) => b.blockerId));
   const [testers, invites, owedList] = await Promise.all([invitable(u.id, id), db.invite.findMany({ where: { testId: id, status: { in: ["sent", "joined"] } }, orderBy: { createdAt: "desc" } }), owedForBox(u.id)]);
@@ -141,7 +145,13 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         joinMode={t.joinMode}
         deadlineDays={t.deadlineDays}
         categories={t.categories}
-        working={working.map((c) => ({ contractId: c.id, name: displayName(c.tester) }))}
+        working={working.map((c) => ({
+          contractId: c.id,
+          name: displayName(c.tester),
+          sent: [...(c.submissions.some((x) => x.kind === "written") ? ["written answers"] : []), ...(c.submissions.some((x) => x.kind === "recording") ? ["recording"] : [])],
+          toSend: [...(c.writtenCents != null && !c.submissions.some((x) => x.kind === "written") ? ["written answers"] : []), ...(c.recordingCents != null && !c.submissions.some((x) => x.kind === "recording") ? ["recording"] : [])],
+          ahead: c.calls.filter((x) => x.status === "booked" && x.startsAt > now).length,
+        }))}
       />
       {/* (Owner) The full app's "Testers joined" right after the header: avatars with their hover cards (Block inside). */}
       <TestersJoined
@@ -320,18 +330,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 )}
               </div>
             ))}
-            <details className="text-sm">
-              <summary className="cursor-pointer">Chat with {displayName(c.tester)} ({msgs.filter((m) => m.testerId === c.testerId).length})</summary>
-              <div className="pt-2">
-                <Chat
-                  closed={blockedIds.has(c.testerId) || blockedBy.has(c.testerId)}
-                  path={`/api/tests/${t.id}/message`}
-                  extra={{ contractId: c.id }}
-                  other={displayName(c.tester)}
-                  messages={msgs.filter((m) => m.testerId === c.testerId).map((m) => ({ id: m.id, mine: m.senderId === u.id, who: m.senderId === u.id ? "You" : displayName(m.sender), body: m.body, at: m.createdAt.toISOString() }))}
-                />
-              </div>
-            </details>
+            <a href={`/app/chat/${c.id}`} className="btn-secondary relative w-fit max-w-full no-underline hover:no-underline"><MessagesSquare className="h-4 w-4 shrink-0" /> <span className="truncate">Chat with {displayName(c.tester)}</span>
+              {(unread.get(c.id) ?? 0) > 0 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950" aria-label={`${unread.get(c.id)} unread`}>{unread.get(c.id)}</span>}
+            </a>
           </div>
         ))}
         <ByQuestion

@@ -10,7 +10,6 @@ import { sweepHeldCalls } from "@/lib/server/holds";
 import { paidLines } from "@/lib/server/paid";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeForm, LeaveButton, WrittenForm } from "./SessionActions";
-import { Chat } from "@/components/Chat";
 import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
 import { LivePanel } from "@/components/LivePanel";
@@ -18,12 +17,13 @@ import { ChoiceBox } from "./ChoiceBox";
 import { TesterTop } from "./TesterTop";
 import { CallRequests } from "@/components/CallRequests";
 import { rateLabel } from "@/lib/server/requests";
-import { chatMessages } from "@/lib/server/messages";
+import { unreadCount } from "@/lib/server/messages";
+import { PersonHover } from "@/components/PersonHover";
 import { BlockButton } from "@/components/BlockButton";
 import { LiveTop } from "@/components/LiveTop";
 import { qOptional, qText } from "@/lib/questions";
 import { RateBox } from "@/components/RateBox";
-import { contractRatings, rateBlocker, rateWarning } from "@/lib/server/ratings";
+import { contractRatings, rateBlocker, rateWarning, ratingSummary } from "@/lib/server/ratings";
 import { openOffer } from "@/lib/server/terms";
 
 export const metadata = { title: "Your session · Playtest" };
@@ -70,6 +70,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   // Live calls: the request panel shows only when there's something to do or see.
   const canRequestCall = !refusal && !blockedPair && !c.test.developer.holdStartedAt;
   const pendingReqs = await db.callRequest.findMany({ where: { contractId: c.id, status: "pending", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
+  const unread = await unreadCount(u.id, c.testId, c.testerId);
+  const blockedByMe = (await db.block.count({ where: { blockerId: u.id, blockedId: c.test.developerId } })) > 0;
+  const devRating = (await ratingSummary(c.test.developerId)).line;
   const infoChanged = (await db.testEvent.count({ where: { testId: c.testId, kind: "info", createdAt: { gt: c.joinedAt } } })) > 0;
   // The full app's session page: one centred column; the header card (title, by, badges, Chat, Open the product), then a
   // card per part.
@@ -87,13 +90,19 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         <div className="flex flex-wrap items-start gap-4">
           <div className="min-w-[12rem] flex-1">
             <h1 className="text-2xl font-bold tracking-tight text-white">{c.title}</h1>
-            <p className="text-sm text-slate-400">by <a href={`/app/developers/${c.test.developerId}`} className="text-slate-200">{dev}</a> · joined {fmtDate(c.joinedAt)}</p>
+            <p className="text-sm text-slate-400">by{" "}
+              {/* (NEXT-UI 4) Block lives in the developer's hover card only. */}
+              <PersonHover name={dev} href={`/app/developers/${c.test.developerId}`} summary={[devRating || "No ratings yet"]}
+                block={blockedByMe ? <span className="text-xs text-slate-400">You blocked {dev}.</span> : <BlockButton seenAt={seenAt} sessionId={c.id} userId={c.test.developerId} name={dev} effect="Your session with them ends now (work you sent stays payable), calls between you are cancelled, and chat closes." />} />
+              {" "}· joined {fmtDate(c.joinedAt)}</p>
             <div className="mt-1 flex flex-wrap gap-2">
               <span className={`badge ${c.status === "working" ? "border-emerald-400/40 text-emerald-200" : ""}`}>{c.status === "working" ? "Working" : c.status === "left" ? "You left" : "Ended"}</span>
               <span className="badge"><CalendarClock className="h-3.5 w-3.5" /> due {fmtDate(c.dueAt)}</span>
             </div>
           </div>
-          <a href="#chat" className="btn-secondary min-w-0 max-w-full no-underline hover:no-underline"><MessagesSquare className="h-4 w-4 shrink-0" /> <span className="truncate">Chat with {dev}</span></a>
+          <a href={`/app/chat/${c.id}`} className="btn-secondary relative min-w-0 max-w-full no-underline hover:no-underline"><MessagesSquare className="h-4 w-4 shrink-0" /> <span className="truncate">Chat with {dev}</span>
+            {unread > 0 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950" aria-label={`${unread} unread`}>{unread}</span>}
+          </a>
         </div>
         {isLate(c.dueAt, now) && !refusal && <p className="text-sm text-slate-400">Your deadline has passed: late work is still accepted and marked late.</p>}
         {c.description && <p className="whitespace-pre-wrap text-slate-300">{c.description}</p>}
@@ -117,7 +126,6 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           </details>
         )}
         {c.keepPrivate && <p className="note">You agreed to keep this build and what you see private.</p>}
-        {c.status === "working" && <LeaveButton sessionId={c.id} seenAt={seenAt} />}
         {myRating && !rated.testerRevealed && <p className="note">You rated {dev}.</p>}
         {myRating && rated.testerRevealed && <p className="note">You rated {dev}: {myRating.stars} ★{myRating.comment ? ` · “${myRating.comment}”` : ""}</p>}
         {rated.developer && <p className="note">{dev} rated you: {rated.developer.stars} ★{rated.developer.comment ? ` · “${rated.developer.comment}”` : ""}</p>}
@@ -137,9 +145,6 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             <p className="text-ink-300">You join on the current listing: your session comes back with everything in it (work you sent, payments and chat).</p>
             <a className="btn" href={`/app/find/${c.testId}`}>Join again</a>
           </section>
-        )}
-        {!(await db.block.count({ where: { blockerId: u.id, blockedId: c.test.developerId } })) && (
-          <BlockButton seenAt={seenAt} sessionId={c.id} userId={c.test.developerId} name={dev} effect="Your session with them ends now (work you sent stays payable), calls between you are cancelled, and chat closes." />
         )}
       </section>
 
@@ -233,15 +238,14 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         />
       </section>
 
-      <section className="card scroll-mt-24 space-y-3" id="chat">
-        <h2>Chat with {dev}</h2>
-        <Chat
-          closed={blockedPair}
-          path={`/api/sessions/${c.id}/message`}
-          other={dev}
-          messages={(await chatMessages(c.testId, c.testerId)).map((m) => ({ id: m.id, mine: m.senderId === u.id, who: m.senderId === u.id ? "You" : displayName(m.sender), body: m.body, at: m.createdAt.toISOString() }))}
-        />
-      </section>
+      {/* (NEXT-UI 4) Leaving, in its own card as in the full app. */}
+      {c.status === "working" && (
+        <section className="card space-y-3 text-sm" id="leave">
+          <h2 className="font-semibold text-white">Can&apos;t finish?</h2>
+          <p className="text-slate-400">You can leave this test: what you sent is still reviewed and paid as usual, the parts you haven&apos;t sent close with no pay, and calls ahead are cancelled. You can join again later while the test is open: your session comes back.</p>
+          <LeaveButton sessionId={c.id} seenAt={seenAt} title={c.title} />
+        </section>
+      )}
     </div>
   );
 }

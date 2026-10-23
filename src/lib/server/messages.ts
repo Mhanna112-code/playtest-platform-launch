@@ -53,3 +53,18 @@ export async function sendMessage(user: { id: string; name: string; email: strin
 
 export const chatMessages = (testId: string, testerId: string) =>
   db.message.findMany({ where: { testId, testerId }, orderBy: { createdAt: "asc" }, include: { sender: true }, take: 300 });
+
+/** (NEXT-UI 4) Unread: the other side's messages in this chat after the person last opened it. */
+export async function unreadCount(userId: string, testId: string, testerId: string) {
+  const read = await db.chatRead.findUnique({ where: { userId_testId_testerId: { userId, testId, testerId } } });
+  return db.message.count({ where: { testId, testerId, senderId: { not: userId }, ...(read ? { createdAt: { gt: read.readAt } } : {}) } });
+}
+
+/** Opening the chat page marks it read. */
+export async function markChatRead(userId: string, testId: string, testerId: string) {
+  await db.chatRead.upsert({
+    where: { userId_testId_testerId: { userId, testId, testerId } },
+    update: { readAt: new Date() },
+    create: { userId, testId, testerId },
+  });
+}

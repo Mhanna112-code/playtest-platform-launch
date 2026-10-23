@@ -244,8 +244,10 @@ async function signIn(page, email) {
   });
 
   await flow("07", "Chat, payments page and admin", async () => {
+    await tester.click("a:has-text('Chat with')"); // (NEXT-UI 4) the chat is its own page
+    await tester.waitForURL(/\/app\/chat\//);
     await tester.fill('input[placeholder^="Message"]', "Thanks! Happy to test round 2.");
-    await tester.click("#chat button:has-text('Send')");
+    await tester.click("button:has-text('Send')");
     await tester.waitForSelector("text=Happy to test round 2");
     await shot(tester, "chat");
     await dev.goto("/app/payments");
@@ -345,7 +347,9 @@ async function signIn(page, email) {
     check("webhook accepted", hook.ok, hook.status);
     await vd.click("button:has-text('End early')");
     await vd.fill("#reason", "Checking the stop-once box");
-    await vd.click("text=End their work now");
+    await vd.check("[data-end-early] fieldset input >> nth=0"); // All
+    await vd.click("[data-end-early] button:has-text('End their work now')");
+    await vd.click("dialog[open] button[data-confirm='End their work now']");
     check("stop-once line under the top panel", await has(vd, "text=Your bank reversed your $12.50 payment for Ana Silva's live call"));
     await shot(vd, "3-dev-chargeback-stop-once");
     sql(`update "User" set "holdStartedAt" = (now() at time zone 'utc') - interval '5 minutes' where id = '${devId}'`);
@@ -545,7 +549,9 @@ async function signIn(page, email) {
     check("webhook accepted", hook.ok, hook.status);
     await dev.click("button:has-text('End early')");
     await dev.fill("#reason", "Checking the stop-once box");
-    await dev.click("text=End their work now");
+    await dev.check("[data-end-early] fieldset input >> nth=0"); // All
+    await dev.click("[data-end-early] button:has-text('End their work now')");
+    await dev.click("dialog[open] button[data-confirm='End their work now']");
     check("stop-once line", await has(dev, "text=Your bank reversed your $10.00 payment for Ana Silva's written answers"));
     await shot(dev, "chargeback-stop-once-developer");
     await dev.reload();
@@ -880,12 +886,12 @@ async function signIn(page, email) {
     await tab2.waitForTimeout(1500);
     check("tab 2 sent the answers", sql(`select count(*) from "Submission" where "contractId" = '${SCara}' and kind = 'written'`) === "1");
     await shot(tab2, "tab2-sent-tester");
-    await tab1.click("button[aria-haspopup='dialog']:has-text('Leave the test')");
-    await tab1.click("dialog[open] button[data-confirm='Leave the test']");
+    await tab1.click("button[aria-haspopup='dialog']:has-text('Leave this test')");
+    await tab1.click("dialog[open] button[data-confirm='Leave this test']");
     check("tab 1 Leave stopped once: 'You also did this in another tab'", await has(tab1, "text=You also did this in another tab: sent your written answers at"));
     await shot(tab1, "tab1-leave-stopped-tester");
-    await tab1.click("button[aria-haspopup='dialog']:has-text('Leave the test')");
-    await tab1.click("dialog[open] button[data-confirm='Leave the test']");
+    await tab1.click("button[aria-haspopup='dialog']:has-text('Leave this test')");
+    await tab1.click("dialog[open] button[data-confirm='Leave this test']");
     await tab1.waitForTimeout(2000);
     check("second press left the test", sql(`select status from "Contract" where id = '${SCara}'`) === "left");
     await shot(tab1, "tab1-left-tester");
@@ -968,6 +974,7 @@ async function signIn(page, email) {
     await shot(t2, "top-box-info-tester");
     // --- Block after the developer paid: Dee's page (not refreshed) stops once under "Yes, block".
     await t2.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await t2.hover("a[href^='/app/developers/']"); // Block is in the developer's hover card
     await t2.click("button[aria-haspopup='dialog']:has-text('Block Nora Lane')");
     const sub = sql(`select id from "Submission" where "contractId" = '${SDee3}' and kind = 'written'`);
     const paid = await apiPost(dev, "/api/review", { payKey: `ev23-${TS}`, kind: "submission", id: sub, amount: "8.00", tickedCents: 800, seenAt: new Date().toISOString(), confirmed: true });
@@ -986,6 +993,7 @@ async function signIn(page, email) {
     check("no second scroll (only the new line's height)", Math.abs(y3 - y2) < 60, `${y2} → ${y3}`);
     check("the stop box lists the payment once", (await t2.locator("div.info li", { hasText: "paid $8.00 for your written answers" }).count()) === 2); // one in the top box, one under the button
     await shot(t2, "top-box-and-stop-box-tester");
+    await t2.hover("a[href^='/app/developers/']"); // Block is in the developer's hover card
     await t2.click("button[aria-haspopup='dialog']:has-text('Block Nora Lane')");
     await t2.click("dialog[open] button[data-confirm='Block Nora Lane']");
     await t2.waitForTimeout(2000);
@@ -1038,8 +1046,8 @@ async function signIn(page, email) {
     await tabB.close();
     const subE = sql(`select id from "Submission" where "contractId" = '${SE}' and kind = 'written'`);
     await apiPost(dev, "/api/review", { payKey: `ev24-${TS}`, kind: "submission", id: subE, amount: "8.00", tickedCents: 800, seenAt: new Date().toISOString(), confirmed: true });
-    await tabA.click("button[aria-haspopup='dialog']:has-text('Leave the test')");
-    await tabA.click("dialog[open] button[data-confirm='Leave the test']");
+    await tabA.click("button[aria-haspopup='dialog']:has-text('Leave this test')");
+    await tabA.click("dialog[open] button[data-confirm='Leave this test']");
     check("tester stop box: 'You also did this in another tab' + the developer paid", (await has(tabA, "text=You also did this in another tab: sent a call request at")) && (await has(tabA, "text=Nora Lane paid $8.00 for your written answers")));
     await shot(tabA, "combined-other-tab-and-paid-tester");
     // Declined: the developer declines Eve's request; her Withdraw (page not reloaded) stops once, then is refused.
