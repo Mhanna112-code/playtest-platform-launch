@@ -4,6 +4,7 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { JoinCall } from "@/components/JoinCall";
 import { usePress } from "@/lib/usePress";
 import { MARKABLE } from "@/lib/markJump";
+import { LivePanel } from "@/components/LivePanel";
 
 export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string; joinable?: boolean };
 export type DevSet = { id: string; label: string; calls: DevCall[] };
@@ -64,8 +65,9 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest }: { testId: 
   );
 
   return (
-    <section className="panel" id="calls" aria-label="Call requests">
-      <h2>Live calls</h2>
+    // The full app's ONE Live session panel (a fold on the test page), its length the next booked call's.
+    <LivePanel fold minutes={testers.flatMap((t) => [...t.calls, ...t.sets.flatMap((x) => x.calls)]).filter((c) => !c.started).sort((a, b) => a.when.localeCompare(b.when))[0]?.minutes ?? null}>
+    <section className="space-y-3" id="calls" aria-label="Call requests">
       <p className="note">Calls you request use each tester&apos;s contract rate. A tester can ask for a different rate if they request a call.</p>
       {canRequest && testers.length > 0 && (
         <fieldset className="space-y-1 text-sm">
@@ -155,5 +157,6 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest }: { testId: 
         </div>
       ))}
     </section>
+    </LivePanel>
   );
 }

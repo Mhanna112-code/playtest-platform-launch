@@ -13,6 +13,7 @@ import { DisputeForm, LeaveButton, WrittenForm } from "./SessionActions";
 import { Chat } from "@/components/Chat";
 import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
+import { LivePanel } from "@/components/LivePanel";
 import { ChoiceBox } from "./ChoiceBox";
 import { TesterTop } from "./TesterTop";
 import { CallRequests } from "@/components/CallRequests";
@@ -142,26 +143,31 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         )}
       </section>
 
-      <TesterCallPanel
-        sessionId={c.id}
-        seenAt={seenAt}
-        refusal={refusal}
-        label={c.liveRateCents != null ? `Live call: ${money(c.liveRateCents).replace(/\.00$/, "")}/h` : "Live call: not in your contract"}
-        mine={c.calls.map((x) => ({ id: x.id, joinable: !blockedPair && callJoinable(x, now), when: x.startsAt.toISOString(), minutes: x.minutes, room: roomUrl(x, x.slot), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, cancelled: blockedPair && x.status !== "cancelled" ? "not available" : cancelledText(x), rate: rateLabel(x.rateCents, c.liveRateCents), late: isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined }))}
-        lateNote={now > c.dueAt ? `Your deadline was ${fmtDate(c.dueAt).replace(/, \d{4}$/, "")} (a guide, not a limit): a call you book now reads “${bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, ""))}”.` : undefined}
-      />
-      {(canRequestCall || pendingReqs.length > 0) && (
-        <section className="card space-y-3" aria-label="Call requests">
-          <h2>Live call requests</h2>
-          <CallRequests
-            side="tester"
-            path={`/api/sessions/${c.id}`}
+      {/* The full app's ONE Live session panel: the rate, Booked, Past calls and Requests (calls are always requests). */}
+      {(c.calls.length > 0 || canRequestCall || pendingReqs.length > 0) && (
+        <LivePanel minutes={c.calls.filter((x) => x.status === "booked" && x.startsAt > now).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())[0]?.minutes ?? null}>
+          <p className="note">{c.liveRateCents != null ? `Live call: ${money(c.liveRateCents).replace(/\.00$/, "")}/h` : "Live call: not in your contract"}</p>
+          <TesterCallPanel
+            sessionId={c.id}
             seenAt={seenAt}
-            canRequest={canRequestCall}
-            targets={[{ contractId: c.id, name: dev, rate: "" }]}
-            requests={pendingReqs.map((r) => ({ id: r.id, minutes: r.minutes, times: (r.times.length ? r.times : [r.startsAt]).map((d) => d.toISOString()), weeks: r.weeks, repeat: r.repeat, mine: r.fromSide === "tester", who: dev, contractId: c.id, rate: r.askRateCents != null ? `you ask ${money(r.askRateCents).replace(/\.00$/, "")}/h` : rateLabel(c.liveRateCents, c.liveRateCents) }))}
+            refusal={refusal}
+            mine={c.calls.map((x) => ({ id: x.id, joinable: !blockedPair && callJoinable(x, now), when: x.startsAt.toISOString(), minutes: x.minutes, room: roomUrl(x, x.slot), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, ended: x.startsAt.getTime() + x.minutes * 60_000 <= now.getTime(), reported: !!x.noShowBy, cancelled: blockedPair && x.status !== "cancelled" ? "not available" : cancelledText(x), rate: rateLabel(x.rateCents, c.liveRateCents), late: isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined }))}
+            lateNote={now > c.dueAt ? `Your deadline was ${fmtDate(c.dueAt).replace(/, \d{4}$/, "")} (a guide, not a limit): a call you book now reads “${bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, ""))}”.` : undefined}
           />
-        </section>
+          {(canRequestCall || pendingReqs.length > 0) && (
+            <section className="space-y-1.5" aria-label="Call requests" data-live-section="Requests">
+              <h3 className="text-sm font-semibold text-white">Requests</h3>
+              <CallRequests
+                side="tester"
+                path={`/api/sessions/${c.id}`}
+                seenAt={seenAt}
+                canRequest={canRequestCall}
+                targets={[{ contractId: c.id, name: dev, rate: "" }]}
+                requests={pendingReqs.map((r) => ({ id: r.id, minutes: r.minutes, times: (r.times.length ? r.times : [r.startsAt]).map((d) => d.toISOString()), weeks: r.weeks, repeat: r.repeat, mine: r.fromSide === "tester", who: dev, contractId: c.id, rate: r.askRateCents != null ? `you ask ${money(r.askRateCents).replace(/\.00$/, "")}/h` : rateLabel(c.liveRateCents, c.liveRateCents) }))}
+              />
+            </section>
+          )}
+        </LivePanel>
       )}
       {c.calls.filter((x) => !x.review && x.status === "booked" && x.startsAt <= now).map((x) => (
         <p key={x.id} className="info">

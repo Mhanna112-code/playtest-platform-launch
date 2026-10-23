@@ -3,13 +3,18 @@ import { useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
 import { JoinCall } from "@/components/JoinCall";
+import { LIVE_SECTIONS, LiveSection } from "@/components/LivePanel";
 
-type Mine = { id: string; when: string; minutes: number; room: string; canCancel: boolean; started: boolean; reported: boolean; cancelled: string; late?: string; rate?: string; joinable?: boolean };
+type Mine = { id: string; when: string; minutes: number; room: string; canCancel: boolean; started: boolean; ended?: boolean; reported: boolean; cancelled: string; late?: string; rate?: string; joinable?: boolean };
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-/** The tester's live-call panel: Book / Cancel stop once for call changes since the page loaded (box under this panel). */
-export function TesterCallPanel(p: { sessionId: string; seenAt: string; label: string; mine: Mine[]; refusal: string; lateNote?: string; rateLine?: string }) {
+/**
+ * The tester's calls inside the Live session panel: Booked (still ahead or running: Join call while it can be joined,
+ * Cancel) and Past calls (over or cancelled). Cancel and Report a problem stop once for call changes since the page
+ * loaded (box under the button).
+ */
+export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mine[]; refusal: string; lateNote?: string }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
   const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={error} /></div> : null);
   const [report, setReport] = useState<Record<string, string>>({});
@@ -17,40 +22,35 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; label: s
     const r = await press(`/api/sessions/${p.sessionId}/${action}`, body, key);
     if (r) window.location.reload();
   }
-  // (Owner) Never a panel that only repeats the rate (it's in the contract line): only when there are calls.
+  const booked = p.mine.filter((m) => !m.cancelled && !m.ended);
+  const past = p.mine.filter((m) => m.cancelled || m.ended);
+  const row = (m: Mine) => (
+    <li key={m.id} data-call={m.cancelled || m.ended ? "past" : "booked"} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+      <span className="mr-auto text-slate-200">{fmt(m.when)} · {m.minutes} min{m.rate && ` · ${m.rate}`}{m.cancelled && ` · ${m.cancelled}`}{m.late && <span className="ml-2 badge">{m.late}</span>}</span>
+      {!m.cancelled && m.joinable && <JoinCall callId={m.id} />}
+      {!m.cancelled && !m.started && (m.canCancel ? <button className="btn-secondary px-3 py-1 text-xs" disabled={busy} onClick={() => go("cancel-call", { callId: m.id }, "cancel-" + m.id)}>Cancel</button> : (
+        <span className="inline-flex gap-2">
+          <input className="input w-48" placeholder="Why? (less than 24 hours away)" value={report["c" + m.id] ?? ""} onChange={(e) => setReport({ ...report, ["c" + m.id]: e.target.value })} />
+          <button className="btn-secondary px-3 py-1 text-xs" disabled={busy} onClick={() => go("cancel-call", { callId: m.id, reason: report["c" + m.id] ?? "" }, "cancel-" + m.id)}>Cancel</button>
+        </span>
+      ))}
+      {!m.cancelled && m.started && !m.reported && (
+        <span className="inline-flex gap-2">
+          <input className="input w-56" placeholder="The developer didn't show up…" value={report[m.id] ?? ""} onChange={(e) => setReport({ ...report, [m.id]: e.target.value })} />
+          <button className="btn-ghost" disabled={busy} onClick={() => go("no-show", { callId: m.id, note: report[m.id] ?? "" }, "noshow-" + m.id)}>Report a problem</button>
+        </span>
+      )}
+      {m.reported && <span className="note">Problem reported to the team.</span>}
+      {box("cancel-" + m.id)}
+      {box("noshow-" + m.id)}
+    </li>
+  );
   if (!p.mine.length) return null;
   return (
-    <div className="space-y-2" id="calls">
-      <section className="panel" aria-label="Live call">
-        <h2>Your calls</h2>
-        <p className="note">{p.label}</p>
-        {p.lateNote && !p.refusal && <p className="note">{p.lateNote}</p>}
-        {p.mine.length > 0 && (
-          <ul className="space-y-2 text-sm">
-            {p.mine.map((m) => (
-              <li key={m.id} className="flex flex-wrap items-center gap-2">
-                <span className="mr-auto">{fmt(m.when)} · {m.minutes} min{m.rate && ` · ${m.rate}`}{m.cancelled && ` · ${m.cancelled}`}{m.late && <span className="ml-2 badge">{m.late}</span>}</span>
-                {!m.cancelled && m.joinable && <JoinCall callId={m.id} />}
-                {!m.cancelled && !m.started && (m.canCancel ? <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: m.id }, "cancel-" + m.id)}>Cancel</button> : (
-                  <span className="inline-flex gap-2">
-                    <input className="input w-48" placeholder="Why? (less than 24 hours away)" value={report["c" + m.id] ?? ""} onChange={(e) => setReport({ ...report, ["c" + m.id]: e.target.value })} />
-                    <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: m.id, reason: report["c" + m.id] ?? "" }, "cancel-" + m.id)}>Cancel</button>
-                  </span>
-                ))}
-                {!m.cancelled && m.started && !m.reported && (
-                  <span className="inline-flex gap-2">
-                    <input className="input w-56" placeholder="The developer didn't show up…" value={report[m.id] ?? ""} onChange={(e) => setReport({ ...report, [m.id]: e.target.value })} />
-                    <button className="btn-ghost" disabled={busy} onClick={() => go("no-show", { callId: m.id, note: report[m.id] ?? "" }, "noshow-" + m.id)}>Report a problem</button>
-                  </span>
-                )}
-                {m.reported && <span className="note">Problem reported to the team.</span>}
-                {box("cancel-" + m.id)}
-                {box("noshow-" + m.id)}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+    <div className="space-y-4" id="calls">
+      {p.lateNote && !p.refusal && <p className="note">{p.lateNote}</p>}
+      <LiveSection title={LIVE_SECTIONS.booked} show={booked.length > 0}>{booked.map(row)}</LiveSection>
+      <LiveSection title={LIVE_SECTIONS.past} show={past.length > 0}>{past.map(row)}</LiveSection>
     </div>
   );
 }
