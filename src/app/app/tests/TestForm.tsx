@@ -4,6 +4,7 @@ import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { Err } from "@/components/Err";
 import { mergeChanges, useLiveAppend } from "@/lib/live";
 import { NOT_REQUIRED, qOptional, qText } from "@/lib/questions";
+import { limitHint } from "@/lib/capacity";
 import { Choices } from "@/components/Choices";
 import { api, ApiError, isFieldError } from "@/lib/client";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
@@ -46,7 +47,7 @@ const API_FIELDS: Record<keyof F, string[]> = {
   recordingPrice: ["recordingCents"], live: ["liveRateCents", "liveMinutes"], liveRate: ["liveRateCents"], liveMinutes: ["liveMinutes"], questions: ["questions"], optionalQs: ["questions"], openUntil: ["openUntil"], joinMode: ["joinMode"],
 };
 
-export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; version: number; testersIn: number; draft: boolean; seenAt?: string } }) {
+export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: { id: string; version: number; testersIn: number; draft: boolean; seenAt?: string }; spotsLimit?: number }) {
   const [f, setF] = useState<F>(toForm(init));
   const [touched, setTouched] = useState<Set<keyof F>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -98,7 +99,7 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
   }
 
   // Mark the field a mistake is about (red at the field).
-  const FIELD_WORDS: Partial<Record<keyof F, RegExp>> = { title: /title/i, writtenPrice: /written answers price/i, recordingPrice: /recording price/i, liveRate: /live call rate/i, liveMinutes: /call lasts/i, spots: /spots/i, deadlineDays: /deadline/i, openUntil: /open until/i, buildUrl: /build link/i };
+  const FIELD_WORDS: Partial<Record<keyof F, RegExp>> = { title: /title/i, writtenPrice: /written answers price/i, recordingPrice: /recording price/i, liveRate: /live call rate/i, liveMinutes: /call lasts/i, spots: /spots|testers per test/i, deadlineDays: /deadline/i, openUntil: /open until/i, buildUrl: /build link/i };
   const bad = (k: keyof F) => !!FIELD_WORDS[k] && errs.some((e) => FIELD_WORDS[k]!.test(e));
   const text = (k: keyof F, label: string, opts: { req?: boolean; ph?: string; type?: string; cls?: string } = {}) => (
     <div>
@@ -171,6 +172,7 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
           {text("deadlineDays", "Days each tester has from joining", { req: true, type: "number", cls: "max-w-[8rem]" })}
           {text("openUntil", "Open until (no new testers or work after it; blank = no end)", { type: "date", cls: "max-w-[12rem]" })}
         </div>
+        {spotsLimit != null && <p className="note">{limitHint(spotsLimit)}</p>}
         {edit && edit.testersIn > 0 && <p className="note">{edit.testersIn} tester{edit.testersIn === 1 ? " is" : "s are"} in: spots can&apos;t go below that.</p>}
         <div>
           <label className="label" htmlFor="joinMode">Who can join</label>

@@ -1,6 +1,8 @@
 import { BarChart3, CheckCircle2, Star, Timer } from "lucide-react";
 import { StatTile } from "@/components/StatTile";
 import { DEV_FOOTNOTE, TESTER_FOOTNOTE, developerStats, ratingTile, testerStats } from "@/lib/server/profileStats";
+import { capacityCard } from "@/lib/capacity";
+import { testerCapacity } from "@/lib/server/capacity";
 
 /** A developer's tiles (their profile as testers see it, and their dashboard): the full app's three, plus the rating. */
 export async function DeveloperTiles({ userId }: { userId: string }) {
@@ -29,5 +31,16 @@ export async function TesterTiles({ userId }: { userId: string }) {
       </section>
       <p className="-mt-2 text-xs text-slate-500">{TESTER_FOOTNOTE}</p>
     </>
+  );
+}
+
+/** (NEWEST+9) The full app's tester-capacity card: shown ONLY to the developer (dashboard, own profile), never to testers. */
+export async function CapacityCard({ userId }: { userId: string }) {
+  const c = capacityCard(await testerCapacity(userId));
+  return (
+    <section id="tester-limit" className="card scroll-mt-24 space-y-1 text-sm" aria-label="Testers per test">
+      <p className="font-semibold text-white">{c.limit}</p>
+      <p className="text-slate-400">{c.next}. {c.rule}</p>
+    </section>
   );
 }

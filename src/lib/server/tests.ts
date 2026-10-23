@@ -1,5 +1,7 @@
 import { devChanges, seenOf, tabOf, withRenamed } from "./live";
 import { qOptional } from "@/lib/questions";
+import { overLimitText } from "@/lib/capacity";
+import { testerCapacity } from "./capacity";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, pronouns, toCents } from "@/lib/format";
@@ -174,6 +176,9 @@ export async function createTest(dev: U, body: Record<string, unknown>) {
   if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", `${PAY_WAITS} New tests can't be posted while payments are on hold.`);
   const l = parseListing(body) as Listing;
   const errs = checkListing(l);
+  // (NEWEST+9) Spots up to the developer's tester capacity.
+  const cap = await testerCapacity(dev.id);
+  if (Number.isInteger(l.spots) && l.spots > cap.limit && !errs.some((e) => e.startsWith("Spots"))) errs.push(overLimitText(cap.limit));
   if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs });
   return db.test.create({ data: { ...listingData(l), developerId: dev.id, status: "open" } });
 }
@@ -194,6 +199,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   let reinvite = false;
   let spotsChanged = false;
   let switchedToInvite = false;
+  const cap = await testerCapacity(dev.id);
   const result = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
@@ -220,6 +226,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (next.liveRateCents == null) next.liveMinutes = null;
     const testersIn = await tx.contract.count({ where: working(testId) });
     const errs = checkListing(next, testersIn);
+    // (NEWEST+9) Raising spots above the capacity is refused; a test already above it keeps its spots.
+    if (Number.isInteger(next.spots) && next.spots > current.spots && next.spots > cap.limit && !errs.some((e) => e.startsWith("Spots"))) errs.push(overLimitText(cap.limit));
     if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs });
     const terms = changedTerms(current, next);
     const fields = LISTING_FIELDS.filter((k) => JSON.stringify(current[k]) !== JSON.stringify(next[k]));

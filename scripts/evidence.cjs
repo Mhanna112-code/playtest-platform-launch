@@ -1609,6 +1609,52 @@ async function signIn(page, email) {
     await shot(adm, "admin");
   });
 
+  await flow("31", "NEWEST+9: tester capacity per test: the developer-only card, and spots above the limit refused in red at the field", async () => {
+    const DEV31 = `dev31+${TS}@playtest.test`;
+    const d = await ctx(DESKTOP);
+    await signIn(d, DEV31);
+    await d.fill("#name", "Nora Lane");
+    await d.selectOption("#pronoun", "she");
+    await d.check("text=post tests for my app, game or product");
+    await d.click("text=Continue");
+    await d.waitForSelector("text=Welcome back,");
+    check("dashboard: the card, for the developer", (await has(d, "#tester-limit >> text=Can take up to 10 testers per test")) && (await has(d, "#tester-limit >> text=Next: +10% after 10 more ratings")));
+    await d.locator("#tester-limit").scrollIntoViewIfNeeded();
+    await shot(d, "capacity-card-developer");
+    await d.goto("/app/profile");
+    check("own Profile: the card", await has(d, "#tester-limit >> text=Can take up to 10 testers per test"));
+    // Testers never see it (the profile as testers see it).
+    const t = await ctx(PHONE);
+    await signIn(t, `tester31+${TS}@playtest.test`);
+    await t.fill("#name", "Ana Silva");
+    await t.selectOption("#pronoun", "she");
+    await t.check("text=test apps, games and more, and get paid");
+    await t.click("label:has-text('Windows PC')");
+    await t.click("label:has-text('English')");
+    await t.click("text=Continue");
+    await t.waitForSelector("text=Welcome back,");
+    await t.goto(`/app/developers/${sql(`select id from "User" where email = '${DEV31}'`)}`);
+    await t.waitForSelector("text=Reports reviewed");
+    check("the profile testers see: no capacity card", (await t.locator("#tester-limit").count()) === 0 && !(await t.isVisible("text=testers per test")));
+    // Post with 11 spots: red at the spots field; the limit shown next to it.
+    await d.goto("/app/tests/new");
+    check("the limit next to the spots field", await has(d, "text=Limit: 10 testers per test"));
+    await d.fill("#title", "Coral Maze");
+    await d.fill("#description", "Find the way out.");
+    await d.fill("#buildUrl", "https://example.com/coral");
+    await d.fill("#questions", "Where did you get lost?");
+    await d.fill("#spots", "11");
+    await d.click("button:has-text('Post the test')");
+    check("refused in red at the spots field", await has(d, ".err-field >> text=You can take up to 10 testers per test right now."));
+    check("nothing posted", sql(`select count(*) from "Test" t join "User" u on u.id = t."developerId" where u.email = '${DEV31}'`) === "0");
+    await d.locator("#spots").scrollIntoViewIfNeeded();
+    await shot(d, "spots-over-limit-red-developer");
+    await d.fill("#spots", "10");
+    await d.click("button:has-text('Post the test')");
+    await d.waitForURL((u) => /\/app\/tests\/\w+$/.test(u.pathname) && !u.pathname.endsWith("/new"));
+    check("10 spots: posted", sql(`select spots from "Test" t join "User" u on u.id = t."developerId" where u.email = '${DEV31}'`) === "10");
+  });
+
   await browser.close();
 
   // ---------- Coverage: one screenshot per stop / failure type, plus combined cases ----------
@@ -1704,6 +1750,8 @@ async function signIn(page, email) {
     C("New layout: profile", "developer", "30", "30-profile-developer.png"),
     C("New layout: notifications", "tester", "30", "30-notifications-tester.png"),
     C("New layout: admin", "admin", "30", "30-admin.png"),
+    C("Tester capacity card (only the developer sees it)", "developer", "31", "31-capacity-card-developer.png"),
+    C("Spots above the limit refused in red at the field", "developer", "31", "31-spots-over-limit-red-developer.png"),
   ];
   summary.coverage = rows.map((r) => {
     const f = summary.flows.find((x) => x.id === r.flow);

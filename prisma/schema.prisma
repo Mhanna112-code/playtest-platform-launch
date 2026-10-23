@@ -41,6 +41,8 @@ model User {
   emailPref     String    @default("each")
   /// Last summary email (daily / weekly / monthly settings)
   lastSummaryAt DateTime?
+  /// (NEWEST+9) The most testers per test this developer has earned so far (it never shrinks; see src/lib/capacity.ts)
+  testerLimit   Int       @default(10)
 
   notifications Notification[]
 

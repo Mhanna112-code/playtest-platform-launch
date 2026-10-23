@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing } from "@/lib/server/tests";
 import { TestForm } from "../../TestForm";
+import { testerCapacity } from "@/lib/server/capacity";
 import { LiveTop } from "@/components/LiveTop";
 
 export const metadata = { title: "Edit test · Playtest" };
@@ -25,7 +26,7 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
       ) : (
         <>
           <p className="note">Edit changes the listing for new testers only. Testers already in keep the contract they joined on.</p>
-          <TestForm init={asListing(t)} edit={{ id, version: t.version, testersIn, draft: t.status === "draft", seenAt }} />
+          <TestForm init={asListing(t)} edit={{ id, version: t.version, testersIn, draft: t.status === "draft", seenAt }} spotsLimit={(await testerCapacity(u.id)).limit} />
         </>
       )}
     </>

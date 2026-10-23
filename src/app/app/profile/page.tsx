@@ -5,6 +5,7 @@ import { ProfileForm } from "./ProfileForm";
 import { PasswordForm } from "./PasswordForm";
 import { UnblockButton } from "@/components/BlockButton";
 import { ratingSummary } from "@/lib/server/ratings";
+import { CapacityCard } from "@/components/ProfileTiles";
 
 export const metadata = { title: "Profile · Playtest" };
 
@@ -27,6 +28,7 @@ export default async function ProfilePage() {
           </p>
         )}
       </div>
+      {u.isDeveloper && <CapacityCard userId={u.id} />}
       <section className="card space-y-2" aria-label="Your ratings">
         <h2 className="font-semibold text-white">Your ratings</h2>
         {rating.line ? <p className="text-slate-200">{rating.line}</p> : <p className="text-sm text-slate-400">No ratings yet.</p>}

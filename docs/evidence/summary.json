@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-23T06:03:16.720Z",
+  "run": "2026-10-23T06:16:29.204Z",
   "base": "http://localhost:3450",
   "flows": [
     {
@@ -676,9 +676,27 @@
         "30-notifications-tester.png",
         "30-admin.png"
       ]
+    },
+    {
+      "id": "31",
+      "title": "NEWEST+9: tester capacity per test: the developer-only card, and spots above the limit refused in red at the field",
+      "status": "pass",
+      "checks": [
+        "PASS dashboard: the card, for the developer",
+        "PASS own Profile: the card",
+        "PASS the profile testers see: no capacity card",
+        "PASS the limit next to the spots field",
+        "PASS refused in red at the spots field",
+        "PASS nothing posted",
+        "PASS 10 spots: posted"
+      ],
+      "screenshots": [
+        "31-capacity-card-developer.png",
+        "31-spots-over-limit-red-developer.png"
+      ]
     }
   ],
-  "mergedInto": "2026-10-23T05:58:46.356Z",
+  "mergedInto": "2026-10-23T06:15:47.971Z",
   "coverage": [
     {
       "type": "Tester stop A: new terms (Send my recording)",
@@ -1266,6 +1284,20 @@
       "side": "admin",
       "flow": "30",
       "screenshot": "30-admin.png",
+      "status": "pass"
+    },
+    {
+      "type": "Tester capacity card (only the developer sees it)",
+      "side": "developer",
+      "flow": "31",
+      "screenshot": "31-capacity-card-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Spots above the limit refused in red at the field",
+      "side": "developer",
+      "flow": "31",
+      "screenshot": "31-spots-over-limit-red-developer.png",
       "status": "pass"
     }
   ],

@@ -6,7 +6,7 @@ import { termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { ProfileForm } from "./profile/ProfileForm";
 import { NoThanks } from "./NoThanks";
-import { DeveloperTiles } from "@/components/ProfileTiles";
+import { CapacityCard, DeveloperTiles } from "@/components/ProfileTiles";
 
 export const metadata = { title: "Home · Playtest" };
 export const dynamic = "force-dynamic";
@@ -50,6 +50,7 @@ export default async function AppHome() {
       {u.isDeveloper && (
         <div className="space-y-4">
           <DeveloperTiles userId={u.id} />
+          <CapacityCard userId={u.id} />
         </div>
       )}
       {u.isDeveloper && (
