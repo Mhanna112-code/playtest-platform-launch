@@ -111,7 +111,13 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             lines={rateWarn.lines}
           />
         )}
-        {c.status === "left" && c.endKind !== "rated" && !myRating && c.test.status === "open" && <p className="text-sm"><a href={`/app/find/${c.testId}`}>Join this test again</a> on the current listing: your session comes back with everything in it.</p>}
+        {c.status === "left" && c.endKind !== "rated" && !myRating && c.test.status === "open" && (
+          <section id="rejoin" className="panel scroll-mt-24 border-emerald-400/30 text-sm">
+            <p className="font-semibold text-white">Join {c.title} again</p>
+            <p className="text-ink-300">You join on the current listing: your session comes back with everything in it (work you sent, payments and chat).</p>
+            <a className="btn" href={`/app/find/${c.testId}`}>Join again</a>
+          </section>
+        )}
         {!(await db.block.count({ where: { blockerId: u.id, blockedId: c.test.developerId } })) && (
           <BlockButton seenAt={seenAt} sessionId={c.id} userId={c.test.developerId} name={dev} effect="Your session with them ends now (work you sent stays payable), calls between you are cancelled, and chat closes." />
         )}

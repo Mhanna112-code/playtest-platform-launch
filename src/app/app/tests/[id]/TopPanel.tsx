@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { api } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
+import { CalendarClock, Pencil } from "lucide-react";
 
 type Tester = { contractId: string; name: string };
 
@@ -10,7 +11,7 @@ type Tester = { contractId: string; name: string };
  * The test page's top title panel: the developer's big buttons (Stop the test, End early, Next round).
  * Its stop-once box sits directly under this panel.
  */
-export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null }) {
+export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
   const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={error} /> : null);
   const [open, setOpen] = useState<"" | "stop" | "end" | "next">("");
@@ -30,14 +31,23 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
 
   return (
     <div className="space-y-2">
-      <section className="panel" aria-label="Test">
-        <div className="flex flex-wrap items-start gap-2">
-          <h1 className="mr-auto">{p.title}</h1>
-          <span className="badge">{STATUS[p.status]}</span>
+      {/* The full app's test header: title, badges (status; who can join, linking to Edit; deadline), then the actions. */}
+      <section className="panel relative z-20 !space-y-5" aria-label="Test">
+        <div className="flex flex-wrap items-start gap-4">
+          <div className="min-w-[12rem] flex-1 space-y-2">
+            <h1 className="text-3xl font-bold tracking-tight text-white">{p.title}</h1>
+            <div className="flex flex-wrap gap-2">
+              <span className={`badge ${p.status === "open" ? "border-emerald-400/40 text-emerald-200" : ""}`}>{STATUS[p.status]}</span>
+              {p.joinMode && (
+                <a href={`/app/tests/${p.id}/edit`} className={`badge no-underline hover:no-underline ${p.joinMode === "apply" ? "border-sky-300/40 text-sky-200" : ""}`} title="Change who can join in Edit">
+                  {p.joinMode === "apply" ? "You approve each tester" : p.joinMode === "invite" ? "Invite only" : "Anyone who matches joins instantly"}
+                </a>
+              )}
+              {p.deadlineDays != null && <span className="badge" title="Each tester's deadline counts from when they join (change it in Edit)"><CalendarClock className="h-3.5 w-3.5" /> {p.deadlineDays} day{p.deadlineDays === 1 ? "" : "s"} per tester</span>}
+            </div>
+            <p className="note">{p.terms} · {p.spotsLine}</p>
+          </div>
         </div>
-        <p className="note">
-          {p.terms} · {p.spotsLine}
-        </p>
         {!stopped && (
           <div className="flex flex-wrap gap-2">
             {p.status === "draft" && (
@@ -48,7 +58,7 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
                 Open the test
               </button>
             )}
-            <a className="btn-ghost" href={`/app/tests/${p.id}/edit`}>Edit</a>
+            <a className="btn-secondary px-3 py-1.5" href={`/app/tests/${p.id}/edit`}><Pencil className="h-4 w-4" /> Edit</a>
             <a className="btn-ghost" href="#calls">Live calls</a>
             <button className="btn-ghost" onClick={() => setOpen(open === "end" ? "" : "end")} disabled={p.working.length === 0}>
               End early

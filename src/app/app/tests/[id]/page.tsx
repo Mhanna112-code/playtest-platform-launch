@@ -17,6 +17,7 @@ import { BlockButton } from "@/components/BlockButton";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, rateBlocker, ratingSummary } from "@/lib/server/ratings";
 import { LiveTop } from "@/components/LiveTop";
+import { Users } from "lucide-react";
 import { Applications } from "./Applications";
 import { rateLabel } from "@/lib/server/requests";
 import { AutoRefresh } from "@/components/AutoRefresh";
@@ -130,6 +131,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         seenAt={seenAt}
         nextRoundId={next?.id ?? null}
         spotsLine={`${working.length} of ${t.spots} spots used`}
+        joinMode={t.joinMode}
+        deadlineDays={t.deadlineDays}
         working={working.map((c) => ({ contractId: c.id, name: displayName(c.tester) }))}
       />
       {(u.holdStartedAt || owedList.length > 0) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} />}
@@ -174,7 +177,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       )}
 
       <section className="space-y-3">
-        <h2>Testers</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2"><Users className="h-5 w-5 text-volt-300" /> Testers joined</h2>
+          <span className="text-sm text-ink-400">{working.length} of {t.spots}</span>
+        </div>
         {t.contracts.length === 0 && <p className="note">Nobody has joined yet.</p>}
         {t.contracts.map((c) => (
           <div key={c.id} className="panel" id={`tester-${c.id}`}>
