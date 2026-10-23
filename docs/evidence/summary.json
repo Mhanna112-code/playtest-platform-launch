@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-23T06:16:29.204Z",
+  "run": "2026-10-23T06:50:24.933Z",
   "base": "http://localhost:3450",
   "flows": [
     {
@@ -694,9 +694,37 @@
         "31-capacity-card-developer.png",
         "31-spots-over-limit-red-developer.png"
       ]
+    },
+    {
+      "id": "32",
+      "title": "Categories as ticks (full app's list, at least one), category badges, the invite panel fold with the test's filters above Suggested, the top panel (buttons top right, Open until fold), and By question",
+      "status": "pass",
+      "checks": [
+        "PASS Categories: the full app's list as ticks",
+        "PASS none ticked: red",
+        "PASS posted with two categories",
+        "PASS header: category badges",
+        "PASS header: no Live calls button",
+        "PASS header: Open until fold at the bottom right",
+        "PASS invite panel shut at first",
+        "PASS filters directly above Suggested (saw: [\"People you've worked with\",\"Devices\",\"Languages\",\"Suggested\",\"Find testers\"])",
+        "PASS filters list only the test's needs",
+        "PASS By question: the question with both answers",
+        "PASS By question: 'not required', statuses, notes",
+        "PASS Find card: category badges",
+        "PASS listing: category badges"
+      ],
+      "screenshots": [
+        "32-categories-none-red-developer.png",
+        "32-top-panel-developer.png",
+        "32-invite-panel-developer.png",
+        "32-by-question-developer.png",
+        "32-find-category-badges-tester.png",
+        "32-listing-category-badges-tester.png"
+      ]
     }
   ],
-  "mergedInto": "2026-10-23T06:15:47.971Z",
+  "mergedInto": "2026-10-23T06:49:45.130Z",
   "coverage": [
     {
       "type": "Tester stop A: new terms (Send my recording)",
@@ -1298,6 +1326,48 @@
       "side": "developer",
       "flow": "31",
       "screenshot": "31-spots-over-limit-red-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Categories: none ticked is red (the full app list as ticks)",
+      "side": "developer",
+      "flow": "32",
+      "screenshot": "32-categories-none-red-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Top panel: buttons top right, terms and Open until fold bottom right, category badges",
+      "side": "developer",
+      "flow": "32",
+      "screenshot": "32-top-panel-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Invite panel: a fold with its icon; the test filters above Suggested",
+      "side": "developer",
+      "flow": "32",
+      "screenshot": "32-invite-panel-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "By question: answers per question with tester, time, status, not required",
+      "side": "developer",
+      "flow": "32",
+      "screenshot": "32-by-question-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Category badges on Find",
+      "side": "tester",
+      "flow": "32",
+      "screenshot": "32-find-category-badges-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Category badges on the listing",
+      "side": "tester",
+      "flow": "32",
+      "screenshot": "32-listing-category-badges-tester.png",
       "status": "pass"
     }
   ],

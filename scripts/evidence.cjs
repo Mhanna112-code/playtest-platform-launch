@@ -1657,6 +1657,90 @@ async function signIn(page, email) {
     check("10 spots: posted", sql(`select spots from "Test" t join "User" u on u.id = t."developerId" where u.email = '${DEV31}'`) === "10");
   });
 
+  await flow("32", "Categories as ticks (full app's list, at least one), category badges, the invite panel fold with the test's filters above Suggested, the top panel (buttons top right, Open until fold), and By question", async () => {
+    const DEV32 = `dev32+${TS}@playtest.test`;
+    const d = await ctx(DESKTOP);
+    await signIn(d, DEV32);
+    await d.fill("#name", "Nora Lane");
+    await d.selectOption("#pronoun", "she");
+    await d.check("text=post tests for my app, game or product");
+    await d.click("text=Continue");
+    await d.waitForSelector("text=Welcome back,");
+    await d.goto("/app/tests/new");
+    check("Categories: the full app's list as ticks", (await d.locator("fieldset:has(legend:text('Categories')) input[type=checkbox]").count()) === 12);
+    await d.uncheck("fieldset:has(legend:text('Categories')) label:has-text('Productivity') input");
+    await d.fill("#title", "Tidal Puzzle");
+    await d.fill("#description", "Solve the tide pools.");
+    await d.fill("#buildUrl", "https://example.com/tidal");
+    await d.fill("#questions", "What did you like?\nAnything else?");
+    await d.locator("li", { hasText: "Anything else?" }).locator("text=Not required").click();
+    await d.click("button:has-text('Post the test')");
+    check("none ticked: red", await has(d, ".err-field >> text=Tick at least one category."));
+    await d.locator("fieldset:has(legend:text('Categories'))").scrollIntoViewIfNeeded();
+    await shot(d, "categories-none-red-developer");
+    await d.check("fieldset:has(legend:text('Categories')) label:has-text('Game') input");
+    await d.check("fieldset:has(legend:text('Categories')) label:has-text('Education') input");
+    await d.click("fieldset:has-text('Devices testers need') label:has-text('Windows PC')");
+    await d.click("fieldset:has-text('Languages testers need') label:has-text('English')");
+    const until = new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10);
+    await d.fill("#openUntil", until);
+    await d.click("button:has-text('Post the test')");
+    await d.waitForURL((u) => /\/app\/tests\/\w+$/.test(u.pathname) && !u.pathname.endsWith("/new"));
+    const T = d.url().split("/").pop();
+    check("posted with two categories", sql(`select array_to_string(categories, ',') from "Test" where id = '${T}'`) === "Game,Education");
+    check("header: category badges", (await has(d, "section[aria-label='Test'] >> text=Game")) && (await has(d, "section[aria-label='Test'] >> text=Education")));
+    check("header: no Live calls button", (await d.locator("section[aria-label='Test'] a:has-text('Live calls')").count()) === 0);
+    check("header: Open until fold at the bottom right", await has(d, "#open-until >> text=Change"));
+    sql(`update "User" set "stripeCustomerId" = 'cus_fake32_${TS}', "stripePaymentMethodId" = 'pm_card_visa' where email = '${DEV32}'`);
+    // Two testers answer; one is paid.
+    const onboard = async (pg, email, name) => {
+      await signIn(pg, email);
+      await pg.fill("#name", name);
+      await pg.selectOption("#pronoun", "she");
+      await pg.check("text=test apps, games and more, and get paid");
+      await pg.click("label:has-text('Windows PC')");
+      await pg.click("label:has-text('English')");
+      await pg.click("text=Continue");
+      await pg.waitForSelector("text=Welcome back,");
+    };
+    const a = await ctx(PHONE), b = await ctx(PHONE);
+    await onboard(a, `tester32a+${TS}@playtest.test`, "Ana Silva");
+    await onboard(b, `tester32b+${TS}@playtest.test`, "Ben Ito");
+    const SA = (await apiPost(a, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
+    const SB = (await apiPost(b, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
+    await apiPost(a, `/api/sessions/${SA}/written`, { answers: ["The tide timer.", "Add a hint button."], notes: "It froze once on level 2.", seenAt: new Date().toISOString(), confirmed: true });
+    await apiPost(b, `/api/sessions/${SB}/written`, { answers: ["The crabs.", ""], seenAt: new Date().toISOString(), confirmed: true });
+    const subA = sql(`select id from "Submission" where "contractId" = '${SA}' and kind = 'written'`);
+    await apiPost(d, "/api/review", { payKey: `ev32-${TS}`, seenAt: new Date().toISOString(), confirmed: true, kind: "submission", id: subA, amount: "10.00", tickedCents: 1000 });
+    await d.reload();
+    await d.locator("section[aria-label='Test']").scrollIntoViewIfNeeded();
+    await d.screenshot({ path: path.join(OUT, "32-top-panel-developer.png") });
+    cur.screenshots.push("32-top-panel-developer.png");
+    // The invite panel: a fold with the full app's icon; the filters (only this test's needs) right above Suggested.
+    check("invite panel shut at first", !(await d.isVisible("#invite h3:has-text('Suggested')")));
+    await d.click("#invite > summary");
+    const order = await d.evaluate(() => [...document.querySelectorAll("#invite h3, #invite legend")].map((x) => x.textContent.trim()));
+    check("filters directly above Suggested", order.indexOf("Suggested") === order.indexOf("Languages") + 1 && order.indexOf("Devices") === order.indexOf("Languages") - 1, JSON.stringify(order));
+    check("filters list only the test's needs", (await d.locator("#invite fieldset input[type=checkbox]").count()) === 2);
+    await d.locator("#invite").scrollIntoViewIfNeeded();
+    await shot(d, "invite-panel-developer");
+    // By question.
+    await d.click("#by-question > summary");
+    check("By question: the question with both answers", (await has(d, "#by-question >> text=What did you like?")) && (await has(d, "#by-question >> text=The tide timer.")) && (await has(d, "#by-question >> text=The crabs.")));
+    check("By question: 'not required', statuses, notes", (await has(d, "#by-question >> [data-not-required]")) && (await has(d, "#by-question >> text=Paid $10.00")) && (await has(d, "#by-question >> text=Not reviewed yet")) && (await has(d, "#by-question >> text=It froze once on level 2.")));
+    await d.locator("#by-question").scrollIntoViewIfNeeded();
+    await shot(d, "by-question-developer");
+    // Category badges on Find and the listing.
+    const c = await ctx(DESKTOP);
+    await onboard(c, `tester32c+${TS}@playtest.test`, "Cara Diaz");
+    await c.goto("/app/find");
+    check("Find card: category badges", (await c.locator("li", { has: c.locator(`a[href="/app/find/${T}"]`) }).locator("text=Education").count()) > 0);
+    await shot(c, "find-category-badges-tester");
+    await c.goto(`/app/find/${T}`);
+    check("listing: category badges", await has(c, "#listing >> text=Education"));
+    await shot(c, "listing-category-badges-tester");
+  });
+
   await browser.close();
 
   // ---------- Coverage: one screenshot per stop / failure type, plus combined cases ----------
@@ -1754,6 +1838,12 @@ async function signIn(page, email) {
     C("New layout: admin", "admin", "30", "30-admin.png"),
     C("Tester capacity card (only the developer sees it)", "developer", "31", "31-capacity-card-developer.png"),
     C("Spots above the limit refused in red at the field", "developer", "31", "31-spots-over-limit-red-developer.png"),
+    C("Categories: none ticked is red (the full app list as ticks)", "developer", "32", "32-categories-none-red-developer.png"),
+    C("Top panel: buttons top right, terms and Open until fold bottom right, category badges", "developer", "32", "32-top-panel-developer.png"),
+    C("Invite panel: a fold with its icon; the test filters above Suggested", "developer", "32", "32-invite-panel-developer.png"),
+    C("By question: answers per question with tester, time, status, not required", "developer", "32", "32-by-question-developer.png"),
+    C("Category badges on Find", "tester", "32", "32-find-category-badges-tester.png"),
+    C("Category badges on the listing", "tester", "32", "32-listing-category-badges-tester.png"),
   ];
   summary.coverage = rows.map((r) => {
     const f = summary.flows.find((x) => x.id === r.flow);
