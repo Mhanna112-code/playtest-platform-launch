@@ -4,17 +4,19 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { api } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
 import { PressButton } from "@/components/PressButton";
+import { UserPlus } from "lucide-react";
 
 type Tester = { id: string; name: string; rating?: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string };
 type Sent = { id: string; name: string; status: string };
 
 
 /**
- * The invite panel (test page only). Sections: Invited (Cancel invite) · People you've worked with · Suggested · Find
- * testers (empty until you search). Greyed rows can't be ticked; filters only narrow what's shown. A ticked tester missing
- * something the test needs gets an in-page confirm under Invite (Invite anyway / Cancel).
+ * The invite panel (test page only), the full app's fold ("Invite testers" with its icon opens and closes it). Sections:
+ * Invited (Cancel invite) · People you've worked with · the filters (the devices / languages THIS test needs) · Suggested ·
+ * Find testers (empty until you search). The filters narrow Suggested and Find testers. Greyed rows can't be ticked. A
+ * ticked tester missing something the test needs gets an in-page confirm under Invite (Invite anyway / Cancel).
  */
-export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester[]; sent: Sent[]; options: { devices: string[]; languages: string[]; categories: string[] } }) {
+export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester[]; sent: Sent[]; options: { devices: string[]; languages: string[] } }) {
   const { press, changes, error, busy, setError } = usePress(p.seenAt);
   // Tick-box filters: any ticked device / any ticked language.
   const [f, setF] = useState<{ devices: string[]; languages: string[] }>({ devices: [], languages: [] });
@@ -22,13 +24,16 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
   const [ticked, setTicked] = useState<string[]>([]);
   const [msg, setMsg] = useState("");
   const [confirm, setConfirm] = useState<string[] | null>(null);
-  const notInvited = useMemo(
-    () => p.testers.filter((t) => !t.invited && (!f.devices.length || t.devices.some((d) => f.devices.includes(d))) && (!f.languages.length || t.languages.some((l) => f.languages.includes(l)))),
-    [p.testers, f],
-  );
+  const notInvited = useMemo(() => p.testers.filter((t) => !t.invited), [p.testers]);
+  const passes = (t: Tester) => (!f.devices.length || t.devices.some((d) => f.devices.includes(d))) && (!f.languages.length || t.languages.some((l) => f.languages.includes(l)));
   const worked = notInvited.filter((t) => t.section === "worked");
-  const suggested = notInvited.filter((t) => t.section === "suggested");
-  const found = q.trim().length >= 2 ? notInvited.filter((t) => t.name.toLowerCase().includes(q.trim().toLowerCase())) : [];
+  const suggested = notInvited.filter((t) => t.section === "suggested" && passes(t));
+  const found = q.trim().length >= 2 ? notInvited.filter((t) => passes(t) && t.name.toLowerCase().includes(q.trim().toLowerCase())) : [];
+  // The fold: shut at first, open when the page comes back to it (#invite, e.g. after inviting).
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (window.location.hash === "#invite") setOpen(true);
+  }, []);
 
   async function invite(anyway: boolean) {
     setMsg("");
@@ -37,7 +42,10 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
       setConfirm(null);
       setMsg(r.message);
       setTicked([]);
-      setTimeout(() => window.location.reload(), 1500);
+      setTimeout(() => {
+        window.location.hash = "invite";
+        window.location.reload();
+      }, 1500);
     }
   }
   // The server answers a missing need with "CONFIRM:<lines>": show it as the in-page confirm under Invite.
@@ -68,7 +76,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
       {t.grey && <span className="ml-2 text-xs">{t.grey}</span>}
     </label>
   );
-  const ticks = (k: keyof typeof f, label: string, opts: string[]) => (
+  const ticks = (k: keyof typeof f, label: string, opts: string[]) => opts.length > 0 && (
     <fieldset className="space-y-1">
       <legend className="label">{label}</legend>
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
@@ -82,8 +90,9 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
   );
 
   return (
-    <section className="panel" id="invite" aria-label="Invite testers">
-      <h2>Invite testers</h2>
+    <details id="invite" className="card scroll-mt-24" open={open} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)} aria-label="Invite testers">
+      <summary className="fold-chevron flex cursor-pointer items-center gap-2 font-semibold text-white"><UserPlus className="h-5 w-5 text-sky-300" /> Invite testers</summary>
+      <div className="mt-3 space-y-3 text-sm">
       {p.sent.length > 0 && (
         <>
           <h3>Invited</h3>
@@ -99,13 +108,15 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
           </ul>
         </>
       )}
-      <div className="grid gap-3 sm:grid-cols-2">
-        {ticks("devices", "Devices", p.options.devices)}
-        {ticks("languages", "Languages", p.options.languages)}
-      </div>
       <div className="max-h-80 space-y-2 overflow-y-auto text-sm">
         <h3>People you&apos;ve worked with</h3>
         {worked.length ? worked.map(row) : <p className="note">Nobody yet.</p>}
+        {(p.options.devices.length > 0 || p.options.languages.length > 0) && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {ticks("devices", "Devices", p.options.devices)}
+            {ticks("languages", "Languages", p.options.languages)}
+          </div>
+        )}
         <h3>Suggested</h3>
         {suggested.length ? suggested.map(row) : <p className="note">No suggestions right now.</p>}
         <h3>Find testers</h3>
@@ -124,6 +135,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
         </div>
       )}
       {msg && <p className="info">{msg}</p>}
-    </section>
+      </div>
+    </details>
   );
 }

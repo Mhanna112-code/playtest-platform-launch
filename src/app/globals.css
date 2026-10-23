@@ -70,3 +70,19 @@ body {
   .nav-link { @apply inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-ink-300 no-underline transition hover:bg-white/[0.06] hover:text-white hover:no-underline; }
   .kicker { @apply font-mono text-xs uppercase tracking-[0.2em] text-volt-300; }
 }
+
+/* The full app's folding header: a chevron pointing right when closed and down when open (its summary is a flex row,
+   which hides the browser's own marker). */
+summary.fold-chevron { list-style: none; }
+summary.fold-chevron::-webkit-details-marker { display: none; }
+summary.fold-chevron::before {
+  content: "\25B8";
+  display: inline-block;
+  width: 0.75rem;
+  color: rgb(148 163 184);
+  transition: transform 150ms ease-out;
+}
+details[open] > summary.fold-chevron::before { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) {
+  summary.fold-chevron::before { transition: none; }
+}

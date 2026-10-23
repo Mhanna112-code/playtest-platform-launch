@@ -270,7 +270,7 @@ async function signIn(page, email) {
     await t2.waitForSelector("text=Your sessions");
     await dev.goto(testUrl);
     // Tick-box filters, then Find testers by name (Suggested shows up to 5).
-    await dev.check("#invite fieldset:has-text('Devices') label:has-text('Mac') input");
+    await dev.click("#invite > summary"); // the fold opens
     await dev.fill("#invite input[aria-label='Find testers']", `Dee Moss ${TS % 10000}`);
     await dev.check(`#invite label:has-text('Dee Moss ${TS % 10000}') input`);
     await shot(dev, "invite-panel");
@@ -487,6 +487,7 @@ async function signIn(page, email) {
     check("join refused", await has(t3, "text=This test is paused, so it isn't taking new testers right now."));
     await shot(t3, "hold-join-refused-tester");
     await dev.goto(t11Url());
+    await dev.click("#invite > summary");
     await dev.fill("#invite input[aria-label='Find testers']", `Cara Diaz ${TS % 10000}`);
     await dev.check(`#invite label:has-text('Cara Diaz ${TS % 10000}') input`);
     await dev.click("#invite button:has-text('Invite')");
@@ -1500,6 +1501,7 @@ async function signIn(page, email) {
     await shot(tp, "auto-cancel-told-tester");
     // (5) Suggested (up to 5) and the tick-box filters.
     await d.goto(`/app/tests/${T}`);
+    await d.click("#invite > summary");
     const sug = await d.locator("#invite h3:has-text('Suggested') ~ label").count();
     check("Suggested shows up to 5", sug > 0 && sug <= 5, sug);
     await d.check("#invite fieldset:has-text('Devices') label:has-text('Mac') input");
