@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-23T00:09:31.890Z",
+  "run": "2026-10-23T00:47:28.170Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -540,8 +540,47 @@
         "26-spot-opened-tester.png",
         "26-renamed-note-tester.png"
       ]
+    },
+    {
+      "id": "27",
+      "title": "Ratings: the tester rates the developer (not yet, available after review, warning, red form mistake, rated; no rejoin; Charge stays; profile average)",
+      "status": "pass",
+      "checks": [
+        "PASS test posted and joined (saw: {\"id\":\"cmvk936w400347k8clh7560nk\"})",
+        "PASS not yet: no Rate button while work waits for review",
+        "PASS the developer paid the call (saw: {\"reviewId\":\"cmvk9383d004f7k8c4vzzxejz\",\"amountCents\":1500,\"status\":\"charged\",\"rejected\":false,\"paidSoFarCents\":1500})",
+        "PASS the 'Rate Nora Lane' prompt was sent once",
+        "PASS available after the review: Rate button",
+        "PASS warning: rating ends your part",
+        "PASS warning: the unsent part won't be paid",
+        "PASS warning: upcoming calls cancelled (one line)",
+        "PASS stars missing: red at the field",
+        "PASS rated: 'You rated Nora Lane.' (hidden from the developer for now)",
+        "PASS the upcoming call was cancelled",
+        "PASS Charge still available after rating",
+        "PASS join page: no rejoin after rating",
+        "PASS developer: 'Ana Silva rated you: you'll see it after you rate her (or on …)'",
+        "PASS not in the average yet",
+        "PASS both revealed: 'Ana Silva rated you: 4 ★' and 'You rated Ana Silva: 5 ★'",
+        "PASS tester sees both now",
+        "PASS listing shows the developer's average",
+        "PASS developer profile: average and the comment (no rater name)"
+      ],
+      "screenshots": [
+        "27-rate-not-yet-tester.png",
+        "27-rate-available-tester.png",
+        "27-rate-warning-tester.png",
+        "27-rate-stars-missing-red-tester.png",
+        "27-rated-charge-still-available-tester.png",
+        "27-rated-no-rejoin-tester.png",
+        "27-dev-rating-hidden-developer.png",
+        "27-dev-rated-both-revealed-developer.png",
+        "27-both-revealed-tester.png",
+        "27-profile-average-developer.png"
+      ]
     }
   ],
+  "mergedInto": "2026-10-23T00:09:31.890Z",
   "coverage": [
     {
       "type": "Tester stop A: new terms (Send my recording)",
@@ -891,6 +930,76 @@
       "side": "tester",
       "flow": "26",
       "screenshot": "26-renamed-note-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Rating: not yet while work waits for review (no Rate button)",
+      "side": "tester",
+      "flow": "27",
+      "screenshot": "27-rate-not-yet-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Rating: available after the review",
+      "side": "tester",
+      "flow": "27",
+      "screenshot": "27-rate-available-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Rating warning: an unsent part and the calls line",
+      "side": "tester",
+      "flow": "27",
+      "screenshot": "27-rate-warning-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Rating: stars missing shown in red",
+      "side": "tester",
+      "flow": "27",
+      "screenshot": "27-rate-stars-missing-red-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Rating done: Charge still available",
+      "side": "tester",
+      "flow": "27",
+      "screenshot": "27-rated-charge-still-available-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Rating: rejoin refused on the join page",
+      "side": "tester",
+      "flow": "27",
+      "screenshot": "27-rated-no-rejoin-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Rating: profile average with comments (no names)",
+      "side": "developer",
+      "flow": "27",
+      "screenshot": "27-profile-average-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Developer rating: the tester's rating hidden until the developer rates",
+      "side": "developer",
+      "flow": "27",
+      "screenshot": "27-dev-rating-hidden-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Developer rates the tester: both ratings revealed",
+      "side": "developer",
+      "flow": "27",
+      "screenshot": "27-dev-rated-both-revealed-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Both ratings revealed (tester)",
+      "side": "tester",
+      "flow": "27",
+      "screenshot": "27-both-revealed-tester.png",
       "status": "pass"
     }
   ],

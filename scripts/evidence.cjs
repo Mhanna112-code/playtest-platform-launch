@@ -32,7 +32,9 @@ const PHONE = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isM
 const DESKTOP = { viewport: { width: 1280, height: 900 } };
 
 fs.mkdirSync(OUT, { recursive: true });
-for (const f of fs.readdirSync(OUT)) if (/\.(png|webm)$/.test(f) || f === "summary.json") fs.rmSync(path.join(OUT, f));
+// A full run starts clean; an ONLY run replaces just its own flows' files.
+const ONLY_IDS = (process.env.ONLY || "").split(",").filter(Boolean);
+for (const f of fs.readdirSync(OUT)) if ((/\.(png|webm)$/.test(f) && (!ONLY_IDS.length || ONLY_IDS.some((id) => f.startsWith(`${id}-`)))) || (f === "summary.json" && !ONLY_IDS.length)) fs.rmSync(path.join(OUT, f));
 const summary = { run: new Date(TS).toISOString(), base: BASE, flows: [] };
 const ONLY = (process.env.ONLY || "").split(",").filter(Boolean); // e.g. ONLY=27: run just these, merge into summary.json
 let browser, cur;
@@ -1232,13 +1234,29 @@ async function signIn(page, email) {
     await tp.fill("#rate-comment", "Clear build and quick pay.");
     await tp.click("button:has-text('Rate and finish')");
     await tp.waitForTimeout(2000);
-    check("rated: 'You rated Nora Lane: 4 ★'", await has(tp, "text=You rated Nora Lane: 4 ★"));
+    check("rated: 'You rated Nora Lane.' (hidden from the developer for now)", await has(tp, "text=You rated Nora Lane."));
     check("the upcoming call was cancelled", sql(`select count(*) from "Call" where "contractId" = '${S}' and status = 'booked' and "startsAt" > now()`) === "0");
     check("Charge still available after rating", await has(tp, "button:has-text('Charge Nora Lane')"));
     await shot(tp, "rated-charge-still-available-tester");
     await tp.goto(`/app/find/${T}`);
     check("join page: no rejoin after rating", await has(tp, "text=You rated this test, so you can't join it again."));
     await shot(tp, "rated-no-rejoin-tester");
+    // The developer: the rating is hidden until they rate Ana (blind reveal); then both show.
+    await d.goto(`/app/tests/${T}`);
+    check("developer: 'Ana Silva rated you: you'll see it after you rate her (or on …)'", await has(d, "text=Ana Silva rated you: you'll see it after you rate her (or on"));
+    check("not in the average yet", sql(`select count(*) from "Rating" where "rateeId" = (select id from "User" where email = '${DEV27}') and "revealedAt" is not null`) === "0");
+    await shot(d, "dev-rating-hidden-developer");
+    await d.click("button:has-text('Rate Ana Silva')");
+    await d.check("label:has-text('5 ★') input");
+    await d.fill("#rate-comment", "Thorough and kind.");
+    await d.click("button:text-is('Rate')");
+    await d.waitForTimeout(2000);
+    check("both revealed: 'Ana Silva rated you: 4 ★' and 'You rated Ana Silva: 5 ★'", (await has(d, "text=Ana Silva rated you: 4 ★")) && (await has(d, "text=You rated Ana Silva: 5 ★")));
+    await shot(d, "dev-rated-both-revealed-developer");
+    await tp.goto(`/app/sessions/${S}`);
+    check("tester sees both now", (await has(tp, "text=You rated Nora Lane: 4 ★")) && (await has(tp, "text=Nora Lane rated you: 5 ★")));
+    await shot(tp, "both-revealed-tester");
+    await tp.goto(`/app/find/${T}`);
     check("listing shows the developer's average", await has(tp, "text=4.0 ★ (1 rating)"));
     await d.goto("/app/profile");
     check("developer profile: average and the comment (no rater name)", (await has(d, "text=4.0 ★ (1 rating)")) && (await has(d, "text=Clear build and quick pay.")) && !(await d.isVisible("section[aria-label='Your ratings'] >> text=Ana Silva")));
@@ -1313,13 +1331,15 @@ async function signIn(page, email) {
     C("Rating done: Charge still available", "tester", "27", "27-rated-charge-still-available-tester.png"),
     C("Rating: rejoin refused on the join page", "tester", "27", "27-rated-no-rejoin-tester.png"),
     C("Rating: profile average with comments (no names)", "developer", "27", "27-profile-average-developer.png"),
+    C("Developer rating: the tester's rating hidden until the developer rates", "developer", "27", "27-dev-rating-hidden-developer.png"),
+    C("Developer rates the tester: both ratings revealed", "developer", "27", "27-dev-rated-both-revealed-developer.png"),
+    C("Both ratings revealed (tester)", "tester", "27", "27-both-revealed-tester.png"),
   ];
   summary.coverage = rows.map((r) => {
     const f = summary.flows.find((x) => x.id === r.flow);
     const shotOk = !!f && f.screenshots.includes(r.screenshot) && fs.existsSync(path.join(OUT, r.screenshot));
     return { ...r, status: f && f.status === "pass" && shotOk ? "pass" : "fail" };
   });
-  summary.notYet = [{ type: "Developer rates a tester", reason: "on hold: the owner is changing when it's available (the coordinator will send the rule)" }];
   summary.pass = summary.flows.every((f) => f.status === "pass") && summary.coverage.every((c) => c.status === "pass");
   fs.writeFileSync(path.join(OUT, "summary.json"), JSON.stringify(summary, null, 2));
   console.log(summary.pass ? "ALL PASS" : "SOME FAILED", "→", OUT);
