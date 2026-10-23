@@ -16,12 +16,13 @@ type U = { id: string; email: string; name: string; pronoun: string };
  * now"). Removed silently: blocked either way, deleted accounts (no longer testers); the page's filters remove the rest.
  */
 export async function invitable(devId: string, testId: string) {
-  const [testers, inTest, invites, blocks, active] = await Promise.all([
+  const [testers, inTest, invites, blocks, active, past] = await Promise.all([
     db.user.findMany({ where: { isTester: true, id: { not: devId } }, include: { profile: true }, orderBy: { createdAt: "desc" }, take: 500 }),
     db.contract.findMany({ where: { testId, status: "working" }, select: { testerId: true } }),
     db.invite.findMany({ where: { testId, status: "sent" } }),
     db.block.findMany({ where: { OR: [{ blockerId: devId }, { blockedId: devId }] } }),
     db.contract.groupBy({ by: ["testerId"], where: { status: "working" }, _count: { _all: true } }),
+    db.contract.findMany({ where: { testId, status: { in: ["left", "ended"] } }, select: { testerId: true, status: true } }),
   ]);
   const removed = new Set(blocks.map((b) => (b.blockerId === devId ? b.blockedId : b.blockerId)));
   const test = await db.test.findUniqueOrThrow({ where: { id: testId } });
@@ -57,6 +58,8 @@ export async function invitable(devId: string, testId: string) {
       return {
         id: t.id, name: displayName(t), devices: t.profile?.devices ?? [], languages: t.profile?.languages ?? [], categories: t.profile?.categories ?? [],
         invited: !!inv, inviteId: inv?.id ?? null, grey, rating: ratingLine(t.id),
+        // (NEXT-UI 14) Still tickable: a re-invite is how an ended tester can come back.
+        was: ((s) => (s === "left" ? "Left this test" : s === "ended" ? "You ended their work" : ""))(past.find((c) => c.testerId === t.id)?.status),
         tag: doesntListTag(test, t.profile),
         detail: withYouText(mine.find((m) => m.rateeId === t.id)?._avg.stars ?? null, withDev.filter((c) => c.testerId === t.id).length),
         gap: missingNeed(test, t.profile),

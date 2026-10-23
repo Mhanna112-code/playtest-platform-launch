@@ -6,7 +6,7 @@ import { usePress } from "@/lib/usePress";
 import { PressButton } from "@/components/PressButton";
 import { UserPlus } from "lucide-react";
 
-type Tester = { id: string; name: string; rating?: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; tag?: string; detail?: string };
+type Tester = { id: string; name: string; rating?: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; detail?: string };
 type Sent = { id: string; name: string; status: string };
 
 
@@ -84,6 +84,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
     <li key={key + t.id} data-invite-row={t.id} className={`flex flex-wrap items-center gap-2 ${t.grey ? "text-slate-500" : "text-slate-300"}`}>
       <input type="checkbox" id={`${key}-${t.id}`} aria-label={t.name} disabled={!!t.grey} checked={!t.grey && ticked.includes(t.id)} onChange={(e) => { setNone(false); setTicked(e.target.checked ? [...ticked, t.id] : ticked.filter((x) => x !== t.id)); }} />
       <span className="min-w-0 flex-1 truncate"><a href={`/app/testers/${t.id}`} target="_blank" rel="noopener" className="text-inherit underline-offset-2 hover:underline">{t.name}</a></span>
+      {t.was && !t.grey && <span className="badge max-w-full shrink-0 truncate whitespace-nowrap">{t.was}</span>}
       {t.tag && !t.grey && <span className="badge max-w-full shrink-0 truncate whitespace-nowrap border-amber-300/40 text-amber-200">{t.tag}</span>}
       <label htmlFor={`${key}-${t.id}`} className="shrink-0 cursor-pointer text-xs text-slate-500">{t.grey ?? t.detail}</label>
     </li>
