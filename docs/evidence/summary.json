@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-23T07:30:28.617Z",
+  "run": "2026-10-23T17:00:27.464Z",
   "base": "http://localhost:3450",
   "flows": [
     {
@@ -744,9 +744,28 @@
         "33-live-session-developer.png",
         "33-call-page-timer-developer.png"
       ]
+    },
+    {
+      "id": "34",
+      "title": "Rest of the live session: length entry (developer: booked / measured, up to 150%, by 24 h, why if shorter; tester: what was entered), Report a problem fold, the call page header",
+      "status": "pass",
+      "checks": [
+        "PASS length entry: booked and measured",
+        "PASS length entry: up to 45 min, by when",
+        "PASS saved with the reason",
+        "PASS tester: what was entered and why",
+        "PASS report: No-show / Late radios",
+        "PASS report sent: 'You reported that Nora Lane was late'",
+        "PASS call page: 'Call with Ana Silva' and the booked / paid line"
+      ],
+      "screenshots": [
+        "34-length-entry-developer.png",
+        "34-length-and-report-tester.png",
+        "34-call-page-header-developer.png"
+      ]
     }
   ],
-  "mergedInto": "2026-10-23T06:50:24.933Z",
+  "mergedInto": "2026-10-23T07:30:28.617Z",
   "coverage": [
     {
       "type": "Tester stop A: new terms (Send my recording)",
@@ -1411,6 +1430,27 @@
       "side": "developer",
       "flow": "33",
       "screenshot": "33-call-page-timer-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Length entry (developer): booked / measured, up to 150 percent, by 24 h, why if shorter",
+      "side": "developer",
+      "flow": "34",
+      "screenshot": "34-length-entry-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Tester: the length entered with the reason; Report a problem fold",
+      "side": "tester",
+      "flow": "34",
+      "screenshot": "34-length-and-report-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Call page header: Call with ..., booked for N minutes (paid up to ...)",
+      "side": "developer",
+      "flow": "34",
+      "screenshot": "34-call-page-header-developer.png",
       "status": "pass"
     }
   ],

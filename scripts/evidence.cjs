@@ -1791,6 +1791,61 @@ async function signIn(page, email) {
     cur.screenshots.push("33-call-page-timer-developer.png");
   });
 
+  await flow("34", "Rest of the live session: length entry (developer: booked / measured, up to 150%, by 24 h, why if shorter; tester: what was entered), Report a problem fold, the call page header", async () => {
+    const DEV34 = `dev34+${TS}@playtest.test`, T34 = `tester34+${TS}@playtest.test`;
+    const d = await ctx(DESKTOP);
+    await signIn(d, DEV34);
+    await d.fill("#name", "Nora Lane");
+    await d.selectOption("#pronoun", "she");
+    await d.check("text=post tests for my app, game or product");
+    await d.click("text=Continue");
+    await d.waitForSelector("text=Welcome back,");
+    const r = await apiPost(d, "/api/tests", { title: "Driftwood", description: "Build a raft.", buildUrl: "https://example.com/drift", categories: ["Game"], devices: [], languages: [], spots: 3, writtenCents: "10.00", recordingCents: null, liveRateCents: "30.00", liveMinutes: null, deadlineDays: 7, questions: ["Anything?"], openUntil: "", joinMode: "anyone" });
+    const T = r.body.id;
+    const tp = await ctx(PHONE);
+    await signIn(tp, T34);
+    await tp.fill("#name", "Ana Silva");
+    await tp.selectOption("#pronoun", "she");
+    await tp.check("text=test apps, games and more, and get paid");
+    await tp.click("label:has-text('Windows PC')");
+    await tp.click("label:has-text('English')");
+    await tp.click("text=Continue");
+    await tp.waitForSelector("text=Welcome back,");
+    const S = (await apiPost(tp, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
+    const done = await requestAndAccept(d, tp, T, S, 2);
+    sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '2 hours', "devJoinedAt" = (now() at time zone 'utc') - interval '2 hours', "testerJoinedAt" = (now() at time zone 'utc') - interval '115 minutes' where id = '${done}'`);
+    // The developer enters a shorter length with the reason.
+    await d.goto(`/app/tests/${T}`);
+    check("length entry: booked and measured", await has(d, `text=booked 30, measured 25 min`));
+    check("length entry: up to 45 min, by when", await has(d, "text=You can log up to 45 min for this 30-min call. Enter it by"));
+    await d.fill(`#len-${done}`, "25");
+    await d.fill(`input[aria-label='Why, if shorter']`, "Ana joined five minutes late.");
+    await d.locator(`#len-${done}`).scrollIntoViewIfNeeded();
+    await shot(d, "length-entry-developer");
+    await d.click("button:has-text('Enter the length')");
+    await d.waitForTimeout(1500);
+    check("saved with the reason", sql(`select "actualMinutes" || '|' || "lengthNote" from "Call" where id = '${done}'`) === "25|Ana joined five minutes late.");
+    // The tester reads it; Report a problem is the full app's fold.
+    await tp.goto(`/app/sessions/${S}`);
+    check("tester: what was entered and why", await has(tp, "text=Nora Lane entered 25 minutes (booked 30): “Ana joined five minutes late.”"));
+    await tp.click("summary:has-text('Report a problem with this call')");
+    check("report: No-show / Late radios", (await has(tp, "text=Nora Lane didn't show up")) && (await has(tp, "text=Nora Lane was late")));
+    await tp.locator("summary:has-text('Report a problem with this call')").scrollIntoViewIfNeeded();
+    await shot(tp, "length-and-report-tester");
+    await tp.check("label:has-text('Nora Lane was late') input");
+    await tp.fill("textarea[aria-label='What happened']", "She joined 10 minutes in.");
+    await tp.click("button:has-text('Send to the team')");
+    await tp.waitForTimeout(1500);
+    check("report sent: 'You reported that Nora Lane was late'", (await has(tp, "text=You reported that Nora Lane was late: She joined 10 minutes in.")) && sql(`select "noShowBy" from "Call" where id = '${done}'`) === "tester");
+    // The call page header.
+    const live = await requestAndAccept(d, tp, T, S, 3);
+    sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '2 minutes' where id = '${live}'`);
+    await d.goto(`/app/calls/${live}`);
+    check("call page: 'Call with Ana Silva' and the booked / paid line", (await has(d, "h1:has-text('Call with Ana Silva')")) && (await has(d, "text=booked for 30 minutes (paid up to 45) · the length is measured while you're both here.")));
+    await d.screenshot({ path: path.join(OUT, "34-call-page-header-developer.png") });
+    cur.screenshots.push("34-call-page-header-developer.png");
+  });
+
   await browser.close();
 
   // ---------- Coverage: one screenshot per stop / failure type, plus combined cases ----------
@@ -1897,6 +1952,9 @@ async function signIn(page, email) {
     C("Live session panel (tester): timer, presence, booked, past calls, add to calendar", "tester", "33", "33-live-session-tester.png"),
     C("Live session panel (developer): a fold, past calls with outcomes", "developer", "33", "33-live-session-developer.png"),
     C("The call page with the call timer", "developer", "33", "33-call-page-timer-developer.png"),
+    C("Length entry (developer): booked / measured, up to 150 percent, by 24 h, why if shorter", "developer", "34", "34-length-entry-developer.png"),
+    C("Tester: the length entered with the reason; Report a problem fold", "tester", "34", "34-length-and-report-tester.png"),
+    C("Call page header: Call with ..., booked for N minutes (paid up to ...)", "developer", "34", "34-call-page-header-developer.png"),
   ];
   summary.coverage = rows.map((r) => {
     const f = summary.flows.find((x) => x.id === r.flow);
