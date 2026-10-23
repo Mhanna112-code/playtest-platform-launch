@@ -16,6 +16,12 @@ export default async function ProfilePage() {
   return (
     <>
       <h1 className="text-3xl font-bold tracking-tight text-white">Profile</h1>
+      {(u.isDeveloper || u.isTester) && (
+        <p className="flex flex-wrap gap-x-4 text-sm">
+          {u.isDeveloper && <a href={`/app/developers/${u.id}`}>How testers see your profile</a>}
+          {u.isTester && <a href={`/app/testers/${u.id}`}>How developers see your profile</a>}
+        </p>
+      )}
       <section className="panel" aria-label="Your ratings">
         <h2>Your ratings</h2>
         {rating.line ? <p>{rating.line}</p> : <p className="note">No ratings yet.</p>}

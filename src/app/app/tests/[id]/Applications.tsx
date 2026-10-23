@@ -2,7 +2,7 @@
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
 
-type App = { id: string; name: string; note: string; profile: string };
+type App = { id: string; userId: string; name: string; note: string; profile: string };
 
 export function Applications({ testId, seenAt, apps }: { testId: string; seenAt: string; apps: App[] }) {
   const { press, changes, error, busy, at } = usePress(seenAt);
@@ -17,7 +17,7 @@ export function Applications({ testId, seenAt, apps }: { testId: string; seenAt:
       <ul className="space-y-3 text-sm">
         {apps.map((a) => (
           <li key={a.id} className="space-y-1">
-            <p><b>{a.name}</b> · {a.profile}</p>
+            <p><a href={`/app/testers/${a.userId}`}><b>{a.name}</b></a> · {a.profile}</p>
             {a.note && <p>“{a.note}”</p>}
             <div className="flex flex-wrap gap-2">
               <button className="btn" disabled={busy} onClick={() => go(a, "accept")}>Accept</button>

@@ -48,9 +48,9 @@ async function devRateBlocker(contractId: string, now = new Date()) {
 /** "4.6 ★ (12 ratings)" and the comments (never the rater's name); revealed ratings only. */
 export async function ratingSummary(userId: string) {
   const rows = await db.rating.findMany({ where: { rateeId: userId, ...revealedWhere() }, orderBy: { createdAt: "desc" } });
-  if (!rows.length) return { line: "", comments: [] as string[], n: 0 };
+  if (!rows.length) return { line: "", comments: [] as string[], n: 0, avg: 0 };
   const avg = rows.reduce((a, r) => a + r.stars, 0) / rows.length;
-  return { line: `${avg.toFixed(1)} ★ (${rows.length} rating${rows.length === 1 ? "" : "s"})`, comments: rows.filter((r) => r.comment).slice(0, 10).map((r) => r.comment), n: rows.length };
+  return { line: `${avg.toFixed(1)} ★ (${rows.length} rating${rows.length === 1 ? "" : "s"})`, comments: rows.filter((r) => r.comment).slice(0, 10).map((r) => r.comment), n: rows.length, avg };
 }
 export const revealedRatingsWhere = revealedWhere;
 

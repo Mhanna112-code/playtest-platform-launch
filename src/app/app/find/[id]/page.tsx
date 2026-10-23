@@ -38,7 +38,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       {t.developerId !== u.id && <LiveTop scope={`listing:${t.id}`} seenAt={seenAt} seeIt="#listing" />}
       <div className="panel" id="listing">
         <h1 className="text-3xl font-bold tracking-tight text-white">{t.title}</h1>
-        <p className="note">by {displayName(t.developer)}{devRating.line && ` · ${devRating.line}`}{t.category && ` · ${t.category}`}</p>
+        <p className="note">by <a href={`/app/developers/${t.developerId}`}>{displayName(t.developer)}</a>{devRating.line && ` · ${devRating.line}`}{t.category && ` · ${t.category}`}</p>
         {devRating.comments.length > 0 && (
           <details className="text-sm">
             <summary className="cursor-pointer">What testers said</summary>

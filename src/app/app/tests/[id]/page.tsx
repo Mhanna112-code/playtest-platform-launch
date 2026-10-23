@@ -67,7 +67,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const preJoin = await db.user.findMany({ where: { id: { in: [...pendingApps.map((a) => a.testerId), ...invitedIds] } } });
   const apps = pendingApps.map((a) => {
     const x = appUsers.find((y) => y.id === a.testerId)!;
-    return { id: a.id, name: displayName(x), note: a.note, profile: [...(x.profile?.devices ?? []), ...(x.profile?.languages ?? []), ...(appRatings.get(x.id) ? [appRatings.get(x.id)!] : [])].join(", ") };
+    return { id: a.id, userId: x.id, name: displayName(x), note: a.note, profile: [...(x.profile?.devices ?? []), ...(x.profile?.languages ?? []), ...(appRatings.get(x.id) ? [appRatings.get(x.id)!] : [])].join(", ") };
   });
   const blockedIds = new Set((await db.block.findMany({ where: { blockerId: u.id } })).map((b) => b.blockedId));
   const blockedBy = new Set((await db.block.findMany({ where: { blockedId: u.id } })).map((b) => b.blockerId));
@@ -187,7 +187,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         {t.contracts.map((c) => (
           <div key={c.id} className="panel" id={`tester-${c.id}`}>
             <div className="flex flex-wrap items-baseline gap-2">
-              <h3 className="mr-auto">{displayName(c.tester)}</h3>
+              <h3 className="mr-auto"><a href={`/app/testers/${c.testerId}`}>{displayName(c.tester)}</a></h3>
               <span className="badge">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
               {c.keepPrivate && <span className="badge">Keeps it private</span>}
             </div>

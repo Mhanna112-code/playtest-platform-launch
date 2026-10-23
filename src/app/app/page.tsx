@@ -6,6 +6,7 @@ import { termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { ProfileForm } from "./profile/ProfileForm";
 import { NoThanks } from "./NoThanks";
+import { DeveloperTiles } from "@/components/ProfileTiles";
 
 export const metadata = { title: "Home · Playtest" };
 export const dynamic = "force-dynamic";
@@ -46,6 +47,11 @@ export default async function AppHome() {
           {u.isTester && <Link className={u.isDeveloper ? "btn-secondary" : "btn"} href="/app/find"><Compass className="h-4 w-4" /> Find tests</Link>}
         </div>
       </div>
+      {u.isDeveloper && (
+        <div className="space-y-4">
+          <DeveloperTiles userId={u.id} />
+        </div>
+      )}
       {u.isDeveloper && (
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-white"><LayoutGrid className="h-5 w-5 text-volt-300" /> Your tests</h2>

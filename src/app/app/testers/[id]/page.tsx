@@ -1,0 +1,51 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { CalendarDays, Languages, Monitor } from "lucide-react";
+import { db } from "@/lib/db";
+import { displayName, fmtDate } from "@/lib/format";
+import { requirePageUser } from "@/lib/server/page-auth";
+import { TesterTiles } from "@/components/ProfileTiles";
+
+export const metadata = { title: "Tester · Playtest" };
+export const dynamic = "force-dynamic";
+
+/**
+ * A tester's profile as developers see it (the full app's tester profile): who they are, the two tiles (Accepted parts,
+ * Rating) with what they count, and About. For developers (and the tester themself); not between people who blocked
+ * each other.
+ */
+export default async function TesterProfilePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const viewer = await requirePageUser();
+  const p = await db.user.findUnique({ where: { id }, include: { profile: true } });
+  if (!p || !p.isTester) notFound();
+  const mine = viewer.id === p.id;
+  if (!mine && !viewer.isAdmin && !viewer.isDeveloper) notFound();
+  if (!mine && !viewer.isAdmin && (await db.block.count({ where: { OR: [{ blockerId: viewer.id, blockedId: p.id }, { blockerId: p.id, blockedId: viewer.id }] } }))) notFound();
+  const name = displayName(p);
+  const pr = p.profile;
+  return (
+    <div className="mx-auto max-w-3xl space-y-6">
+      <section className="card flex flex-wrap items-center gap-4">
+        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-volt-300 to-sky-300 text-xl font-semibold text-ink-950">{name.charAt(0).toUpperCase()}</span>
+        <div className="min-w-0 flex-1 space-y-2">
+          <h1 className="text-2xl font-bold text-white">{name}</h1>
+          <p className="flex flex-wrap items-center gap-2 text-sm text-slate-400"><CalendarDays className="h-4 w-4" /> Tester since {fmtDate(p.createdAt)}</p>
+          {mine && <p className="text-xs text-slate-500">This is how developers see your profile.</p>}
+        </div>
+        {mine && <Link href="/app/profile" className="btn-secondary px-3 py-1.5 text-sm">Edit profile</Link>}
+      </section>
+      <TesterTiles userId={p.id} />
+      <section className="card space-y-3">
+        <h2 className="font-semibold text-white">About</h2>
+        <p className="text-sm text-slate-300">{pr?.bio || <span className="text-slate-500">No bio yet.</span>}</p>
+        <div className="flex flex-wrap gap-2">
+          {(pr?.categories ?? []).map((c) => <span key={c} className="badge">{c}</span>)}
+          {(pr?.devices ?? []).map((d) => <span key={d} className="badge"><Monitor className="h-3.5 w-3.5" /> {d}</span>)}
+          {(pr?.languages ?? []).map((l) => <span key={l} className="badge"><Languages className="h-3.5 w-3.5" /> {l}</span>)}
+          {!pr?.categories.length && !pr?.devices.length && <span className="text-sm text-slate-500">Interests and devices not filled in yet.</span>}
+        </div>
+      </section>
+    </div>
+  );
+}

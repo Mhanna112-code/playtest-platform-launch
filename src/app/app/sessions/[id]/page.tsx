@@ -81,7 +81,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       )}
       <div className="panel">
         <h1 className="text-3xl font-bold tracking-tight text-white">{c.title}</h1>
-        <p className="note">by {dev} · joined {fmtDate(c.joinedAt)} · due {fmtDate(c.dueAt)}{isLate(c.dueAt, now) && !refusal ? " (late work is still accepted and marked late)" : ""}</p>
+        <p className="note">by <a href={`/app/developers/${c.test.developerId}`}>{dev}</a> · joined {fmtDate(c.joinedAt)} · due {fmtDate(c.dueAt)}{isLate(c.dueAt, now) && !refusal ? " (late work is still accepted and marked late)" : ""}</p>
         <p className="text-sm"><b>Your contract:</b> {termsLine(c, true)} (what you get)</p>
         <p className="text-sm">{(await paidLines([c.id])).get(c.id)}</p>
         {c.buildUrl && <p className="text-sm">Build: <a href={c.buildUrl} target="_blank" rel="noreferrer">{c.buildUrl}</a></p>}

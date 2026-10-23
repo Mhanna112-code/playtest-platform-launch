@@ -47,7 +47,9 @@ body {
   .wrap { @apply mx-auto max-w-4xl px-4 py-6; }
   .card-hover { @apply transition duration-200 hover:-translate-y-0.5 hover:border-volt-300/30 hover:bg-ink-900; }
   /* The full app's .card */
-  .card, .panel { @apply space-y-3 rounded-2xl border border-white/[0.08] bg-ink-900/70 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_30px_-12px_rgba(0,0,0,0.6)] backdrop-blur-sm; }
+  .card, .panel { @apply rounded-2xl border border-white/[0.08] bg-ink-900/70 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_30px_-12px_rgba(0,0,0,0.6)] backdrop-blur-sm; }
+  /* A panel stacks its rows; a card lays itself out (the full app's .card has no spacing of its own). */
+  .panel { @apply space-y-3; }
   /* Primary action: the tactile lime button. */
   .btn { @apply inline-flex select-none items-center justify-center gap-2 rounded-xl bg-volt-300 px-4 py-2 text-sm font-semibold text-ink-950 no-underline shadow-[0_3px_0_0_#62820b,0_8px_24px_-10px_rgba(216,252,82,0.55)] transition duration-100 hover:-translate-y-px hover:bg-volt-200 hover:no-underline active:translate-y-[2px] active:shadow-[0_1px_0_0_#62820b] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0; }
   .btn-secondary, .btn-ghost { @apply inline-flex select-none items-center justify-center gap-2 rounded-xl border border-white/[0.12] bg-white/[0.04] px-4 py-2 text-sm font-medium text-ink-100 no-underline shadow-[0_2px_0_0_rgba(0,0,0,0.35)] transition duration-100 hover:border-white/25 hover:bg-white/[0.08] hover:no-underline active:translate-y-px active:shadow-none disabled:cursor-not-allowed disabled:opacity-50; }
