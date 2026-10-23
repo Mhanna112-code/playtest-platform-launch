@@ -25,6 +25,8 @@ import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
 import { PayBox } from "./PayBox";
 import { TopPanel } from "./TopPanel";
+import { ByQuestion } from "./ByQuestion";
+import { byQuestion } from "@/lib/byQuestion";
 
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
@@ -284,6 +286,20 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             </details>
           </div>
         ))}
+        <ByQuestion
+          blocks={byQuestion(
+            (t.questions as string[]) ?? [],
+            t.contracts.flatMap((c) =>
+              c.submissions
+                .filter((s) => s.kind === "written")
+                .map((s) => ({
+                  contractId: c.id, tester: displayName(c.tester), questions: writtenQuestions(c), answers: (s.answers as string[]) ?? [], notes: s.notes, sentAt: s.updatedAt,
+                  status: (!s.review ? "waiting" : s.review.rejected && !(s.dispute?.decidedCents) ? "rejected" : "paid") as "paid" | "rejected" | "waiting",
+                  paidCents: Math.max(s.review?.amountCents ?? 0, s.dispute?.decidedCents ?? 0),
+                })),
+            ),
+          )}
+        />
       </section>
     </>
   );
