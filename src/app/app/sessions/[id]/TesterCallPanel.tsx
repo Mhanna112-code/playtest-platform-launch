@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
 import { JoinCall } from "@/components/JoinCall";
+import { CallTimer } from "@/components/CallTimer";
 import { LIVE_SECTIONS, LiveSection } from "@/components/LivePanel";
 
 type Mine = { id: string; when: string; minutes: number; room: string; canCancel: boolean; started: boolean; ended?: boolean; reported: boolean; cancelled: string; late?: string; rate?: string; joinable?: boolean };
@@ -14,7 +15,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  * Cancel) and Past calls (over or cancelled). Cancel and Report a problem stop once for call changes since the page
  * loaded (box under the button).
  */
-export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mine[]; refusal: string; lateNote?: string }) {
+export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mine[]; refusal: string; lateNote?: string; devName: string }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
   const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={error} /></div> : null);
   const [report, setReport] = useState<Record<string, string>>({});
@@ -41,6 +42,7 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
         </span>
       )}
       {m.reported && <span className="note">Problem reported to the team.</span>}
+      {!m.cancelled && m.joinable && <div className="w-full"><CallTimer startsAt={m.when} minutes={m.minutes} role="tester" label={`Call with ${p.devName}`} /></div>}
       {box("cancel-" + m.id)}
       {box("noshow-" + m.id)}
     </li>

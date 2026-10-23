@@ -5,6 +5,7 @@ import { callStatus } from "@/lib/server/blocks";
 import { roomUrl } from "@/lib/server/calls";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { CallRoom } from "./CallRoom";
+import { CallTimer } from "@/components/CallTimer";
 
 export const metadata = { title: "Live call · Playtest" };
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
     <>
       <h1>Live call · {call.contract.title}</h1>
       <p className="note">{fmtDateTime(call.startsAt)} · {call.minutes} min</p>
+      <CallTimer startsAt={call.startsAt.toISOString()} minutes={call.minutes} role={call.contract.testerId === u.id ? "tester" : "developer"} />
       <CallRoom callId={id} room={roomUrl(call, call.slot)} initialLine={s.line} initialBoth={s.bothJoinedAt ? s.bothJoinedAt.toISOString() : null} />
     </>
   );

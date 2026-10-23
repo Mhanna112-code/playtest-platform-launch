@@ -151,6 +151,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             sessionId={c.id}
             seenAt={seenAt}
             refusal={refusal}
+            devName={dev}
             mine={c.calls.map((x) => ({ id: x.id, joinable: !blockedPair && callJoinable(x, now), when: x.startsAt.toISOString(), minutes: x.minutes, room: roomUrl(x, x.slot), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, ended: x.startsAt.getTime() + x.minutes * 60_000 <= now.getTime(), reported: !!x.noShowBy, cancelled: blockedPair && x.status !== "cancelled" ? "not available" : cancelledText(x), rate: rateLabel(x.rateCents, c.liveRateCents), late: isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined }))}
             lateNote={now > c.dueAt ? `Your deadline was ${fmtDate(c.dueAt).replace(/, \d{4}$/, "")} (a guide, not a limit): a call you book now reads “${bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, ""))}”.` : undefined}
           />
