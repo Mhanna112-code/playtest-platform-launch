@@ -5,12 +5,16 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { PressButton } from "@/components/PressButton";
 import { api, errOf, ApiError } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
+import { useRouter } from "next/navigation";
+import { GapDialog, JustUpdated, type PopupAnswer } from "@/components/GapDialog";
+import { noGaps, PROFILE_COVERS, type GapAsk, type Gaps } from "@/lib/gaps";
 
 /**
  * Join or Apply to join. Stops once (box under the button) if anything about the listing changed since the page loaded;
  * the second press goes ahead on the current listing. No offers or counter-offers here.
  */
-export function JoinBox(p: { testId: string; seenAt: string; mode: string; invited: boolean; inviteId?: string | null; application: { status: string; changed: boolean } | null }) {
+export function JoinBox(p: { testId: string; seenAt: string; mode: string; invited: boolean; inviteId?: string | null; application: { status: string; changed: boolean } | null; missing: Gaps }) {
+  const router = useRouter();
   const [keepPrivate, setKeepPrivate] = useState(false);
   const [note, setNote] = useState("");
   const [box, setBox] = useStopBox();
@@ -20,8 +24,44 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState("");
-  const [warn, setWarn] = useState("");
+  // (NEXT-UI 4b) The full app's "What this test needs" pop-up (devices and languages), and the blue notice under the
+  // button when the profile covers everything by the time it is pressed.
+  const [asking, setAsking] = useState<{ ask: GapAsk; gaps: Gaps } | null>(null);
+  const [covered, setCovered] = useState<string | null>(null);
   const [inviteId, setInviteId] = useState(p.inviteId ?? "");
+
+  // The pop-up's press: "Join anyway" / "Apply anyway", checked on the server against what the pop-up showed.
+  async function sendFromPopup(shown: Gaps): Promise<PopupAnswer> {
+    const action = applying ? "apply" : "join";
+    try {
+      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { keepPrivate, note, seenAt: p.seenAt, confirmed, boxAt, anyway: true, gapsShown: shown, inviteId });
+      if (r.sessionId) window.location.href = `/app/sessions/${r.sessionId}`;
+      else setDone("Application sent. You'll hear back when the developer answers.");
+      return { ok: true };
+    } catch (e) {
+      if (e instanceof ApiError && e.code === "stop_once") {
+        setBoxAt(String(e.data.now ?? new Date().toISOString()));
+        return { stop: ((e.data.changes as { text: string }[]) ?? []).map((c) => c.text) };
+      }
+      if (e instanceof ApiError && e.code === "needs" && e.data.gaps) return { gaps: e.data.gaps as Gaps };
+      setErr(errOf(e));
+      return { refused: true };
+    }
+  }
+  // Join / Apply with something missing: the pop-up asks first (never a refusal). Covered by now: a notice, no pop-up.
+  async function press(action: "join" | "apply") {
+    setCovered(null);
+    if (noGaps(p.missing)) return go(action);
+    setBusy(true);
+    const now = await api<{ gaps: Gaps }>(`/api/tests/${p.testId}/my-gaps`, {}).catch(() => null);
+    setBusy(false);
+    if (now && noGaps(now.gaps)) {
+      setCovered(new Date().toISOString());
+      router.refresh();
+      return;
+    }
+    setAsking({ ask: action, gaps: now?.gaps ?? p.missing });
+  }
 
   async function go(action: "join" | "apply" | "withdraw-application", anyway = false) {
     setBusy(true);
@@ -40,7 +80,7 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
         // The new invite is shown right here; the next press joins on it.
         setErr(`${e.message}${e.data.terms ? ` ${String(e.data.terms)}. Press Join to join on it.` : ""}`);
         if (typeof e.data.newInviteId === "string") setInviteId(e.data.newInviteId);
-      } else if (e instanceof ApiError && e.code === "needs") setWarn(e.message);
+      } else if (e instanceof ApiError && e.code === "needs" && e.data.gaps) setAsking({ ask: action === "apply" ? "apply" : "join", gaps: e.data.gaps as Gaps });
       else setErr(errOf(e));
     } finally {
       setBusy(false);
@@ -82,19 +122,23 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
         </div>
       )}
       <div className="flex flex-wrap gap-2">
-        <button className="btn" disabled={busy || !!done} onClick={() => go(applying ? "apply" : "join")}>{busy ? "Sending…" : applying ? "Apply to join" : "Join this test"}</button>
+        <button className="btn" disabled={busy || !!done} onClick={() => press(applying ? "apply" : "join")}>{busy ? "Sending…" : applying ? "Apply to join" : "Join this test"}</button>
         {p.inviteId && !done && (
           <PressButton seenAt={p.seenAt} path={`/api/invites/${inviteId}`} body={{}} onDone={() => (window.location.href = "/app")}>No thanks</PressButton>
         )}
       </div>
-      {warn && (
-        <div className="info space-y-2">
-          {warn.split("\n").map((l) => <p key={l}>{l}</p>)}
-          <div className="flex gap-2">
-            <button className="btn" disabled={busy} onClick={() => go("join", true)}>Join anyway</button>
-            <button className="btn-ghost" onClick={() => setWarn("")}>Cancel</button>
-          </div>
-        </div>
+      {covered && (
+        <p role="status" className="info"><JustUpdated at={covered} /> {PROFILE_COVERS}</p>
+      )}
+      {asking && (
+        <GapDialog
+          testId={p.testId}
+          ask={asking.ask}
+          initial={asking.gaps}
+          send={sendFromPopup}
+          onCovered={(at) => { setAsking(null); setCovered(at); router.refresh(); }}
+          onClose={() => setAsking(null)}
+        />
       )}
       <ChangesBox changes={box?.changes ?? null} tail={box?.tail} />
       {done && <p className="ok">{done}</p>}

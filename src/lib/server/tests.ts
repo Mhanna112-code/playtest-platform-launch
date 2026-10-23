@@ -9,6 +9,7 @@ import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import {
   andList, changedTerms, checkAsk, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
+import { gapsOf, gapsUnseen, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { offerNewTerms, testerTermsGate } from "./terms";
@@ -448,6 +449,19 @@ export function needsLines(t: { devices: string[]; languages: string[] }, p: { d
   if (t.languages.length && !t.languages.some((l) => p?.languages.includes(l))) out.push(`This test needs one of: ${t.languages.join(", ")}. Add the language in your profile.`);
   return out;
 }
+/**
+ * (NEXT-UI 4b) Missing device / language: warn, never refuse. The first press says what's missing (the page's pop-up
+ * asks); "anyway" goes ahead, but if something is missing now that the pop-up didn't show (`gapsShown`), it stops once more
+ * with the list as it is now.
+ */
+export function gapStop(t: { devices: string[]; languages: string[] }, profile: { devices: string[]; languages: string[] } | null, body: Record<string, unknown>, verb: "Join" | "Apply") {
+  const gaps = gapsOf(t, profile);
+  if (noGaps(gaps)) return;
+  const message = `${needsLines(t, profile).join("\n")}\n${verb} anyway?`;
+  if (body.anyway !== true) throw new HttpError(409, "needs", message, { gaps });
+  const shown = readGaps(body.gapsShown);
+  if (shown && gapsUnseen(gaps, shown)) throw new HttpError(409, "needs", message, { gaps, changed: true });
+}
 /** Why this tester's profile doesn't fit the test's needs, or "" when it does (every unmet need). */
 export const needsGap = (t: { devices: string[]; languages: string[] }, p: { devices: string[]; languages: string[] } | null) => needsLines(t, p).join(" ");
 
@@ -482,8 +496,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     }
     if (await tx.block.count({ where: { blockerId: tester.id, blockedId: t.developerId } })) throw new HttpError(409, "blocked", `You blocked ${displayName(dev)}: unblock them in Settings → Blocked people to join.`);
     if (await tx.block.count({ where: { blockerId: t.developerId, blockedId: tester.id } })) throw new HttpError(409, "closed", "This test isn't taking new testers right now.");
-    const gaps = needsLines(t, profile);
-    if (gaps.length && body.anyway !== true) throw new HttpError(409, "needs", `${gaps.join("\n")}\nJoin anyway?`);
+    gapStop(t, profile, body, "Join");
     const snap = contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion }, new Date(), body.keepPrivate === true);
     const contract = old
       ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, dueAt: rejoinDue(old.dueAt, old.endedAt, new Date()), status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null } })

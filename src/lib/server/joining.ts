@@ -5,7 +5,7 @@ import { MAX_ACTIVE_TESTS, termsDiff, termsLine, type TestEventLike } from "@/li
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
-import { asListing, devGate, joinTest, ownTest } from "./tests";
+import { asListing, devGate, gapStop, joinTest, ownTest } from "./tests";
 
 // Joining (owner rule): Who can join = Anyone (Join) / Apply (Apply to join → the developer Accepts or Declines) /
 // Invite only. No offers or counter-offers on the join page. Join and Apply stop once if ANYTHING about the listing
@@ -149,6 +149,7 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
   const refusal = await joinRefusal(tester.id, testId);
   if (refusal) throw new HttpError(409, "refused", refusal);
   await listingGate(tester.id, testId, body, "apply");
+  if (t.joinMode !== "anyone" && t.joinMode !== "invite") gapStop(t, await db.testerProfile.findUnique({ where: { userId: tester.id } }), body, "Apply");
   if (t.joinMode === "anyone") return { joined: true, sessionId: (await join(tester, testId, { ...body, confirmed: true })).id };
   if (t.joinMode === "invite") throw new HttpError(409, "invite_only", "This test is invite only.");
   const note = typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";

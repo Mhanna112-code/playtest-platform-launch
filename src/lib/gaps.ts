@@ -1,0 +1,43 @@
+// The full app's "What this test needs" words (lib/devices.ts) on lean data: what a tester's profile lacks for a test.
+export type Gaps = { languages: string[]; devices: string[] };
+export type GapAsk = "apply" | "join";
+
+export const noGaps = (g: Gaps | null | undefined) => !g || (!g.languages.length && !g.devices.length);
+/** Something is missing now that the pop-up didn't show. */
+export const gapsUnseen = (now: Gaps, shown: Gaps) => now.languages.some((l) => !shown.languages.includes(l)) || now.devices.some((d) => !shown.devices.includes(d));
+export const sameGaps = (a: Gaps, b: Gaps) => a.languages.join("|") === b.languages.join("|") && a.devices.join("|") === b.devices.join("|");
+
+/** What a tester's profile lacks for a test: the test's languages / devices when the profile lists none of them. */
+export function gapsOf(t: { devices: string[]; languages: string[] }, p: { devices: string[]; languages: string[] } | null): Gaps {
+  return {
+    languages: t.languages.length && !t.languages.some((l) => p?.languages.includes(l)) ? t.languages : [],
+    devices: t.devices.length && !t.devices.some((d) => p?.devices.includes(d)) ? t.devices : [],
+  };
+}
+
+export function readGaps(raw: unknown): Gaps | null {
+  try {
+    const v = (typeof raw === "string" ? JSON.parse(raw) : raw) as Partial<Gaps> | null;
+    if (!v || typeof v !== "object") return null;
+    return { languages: Array.isArray(v.languages) ? v.languages.map(String) : [], devices: Array.isArray(v.devices) ? v.devices.map(String) : [] };
+  } catch {
+    return null;
+  }
+}
+
+const list = (x: string[]) => (x.length < 2 ? x.join("") : `${x.slice(0, -1).join(", ")} or ${x[x.length - 1]}`);
+
+/** "doesn't list Spanish, which this test needs, or iOS or Android, which it runs on". */
+export function gapsWords(g: Gaps) {
+  if (g.languages.length && g.devices.length) return `doesn't list ${list(g.languages)}, which this test needs, or ${list(g.devices)}, which it runs on`;
+  if (g.languages.length) return `doesn't list ${list(g.languages)}, which this test needs`;
+  return `doesn't list ${list(g.devices)}, which this test runs on`;
+}
+
+export const TESTER_ASK: Record<GapAsk, { question: string; anyway: string; plain: string }> = {
+  apply: { question: "Apply anyway?", anyway: "Apply anyway", plain: "Apply" },
+  join: { question: "Join anyway?", anyway: "Join anyway", plain: "Join" },
+};
+export const PROFILE_COVERS = "Your profile now covers what this test needs.";
+export const testerGapText = (g: Gaps, ask: GapAsk) => (noGaps(g) ? PROFILE_COVERS : `Your profile ${gapsWords(g)}. ${TESTER_ASK[ask].question}`);
+export const testerGapButton = (g: Gaps, ask: GapAsk) => (noGaps(g) ? TESTER_ASK[ask].plain : TESTER_ASK[ask].anyway);

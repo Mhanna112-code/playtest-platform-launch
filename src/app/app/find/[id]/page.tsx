@@ -7,6 +7,7 @@ import { termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, needsLines } from "@/lib/server/tests";
 import { JoinBox } from "./JoinBox";
+import { gapsOf } from "@/lib/gaps";
 import { LiveTop } from "@/components/LiveTop";
 import { qOptional, qText } from "@/lib/questions";
 import { ratingSummary } from "@/lib/server/ratings";
@@ -24,7 +25,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   const mine = await db.contract.findUnique({ where: { testId_testerId: { testId: id, testerId: u.id } } });
   if (mine && mine.status === "working") redirect(`/app/sessions/${mine.id}`);
   const testersIn = await db.contract.count({ where: { testId: id, status: "working" } });
-  const gaps = needsLines(t, await db.testerProfile.findUnique({ where: { userId: u.id } }));
+  const profile = await db.testerProfile.findUnique({ where: { userId: u.id } });
+  const gaps = needsLines(t, profile);
   const canChat = !!(await db.invite.findFirst({ where: { testId: t.id, testerId: u.id, status: "sent" } })) || !!(await db.application.findFirst({ where: { testId: t.id, testerId: u.id, status: "pending" } }));
   const chatClosed = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: u.id }] } })) > 0;
   const blocked = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: u.id }] } })) > 0;
@@ -104,6 +106,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             mode={t.joinMode}
             invited={!!invite}
             inviteId={invite?.id ?? null}
+            missing={gapsOf(t, profile)}
             application={await db.application.findUnique({ where: { testId_testerId: { testId: t.id, testerId: u.id } } }).then((a) => (a ? { status: a.status, changed: !!a.changedAt } : null))}
           />
         )}

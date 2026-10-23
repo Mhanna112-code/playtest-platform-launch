@@ -1,3 +1,5 @@
+import { db } from "@/lib/db";
+import { gapsOf } from "@/lib/gaps";
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { devCancelCall, reportNoShow, setCallLength } from "@/lib/server/calls";
 import { cancelInvite, inviteGaps, inviteTesters } from "@/lib/server/invites";
@@ -63,6 +65,11 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         return ok(await devRequestTime(u, id, body));
       case "answer-request":
         return ok(await answerRequest(u, String(body.contractId ?? ""), body));
+      case "my-gaps": {
+        // The join page's "What this test needs" pop-up checks the profile and the test again while it is open.
+        const t = await db.test.findUniqueOrThrow({ where: { id } });
+        return ok({ gaps: gapsOf(t, await db.testerProfile.findUnique({ where: { userId: u.id } })) });
+      }
       case "invite-check":
         return ok(await inviteGaps(u.id, id, Array.isArray(body.testerIds) ? body.testerIds.map(String) : []));
       case "cancel-invite":

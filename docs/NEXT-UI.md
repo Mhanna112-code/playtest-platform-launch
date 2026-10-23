@@ -21,7 +21,7 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    browser exactly per LEAN-SPEC.
 4. Group C controls: End early ticks + confirm popup; Stop the test confirm popup; Cancel dropdown; Chat as its own page
    with unread badge; Block in the hover card; Leave in its own "Can't finish?" card.
-4b. Join anyway / Apply anyway: use the full app's popup and its behaviour
+4b. [DONE] Join anyway / Apply anyway: use the full app's popup and its behaviour
    (integration src/app/playtests/[id]/claim-form.tsx), replacing the lean in-page warning; lists every unmet need
    (devices and languages), same lean rules (warn, never refuse).
 5. Join page (listing), dashboard and Find tests formatted EXACTLY like the full app's equivalents

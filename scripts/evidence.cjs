@@ -1454,10 +1454,11 @@ async function signIn(page, email) {
     await tp.goto(`/app/find/${T}`);
     check("listing: both needs lines", (await has(tp, "text=This test needs one of: Mac. Add your device in your profile.")) && (await has(tp, "text=This test needs one of: Korean. Add the language in your profile.")));
     await tp.click("button:has-text('Join this test')");
-    const warnBox = tp.locator("div.info:has(button:has-text('Join anyway'))");
+    // (NEXT-UI 4b) The full app's pop-up: one sentence naming every unmet need.
+    const warnBox = tp.locator("dialog[open]:has(button:has-text('Join anyway'))");
     await warnBox.waitFor({ timeout: 6000 }).catch(() => {});
     const warnText = await warnBox.innerText().catch(() => "");
-    check("Join anyway warning: both lines", warnText.includes("needs one of: Mac") && warnText.includes("needs one of: Korean"), warnText);
+    check("Join anyway pop-up: both needs", warnText.includes("Mac") && warnText.includes("Korean") && warnText.includes("Join anyway?"), warnText);
     await shot(tp, "join-anyway-both-needs-tester");
     await tp.click("button:has-text('Join anyway')");
     await tp.waitForURL(/\/app\/sessions\//);
