@@ -37,7 +37,7 @@ export default async function AdminPage() {
         <Brand />
         <Link href="/app">Back to the app</Link>
       </div>
-      <h1>Admin</h1>
+      <h1 className="text-3xl font-bold tracking-tight text-white">Admin</h1>
 
       <section className="panel">
         <h2>Needs the team today ({cases.length})</h2>

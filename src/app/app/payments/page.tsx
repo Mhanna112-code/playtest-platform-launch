@@ -24,7 +24,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   ]);
   return (
     <>
-      <h1>Payments</h1>
+      <h1 className="text-3xl font-bold tracking-tight text-white">Payments</h1>
       {!on && <p className="info">{MESSAGES.off}</p>}
       {u.isDeveloper && (await owedForBox(u.id).then((o) => (u.holdStartedAt || o.length ? <OwedBox onHold={!!u.holdStartedAt} owed={o} /> : null)))}
       {q.error && q.error !== "off" && <p className="err">{MESSAGES[q.error]}</p>}

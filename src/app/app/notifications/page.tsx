@@ -13,7 +13,7 @@ export default async function Notifications() {
   await db.notification.updateMany({ where: { userId: u.id, readAt: null }, data: { readAt: new Date() } });
   return (
     <>
-      <h1>Notifications</h1>
+      <h1 className="text-3xl font-bold tracking-tight text-white">Notifications</h1>
       <p className="note">Emails follow your setting in <Link href="/app/profile">Profile</Link>; everything is kept here.</p>
       {items.length === 0 && <p className="note">Nothing yet.</p>}
       <ul className="space-y-2">

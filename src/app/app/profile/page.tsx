@@ -15,7 +15,7 @@ export default async function ProfilePage() {
   const rating = await ratingSummary(u.id);
   return (
     <>
-      <h1>Profile</h1>
+      <h1 className="text-3xl font-bold tracking-tight text-white">Profile</h1>
       <section className="panel" aria-label="Your ratings">
         <h2>Your ratings</h2>
         {rating.line ? <p>{rating.line}</p> : <p className="note">No ratings yet.</p>}

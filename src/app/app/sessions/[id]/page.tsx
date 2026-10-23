@@ -80,7 +80,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(c.title, c.test.openUntil, now)}</p>
       )}
       <div className="panel">
-        <h1>{c.title}</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-white">{c.title}</h1>
         <p className="note">by {dev} · joined {fmtDate(c.joinedAt)} · due {fmtDate(c.dueAt)}{isLate(c.dueAt, now) && !refusal ? " (late work is still accepted and marked late)" : ""}</p>
         <p className="text-sm"><b>Your contract:</b> {termsLine(c, true)} (what you get)</p>
         <p className="text-sm">{(await paidLines([c.id])).get(c.id)}</p>
