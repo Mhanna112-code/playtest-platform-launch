@@ -1263,6 +1263,63 @@ async function signIn(page, email) {
     await shot(d, "profile-average-developer");
   });
 
+
+  await flow("28", "Outages: a 2 h 30 min gap in heartbeats is recorded; deadlines move; a call inside is missed (no no-show, nothing charged); top box + bell", async () => {
+    // A fresh heartbeat first (the server may have been off since the last run: that gap is recorded now, not mid-flow).
+    await fetch(`${BASE}/api/health`);
+    const d = await ctx(DESKTOP);
+    const DEV28 = `dev28+${TS}@playtest.test`, T28 = `tester28+${TS}@playtest.test`;
+    await signIn(d, DEV28);
+    await d.fill("#name", "Nora Lane");
+    await d.selectOption("#pronoun", "she");
+    await d.check("text=post tests for my game");
+    await d.click("text=Continue");
+    await d.waitForSelector("text=Your tests");
+    const tp = await ctx(PHONE);
+    await signIn(tp, T28);
+    await tp.fill("#name", "Ana Silva");
+    await tp.selectOption("#pronoun", "she");
+    await tp.check("text=test games and get paid");
+    await tp.click("label:has-text('Windows PC')");
+    await tp.click("label:has-text('English')");
+    await tp.click("text=Continue");
+    await tp.waitForSelector("text=Your sessions");
+    const r = await apiPost(d, "/api/tests", { title: "Reef Run", description: "Swim the reef.", buildUrl: "https://example.com/reefrun", category: "Adventure", devices: [], languages: [], spots: 3, writtenCents: "10.00", recordingCents: null, liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7, questions: ["What did you see?"], openUntil: "", joinMode: "anyone" });
+    const T = r.body.id;
+    const S = (await apiPost(tp, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
+    await apiPost(tp, `/api/sessions/${S}/written`, { answers: ["Turtles."] });
+    const call = await requestAndAccept(d, tp, T, S, 2);
+    // The call's time (1 hour ago) falls inside the outage below.
+    sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '1 hour' where id = '${call}'`);
+    const dueBefore = Number(sql(`select extract(epoch from "dueAt") * 1000 from "Contract" where id = '${S}'`));
+    const payByBefore = Number(sql(`select extract(epoch from "payBy") * 1000 from "Submission" where "contractId" = '${S}'`));
+    await tp.goto(`/app/sessions/${S}`);
+    await d.goto(`/app/tests/${T}`);
+    // Simulate the outage: the last heartbeat is 2 h 30 min ago; the uptime checker's next call finds the gap.
+    // (Stored times are UTC.)
+    sql(`delete from "Heartbeat" where at > (now() at time zone 'utc') - interval '150 minutes'`);
+    sql(`insert into "Heartbeat" (id, at) values ('ev28_${TS}', (now() at time zone 'utc') - interval '150 minutes')`);
+    const h = await fetch(`${BASE}/api/health`).then((x) => x.json());
+    check("health answered", h.ok === true);
+    const ms = Number(sql(`select ms from "Outage" order by "recordedAt" desc limit 1`));
+    check("outage recorded once (2 h 30 min)", Math.abs(ms - 150 * 60000) < 5000, ms);
+    const dueAfter = Number(sql(`select extract(epoch from "dueAt") * 1000 from "Contract" where id = '${S}'`));
+    const payByAfter = Number(sql(`select extract(epoch from "payBy") * 1000 from "Submission" where "contractId" = '${S}'`));
+    check("the tester's deadline moved by the outage length", Math.abs(dueAfter - dueBefore - ms) < 5, dueAfter - dueBefore);
+    check("the review clock (pay-by) moved by the outage length", Math.abs(payByAfter - payByBefore - ms) < 5, payByAfter - payByBefore);
+    check("the call inside was missed: cancelled by the site, no no-show, nothing charged", sql(`select status || '|' || coalesce("cancelNote", '') || '|' || coalesce("noShowBy", 'none') from "Call" where id = '${call}'`) === "cancelled|missed because the site was down|none" && sql(`select count(*) from "Payment" where "callId" = '${call}'`) === "0");
+    check("bell: 'The site was down from … Deadlines and payment dates moved 2 h 30 min later.'", sql(`select count(*) from "Notification" n join "User" u on u.id = n."userId" where u.email = '${T28}' and n.text like 'The site was down from %moved 2 h 30 min later.'`) === "1");
+    await tp.bringToFront();
+    check("tester's top box: the outage line", await tp.waitForSelector("[data-live-top] >> text=Deadlines and payment dates moved 2 h 30 min later.", { timeout: 35000 }).then(() => true, () => false));
+    await shot(tp, "outage-top-box-tester");
+    await d.bringToFront();
+    check("developer's top box: the outage line", await d.waitForSelector("[data-live-top] >> text=Deadlines and payment dates moved 2 h 30 min later.", { timeout: 35000 }).then(() => true, () => false));
+    await shot(d, "outage-top-box-developer");
+    await tp.goto("/app/notifications");
+    check("tester told the call was missed", await has(tp, "text=was missed because the site was down"));
+    await shot(tp, "outage-missed-call-tester");
+  });
+
   await browser.close();
 
   // ---------- Coverage: one screenshot per stop / failure type, plus combined cases ----------
@@ -1334,6 +1391,9 @@ async function signIn(page, email) {
     C("Developer rating: the tester's rating hidden until the developer rates", "developer", "27", "27-dev-rating-hidden-developer.png"),
     C("Developer rates the tester: both ratings revealed", "developer", "27", "27-dev-rated-both-revealed-developer.png"),
     C("Both ratings revealed (tester)", "tester", "27", "27-both-revealed-tester.png"),
+    C("Outage: top-box line (tester)", "tester", "28", "28-outage-top-box-tester.png"),
+    C("Outage: top-box line (developer)", "developer", "28", "28-outage-top-box-developer.png"),
+    C("Outage: a call inside was missed (no no-show, nothing charged)", "tester", "28", "28-outage-missed-call-tester.png"),
   ];
   summary.coverage = rows.map((r) => {
     const f = summary.flows.find((x) => x.id === r.flow);
