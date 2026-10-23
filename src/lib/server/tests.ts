@@ -1,4 +1,5 @@
 import { devChanges, seenOf, tabOf, withRenamed } from "./live";
+import { qOptional } from "@/lib/questions";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, pronouns, toCents } from "@/lib/format";
@@ -522,7 +523,8 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   const c0 = await ownContract(tester.id, contractId);
   const qs = writtenQuestions(c0);
   const answers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim().slice(0, 10_000) : "")) : [];
-  if (answers.length !== qs.length || answers.some((a) => !a)) throw new HttpError(400, "bad_answers", "Answer every question before sending.");
+  // Only the required questions need an answer ("not required" ones may stay empty).
+  if (answers.length !== qs.length || qs.some((q, i) => !qOptional(q) && !answers[i])) throw new HttpError(400, "bad_answers", "Answer every required question before sending.");
   const notes = str(body.notes, 10_000);
   await testerTermsGate(contractId, displayName(c0.test.developer), body);
   const askedCents = body.ask === undefined || body.ask === null || body.ask === "" ? null : toCents(body.ask);

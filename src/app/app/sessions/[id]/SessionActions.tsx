@@ -4,6 +4,7 @@ import { useState } from "react";
 import { api, errOf } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { qOptional, qText } from "@/lib/questions";
 import { ChangesBox } from "@/components/ChangesBox";
 
 /** Written answers: one box per question in the tester's contract. Can be updated until it's paid. */
@@ -34,7 +35,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     <form className="space-y-3" onSubmit={send}>
       {questions.map((q, i) => (
         <div key={i}>
-          <label className="label req" htmlFor={`a${i}`}>{q}</label>
+          <label className={`label ${qOptional(q) ? "" : "req"}`} htmlFor={`a${i}`}>{qText(q)}{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</label>
           <textarea id={`a${i}`} rows={3} className="input" value={answers[i]} onChange={(e) => setAnswers(answers.map((a, j) => (j === i ? e.target.value : a)))} />
         </div>
       ))}

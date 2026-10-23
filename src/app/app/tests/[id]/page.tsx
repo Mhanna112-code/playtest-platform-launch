@@ -17,6 +17,7 @@ import { BlockButton } from "@/components/BlockButton";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, rateBlocker, ratingSummary } from "@/lib/server/ratings";
 import { LiveTop } from "@/components/LiveTop";
+import { qOptional, qText } from "@/lib/questions";
 import { Users } from "lucide-react";
 import { Applications } from "./Applications";
 import { rateLabel } from "@/lib/server/requests";
@@ -246,7 +247,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {s.kind === "written" &&
                   writtenQuestions(c).map((q, i) => (
                     <div key={i} className="text-sm">
-                      <p className="font-medium text-ink-200">{q}</p>
+                      <p className="font-medium text-ink-200">{qText(q)}{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</p>
                       <p className="whitespace-pre-wrap">{(s.answers as string[])[i]}</p>
                     </div>
                   ))}

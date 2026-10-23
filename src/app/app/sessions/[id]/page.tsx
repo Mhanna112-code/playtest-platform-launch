@@ -19,6 +19,7 @@ import { rateLabel } from "@/lib/server/requests";
 import { chatMessages } from "@/lib/server/messages";
 import { BlockButton } from "@/components/BlockButton";
 import { LiveTop } from "@/components/LiveTop";
+import { qOptional, qText } from "@/lib/questions";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, rateBlocker, rateWarning } from "@/lib/server/ratings";
 import { openOffer } from "@/lib/server/terms";
@@ -173,7 +174,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         {written?.review ? (
           writtenQuestions(c).map((q, i) => (
             <div key={i} className="text-sm">
-              <p className="font-medium text-ink-200">{q}</p>
+              <p className="font-medium text-ink-200">{qText(q)}{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</p>
               <p className="whitespace-pre-wrap">{(written.answers as string[])[i]}</p>
             </div>
           ))

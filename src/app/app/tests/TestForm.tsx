@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { mergeChanges, useLiveAppend } from "@/lib/live";
+import { NOT_REQUIRED, qOptional, qText } from "@/lib/questions";
 import { Choices } from "@/components/Choices";
 import { api, ApiError } from "@/lib/client";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
@@ -13,7 +14,7 @@ import type { Listing } from "@/lib/rules";
 type F = {
   title: string; description: string; buildUrl: string; category: string; devices: string[]; languages: string[];
   spots: string; deadlineDays: string; written: boolean; writtenPrice: string; recording: boolean; recordingPrice: string;
-  live: boolean; liveRate: string; liveMinutes: string; questions: string; openUntil: string; joinMode: string;
+  live: boolean; liveRate: string; liveMinutes: string; questions: string; optionalQs: string[]; openUntil: string; joinMode: string;
 };
 
 const dollars = (c: number | null) => (c == null ? "" : (c / 100).toFixed(2));
@@ -22,7 +23,7 @@ export function toForm(l: Listing): F {
     title: l.title, description: l.description, buildUrl: l.buildUrl, category: l.category, devices: l.devices, languages: l.languages,
     spots: String(l.spots), deadlineDays: String(l.deadlineDays), written: l.writtenCents != null, writtenPrice: dollars(l.writtenCents),
     recording: l.recordingCents != null, recordingPrice: dollars(l.recordingCents), live: l.liveRateCents != null,
-    liveRate: dollars(l.liveRateCents), liveMinutes: String(l.liveMinutes ?? 30), questions: l.questions.join("\n"),
+    liveRate: dollars(l.liveRateCents), liveMinutes: String(l.liveMinutes ?? 30), questions: l.questions.map(qText).join("\n"), optionalQs: l.questions.filter(qOptional).map(qText),
     openUntil: l.openUntil ? l.openUntil.slice(0, 10) : "",
     joinMode: l.joinMode ?? "anyone",
   };
@@ -34,14 +35,14 @@ function toApi(f: F): Record<string, unknown> {
     title: f.title, description: f.description, buildUrl: f.buildUrl, category: f.category, devices: f.devices, languages: f.languages,
     spots: f.spots, deadlineDays: f.deadlineDays, writtenCents: f.written ? f.writtenPrice || "" : null,
     recordingCents: f.recording ? f.recordingPrice || "" : null, liveRateCents: f.live ? f.liveRate || "" : null,
-    liveMinutes: f.live ? f.liveMinutes : null, questions: f.questions.split("\n").map((q) => q.trim()).filter(Boolean), openUntil: f.openUntil, joinMode: f.joinMode,
+    liveMinutes: f.live ? f.liveMinutes : null, questions: f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (f.optionalQs.includes(q) ? NOT_REQUIRED + q : q)), openUntil: f.openUntil, joinMode: f.joinMode,
   };
 }
 // Which API fields each form field feeds.
 const API_FIELDS: Record<keyof F, string[]> = {
   title: ["title"], description: ["description"], buildUrl: ["buildUrl"], category: ["category"], devices: ["devices"], languages: ["languages"],
   spots: ["spots"], deadlineDays: ["deadlineDays"], written: ["writtenCents"], writtenPrice: ["writtenCents"], recording: ["recordingCents"],
-  recordingPrice: ["recordingCents"], live: ["liveRateCents", "liveMinutes"], liveRate: ["liveRateCents"], liveMinutes: ["liveMinutes"], questions: ["questions"], openUntil: ["openUntil"], joinMode: ["joinMode"],
+  recordingPrice: ["recordingCents"], live: ["liveRateCents", "liveMinutes"], liveRate: ["liveRateCents"], liveMinutes: ["liveMinutes"], questions: ["questions"], optionalQs: ["questions"], openUntil: ["openUntil"], joinMode: ["joinMode"],
 };
 
 export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; version: number; testersIn: number; draft: boolean; seenAt?: string } }) {
@@ -128,6 +129,18 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
             <div className="sm:col-span-2">
               <label className="label req" htmlFor="questions">Questions (one per line)</label>
               <textarea id="questions" rows={4} className="input" value={f.questions} onChange={(e) => set({ questions: e.target.value })} placeholder={"What did you like?\nWhere did you get stuck?"} />
+              {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (
+                    <li key={q} className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm">
+                      <span className="min-w-0 break-words text-ink-200">{q}</span>
+                      <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-ink-300">
+                        <input type="checkbox" checked={f.optionalQs.includes(q)} onChange={(e) => set({ optionalQs: e.target.checked ? [...f.optionalQs, q] : f.optionalQs.filter((x) => x !== q) })} /> Not required
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         )}

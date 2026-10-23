@@ -6,6 +6,7 @@ import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, needsLines } from "@/lib/server/tests";
 import { JoinBox } from "./JoinBox";
 import { LiveTop } from "@/components/LiveTop";
+import { qOptional, qText } from "@/lib/questions";
 import { ratingSummary } from "@/lib/server/ratings";
 import { Chat } from "@/components/Chat";
 import { chatMessages } from "@/lib/server/messages";
@@ -56,7 +57,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           <>
             <h3>Questions</h3>
             <ul className="list-disc pl-5 text-sm">
-              {l.questions.map((q) => <li key={q}>{q}</li>)}
+              {l.questions.map((q) => <li key={q}>{qText(q)}{qOptional(q) && <span className="text-ink-500"> · not required</span>}</li>)}
             </ul>
           </>
         )}
