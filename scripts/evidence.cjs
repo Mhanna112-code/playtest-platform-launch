@@ -1012,7 +1012,8 @@ async function signIn(page, email) {
     check("weekly clash refused whole, naming week 2", await has(tabA, "text=These weeks clash: week 2"));
     await shot(tabA, "weekly-clash-refused-tester");
     // A clash when sending: the same time as a request already waiting between them.
-    await reqBox(tabA).locator("input[aria-label='Requested time 1']").fill(local(atK(3)));
+    // (10 minutes later than the waiting request: an exact match would auto-match instead.)
+    await reqBox(tabA).locator("input[aria-label='Requested time 1']").fill(local(new Date(new Date(atK(3)).getTime() + 10 * 60000).toISOString()));
     await tabA.getByRole("button", { name: "Request a time" }).click();
     check("send refused: a request is already waiting for that time", await has(tabA, "text=waiting for that time"));
     await shot(tabA, "send-clash-refused-tester");

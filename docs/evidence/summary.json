@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-22T23:08:44.117Z",
+  "run": "2026-10-23T00:09:31.890Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvk5kabm00077k5gmxts2kr7)",
+        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvk7qfa500v17k9466ny2uv9)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -167,7 +167,7 @@
       "title": "Charge declined: owed with a 3-day cut-off (developer banner + Payments, tester line); a second failure pauses at once",
       "status": "pass",
       "checks": [
-        "PASS test posted (saw: {\"id\":\"cmvk5l2bs00457k5gv4qk1fre\"})",
+        "PASS test posted (saw: {\"id\":\"cmvk7r5u500yz7k947jouhhog\"})",
         "PASS both testers joined",
         "PASS tester offered the choice",
         "PASS developer banner with the cut-off",
@@ -223,8 +223,8 @@
         "PASS total-changed stop",
         "PASS the one still failing is named",
         "PASS hold lifted",
-        "PASS tester deadline moved on 2 days (saw: 2026-10-29 → 2026-11-01)",
-        "PASS Open until moved on 2 days (saw: 2026-11-01 → 2026-11-04)",
+        "PASS tester deadline moved on 2 days (saw: 2026-10-30 → 2026-11-01)",
+        "PASS Open until moved on 2 days (saw: 2026-11-02 → 2026-11-05)",
         "PASS tester no longer paused"
       ],
       "screenshots": [
@@ -403,10 +403,10 @@
       "title": "Developer live-call panel: one tester with a booked call, a weekly set and a waiting request; another at 3 of 3 refused",
       "status": "pass",
       "checks": [
-        "PASS weekly set booked (3 calls) (saw: {\"booked\":true,\"callId\":\"cmvk5nzno00fz7k5gszm0p05q\",\"calls\":3})",
-        "PASS Dee's call on day 8 booked (saw: {\"booked\":true,\"callId\":\"cmvk5nzsn00gz7k5gkfbhoqg9\",\"calls\":1})",
-        "PASS Dee's call on day 9 booked (saw: {\"booked\":true,\"callId\":\"cmvk5nzwj00hg7k5gnyks486w\",\"calls\":1})",
-        "PASS Dee's call on day 10 booked (saw: {\"booked\":true,\"callId\":\"cmvk5o00c00hx7k5ge0u1s7xv\",\"calls\":1})",
+        "PASS weekly set booked (3 calls) (saw: {\"booked\":true,\"callId\":\"cmvk7u0ug01at7k94jxoi30y1\",\"calls\":3})",
+        "PASS Dee's call on day 8 booked (saw: {\"booked\":true,\"callId\":\"cmvk7u10101bt7k94uw9y7eju\",\"calls\":1})",
+        "PASS Dee's call on day 9 booked (saw: {\"booked\":true,\"callId\":\"cmvk7u15401ca7k94prhxdy95\",\"calls\":1})",
+        "PASS Dee's call on day 10 booked (saw: {\"booked\":true,\"callId\":\"cmvk7u18x01cr7k94e7ycwkc2\",\"calls\":1})",
         "PASS 4th booked time refused for the tester",
         "PASS rate line",
         "PASS Dee at 3 of 3 booked",
@@ -424,20 +424,20 @@
       "title": "Every button stops once: your own other-tab actions, Block after a payment, listing info (F), the live top box",
       "status": "pass",
       "checks": [
-        "PASS two testers in (saw: {\"id\":\"cmvk5o1fq00ij7k5gedhqnc96\"})",
+        "PASS two testers in (saw: {\"id\":\"cmvk7u2i701dd7k94hvm8v4vz\"})",
         "PASS tab 2 sent the answers",
         "PASS tab 1 Leave stopped once: 'You also did this in another tab'",
         "PASS second press left the test",
         "PASS Cara charged; the card was declined (owed) (saw: {\"choice\":\"charge\",\"amountCents\":800,\"status\":\"failed\"})",
         "PASS developer's top box: 'Payment failed on Tide Pool ... pay by ... to avoid a pause'",
-        "PASS tester's top box: 'delayed', never failed/hold/chargeback (saw: Updated · 6:11 PM: You also did this in another tab: charged for your written answers\nUpdated · 6:11 PM: Nora Lane's payment for your written answers ($8) is de)",
+        "PASS tester's top box: 'delayed', never failed/hold/chargeback (saw: Updated · 7:12 PM: You also did this in another tab: charged for your written answers\nUpdated · 7:12 PM: Nora Lane's payment for your written answers ($8) is de)",
         "PASS developer's OTHER test page shows the failure, naming Tide Pool",
         "PASS the developer paid what they owe (saw: {\"paid\":1,\"stillFailing\":[],\"lifted\":false})",
         "PASS Edit tab 1: Save stopped once with the other tab's change",
         "PASS second Save saved",
-        "PASS tester's top box: 'Nora Lane changed the description' with See it (saw: 18 s)",
+        "PASS tester's top box: 'Nora Lane changed the description' with See it (saw: 19 s)",
         "PASS the page scrolled up to the top box once (saw: 1007 → 133)",
-        "PASS developer paid Dee $8 (saw: {\"reviewId\":\"cmvk5p3z900kq7k5gv6jta1gs\",\"amountCents\":800,\"status\":\"charged\",\"rejected\":false,\"paidSoFarCents\":800})",
+        "PASS developer paid Dee $8 (saw: {\"reviewId\":\"cmvk7v51f01fk7k94hi8x9vuj\",\"amountCents\":800,\"status\":\"charged\",\"rejected\":false,\"paidSoFarCents\":800})",
         "PASS Block stopped once: the developer paid",
         "PASS top box lists the payment above the description change",
         "PASS no second scroll (only the new line's height) (saw: 205 → 183)",
@@ -462,18 +462,27 @@
     {
       "id": "24",
       "title": "Coverage: tester call refusals, limits, clashes, and combined stop boxes (info + call; another tab + paid)",
-      "status": "fail",
+      "status": "pass",
       "checks": [
-        "PASS Eve and Cara in (saw: {\"id\":\"cmvk5pl9700ld7k5gm6uggacf\"})",
+        "PASS Eve and Cara in (saw: {\"id\":\"cmvk7vmdk01g77k94ffzl45ym\"})",
         "PASS tester stop box: listing info (F) + call change (C) together",
         "PASS tester stop box: 'You also did this in another tab' + the developer paid",
         "PASS refused: the developer declined this request",
-        "FAIL error: locator.click: Timeout 15000ms exceeded."
+        "PASS refused: the call time is no longer available (its time passed)",
+        "PASS refused: 'This time is no longer free.' (never who with)",
+        "PASS weekly clash refused whole, naming week 2",
+        "PASS send refused: a request is already waiting for that time",
+        "PASS 4th request refused: 3 requests waiting"
       ],
       "screenshots": [
         "24-combined-info-and-call-tester.png",
         "24-combined-other-tab-and-paid-tester.png",
-        "24-request-declined-refused-tester.png"
+        "24-request-declined-refused-tester.png",
+        "24-request-time-passed-refused-tester.png",
+        "24-no-longer-free-refused-tester.png",
+        "24-weekly-clash-refused-tester.png",
+        "24-send-clash-refused-tester.png",
+        "24-three-requests-refused-tester.png"
       ]
     },
     {
@@ -503,22 +512,33 @@
       "status": "pass",
       "checks": [
         "PASS old invite replaced, a new one sent",
-        "PASS Join on the old invite refused, the new invite shown",
-        "PASS joined on the new invite (saw: http://localhost:3400/app/sessions/cmvk5reay00pr7k5g4xfvu3us)",
-        "PASS under Accept: asked to join on the current listing",
-        "PASS not joined yet",
-        "PASS tester: changed since you applied",
+        "PASS Join on the old invite: one blue final notice with the new invite",
+        "PASS joined on the new invite (saw: http://localhost:3400/app/sessions/cmvk7wumb01m47k943yc7cfd8)",
+        "PASS Save result lists the closed application",
+        "PASS tab 1 Accept: one final notice (closed when you changed the listing in another tab)",
+        "PASS not joined",
+        "PASS tester's join page top box: your application was closed",
         "PASS join page: 'You left this test. Joining again restores your session'",
-        "PASS the same session restored (saw: http://localhost:3400/app/sessions/cmvk5reay00pr7k5g4xfvu3us)",
+        "PASS the same session restored (saw: http://localhost:3400/app/sessions/cmvk7wumb01m47k943yc7cfd8)",
         "PASS new terms on the contract (Written $9.60)",
-        "PASS old work kept with its payment"
+        "PASS old work kept with its payment",
+        "PASS the test is full; Eve's invite stays open",
+        "PASS Eve's top box: full right now, the invite stays open",
+        "PASS Join refused while full (blue, under the button)",
+        "PASS Eve's top box: a spot opened",
+        "PASS Eve joined after the spot opened (saw: http://localhost:3400/app/sessions/cmvk7y8or01p07k94zlh1ggj0)",
+        "PASS sent (not stopped) and the note shows: renamed"
       ],
       "screenshots": [
         "26-old-invite-refused-tester.png",
-        "26-application-accept-after-change-developer.png",
-        "26-application-changed-since-applied-tester.png",
+        "26-save-result-closings-developer.png",
+        "26-closed-application-accept-refused-developer.png",
+        "26-application-closed-top-box-tester.png",
         "26-rejoin-join-page-tester.png",
-        "26-rejoined-session-restored-tester.png"
+        "26-rejoined-session-restored-tester.png",
+        "26-full-invite-refused-tester.png",
+        "26-spot-opened-tester.png",
+        "26-renamed-note-tester.png"
       ]
     }
   ],
@@ -542,7 +562,7 @@
       "side": "tester",
       "flow": "24",
       "screenshot": "24-combined-info-and-call-tester.png",
-      "status": "fail"
+      "status": "pass"
     },
     {
       "type": "Tester stop D: the listing changed (join page: Apply)",
@@ -563,7 +583,7 @@
       "side": "tester",
       "flow": "24",
       "screenshot": "24-combined-info-and-call-tester.png",
-      "status": "fail"
+      "status": "pass"
     },
     {
       "type": "Developer stop: testers joined / sent (top panel)",
@@ -696,14 +716,14 @@
       "side": "tester",
       "flow": "24",
       "screenshot": "24-request-declined-refused-tester.png",
-      "status": "fail"
+      "status": "pass"
     },
     {
       "type": "Refusal: request closed / its time passed",
       "side": "tester",
       "flow": "24",
       "screenshot": "24-request-time-passed-refused-tester.png",
-      "status": "fail"
+      "status": "pass"
     },
     {
       "type": "Refusal: 3 booked times",
@@ -724,28 +744,28 @@
       "side": "tester",
       "flow": "24",
       "screenshot": "24-three-requests-refused-tester.png",
-      "status": "fail"
+      "status": "pass"
     },
     {
       "type": "Refusal: a clash when sending",
       "side": "tester",
       "flow": "24",
       "screenshot": "24-send-clash-refused-tester.png",
-      "status": "fail"
+      "status": "pass"
     },
     {
       "type": "Refusal: weekly clash naming the week",
       "side": "tester",
       "flow": "24",
       "screenshot": "24-weekly-clash-refused-tester.png",
-      "status": "fail"
+      "status": "pass"
     },
     {
       "type": "Refusal: This time is no longer free",
       "side": "tester",
       "flow": "24",
       "screenshot": "24-no-longer-free-refused-tester.png",
-      "status": "fail"
+      "status": "pass"
     },
     {
       "type": "Refusal: Join call too early",
@@ -794,7 +814,7 @@
       "side": "tester",
       "flow": "24",
       "screenshot": "24-combined-other-tab-and-paid-tester.png",
-      "status": "fail"
+      "status": "pass"
     },
     {
       "type": "Combined (b): failure on another test + a tester's action here, one stop box",
@@ -808,7 +828,7 @@
       "side": "tester",
       "flow": "24",
       "screenshot": "24-combined-info-and-call-tester.png",
-      "status": "fail"
+      "status": "pass"
     },
     {
       "type": "Combined (d): top box with 3+ updates after the scroll-once",
@@ -825,17 +845,24 @@
       "status": "pass"
     },
     {
-      "type": "Application Accept after a listing change asks the applicant",
+      "type": "Save result lists closed applications / re-sent invites",
       "side": "developer",
       "flow": "26",
-      "screenshot": "26-application-accept-after-change-developer.png",
+      "screenshot": "26-save-result-closings-developer.png",
       "status": "pass"
     },
     {
-      "type": "Application changed since you applied (tester)",
+      "type": "Closed application: Accept from another tab gets one final notice",
+      "side": "developer",
+      "flow": "26",
+      "screenshot": "26-closed-application-accept-refused-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Closed application in the tester's join-page top box",
       "side": "tester",
       "flow": "26",
-      "screenshot": "26-application-changed-since-applied-tester.png",
+      "screenshot": "26-application-closed-top-box-tester.png",
       "status": "pass"
     },
     {
@@ -844,7 +871,28 @@
       "flow": "26",
       "screenshot": "26-rejoined-session-restored-tester.png",
       "status": "pass"
+    },
+    {
+      "type": "Test full: the invite stays open, Join refused",
+      "side": "tester",
+      "flow": "26",
+      "screenshot": "26-full-invite-refused-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "A spot opened: the invited tester is told",
+      "side": "tester",
+      "flow": "26",
+      "screenshot": "26-spot-opened-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Title change is info only: the press went through with a note",
+      "side": "tester",
+      "flow": "26",
+      "screenshot": "26-renamed-note-tester.png",
+      "status": "pass"
     }
   ],
-  "pass": false
+  "pass": true
 }
