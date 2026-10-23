@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-23T06:50:24.933Z",
+  "run": "2026-10-23T07:30:28.617Z",
   "base": "http://localhost:3450",
   "flows": [
     {
@@ -722,9 +722,31 @@
         "32-find-category-badges-tester.png",
         "32-listing-category-badges-tester.png"
       ]
+    },
+    {
+      "id": "33",
+      "title": "Live session panel (full app): one panel on both sides; the call timer, who's in the room, Past calls (who joined, length, outcome), Add to calendar; Join call only when it can be joined",
+      "status": "pass",
+      "checks": [
+        "PASS one Live session panel",
+        "PASS the call timer: covered minutes",
+        "PASS who's in the room",
+        "PASS Join call only on the running call",
+        "PASS Add to calendar on booked calls",
+        "PASS Past calls: both joined, length, badges",
+        "PASS .ics downloads (text/calendar)",
+        "PASS developer: the same panel, a fold",
+        "PASS developer: Past calls with the cancelled call",
+        "PASS the call page has the timer"
+      ],
+      "screenshots": [
+        "33-live-session-tester.png",
+        "33-live-session-developer.png",
+        "33-call-page-timer-developer.png"
+      ]
     }
   ],
-  "mergedInto": "2026-10-23T06:49:45.130Z",
+  "mergedInto": "2026-10-23T06:50:24.933Z",
   "coverage": [
     {
       "type": "Tester stop A: new terms (Send my recording)",
@@ -951,7 +973,7 @@
       "status": "pass"
     },
     {
-      "type": "Refusal: Join call too early",
+      "type": "Join call hidden until the call can be joined",
       "side": "tester",
       "flow": "18",
       "screenshot": "18-join-too-early-tester.png",
@@ -1368,6 +1390,27 @@
       "side": "tester",
       "flow": "32",
       "screenshot": "32-listing-category-badges-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Live session panel (tester): timer, presence, booked, past calls, add to calendar",
+      "side": "tester",
+      "flow": "33",
+      "screenshot": "33-live-session-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Live session panel (developer): a fold, past calls with outcomes",
+      "side": "developer",
+      "flow": "33",
+      "screenshot": "33-live-session-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "The call page with the call timer",
+      "side": "developer",
+      "flow": "33",
+      "screenshot": "33-call-page-timer-developer.png",
       "status": "pass"
     }
   ],

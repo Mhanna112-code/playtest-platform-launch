@@ -1740,6 +1740,57 @@ async function signIn(page, email) {
     await shot(c, "listing-category-badges-tester");
   });
 
+  await flow("33", "Live session panel (full app): one panel on both sides; the call timer, who's in the room, Past calls (who joined, length, outcome), Add to calendar; Join call only when it can be joined", async () => {
+    const DEV33 = `dev33+${TS}@playtest.test`, T33 = `tester33+${TS}@playtest.test`;
+    const d = await ctx(DESKTOP);
+    await signIn(d, DEV33);
+    await d.fill("#name", "Nora Lane");
+    await d.selectOption("#pronoun", "she");
+    await d.check("text=post tests for my app, game or product");
+    await d.click("text=Continue");
+    await d.waitForSelector("text=Welcome back,");
+    const r = await apiPost(d, "/api/tests", { title: "Sea Glass", description: "Collect the glass.", buildUrl: "https://example.com/glass", categories: ["Game"], devices: [], languages: [], spots: 3, writtenCents: "10.00", recordingCents: null, liveRateCents: "30.00", liveMinutes: null, deadlineDays: 7, questions: ["Anything?"], openUntil: "", joinMode: "anyone" });
+    const T = r.body.id;
+    const tp = await ctx(PHONE);
+    await signIn(tp, T33);
+    await tp.fill("#name", "Ana Silva");
+    await tp.selectOption("#pronoun", "she");
+    await tp.check("text=test apps, games and more, and get paid");
+    await tp.click("label:has-text('Windows PC')");
+    await tp.click("label:has-text('English')");
+    await tp.click("text=Continue");
+    await tp.waitForSelector("text=Welcome back,");
+    const S = (await apiPost(tp, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
+    // A call running now (the developer is in the room), one far ahead, one over (both joined) and one cancelled.
+    const running = await requestAndAccept(d, tp, T, S, 2);
+    sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '4 minutes', "devJoinedAt" = (now() at time zone 'utc') - interval '3 minutes' where id = '${running}'`);
+    const ahead = await requestAndAccept(d, tp, T, S, 3);
+    const over = await requestAndAccept(d, tp, T, S, 4);
+    sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '3 hours', "devJoinedAt" = (now() at time zone 'utc') - interval '3 hours', "testerJoinedAt" = (now() at time zone 'utc') - interval '179 minutes', "actualMinutes" = 40 where id = '${over}'`);
+    const gone = await requestAndAccept(d, tp, T, S, 5);
+    await apiPost(d, `/api/tests/${T}/cancel-call`, { callId: gone, seenAt: new Date().toISOString(), confirmed: true });
+    await tp.goto(`/app/sessions/${S}`);
+    check("one Live session panel", (await tp.locator("[data-live-panel]").count()) === 1 && (await has(tp, "[data-live-panel] >> text=Live session")));
+    check("the call timer: covered minutes", await has(tp, "[data-call-timer] >> text=of 45 covered minutes"));
+    check("who's in the room", await has(tp, "[data-call-presence] >> text=Nora Lane joined the call room"));
+    check("Join call only on the running call", (await tp.locator("button:has-text('Join call')").count()) === 1);
+    check("Add to calendar on booked calls", (await tp.locator(`a[href='/api/calls/${ahead}/ics']`).count()) === 1);
+    check("Past calls: both joined, length, badges", (await has(tp, "[data-live-section='Past calls'] >> text=both joined")) && (await has(tp, "[data-live-section='Past calls'] >> text=40 min (booked 30)")) && (await has(tp, "[data-live-section='Past calls'] >> text=not paid yet")) && (await has(tp, "[data-live-section='Past calls'] >> text=cancelled by Nora Lane")));
+    await tp.locator("[data-live-panel]").scrollIntoViewIfNeeded();
+    await shot(tp, "live-session-tester");
+    const ics = await tp.context().request.get(`${BASE}/api/calls/${ahead}/ics`);
+    check(".ics downloads (text/calendar)", ics.status() === 200 && (ics.headers()["content-type"] || "").includes("text/calendar") && (await ics.text()).includes("SUMMARY:Live call: Sea Glass"));
+    await d.goto(`/app/tests/${T}`);
+    check("developer: the same panel, a fold", await has(d, "details[data-live-panel] >> text=Live session"));
+    check("developer: Past calls with the cancelled call", await has(d, "[data-live-section='Past calls'] >> text=cancelled by you"));
+    await d.locator("[data-live-panel]").scrollIntoViewIfNeeded();
+    await shot(d, "live-session-developer");
+    await d.goto(`/app/calls/${running}`);
+    check("the call page has the timer", await has(d, "[data-call-timer] >> text=covered minutes"));
+    await d.screenshot({ path: path.join(OUT, "33-call-page-timer-developer.png") });
+    cur.screenshots.push("33-call-page-timer-developer.png");
+  });
+
   await browser.close();
 
   // ---------- Coverage: one screenshot per stop / failure type, plus combined cases ----------
@@ -1843,6 +1894,9 @@ async function signIn(page, email) {
     C("By question: answers per question with tester, time, status, not required", "developer", "32", "32-by-question-developer.png"),
     C("Category badges on Find", "tester", "32", "32-find-category-badges-tester.png"),
     C("Category badges on the listing", "tester", "32", "32-listing-category-badges-tester.png"),
+    C("Live session panel (tester): timer, presence, booked, past calls, add to calendar", "tester", "33", "33-live-session-tester.png"),
+    C("Live session panel (developer): a fold, past calls with outcomes", "developer", "33", "33-live-session-developer.png"),
+    C("The call page with the call timer", "developer", "33", "33-call-page-timer-developer.png"),
   ];
   summary.coverage = rows.map((r) => {
     const f = summary.flows.find((x) => x.id === r.flow);
