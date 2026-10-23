@@ -18,7 +18,7 @@ describe("missing device or language: Join anyway?", () => {
     const { testId } = await setup({ devices: ["Mac"] });
     const ben = await makeUser({ tester: true });
     const r = await act(testId, "join", ben.cookie, {});
-    expect(r.body.error).toMatchObject({ code: "needs", message: "This test needs one of: Mac. You don't list it in your profile. Join anyway?" });
+    expect(r.body.error).toMatchObject({ code: "needs", message: "This test needs one of: Mac. Add your device in your profile.\nJoin anyway?" });
     expect((await act(testId, "join", ben.cookie, { anyway: true })).status).toBe(200);
     expect(await db.contract.count({ where: { testId, testerId: ben.user.id } })).toBe(1);
   });

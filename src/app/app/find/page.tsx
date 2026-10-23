@@ -5,7 +5,7 @@ import { displayName } from "@/lib/format";
 import { ratingSummary } from "@/lib/server/ratings";
 import { termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
-import { asListing, findTests, needsGap } from "@/lib/server/tests";
+import { asListing, findTests, needsLines } from "@/lib/server/tests";
 
 export const metadata = { title: "Find tests · Playtest" };
 export const dynamic = "force-dynamic";
@@ -22,14 +22,15 @@ export default async function FindPage() {
       {tests.length === 0 && <p className="note">No open tests right now. Check back soon.</p>}
       <div className="grid gap-3 sm:grid-cols-2">
         {tests.map((t) => {
-          const gap = needsGap(t, profile);
+          const gaps = needsLines(t, profile);
           return (
             <Link key={t.id} href={`/app/find/${t.id}`} className="panel block text-ink-100 no-underline hover:border-volt-300/40 hover:no-underline">
               <h3>{t.title}</h3>
               <p className="note">by {displayName(t.developer)}{devRatings.get(t.developerId) && ` · ${devRatings.get(t.developerId)}`}{t.category && ` · ${t.category}`}</p>
               <p className="text-sm">{termsLine(asListing(t), true)}</p>
               <p className="note">{t.spots - t._count.contracts} spot{t.spots - t._count.contracts === 1 ? "" : "s"} left{t.devices.length ? ` · ${t.devices.join(", ")}` : ""}</p>
-              {gap && <p className="text-sm text-amber-300">{gap}</p>}
+              {t.contracts.some((c) => c.status === "left") && <p className="note">You left this test</p>}
+              {gaps.map((g) => <p key={g} className="text-sm text-amber-300">{g}</p>)}
             </Link>
           );
         })}

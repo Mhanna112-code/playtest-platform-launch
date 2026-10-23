@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDate } from "@/lib/format";
 import { termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
-import { asListing, needsGap } from "@/lib/server/tests";
+import { asListing, needsLines } from "@/lib/server/tests";
 import { JoinBox } from "./JoinBox";
 import { LiveTop } from "@/components/LiveTop";
 import { ratingSummary } from "@/lib/server/ratings";
@@ -21,7 +21,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   const mine = await db.contract.findUnique({ where: { testId_testerId: { testId: id, testerId: u.id } } });
   if (mine && mine.status === "working") redirect(`/app/sessions/${mine.id}`);
   const testersIn = await db.contract.count({ where: { testId: id, status: "working" } });
-  const gap = needsGap(t, await db.testerProfile.findUnique({ where: { userId: u.id } }));
+  const gaps = needsLines(t, await db.testerProfile.findUnique({ where: { userId: u.id } }));
   const canChat = !!(await db.invite.findFirst({ where: { testId: t.id, testerId: u.id, status: "sent" } })) || !!(await db.application.findFirst({ where: { testId: t.id, testerId: u.id, status: "pending" } }));
   const chatClosed = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: u.id }] } })) > 0;
   const blocked = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: u.id }] } })) > 0;
@@ -88,7 +88,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         ) : closed ? (
           <p className="err">{t.status === "stopped" ? "This test was stopped." : testersIn >= t.spots ? "This test is full." : "This test isn't taking new testers any more."}</p>
         ) : (
-          <>{gap && <p className="info">{gap.replace(/ Add .*$/, "")} You don&apos;t list it in your profile.</p>}</>
+          <>{gaps.map((g) => <p key={g} className="info">{g}</p>)}</>
         )}
         {t.developerId === u.id || !u.isTester || closed || blocked || ratedHere ? null : (
           <JoinBox

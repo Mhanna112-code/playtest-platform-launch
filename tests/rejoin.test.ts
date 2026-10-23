@@ -278,4 +278,29 @@ describe("when the test fills (correction 4) and no invite cap (correction 5)", 
     expect(await db.notification.count({ where: { userId: dee.user.id, text: "A spot opened on Harbor Run: you can accept Nora Lane's invite now." } })).toBe(1);
     expect(await db.invite.count({ where: { testId, testerId: dee.user.id, status: "sent" } })).toBe(1);
   });
+
+  it("after leaving: Find lists the test ('You left this test'); the page keeps updates; Join again stops once for paid + new terms (plain line)", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
+    await sact(sessionId, "leave", tester.cookie, {});
+    const { findTests } = await import("@/lib/server/tests");
+    const found = await findTests(tester.user as never);
+    expect(found.some((t) => t.id === testId && t.contracts.some((c) => c.status === "left"))).toBe(true);
+    const pageLoaded = seen();
+    await new Promise((r) => setTimeout(r, 5));
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
+    await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { writtenCents: "12.00" } });
+    // The old session page's top box still shows the payment.
+    const { GET: liveGET } = await import("@/app/api/live/route");
+    const sl = (await json(await liveGET(req(`/api/live?scope=session:${sessionId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: tester.cookie })))).body.changes.map((c: { text: string }) => c.text);
+    expect(sl).toContain("Nora Lane paid $10.00 for your written answers");
+    // Join again (the listing's Join) stops once: paid, the terms as a plain line; then joins.
+    const j = await act(testId, "join", tester.cookie, { listingVersion: await listingVersion(testId), seenAt: pageLoaded });
+    const lines = j.body.error.changes.map((c: { text: string }) => c.text);
+    expect(lines).toEqual(expect.arrayContaining(["Nora Lane paid $10.00 for your written answers", "Nora Lane changed the terms: written $10 → $12"]));
+    expect(j.body.error.top).toBeUndefined(); // no offer box, no scroll to the top
+    expect((await act(testId, "join", tester.cookie, { listingVersion: await listingVersion(testId), seenAt: pageLoaded, confirmed: true })).status).toBe(200);
+  });
 });

@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtTime } from "@/lib/format";
-import { MAX_ACTIVE_TESTS, termsLine, type TestEventLike } from "@/lib/rules";
+import { MAX_ACTIVE_TESTS, termsDiff, termsLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
@@ -79,7 +79,25 @@ export async function joinPageChanges(userId: string, testId: string, seenAt: un
     const fresh = await db.invite.findFirst({ where: { testId, testerId: userId, status: "sent" }, orderBy: { createdAt: "desc" } });
     gone.push(fresh ? { kind: "invite", text: `${displayName(t.developer)} changed the listing: here's a new invite on the updated listing`, createdAt: fresh.createdAt } : { kind: "invite", text: `${displayName(t.developer)} changed the listing: your invite closed (no spots left)`, createdAt: replaced[0].updatedAt });
   }
-  return [...edits, ...info, ...gone, ...(await ownChanges(userId, testId, d, tab))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  // (Owner) Rejoining a test they LEFT stops once for the same reasons as their in-test buttons (A-F): paid / rejected,
+  // call changes, their own other-tab actions; new terms as a plain line (they rejoin on the current listing, no offer).
+  const left = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId: userId } } });
+  const rejoin: TestEventLike[] = [];
+  if (left && left.status === "left") {
+    const { testerChanges } = await import("./testerGate");
+    rejoin.push(...(await testerChanges(userId, left.id, testId, d, tab)).filter((e) => e.kind !== "terms"));
+    const termsEdit = edits.filter((e) => e.kind === "edited").pop();
+    const diff = termsDiff({ ...left, questions: (left.questions as string[]) ?? [] }, asListing(t));
+    if (termsEdit && diff) rejoin.push({ kind: "terms_plain", text: `${displayName(t.developer)} changed the terms: ${diff}`, createdAt: termsEdit.createdAt });
+  }
+  const all = [...edits, ...info, ...gone, ...(await ownChanges(userId, testId, d, tab)), ...rejoin];
+  const seen = new Set<string>();
+  return all.filter((e) => {
+    const k = `${e.createdAt.getTime()}|${e.text}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  }).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }
 
 /** Join / Apply / Withdraw application / No thanks stop once (box under the button) for the join page's reasons. */

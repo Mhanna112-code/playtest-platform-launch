@@ -404,8 +404,13 @@ export async function nextRound(dev: U, testId: string, body: Record<string, unk
 /** Open tests the tester can join (not their own, not full, not already joined). */
 export async function findTests(tester: U) {
   const tests = await db.test.findMany({
-    where: { status: "open", developerId: { notIn: [tester.id, ...(await blockPartners(tester.id))] }, developer: { suspendedAt: null }, contracts: { none: { testerId: tester.id } }, OR: [{ joinMode: { not: "invite" } }, { invites: { some: { testerId: tester.id, status: "sent" } } }] },
-    include: { _count: { select: { contracts: { where: { status: "working" } } } }, developer: { select: { name: true, email: true } } },
+    where: {
+      status: "open", developerId: { notIn: [tester.id, ...(await blockPartners(tester.id))] }, developer: { suspendedAt: null },
+      // Not joined, or LEFT (they can come back: not after rating, not if the developer ended them).
+      contracts: { none: { testerId: tester.id, OR: [{ status: { not: "left" } }, { endKind: "rated" }] } },
+      OR: [{ joinMode: { not: "invite" } }, { invites: { some: { testerId: tester.id, status: "sent" } } }],
+    },
+    include: { _count: { select: { contracts: { where: { status: "working" } } } }, developer: { select: { name: true, email: true } }, contracts: { where: { testerId: tester.id }, select: { status: true } } },
     orderBy: { createdAt: "desc" },
     take: 100,
   });
@@ -417,12 +422,15 @@ export async function findTests(tester: U) {
   return tests.filter((t) => t._count.contracts < t.spots).map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i).map((x) => x.t);
 }
 
-/** Why this tester's profile doesn't fit the test's needs, or "" when it does. */
-export function needsGap(t: { devices: string[]; languages: string[] }, p: { devices: string[]; languages: string[] } | null) {
-  if (t.devices.length && !t.devices.some((d) => p?.devices.includes(d))) return `This test needs one of: ${t.devices.join(", ")}. Add your device in your profile.`;
-  if (t.languages.length && !t.languages.some((l) => p?.languages.includes(l))) return `This test needs one of: ${t.languages.join(", ")}. Add the language in your profile.`;
-  return "";
+/** (NEWEST+8) One line for EACH unmet need (devices, languages); none when the profile fits. */
+export function needsLines(t: { devices: string[]; languages: string[] }, p: { devices: string[]; languages: string[] } | null) {
+  const out: string[] = [];
+  if (t.devices.length && !t.devices.some((d) => p?.devices.includes(d))) out.push(`This test needs one of: ${t.devices.join(", ")}. Add your device in your profile.`);
+  if (t.languages.length && !t.languages.some((l) => p?.languages.includes(l))) out.push(`This test needs one of: ${t.languages.join(", ")}. Add the language in your profile.`);
+  return out;
 }
+/** Why this tester's profile doesn't fit the test's needs, or "" when it does (every unmet need). */
+export const needsGap = (t: { devices: string[]; languages: string[] }, p: { devices: string[]; languages: string[] } | null) => needsLines(t, p).join(" ");
 
 /**
  * Join: the tester sends the listing version they saw. A changed listing stops once and returns the new terms;
@@ -455,8 +463,8 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     }
     if (await tx.block.count({ where: { blockerId: tester.id, blockedId: t.developerId } })) throw new HttpError(409, "blocked", `You blocked ${displayName(dev)}: unblock them in Settings → Blocked people to join.`);
     if (await tx.block.count({ where: { blockerId: t.developerId, blockedId: tester.id } })) throw new HttpError(409, "closed", "This test isn't taking new testers right now.");
-    const gap = needsGap(t, profile);
-    if (gap && body.anyway !== true) throw new HttpError(409, "needs", `${gap.replace(/ Add .*$/, "")} You don't list it in your profile. Join anyway?`);
+    const gaps = needsLines(t, profile);
+    if (gaps.length && body.anyway !== true) throw new HttpError(409, "needs", `${gaps.join("\n")}\nJoin anyway?`);
     const snap = contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion }, new Date(), body.keepPrivate === true);
     const contract = old
       ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, dueAt: rejoinDue(old.dueAt, old.endedAt, new Date()), status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null } })

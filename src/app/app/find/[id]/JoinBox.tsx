@@ -87,7 +87,7 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
       </div>
       {warn && (
         <div className="info space-y-2">
-          <p>{warn}</p>
+          {warn.split("\n").map((l) => <p key={l}>{l}</p>)}
           <div className="flex gap-2">
             <button className="btn" disabled={busy} onClick={() => go("join", true)}>Join anyway</button>
             <button className="btn-ghost" onClick={() => setWarn("")}>Cancel</button>
