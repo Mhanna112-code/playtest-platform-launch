@@ -80,3 +80,15 @@ describe("paying for a call and no-shows", () => {
     expect((await sact(sessionId, "no-show", tester.cookie, { callId: call.id, note: "Nobody came" })).body.error.message).toBe("A problem with this call was already reported.");
   });
 });
+
+describe("Report a problem (the full app's fold): No-show / Late plus a note", () => {
+  it("the kind is kept with the note; without a kind the note must say what happened", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 1);
+    await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 10 * 60_000) } });
+    expect((await sact(sessionId, "no-show", tester.cookie, { callId: call.id, note: "" })).status).toBe(400);
+    expect((await sact(sessionId, "no-show", tester.cookie, { callId: call.id, kind: "late", note: "20 minutes late" })).status).toBe(200);
+    expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).noShowNote).toBe("Was late: 20 minutes late");
+  });
+});

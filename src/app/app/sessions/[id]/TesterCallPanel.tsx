@@ -5,10 +5,11 @@ import { usePress } from "@/lib/usePress";
 import { JoinCall } from "@/components/JoinCall";
 import { CalendarPlus } from "lucide-react";
 import { CallTimer } from "@/components/CallTimer";
+import { ReportProblem } from "@/components/ReportProblem";
 import { CallPresence, CallTimelineLine } from "@/components/CallPresence";
 import { LIVE_SECTIONS, LiveSection } from "@/components/LivePanel";
 
-type Mine = { id: string; when: string; minutes: number; room: string; canCancel: boolean; started: boolean; ended?: boolean; reported: boolean; cancelled: string; late?: string; rate?: string; joinable?: boolean; devJoinedAt?: string | null; testerJoinedAt?: string | null; joined?: string; outcome?: { label: string; tone: "grey" | "amber" | "green" | "rose" }[]; logged?: number | null; lengthText?: string };
+type Mine = { id: string; when: string; minutes: number; room: string; canCancel: boolean; started: boolean; ended?: boolean; reported: boolean; cancelled: string; late?: string; rate?: string; joinable?: boolean; devJoinedAt?: string | null; testerJoinedAt?: string | null; joined?: string; outcome?: { label: string; tone: "grey" | "amber" | "green" | "rose" }[]; logged?: number | null; lengthText?: string; report?: { byMe: boolean; note: string } | null };
 const TONE = { grey: "", amber: "border-amber-300/40 text-amber-200", green: "border-emerald-400/40 text-emerald-200", rose: "border-rose-400/40 text-rose-200" } as const;
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -49,13 +50,7 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
           <button className="btn-secondary px-3 py-1 text-xs" disabled={busy} onClick={() => go("cancel-call", { callId: m.id, reason: report["c" + m.id] ?? "" }, "cancel-" + m.id)}>Cancel</button>
         </span>
       ))}
-      {!m.cancelled && m.started && !m.reported && (
-        <span className="inline-flex gap-2">
-          <input className="input w-56" placeholder="The developer didn't show up…" value={report[m.id] ?? ""} onChange={(e) => setReport({ ...report, [m.id]: e.target.value })} />
-          <button className="btn-ghost" disabled={busy} onClick={() => go("no-show", { callId: m.id, note: report[m.id] ?? "" }, "noshow-" + m.id)}>Report a problem</button>
-        </span>
-      )}
-      {m.reported && <span className="note">Problem reported to the team.</span>}
+      {!m.cancelled && m.started && <ReportProblem path={`/api/sessions/${p.sessionId}/no-show`} callId={m.id} otherName={p.devName} seenAt={p.seenAt} reported={m.report ?? null} />}
       {m.started && !m.cancelled && m.lengthText && (
         <div className="w-full space-y-1 border-t border-white/10 pt-2">
           <p className="text-xs font-medium text-white">How long was the call?</p>

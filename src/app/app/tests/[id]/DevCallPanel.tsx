@@ -7,9 +7,10 @@ import { usePress } from "@/lib/usePress";
 import { MARKABLE } from "@/lib/markJump";
 import { LIVE_SECTIONS, LivePanel, LiveSection } from "@/components/LivePanel";
 import { CallTimer } from "@/components/CallTimer";
+import { ReportProblem } from "@/components/ReportProblem";
 import { CallPresence, CallTimelineLine } from "@/components/CallPresence";
 
-export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string; joinable?: boolean };
+export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string; joinable?: boolean; report?: { byMe: boolean; note: string } | null };
 export type DevSet = { id: string; label: string; calls: DevCall[] };
 export type DevReq = { id: string; times: string[]; weeks: number; repeat: string; mine: boolean; rate: string; minutes?: number };
 export type DevPast = { id: string; who: string; when: string; minutes: number; logged: number | null; joined: string; outcome: { label: string; tone: "grey" | "amber" | "green" | "rose" }[]; devJoinedAt: string | null; testerJoinedAt: string | null; cancelled: boolean };
@@ -59,12 +60,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }:
           <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: c.id, reason: reason[c.id] ?? "" }, "cancel-" + c.id)}>Cancel</button>
         </span>
       ))}
-      {c.started && !c.reported && (
-        <span className="inline-flex gap-2">
-          <input className="input w-48" placeholder={`${t.name} didn't show up…`} value={reason["n" + c.id] ?? ""} onChange={(e) => setReason({ ...reason, ["n" + c.id]: e.target.value })} />
-          <button className="btn-ghost" disabled={busy} onClick={() => go("no-show", { callId: c.id, note: reason["n" + c.id] ?? "" }, "noshow-" + c.id)}>Report a problem</button>
-        </span>
-      )}
+      {c.started && <ReportProblem path={`/api/tests/${testId}/no-show`} callId={c.id} otherName={t.name} seenAt={seenAt} reported={c.report ?? null} />}
       {box("cancel-" + c.id)}
       {box("noshow-" + c.id)}
       {c.joinable && <div className="w-full"><CallPresence callId={c.id} startsAt={c.when} minutes={c.minutes} /></div>}

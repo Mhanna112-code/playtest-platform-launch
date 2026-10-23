@@ -91,8 +91,11 @@ export async function reportNoShow(user: U, callId: string, body: Record<string,
   if (call.status !== "booked") throw new HttpError(409, "cancelled", "This call was cancelled.");
   if (call.startsAt > new Date()) throw new HttpError(409, "not_yet", "You can report a problem once the call's time has started.");
   if (call.noShowBy) throw new HttpError(409, "reported", "A problem with this call was already reported.");
-  const note = typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
-  if (note.length < 5) throw new HttpError(400, "bad_note", "Say what happened.");
+  // (The full app's Report a problem) No-show / Late, plus an optional note; without a kind, the note says what happened.
+  const kind = body.kind === "late" ? "was late" : body.kind === "no_show" ? "didn't show up" : "";
+  const typed = typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
+  if (!kind && typed.length < 5) throw new HttpError(400, "bad_note", "Say what happened.");
+  const note = kind ? `${kind[0].toUpperCase()}${kind.slice(1)}${typed ? `: ${typed}` : "."}` : typed;
   if (side === "developer") await devGateIfSeen(call.contract.testId, body);
   else await sharedTesterGate(user.id, call.contractId, call.contract.testId, body);
   await db.call.update({ where: { id: call.id }, data: { noShowBy: side, noShowNote: note, noShowAt: new Date() } });
