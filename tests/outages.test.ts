@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { heartbeat, outageLine } from "@/lib/server/outages";
 import { GET as healthGET } from "@/app/api/health/route";
@@ -8,7 +8,18 @@ import { bookCall, joined, sact, setup } from "./fixtures";
 
 const MIN = 60_000, H = 60 * MIN;
 
+const ping = (key?: string) => healthGET(new Request(`http://localhost:3400/api/health${key ? `?key=${key}` : ""}`));
+
 describe("outages", () => {
+  beforeEach(() => {
+    process.env.OUTAGE_CHECKS = "1";
+    process.env.HEALTH_KEY = "test-health-key";
+  });
+  afterEach(() => {
+    delete process.env.OUTAGE_CHECKS;
+    delete process.env.HEALTH_KEY;
+  });
+
   it("a gap over 15 minutes is recorded once; every running timer moves by its length; calls inside are missed", async () => {
     await db.heartbeat.deleteMany({});
     await db.outage.deleteMany({});
@@ -59,10 +70,33 @@ describe("outages", () => {
     expect((await outageLines(new Date(start.getTime() - MIN))).map((x) => x.text)).toEqual([line]);
   });
 
-  it("/api/health writes a heartbeat when the app and the database answer", async () => {
-    const n = await db.heartbeat.count();
-    const r = await healthGET();
-    expect(r.status).toBe(200);
-    expect(await db.heartbeat.count()).toBe(n + 1);
+  it("gated: with the setting off a gap creates nothing; polls never write heartbeats; only the keyed ping does", async () => {
+    await db.heartbeat.deleteMany({});
+    await db.outage.deleteMany({});
+    // Off: the keyed ping writes nothing; a gap creates nothing.
+    delete process.env.OUTAGE_CHECKS;
+    await db.heartbeat.create({ data: { at: new Date(Date.now() - 3 * H) } });
+    expect((await ping("test-health-key")).status).toBe(200);
+    expect(await heartbeat(new Date())).toBeNull();
+    expect(await db.heartbeat.count()).toBe(1);
+    expect(await db.outage.count()).toBe(0);
+    // On: a page poll writes nothing; health without the key writes nothing; the keyed ping writes one.
+    process.env.OUTAGE_CHECKS = "1";
+    await db.heartbeat.deleteMany({});
+    const { dev, testId } = await setup();
+    const { GET: pulseGET } = await import("@/app/api/pulse/route");
+    const { req } = await import("./helpers");
+    expect((await pulseGET(req(`/api/pulse?test=${testId}`, { cookie: dev.cookie }))).status).toBe(200);
+    expect((await ping()).status).toBe(200);
+    expect(await db.heartbeat.count()).toBe(0);
+    expect((await ping("wrong")).status).toBe(200);
+    expect(await db.heartbeat.count()).toBe(0);
+    await ping("test-health-key");
+    expect(await db.heartbeat.count()).toBe(1);
+    // A gap between keyed pings creates an outage.
+    await db.heartbeat.updateMany({ data: { at: new Date(Date.now() - 40 * MIN) } });
+    await ping("test-health-key");
+    expect(await db.outage.count()).toBe(1);
+    expect(Math.round((await db.outage.findFirstOrThrow()).ms / MIN)).toBe(40);
   });
 });

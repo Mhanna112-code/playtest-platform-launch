@@ -71,3 +71,15 @@ refused with a plain sentence if it can't happen any more.
 Set the variables from `.env.example` (DATABASE_URL + DIRECT_URL, APP_URL, RESEND_API_KEY + EMAIL_FROM, STRIPE_SECRET_KEY,
 STRIPE_WEBHOOK_SECRET, CRON_SECRET, R2_*, GOOGLE_* optionally, ADMIN_EMAILS), run `npm run db:deploy`, then `npm run build && npm start`.
 For Google sign-in, the redirect URI is `APP_URL/api/auth/google/callback`.
+
+## Outage checks
+
+When the site is online, set up an outside uptime checker so outages are detected automatically (timers move and
+missed calls are cancelled without blame):
+
+1. Set a long random `HEALTH_KEY` and `OUTAGE_CHECKS=1` in the production environment.
+2. In UptimeRobot (free), add an HTTP(s) monitor with a 5-minute interval for
+   `https://<your-site>/api/health?key=<HEALTH_KEY>`.
+
+Only those keyed pings write heartbeats; a gap of more than 15 minutes between two of them is recorded as an outage.
+Without `OUTAGE_CHECKS=1` nothing is detected.

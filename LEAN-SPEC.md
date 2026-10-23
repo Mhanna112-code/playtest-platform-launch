@@ -9,6 +9,10 @@ and look, but this version deliberately drops most of its complexity.
   (e.g. UptimeRobot, free, every 5 min; owner sets it up when the site goes online) calls it. The daily job and the
   first request after a gap check the heartbeats: a gap longer than 15 minutes = an outage from the last heartbeat to
   the next one. No admin entry. Each outage is recorded once (start, end, length).
+- GATED (owner): outage detection runs ONLY when OUTAGE_CHECKS=1 (set once the outside checker is live), and ONLY the
+  checker's own pings count as heartbeats: GET /api/health?key=<HEALTH_KEY> (secret env). Page loads, polls and the
+  daily job never write heartbeats and never create outages. Without the setting nothing is detected (quiet nights
+  and a stopped dev server never move timers or send bells).
 - EVERY TIMER that was running during it moves later by the outage length: 14-day review clocks / Charge points,
   pay-by dates (3-day cut-off) and hold start, daily retries, tester deadlines, Open until, rating windows (14 days),
   invite reminders, call-request times/expiry, notification schedules.

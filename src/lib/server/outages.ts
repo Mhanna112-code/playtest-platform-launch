@@ -10,6 +10,10 @@ import { bell, notify } from "./notify";
 export const OUTAGE_MIN_MS = 15 * 60_000;
 const HEARTBEAT_EVERY_MS = 60_000;
 
+/** (GATED) Detection runs only with OUTAGE_CHECKS=1; only the outside checker's keyed ping writes heartbeats. */
+export const outageChecksOn = () => process.env.OUTAGE_CHECKS === "1";
+export const healthKeyOk = (key: string | null) => !!process.env.HEALTH_KEY && key === process.env.HEALTH_KEY;
+
 const clock = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 export const lengthText = (ms: number) => {
   const m = Math.round(ms / 60_000), h = Math.floor(m / 60), r = m % 60;
@@ -27,17 +31,12 @@ export const outageLine = (start: Date, end: Date, ms: number) => {
  * (at most one a minute, unless `force`, e.g. /api/health). Returns the outage it recorded, if any.
  */
 export async function heartbeat(now = new Date(), force = false) {
+  if (!outageChecksOn()) return null; // without the setting nothing is written or detected
   const last = await db.heartbeat.findFirst({ orderBy: { at: "desc" } });
   let outage = null;
   if (last && now.getTime() - last.at.getTime() > OUTAGE_MIN_MS) outage = await recordOutage(last.at, now);
   if (force || !last || now.getTime() - last.at.getTime() >= HEARTBEAT_EVERY_MS) await db.heartbeat.create({ data: { at: now } });
   return outage;
-}
-
-/** Page polls: in tests only an explicit call detects outages (the test database keeps old heartbeats between runs). */
-export async function noteAlive() {
-  if (process.env.VITEST) return null;
-  return heartbeat();
 }
 
 /** Record [start, end) once and move every running timer by its length. */
