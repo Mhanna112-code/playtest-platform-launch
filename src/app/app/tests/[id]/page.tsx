@@ -15,7 +15,7 @@ import { paidLines } from "@/lib/server/paid";
 import { termsRowLines } from "@/lib/server/terms";
 import { BlockButton } from "@/components/BlockButton";
 import { RateBox } from "@/components/RateBox";
-import { rateBlocker, rateWarning, ratingSummary } from "@/lib/server/ratings";
+import { contractRatings, rateBlocker, ratingSummary } from "@/lib/server/ratings";
 import { LiveTop } from "@/components/LiveTop";
 import { Applications } from "./Applications";
 import { rateLabel } from "@/lib/server/requests";
@@ -112,13 +112,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       })),
     };
   });
-  // (NEWEST+5) Rating each tester: available / done, the warning, and each tester's average.
+  // (NEWEST+5) Rating a tester: only after they rated you (14 days); their rating shows once you rate (or the window closes).
   const rateInfo = new Map(
     await Promise.all(
-      t.contracts.map(async (c) => {
-        const mine = await db.rating.findUnique({ where: { contractId_side: { contractId: c.id, side: "developer" } } });
-        return [c.id, { mine, blocker: mine ? "rated" : await rateBlocker(c.id, "developer"), warn: await rateWarning(c.id, "developer"), avg: (await ratingSummary(c.testerId)).line }] as const;
-      }),
+      t.contracts.map(async (c) => [c.id, { ...(await contractRatings(c.id)), blocker: await rateBlocker(c.id, "developer"), avg: (await ratingSummary(c.testerId)).line }] as const),
     ),
   );
   return (
@@ -195,19 +192,24 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             ))}
             {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}
             {rateInfo.get(c.id)?.avg && <p className="note">{displayName(c.tester)}: {rateInfo.get(c.id)?.avg}</p>}
-            {rateInfo.get(c.id)?.mine ? (
-              <p className="note">You rated {displayName(c.tester)}: {rateInfo.get(c.id)?.mine?.stars} ★</p>
-            ) : rateInfo.get(c.id)?.blocker === "" ? (
-              <RateBox
-                path={`/api/tests/${t.id}/rate`}
-                body={{ contractId: c.id }}
-                seenAt={seenAt}
-                name={displayName(c.tester)}
-                working={!!rateInfo.get(c.id)?.warn.working}
-                headline={rateInfo.get(c.id)?.warn.working ? `Rating ends ${displayName(c.tester)}'s part in ${t.title}: ${pronouns(c.tester.pronoun).subj} can't send more work or join again.` : `Once you rate, ${displayName(c.tester)}'s rating is final.`}
-                lines={rateInfo.get(c.id)?.warn.lines ?? []}
-              />
-            ) : null}
+            {(() => {
+              const ri = rateInfo.get(c.id);
+              if (!ri?.tester) return null;
+              const name = displayName(c.tester);
+              return (
+                <>
+                  {ri.testerRevealed ? (
+                    <p className="note">{name} rated you: {ri.tester.stars} ★{ri.tester.comment ? ` · “${ri.tester.comment}”` : ""}</p>
+                  ) : (
+                    <p className="note">{name} rated you: you&apos;ll see it after you rate {pronouns(c.tester.pronoun).obj} (or on {fmtDate(ri.revealOn!)}).</p>
+                  )}
+                  {ri.developer && <p className="note">You rated {name}: {ri.developer.stars} ★</p>}
+                  {ri.blocker === "" && (
+                    <RateBox path={`/api/tests/${t.id}/rate`} body={{ contractId: c.id }} seenAt={seenAt} name={name} working={false} headline={`Your rating of ${name} is final. Both ratings show once you rate.`} lines={[]} />
+                  )}
+                </>
+              );
+            })()}
             {blockedIds.has(c.testerId) ? <p className="note">You blocked {displayName(c.tester)}. Unblock in Settings → Blocked people.</p> : <BlockButton seenAt={seenAt} testId={t.id} userId={c.testerId} name={displayName(c.tester)} effect="Their session ends now (work they sent stays payable), calls between you are cancelled, and chat closes." />}
             {c.submissions.length === 0 && c.calls.length === 0 && <p className="note">Nothing sent yet.</p>}
             {c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).map((x) => (

@@ -4,6 +4,7 @@ import { andList, inviteTesterRefusal, inviteTestRefusal, MAX_ACTIVE_TESTS, term
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { asListing, devGate, devGateIfSeen, needsGap, ownTest, recordEvent } from "./tests";
+import { revealedRatingsWhere } from "./ratings";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -26,7 +27,7 @@ export async function invitable(devId: string, testId: string) {
   const workedWith = new Set((await db.contract.findMany({ where: { test: { developerId: devId } }, select: { testerId: true } })).map((c) => c.testerId));
   const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   // (NEWEST+5) "4.6 ★ (12 ratings)" on each invite row.
-  const grouped = await db.rating.groupBy({ by: ["rateeId"], where: { rateeId: { in: testers.map((t) => t.id) } }, _avg: { stars: true }, _count: { _all: true } });
+  const grouped = await db.rating.groupBy({ by: ["rateeId"], where: { rateeId: { in: testers.map((t) => t.id) }, ...revealedRatingsWhere() }, _avg: { stars: true }, _count: { _all: true } });
   const ratingLine = (id: string) => {
     const g = grouped.find((x) => x.rateeId === id);
     return g ? `${(g._avg.stars ?? 0).toFixed(1)} ★ (${g._count._all} rating${g._count._all === 1 ? "" : "s"})` : "";

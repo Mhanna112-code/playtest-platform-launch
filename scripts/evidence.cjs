@@ -34,6 +34,7 @@ const DESKTOP = { viewport: { width: 1280, height: 900 } };
 fs.mkdirSync(OUT, { recursive: true });
 for (const f of fs.readdirSync(OUT)) if (/\.(png|webm)$/.test(f) || f === "summary.json") fs.rmSync(path.join(OUT, f));
 const summary = { run: new Date(TS).toISOString(), base: BASE, flows: [] };
+const ONLY = (process.env.ONLY || "").split(",").filter(Boolean); // e.g. ONLY=27: run just these, merge into summary.json
 let browser, cur;
 
 async function shot(page, name) {
@@ -48,6 +49,7 @@ const check = (what, ok, saw) => {
   if (!ok) cur.status = "fail";
 };
 async function flow(id, title, fn) {
+  if (ONLY.length && !ONLY.includes(id)) return;
   cur = { id, title, status: "pass", checks: [], screenshots: [] };
   console.log(id, title);
   try {
@@ -1173,9 +1175,85 @@ async function signIn(page, email) {
     await shot(t4, "renamed-note-tester");
   });
 
+
+  await flow("27", "Ratings: the tester rates the developer (not yet, available after review, warning, red form mistake, rated; no rejoin; Charge stays; profile average)", async () => {
+    const d = await ctx(DESKTOP);
+    const DEV27 = `dev27+${TS}@playtest.test`, T27 = `tester27+${TS}@playtest.test`;
+    await signIn(d, DEV27);
+    await d.fill("#name", "Nora Lane");
+    await d.selectOption("#pronoun", "she");
+    await d.check("text=post tests for my game");
+    await d.click("text=Continue");
+    await d.waitForSelector("text=Your tests");
+    sql(`update "User" set "stripeCustomerId" = 'cus_fake27_${TS}', "stripePaymentMethodId" = 'pm_card_visa' where email = '${DEV27}'`);
+    const tp = await ctx(PHONE);
+    await signIn(tp, T27);
+    await tp.fill("#name", "Ana Silva");
+    await tp.selectOption("#pronoun", "she");
+    await tp.check("text=test games and get paid");
+    await tp.click("label:has-text('Windows PC')");
+    await tp.click("label:has-text('English')");
+    await tp.click("text=Continue");
+    await tp.waitForSelector("text=Your sessions");
+    const r = await apiPost(d, "/api/tests", { title: "Coral Cove", description: "Dive and count the fish.", buildUrl: "https://example.com/coral", category: "Adventure", devices: [], languages: [], spots: 3, writtenCents: "10.00", recordingCents: "15.00", liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7, questions: ["What did you see?"], openUntil: "", joinMode: "anyone" });
+    const T = r.body.id;
+    const S = (await apiPost(tp, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
+    check("test posted and joined", !!T && !!S, JSON.stringify(r.body));
+    // The recording is sent; a call took place (not paid yet): rating isn't available.
+    const st = await apiPost(tp, `/api/sessions/${S}/recording-start`, { filename: "dive.webm", size: 16, contentType: "video/webm" });
+    await tp.context().request.put(BASE + st.body.uploadUrl, { data: Buffer.from("tiny test video!"), headers: { "content-type": "video/webm" } });
+    await apiPost(tp, `/api/sessions/${S}/recording-done`, { recordingId: st.body.recordingId });
+    await apiPost(tp, `/api/sessions/${S}/recording-send`, {});
+    const past = await requestAndAccept(d, tp, T, S, 2);
+    sql(`update "Call" set "startsAt" = now() - interval '1 hour' where id = '${past}'`);
+    await tp.goto(`/app/sessions/${S}`);
+    check("not yet: no Rate button while work waits for review", !(await tp.isVisible("button:has-text('Rate Nora Lane')")));
+    await shot(tp, "rate-not-yet-tester");
+    // The recording reaches the 14-day point (Charge / Let it go); the developer pays the call: rating opens.
+    const subR = sql(`select id from "Submission" where "contractId" = '${S}' and kind = 'recording'`);
+    sql(`update "Submission" set "payBy" = now() - interval '1 minute' where id = '${subR}'`);
+    await runCron();
+    const pc = await apiPost(d, "/api/review", { payKey: `ev27-${TS}`, kind: "call", id: past, amount: "15.00", tickedCents: 1500, seenAt: new Date().toISOString(), confirmed: true });
+    check("the developer paid the call", pc.status === 200, JSON.stringify(pc.body));
+    await requestAndAccept(d, tp, T, S, 5); // an upcoming call
+    check("the 'Rate Nora Lane' prompt was sent once", sql(`select count(*) from "Notification" n join "User" u on u.id = n."userId" where u.email = '${T27}' and n.text like 'Rate Nora Lane%'`) === "1");
+    await tp.reload();
+    check("available after the review: Rate button", await has(tp, "button:has-text('Rate Nora Lane')"));
+    await shot(tp, "rate-available-tester");
+    await tp.click("button:has-text('Rate Nora Lane')");
+    check("warning: rating ends your part", await has(tp, "text=Rating ends your part in Coral Cove. You won't be able to send more work, book calls or join this test again."));
+    check("warning: the unsent part won't be paid", await has(tp, "text=Not sent yet from your contract: written answers ($8) — it won't be paid."));
+    check("warning: upcoming calls cancelled (one line)", await has(tp, "text=All your upcoming calls will be cancelled."));
+    await shot(tp, "rate-warning-tester");
+    await tp.click("button:has-text('Rate and finish')");
+    check("stars missing: red at the field", await has(tp, ".err-field >> text=Choose 1 to 5 stars."));
+    await shot(tp, "rate-stars-missing-red-tester");
+    await tp.check("label:has-text('4 ★') input");
+    await tp.fill("#rate-comment", "Clear build and quick pay.");
+    await tp.click("button:has-text('Rate and finish')");
+    await tp.waitForTimeout(2000);
+    check("rated: 'You rated Nora Lane: 4 ★'", await has(tp, "text=You rated Nora Lane: 4 ★"));
+    check("the upcoming call was cancelled", sql(`select count(*) from "Call" where "contractId" = '${S}' and status = 'booked' and "startsAt" > now()`) === "0");
+    check("Charge still available after rating", await has(tp, "button:has-text('Charge Nora Lane')"));
+    await shot(tp, "rated-charge-still-available-tester");
+    await tp.goto(`/app/find/${T}`);
+    check("join page: no rejoin after rating", await has(tp, "text=You rated this test, so you can't join it again."));
+    await shot(tp, "rated-no-rejoin-tester");
+    check("listing shows the developer's average", await has(tp, "text=4.0 ★ (1 rating)"));
+    await d.goto("/app/profile");
+    check("developer profile: average and the comment (no rater name)", (await has(d, "text=4.0 ★ (1 rating)")) && (await has(d, "text=Clear build and quick pay.")) && !(await d.isVisible("section[aria-label='Your ratings'] >> text=Ana Silva")));
+    await shot(d, "profile-average-developer");
+  });
+
   await browser.close();
 
   // ---------- Coverage: one screenshot per stop / failure type, plus combined cases ----------
+  if (ONLY.length) {
+    // Merge this partial run into the last full summary.
+    const old = JSON.parse(fs.readFileSync(path.join(OUT, "summary.json"), "utf8"));
+    summary.flows = [...old.flows.filter((f) => !ONLY.includes(f.id)), ...summary.flows].sort((a, b) => a.id.localeCompare(b.id));
+    summary.mergedInto = old.run;
+  }
   const C = (type, side, flowId, screenshot) => ({ type, side, flow: flowId, screenshot });
   const rows = [
     C("Tester stop A: new terms (Send my recording)", "tester", "17", "17-send-stops-once-tester.png"),
@@ -1228,12 +1306,20 @@ async function signIn(page, email) {
     C("Test full: the invite stays open, Join refused", "tester", "26", "26-full-invite-refused-tester.png"),
     C("A spot opened: the invited tester is told", "tester", "26", "26-spot-opened-tester.png"),
     C("Title change is info only: the press went through with a note", "tester", "26", "26-renamed-note-tester.png"),
+    C("Rating: not yet while work waits for review (no Rate button)", "tester", "27", "27-rate-not-yet-tester.png"),
+    C("Rating: available after the review", "tester", "27", "27-rate-available-tester.png"),
+    C("Rating warning: an unsent part and the calls line", "tester", "27", "27-rate-warning-tester.png"),
+    C("Rating: stars missing shown in red", "tester", "27", "27-rate-stars-missing-red-tester.png"),
+    C("Rating done: Charge still available", "tester", "27", "27-rated-charge-still-available-tester.png"),
+    C("Rating: rejoin refused on the join page", "tester", "27", "27-rated-no-rejoin-tester.png"),
+    C("Rating: profile average with comments (no names)", "developer", "27", "27-profile-average-developer.png"),
   ];
   summary.coverage = rows.map((r) => {
     const f = summary.flows.find((x) => x.id === r.flow);
     const shotOk = !!f && f.screenshots.includes(r.screenshot) && fs.existsSync(path.join(OUT, r.screenshot));
     return { ...r, status: f && f.status === "pass" && shotOk ? "pass" : "fail" };
   });
+  summary.notYet = [{ type: "Developer rates a tester", reason: "on hold: the owner is changing when it's available (the coordinator will send the rule)" }];
   summary.pass = summary.flows.every((f) => f.status === "pass") && summary.coverage.every((c) => c.status === "pass");
   fs.writeFileSync(path.join(OUT, "summary.json"), JSON.stringify(summary, null, 2));
   console.log(summary.pass ? "ALL PASS" : "SOME FAILED", "→", OUT);

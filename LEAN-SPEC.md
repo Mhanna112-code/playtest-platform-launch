@@ -18,12 +18,13 @@ and look, but this version deliberately drops most of its complexity.
 - EFFECT: like Leave (session ends, upcoming calls cancelled, requests closed, no rejoin ever, the join page says
   "You rated this test, so you can't join it again."), BUT money actions stay: Charge / Let it go and Dispute remain
   available after rating. One rating per tester per test, final (no edit).
-- MIRRORED for the developer rating a tester (per tester, from their row): same conditions (1)-(3) from the
-  developer's side (all that tester's sent parts decided by the developer or past 14 days; no open dispute). Rating
-  ENDS that tester's session like End early (calls cancelled, requests closed, no rejoin), with the same kind of
-  in-page warning ("Rating ends Ana Silva's part in Harbor Run: she can't send more work or join again. All her upcoming
-  calls will be cancelled."); the tester's money actions stay. The tester is told "Nora Lane finished your part
-  in Harbor Run." Each side rates independently.
+- DEVELOPER RATING A TESTER (owner, replaces "mirrored"): available ONLY after that tester has rated the developer
+  (so the tester is already out: no session to end, no calls, no warning), and not while a dispute in this test is
+  open. The developer gets one bell: "Ana Silva finished Harbor Run. You can rate her for 14 days." The window closes
+  14 days after the tester's rating.
+- BLIND REVEAL: the tester's rating stays HIDDEN (from the developer and from profiles/averages) until the developer
+  rates or the 14-day window closes; then BOTH show at once. Before that each side only sees "You rated Nora Lane" /
+  "Ana Silva rated you: you'll see it after you rate her (or on Nov 5)."
 - WHAT A RATING IS: 1-5 stars + optional comment (max 500 chars). Shown as "4.6 ★ (12 ratings)" on the developer's
   profile and listings / the tester's profile and invite rows; comments shown WITHOUT the rater's name.
 - Rate follows the same button rules as every other button: stop once for all reasons (A-F / developer set),

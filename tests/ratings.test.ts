@@ -51,7 +51,7 @@ describe("the tester rates the developer", () => {
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 60_000), choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 14 * 86_400_000) } });
     await bookCall(testId, dev.cookie, sessionId, tester.cookie, 72);
-    const w = await rateWarning(sessionId, "tester");
+    const w = await rateWarning(sessionId);
     expect(w).toEqual({ working: true, lines: ["Not sent yet from your contract: recording ($12) — it won't be paid.", "All your upcoming calls will be cancelled."] });
     // Rate is a button like the others: stops once for a change since the page loaded.
     const pageLoaded = seen();
@@ -70,15 +70,57 @@ describe("the tester rates the developer", () => {
     expect(ch.status).toBe(200);
   });
 
-  it("averages show as '4.5 ★ (2 ratings)'; comments without names", async () => {
+  it("averages count revealed ratings only; '4.5 ★ (2 ratings)'; comments without names", async () => {
     const { dev, testId } = await setup();
+    const ids: string[] = [];
     for (const [name, stars, comment] of [["Ana Silva", 5, "Great"], ["Ben Carter", 4, ""]] as const) {
       const { tester, sessionId } = await joined(testId, name);
       await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
       const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
       await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
       expect((await sact(sessionId, "rate", tester.cookie, { stars, comment })).status).toBe(200);
+      ids.push(sessionId);
     }
+    expect((await ratingSummary(dev.user.id)).line).toBe(""); // hidden until the developer rates (or 14 days)
+    for (const id of ids) expect((await act(testId, "rate", dev.cookie, { contractId: id, stars: 5, seenAt: seen(), confirmed: true })).status).toBe(200);
     expect(await ratingSummary(dev.user.id)).toEqual({ line: "4.5 ★ (2 ratings)", comments: ["Great"], n: 2 });
   });
+});
+
+describe("the developer rates a tester (after the tester rated; blind reveal)", () => {
+  async function ratedByTester() {
+    const s = await setup();
+    const j = await joined(s.testId);
+    await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] });
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
+    await pay(s.dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
+    return { ...s, ...j };
+  }
+
+  it("not before the tester rated; then a bell; the tester's rating is hidden until the developer rates, then both show", async () => {
+    const { dev, testId, tester, sessionId } = await ratedByTester();
+    expect((await act(testId, "rate", dev.cookie, { contractId: sessionId, stars: 4, seenAt: seen(), confirmed: true })).body.error.message).toBe("You can rate Ana Silva once she has rated you.");
+    expect((await sact(sessionId, "rate", tester.cookie, { stars: 3, comment: "Slow replies" })).status).toBe(200);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: "Ana Silva finished Harbor Run. You can rate her for 14 days." } })).toBe(1);
+    const { contractRatings } = await import("@/lib/server/ratings");
+    expect((await contractRatings(sessionId)).testerRevealed).toBe(false);
+    expect((await ratingSummary(dev.user.id)).line).toBe("");
+    expect((await act(testId, "rate", dev.cookie, { contractId: sessionId, seenAt: seen(), confirmed: true })).status).toBe(400); // stars missing: red
+    expect((await act(testId, "rate", dev.cookie, { contractId: sessionId, stars: 5, comment: "Thorough", seenAt: seen(), confirmed: true })).status).toBe(200);
+    const after = await contractRatings(sessionId);
+    expect(after.testerRevealed).toBe(true);
+    expect(after.developer?.revealedAt).toEqual(after.tester?.revealedAt);
+    expect((await ratingSummary(dev.user.id)).line).toBe("3.0 ★ (1 rating)");
+    expect((await ratingSummary(tester.user.id)).line).toBe("5.0 ★ (1 rating)");
+    expect((await act(testId, "rate", dev.cookie, { contractId: sessionId, stars: 1, seenAt: seen(), confirmed: true })).body.error.message).toBe("You already rated Ana Silva.");
+  });
+
+  it("after 14 days without the developer's rating: the tester's rating shows and the window is closed", async () => {
+    const { dev, testId, tester, sessionId } = await ratedByTester();
+    await sact(sessionId, "rate", tester.cookie, { stars: 4 });
+    await db.rating.updateMany({ where: { contractId: sessionId, side: "tester" }, data: { createdAt: new Date(Date.now() - 15 * 86_400_000) } });
+    expect((await ratingSummary(dev.user.id)).line).toBe("4.0 ★ (1 rating)");
+    expect((await act(testId, "rate", dev.cookie, { contractId: sessionId, stars: 5, seenAt: seen(), confirmed: true })).body.error.message).toBe("The 14 days to rate Ana Silva have passed.");
+  });
+
 });

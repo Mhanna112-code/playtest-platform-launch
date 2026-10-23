@@ -566,6 +566,8 @@ model Rating {
   rateeId    String
   stars      Int
   comment    String   @default("")
+  /// Blind reveal: a tester's rating shows once the developer rates (or 14 days pass); the developer's at once.
+  revealedAt DateTime?
   createdAt  DateTime @default(now())
 
   @@unique([contractId, side])

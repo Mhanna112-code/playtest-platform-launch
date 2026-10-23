@@ -20,7 +20,7 @@ import { chatMessages } from "@/lib/server/messages";
 import { BlockButton } from "@/components/BlockButton";
 import { LiveTop } from "@/components/LiveTop";
 import { RateBox } from "@/components/RateBox";
-import { rateBlocker, rateWarning } from "@/lib/server/ratings";
+import { contractRatings, rateBlocker, rateWarning } from "@/lib/server/ratings";
 import { openOffer } from "@/lib/server/terms";
 
 export const metadata = { title: "Your session · Playtest" };
@@ -59,9 +59,10 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const failedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", callId: { not: null } }, select: { callId: true } })).map((p) => p.callId!));
   const cancelledText = (x: { status: string; cancelledBy: string | null }) => (x.status !== "cancelled" ? "" : x.cancelledBy === "tester" ? "you cancelled it" : `cancelled by ${x.cancelledBy === "developer" ? dev : "the site"}`);
   // (NEWEST+5) Rating the developer.
-  const myRating = await db.rating.findUnique({ where: { contractId_side: { contractId: c.id, side: "tester" } } });
+  const rated = await contractRatings(c.id);
+  const myRating = rated.tester;
   const rateBlock = myRating ? "rated" : await rateBlocker(c.id, "tester");
-  const rateWarn = await rateWarning(c.id, "tester");
+  const rateWarn = await rateWarning(c.id);
   const infoChanged = (await db.testEvent.count({ where: { testId: c.testId, kind: "info", createdAt: { gt: c.joinedAt } } })) > 0;
   return (
     <>
@@ -94,7 +95,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         )}
         {c.keepPrivate && <p className="note">You agreed to keep this build and what you see private.</p>}
         {c.status === "working" && <LeaveButton sessionId={c.id} seenAt={seenAt} />}
-        {myRating && <p className="note">You rated {dev}: {myRating.stars} ★{myRating.comment ? ` · “${myRating.comment}”` : ""}</p>}
+        {myRating && !rated.testerRevealed && <p className="note">You rated {dev}.</p>}
+        {myRating && rated.testerRevealed && <p className="note">You rated {dev}: {myRating.stars} ★{myRating.comment ? ` · “${myRating.comment}”` : ""}</p>}
+        {rated.developer && <p className="note">{dev} rated you: {rated.developer.stars} ★{rated.developer.comment ? ` · “${rated.developer.comment}”` : ""}</p>}
         {rateBlock === "" && (
           <RateBox
             path={`/api/sessions/${c.id}/rate`}
