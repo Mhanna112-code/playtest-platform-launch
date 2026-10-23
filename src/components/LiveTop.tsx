@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import type { Change } from "@/components/ChangesBox";
-import { announce, clearShown, setShown } from "@/lib/live";
+import { announce, clearShown, setShown, wasShownInBox } from "@/lib/live";
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const key = (c: Change) => `${c.at}|${c.text}`;
@@ -50,7 +50,8 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt }: { scope: strin
       const added = r.changes.filter((c) => !known.current.has(key(c)));
       added.forEach((c) => known.current.add(key(c)));
       if (added.length) setLines((old) => [...old, ...added]);
-      if (added.length && !scrolled.current) {
+      // Scroll once, only for a live update nobody pressed for (lines a stop box showed are quiet).
+      if (added.some((c) => !wasShownInBox(c)) && !scrolled.current) {
         scrolled.current = true;
         scrollUp();
       }

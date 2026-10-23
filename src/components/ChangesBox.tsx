@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { ResendConfirm } from "@/components/ResendConfirm";
+import { markShownInBox } from "@/lib/live";
 
 export type Change = { text: string; at: string; kind?: string };
 
@@ -13,6 +14,7 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: 
 export function ChangesBox({ changes, error, tail = "Press again to go ahead." }: { changes: Change[] | null; error?: string; tail?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    if (changes) markShownInBox(changes); // seen: the top box lists them quietly, without its scroll
     if ((changes || error) && ref.current) ref.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [changes, error]);
   if (!changes && !error) return null;

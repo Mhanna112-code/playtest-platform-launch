@@ -926,6 +926,13 @@ async function signIn(page, email) {
     await devTab1.click("button:has-text('Save')");
     check("Edit tab 1: Save stopped once with the other tab's change", await has(devTab1, "text=Nora Lane changed the description"));
     await shot(devTab1, "edit-save-stopped-developer");
+    // A press never moves the page: when the top box picks the same line up (next poll), the view stays at Save.
+    const yStop = await devTab1.evaluate(() => window.scrollY);
+    await devTab1.bringToFront();
+    await devTab1.waitForSelector("[data-live-top] >> text=Nora Lane changed the description", { timeout: 35000 }).catch(() => {});
+    await devTab1.waitForTimeout(1200);
+    const yAfter = await devTab1.evaluate(() => window.scrollY);
+    check("after the stopped Save, the page stays at the button (no jump to the top box)", Math.abs(yAfter - yStop) < 80, `${yStop} → ${yAfter}`);
     await devTab1.click("button:has-text('Save')");
     await devTab1.waitForURL(`**/app/tests/${T}?saved=1**`).catch(() => {});
     check("second Save saved", sql(`select category from "Test" where id = '${T}'`) === "Game: Puzzle");
