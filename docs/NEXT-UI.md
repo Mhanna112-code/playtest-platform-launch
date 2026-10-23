@@ -19,7 +19,7 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    ticks survive search changes; count by Invite; "Tick at least one tester." red if none). Rows in the full app's
    format (amber "Doesn't list X" pill; "you rated 5.0/5 · 1 test with you"). Verify the Invite anyway box in the
    browser exactly per LEAN-SPEC.
-4. [DONE] Group C controls: End early ticks + confirm popup; Stop the test confirm popup; Cancel dropdown; Chat as its own page
+4. [DONE 3da9c7c] Group C controls: End early ticks + confirm popup; Stop the test confirm popup; Cancel dropdown; Chat as its own page
    with unread badge; Block in the hover card; Leave in its own "Can't finish?" card.
 4b. [DONE c68cff4] Join anyway / Apply anyway: use the full app's popup and its behaviour
    (integration src/app/playtests/[id]/claim-form.tsx), replacing the lean in-page warning; lists every unmet need
@@ -53,7 +53,7 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    back after reload / sign-in with the full app's "Not sent yet" tag, as in the full app (integration
    components/use-kept-form + change-lock). ONLY on: written answers, chat messages, dispute text, rating comments,
    reject reasons, and the Post/Edit form. NOT on login/sign-up. Sending clears it.
-11. TESTER SESSION PAGE exactly like the full app's (integration src/app/tester/claims/[id]/page.tsx), lean behaviour:
+11. [DONE] TESTER SESSION PAGE exactly like the full app's (integration src/app/tester/claims/[id]/page.tsx), lean behaviour:
    - "Your parts" card (full app :686-716) showing, per part (written / recording / live calls): Required / Not required, sent or not sent yet,
      "You asked $X" if they asked, and "Paid so far $Y" (plus the listing price / "Not in your contract").
    - Every other section in the full app's layout and order; the live-call area is the lean "Live session" panel
