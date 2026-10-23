@@ -49,3 +49,20 @@ describe("Join call shows only while the room can be joined (as in the full app)
     expect(callJoinable({ ...call, status: "cancelled" }, at(0))).toBe(false);
   });
 });
+
+describe("call presence (the full app's CallPresence, on lean data)", () => {
+  it("each side reads who the other is and when they joined the room", async () => {
+    const { callStatus } = await import("@/lib/server/blocks");
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 1);
+    const at = new Date();
+    await db.call.update({ where: { id: call.id }, data: { devJoinedAt: at } });
+    const t = await callStatus(tester.user, call.id);
+    expect(t.other).toEqual({ name: "Nora Lane", joinedAt: at });
+    expect(t.meJoinedAt).toBeNull();
+    const d = await callStatus(dev.user, call.id);
+    expect(d.other).toEqual({ name: "Ana Silva", joinedAt: null });
+    expect(d.meJoinedAt).toEqual(at);
+  });
+});

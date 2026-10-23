@@ -84,5 +84,13 @@ export async function callStatus(user: { id: string }, callId: string) {
   if (!call || !c || (c.testerId !== user.id && c.test.developerId !== user.id)) throw new HttpError(404, "not_found", "That call doesn't exist.");
   const line = call.status === "cancelled" ? "This call was cancelled." : (await blockedEitherWay(c.testerId, c.test.developerId)) ? "This call isn't available." : "";
   const both = call.devJoinedAt && call.testerJoinedAt ? new Date(Math.max(call.devJoinedAt.getTime(), call.testerJoinedAt.getTime())) : null;
-  return { line, bothJoinedAt: both };
+  // (The full app's CallPresence) Who has joined the room, for the other side's line: lean keeps each side's first join.
+  const amTester = c.testerId === user.id;
+  const tester = amTester ? null : await db.user.findUnique({ where: { id: c.testerId }, select: { name: true, email: true } });
+  const otherName = amTester ? (c.test.developer.name || c.test.developer.email.split("@")[0]) : (tester?.name || tester?.email.split("@")[0] || "");
+  return {
+    line, bothJoinedAt: both, startsAt: call.startsAt, minutes: call.minutes,
+    other: { name: otherName, joinedAt: amTester ? call.devJoinedAt : call.testerJoinedAt },
+    meJoinedAt: amTester ? call.testerJoinedAt : call.devJoinedAt,
+  };
 }

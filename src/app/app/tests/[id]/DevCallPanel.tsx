@@ -6,6 +6,7 @@ import { usePress } from "@/lib/usePress";
 import { MARKABLE } from "@/lib/markJump";
 import { LivePanel } from "@/components/LivePanel";
 import { CallTimer } from "@/components/CallTimer";
+import { CallPresence } from "@/components/CallPresence";
 
 export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string; joinable?: boolean };
 export type DevSet = { id: string; label: string; calls: DevCall[] };
@@ -62,6 +63,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest }: { testId: 
       )}
       {box("cancel-" + c.id)}
       {box("noshow-" + c.id)}
+      {c.joinable && <div className="w-full"><CallPresence callId={c.id} startsAt={c.when} minutes={c.minutes} /></div>}
       {c.joinable && <div className="w-full"><CallTimer startsAt={c.when} minutes={c.minutes} role="developer" label={`Call with ${t.name}`} /></div>}
     </li>
   );
