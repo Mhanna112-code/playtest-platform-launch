@@ -208,11 +208,14 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
     const events = await tx.testEvent.findMany({ where: { testId, version: { gt: loaded } } });
-    const gate = editCheck(loaded, t.version, events, confirmed);
+    // (Owner) A second Save goes ahead only if nothing new happened since its box last updated (boxAt).
+    const boxAt = confirmed ? seenOf(body.boxAt) : null;
+    const newSinceBox = boxAt ? events.filter((e) => e.createdAt > boxAt) : [];
+    const gate = boxAt ? (newSinceBox.length ? { go: false as const, changes: newSinceBox } : { go: true as const }) : editCheck(loaded, t.version, events, confirmed);
     // (NEWEST+3) Save follows the same rule as the test page's buttons: every developer reason since Edit opened
     // (testers' actions, and anything saved or done in another tab), then any other change to the listing's version.
-    const seen = seenOf(body.seenAt);
-    const dc = !confirmed && seen ? withRenamed(await devChanges(dev.id, testId, seen, tabOf(body), tx), body) : [];
+    const seen = boxAt ?? (confirmed ? null : seenOf(body.seenAt));
+    const dc = seen ? withRenamed(await devChanges(dev.id, testId, seen, tabOf(body), tx), body) : [];
     // The "fields you didn't touch keep the newer values" tail only when the listing itself was saved elsewhere.
     const listingEdited = events.some((e) => e.kind === "edited" || e.kind === "edited_spots");
     if (dc.length) {
@@ -297,8 +300,11 @@ export async function openDraft(dev: U, testId: string) {
  * payment/rejection was made, the first press stops and returns the list; the second press (confirmed) goes ahead.
  */
 export async function devGate(tx: Tx, testId: string, body: Record<string, unknown>, extra: Record<string, unknown> = {}, extraChanges: TestEventLike[] = []) {
-  const seenAt = seenDate(body.seenAt);
-  if (body.confirmed === true) return;
+  // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt).
+  const boxAt = seenOf(body.boxAt);
+  if (body.confirmed === true && !boxAt) return;
+  const seenAt = body.confirmed === true && boxAt ? boxAt : seenDate(body.seenAt);
+  if (body.confirmed === true) extraChanges = extraChanges.filter((c) => c.createdAt > seenAt);
   const t = await tx.test.findUniqueOrThrow({ where: { id: testId }, select: { developerId: true } });
   const changes = withRenamed([...(await devChanges(t.developerId, testId, seenAt, tabOf(body), tx)), ...extraChanges].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()), body);
   if (changes.length) {

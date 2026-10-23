@@ -13,7 +13,9 @@ import { ConfirmButton } from "@/components/ConfirmButton";
  * part) or let it go. Charge needs its tick; Let it go asks once in place. (Never shown when the part is paid in full.)
  */
 export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenAt }: { sessionId: string; submissionId: string; line: string; devName: string; cents: number; seenAt: string }) {
-  const [confirmed, setConfirmed] = useState(false);
+  // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
+  const [boxAt, setBoxAt] = useState("");
+  const confirmed = !!boxAt;
   const [box, setBox] = useStopBox();
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -22,10 +24,10 @@ export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenA
   const typed = toCents(amount);
   const go = (choice: string) => {
     setBusy(true);
-    api(`/api/sessions/${sessionId}/choose`, { submissionId, choice, amount, tickedCents: choice === "charge" && ticked ? typed : undefined, seenAt, confirmed })
+    api(`/api/sessions/${sessionId}/choose`, { submissionId, choice, amount, tickedCents: choice === "charge" && ticked ? typed : undefined, seenAt, confirmed, boxAt })
       .then(() => window.location.reload())
       .catch((e) => {
-        const sb = stopBox(e); if (sb) { setBox(sb); setConfirmed(true); }
+        const sb = stopBox(e); if (sb) { setBox(sb); setBoxAt(sb.now); }
         else setErr(errOf(e));
         setBusy(false);
       });

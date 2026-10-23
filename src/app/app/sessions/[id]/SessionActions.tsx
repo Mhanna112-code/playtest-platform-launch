@@ -10,7 +10,9 @@ import { ChangesBox } from "@/components/ChangesBox";
 
 /** Written answers: one box per question in the tester's contract. Can be updated until it's paid. */
 export function WrittenForm({ sessionId, questions, initial, initialNotes, update, seenAt }: { sessionId: string; questions: string[]; initial: string[]; initialNotes: string; update: boolean; seenAt: string }) {
-  const [confirmed, setConfirmed] = useState(false);
+  // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
+  const [boxAt, setBoxAt] = useState("");
+  const confirmed = !!boxAt;
   const [box, setBox] = useStopBox();
   const [answers, setAnswers] = useState<string[]>(questions.map((_, i) => initial[i] ?? ""));
   const [notes, setNotes] = useState(initialNotes);
@@ -23,10 +25,10 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     setBusy(true);
     setMsg(null);
     try {
-      await api(`/api/sessions/${sessionId}/written`, { answers, notes, ask, seenAt, confirmed });
+      await api(`/api/sessions/${sessionId}/written`, { answers, notes, ask, seenAt, confirmed, boxAt });
       window.location.reload();
     } catch (err) {
-      const sb = stopBox(err); if (sb) { setBox(sb); setConfirmed(true); }
+      const sb = stopBox(err); if (sb) { setBox(sb); setBoxAt(sb.now); }
       else setMsg({ ok: false, text: errOf(err) });
       setBusy(false);
     }
@@ -81,7 +83,9 @@ export function LeaveButton({ sessionId, seenAt }: { sessionId: string; seenAt: 
 /** Dispute once: only for a part in the contract paid below the listing amount. */
 export function DisputeForm({ sessionId, kind, id, seenAt }: { sessionId: string; kind: "submission" | "call"; id: string; seenAt?: string }) {
   const [box, setBox] = useStopBox();
-  const [confirmed, setConfirmed] = useState(false);
+  // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
+  const [boxAt, setBoxAt] = useState("");
+  const confirmed = !!boxAt;
   const [reason, setReason] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -101,13 +105,13 @@ export function DisputeForm({ sessionId, kind, id, seenAt }: { sessionId: string
           setBusy(true);
           setErr("");
           try {
-            await api(`/api/sessions/${sessionId}/dispute`, { kind, id, reason, seenAt, confirmed });
+            await api(`/api/sessions/${sessionId}/dispute`, { kind, id, reason, seenAt, confirmed, boxAt });
             window.location.reload();
           } catch (e) {
             const sb = stopBox(e);
             if (sb) {
               setBox(sb);
-              setConfirmed(true);
+              setBoxAt(sb.now);
             } else setErr(errOf(e));
             setBusy(false);
           }

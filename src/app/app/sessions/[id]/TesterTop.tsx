@@ -9,7 +9,9 @@ import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
 export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: string; seenAt: string; offer: { id: string; diff: string } | null; devName: string }) {
   const [box, setBox] = useStopBox();
   const [offerId, setOfferId] = useState(offer?.id ?? "");
-  const [confirmed, setConfirmed] = useState(false);
+  // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
+  const [boxAt, setBoxAt] = useState("");
+  const confirmed = !!boxAt;
   const [err, setErr] = useState("");
   useEffect(() => {
     const on = (e: Event) => setBox((e as CustomEvent).detail as StopBox);
@@ -24,13 +26,13 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
       </div>
     ) : null;
   const decide = (choice: string) =>
-    api(`/api/sessions/${sessionId}/terms`, { offerId, choice, seenAt, confirmed })
+    api(`/api/sessions/${sessionId}/terms`, { offerId, choice, seenAt, confirmed, boxAt })
       .then(() => window.location.reload())
       .catch((e) => {
         const sb = stopBox(e);
         if (sb) {
           setBox(sb);
-          setConfirmed(true);
+          setBoxAt(sb.now);
           const next = (e as { data?: { offerId?: string } }).data?.offerId;
           if (next) setOfferId(next);
         } else setErr(errOf(e));

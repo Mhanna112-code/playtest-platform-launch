@@ -9,7 +9,8 @@ import { usePress } from "@/lib/usePress";
  * under the button). They are never told.
  */
 export function BlockButton({ userId, name, effect, seenAt, sessionId, testId }: { userId: string; name: string; effect: string; seenAt?: string; sessionId?: string; testId?: string }) {
-  const { press, changes, error, busy } = usePress(seenAt ?? "");
+  // (Owner) The tester's Block still stops just once; the developer's follows the box rule.
+  const { press, changes, error, busy } = usePress(seenAt ?? "", undefined, { once: !!sessionId });
   return (
     <div className="space-y-2">
       <ConfirmButton className="btn-secondary px-3 py-1.5 text-xs" disabled={busy} title={`Block ${name}?`} confirmLabel={`Block ${name}`}

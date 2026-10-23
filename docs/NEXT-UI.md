@@ -58,7 +58,7 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
      "You asked $X" if they asked, and "Paid so far $Y" (plus the listing price / "Not in your contract").
    - Every other section in the full app's layout and order; the live-call area is the lean "Live session" panel
      (same component as the developer side). Nothing the lean app doesn't do.
-12. STOP RULE FIX (owner, high priority, do right after item 0): the second press goes ahead ONLY if nothing new
+12. [DONE] STOP RULE FIX (owner, high priority, do right after item 0): the second press goes ahead ONLY if nothing new
    happened since its stop box last updated (send the box's newest line time; anything newer stops again with the new
    lines added). Applies to every button EXCEPT the tester's Leave and Block, which still stop only once. Tests.
 13. NOTICE IN VIEW (owner): when a stop box or refusal appears after a press, scroll just enough to bring the button and

@@ -63,7 +63,13 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: { i
   const [errs, setErrs] = useState<string[]>([]);
   const [changes, setChanges] = useState<Change[] | null>(null);
   const [listingEdited, setListingEdited] = useState(false);
-  useLiveAppend(changes != null, (added) => setChanges((c) => (c ? mergeChanges(c, added) : c)));
+  // (Owner) When the box last updated: the next Save goes ahead only if nothing new happened since.
+  const [boxAt, setBoxAt] = useState("");
+  useLiveAppend(changes != null, (added) => {
+    setChanges((c) => (c ? mergeChanges(c, added) : c));
+    const newest = added.map((a) => a.at).sort().pop();
+    if (newest) setBoxAt((b) => (b && b > newest ? b : newest));
+  });
   const [saved, setSaved] = useState("");
   const [refusal, setRefusal] = useState("");
   const set = (p: Partial<F>) => {
@@ -86,12 +92,13 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: { i
       const all = toApi(f);
       const fields: Record<string, unknown> = {};
       for (const k of touched) for (const a of API_FIELDS[k]) fields[a] = all[a];
-      const r = await api<{ offered: number; notReinvited?: string[]; resent?: string[]; closedApps?: string[]; spotClosed?: string[]; spots?: number }>(`/api/tests/${edit.id}/edit`, { version: edit.version, fields, seenAt: edit.seenAt, confirmed: changes != null });
+      const r = await api<{ offered: number; notReinvited?: string[]; resent?: string[]; closedApps?: string[]; spotClosed?: string[]; spots?: number }>(`/api/tests/${edit.id}/edit`, { version: edit.version, fields, seenAt: edit.seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}) });
       const q = (k: string, v?: string[]) => (v?.length ? `&${k}=${encodeURIComponent(v.join(", "))}` : "");
       window.location.href = `/app/tests/${edit.id}?saved=1&offered=${r.offered ?? 0}${q("closed", r.closedApps)}${q("resent", r.resent)}${q("skipped", r.notReinvited)}${r.spotClosed?.length ? `${q("spotclosed", r.spotClosed)}&spots=${r.spots}` : ""}`;
     } catch (err) {
       if (err instanceof ApiError && err.code === "changed") {
-        setChanges(err.data.changes as Change[]);
+        setChanges((c) => (c ? mergeChanges(c, (err.data.changes as Change[]) ?? []) : (err.data.changes as Change[])));
+        if (typeof err.data.now === "string") setBoxAt(err.data.now);
         setListingEdited(err.data.listingEdited === true);
       }
       else if (err instanceof ApiError && !isFieldError(err)) {

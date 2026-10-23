@@ -19,7 +19,12 @@ export function OpenUntilFold({ testId, version, seenAt, openUntil, passed }: { 
   const [changes, setChanges] = useState<Change[] | null>(null);
   const [refusal, setRefusal] = useState("");
   const [mistake, setMistake] = useState("");
-  useLiveAppend(changes != null, (added) => setChanges((c) => (c ? mergeChanges(c, added) : c)));
+  const [boxAt, setBoxAt] = useState("");
+  useLiveAppend(changes != null, (added) => {
+    setChanges((c) => (c ? mergeChanges(c, added) : c));
+    const newest = added.map((a) => a.at).sort().pop();
+    if (newest) setBoxAt((b) => (b && b > newest ? b : newest));
+  });
   if (passed) return <p className="text-xs text-slate-400">Open until {shown} (passed)</p>;
   async function save() {
     if (!checkFields(document.getElementById("open-until"))) return;
@@ -27,10 +32,13 @@ export function OpenUntilFold({ testId, version, seenAt, openUntil, passed }: { 
     setRefusal("");
     setMistake("");
     try {
-      await api(`/api/tests/${testId}/edit`, { version, fields: { openUntil: value }, seenAt, confirmed: changes != null });
+      await api(`/api/tests/${testId}/edit`, { version, fields: { openUntil: value }, seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}) });
       window.location.reload();
     } catch (e) {
-      if (e instanceof ApiError && e.code === "changed") setChanges((e.data.changes as Change[]) ?? []);
+      if (e instanceof ApiError && e.code === "changed") {
+        setChanges((c) => (c ? mergeChanges(c, (e.data.changes as Change[]) ?? []) : ((e.data.changes as Change[]) ?? [])));
+        if (typeof e.data.now === "string") setBoxAt(e.data.now);
+      }
       else if (e instanceof ApiError && isFieldError(e)) {
         setChanges(null);
         setMistake(e.message);

@@ -14,7 +14,9 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
   const [keepPrivate, setKeepPrivate] = useState(false);
   const [note, setNote] = useState("");
   const [box, setBox] = useStopBox();
-  const [confirmed, setConfirmed] = useState(false);
+  // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
+  const [boxAt, setBoxAt] = useState("");
+  const confirmed = !!boxAt;
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState("");
@@ -25,7 +27,7 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
     setBusy(true);
     setErr("");
     try {
-      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { keepPrivate, note, seenAt: p.seenAt, confirmed, anyway, inviteId });
+      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { keepPrivate, note, seenAt: p.seenAt, confirmed, boxAt, anyway, inviteId });
       if (r.sessionId) window.location.href = `/app/sessions/${r.sessionId}`;
       else if (action === "withdraw-application") window.location.reload();
       else setDone("Application sent. You'll hear back when the developer answers.");
@@ -33,7 +35,7 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
       const sb = stopBox(e);
       if (sb) {
         setBox(sb);
-        setConfirmed(true);
+        setBoxAt(sb.now);
       } else if (e instanceof ApiError && e.code === "invite_replaced") {
         // The new invite is shown right here; the next press joins on it.
         setErr(`${e.message}${e.data.terms ? ` ${String(e.data.terms)}. Press Join to join on it.` : ""}`);

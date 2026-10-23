@@ -102,8 +102,10 @@ export async function joinPageChanges(userId: string, testId: string, seenAt: un
 
 /** Join / Apply / Withdraw application / No thanks stop once (box under the button) for the join page's reasons. */
 export async function listingGate(userId: string, testId: string, body: Record<string, unknown>, verb: string) {
-  if (body.confirmed === true) return;
-  const changes = withRenamed(await joinPageChanges(userId, testId, body.seenAt, tabOf(body)), body);
+  // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt).
+  const boxAt = seenOf(body.boxAt);
+  if (body.confirmed === true && !boxAt) return;
+  const changes = withRenamed(await joinPageChanges(userId, testId, body.confirmed === true ? boxAt!.toISOString() : body.seenAt, tabOf(body)), body);
   if (changes.length) {
     const tail = verb === "withdraw" || verb === "decline" ? "Press again to go ahead." : `Press again to ${verb} on the current listing.`;
     throw new HttpError(409, "stop_once", tail, { changes: changes.map((e) => ({ text: e.text, at: e.createdAt })), tail });

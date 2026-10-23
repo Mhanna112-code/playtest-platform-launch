@@ -64,8 +64,11 @@ const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", 
 
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
 export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.") {
-  if (body.confirmed === true) return;
-  const seenAt = seenOf(body.seenAt);
+  // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt); Leave and
+  // Block send no boxAt, so they still stop just once.
+  const boxAt = seenOf(body.boxAt);
+  if (body.confirmed === true && !boxAt) return;
+  const seenAt = body.confirmed === true ? boxAt : seenOf(body.seenAt);
   if (!seenAt) return;
   const changes = withRenamed(await testerChanges(testerId, contractId, testId, seenAt, tabOf(body)), body);
   const r = stopOnce(changes, seenAt, false, [...KINDS, "renamed"]);

@@ -48,7 +48,9 @@ export async function handle(fn: () => Promise<Response>): Promise<Response> {
   try {
     return await fn();
   } catch (e) {
-    if (e instanceof HttpError) return fail(e.status, e.code, e.message, e.data);
+    // (Owner) A stop says when the box was made: the next press sends it back as "boxAt" and goes ahead only if nothing
+    // new happened since (else it stops again with the new lines).
+    if (e instanceof HttpError) return fail(e.status, e.code, e.message, e.code === "stop_once" || e.code === "changed" ? { ...(e.data ?? {}), now: new Date().toISOString() } : e.data);
     console.error(e);
     return fail(500, "server", "Something went wrong on our side. Try again in a moment.");
   }

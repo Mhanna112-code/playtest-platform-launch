@@ -10,7 +10,9 @@ type Rec = { id: string; filename: string; size: number; uploaded: boolean };
 
 /** Upload up to 5 screen recordings (500 MB each), then send them. Can be sent again with new ones until paid. */
 export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, seenAt }: { sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean; seenAt: string }) {
-  const [confirmed, setConfirmed] = useState(false);
+  // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
+  const [boxAt, setBoxAt] = useState("");
+  const confirmed = !!boxAt;
   const [box, setBox] = useStopBox();
   const [progress, setProgress] = useState<number | null>(null);
   const [err, setErr] = useState("");
@@ -71,10 +73,10 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
             if (!checkFields(e.currentTarget.parentElement)) return;
             setBusy(true);
             try {
-              await api(`/api/sessions/${sessionId}/recording-send`, { ask, seenAt, confirmed });
+              await api(`/api/sessions/${sessionId}/recording-send`, { ask, seenAt, confirmed, boxAt });
               window.location.reload();
             } catch (e) {
-              const sb = stopBox(e); if (sb) { setBox(sb); setConfirmed(true); }
+              const sb = stopBox(e); if (sb) { setBox(sb); setBoxAt(sb.now); }
               else setErr(errOf(e));
               setBusy(false);
             }
