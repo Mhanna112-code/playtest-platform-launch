@@ -3,7 +3,7 @@ import { reportNoShow, testerCancelCall } from "@/lib/server/calls";
 import { sendMessage } from "@/lib/server/messages";
 import { finishRecording, sendRecording, startRecording } from "@/lib/server/recordings";
 import { chooseOutcome } from "@/lib/server/holds";
-import { answerRequest, requestTime } from "@/lib/server/requests";
+import { answerRequest, cancelCallSet, requestTime } from "@/lib/server/requests";
 import { decideTerms } from "@/lib/server/terms";
 import { openDispute } from "@/lib/server/payments";
 import { leaveTest, sendWritten } from "@/lib/server/tests";
@@ -60,6 +60,8 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         return ok(await answerRequest(u, id, body));
       case "cancel-call":
         return ok(await testerCancelCall(u, id, body));
+      case "cancel-set":
+        return ok(await cancelCallSet(u, id, body));
       case "no-show":
         return ok(await reportNoShow(u, String(body.callId ?? ""), body));
       case "dispute": {

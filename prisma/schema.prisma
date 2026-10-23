@@ -205,6 +205,7 @@ model Contract {
   submissions Submission[]
   recordings  Recording[]
   calls       Call[]
+  callSets    CallSet[]
   messages    Message[]
 
   @@unique([testId, testerId])
@@ -569,10 +570,33 @@ model CallRequest {
   /// Repeat: "daily" | "weekly" ("" = choose one); `weeks` is the number of calls (2-8)
   repeat       String    @default("")
   weeks        Int       @default(0)
+  /// (NEXT-UI 7) The rows: [{ startsAt, repeat: "once" | "daily" | "weekly", count }] (count 2-8, 0 = Forever); null on older requests
+  rows         Json?
   callId       String?
   decidedAt    DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+
+  @@index([contractId, status])
+}
+
+/// (NEXT-UI 7) A booked daily / weekly run of calls (counted 2-8, or Forever: the next 4 ahead are booked, the daily job adds the next)
+model CallSet {
+  id         String   @id @default(cuid())
+  testId     String
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  /// "daily" | "weekly"
+  repeat     String
+  /// 2-8 calls; 0 = Forever
+  count      Int
+  minutes    Int
+  rateCents  Int?
+  /// The next occurrence the daily job books (Forever sets)
+  nextAt     DateTime
+  /// "active" | "cancelled" | "ended" (the tester's part ended, or the test stopped)
+  status     String   @default("active")
+  createdAt  DateTime @default(now())
 
   @@index([contractId, status])
 }

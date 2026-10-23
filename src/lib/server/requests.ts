@@ -1,7 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, fmtTime, money, pronouns, toCents } from "@/lib/format";
-import { checkCallMinutes } from "@/lib/rules";
+import { checkCallMinutes, checkCancel } from "@/lib/rules";
+import { FOREVER_AHEAD, MAX_ROWS, occurrences, rowsOf, stepMs, toJson, type CallRow, type RowRepeat } from "@/lib/callRows";
+import type { Prisma } from "@prisma/client";
 import { PAUSED_FOR_TESTERS } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
@@ -43,9 +45,10 @@ const askMatches = (ask: number | null, contractRate: number | null) => ask == n
 export const rateLabel = (rateCents: number | null, contractRate: number | null) =>
   rateCents == null ? "Not in your contract" : `${rateCents === contractRate ? "Contract" : "Agreed"} ${money(rateCents).replace(/\.00$/, "")}/h`;
 
-/** The times a request covers: its options ("choose one") or every week ("weekly"). */
-export const requestTimes = (r: { times: Date[]; startsAt: Date; weeks: number; repeat?: string }) =>
-  r.weeks > 0 ? Array.from({ length: r.weeks }, (_, k) => new Date(r.startsAt.getTime() + k * (r.repeat === "daily" ? 1 : 7) * DAY_MS)) : r.times.length ? r.times : [r.startsAt];
+/** Every call time a request covers: each row's calls (a Forever row: the next 4 ahead). */
+export const requestTimes = (r: { rows?: unknown; times: Date[]; startsAt: Date; weeks: number; repeat?: string }) => rowsOf(r).flatMap(occurrences);
+/** The single-call ("Once") times of a request: what auto-match compares. */
+const onceTimes = (r: { rows?: unknown; times: Date[]; startsAt: Date; weeks: number; repeat?: string }) => rowsOf(r).filter((x) => x.repeat === "once").map((x) => x.startsAt);
 const overlaps = (a: Date, am: number, b: Date, bm: number) => a.getTime() < b.getTime() + bm * 60_000 && b.getTime() < a.getTime() + am * 60_000;
 
 /** Read the request's kind and times from the form: times[] (1–3, choose one) or startsAt + weeks (2–8, weekly). */
@@ -58,20 +61,59 @@ function readMinutes(body: Record<string, unknown>) {
   return r.minutes;
 }
 
-function readKind(body: Record<string, unknown>) {
-  const weeks = Number(body.weeks ?? body.count ?? 0) || 0;
-  const repeat = weeks ? (body.repeat === "daily" ? "daily" : "weekly") : "";
-  const raw = Array.isArray(body.times) ? body.times : body.startsAt ? [body.startsAt] : [];
-  const times = raw.map((x) => new Date(String(x))).filter((d) => !isNaN(d.getTime()));
-  if (!times.length) throw new HttpError(400, "bad_time", "Pick a time in the future.");
-  if (times.some((d) => d.getTime() < Date.now() + 5 * 60_000)) throw new HttpError(400, "bad_time", "Pick times in the future.");
-  if (weeks) {
-    if (times.length !== 1) throw new HttpError(400, "bad_kind", `A ${repeat} request has exactly one time.`);
-    if (weeks < 2 || weeks > 8) throw new HttpError(400, "bad_weeks", `${repeat === "daily" ? "Daily" : "Weekly"} calls repeat 2 to 8 times.`);
-  } else if (times.length > 3) throw new HttpError(400, "bad_kind", "Offer up to 3 times to choose from.");
-  times.sort((a, b) => a.getTime() - b.getTime());
-  return { weeks, repeat, times, startsAt: times[0] };
+/**
+ * The rows of a request (NEXT-UI 7): `rows` [{ startsAt, repeat: once | daily | weekly, count }] (count 2-8, or 0 / "forever"),
+ * 1-3 of them; the older shape (times[], or startsAt + weeks + repeat) still reads the same way.
+ */
+function readRows(body: Record<string, unknown>): CallRow[] {
+  const future = (d: Date) => {
+    if (isNaN(d.getTime())) throw new HttpError(400, "bad_time", "Pick a time in the future.");
+    if (d.getTime() < Date.now() + 5 * 60_000) throw new HttpError(400, "bad_time", "Pick times in the future.");
+    return d;
+  };
+  let rows: CallRow[];
+  if (Array.isArray(body.rows)) {
+    rows = body.rows.map((x) => {
+      const o = (x ?? {}) as Record<string, unknown>;
+      const repeat: RowRepeat = o.repeat === "daily" ? "daily" : o.repeat === "weekly" ? "weekly" : "once";
+      const startsAt = future(new Date(String(o.startsAt ?? "")));
+      if (repeat === "once") return { startsAt, repeat, count: 1 };
+      const forever = o.count === 0 || o.count === "0" || o.count === "forever" || o.forever === true;
+      const n = Number(o.count);
+      if (!forever && (!Number.isInteger(n) || n < 2 || n > 8)) throw new HttpError(400, "bad_weeks", `${repeat === "daily" ? "Daily" : "Weekly"} calls repeat 2 to 8 times, or Forever.`);
+      return { startsAt, repeat, count: forever ? 0 : n };
+    });
+  } else {
+    const weeks = Number(body.weeks ?? body.count ?? 0) || 0;
+    const repeat: RowRepeat = weeks ? (body.repeat === "daily" ? "daily" : "weekly") : "once";
+    const raw = Array.isArray(body.times) ? body.times : body.startsAt ? [body.startsAt] : [];
+    const times = raw.map((x) => new Date(String(x))).filter((d) => !isNaN(d.getTime()));
+    if (!times.length) throw new HttpError(400, "bad_time", "Pick a time in the future.");
+    times.forEach(future);
+    if (weeks) {
+      if (times.length !== 1) throw new HttpError(400, "bad_kind", `A ${repeat} request has exactly one time.`);
+      if (weeks < 2 || weeks > 8) throw new HttpError(400, "bad_weeks", `${repeat === "daily" ? "Daily" : "Weekly"} calls repeat 2 to 8 times.`);
+      rows = [{ startsAt: times[0], repeat, count: weeks }];
+    } else rows = times.map((startsAt) => ({ startsAt, repeat: "once" as const, count: 1 }));
+  }
+  if (!rows.length) throw new HttpError(400, "bad_time", "Pick a time in the future.");
+  if (rows.length > MAX_ROWS) throw new HttpError(400, "bad_kind", "Offer up to 3 times to choose from.");
+  return rows.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
 }
+
+function readKind(body: Record<string, unknown>) {
+  const rows = readRows(body);
+  // The older columns keep their meaning for a single counted repeating row (what the rest of the app reads).
+  const single = rows.length === 1 && rows[0].repeat !== "once" && rows[0].count > 0 ? rows[0] : null;
+  return { rows, startsAt: rows[0].startsAt, times: rows.map((r) => r.startsAt), weeks: single?.count ?? 0, repeat: single?.repeat ?? "" };
+}
+type Kind = ReturnType<typeof readKind>;
+const unitOf = (repeat: string) => (repeat === "daily" ? "daily" : "weekly");
+/** "weekly calls (4 weeks)" / "daily calls (until cancelled)" for a one-row repeat, else "a call". */
+const kindWords = (rows: CallRow[]) => {
+  const r = rows.length === 1 && rows[0].repeat !== "once" ? rows[0] : null;
+  return r ? `${unitOf(r.repeat)} calls (${r.count ? `${r.count} ${r.repeat === "daily" ? "days" : "weeks"}` : "until cancelled"})` : "a call";
+};
 
 /** Sending: a time overlapping a booked call or a pending request between the same two people is refused. */
 async function sendClash(contractId: string, times: Date[], minutes: number, otherName: string, exceptId?: string, mine?: { side: Side; otherPoss: string }) {
@@ -129,11 +171,11 @@ const bookedLimit = (side: Side, testerName: string) =>
   side === "developer" ? `${testerName} already has ${MAX_BOOKED} booked times with you. Wait until one is over or cancel one.` : `You already have ${MAX_BOOKED} booked times in this test.`;
 
 /** Book one call at this time between the two, at the agreed rate. */
-async function bookAt(contractId: string, startsAt: Date, minutes: number, rateCents: number | null, setId: string | null = null, byDeveloper = false) {
+async function bookAt(contractId: string, startsAt: Date, minutes: number, rateCents: number | null, setId: string | null = null, byDeveloper = false, quiet = false) {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: true, tester: true } });
   const slot = await db.callSlot.create({ data: { testId: c.testId, startsAt, minutes, allowedTesterIds: [c.testerId], status: "booked" } });
   const call = await db.call.create({ data: { slotId: slot.id, contractId, startsAt, minutes, rateCents, setId } });
-  await db.$transaction((tx) => recordEvent(tx, c.testId, "booked", byDeveloper ? `You booked a call with ${displayName(c.tester)} for ${fmtDateTime(startsAt)}` : `${displayName(c.tester)} booked a call for ${fmtDateTime(startsAt)}`, false, {}, contractId));
+  if (!quiet) await db.$transaction((tx) => recordEvent(tx, c.testId, "booked", byDeveloper ? `You booked a call with ${displayName(c.tester)} for ${fmtDateTime(startsAt)}` : `${displayName(c.tester)} booked a call for ${fmtDateTime(startsAt)}`, false, {}, contractId));
   return call;
 }
 
@@ -166,10 +208,13 @@ async function refusals(c: Ctx["c"], side: Side) {
   if (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) throw new HttpError(409, "gone", "This time isn't available.");
 }
 
-const bellFor = (name: string, k: { weeks: number; times: Date[]; repeat?: string }) =>
-  k.weeks ? `${name} asked for ${k.repeat === "daily" ? "daily" : "weekly"} calls: ${k.times[0].toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })}, ${k.weeks} ${k.repeat === "daily" ? "days" : "weeks"}`
-  : k.times.length > 1 ? `${name} asked for a call: pick one of ${k.times.length} times`
-  : `${name} asked for a call: ${fmtDateTime(k.times[0])}`;
+const bellFor = (name: string, k: { rows: CallRow[] }) => {
+  const w = (d: Date) => d.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
+  const one = k.rows.length === 1 ? k.rows[0] : null;
+  if (one && one.repeat !== "once") return `${name} asked for ${unitOf(one.repeat)} calls: ${w(one.startsAt)}, ${one.count ? `${one.count} ${one.repeat === "daily" ? "days" : "weeks"}` : "until cancelled"}`;
+  if (k.rows.length > 1) return `${name} asked for a call: pick one of ${k.rows.length} times`;
+  return `${name} asked for a call: ${fmtDateTime(k.rows[0].startsAt)}`;
+};
 
 /** Developer: Request a time with one or more ticked working testers. */
 export async function devRequestTime(dev: U, testId: string, body: Record<string, unknown>) {
@@ -186,10 +231,11 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   }
   await db.$transaction((tx) => devGate(tx, testId, body));
   // Auto-match ("choose one" only): a tester already requested one of these exact times at the contract rate.
-  if (!kind.weeks) {
+  const onceStarts = kind.rows.filter((r) => r.repeat === "once").map((r) => r.startsAt);
+  if (onceStarts.length) {
     for (const { c } of all) {
       const match = await db.callRequest.findFirst({ where: { contractId: c.id, status: "pending", fromSide: "tester", weeks: 0, minutes: reqMinutes, startsAt: { gt: new Date() } } });
-      const hit = match && askMatches(match.askRateCents, c.liveRateCents) ? requestTimes(match).find((t) => kind.times.some((x) => x.getTime() === t.getTime())) : undefined;
+      const hit = match && askMatches(match.askRateCents, c.liveRateCents) ? onceTimes(match).find((t) => onceStarts.some((x) => x.getTime() === t.getTime())) : undefined;
       if (match && hit) {
         const clash = await acceptClash(c, "developer", [hit], match.minutes);
         if (clash.length) throw new HttpError(409, "clash", clash[0]);
@@ -225,11 +271,11 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   const batchId = randomBytes(8).toString("hex");
   for (const { c } of ok) {
     const minutes = reqMinutes;
-    await db.callRequest.create({ data: { testId, contractId: c.id, fromSide: "developer", startsAt: kind.startsAt, times: kind.weeks ? [kind.startsAt] : kind.times, weeks: kind.weeks, repeat: kind.repeat, minutes, batchId } });
+    await db.callRequest.create({ data: { testId, contractId: c.id, fromSide: "developer", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes, batchId } });
     const line = bellFor(displayName(dev), kind);
     await notify(c.tester.email, line, [line, `Rate: ${rateLabel(c.liveRateCents, c.liveRateCents)}. Accept or decline it on your session page.`], `/app/sessions/${c.id}`);
   }
-  await db.$transaction((tx) => recordEvent(tx, testId, "requested", `You requested ${kind.weeks ? `weekly calls (${kind.weeks} weeks)` : "a call"} from ${fmtDateTime(kind.startsAt)} with ${ok.length} tester${ok.length === 1 ? "" : "s"}`, false));
+  await db.$transaction((tx) => recordEvent(tx, testId, "requested", `You requested ${kindWords(kind.rows)} from ${fmtDateTime(kind.startsAt)} with ${ok.length} tester${ok.length === 1 ? "" : "s"}`, false));
   return { requested: ok.length, batchId };
 }
 
@@ -245,10 +291,11 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   const minutes = readMinutes(body);
   const devName = displayName(c.test.developer);
   // Auto-match ("choose one", rates match): a developer request with one of these exact times books it.
-  if (!kind.weeks && askMatches(ask, c.liveRateCents)) {
+  const onceStarts = kind.rows.filter((r) => r.repeat === "once").map((r) => r.startsAt);
+  if (onceStarts.length && askMatches(ask, c.liveRateCents)) {
     const devReqs = await db.callRequest.findMany({ where: { contractId, status: "pending", fromSide: "developer", weeks: 0, minutes } });
     for (const m of devReqs) {
-      const hit = requestTimes(m).find((t) => kind.times.some((k) => k.getTime() === t.getTime()));
+      const hit = onceTimes(m).find((t) => onceStarts.some((k) => k.getTime() === t.getTime()));
       if (!hit) continue;
       const clash = await acceptClash(c, "tester", [hit], m.minutes);
       if (clash.length) throw new HttpError(409, "clash", clash[0]);
@@ -276,9 +323,9 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   if (clash) throw new HttpError(409, "clash", clash);
   if ((await pendingRequests(contractId)) >= MAX_REQUESTS) throw new HttpError(409, "limit", requestLimitLine(devName));
   const r = await db.callRequest.create({
-    data: { testId: c.testId, contractId, fromSide: "tester", startsAt: kind.startsAt, times: kind.weeks ? [kind.startsAt] : kind.times, weeks: kind.weeks, repeat: kind.repeat, minutes, askRateCents: ask == null || ask === c.liveRateCents ? null : ask, batchId: closedCopy ? `ask-${closedCopy}` : "" },
+    data: { testId: c.testId, contractId, fromSide: "tester", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes, askRateCents: ask == null || ask === c.liveRateCents ? null : ask, batchId: closedCopy ? `ask-${closedCopy}` : "" },
   });
-  await db.$transaction((tx) => recordEvent(tx, c.testId, "requested", `${displayName(c.tester)} requested ${kind.weeks ? `weekly calls (${kind.weeks} weeks) from` : "a call for"} ${fmtDateTime(kind.startsAt)}${r.askRateCents != null ? ` and asks ${money(r.askRateCents)}/h` : ""}`, false, {}, contractId));
+  await db.$transaction((tx) => recordEvent(tx, c.testId, "requested", `${displayName(c.tester)} requested ${kind.rows.length === 1 && kind.rows[0].repeat !== "once" ? `${kindWords(kind.rows)} from` : "a call for"} ${fmtDateTime(kind.startsAt)}${r.askRateCents != null ? ` and asks ${money(r.askRateCents)}/h` : ""}`, false, {}, contractId));
   const line = bellFor(displayName(c.tester), kind);
   await notify(c.test.developer.email, line, [r.askRateCents != null ? `They ask ${money(r.askRateCents)}/h.` : `At their contract rate (${rateLabel(c.liveRateCents, c.liveRateCents)}).`, "Accept or decline it on the test page."], `/app/tests/${c.testId}#calls`);
   return { requested: true, id: r.id };
@@ -309,37 +356,41 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     // A tester's Accept always books at the contract rate; the developer accepting a tester's priced request books at
     // the asked rate ("Agreed"). The rate is fixed at acceptance (every week of a weekly).
     const rate = side === "developer" && r.askRateCents != null ? r.askRateCents : c.liveRateCents;
-    let times: Date[];
-    if (r.weeks) times = requestTimes(r);
+    // The other side picks ONE row; a repeating row books its whole set (Forever: the next 4 ahead).
+    const rowsR = rowsOf(r);
+    let row: CallRow;
+    if (rowsR.length === 1) row = rowsR[0];
     else {
-      const opts = requestTimes(r);
-      const pick = body.time ? new Date(String(body.time)) : opts.length === 1 ? opts[0] : null;
-      const chosen = pick ? opts.find((t) => t.getTime() === pick.getTime()) : undefined;
+      const pick = body.time ? new Date(String(body.time)) : null;
+      const chosen = pick ? rowsR.find((x) => x.startsAt.getTime() === pick.getTime()) : undefined;
       if (!chosen) throw new HttpError(400, "pick", "Pick one of the times.");
-      times = [chosen];
+      row = chosen;
     }
-    if (r.weeks) {
-      // Weekly: every week is checked; any clash refuses the whole request and names the week(s).
+    const times = occurrences(row);
+    if (row.repeat !== "once") {
+      // Every call is checked; any clash refuses the whole request and names the week(s) / day(s).
       const bad: string[] = [];
       for (const [i, t] of times.entries()) {
         const cl = await acceptClash(c, side, [t], r.minutes);
-        if (cl.length) bad.push(`week ${i + 1} (${fmtDateTime(t)}): ${cl[0]}`);
+        if (cl.length) bad.push(`${row.repeat === "daily" ? "day" : "week"} ${i + 1} (${fmtDateTime(t)}): ${cl[0]}`);
       }
-      if (bad.length) throw new HttpError(409, "clash", `These weeks clash: ${bad.join(" ")}`);
+      if (bad.length) throw new HttpError(409, "clash", `These ${row.repeat === "daily" ? "days" : "weeks"} clash: ${bad.join(" ")}`);
     } else {
       const clashes = await acceptClash(c, side, times, r.minutes);
       if (clashes.length) throw new HttpError(409, "clash", clashes[0]);
     }
     if ((await bookedTimes(contractId)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit(side, displayName(c.tester)));
     let first = null;
+    // A repeating pick is one CallSet (it counts as 1 of the 3 booked times); Forever keeps the next 4 ahead.
+    const set = row.repeat === "once" ? null : await db.callSet.create({ data: { testId: c.testId, contractId, repeat: row.repeat, count: row.count, minutes: r.minutes, rateCents: rate, nextAt: new Date(row.startsAt.getTime() + times.length * stepMs(row.repeat)) } });
     for (const t of times) {
-      const call = await bookAt(contractId, t, r.minutes, rate, r.weeks ? r.id : null, side === "developer");
+      const call = await bookAt(contractId, t, r.minutes, rate, set?.id ?? null, side === "developer");
       first = first ?? call;
     }
     await db.callRequest.update({ where: { id: r.id }, data: { status: "booked", callId: first!.id, decidedAt: new Date() } });
     if (side === "tester") await closeBatch(r.batchId, r.id);
     else if (r.batchId.startsWith("ask-")) await closeBatch(r.batchId.slice(4), r.id); // the rest of the developer's batch
-    const what = r.weeks ? `${r.weeks} ${r.repeat === "daily" ? "daily" : "weekly"} calls from ${fmtDateTime(times[0])}` : fmtDateTime(times[0]);
+    const what = row.repeat === "once" ? fmtDateTime(times[0]) : row.count ? `${row.count} ${unitOf(row.repeat)} calls from ${fmtDateTime(times[0])}` : `${unitOf(row.repeat)} calls from ${fmtDateTime(times[0])} (until cancelled)`;
     await notify(other.email, `Booked: ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#calls` : `/app/sessions/${c.id}`);
     return { booked: true, callId: first!.id, calls: times.length };
   }
@@ -348,4 +399,76 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   await db.$transaction((tx) => recordEvent(tx, c.testId, status === "withdrawn" ? "withdrew_req" : "declined_req", `${displayName(user)} ${status} a call request for ${fmtDateTime(r.startsAt)}`, false, {}, contractId));
   if (status === "declined") await notify(other.email, `${displayName(user)} declined your call request`, [`${displayName(user)} declined your request for ${fmtDateTime(r.startsAt)}.`], side === "tester" ? `/app/tests/${c.testId}#calls` : `/app/sessions/${c.id}`);
   return { [status]: true };
+}
+
+
+// ---------- (NEXT-UI 7) Daily / weekly sets: cancel the rest, and Forever sets kept 4 ahead ----------
+
+/**
+ * CANCEL on a booked set's line: the only way to stop a repeating set. Cancels every call of it still ahead (a reason is
+ * required if the next one is within 24 hours) and ends the set; the other side is told once.
+ */
+export async function cancelCallSet(user: U, contractId: string, body: Record<string, unknown>) {
+  const { c, side, other } = await ctx(user.id, contractId);
+  const setId = String(body.setId ?? "");
+  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 500) : "";
+  const now = new Date();
+  const ahead = () => db.call.findMany({ where: { contractId, setId, status: "booked", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
+  const first = await ahead();
+  if (!first.length) throw new HttpError(409, "cancelled", "The remaining calls of this set were already cancelled.");
+  const ok = checkCancel(first[0].startsAt, now, reason);
+  if (!ok.ok) throw new HttpError(400, "reason", ok.message);
+  if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body));
+  else await testerGate(c.testerId, contractId, c.testId, body);
+  const calls = await ahead();
+  if (!calls.length) throw new HttpError(409, "cancelled", "The remaining calls of this set were already cancelled.");
+  const set = await db.callSet.findUnique({ where: { id: setId } });
+  const unit = set ? unitOf(set.repeat) : calls.length > 1 && calls[1].startsAt.getTime() - calls[0].startsAt.getTime() < 2 * 86_400_000 ? "daily" : "weekly";
+  await db.$transaction(async (tx) => {
+    await tx.call.updateMany({ where: { id: { in: calls.map((x) => x.id) } }, data: { status: "cancelled", cancelledBy: side, cancelledAt: now, cancelNote: reason } });
+    await tx.callSlot.updateMany({ where: { id: { in: calls.map((x) => x.slotId) } }, data: { status: "removed" } });
+    if (set) await tx.callSet.update({ where: { id: set.id }, data: { status: "cancelled" } });
+    await recordEvent(tx, c.testId, "cancelled", `${displayName(user)} cancelled the ${unit} calls from ${fmtDateTime(calls[0].startsAt)} (${calls.length} left)`, false, {}, contractId);
+  });
+  const line = `${displayName(user)} cancelled the remaining ${unit} calls (${calls.length}), starting ${fmtDateTime(calls[0].startsAt)}${reason ? `: ${reason}` : "."}`;
+  await notify(other.email, line, [line], side === "developer" ? `/app/sessions/${contractId}` : `/app/tests/${c.testId}#calls`);
+  return { cancelled: calls.length };
+}
+
+/**
+ * The daily job's top-up: every active Forever set keeps its next 4 calls booked (each checked for clashes with either
+ * side's other calls: a clashing one is skipped and both are told). A set ends when the tester's part ends (left, rated,
+ * ended) or the test stops; a payment hold waits.
+ */
+export async function topUpForeverSets(now = new Date()) {
+  const sets = await db.callSet.findMany({ where: { status: "active", count: 0 }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } } });
+  let booked = 0, skipped = 0;
+  for (const set of sets) {
+    const c = set.contract;
+    if (c.status !== "working" || c.test.status !== "open") {
+      await db.callSet.update({ where: { id: set.id }, data: { status: "ended" } });
+      continue;
+    }
+    if (c.test.developer.holdStartedAt) continue;
+    let ahead = await db.call.count({ where: { setId: set.id, status: "booked", startsAt: { gt: now } } });
+    let nextAt = set.nextAt;
+    for (let guard = 0; ahead < FOREVER_AHEAD && guard < FOREVER_AHEAD * 2; guard++) {
+      const at = nextAt;
+      nextAt = new Date(at.getTime() + stepMs(set.repeat));
+      if (at.getTime() <= now.getTime()) continue; // (an old occurrence: never booked back in time)
+      const clash = await acceptClash(c, "developer", [at], set.minutes);
+      if (clash.length) {
+        skipped++;
+        const line = `The ${unitOf(set.repeat)} call on ${fmtDateTime(at)} was skipped: ${displayName(c.tester)} or ${displayName(c.test.developer)} already has a call at that time.`;
+        await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#calls`);
+        await notify(c.tester.email, line, [line], `/app/sessions/${c.id}`);
+        continue;
+      }
+      await bookAt(c.id, at, set.minutes, set.rateCents, set.id, true, true);
+      booked++;
+      ahead++;
+    }
+    await db.callSet.update({ where: { id: set.id }, data: { nextAt } });
+  }
+  return { booked, skipped };
 }

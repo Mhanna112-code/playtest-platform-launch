@@ -8,7 +8,7 @@ import { CANCEL_HOURS } from "@/lib/rules";
  * one-line rule. Lean has one way to cancel (no "ask to cancel"): at once; a reason is needed within 24 hours of the
  * call. The press's stop-once box or refusal shows under the call's row (the caller's `box`).
  */
-export function CancelMenu(p: { needsReason: boolean; busy: boolean; other: string; onCancel: (reason: string) => void; label?: string }) {
+export function CancelMenu(p: { needsReason: boolean; busy: boolean; other: string; onCancel: (reason: string) => void; label?: string; rule?: string }) {
   const [reason, setReason] = useState("");
   const root = useRef<HTMLDivElement>(null);
   return (
@@ -26,9 +26,9 @@ export function CancelMenu(p: { needsReason: boolean; busy: boolean; other: stri
         />
         <button className="btn-secondary px-3 py-1 text-xs" disabled={p.busy} onClick={() => checkFields(root.current) && p.onCancel(reason)}>{p.label ?? "Cancel this call"}</button>
         <p className="w-full text-xs text-slate-400">
-          {p.needsReason
+          {p.rule ?? (p.needsReason
             ? `Less than ${CANCEL_HOURS} hours ahead: say why. ${p.other} is told.`
-            : `${CANCEL_HOURS} hours or more ahead: it's cancelled at once and ${p.other} is told. A reason is optional.`}
+            : `${CANCEL_HOURS} hours or more ahead: it's cancelled at once and ${p.other} is told. A reason is optional.`)}
         </p>
       </div>
     </details>

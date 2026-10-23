@@ -28,7 +28,7 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    (app/playtests/[id], app/dev/page.tsx + app/tester/page.tsx, app/playtests/page.tsx).
 6. Developer/tester side switch like the full app (header switch, per-side nav/dashboard/pages, /switch links) -
    owner to confirm.
-7. CALL REQUEST FORM (owner, final):
+7. [DONE] CALL REQUEST FORM (owner, final):
    - Remove the "Choose one / Daily / Weekly" radios. Each time row has its own "Once / Daily / Weekly" picker (Once
      default) and, when it repeats, a calls dropdown: 2-8 and "Forever" at the bottom. Up to 3 rows; with more than
      one row the other side picks ONE (a repeating pick books the whole set). Length and Ask $/h stay per request.
@@ -53,7 +53,7 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    back after reload / sign-in with the full app's "Not sent yet" tag, as in the full app (integration
    components/use-kept-form + change-lock). ONLY on: written answers, chat messages, dispute text, rating comments,
    reject reasons, and the Post/Edit form. NOT on login/sign-up. Sending clears it.
-11. [DONE] TESTER SESSION PAGE exactly like the full app's (integration src/app/tester/claims/[id]/page.tsx), lean behaviour:
+11. [DONE f1e3be4] TESTER SESSION PAGE exactly like the full app's (integration src/app/tester/claims/[id]/page.tsx), lean behaviour:
    - "Your parts" card (full app :686-716) showing, per part (written / recording / live calls): Required / Not required, sent or not sent yet,
      "You asked $X" if they asked, and "Paid so far $Y" (plus the listing price / "Not in your contract").
    - Every other section in the full app's layout and order; the live-call area is the lean "Live session" panel

@@ -3,7 +3,7 @@ import { gapsOf } from "@/lib/gaps";
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { devCancelCall, reportNoShow, setCallLength } from "@/lib/server/calls";
 import { cancelInvite, inviteGaps, inviteTesters } from "@/lib/server/invites";
-import { answerRequest, devRequestTime } from "@/lib/server/requests";
+import { answerRequest, cancelCallSet, devRequestTime } from "@/lib/server/requests";
 import { apply, decideApplication, join, withdrawApplication } from "@/lib/server/joining";
 import { addDevSide } from "@/lib/server/payments";
 import { sendChat, sendMessage } from "@/lib/server/messages";
@@ -53,6 +53,8 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         return ok(await nextRound(u, id, body));
       case "cancel-call":
         return ok(await devCancelCall(u, id, body));
+      case "cancel-set":
+        return ok(await cancelCallSet(u, String(body.contractId ?? ""), body));
       case "call-length":
         return ok(await setCallLength(u, id, body));
       case "no-show":

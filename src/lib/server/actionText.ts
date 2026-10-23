@@ -53,6 +53,7 @@ export async function logTesterAction(userId: string, contractId: string, action
       break;
     }
     case "cancel-call": text = `cancelled ${await callLine(s(body.callId), false)}`; break;
+    case "cancel-set": text = "cancelled the rest of a daily / weekly set of calls"; break;
     case "no-show": text = `reported a problem with ${await callLine(s(body.callId), false)}`; break;
     case "dispute": text = "opened a dispute"; break;
     case "rate": text = "rated the test"; break;
@@ -92,6 +93,7 @@ export async function logTestAction(userId: string, testId: string, action: stri
     }
     case "next-round": text = "started a new round"; break;
     case "cancel-call": text = `cancelled ${await callLine(s(body.callId), true)}`; break;
+    case "cancel-set": text = "cancelled the rest of a daily / weekly set of calls"; break;
     case "call-length": text = `entered the length of ${await callLine(s(body.callId), true)}`; break;
     case "no-show": text = `reported a problem with ${await callLine(s(body.callId), true)}`; break;
     case "dispute-side": text = "added your side to a dispute"; break;

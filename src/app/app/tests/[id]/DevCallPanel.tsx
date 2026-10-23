@@ -11,10 +11,13 @@ import { CallTimer } from "@/components/CallTimer";
 import { ReportProblem } from "@/components/ReportProblem";
 import { CallPresence, CallTimelineLine } from "@/components/CallPresence";
 import { CancelMenu } from "@/components/CancelMenu";
+import type { RowJson } from "@/lib/callRows";
+import { acceptChoices, describeRows, newRow, RequestRows, rowsPayload, type RowState } from "@/components/RequestRows";
 
 export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string; joinable?: boolean; report?: { byMe: boolean; note: string } | null };
-export type DevSet = { id: string; label: string; calls: DevCall[] };
-export type DevReq = { id: string; times: string[]; weeks: number; repeat: string; mine: boolean; rate: string; minutes?: number };
+/** A booked daily / weekly set: its line ("Weekly · Mon 3:00 PM (3 left)", or no count for Forever), and whether Cancel needs a reason. */
+export type DevSet = { id: string; label: string; minutes: number; rate: string; needsReason: boolean; calls: DevCall[] };
+export type DevReq = { id: string; rows: RowJson[]; mine: boolean; rate: string; minutes?: number };
 export type DevPast = { id: string; who: string; when: string; minutes: number; logged: number | null; joined: string; outcome: { label: string; tone: "grey" | "amber" | "green" | "rose" }[]; devJoinedAt: string | null; testerJoinedAt: string | null; cancelled: boolean };
 const TONE = { grey: "", amber: "border-amber-300/40 text-amber-200", green: "border-emerald-400/40 text-emerald-200", rose: "border-rose-400/40 text-rose-200" } as const;
 export type DevTester = { contractId: string; name: string; terms: string; booked: number; calls: DevCall[]; sets: DevSet[]; requests: DevReq[] };
@@ -30,9 +33,7 @@ const short = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: 
 export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }: { testId: string; seenAt: string; testers: DevTester[]; canRequest: boolean; past?: DevPast[] }) {
   const { press, changes, error, busy, at, errData } = usePress(seenAt);
   const [ticked, setTicked] = useState<string[]>([]);
-  const [kind, setKind] = useState<"one" | "daily" | "weekly">("one");
-  const [whens, setWhens] = useState<string[]>([""]);
-  const [count, setCount] = useState(4);
+  const [rows, setRows] = useState<RowState[]>([newRow()]);
   const [minutes, setMinutes] = useState("");
   const form = useRef<HTMLDivElement>(null);
   const minNow = useLocalMin(5);
@@ -47,7 +48,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }:
     }
   };
   const all = testers.length > 0 && testers.every((t) => ticked.includes(t.contractId));
-  const filled = whens.filter(Boolean).map((w) => new Date(w).toISOString());
+  const filled = rowsPayload(rows);
   const shown = ticked.length ? testers.filter((t) => ticked.includes(t.contractId)) : testers.filter((t) => t.calls.length || t.sets.length || t.requests.length);
 
   const callRow = (t: DevTester, c: DevCall) => (
@@ -81,26 +82,13 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }:
       )}
       {canRequest && (
         <div className="space-y-2 text-sm" ref={form}>
-          <div className="flex flex-wrap gap-4">
-            <label><input type="radio" checked={kind === "one"} onChange={() => setKind("one")} /> Choose one (up to 3 times)</label>
-            <label><input type="radio" checked={kind === "daily"} onChange={() => { setKind("daily"); setWhens([whens[0] ?? ""]); }} /> Daily</label>
-            <label><input type="radio" checked={kind === "weekly"} onChange={() => { setKind("weekly"); setWhens([whens[0] ?? ""]); }} /> Weekly</label>
-          </div>
+          <RequestRows rows={rows} setRows={setRows} minNow={minNow} />
           <div className="flex flex-wrap items-end gap-2">
-            {whens.map((w, i) => (
-              <input key={i} type="datetime-local" min={minNow} data-msg="Pick a time in the future." aria-label={`Requested time ${i + 1}`} className="input max-w-xs" value={w} onChange={(e) => setWhens(whens.map((x, j) => (j === i ? e.target.value : x)))} />
-            ))}
             <label className="inline-flex items-center gap-1 text-sm">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max="180" data-whole="" data-msg="A live call lasts from 10 to 180 minutes." value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min <span className="text-xs text-slate-500">10–180</span></label>
-            {kind === "one" && whens.length < 3 && <button type="button" className="btn-ghost" onClick={() => setWhens([...whens, ""])}>+ Another time</button>}
-            {kind !== "one" && (
-              <select aria-label="How many calls" className="input w-auto" value={count} onChange={(e) => setCount(Number(e.target.value))}>
-                {[2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n} calls</option>)}
-              </select>
-            )}
             <button
               className="btn"
               disabled={busy || !filled.length || ticked.length === 0}
-              onClick={() => checkFields(form.current) && go("request-time", { contractIds: ticked, minutes: minutes.trim() ? minutes.trim() : "", ...(kind === "one" ? { times: filled } : { times: filled.slice(0, 1), weeks: count, repeat: kind }) }, "request")}
+              onClick={() => checkFields(form.current) && go("request-time", { contractIds: ticked, minutes: minutes.trim() ? minutes.trim() : "", rows: filled }, "request")}
             >
               Request a time
             </button>
@@ -119,10 +107,17 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }:
           <ul className="space-y-1">
             {t.calls.map((c) => callRow(t, c))}
             {t.sets.map((s) => (
-              <li key={s.id} className="space-y-1">
-                <span>{t.name} · {s.label} </span>
-                <button className="btn-ghost text-xs" onClick={() => setOpen({ ...open, [s.id]: !open[s.id] })}>{open[s.id] ? "Hide calls" : "Show calls"}</button>
-                {open[s.id] && <ul className="ml-4 space-y-1">{s.calls.map((c) => callRow(t, c))}</ul>}
+              <li key={s.id} className="space-y-1" data-call-set="">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="mr-auto">{t.name} · {s.label} · {s.minutes} min · {s.rate}</span>
+                  <button className="btn-ghost text-xs" onClick={() => setOpen({ ...open, [s.id]: !(open[s.id] ?? s.calls.some((c) => c.joinable)) })}>{(open[s.id] ?? s.calls.some((c) => c.joinable)) ? "Hide calls" : "Show calls"}</button>
+                  <CancelMenu needsReason={s.needsReason} busy={busy} other={t.name} label="Cancel the remaining calls"
+                    rule={`Cancels every call still ahead and ${t.name} is told.${s.needsReason ? " The next one is less than 24 hours away: say why." : ""}`}
+                    onCancel={(why) => go("cancel-set", { contractId: t.contractId, setId: s.id, reason: why }, "cancel-set-" + s.id)} />
+                </div>
+                <p className="text-xs text-slate-400">Cancel to stop the remaining calls.</p>
+                {box("cancel-set-" + s.id)}
+                {(open[s.id] ?? s.calls.some((c) => c.joinable)) && <ul className="ml-4 space-y-1">{s.calls.map((c) => callRow(t, c))}</ul>}
               </li>
             ))}
           </ul>
@@ -132,19 +127,15 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }:
               <li key={r.id} id={`req-${r.id}`} className={`flex flex-wrap items-center gap-2 ${MARKABLE}`}>
                 <span className="mr-auto">
                   {r.mine ? "You requested" : `${t.name} requested`}{" "}
-                  {r.weeks ? `${r.repeat === "daily" ? "daily" : "weekly"} calls: ${short(r.times[0])} · ${r.weeks} calls from ${fmt(r.times[0])}` : r.times.length > 1 ? `one of: ${r.times.map(fmt).join(" · ")}` : fmt(r.times[0])}{r.minutes ? ` · ${r.minutes} min` : ""} · {r.rate}
+                  {describeRows(r.rows)}{r.minutes ? ` · ${r.minutes} min` : ""} · {r.rate}
                 </span>
                 {r.mine ? (
                   <button className="btn-ghost" disabled={busy} onClick={() => go("answer-request", { requestId: r.id, action: "withdraw", contractId: t.contractId }, "w-" + r.id)}>Withdraw</button>
                 ) : (
                   <>
-                    {!r.weeks && r.times.length > 1 ? (
-                      r.times.map((x) => (
-                        <button key={x} className="btn" disabled={busy} onClick={() => go("answer-request", { requestId: r.id, action: "accept", time: x, contractId: t.contractId }, "a-" + r.id)}>Accept {short(x)}</button>
-                      ))
-                    ) : (
-                      <button className="btn" disabled={busy} onClick={() => go("answer-request", { requestId: r.id, action: "accept", contractId: t.contractId }, "a-" + r.id)}>{r.weeks ? `Accept all ${r.weeks}` : "Accept"}</button>
-                    )}
+                    {acceptChoices(r.rows).map((x) => (
+                      <button key={x.label} className="btn" disabled={busy} onClick={() => go("answer-request", { requestId: r.id, action: "accept", ...(x.time ? { time: x.time } : {}), contractId: t.contractId }, "a-" + r.id)}>{x.label}</button>
+                    ))}
                     <button className="btn-ghost" disabled={busy} onClick={() => go("answer-request", { requestId: r.id, action: "decline", contractId: t.contractId }, "d-" + r.id)}>Decline</button>
                   </>
                 )}

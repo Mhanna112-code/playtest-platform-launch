@@ -10,7 +10,8 @@ import { CallPresence, CallTimelineLine } from "@/components/CallPresence";
 import { LIVE_SECTIONS, LiveSection } from "@/components/LivePanel";
 import { CancelMenu } from "@/components/CancelMenu";
 
-type Mine = { id: string; when: string; minutes: number; room: string; canCancel: boolean; started: boolean; ended?: boolean; reported: boolean; cancelled: string; late?: string; rate?: string; joinable?: boolean; devJoinedAt?: string | null; testerJoinedAt?: string | null; joined?: string; outcome?: { label: string; tone: "grey" | "amber" | "green" | "rose" }[]; logged?: number | null; lengthText?: string; report?: { byMe: boolean; note: string } | null };
+export type TesterSet = { id: string; label: string; minutes: number; rate: string; needsReason: boolean; callIds: string[] };
+type Mine = { id: string; setId?: string | null; when: string; minutes: number; room: string; canCancel: boolean; started: boolean; ended?: boolean; reported: boolean; cancelled: string; late?: string; rate?: string; joinable?: boolean; devJoinedAt?: string | null; testerJoinedAt?: string | null; joined?: string; outcome?: { label: string; tone: "grey" | "amber" | "green" | "rose" }[]; logged?: number | null; lengthText?: string; report?: { byMe: boolean; note: string } | null };
 const TONE = { grey: "", amber: "border-amber-300/40 text-amber-200", green: "border-emerald-400/40 text-emerald-200", rose: "border-rose-400/40 text-rose-200" } as const;
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -20,14 +21,18 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  * Cancel) and Past calls (over or cancelled). Cancel and Report a problem stop once for call changes since the page
  * loaded (box under the button).
  */
-export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mine[]; refusal: string; lateNote?: string; devName: string }) {
+export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mine[]; sets?: TesterSet[]; refusal: string; lateNote?: string; devName: string }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
   const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={error} /></div> : null);
   async function go(action: string, body: Record<string, unknown>, key = action) {
     const r = await press(`/api/sessions/${p.sessionId}/${action}`, body, key);
     if (r) window.location.reload();
   }
-  const booked = p.mine.filter((m) => !m.cancelled && !m.ended);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const sets = p.sets ?? [];
+  const inSet = new Set(sets.flatMap((x) => x.callIds));
+  // A booked set shows as one line (its calls inside "Show calls"); everything else as before.
+  const booked = p.mine.filter((m) => !m.cancelled && !m.ended && !inSet.has(m.id));
   const past = p.mine.filter((m) => m.cancelled || m.ended);
   const row = (m: Mine) => (
     <li key={m.id} data-call={m.cancelled || m.ended ? "past" : "booked"} className="flex flex-wrap items-center gap-2 py-2 text-sm">
@@ -63,7 +68,27 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
   return (
     <div className="space-y-4" id="calls">
       {p.lateNote && !p.refusal && <p className="note">{p.lateNote}</p>}
-      <LiveSection title={LIVE_SECTIONS.booked} show={booked.length > 0}>{booked.map(row)}</LiveSection>
+      <LiveSection title={LIVE_SECTIONS.booked} show={booked.length > 0 || sets.length > 0}>
+        {booked.map(row)}
+        {sets.map((st) => {
+          const calls = p.mine.filter((m) => st.callIds.includes(m.id));
+          const shown = open[st.id] ?? calls.some((m) => m.joinable);
+          return (
+            <li key={st.id} className="space-y-1 py-2 text-sm" data-call-set="">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="mr-auto text-slate-200">{st.label} · {st.minutes} min · {st.rate}</span>
+                <button className="btn-ghost text-xs" onClick={() => setOpen({ ...open, [st.id]: !shown })}>{shown ? "Hide calls" : "Show calls"}</button>
+                <CancelMenu needsReason={st.needsReason} busy={busy} other={p.devName} label="Cancel the remaining calls"
+                  rule={`Cancels every call still ahead and ${p.devName} is told.${st.needsReason ? " The next one is less than 24 hours away: say why." : ""}`}
+                  onCancel={(why) => go("cancel-set", { setId: st.id, reason: why }, "cancel-set-" + st.id)} />
+              </div>
+              <p className="text-xs text-slate-400">Cancel to stop the remaining calls.</p>
+              {box("cancel-set-" + st.id)}
+              {shown && <ul className="ml-4 divide-y divide-white/5">{calls.map(row)}</ul>}
+            </li>
+          );
+        })}
+      </LiveSection>
       <LiveSection title={LIVE_SECTIONS.past} show={past.length > 0}>{past.map(row)}</LiveSection>
     </div>
   );

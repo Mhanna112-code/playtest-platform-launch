@@ -346,6 +346,8 @@ export async function runDaily(now = new Date()) {
     await bell(i.testerId, `Reminder: ${displayName(i.test.developer)} invited you to “${i.test.title}”.`, `/app/find/${i.testId}`);
     await db.invite.update({ where: { id: i.id }, data: { remindedAt: now } });
   }
+  // 8. (NEXT-UI 7) Forever sets of calls: the next ones are booked as each passes (4 ahead); ended sets are marked.
+  await (await import("./requests")).topUpForeverSets(now);
   return out;
 }
 

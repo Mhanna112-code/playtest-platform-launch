@@ -22,6 +22,7 @@ import { qOptional, qText } from "@/lib/questions";
 import { Users } from "lucide-react";
 import { Applications } from "./Applications";
 import { rateLabel } from "@/lib/server/requests";
+import { rowsOf, toJson } from "@/lib/callRows";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
@@ -62,6 +63,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   await sweepHeldCalls(u.id);
   const paidKinds = await paidLines(t.contracts.map((c) => c.id));
   const termsRows = await termsRowLines(t.contracts.map((c) => c.id));
+  const callSets = await db.callSet.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } } });
   const reqs = await db.callRequest.findMany({ where: { testId: id, status: "pending", startsAt: { gt: new Date() } }, orderBy: { startsAt: "asc" } });
   // A developer batch sent to several testers shows once per tester; that's fine: each copy is that tester's.
   const msgs = await db.message.findMany({ where: { testId: id }, orderBy: { createdAt: "asc" }, include: { sender: true }, take: 2000 });
@@ -105,11 +107,15 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     const toCall = (x: (typeof c.calls)[number]): DevCall => ({ id: x.id, joinable: callJoinable(x, now), report: x.noShowBy ? { byMe: x.noShowBy === "developer", note: x.noShowNote } : null, when: x.startsAt.toISOString(), minutes: x.minutes, rate: rateLabel(x.rateCents, c.liveRateCents), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, late: lateOf(c, x) });
     const live = c.calls.filter((x) => x.status === "booked" && !x.review);
     const setIds = [...new Set(live.filter((x) => x.setId).map((x) => x.setId!))];
-    const sets = setIds.map((sid) => {
+    // (NEXT-UI 7) A set's line: "Weekly · Mon 3:00 PM (3 left)", or no count for Forever.
+    const sets = setIds.flatMap((sid) => {
       const cs = live.filter((x) => x.setId === sid).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
-      const daily = cs.length > 1 && cs[1].startsAt.getTime() - cs[0].startsAt.getTime() < 2 * 86_400_000;
-      const next = cs.find((x) => x.startsAt > now) ?? cs[cs.length - 1];
-      return { id: sid, label: `${daily ? "Daily" : "Weekly"}: ${cs[0].startsAt.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })} · ${cs.length} calls, next ${fmtDate(next.startsAt).replace(/, \d{4}$/, "")} · ${rateLabel(cs[0].rateCents, c.liveRateCents)}`, calls: cs.map(toCall) };
+      const row = callSets.find((x) => x.id === sid);
+      const daily = row ? row.repeat === "daily" : cs.length > 1 && cs[1].startsAt.getTime() - cs[0].startsAt.getTime() < 2 * 86_400_000;
+      const left = cs.filter((x) => x.startsAt > now).length;
+      if (!left) return [];
+      const next = cs.find((x) => x.startsAt > now)!;
+      return [{ id: sid, label: `${daily ? "Daily" : "Weekly"} · ${cs[0].startsAt.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })}${row?.count === 0 ? "" : ` (${left} left)`}`, minutes: cs[0].minutes, rate: rateLabel(cs[0].rateCents, c.liveRateCents), needsReason: cancelNeedsReason(next.startsAt, now), calls: cs.map(toCall) }];
     });
     const booked = new Set(c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => x.setId ?? x.id)).size;
     return {
@@ -117,7 +123,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       calls: live.filter((x) => !x.setId).map(toCall),
       sets,
       requests: reqs.filter((r) => r.contractId === c.id).map((r) => ({
-        id: r.id, minutes: r.minutes, times: (r.times.length ? r.times : [r.startsAt]).map((d) => d.toISOString()), weeks: r.weeks, repeat: r.repeat, mine: r.fromSide === "developer",
+        id: r.id, minutes: r.minutes, rows: toJson(rowsOf(r)), mine: r.fromSide === "developer",
         rate: r.askRateCents != null ? `asks ${whole(r.askRateCents)}/h` : rateLabel(c.liveRateCents, c.liveRateCents),
       })),
     };

@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money } from "@/lib/format";
 import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, stopOnce, type TestEventLike } from "@/lib/rules";
+import { rowsOf } from "@/lib/callRows";
 import { HttpError } from "./http";
 import { asLines, ownChanges, seenOf, tabOf, testerPaymentChanges, withRenamed } from "./live";
 
@@ -39,7 +40,7 @@ export async function testerChanges(testerId: string, contractId: string, testId
   }
   for (const r of devReqs) {
     const when = fmtDateTime(r.startsAt);
-    const what = r.weeks ? `${r.repeat === "daily" ? "daily" : "weekly"} calls from ${when}` : r.times.length > 1 ? `a call (pick one of ${r.times.length} times)` : `a call for ${when}`;
+    const what = requestWords(r, when);
     if (r.status === "pending" && r.createdAt > seenAt) out.push({ kind: "requested", text: `${dev} requested ${what}`, createdAt: r.createdAt });
     else if (r.status === "withdrawn") out.push({ kind: "requested", text: `${dev} withdrew the request for ${what}`, createdAt: r.updatedAt });
     else if (r.status === "taken") out.push({ kind: "requested", text: `The call time ${when} is no longer available: another tester took it`, createdAt: r.updatedAt });
@@ -50,7 +51,7 @@ export async function testerChanges(testerId: string, contractId: string, testId
     const when = fmtDateTime(r.startsAt);
     if (r.status === "declined") out.push({ kind: "requested", text: `${dev} declined your call request for ${when}`, createdAt: r.decidedAt! });
     else if (r.closedReason === "matched") out.push({ kind: "booked", text: `Booked: ${dev} asked for the same time, ${when}`, createdAt: r.decidedAt! });
-    else out.push({ kind: "booked", text: `${dev} accepted your call request: ${r.weeks ? `${r.weeks} ${r.repeat === "daily" ? "daily" : "weekly"} calls from ${when}` : when}`, createdAt: r.decidedAt! });
+    else out.push({ kind: "booked", text: `${dev} accepted your call request: ${rowsOf(r).length === 1 && rowsOf(r)[0].repeat !== "once" ? requestWords(r, when) : when}`, createdAt: r.decidedAt! });
   }
   for (const call of calls) out.push({ kind: "cancelled", text: `Your call on ${fmtDateTime(call.startsAt)} was cancelled`, createdAt: call.cancelledAt! });
   // (F) the listing's info (title, description, devices, languages) changed.
@@ -73,4 +74,12 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const changes = withRenamed(await testerChanges(testerId, contractId, testId, seenAt, tabOf(body)), body);
   const r = stopOnce(changes, seenAt, false, [...KINDS, "renamed"]);
   if (!r.go) throw new HttpError(409, "stop_once", tail, { changes: asLines(r.changes), tail, top: r.changes.some((e) => e.kind === "terms") });
+}
+
+/** "weekly calls from Thu, Nov 5, 3:00 PM" / "a call (pick one of 3 times)" / "a call for Thu, Nov 5, 3:00 PM". */
+function requestWords(r: { rows?: unknown; times: Date[]; startsAt: Date; weeks: number; repeat: string }, when: string) {
+  const rows = rowsOf(r);
+  if (rows.length > 1) return `a call (pick one of ${rows.length} times)`;
+  const x = rows[0];
+  return x.repeat === "once" ? `a call for ${when}` : `${x.repeat === "daily" ? "daily" : "weekly"} calls from ${when}${x.count ? "" : " (until cancelled)"}`;
 }

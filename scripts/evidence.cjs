@@ -859,7 +859,7 @@ async function signIn(page, email) {
     await dev.goto(`/app/tests/${T21}`);
     check("rate line", await has(dev, "text=Calls you request use each tester's contract rate."));
     check("Dee at 3 of 3 booked", await has(dev, "text=3 of 3 booked"));
-    check("weekly set shown as one line", await has(dev, "text=Weekly:"));
+    check("weekly set shown as one line", await has(dev, "text=Weekly ·"));
     await dev.locator("section[aria-label='Call requests'] button:has-text('Show calls')").first().click();
     await shot(dev, "full-panel-developer");
     // The developer's own Accept on a 4th is refused too: Dee requests a time; the developer accepts.
