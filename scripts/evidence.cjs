@@ -59,6 +59,9 @@ async function flow(id, title, fn) {
   } catch (e) {
     cur.status = "fail";
     cur.checks.push("FAIL error: " + String(e.message || e).split("\n")[0]);
+    // A screenshot of every open page at the failure (debug only; not a coverage file).
+    let n = 0;
+    for (const c of browser.contexts()) for (const pg of c.pages()) await pg.screenshot({ path: path.join(OUT, `${id}-FAILED-${++n}.png`), fullPage: true }).catch(() => {});
   }
   summary.flows.push(cur);
   console.log("  " + cur.status, cur.checks.filter((c) => c.startsWith("FAIL")).join(" | "));
@@ -195,7 +198,7 @@ async function signIn(page, email) {
     await tester.fill("#a0", "The boat handling feels great.");
     await tester.fill("#a1", "The second bridge: I couldn't tell where to go.");
     await tester.click("text=Send my written answers");
-    await tester.waitForSelector("text=Sent ");
+    await tester.waitForSelector("text=/^Sent [A-Z]/");
     await shot(tester, "answers-sent");
     await dev.click("button:has-text('Next round')");
     await dev.click("text=Start the next round");
@@ -282,7 +285,7 @@ async function signIn(page, email) {
   await flow("09", "Payment hold: tests pause, the tester reads only 'paused', Pay what you owe lifts it", async () => {
     await dev.waitForTimeout(2500); // let the pending reload from the invite (flow 08) finish
     const { execFileSync } = require("child_process");
-    execFileSync("psql", ["-h", "localhost", "-p", "5499", "-U", "postgres", "-d", "playtest_lite", "-c", `update "User" set "holdStartedAt" = now() - interval '1 day', "holdReason" = 'unpaid' where email = '${DEV}'`]);
+    execFileSync("psql", ["-h", "localhost", "-p", "5499", "-U", "postgres", "-d", "playtest_lite", "-c", `update "User" set "holdStartedAt" = (now() at time zone 'utc') - interval '1 day', "holdReason" = 'unpaid' where email = '${DEV}'`]);
     await dev.goto(testUrl);
     check("developer sees the paused box", await has(dev, "text=Your tests are paused."));
     await shot(dev, "paused");
@@ -345,7 +348,7 @@ async function signIn(page, email) {
     await vd.click("text=End their work now");
     check("stop-once line under the top panel", await has(vd, "text=Your bank reversed your $12.50 payment for Ana Silva's live call"));
     await shot(vd, "3-dev-chargeback-stop-once");
-    sql(`update "User" set "holdStartedAt" = now() - interval '5 minutes' where id = '${devId}'`);
+    sql(`update "User" set "holdStartedAt" = (now() at time zone 'utc') - interval '5 minutes' where id = '${devId}'`);
     sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '1 minute' where status = 'booked' and "startsAt" > now() and "contractId" in (select id from "Contract" where "testId" in (select id from "Test" where "developerId" = '${devId}'))`);
     await vd.reload();
     check("hold banner", await has(vd, "text=Your tests are paused."));
@@ -410,7 +413,7 @@ async function signIn(page, email) {
     await tester.context().request.put(BASE + st.body.uploadUrl, { data: Buffer.from("tiny test video!"), headers: { "content-type": "video/webm" } });
     await apiPost(tester, `/api/sessions/${SA}/recording-done`, { recordingId: st.body.recordingId });
     await apiPost(tester, `/api/sessions/${SA}/recording-send`, {});
-    sql(`update "Submission" set "payBy" = now() - interval '1 minute' where "contractId" = '${SA}'`);
+    sql(`update "Submission" set "payBy" = (now() at time zone 'utc') - interval '1 minute' where "contractId" = '${SA}'`);
     // Three calls for Ana: one held before the hold (to show Pay waiting), one whose time comes during the hold, one after.
     const call1 = await requestAndAccept(dev, tester, T11, SA, 2);
     sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '30 minutes', "devJoinedAt" = (now() at time zone 'utc') - interval '30 minutes', "testerJoinedAt" = (now() at time zone 'utc') - interval '30 minutes' where id = '${call1}'`);
@@ -445,10 +448,10 @@ async function signIn(page, email) {
 
   let t3 = null;
   await flow("12", "Hold pauses every test; joins, invites, Next round, posting, Pay/Reject wait; calls inside the hold cancelled, after it kept; testers still send", async () => {
-    sql(`update "Payment" set "owedUntil" = now() - interval '1 minute' where "developerId" = '${devId}' and status = 'failed' and "settledAt" is null and "owedUntil" is not null`);
+    sql(`update "Payment" set "owedUntil" = (now() at time zone 'utc') - interval '1 minute' where "developerId" = '${devId}' and status = 'failed' and "settledAt" is null and "owedUntil" is not null`);
     await runCron(); // the cut-off passes (the hold is already on from the second failure in flow 11)
     check("hold on", sql(`select "holdStartedAt" is not null from "User" where id = '${devId}'`) === "t");
-    sql(`update "User" set "holdStartedAt" = now() - interval '10 minutes' where id = '${devId}'`);
+    sql(`update "User" set "holdStartedAt" = (now() at time zone 'utc') - interval '10 minutes' where id = '${devId}'`);
     await dev.goto(t11Url());
     check("developer: tests paused", await has(dev, "text=Your tests are paused."));
     await tester.goto(`/app/sessions/${SA}`);
@@ -499,13 +502,13 @@ async function signIn(page, email) {
     await t2.goto(`/app/sessions/${SD}`);
     await t2.fill("#a0", "Beautiful lighthouse, the stairs puzzle was hard.");
     await t2.click("text=Send my written answers");
-    check("tester still sends", await has(t2, "text=Sent "));
+    check("tester still sends", await has(t2, "text=/^Sent [A-Z]/"));
     await dev.goto(t11Url());
     await both("hold-tester-still-sends", t2);
   });
 
   await flow("13", "Several failed payments: listed, one still failing, then all paid; hold lifts and deadlines / Open until move on", async () => {
-    sql(`update "User" set "holdStartedAt" = now() - interval '2 days', "stripePaymentMethodId" = 'pm_card_partial' where id = '${devId}'`);
+    sql(`update "User" set "holdStartedAt" = (now() at time zone 'utc') - interval '2 days', "stripePaymentMethodId" = 'pm_card_partial' where id = '${devId}'`);
     const dueBefore = sql(`select to_char("dueAt", 'YYYY-MM-DD') from "Contract" where id = '${SA}'`);
     const ouBefore = sql(`select to_char("openUntil", 'YYYY-MM-DD') from "Test" where id = '${T11}'`);
     await dev.goto(t11Url());
@@ -513,7 +516,7 @@ async function signIn(page, email) {
     await both("several-owed");
     // Another failed payment arrives after the page loaded: the first press stops once with the new total.
     const tid = sql(`select id from "User" where email = '${TESTER}'`);
-    sql(`insert into "Payment" (id, kind, "contractId", "developerId", "testerId", "amountCents", "feeCents", "testerCents", status, "owedUntil", "createdAt") values ('ev_${TS}', 'review', '${SA}', '${devId}', '${tid}', 500, 0, 0, 'failed', now() + interval '3 days', now())`);
+    sql(`insert into "Payment" (id, kind, "contractId", "developerId", "testerId", "amountCents", "feeCents", "testerCents", status, "owedUntil", "createdAt") values ('ev_${TS}', 'review', '${SA}', '${devId}', '${tid}', 500, 0, 0, 'failed', (now() at time zone 'utc') + interval '3 days', (now() at time zone 'utc'))`);
     await dev.click("button:has-text('Pay what you owe')");
     check("total-changed stop", await has(dev, "text=New total $30.00. Press again to pay $30.00."));
     await shot(dev, "several-total-changed-developer");
@@ -566,7 +569,7 @@ async function signIn(page, email) {
     const card = dev.locator(`#tester-${SD}`);
     const box = card.locator("div.rounded-lg", { hasText: "Written answers" }).filter({ hasText: "Amount" }).first();
     await box.locator("input[id^='amt-']").fill("4.00");
-    await box.locator("textarea").fill("Only one short answer.");
+    await box.locator("input[id^='why-']").fill("Only one short answer.");
     await box.locator("input[type=checkbox]").check();
     await box.locator("button:has-text('Pay')").click();
     check("paid $4.00", await has(dev, "text=Paid $4.00"));
@@ -603,7 +606,7 @@ async function signIn(page, email) {
 
   await flow("16", "Live updates: both pages open, lines appear within ~20 s without reloading", async () => {
     // Ana's upcoming call is cancelled first so she can book again.
-    const c3 = sql(`select id from "Call" where "contractId" = '${SA}' and status = 'booked' and "startsAt" > now() limit 1`);
+    const c3 = sql(`select id from "Call" where "contractId" = '${SA}' and status = 'booked' and "startsAt" > (now() at time zone 'utc') limit 1`);
     if (c3) await apiPost(tester, `/api/sessions/${SA}/cancel-call`, { seenAt: new Date().toISOString(), confirmed: true, callId: c3 });
     const vdir = fs.mkdtempSync(path.join(os.tmpdir(), "pt-video16-"));
     const vd = await (await browser.newContext({ ...DESKTOP, baseURL: BASE, storageState: await dev.context().storageState(), recordVideo: { dir: vdir, size: DESKTOP.viewport } })).newPage();
@@ -687,7 +690,7 @@ async function signIn(page, email) {
     await shot(tester, "join-too-early-tester");
     // The developer blocks Ana from her tester row.
     await dev.goto(t11Url());
-    await dev.locator(`#tester-${SA}`).locator("button:has-text('Block Ana Silva')").click();
+    await dev.locator(`#tester-${SA}`).locator("button[aria-haspopup='dialog']:has-text('Block Ana Silva')").click();
     await shot(dev, "block-confirm-developer");
     await dev.locator("dialog[open] button[data-confirm='Block Ana Silva']").click();
     check("developer sees the block on the row", await has(dev, "text=You blocked Ana Silva."));
@@ -756,7 +759,7 @@ async function signIn(page, email) {
     await dev.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "30");
     await dev.click("section[aria-label='Call requests'] >> text=Request a time");
     await dev.waitForTimeout(1500);
-    const booked = sql(`select count(*) from "Call" where "contractId" = '${SD}' and status = 'booked' and "startsAt" > now() + interval '7 days'`);
+    const booked = sql(`select count(*) from "Call" where "contractId" = '${SD}' and status = 'booked' and "startsAt" > (now() at time zone 'utc') + interval '7 days'`);
     check("booked at once (both picked the same time)", Number(booked) >= 1, booked);
     await t2.goto("/app/notifications");
     check("tester told: you both picked", await has(t2, "text=Booked: you both picked"));
@@ -798,7 +801,7 @@ async function signIn(page, email) {
     await dev.waitForTimeout(1500);
     // Dee's page is open with the developer's request (she'll press Accept later).
     await t2.goto(`/app/sessions/${SDee}`);
-    check("tester sees only the listed rate", await has(t2, "text=Live call: $40/h"));
+    check("tester sees only the listed rate", await has(t2, "section[aria-label='Call requests'] >> text=Contract $40/h"));
     await shot(t2, "request-received-tester-b");
     // Cara requests the same time asking $50/h: her copy closes; her request waits for the developer.
     await t3.goto(`/app/sessions/${SC}`);
@@ -891,7 +894,7 @@ async function signIn(page, email) {
     await dev.goto(`/app/tests/${T}`);
     const pmBefore = sql(`select coalesce("stripePaymentMethodId", '') from "User" where id = '${devId}'`);
     const subC = sql(`select id from "Submission" where "contractId" = '${SCara}' and kind = 'written'`);
-    sql(`update "Submission" set "payBy" = now() - interval '1 minute' where id = '${subC}'`);
+    sql(`update "Submission" set "payBy" = (now() at time zone 'utc') - interval '1 minute' where id = '${subC}'`);
     await runCron();
     const devOther = await dev.context().newPage();
     await devOther.goto(`/app/tests/${T21}`);
@@ -936,13 +939,16 @@ async function signIn(page, email) {
     await devTab1.click("button:has-text('Save')");
     check("Edit tab 1: Save stopped once with the other tab's change", await has(devTab1, "text=Nora Lane changed the description"));
     await shot(devTab1, "edit-save-stopped-developer");
-    // A press never moves the page: when the top box picks the same line up (next poll), the view stays at Save.
-    const yStop = await devTab1.evaluate(() => window.scrollY);
+    // A press never moves the page: when the top box picks the same line up (next poll), Save stays where it is on
+    // screen (the box added at the top pushes the page down, and the browser keeps the view on Save).
+    await devTab1.waitForTimeout(1000); // the stop box finishes settling into view under Save
+    const saveY = () => devTab1.evaluate(() => Math.round([...document.querySelectorAll("button")].find((b) => b.textContent.trim().startsWith("Save")).getBoundingClientRect().top));
+    const yStop = await saveY();
     await devTab1.bringToFront();
-    await devTab1.waitForSelector("[data-live-top] >> text=Nora Lane changed the description", { timeout: 35000 }).catch(() => {});
+    const boxSeen = await devTab1.waitForSelector("[data-live-top] >> text=Nora Lane changed the description", { timeout: 35000 }).then(() => true, () => false);
     await devTab1.waitForTimeout(1200);
-    const yAfter = await devTab1.evaluate(() => window.scrollY);
-    check("after the stopped Save, the page stays at the button (no jump to the top box)", Math.abs(yAfter - yStop) < 80, `${yStop} → ${yAfter}`);
+    const yAfter = await saveY();
+    check("after the stopped Save, the page stays at the button (no jump to the top box)", boxSeen && Math.abs(yAfter - yStop) < 40, `Save at ${yStop} px → ${yAfter} px on screen; top box ${boxSeen ? "shown" : "not shown"}`);
     await devTab1.click("button:has-text('Save')");
     await devTab1.waitForURL(`**/app/tests/${T}?saved=1**`).catch(() => {});
     check("second Save saved", sql(`select category from "Test" where id = '${T}'`) === "Game: Puzzle");
@@ -961,7 +967,7 @@ async function signIn(page, email) {
     await shot(t2, "top-box-info-tester");
     // --- Block after the developer paid: Dee's page (not refreshed) stops once under "Yes, block".
     await t2.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await t2.click("button:has-text('Block Nora Lane')");
+    await t2.click("button[aria-haspopup='dialog']:has-text('Block Nora Lane')");
     const sub = sql(`select id from "Submission" where "contractId" = '${SDee3}' and kind = 'written'`);
     const paid = await apiPost(dev, "/api/review", { payKey: `ev23-${TS}`, kind: "submission", id: sub, amount: "8.00", tickedCents: 800, seenAt: new Date().toISOString(), confirmed: true });
     check("developer paid Dee $8", paid.status === 200, JSON.stringify(paid.body));
@@ -1073,7 +1079,8 @@ async function signIn(page, email) {
     await reqBox(tabA).locator("input[aria-label='Requested time 1']").fill(local(new Date(new Date(atK(3)).getTime() + 10 * 60000).toISOString()));
     await tabA.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "30").catch(() => {});
     await tabA.getByRole("button", { name: "Request a time" }).click();
-    check("send refused: a request is already waiting for that time", await has(tabA, "text=waiting for that time"));
+    check("send refused: the other side's waiting request is named (NEWEST+8)", await has(tabA, "text=Nora Lane already asked for"));
+    check("its Accept is right there", await has(tabA, "section[aria-label='Call requests'] >> button:has-text('Accept Nora')"));
     await shot(tabA, "send-clash-refused-tester");
     // The 3-requests limit: one more goes; the next is refused.
     await reqBox(tabA).locator("input[aria-label='Requested time 1']").fill(local(atK(20)));
@@ -1103,7 +1110,7 @@ async function signIn(page, email) {
     const SR = (await apiPost(t3, `/api/tests/${TR}/join`, { confirmed: true })).body.sessionId;
     await apiPost(t3, `/api/sessions/${SR}/written`, { answers: ["Eleven."] });
     const subR = sql(`select id from "Submission" where "contractId" = '${SR}' and kind = 'written'`);
-    sql(`update "Submission" set "payBy" = now() - interval '1 minute' where id = '${subR}'`);
+    sql(`update "Submission" set "payBy" = (now() at time zone 'utc') - interval '1 minute' where id = '${subR}'`);
     await runCron();
     const pmBefore = sql(`select coalesce("stripePaymentMethodId", '') from "User" where id = '${devId}'`);
     // Both pages open: the developer's Kelp Forest page and Cara's Kelp Forest session.
@@ -1270,7 +1277,7 @@ async function signIn(page, email) {
     await shot(tp, "rate-not-yet-tester");
     // The recording reaches the 14-day point (Charge / Let it go); the developer pays the call: rating opens.
     const subR = sql(`select id from "Submission" where "contractId" = '${S}' and kind = 'recording'`);
-    sql(`update "Submission" set "payBy" = now() - interval '1 minute' where id = '${subR}'`);
+    sql(`update "Submission" set "payBy" = (now() at time zone 'utc') - interval '1 minute' where id = '${subR}'`);
     await runCron();
     const pc = await apiPost(d, "/api/review", { payKey: `ev27-${TS}`, kind: "call", id: past, amount: "15.00", tickedCents: 1500, seenAt: new Date().toISOString(), confirmed: true });
     check("the developer paid the call", pc.status === 200, JSON.stringify(pc.body));
@@ -1293,7 +1300,7 @@ async function signIn(page, email) {
     await tp.click("dialog[open] button[data-confirm='Rate and finish']");
     await tp.waitForTimeout(2000);
     check("rated: 'You rated Nora Lane.' (hidden from the developer for now)", await has(tp, "text=You rated Nora Lane."));
-    check("the upcoming call was cancelled", sql(`select count(*) from "Call" where "contractId" = '${S}' and status = 'booked' and "startsAt" > now()`) === "0");
+    check("the upcoming call was cancelled", sql(`select count(*) from "Call" where "contractId" = '${S}' and status = 'booked' and "startsAt" > (now() at time zone 'utc')`) === "0");
     check("Charge still available after rating", await has(tp, "button:has-text('Charge Nora Lane')"));
     await shot(tp, "rated-charge-still-available-tester");
     await tp.goto(`/app/find/${T}`);
@@ -1438,7 +1445,7 @@ async function signIn(page, email) {
     await tp.waitForSelector("text=Welcome back,");
     await shot(tp, "dashboard-tester");
     await tp.goto("/app/find");
-    const card = tp.locator("li", { hasText: "Mangrove" });
+    const card = tp.locator("li", { has: tp.locator(`a[href="/app/find/${T}"]`) });
     check("Find card: both needs lines", (await card.locator("text=This test needs one of: Mac. Add your device in your profile.").count()) > 0 && (await card.locator("text=This test needs one of: Korean. Add the language in your profile.").count()) > 0);
     await card.scrollIntoViewIfNeeded();
     await shot(tp, "find-both-needs-tester");
@@ -1541,7 +1548,7 @@ async function signIn(page, email) {
     C("Refusal: 3 booked times", "tester", "22", "22-fourth-refused-tester.png"),
     C("Refusal: 3 booked times (developer)", "developer", "22", "22-fourth-refused-developer.png"),
     C("Refusal: 3 requests waiting", "tester", "24", "24-three-requests-refused-tester.png"),
-    C("Refusal: a clash when sending", "tester", "24", "24-send-clash-refused-tester.png"),
+    C("Refusal: a clash when sending (the other side's request named, its Accept right there)", "tester", "24", "24-send-clash-refused-tester.png"),
     C("Refusal: weekly clash naming the week", "tester", "24", "24-weekly-clash-refused-tester.png"),
     C("Refusal: This time is no longer free", "tester", "24", "24-no-longer-free-refused-tester.png"),
     C("Refusal: Join call too early", "tester", "18", "18-join-too-early-tester.png"),
