@@ -25,6 +25,8 @@ import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
 import { PayBox } from "./PayBox";
 import { TopPanel } from "./TopPanel";
+import { TestersJoined } from "./TestersJoined";
+import { testerStats } from "@/lib/server/profileStats";
 import { ByQuestion } from "./ByQuestion";
 import { byQuestion } from "@/lib/byQuestion";
 
@@ -43,7 +45,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       contracts: {
         orderBy: { joinedAt: "asc" },
         include: {
-          tester: true,
+          tester: { include: { profile: true } },
           submissions: { include: { review: true, dispute: true, recordings: true }, orderBy: { sentAt: "asc" } },
           calls: { include: { review: true, dispute: true, slot: true }, orderBy: { startsAt: "asc" } },
         },
@@ -141,6 +143,23 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         categories={t.categories}
         working={working.map((c) => ({ contractId: c.id, name: displayName(c.tester) }))}
       />
+      {/* (Owner) The full app's "Testers joined" right after the header: avatars with their hover cards (Block inside). */}
+      <TestersJoined
+        testId={t.id}
+        spots={t.spots}
+        status={t.status}
+        seats={await Promise.all(working.map(async (c) => ({
+          testerId: c.testerId,
+          name: displayName(c.tester),
+          summary: [
+            [...(c.tester.profile?.devices ?? []), ...(c.tester.profile?.languages ?? [])].join(", "),
+            (await ratingSummary(c.testerId)).line || "No ratings yet",
+            `Accepted parts: ${(await testerStats(c.testerId)).accepted.value} ${(await testerStats(c.testerId)).accepted.hint}`,
+          ].filter(Boolean),
+          block: blockedIds.has(c.testerId) ? <span className="text-xs text-slate-400">You blocked {displayName(c.tester)}.</span> : <BlockButton seenAt={seenAt} testId={t.id} userId={c.testerId} name={displayName(c.tester)} effect="Their session ends now (work they sent stays payable), calls between you are cancelled, and chat closes." />,
+        })))}
+        gone={t.contracts.filter((c) => c.status !== "working").map((c) => ({ contractId: c.id, name: displayName(c.tester), how: c.status === "left" ? (c.endKind === "rated" ? "rated and finished" : "left") : "work ended", at: c.endedAt }))}
+      />
       {(u.holdStartedAt || owedList.length > 0) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} />}
       {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date())}</p>}
       <Applications testId={t.id} seenAt={seenAt} apps={apps} />
@@ -234,7 +253,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 </>
               );
             })()}
-            {blockedIds.has(c.testerId) ? <p className="note">You blocked {displayName(c.tester)}. Unblock in Settings → Blocked people.</p> : <BlockButton seenAt={seenAt} testId={t.id} userId={c.testerId} name={displayName(c.tester)} effect="Their session ends now (work they sent stays payable), calls between you are cancelled, and chat closes." />}
+            {blockedIds.has(c.testerId) && <p className="note">You blocked {displayName(c.tester)}. Unblock in Settings → Blocked people.</p>}
             {c.submissions.length === 0 && c.calls.length === 0 && <p className="note">Nothing sent yet.</p>}
             {c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).map((x) => (
               <div key={x.id} className="space-y-2 rounded-lg border border-white/10 p-3">

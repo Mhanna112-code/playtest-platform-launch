@@ -690,7 +690,8 @@ async function signIn(page, email) {
     await shot(tester, "join-too-early-tester");
     // The developer blocks Ana from her tester row.
     await dev.goto(t11Url());
-    await dev.locator(`#tester-${SA}`).locator("button[aria-haspopup='dialog']:has-text('Block Ana Silva')").click();
+    await dev.hover("#testers-joined a[aria-label='Ana Silva: profile']"); // Block is in the hover card (full app)
+    await dev.locator("#testers-joined button[aria-haspopup='dialog']:has-text('Block Ana Silva')").click();
     await shot(dev, "block-confirm-developer");
     await dev.locator("dialog[open] button[data-confirm='Block Ana Silva']").click();
     check("developer sees the block on the row", await has(dev, "text=You blocked Ana Silva."));
