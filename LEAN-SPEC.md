@@ -4,6 +4,15 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 23, NEWEST+9) Tester capacity per test (as in the full app)
+- A developer can take up to N testers per test: starts at 10; after every 10 new ratings it grows by 10% (at least
+  +1) when at least half of those 10 are 3 stars or more OR the developer reviewed at least 90% of the work testers
+  sent them themselves (paid / partly paid / rejected count; tester Charges and Let it go don't); max 50; never shrinks.
+- Post/Edit refuse spots above it: red at the spots field "You can take up to 10 testers per test right now."; the
+  limit is shown next to the field. Existing tests keep their spots.
+- The full app's card ("Can take up to 10 testers per test · Next: +10% after 4 more ratings…") shows ONLY to the
+  developer (their dashboard/profile), never on the profile testers see.
+
 ## (Owner, Oct 23, NEWEST+8) Launch fixes
 1. EMAIL CONFIRMATION REQUIRED before posting a test, Edit Save, joining/applying/accepting an invite, sending work,
    requesting/accepting calls, paying, charging, inviting, rating. Browsing, profile, chat, sign-out still work. A
