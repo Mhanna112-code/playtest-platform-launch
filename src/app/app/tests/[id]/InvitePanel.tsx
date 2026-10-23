@@ -5,6 +5,7 @@ import { api } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
 import { PressButton } from "@/components/PressButton";
 import { UserPlus } from "lucide-react";
+import { bringInView } from "@/lib/markJump";
 
 type Tester = { id: string; name: string; rating?: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; detail?: string };
 type Sent = { id: string; name: string; status: string };
@@ -62,6 +63,13 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
   }, [error, setError]);
   // The box stays up while anyone ticked misses a need, updating live; when everyone fits it closes with a notice.
   const boxOpen = confirm != null;
+  // After a press: the Invite anyway box (or the notice under Invite) comes into view with the least scrolling.
+  useEffect(() => {
+    if (boxOpen) bringInView(document.querySelector<HTMLElement>("[data-invite-anyway]"));
+  }, [boxOpen]);
+  useEffect(() => {
+    if (msg) bringInView(document.querySelector<HTMLElement>("[data-invite-msg]"));
+  }, [msg]);
   useEffect(() => {
     if (!boxOpen) return;
     // At once when the ticks change, then every 15 s as profiles change.
@@ -143,7 +151,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
         <span className="text-xs text-slate-400">{ticked.length} selected</span>
       </div>
       {none && <p className="err-field">Tick at least one tester.</p>}
-      {msg && <p className="info">{msg}</p>}
+      {msg && <p className="info" data-invite-msg="">{msg}</p>}
       {at !== "anyway" && <ChangesBox changes={changes} error={error} />}
       {confirm && (
         <div className="info space-y-2" data-invite-anyway="">

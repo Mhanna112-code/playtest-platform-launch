@@ -61,9 +61,9 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
 12. [DONE] STOP RULE FIX (owner, high priority, do right after item 0): the second press goes ahead ONLY if nothing new
    happened since its stop box last updated (send the box's newest line time; anything newer stops again with the new
    lines added). Applies to every button EXCEPT the tester's Leave and Block, which still stop only once. Tests.
-13. NOTICE IN VIEW (owner): when a stop box or refusal appears after a press, scroll just enough to bring the button and
+13. [DONE] NOTICE IN VIEW (owner): when a stop box or refusal appears after a press, scroll just enough to bring the button and
    its notice into view (block "nearest"); never jump to the top box because of a press.
-14. INVITE PANEL labels: a tester who left this test shows "Left this test", one you ended shows "You ended their work",
+14. [DONE 9c297bd] INVITE PANEL labels: a tester who left this test shows "Left this test", one you ended shows "You ended their work",
    to the right of their name (still tickable: a re-invite is how an ended tester can come back).
 12b. Finish item 12's gaps: the "What's missing changed" stop inside the Invite anyway box, the owed-total check
    behind "Pay what you owe", and the call-request limit confirm must also stop again for anything newer.

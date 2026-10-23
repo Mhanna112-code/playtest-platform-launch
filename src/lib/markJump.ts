@@ -11,5 +11,22 @@ export function jumpTo(id: string) {
   setTimeout(() => el.removeAttribute("data-marked"), 4000);
 }
 
+/**
+ * (Owner, NEXT-UI 13) After a press, bring the notice (and the button right above it) into view with the least scrolling:
+ * nothing moves when both are already visible; never the top of the page.
+ */
+export function bringInView(el: HTMLElement | null) {
+  if (!el) return;
+  const prev = el.previousElementSibling as HTMLElement | null;
+  const r = el.getBoundingClientRect();
+  const top = prev && prev.tagName === "BUTTON" ? Math.min(prev.getBoundingClientRect().top, r.top) : r.top;
+  const lo = 88; // under the sticky header
+  const hi = window.innerHeight - 12;
+  let dy = 0;
+  if (r.bottom > hi) dy = r.bottom - hi;
+  if (top - dy < lo) dy = top - lo; // too tall to fit both: the button first
+  if (Math.abs(dy) > 1) window.scrollBy({ top: dy, behavior: "smooth" });
+}
+
 /** The classes a jump target carries. */
 export const MARKABLE = "scroll-mt-24 rounded-xl transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300";

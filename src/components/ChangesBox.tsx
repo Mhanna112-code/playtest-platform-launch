@@ -2,7 +2,7 @@
 import { useEffect, useRef } from "react";
 import { ResendConfirm } from "@/components/ResendConfirm";
 import { markShownInBox } from "@/lib/live";
-import { jumpTo } from "@/lib/markJump";
+import { bringInView, jumpTo } from "@/lib/markJump";
 
 export type Change = { text: string; at: string; kind?: string };
 
@@ -16,7 +16,7 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (changes) markShownInBox(changes); // seen: the top box lists them quietly, without its scroll
-    if ((changes || error) && ref.current) ref.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (changes || error) bringInView(ref.current);
   }, [changes, error]);
   if (!changes && !error) return null;
   if (!changes && error && error.startsWith("\u0001")) return <p ref={ref as unknown as React.RefObject<HTMLParagraphElement>} className="err-field basis-full">{error.slice(1)}</p>;
