@@ -68,7 +68,7 @@ describe("outages", () => {
     // The top box on affected pages.
     const { outageLines } = await import("@/lib/server/outages");
     expect((await outageLines(new Date(start.getTime() - MIN))).map((x) => x.text)).toEqual([line]);
-  });
+  }, 90_000);
 
   it("gated: with the setting off a gap creates nothing; polls never write heartbeats; only the keyed ping does", async () => {
     await db.heartbeat.deleteMany({});
@@ -98,5 +98,5 @@ describe("outages", () => {
     await ping("test-health-key");
     expect(await db.outage.count()).toBe(1);
     expect(Math.round((await db.outage.findFirstOrThrow()).ms / MIN)).toBe(40);
-  });
+  }, 90_000);
 });

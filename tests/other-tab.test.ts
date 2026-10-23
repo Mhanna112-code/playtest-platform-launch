@@ -180,6 +180,25 @@ describe("(F) listing info", () => {
   });
 });
 
+describe("Pay after a tester left (owner bug report)", () => {
+  it("a tester leaves; Pay with the page's old seenAt stops once with the line; the second press pays", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId, "Dev Tester");
+    await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    const pageLoaded = seen();
+    await later();
+    expect((await sact(sessionId, "leave", tester.cookie, {})).status).toBe(200);
+    const body = { payKey: randomUUID(), kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, seenAt: pageLoaded };
+    const first = await reviewPOST(req("/api/review", { cookie: dev.cookie, body })).then(json);
+    expect(first.body.error.code).toBe("stop_once");
+    expect(texts(first)).toEqual(["Dev Tester left the test"]);
+    expect((await live(dev.cookie, `test:${testId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual(["Dev Tester left the test"]);
+    const second = await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { ...body, confirmed: true } })).then(json);
+    expect(second.status).toBe(200);
+  });
+});
+
 describe("Edit Save's tail", () => {
   it("a stop for a tester's action only (no listing edit elsewhere) uses the plain tail", async () => {
     const { dev, testId } = await setup();

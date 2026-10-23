@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime } from "@/lib/format";
-import { bell, notify } from "./notify";
+import { notify } from "./notify";
 
 // (Owner, Oct 22, NEWEST+6) Outages, detected automatically (no admin entry). GET /api/health (an outside uptime
 // checker every 5 min), page polls and the daily job write heartbeats; a gap of more than 15 minutes between the last
@@ -82,7 +82,8 @@ export async function recordOutage(start: Date, end: Date) {
   const line = outageLine(start, end, ms);
   const testers = await db.contract.findMany({ where: { status: "working" }, select: { testerId: true }, distinct: ["testerId"] });
   const devs = await db.test.findMany({ where: { status: "open" }, select: { developerId: true }, distinct: ["developerId"] });
-  for (const id of new Set([...testers.map((x) => x.testerId), ...devs.map((x) => x.developerId)])) await bell(id, line, "/app");
+  const ids = [...new Set([...testers.map((x) => x.testerId), ...devs.map((x) => x.developerId)])];
+  await db.notification.createMany({ data: ids.map((userId) => ({ userId, text: line, link: "/app" })) });
   return o;
 }
 

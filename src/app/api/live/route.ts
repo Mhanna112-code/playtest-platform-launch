@@ -18,7 +18,10 @@ export async function GET(req: Request) {
     if (isNaN(since.getTime())) throw new HttpError(400, "bad_request", "Refresh to see the latest.");
     const tab = (req.headers.get("x-tab") ?? "").slice(0, 64);
     const [kind, id] = (q.get("scope") ?? "").split(":");
+    // The seen marker: a few seconds back (a change whose transaction is still committing already has its time but
+    // isn't visible yet: it must not be skipped), or the newest line actually shown, whichever is later.
     const now = new Date();
+    const margin = new Date(now.getTime() - 5000);
     let changes;
     if (kind === "session") {
       const c = await db.contract.findUnique({ where: { id } });
@@ -32,6 +35,8 @@ export async function GET(req: Request) {
     } else throw new HttpError(404, "not_found", "Nothing to watch here.");
     // (NEWEST+6) "The site was down from … Deadlines and payment dates moved … later." on every affected page.
     const outages = await outageLines(since);
-    return ok({ changes: [...asLines(changes.filter((c) => c.createdAt <= now)), ...outages].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()), now: now.toISOString() });
+    const shown = changes.filter((c) => c.createdAt <= now);
+    const seenTo = new Date(Math.max(margin.getTime(), ...shown.map((c) => c.createdAt.getTime())));
+    return ok({ changes: [...asLines(shown), ...outages].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()), now: seenTo.toISOString() });
   });
 }
