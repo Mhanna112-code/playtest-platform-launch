@@ -8,7 +8,7 @@ import { CallTimer } from "@/components/CallTimer";
 import { CallPresence, CallTimelineLine } from "@/components/CallPresence";
 import { LIVE_SECTIONS, LiveSection } from "@/components/LivePanel";
 
-type Mine = { id: string; when: string; minutes: number; room: string; canCancel: boolean; started: boolean; ended?: boolean; reported: boolean; cancelled: string; late?: string; rate?: string; joinable?: boolean; devJoinedAt?: string | null; testerJoinedAt?: string | null; joined?: string; outcome?: { label: string; tone: "grey" | "amber" | "green" | "rose" }[]; logged?: number | null };
+type Mine = { id: string; when: string; minutes: number; room: string; canCancel: boolean; started: boolean; ended?: boolean; reported: boolean; cancelled: string; late?: string; rate?: string; joinable?: boolean; devJoinedAt?: string | null; testerJoinedAt?: string | null; joined?: string; outcome?: { label: string; tone: "grey" | "amber" | "green" | "rose" }[]; logged?: number | null; lengthText?: string };
 const TONE = { grey: "", amber: "border-amber-300/40 text-amber-200", green: "border-emerald-400/40 text-emerald-200", rose: "border-rose-400/40 text-rose-200" } as const;
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -56,6 +56,12 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
         </span>
       )}
       {m.reported && <span className="note">Problem reported to the team.</span>}
+      {m.started && !m.cancelled && m.lengthText && (
+        <div className="w-full space-y-1 border-t border-white/10 pt-2">
+          <p className="text-xs font-medium text-white">How long was the call?</p>
+          <p className="text-xs text-slate-300">{m.lengthText}</p>
+        </div>
+      )}
       {!m.cancelled && m.joinable && <div className="w-full"><CallPresence callId={m.id} startsAt={m.when} minutes={m.minutes} /></div>}
       {m.ended && !m.cancelled && <CallTimelineLine people={[{ name: p.devName, joinedAt: m.devJoinedAt ?? null }, { name: "You", joinedAt: m.testerJoinedAt ?? null }]} />}
       {!m.cancelled && m.joinable && <div className="w-full"><CallTimer startsAt={m.when} minutes={m.minutes} role="tester" label={`Call with ${p.devName}`} /></div>}

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, pronouns } from "@/lib/format";
-import { callOutcome, joinedWords, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, defaultCallMinutes, choiceNoteLine, closesInLine, lateLabel, termsLine } from "@/lib/rules";
+import { CALL_CLOSE_MS, callClosed, callOutcome, joinedWords, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, defaultCallMinutes, choiceNoteLine, closesInLine, lateLabel, termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
 import { Chat } from "@/components/Chat";
@@ -246,7 +246,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 ) : (
                   <>
                     {x.devJoinedAt && x.testerJoinedAt && <p className="note">Both joined at {fmtDateTime(new Date(Math.max(x.devJoinedAt.getTime(), x.testerJoinedAt.getTime())))}</p>}
-                    <CallLength seenAt={seenAt} testId={t.id} callId={x.id} minutes={x.actualMinutes ?? defaultCallMinutes(x.startsAt, x.minutes, x.devJoinedAt, x.testerJoinedAt)} />
+                    <CallLength
+                      seenAt={seenAt} testId={t.id} callId={x.id} tester={displayName(c.tester)}
+                      minutes={x.actualMinutes ?? x.minutes} booked={x.minutes} entered={x.actualMinutes} note={x.lengthNote}
+                      measured={x.devJoinedAt && x.testerJoinedAt ? defaultCallMinutes(x.startsAt, x.minutes, x.devJoinedAt, x.testerJoinedAt) : null}
+                      max={Math.floor(x.minutes * 1.5)} closesAt={new Date(x.startsAt.getTime() + CALL_CLOSE_MS).toISOString()} closed={callClosed(x.startsAt, now)}
+                    />
                     <PayBox key={x.actualMinutes ?? 0} kind="call" id={x.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} askedCents={x.askedCents} partPaidCents={partPaid(x.id)}
                       listingCents={callReference(x.rateCents, x.actualMinutes ?? x.minutes, c.liveRateCents).cents}
                       listingText={callReference(x.rateCents, x.actualMinutes ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />

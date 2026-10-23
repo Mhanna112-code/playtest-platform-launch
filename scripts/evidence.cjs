@@ -318,7 +318,7 @@ async function signIn(page, email) {
     // (1) The developer enters 25 minutes: the reference reads rate × 25 min.
     await vd.goto(testUrl);
     await vd.fill('input[id^="len-"]', "25");
-    await vd.click("text=Save the length");
+    await vd.click("button:has-text('Enter the length')");
     check("Pay box reference = rate × 25 min", await has(vd, "text=Listing: $30/h × 25 min = $12.50"));
     await shot(vd, "1-dev-call-length");
     await vt.reload();
@@ -1487,7 +1487,7 @@ async function signIn(page, email) {
     sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '2 hours', "devJoinedAt" = (now() at time zone 'utc') - interval '2 hours', "testerJoinedAt" = (now() at time zone 'utc') - interval '2 hours' where id = '${call90}'`);
     await d.reload();
     await d.fill(`#len-${call90}`, "136");
-    await d.click("button:has-text('Save the length')");
+    await d.click("button:has-text('Enter the length')");
     check("over 150% refused (red): up to 135 min for this 90-min call", await has(d, ".err-field >> text=You can log up to 135 min for this 90-min call."));
     await shot(d, "log-over-150-red-developer");
     // Auto-cancel: nobody joined by the halfway point.

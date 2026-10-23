@@ -113,7 +113,9 @@ export async function setCallLength(dev: U, testId: string, body: Record<string,
   const ok = checkActualMinutes(Number.isFinite(minutes) ? minutes : null, call.minutes);
   if (!ok.ok) throw new HttpError(400, "bad_minutes", ok.message);
   await devGateIfSeen(testId, body);
-  await db.call.update({ where: { id: call.id }, data: { actualMinutes: minutes } });
+  // (The full app's "Why, if shorter") the reason the tester reads when it's shorter than booked.
+  const note = minutes < call.minutes && typeof body.note === "string" ? body.note.trim().slice(0, 500) : "";
+  await db.call.update({ where: { id: call.id }, data: { actualMinutes: minutes, lengthNote: note } });
   return { minutes };
 }
 

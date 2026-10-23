@@ -110,3 +110,23 @@ describe("Add to calendar (.ics)", () => {
     expect((await GET(req(`/api/calls/${call.id}/ics`, { method: "GET", cookie: other.cookie }), { params: Promise.resolve({ id: call.id }) })).status).toBe(404);
   });
 });
+
+describe("call length entry (the full app's, lean rules)", () => {
+  it("the reason is kept only when shorter than booked; the tester reads entered / pending / closed", async () => {
+    const { callLengthText } = await import("@/lib/rules");
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 1);
+    const start = new Date(Date.now() - 60 * 60_000);
+    await db.call.update({ where: { id: call.id }, data: { startsAt: start } });
+    expect((await act(testId, "call-length", dev.cookie, { callId: call.id, minutes: 20, note: "We finished early.", seenAt: new Date().toISOString(), confirmed: true })).status).toBe(200);
+    let c = await db.call.findUniqueOrThrow({ where: { id: call.id } });
+    expect([c.actualMinutes, c.lengthNote]).toEqual([20, "We finished early."]);
+    expect(callLengthText(c, "Nora Lane", () => "x")).toBe("Nora Lane entered 20 minutes (booked 30): “We finished early.”.");
+    expect((await act(testId, "call-length", dev.cookie, { callId: call.id, minutes: 40, note: "ignored", seenAt: new Date().toISOString(), confirmed: true })).status).toBe(200);
+    c = await db.call.findUniqueOrThrow({ where: { id: call.id } });
+    expect([c.actualMinutes, c.lengthNote]).toEqual([40, ""]);
+    expect(callLengthText({ ...c, actualMinutes: null }, "Nora Lane", () => "Fri 3:00 PM")).toBe("Nora Lane enters it after the call. If they don't by Fri 3:00 PM, the booked length (30 minutes) is used.");
+    expect(callLengthText({ ...c, actualMinutes: null, startsAt: new Date(Date.now() - 25 * 3_600_000) }, "Nora Lane", () => "x")).toBe("Nora Lane didn't enter the call's length within 24 hours, so the booked length is used: 30 minutes.");
+  });
+});

@@ -670,6 +670,13 @@ export function callOutcome(x: { status: string; cancelledBy: string | null; can
   return out;
 }
 
+/** (The full app's CallLength, tester side) What became of a call's length, in one sentence. */
+export function callLengthText(x: { startsAt: Date; minutes: number; actualMinutes: number | null; lengthNote: string }, dev: string, fmt: (d: Date) => string, now = new Date()) {
+  if (x.actualMinutes != null) return `${dev} entered ${x.actualMinutes} minutes${x.actualMinutes !== x.minutes ? ` (booked ${x.minutes})` : ""}${x.lengthNote ? `: “${x.lengthNote}”` : ""}.`;
+  if (callClosed(x.startsAt, now)) return `${dev} didn't enter the call's length within 24 hours, so the booked length is used: ${x.minutes} minutes.`;
+  return `${dev} enters it after the call. If they don't by ${fmt(new Date(x.startsAt.getTime() + CALL_CLOSE_MS))}, the booked length (${x.minutes} minutes) is used.`;
+}
+
 /** The length's default: from when both joined to the booked end (at least 1 minute); else the booked length. */
 export function defaultCallMinutes(startsAt: Date, minutes: number, devJoinedAt: Date | null, testerJoinedAt: Date | null) {
   if (!devJoinedAt || !testerJoinedAt) return minutes;
