@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef } from "react";
+import { ResendConfirm } from "@/components/ResendConfirm";
 
 export type Change = { text: string; at: string; kind?: string };
 
@@ -31,7 +32,7 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead." }
           <p>{tail}</p>
         </>
       )}
-      {error && <p>{error}</p>}
+      {error && (error.startsWith("Confirm your email first.") ? <p className="flex flex-wrap items-center gap-2">{error} <ResendConfirm label="Resend the email" /></p> : <p>{error}</p>)}
     </div>
   );
 }

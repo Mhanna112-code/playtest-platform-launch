@@ -5,9 +5,9 @@ import { createSession, SESSION_COOKIE } from "@/lib/server/session";
 export const uniq = () => randomBytes(5).toString("hex");
 export const email = (tag = "u") => `${tag}-${uniq()}@test.playtest.test`;
 
-export async function makeUser(over: { name?: string; dev?: boolean; tester?: boolean; email?: string; pronoun?: string } = {}) {
+export async function makeUser(over: { name?: string; dev?: boolean; tester?: boolean; email?: string; pronoun?: string; unconfirmed?: boolean } = {}) {
   const user = await db.user.create({
-    data: { email: over.email ?? email(), name: over.name ?? "Test Person", pronoun: over.pronoun ?? "", isDeveloper: over.dev ?? false, isTester: over.tester ?? false },
+    data: { email: over.email ?? email(), name: over.name ?? "Test Person", pronoun: over.pronoun ?? "", isDeveloper: over.dev ?? false, isTester: over.tester ?? false, emailVerifiedAt: over.unconfirmed ? null : new Date() },
   });
   if (over.tester) await db.testerProfile.create({ data: { userId: user.id, devices: ["Windows PC"], languages: ["English"], categories: [] } });
   const { token } = await createSession(user.id);

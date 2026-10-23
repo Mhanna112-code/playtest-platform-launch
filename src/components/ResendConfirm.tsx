@@ -3,7 +3,7 @@ import { useState } from "react";
 import { api, ApiError } from "@/lib/client";
 
 /** "Resend" the email confirmation link, answered in place. */
-export function ResendConfirm() {
+export function ResendConfirm({ label = "Resend" }: { label?: string }) {
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   return (
@@ -18,7 +18,7 @@ export function ResendConfirm() {
         } finally {
           setBusy(false);
         }
-      }}>{busy ? "Sending…" : "Resend"}</button>
+      }}>{busy ? "Sending…" : label}</button>
       {msg && <span>{msg}</span>}
     </span>
   );

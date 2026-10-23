@@ -4,6 +4,36 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 23, NEWEST+8) Launch fixes
+1. EMAIL CONFIRMATION REQUIRED before posting a test, Edit Save, joining/applying/accepting an invite, sending work,
+   requesting/accepting calls, paying, charging, inviting, rating. Browsing, profile, chat, sign-out still work. A
+   blocked press shows under the button: "Confirm your email first. [Resend the email]" (blue refusal).
+2. CALL LENGTH: removed from the listing. Each call request picks a length (30 / 45 / 60 / 90 min); "choose one" and
+   daily/weekly requests use one length for all their times. The rate field shows its range next to it: "$10-$200 an
+   hour (or 0 for free)". After the call the developer logs the actual length (only when both joined, as before) and
+   may log MORE than booked, up to 150% of the booked length ("You can log up to 90 min for this 60-min call." red if
+   over). The Pay box uses rate x logged length. 24 HOURS after the planned START the call CLOSES: no joining, the
+   length can't be logged or changed any more; if the developer never logged one, the booked length is used for Pay /
+   Charge. AUTO-CANCEL: if NEITHER side has joined by the call's halfway point, it is cancelled ("Nobody joined, so the
+   call was cancelled."), no charge, never a no-show, both told; if only one joined, the existing no-show rules apply.
+   LENGTH IN REQUESTS + AUTO-MATCH (owner): the person who REQUESTS sets the length; the other side can only Accept
+   or Decline it (to change the length, decline and send your own request). Auto-booking happens ONLY on an exact
+   match: same start, same length and matching rate. ANY other overlap with a pending request or booked call between
+   the same two people is refused under the button: "Ana Silva already asked for Thu, Nov 5, 3:00 PM (60 min).
+   Accept her request, or pick a time that doesn't overlap." with her request's Accept shown right there. No merging,
+   no partial matches. (Clashes with anyone else's calls are checked on Accept, as before.)
+3. NEEDS NOTE: the Find card / listing shows a line for EACH unmet need: "This test needs one of: Mac, Linux. Add your
+   device in your profile." and "This test needs one of: English, Spanish. Add the language in your profile." (both
+   when both are missing). Same lines in the Join anyway warning.
+4. OPTIONAL QUESTIONS (as in the full app): each written question has a "Not required" tick; Send requires only the
+   required ones; the developer's view and the tester's form mark them "not required" (never "(optional)"). Part of
+   the terms (a change offers new terms / closes applications like other question changes).
+5. SUGGESTED TESTERS: up to 5, the best mix of highest rating + matching devices AND languages (meets the test's needs
+   first, then rating, then number of matches). Find testers: tick-box filters for devices and languages (any ticked
+   device / any ticked language), replacing the dropdowns.
+6. LAYOUTS like the full app: the dashboard and the test pages (developer test page, tester session page, Find,
+   listing) follow the full app's panel layout/sections (reuse its components' markup and classes), behaviour unchanged.
+
 ## (Owner, Oct 22, NEWEST+7) Launch look and sign-in like the full site (app behaviour unchanged)
 - Theme the lean app like the full Playtest Platform (dark slate/indigo, its fonts, logo, header/nav, cards, buttons,
   inputs, labels, notices), reusing the full app's styles/components where they fit. Blue stop/refusal notices stay

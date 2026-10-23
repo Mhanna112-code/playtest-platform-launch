@@ -12,6 +12,17 @@ export async function requireActive(req: Request) {
   return u;
 }
 
+/** (NEWEST+8) The refusal for an unconfirmed email (blue, under the button, with a Resend link). */
+export const CONFIRM_FIRST = "Confirm your email first.";
+/**
+ * (NEWEST+8) Email confirmation is required before posting a test, Edit Save, joining / applying / accepting an invite,
+ * sending work, requesting / accepting calls, paying, charging, inviting and rating. Browsing, profile, chat and
+ * sign-out still work.
+ */
+export function requireConfirmed(u: { emailVerifiedAt: Date | null }) {
+  if (!u.emailVerifiedAt) throw new HttpError(409, "confirm_email", CONFIRM_FIRST);
+}
+
 const pick = (v: unknown, allowed: string[]) => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && allowed.includes(x)))] : []);
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 

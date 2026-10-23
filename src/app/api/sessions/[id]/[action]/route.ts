@@ -7,7 +7,10 @@ import { answerRequest, requestTime } from "@/lib/server/requests";
 import { decideTerms } from "@/lib/server/terms";
 import { openDispute } from "@/lib/server/payments";
 import { leaveTest, sendWritten } from "@/lib/server/tests";
-import { requireActive } from "@/lib/server/users";
+import { requireActive, requireConfirmed } from "@/lib/server/users";
+
+// (NEWEST+8) Presses that need a confirmed email.
+const NEEDS_CONFIRMED = new Set(["written", "recording-start", "recording-send", "request-time", "answer-request", "choose", "rate"]);
 import { maybePromptRating, testerRate } from "@/lib/server/ratings";
 import { logTesterAction } from "@/lib/server/actionText";
 
@@ -19,6 +22,7 @@ export async function POST(req: Request, { params }: Ctx) {
     const { id, action } = await params;
     const u = await requireActive(req);
     const body = await readJson(req);
+    if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
     const res0 = await run(u, id, action, body);
     const data = await res0.clone().json().catch(() => null);
     // A rename the page hadn't shown: the press went ahead; the note goes under the button.

@@ -73,6 +73,17 @@ describe("sign up, confirm, log in, reset", () => {
     expect((await json(await loginPOST(req("/api/auth/login", { body: { email: user.email, password: "anything-1" } })))).body.error.message).toBe("This account has no password yet. Use “Forgot your password?” to choose one.");
   });
 
+  it("email confirmation is required for the listed presses (blue refusal), not for profile or chat", async () => {
+    const { POST: testsPOST } = await import("@/app/api/tests/route");
+    const { listingBody } = await import("./fixtures");
+    const { user, cookie } = await makeUser({ dev: true, unconfirmed: true });
+    const r = await json(await testsPOST(req("/api/tests", { cookie, body: listingBody() })));
+    expect(r).toMatchObject({ status: 409, body: { error: { code: "confirm_email", message: "Confirm your email first." } } });
+    expect((await profilePOST(req("/api/profile", { cookie, body: { name: "Nora", isDeveloper: true } }))).status).toBe(200);
+    await db.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } });
+    expect((await testsPOST(req("/api/tests", { cookie, body: listingBody() }))).status).toBe(200);
+  });
+
   it("sign out ends the session", async () => {
     const { cookie } = await makeUser();
     expect(await getUserFromRequest(req("/app", { cookie }))).not.toBeNull();
