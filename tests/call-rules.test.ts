@@ -89,3 +89,24 @@ describe("Past calls (the full app's PastRow): who joined and the outcome", () =
     expect(callOutcome(base, "Nora Lane", "tester")).toEqual([{ label: "not paid yet", tone: "amber" }]);
   });
 });
+
+describe("Add to calendar (.ics)", () => {
+  it("the call's start, end, title and link; only its two people", async () => {
+    const { GET } = await import("@/app/api/calls/[id]/ics/route");
+    const { req, makeUser } = await import("./helpers");
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 48);
+    const res = await GET(req(`/api/calls/${call.id}/ics`, { method: "GET", cookie: tester.cookie }), { params: Promise.resolve({ id: call.id }) });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/calendar");
+    const body = await res.text();
+    const stamp = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    expect(body).toContain(`DTSTART:${stamp(call.startsAt)}`);
+    expect(body).toContain(`DTEND:${stamp(new Date(call.startsAt.getTime() + call.minutes * 60_000))}`);
+    expect(body).toContain("SUMMARY:Live call: Harbor Run");
+    expect(body).toContain(`/app/calls/${call.id}`);
+    const other = await makeUser({ tester: true });
+    expect((await GET(req(`/api/calls/${call.id}/ics`, { method: "GET", cookie: other.cookie }), { params: Promise.resolve({ id: call.id }) })).status).toBe(404);
+  });
+});

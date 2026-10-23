@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { JoinCall } from "@/components/JoinCall";
+import { CalendarPlus } from "lucide-react";
 import { usePress } from "@/lib/usePress";
 import { MARKABLE } from "@/lib/markJump";
 import { LIVE_SECTIONS, LivePanel, LiveSection } from "@/components/LivePanel";
@@ -49,6 +50,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }:
     <li key={c.id} className="flex flex-wrap items-center gap-2">
       <span className="mr-auto">{t.name} · {fmt(c.when)} · {c.minutes} min · {c.rate}{c.late && <span className="ml-2 badge">{c.late}</span>}</span>
       {c.joinable && <JoinCall callId={c.id} />}
+      {!c.started && <a href={`/api/calls/${c.id}/ics`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline"><CalendarPlus className="h-3.5 w-3.5" /> Add to calendar</a>}
       {!c.started && (c.canCancel ? (
         <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: c.id }, "cancel-" + c.id)}>Cancel</button>
       ) : (

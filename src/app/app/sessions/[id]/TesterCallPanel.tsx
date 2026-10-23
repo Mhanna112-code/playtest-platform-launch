@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
 import { JoinCall } from "@/components/JoinCall";
+import { CalendarPlus } from "lucide-react";
 import { CallTimer } from "@/components/CallTimer";
 import { CallPresence, CallTimelineLine } from "@/components/CallPresence";
 import { LIVE_SECTIONS, LiveSection } from "@/components/LivePanel";
@@ -41,6 +42,7 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
         <span className="mr-auto text-slate-200">{fmt(m.when)} · {m.minutes} min{m.rate && ` · ${m.rate}`}{m.late && <span className="ml-2 badge">{m.late}</span>}</span>
       )}
       {!m.cancelled && m.joinable && <JoinCall callId={m.id} />}
+      {!m.cancelled && !m.ended && <a href={`/api/calls/${m.id}/ics`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline"><CalendarPlus className="h-3.5 w-3.5" /> Add to calendar</a>}
       {!m.cancelled && !m.started && (m.canCancel ? <button className="btn-secondary px-3 py-1 text-xs" disabled={busy} onClick={() => go("cancel-call", { callId: m.id }, "cancel-" + m.id)}>Cancel</button> : (
         <span className="inline-flex gap-2">
           <input className="input w-48" placeholder="Why? (less than 24 hours away)" value={report["c" + m.id] ?? ""} onChange={(e) => setReport({ ...report, ["c" + m.id]: e.target.value })} />
