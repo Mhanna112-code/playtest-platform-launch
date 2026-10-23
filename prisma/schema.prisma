@@ -181,6 +181,9 @@ model Contract {
   /// "early" (developer ended this tester's work) | "stopped" (the developer stopped the test)
   endKind        String   @default("")
   endReason      String   @default("")
+  /// (NEWEST+5) "Rate ..." prompt sent once, when rating first became available (tester side / developer side)
+  ratePromptedAt    DateTime?
+  devRatePromptedAt DateTime?
 
   submissions Submission[]
   recordings  Recording[]
@@ -551,4 +554,20 @@ model ActionLog {
   createdAt DateTime @default(now())
 
   @@index([userId, testId, createdAt])
+}
+
+/// (NEWEST+5) One rating per side per test (contract), final. side = who rated: "tester" (rates the developer) | "developer" (rates the tester).
+model Rating {
+  id         String   @id @default(cuid())
+  testId     String
+  contractId String
+  side       String
+  raterId    String
+  rateeId    String
+  stars      Int
+  comment    String   @default("")
+  createdAt  DateTime @default(now())
+
+  @@unique([contractId, side])
+  @@index([rateeId])
 }
