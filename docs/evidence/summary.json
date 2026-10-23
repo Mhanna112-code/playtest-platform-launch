@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-23T00:56:55.867Z",
+  "run": "2026-10-23T01:23:17.748Z",
   "base": "http://localhost:3400",
   "flows": [
     {
@@ -585,9 +585,9 @@
       "status": "pass",
       "checks": [
         "PASS health answered",
-        "PASS outage recorded once (2 h 30 min) (saw: 9000010)",
-        "PASS the tester's deadline moved by the outage length (saw: 9000010)",
-        "PASS the review clock (pay-by) moved by the outage length (saw: 9000010)",
+        "PASS outage recorded once (2 h 30 min) (saw: 9000014)",
+        "PASS the tester's deadline moved by the outage length (saw: 9000014)",
+        "PASS the review clock (pay-by) moved by the outage length (saw: 9000014)",
         "PASS the call inside was missed: cancelled by the site, no no-show, nothing charged",
         "PASS bell: 'The site was down from … Deadlines and payment dates moved 2 h 30 min later.'",
         "PASS tester's top box: the outage line",
@@ -601,7 +601,7 @@
       ]
     }
   ],
-  "mergedInto": "2026-10-23T00:55:20.917Z",
+  "mergedInto": "2026-10-23T00:56:55.867Z",
   "coverage": [
     {
       "type": "Tester stop A: new terms (Send my recording)",

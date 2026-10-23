@@ -1265,8 +1265,9 @@ async function signIn(page, email) {
 
 
   await flow("28", "Outages: a 2 h 30 min gap in heartbeats is recorded; deadlines move; a call inside is missed (no no-show, nothing charged); top box + bell", async () => {
+    // (The server runs with OUTAGE_CHECKS=1 and HEALTH_KEY; only these keyed pings write heartbeats.)
     // A fresh heartbeat first (the server may have been off since the last run: that gap is recorded now, not mid-flow).
-    await fetch(`${BASE}/api/health`);
+    await fetch(`${BASE}/api/health?key=${process.env.HEALTH_KEY || "evidence-health"}`);
     const d = await ctx(DESKTOP);
     const DEV28 = `dev28+${TS}@playtest.test`, T28 = `tester28+${TS}@playtest.test`;
     await signIn(d, DEV28);
@@ -1299,7 +1300,7 @@ async function signIn(page, email) {
     // (Stored times are UTC.)
     sql(`delete from "Heartbeat" where at > (now() at time zone 'utc') - interval '150 minutes'`);
     sql(`insert into "Heartbeat" (id, at) values ('ev28_${TS}', (now() at time zone 'utc') - interval '150 minutes')`);
-    const h = await fetch(`${BASE}/api/health`).then((x) => x.json());
+    const h = await fetch(`${BASE}/api/health?key=${process.env.HEALTH_KEY || "evidence-health"}`).then((x) => x.json());
     check("health answered", h.ok === true);
     const ms = Number(sql(`select ms from "Outage" order by "recordedAt" desc limit 1`));
     check("outage recorded once (2 h 30 min)", Math.abs(ms - 150 * 60000) < 5000, ms);
