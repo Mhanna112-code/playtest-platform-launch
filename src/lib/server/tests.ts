@@ -111,7 +111,10 @@ export async function closeOnFull(tx: Tx, testId: string, exceptTesterId: string
   await tx.testEvent.create({ data: { testId, kind: "full", text: `${t.title} is full${closed}${open}`.replace(/\.$/, "") } });
   const people = await tx.user.findMany({ where: { id: { in: [...apps.map((a) => a.testerId), ...invs.map((i) => i.testerId)] } } });
   const email = (id: string) => people.find((p) => p.id === id)?.email ?? "";
-  return { title: t.title, testId, dev: displayName(t.developer), apps: apps.map((a) => email(a.testerId)), invites: invs.map((i) => email(i.testerId)) };
+  // Once per invite: only those never told it filled.
+  const tell = invs.filter((i) => !i.fullNotifiedAt);
+  await tx.invite.updateMany({ where: { id: { in: tell.map((i) => i.id) } }, data: { fullNotifiedAt: now } });
+  return { title: t.title, testId, dev: displayName(t.developer), apps: apps.map((a) => email(a.testerId)), invites: tell.map((i) => email(i.testerId)) };
 }
 
 export const fullInviteLine = (title: string) => `${title} is full right now. Your invite stays open; we'll tell you when a spot opens.`;
@@ -132,7 +135,9 @@ export async function spotOpened(testId: string) {
   if (last?.kind !== "full") return;
   if ((await db.contract.count({ where: working(testId) })) >= t.spots) return;
   await db.testEvent.create({ data: { testId, kind: "spot_open", text: spotOpenLine(t.title, displayName(t.developer)) } });
-  const invs = await db.invite.findMany({ where: { testId, status: "sent" } });
+  // Once per invite: only those never told a spot opened.
+  const invs = await db.invite.findMany({ where: { testId, status: "sent", openNotifiedAt: null } });
+  await db.invite.updateMany({ where: { id: { in: invs.map((i) => i.id) } }, data: { openNotifiedAt: new Date() } });
   const people = await db.user.findMany({ where: { id: { in: invs.map((i) => i.testerId) } } });
   for (const p of people) await notify(p.email, spotOpenLine(t.title, displayName(t.developer)), [spotOpenLine(t.title, displayName(t.developer))], `/app/find/${testId}`);
 }

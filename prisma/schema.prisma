@@ -428,6 +428,9 @@ model Invite {
   status    String   @default("sent")
   /// Bell reminder every 3 days until they join, decline, or the invite expires
   remindedAt DateTime?
+  /// (Once per invite) told the test filled / told a spot opened
+  fullNotifiedAt DateTime?
+  openNotifiedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

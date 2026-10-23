@@ -265,4 +265,17 @@ describe("when the test fills (correction 4) and no invite cap (correction 5)", 
     expect(await db.application.count({ where: { testId, status: "closed", closedReason: "full" } })).toBe(1);
     expect(await db.invite.count({ where: { testId, status: "sent" } })).toBe(1);
   });
+
+  it("each open invite gets the 'full' and the 'spot opened' notice at most once (fill, reopen, fill, reopen)", async () => {
+    const { dev, testId } = await setup({ spots: 1 });
+    const dee = await makeUser({ tester: true, name: "Dee Moss" });
+    await act(testId, "invite", dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [dee.user.id] });
+    const a = await joined(testId); // fill
+    await sact(a.sessionId, "leave", a.tester.cookie, {}); // reopen
+    const b = await joined(testId, "Ben Carter", "he"); // fill
+    await sact(b.sessionId, "leave", b.tester.cookie, {}); // reopen
+    expect(await db.notification.count({ where: { userId: dee.user.id, text: "Harbor Run is full right now. Your invite stays open; we'll tell you when a spot opens." } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dee.user.id, text: "A spot opened on Harbor Run: you can accept Nora Lane's invite now." } })).toBe(1);
+    expect(await db.invite.count({ where: { testId, testerId: dee.user.id, status: "sent" } })).toBe(1);
+  });
 });
