@@ -5,6 +5,7 @@ import { api, errOf } from "@/lib/client";
 import { money, toCents } from "@/lib/format";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { ChangesBox } from "@/components/ChangesBox";
+import { ConfirmButton } from "@/components/ConfirmButton";
 
 /**
  * Day 14 without a review: charge the developer (the lower of listing and asked, minus what's already been paid for this
@@ -16,7 +17,6 @@ export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenA
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [ticked, setTicked] = useState(false);
-  const [confirmLetGo, setConfirmLetGo] = useState(false);
   const [amount, setAmount] = useState((cents / 100).toFixed(2));
   const typed = toCents(amount);
   const go = (choice: string) => {
@@ -32,13 +32,7 @@ export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenA
   return (
     <div className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">
       <p>{line}.</p>
-      {confirmLetGo ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span>Close this with nothing more paid?</span>
-          <button className="btn-ghost" disabled={busy} onClick={() => go("letgo")}>Yes, let it go</button>
-          <button className="btn-ghost" disabled={busy} onClick={() => setConfirmLetGo(false)}>Keep it</button>
-        </div>
-      ) : (
+      {(
         <div className="flex flex-wrap items-center gap-2">
           <label className="inline-flex items-center gap-1">
             $ <input className="input w-24" inputMode="decimal" aria-label="Amount to charge" value={amount} onChange={(e) => { setAmount(e.target.value); setTicked(false); }} />
@@ -48,7 +42,10 @@ export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenA
             <input type="checkbox" checked={ticked} disabled={typed == null} onChange={(e) => setTicked(e.target.checked)} /> charge {devName} {typed == null ? "–" : money(typed)} now
           </label>
           <button className="btn" disabled={busy || !ticked || typed == null} onClick={() => go("charge")}>{`Charge ${devName} ${typed == null ? "" : money(typed)}`}</button>
-          <button className="btn-ghost" disabled={busy} onClick={() => setConfirmLetGo(true)}>Let it go</button>
+          <ConfirmButton className="btn-secondary" disabled={busy} title="Let it go?" confirmLabel="Let it go" onConfirm={() => go("letgo")}
+            body={<p>This closes with nothing more paid.</p>}>
+            Let it go
+          </ConfirmButton>
         </div>
       )}
       <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />

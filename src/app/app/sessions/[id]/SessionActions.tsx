@@ -3,6 +3,7 @@ import { Err } from "@/components/Err";
 import { useState } from "react";
 import { api, errOf } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { ChangesBox } from "@/components/ChangesBox";
 
 /** Written answers: one box per question in the tester's contract. Can be updated until it's paid. */
@@ -50,37 +51,26 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
 }
 
 export function LeaveButton({ sessionId, seenAt }: { sessionId: string; seenAt: string }) {
-  const [sure, setSure] = useState(false);
   const [err, setErr] = useState("");
   const [box, setBox] = useStopBox();
   const [confirmed, setConfirmed] = useState(false);
+  const leave = () =>
+    api(`/api/sessions/${sessionId}/leave`, { seenAt, confirmed })
+      .then(() => window.location.reload())
+      .catch((e) => {
+        const sb = stopBox(e);
+        if (sb) {
+          setBox(sb);
+          setConfirmed(true);
+        } else setErr(errOf(e));
+      });
   return (
     <div className="space-y-2">
-      {!sure ? (
-        <button className="btn-ghost" onClick={() => setSure(true)}>Leave the test</button>
-      ) : (
-        <div className="space-y-2 rounded-lg border border-rose-400/40 p-3">
-          <p className="text-sm">Leave this test? Work you already sent is still reviewed and paid. Calls ahead are cancelled. You can&apos;t rejoin.</p>
-          <button
-            className="btn-danger"
-            onClick={() =>
-              api(`/api/sessions/${sessionId}/leave`, { seenAt, confirmed })
-                .then(() => window.location.reload())
-                .catch((e) => {
-                  const sb = stopBox(e);
-                  if (sb) {
-                    setBox(sb);
-                    setConfirmed(true);
-                  } else setErr(errOf(e));
-                })
-            }
-          >
-            Leave the test
-          </button>{" "}
-          <button className="btn-ghost" onClick={() => setSure(false)}>Stay</button>
-          <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
-        </div>
-      )}
+      <ConfirmButton className="btn-secondary" title="Leave this test?" confirmLabel="Leave the test" onConfirm={leave}
+        body={<p>Work you already sent is still reviewed and paid. Calls ahead are cancelled.</p>}>
+        Leave the test
+      </ConfirmButton>
+      <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       <Err text={err} />
     </div>
   );
@@ -90,13 +80,13 @@ export function LeaveButton({ sessionId, seenAt }: { sessionId: string; seenAt: 
 export function DisputeForm({ sessionId, kind, id, seenAt }: { sessionId: string; kind: "submission" | "call"; id: string; seenAt?: string }) {
   const [box, setBox] = useStopBox();
   const [confirmed, setConfirmed] = useState(false);
-  const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  if (!open) return <button className="btn-ghost" onClick={() => setOpen(true)}>Dispute the pay</button>;
+  // The full app's fold (no separate mode): "Dispute the pay" opens the form in place.
   return (
-    <div className="space-y-2">
+    <details className="space-y-2">
+      <summary className="cursor-pointer text-sm text-volt-300">Dispute the pay</summary>
       <label className="label req" htmlFor={`d-${id}`}>Why should the pay be higher? (the team and the developer read it)</label>
       <textarea id={`d-${id}`} rows={3} className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
       <p className="note">You can dispute this once. Our team decides; a decision can only raise the pay, up to the listing amount.</p>
@@ -123,6 +113,6 @@ export function DisputeForm({ sessionId, kind, id, seenAt }: { sessionId: string
       </button>
       <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       <Err text={err} />
-    </div>
+    </details>
   );
 }

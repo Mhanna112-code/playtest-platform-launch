@@ -68,7 +68,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0], body: R
     }
     if (c.tester.suspendedAt) throw new HttpError(409, "closed_account", `${name}'s account is closed for now, so they can't be paid.`);
     if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", PAY_WAITS);
-    await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name });
+    // Form mistakes (red at the field) come BEFORE the stop-once: a second press would only fail on them.
     if (reject) {
       const r = checkReject(reason);
       if (!r.ok) throw new HttpError(400, "bad_reason", r.message);
@@ -78,6 +78,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0], body: R
       const card = amountCents! > 0 ? cardRefusal(dev) : "";
       if (card) throw new HttpError(409, "no_card", card);
     }
+    await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name });
     const rev = await tx.review.create({ data: { ...piece.where, contractId: c.id, amountCents: amountCents!, agreedCents: piece.listing, reason, payKey, rejected: reject } });
     const payment = reject
       ? null

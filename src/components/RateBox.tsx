@@ -1,47 +1,43 @@
 "use client";
 import { useState } from "react";
+import { Star } from "lucide-react";
 import { ChangesBox } from "@/components/ChangesBox";
-import { FIELD } from "@/lib/client";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { usePress } from "@/lib/usePress";
 
 /**
- * (NEWEST+5) Rate: 1-5 stars + an optional comment (500 max), behind an in-page warning of what rating ends. Same
- * button rules as every other: stop once (box under the button), refusals blue, form mistakes red at the field.
+ * (NEWEST+5) Rate, as the full app's rating box: 1-5 and an optional note (500 max). A rating that finishes the part
+ * asks first (its in-page confirm, with what it ends). Same button rules as every other: stop once under the button,
+ * refusals blue, a missing rating red.
  */
 export function RateBox(p: { path: string; seenAt: string; name: string; body?: Record<string, unknown>; headline: string; lines: string[]; working: boolean }) {
-  const [open, setOpen] = useState(false);
-  const [stars, setStars] = useState(0);
+  const [stars, setStars] = useState("");
   const [comment, setComment] = useState("");
   const { press, changes, error, busy } = usePress(p.seenAt);
-  const starsErr = error.startsWith(FIELD) && error.includes("stars");
-  if (!open) return <button id="rate" className="btn-ghost" onClick={() => setOpen(true)}>Rate {p.name}</button>;
+  const send = async () => {
+    const r = await press(p.path, { ...(p.body ?? {}), stars: stars ? Number(stars) : null, comment });
+    if (r) window.location.reload();
+  };
   return (
-    <div className="info space-y-2" id="rate">
-      <p>{p.headline}</p>
-      {p.lines.map((l) => <p key={l}>{l}</p>)}
-      <fieldset>
-        <legend className="label req">Your rating of {p.name}</legend>
-        <div className="flex gap-3">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <label key={n} className="inline-flex items-center gap-1">
-              <input type="radio" name="stars" checked={stars === n} onChange={() => setStars(n)} /> {n} ★
-            </label>
-          ))}
-        </div>
-        {starsErr && <p className="err-field">{error.slice(1)}</p>}
-      </fieldset>
-      <div>
-        <label className="label" htmlFor="rate-comment">A comment (optional, shown without your name)</label>
-        <textarea id="rate-comment" rows={2} className="input" maxLength={500} value={comment} onChange={(e) => setComment(e.target.value)} />
+    <div className="space-y-2 rounded-xl border border-amber-300/25 bg-amber-300/[0.04] p-3 text-sm text-ink-200" id="rate">
+      <p className="flex items-center gap-1.5 font-medium text-white"><Star className="h-4 w-4 text-amber-300" /> Rate {p.name}</p>
+      <p className="text-xs text-ink-400">1 to 5, and a note if you like (shown without your name).{p.working ? ` ${p.headline}` : ""}</p>
+      <div className="flex flex-wrap items-end gap-2">
+        <select className="input w-44" value={stars} onChange={(e) => setStars(e.target.value)} aria-label="Your rating, 1 to 5">
+          <option value="" disabled>Choose…</option>
+          <option value="5">5 - excellent</option><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1 - poor</option>
+        </select>
+        <input className="input min-w-0 flex-1" maxLength={500} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="A note" aria-label="A note" />
+        {p.working ? (
+          <ConfirmButton className="btn-secondary" disabled={busy} title="Rate and finish?" confirmLabel="Rate and finish" onConfirm={send}
+            body={<>{[p.headline, ...p.lines].map((l) => <p key={l}>{l}</p>)}</>}>
+            Rate and finish
+          </ConfirmButton>
+        ) : (
+          <button className="btn-secondary" disabled={busy} onClick={send}>Rate</button>
+        )}
       </div>
-      <div className="flex flex-wrap gap-2">
-        <button className="btn" disabled={busy} onClick={async () => {
-          const r = await press(p.path, { ...(p.body ?? {}), stars: stars || null, comment });
-          if (r) window.location.reload();
-        }}>{p.working ? "Rate and finish" : "Rate"}</button>
-        <button className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
-      </div>
-      <ChangesBox changes={changes} error={starsErr ? "" : error} />
+      <ChangesBox changes={changes} error={error} />
     </div>
   );
 }

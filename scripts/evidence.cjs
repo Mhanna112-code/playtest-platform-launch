@@ -685,7 +685,7 @@ async function signIn(page, email) {
     await dev.goto(t11Url());
     await dev.locator(`#tester-${SA}`).locator("button:has-text('Block Ana Silva')").click();
     await shot(dev, "block-confirm-developer");
-    await dev.locator(`#tester-${SA}`).locator("button:has-text('Yes, block Ana Silva')").click();
+    await dev.locator("dialog[open] button[data-confirm='Block Ana Silva']").click();
     check("developer sees the block on the row", await has(dev, "text=You blocked Ana Silva."));
     await shot(dev, "blocked-row-developer");
     // Ana only reads a neutral line; her call was cancelled; Join is refused.
@@ -867,11 +867,12 @@ async function signIn(page, email) {
     await tab2.waitForTimeout(1500);
     check("tab 2 sent the answers", sql(`select count(*) from "Submission" where "contractId" = '${SCara}' and kind = 'written'`) === "1");
     await shot(tab2, "tab2-sent-tester");
-    await tab1.click("button:has-text('Leave the test')");
-    await tab1.locator("button:has-text('Leave the test')").last().click();
+    await tab1.click("button[aria-haspopup='dialog']:has-text('Leave the test')");
+    await tab1.click("dialog[open] button[data-confirm='Leave the test']");
     check("tab 1 Leave stopped once: 'You also did this in another tab'", await has(tab1, "text=You also did this in another tab: sent your written answers at"));
     await shot(tab1, "tab1-leave-stopped-tester");
-    await tab1.locator("button:has-text('Leave the test')").last().click();
+    await tab1.click("button[aria-haspopup='dialog']:has-text('Leave the test')");
+    await tab1.click("dialog[open] button[data-confirm='Leave the test']");
     await tab1.waitForTimeout(2000);
     check("second press left the test", sql(`select status from "Contract" where id = '${SCara}'`) === "left");
     await shot(tab1, "tab1-left-tester");
@@ -955,7 +956,7 @@ async function signIn(page, email) {
     const sub = sql(`select id from "Submission" where "contractId" = '${SDee3}' and kind = 'written'`);
     const paid = await apiPost(dev, "/api/review", { payKey: `ev23-${TS}`, kind: "submission", id: sub, amount: "8.00", tickedCents: 800, seenAt: new Date().toISOString(), confirmed: true });
     check("developer paid Dee $8", paid.status === 200, JSON.stringify(paid.body));
-    await t2.click("button:has-text('Yes, block Nora Lane')");
+    await t2.click("dialog[open] button[data-confirm='Block Nora Lane']");
     check("Block stopped once: the developer paid", await has(t2, "text=Nora Lane paid $8.00 for your written answers"));
     const y2 = await t2.evaluate(() => window.scrollY);
     await shot(t2, "block-stopped-tester");
@@ -969,7 +970,8 @@ async function signIn(page, email) {
     check("no second scroll (only the new line's height)", Math.abs(y3 - y2) < 60, `${y2} → ${y3}`);
     check("the stop box lists the payment once", (await t2.locator("div.info li", { hasText: "paid $8.00 for your written answers" }).count()) === 2); // one in the top box, one under the button
     await shot(t2, "top-box-and-stop-box-tester");
-    await t2.click("button:has-text('Yes, block Nora Lane')");
+    await t2.click("button[aria-haspopup='dialog']:has-text('Block Nora Lane')");
+    await t2.click("dialog[open] button[data-confirm='Block Nora Lane']");
     await t2.waitForTimeout(2000);
     check("second press blocked", sql(`select count(*) from "Block" where "blockedId" = '${devId}' and "blockerId" = (select "testerId" from "Contract" where id = '${SDee3}')`) === "1");
     await shot(t2, "blocked-tester");
@@ -1019,11 +1021,10 @@ async function signIn(page, email) {
     await tabB.close();
     const subE = sql(`select id from "Submission" where "contractId" = '${SE}' and kind = 'written'`);
     await apiPost(dev, "/api/review", { payKey: `ev24-${TS}`, kind: "submission", id: subE, amount: "8.00", tickedCents: 800, seenAt: new Date().toISOString(), confirmed: true });
-    await tabA.click("button:has-text('Leave the test')");
-    await tabA.locator("button:has-text('Leave the test')").last().click();
+    await tabA.click("button[aria-haspopup='dialog']:has-text('Leave the test')");
+    await tabA.click("dialog[open] button[data-confirm='Leave the test']");
     check("tester stop box: 'You also did this in another tab' + the developer paid", (await has(tabA, "text=You also did this in another tab: sent a call request at")) && (await has(tabA, "text=Nora Lane paid $8.00 for your written answers")));
     await shot(tabA, "combined-other-tab-and-paid-tester");
-    await tabA.click("button:has-text('Stay')");
     // Declined: the developer declines Eve's request; her Withdraw (page not reloaded) stops once, then is refused.
     const mine = sql(`select id from "CallRequest" where "contractId" = '${SE}' and "fromSide" = 'tester' and status = 'pending' limit 1`);
     await tabA.reload();
@@ -1262,19 +1263,20 @@ async function signIn(page, email) {
     await requestAndAccept(d, tp, T, S, 5); // an upcoming call
     check("the 'Rate Nora Lane' prompt was sent once", sql(`select count(*) from "Notification" n join "User" u on u.id = n."userId" where u.email = '${T27}' and n.text like 'Rate Nora Lane%'`) === "1");
     await tp.reload();
-    check("available after the review: Rate button", await has(tp, "button:has-text('Rate Nora Lane')"));
+    check("available after the review: the rating box", await has(tp, "#rate >> text=Rate Nora Lane"));
     await shot(tp, "rate-available-tester");
-    await tp.click("button:has-text('Rate Nora Lane')");
-    check("warning: rating ends your part", await has(tp, "text=Rating ends your part in Coral Cove. You won't be able to send more work, book calls or join this test again."));
+    await tp.click("#rate button:has-text('Rate and finish')");
+    check("warning: rating ends your part", await has(tp, "dialog[open] >> text=Rating ends your part in Coral Cove. You won't be able to send more work, book calls or join this test again."));
     check("warning: the unsent part won't be paid", await has(tp, "text=Not sent yet from your contract: written answers ($8) — it won't be paid."));
     check("warning: upcoming calls cancelled (one line)", await has(tp, "text=All your upcoming calls will be cancelled."));
     await shot(tp, "rate-warning-tester");
-    await tp.click("button:has-text('Rate and finish')");
+    await tp.click("dialog[open] button[data-confirm='Rate and finish']");
     check("stars missing: red at the field", await has(tp, ".err-field >> text=Choose 1 to 5 stars."));
     await shot(tp, "rate-stars-missing-red-tester");
-    await tp.check("label:has-text('4 ★') input");
-    await tp.fill("#rate-comment", "Clear build and quick pay.");
-    await tp.click("button:has-text('Rate and finish')");
+    await tp.selectOption("#rate select", "4");
+    await tp.fill("#rate input[aria-label='A note']", "Clear build and quick pay.");
+    await tp.click("#rate button:has-text('Rate and finish')");
+    await tp.click("dialog[open] button[data-confirm='Rate and finish']");
     await tp.waitForTimeout(2000);
     check("rated: 'You rated Nora Lane.' (hidden from the developer for now)", await has(tp, "text=You rated Nora Lane."));
     check("the upcoming call was cancelled", sql(`select count(*) from "Call" where "contractId" = '${S}' and status = 'booked' and "startsAt" > now()`) === "0");
@@ -1288,10 +1290,9 @@ async function signIn(page, email) {
     check("developer: 'Ana Silva rated you: you'll see it after you rate her (or on …)'", await has(d, "text=Ana Silva rated you: you'll see it after you rate her (or on"));
     check("not in the average yet", sql(`select count(*) from "Rating" where "rateeId" = (select id from "User" where email = '${DEV27}') and "revealedAt" is not null`) === "0");
     await shot(d, "dev-rating-hidden-developer");
-    await d.click("button:has-text('Rate Ana Silva')");
-    await d.check("label:has-text('5 ★') input");
-    await d.fill("#rate-comment", "Thorough and kind.");
-    await d.click("button:text-is('Rate')");
+    await d.selectOption("#rate select", "5");
+    await d.fill("#rate input[aria-label='A note']", "Thorough and kind.");
+    await d.click("#rate button:text-is('Rate')");
     await d.waitForTimeout(2000);
     check("both revealed: 'Ana Silva rated you: 4 ★' and 'You rated Ana Silva: 5 ★'", (await has(d, "text=Ana Silva rated you: 4 ★")) && (await has(d, "text=You rated Ana Silva: 5 ★")));
     await shot(d, "dev-rated-both-revealed-developer");

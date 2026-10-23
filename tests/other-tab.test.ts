@@ -199,6 +199,24 @@ describe("Pay after a tester left (owner bug report)", () => {
   });
 });
 
+describe("Reject: a missing reason is red before the stop-once", () => {
+  it("reason checked first (400 at the field); with a reason, the stop-once; then it rejects", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    const pageLoaded = seen();
+    await later();
+    await joined(testId, "Ben Carter", "he"); // a stop-once reason
+    const base = { payKey: randomUUID(), action: "reject", kind: "submission", id: sub.id, seenAt: pageLoaded };
+    const r1 = await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { ...base, reason: "" } })).then(json);
+    expect(r1).toMatchObject({ status: 400, body: { error: { code: "bad_reason" } } });
+    const r2 = await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { ...base, reason: "Missing answers" } })).then(json);
+    expect(r2.body.error.code).toBe("stop_once");
+    expect((await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { ...base, reason: "Missing answers", confirmed: true } }))).status).toBe(200);
+  });
+});
+
 describe("Edit Save's tail", () => {
   it("a stop for a tester's action only (no listing edit elsewhere) uses the plain tail", async () => {
     const { dev, testId } = await setup();
