@@ -7,7 +7,8 @@ import { CallTimer } from "@/components/CallTimer";
 import { CallPresence, CallTimelineLine } from "@/components/CallPresence";
 import { LIVE_SECTIONS, LiveSection } from "@/components/LivePanel";
 
-type Mine = { id: string; when: string; minutes: number; room: string; canCancel: boolean; started: boolean; ended?: boolean; reported: boolean; cancelled: string; late?: string; rate?: string; joinable?: boolean; devJoinedAt?: string | null; testerJoinedAt?: string | null };
+type Mine = { id: string; when: string; minutes: number; room: string; canCancel: boolean; started: boolean; ended?: boolean; reported: boolean; cancelled: string; late?: string; rate?: string; joinable?: boolean; devJoinedAt?: string | null; testerJoinedAt?: string | null; joined?: string; outcome?: { label: string; tone: "grey" | "amber" | "green" | "rose" }[]; logged?: number | null };
+const TONE = { grey: "", amber: "border-amber-300/40 text-amber-200", green: "border-emerald-400/40 text-emerald-200", rose: "border-rose-400/40 text-rose-200" } as const;
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
@@ -28,7 +29,17 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
   const past = p.mine.filter((m) => m.cancelled || m.ended);
   const row = (m: Mine) => (
     <li key={m.id} data-call={m.cancelled || m.ended ? "past" : "booked"} className="flex flex-wrap items-center gap-2 py-2 text-sm">
-      <span className="mr-auto text-slate-200">{fmt(m.when)} · {m.minutes} min{m.rate && ` · ${m.rate}`}{m.cancelled && ` · ${m.cancelled}`}{m.late && <span className="ml-2 badge">{m.late}</span>}</span>
+      {m.ended || m.cancelled ? (
+        // Past calls (the full app's PastRow): when · length · who joined · outcome badges.
+        <span className="mr-auto flex flex-wrap items-center gap-2">
+          <span className="text-slate-200">{fmt(m.when)}</span>
+          <span className="text-slate-400">· {m.logged ?? m.minutes} min{m.logged != null && m.logged !== m.minutes ? ` (booked ${m.minutes})` : ""}</span>
+          {m.joined && !m.cancelled && <span className="text-xs text-slate-400">{m.joined}</span>}
+          {(m.outcome ?? []).map((o) => <span key={o.label} className={`badge ${TONE[o.tone]}`}>{o.label}</span>)}
+        </span>
+      ) : (
+        <span className="mr-auto text-slate-200">{fmt(m.when)} · {m.minutes} min{m.rate && ` · ${m.rate}`}{m.late && <span className="ml-2 badge">{m.late}</span>}</span>
+      )}
       {!m.cancelled && m.joinable && <JoinCall callId={m.id} />}
       {!m.cancelled && !m.started && (m.canCancel ? <button className="btn-secondary px-3 py-1 text-xs" disabled={busy} onClick={() => go("cancel-call", { callId: m.id }, "cancel-" + m.id)}>Cancel</button> : (
         <span className="inline-flex gap-2">

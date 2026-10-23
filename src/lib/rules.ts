@@ -648,6 +648,28 @@ export function callJoinable(x: { status: string; startsAt: Date; minutes: numbe
   return t >= s - JOIN_OPENS_MIN * 60_000 && t <= s + (x.minutes + JOIN_CLOSES_AFTER_END_MIN) * 60_000;
 }
 
+/** (The full app's joinedWords) Who joined a call that started: "both joined", "only you joined", "only Ana joined", "nobody joined". */
+export function joinedWords(x: { startsAt: Date; devJoinedAt: Date | null; testerJoinedAt: Date | null }, side: "tester" | "developer", otherName: string, now = new Date()) {
+  if (x.startsAt.getTime() > now.getTime()) return "";
+  const mine = side === "tester" ? !!x.testerJoinedAt : !!x.devJoinedAt;
+  const theirs = side === "tester" ? !!x.devJoinedAt : !!x.testerJoinedAt;
+  return mine && theirs ? "both joined" : mine ? "only you joined" : theirs ? `only ${otherName} joined` : "nobody joined";
+}
+
+/** A past call's outcome badges (Past calls): cancelled (and by whom / why), a problem reported, paid / not paid yet. */
+export function callOutcome(x: { status: string; cancelledBy: string | null; cancelNote: string; noShowBy: string | null; review: { amountCents: number; rejected: boolean } | null }, devName: string, side: "tester" | "developer") {
+  const out: { label: string; tone: "grey" | "amber" | "green" | "rose" }[] = [];
+  if (x.status === "cancelled") {
+    const who = x.cancelledBy === side ? "you" : x.cancelledBy === "tester" ? (side === "developer" ? "the tester" : "you") : x.cancelledBy === "developer" ? devName : "the site";
+    out.push({ label: x.cancelNote && x.cancelledBy !== "tester" && x.cancelledBy !== "developer" ? x.cancelNote.replace(/\.$/, "") : `cancelled by ${who}`, tone: "grey" });
+    return out;
+  }
+  if (x.noShowBy) out.push({ label: "problem reported", tone: "amber" });
+  if (x.review) out.push(x.review.rejected ? { label: "not paid (rejected)", tone: "rose" } : { label: `paid ${money(x.review.amountCents)}`, tone: "green" });
+  else out.push({ label: "not paid yet", tone: "amber" });
+  return out;
+}
+
 /** The length's default: from when both joined to the booked end (at least 1 minute); else the booked length. */
 export function defaultCallMinutes(startsAt: Date, minutes: number, devJoinedAt: Date | null, testerJoinedAt: Date | null) {
   if (!devJoinedAt || !testerJoinedAt) return minutes;

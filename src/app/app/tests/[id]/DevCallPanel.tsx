@@ -4,13 +4,15 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { JoinCall } from "@/components/JoinCall";
 import { usePress } from "@/lib/usePress";
 import { MARKABLE } from "@/lib/markJump";
-import { LivePanel } from "@/components/LivePanel";
+import { LIVE_SECTIONS, LivePanel, LiveSection } from "@/components/LivePanel";
 import { CallTimer } from "@/components/CallTimer";
-import { CallPresence } from "@/components/CallPresence";
+import { CallPresence, CallTimelineLine } from "@/components/CallPresence";
 
 export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string; joinable?: boolean };
 export type DevSet = { id: string; label: string; calls: DevCall[] };
 export type DevReq = { id: string; times: string[]; weeks: number; repeat: string; mine: boolean; rate: string; minutes?: number };
+export type DevPast = { id: string; who: string; when: string; minutes: number; logged: number | null; joined: string; outcome: { label: string; tone: "grey" | "amber" | "green" | "rose" }[]; devJoinedAt: string | null; testerJoinedAt: string | null; cancelled: boolean };
+const TONE = { grey: "", amber: "border-amber-300/40 text-amber-200", green: "border-emerald-400/40 text-emerald-200", rose: "border-rose-400/40 text-rose-200" } as const;
 export type DevTester = { contractId: string; name: string; terms: string; booked: number; calls: DevCall[]; sets: DevSet[]; requests: DevReq[] };
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -21,7 +23,7 @@ const short = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: 
  * "N of 3 booked"; [Request a time] to everyone ticked; then per-tester blocks (ticked testers, or everyone with a call or
  * request when nothing is ticked): booked calls, daily/weekly sets as one line, waiting requests. Boxes under the button.
  */
-export function DevCallPanel({ testId, seenAt, testers, canRequest }: { testId: string; seenAt: string; testers: DevTester[]; canRequest: boolean }) {
+export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }: { testId: string; seenAt: string; testers: DevTester[]; canRequest: boolean; past?: DevPast[] }) {
   const { press, changes, error, busy, at, errData } = usePress(seenAt);
   const [ticked, setTicked] = useState<string[]>([]);
   const [kind, setKind] = useState<"one" | "daily" | "weekly">("one");
@@ -161,6 +163,19 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest }: { testId: 
         </div>
       ))}
     </section>
+    {/* Past calls (the full app's PastRow): when · who · length · who joined · outcome badges, and the room timeline. */}
+    <LiveSection title={LIVE_SECTIONS.past} show={past.length > 0}>
+      {past.map((x) => (
+        <li key={x.id} data-call="past" className="flex flex-wrap items-center gap-2 py-2 text-sm">
+          <span className="text-slate-200">{fmt(x.when)}</span>
+          <span className="text-slate-400">· {x.who}</span>
+          <span className="text-slate-400">· {x.logged ?? x.minutes} min{x.logged != null && x.logged !== x.minutes ? ` (booked ${x.minutes})` : ""}</span>
+          {x.joined && !x.cancelled && <span className="text-xs text-slate-400">{x.joined}</span>}
+          {x.outcome.map((o) => <span key={o.label} className={`badge ${TONE[o.tone]}`}>{o.label}</span>)}
+          {!x.cancelled && <CallTimelineLine people={[{ name: x.who, joinedAt: x.testerJoinedAt }, { name: "You", joinedAt: x.devJoinedAt }]} />}
+        </li>
+      ))}
+    </LiveSection>
     </LivePanel>
   );
 }

@@ -66,3 +66,26 @@ describe("call presence (the full app's CallPresence, on lean data)", () => {
     expect(d.meJoinedAt).toEqual(at);
   });
 });
+
+describe("Past calls (the full app's PastRow): who joined and the outcome", () => {
+  it("both / only you / only X / nobody; nothing before the start", async () => {
+    const { joinedWords } = await import("@/lib/rules");
+    const s = new Date("2026-11-01T15:00:00Z"), after = new Date("2026-11-01T16:00:00Z"), j = new Date("2026-11-01T15:01:00Z");
+    expect(joinedWords({ startsAt: s, devJoinedAt: j, testerJoinedAt: j }, "tester", "Nora Lane", after)).toBe("both joined");
+    expect(joinedWords({ startsAt: s, devJoinedAt: null, testerJoinedAt: j }, "tester", "Nora Lane", after)).toBe("only you joined");
+    expect(joinedWords({ startsAt: s, devJoinedAt: j, testerJoinedAt: null }, "tester", "Nora Lane", after)).toBe("only Nora Lane joined");
+    expect(joinedWords({ startsAt: s, devJoinedAt: null, testerJoinedAt: null }, "developer", "Ana Silva", after)).toBe("nobody joined");
+    expect(joinedWords({ startsAt: after, devJoinedAt: null, testerJoinedAt: null }, "developer", "Ana Silva", s)).toBe("");
+  });
+
+  it("outcome badges: cancelled (by whom, or the site's reason), problem reported, paid / rejected / not paid yet", async () => {
+    const { callOutcome } = await import("@/lib/rules");
+    const base = { status: "booked", cancelledBy: null, cancelNote: "", noShowBy: null, review: null };
+    expect(callOutcome({ ...base, status: "cancelled", cancelledBy: "developer" }, "Nora Lane", "tester")).toEqual([{ label: "cancelled by Nora Lane", tone: "grey" }]);
+    expect(callOutcome({ ...base, status: "cancelled", cancelledBy: "tester" }, "Nora Lane", "tester")).toEqual([{ label: "cancelled by you", tone: "grey" }]);
+    expect(callOutcome({ ...base, status: "cancelled", cancelledBy: "site", cancelNote: "Nobody joined, so the call was cancelled." }, "Nora Lane", "developer")).toEqual([{ label: "Nobody joined, so the call was cancelled", tone: "grey" }]);
+    expect(callOutcome({ ...base, noShowBy: "tester", review: { amountCents: 1500, rejected: false } }, "Nora Lane", "developer")).toEqual([{ label: "problem reported", tone: "amber" }, { label: "paid $15.00", tone: "green" }]);
+    expect(callOutcome({ ...base, review: { amountCents: 0, rejected: true } }, "Nora Lane", "tester")).toEqual([{ label: "not paid (rejected)", tone: "rose" }]);
+    expect(callOutcome(base, "Nora Lane", "tester")).toEqual([{ label: "not paid yet", tone: "amber" }]);
+  });
+});

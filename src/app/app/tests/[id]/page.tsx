@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, pronouns } from "@/lib/format";
-import { callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, defaultCallMinutes, choiceNoteLine, closesInLine, lateLabel, termsLine } from "@/lib/rules";
+import { callOutcome, joinedWords, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, defaultCallMinutes, choiceNoteLine, closesInLine, lateLabel, termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
 import { Chat } from "@/components/Chat";
@@ -172,7 +172,19 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           sent={invites.map((i) => ({ id: i.id, name: people.get(i.testerId) ?? "?", status: i.status === "joined" ? "joined" : expired ? "expired" : "waiting for them to join" }))}
         />
       )}
-      <DevCallPanel testId={t.id} seenAt={seenAt} canRequest={t.status === "open"} testers={devTesters} />
+      <DevCallPanel
+        testId={t.id}
+        seenAt={seenAt}
+        canRequest={t.status === "open"}
+        testers={devTesters}
+        past={t.contracts
+          .flatMap((c) => c.calls.filter((x) => x.status === "cancelled" || x.review).map((x) => ({
+            id: x.id, who: displayName(c.tester), when: x.startsAt.toISOString(), minutes: x.minutes, logged: x.actualMinutes, cancelled: x.status === "cancelled",
+            joined: joinedWords(x, "developer", displayName(c.tester), now), outcome: callOutcome(x, displayName(u), "developer"),
+            devJoinedAt: x.devJoinedAt?.toISOString() ?? null, testerJoinedAt: x.testerJoinedAt?.toISOString() ?? null,
+          })))
+          .sort((a, b) => b.when.localeCompare(a.when))}
+      />
       {saved && (
         <p className="ok">
           {Number(offered) > 0 ? `Saved. Offered the new terms to ${offered} working tester${Number(offered) === 1 ? "" : "s"}.` : "Saved. New testers join on the new listing; testers already in keep their contract."}
