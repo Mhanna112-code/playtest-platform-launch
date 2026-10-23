@@ -258,6 +258,7 @@ export async function runDaily(now = new Date()) {
       const line = choiceLine(displayName(dev), s.kind, auto);
       await notify(c.tester.email, line, [line], `/app/sessions/${c.id}`);
       await db.$transaction((tx) => recordEvent(tx, c.testId, "choice", `${displayName(c.tester)} can now charge or let go of their ${s.kind === "recording" ? "recording" : "written answers"}`, false, {}, c.id));
+      await (await import("./ratings")).maybePromptRating(c.id);
       out.choices++;
       continue;
     }

@@ -95,7 +95,7 @@ export function testerRefusal(
   fmt: (d: Date) => string,
   now: Date,
 ) {
-  if (c.status === "left") return "You left this test.";
+  if (c.status === "left") return c.endKind === "rated" ? "You rated this test, so your part is finished." : "You left this test.";
   if (c.status === "ended") return endedLine(c, devName, fmt);
   if (test.openUntil && test.openUntil.getTime() < now.getTime()) return `This test closed on ${fmt(test.openUntil)}.`;
   return "";
@@ -314,6 +314,7 @@ export function endedLine(c: { status: string; endKind: string; endedAt: Date | 
   if (c.status !== "ended" || !c.endedAt) return "";
   if (c.endKind === "blocked") return `Your session on ${c.title ?? "this test"} ended.`; // neutral: a block is never revealed
   if (c.endKind === "stopped") return `${devName} stopped the test on ${fmt(c.endedAt)}. Work you sent is still reviewed.`;
+  if (c.endKind === "rated") return `${devName} finished your part in ${c.title ?? "this test"}. Work you sent is still reviewed.`;
   return `${devName} ended your session early on ${fmt(c.endedAt)}. Work you sent is still reviewed.`;
 }
 

@@ -7,6 +7,7 @@ import { addDevSide } from "@/lib/server/payments";
 import { sendChat, sendMessage } from "@/lib/server/messages";
 import { editTest, endEarly, nextRound, openDraft, stopTest } from "@/lib/server/tests";
 import { requireActive } from "@/lib/server/users";
+import { devRate } from "@/lib/server/ratings";
 import { logTestAction } from "@/lib/server/actionText";
 
 type Ctx = { params: Promise<{ id: string; action: string }> };
@@ -38,6 +39,8 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         return ok({ ok: true });
       case "stop":
         return ok(await stopTest(u, id, body));
+      case "rate":
+        return ok(await devRate(u, id, body));
       case "end-early":
         return ok(await endEarly(u, id, body));
       case "next-round":

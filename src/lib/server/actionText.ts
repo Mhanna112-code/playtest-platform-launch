@@ -55,6 +55,7 @@ export async function logTesterAction(userId: string, contractId: string, action
     case "cancel-call": text = `cancelled ${await callLine(s(body.callId), false)}`; break;
     case "no-show": text = `reported a problem with ${await callLine(s(body.callId), false)}`; break;
     case "dispute": text = "opened a dispute"; break;
+    case "rate": text = "rated the test"; break;
     default: return;
   }
   await logAction(userId, c.testId, body, text);
@@ -115,6 +116,11 @@ export async function logTestAction(userId: string, testId: string, action: stri
       break;
     }
     case "join": text = "joined this test"; break;
+    case "rate": {
+      const c = await db.contract.findUnique({ where: { id: s(body.contractId) }, include: { tester: true } });
+      text = `rated ${c ? displayName(c.tester) : "a tester"}`;
+      break;
+    }
     case "apply": text = (result as { joined?: boolean })?.joined ? "joined this test" : "applied to join this test"; break;
     case "withdraw-application": text = "withdrew your application"; break;
     default: return;

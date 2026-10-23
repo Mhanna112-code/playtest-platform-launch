@@ -14,6 +14,8 @@ import { owedForBox, sweepHeldCalls } from "@/lib/server/holds";
 import { paidLines } from "@/lib/server/paid";
 import { termsRowLines } from "@/lib/server/terms";
 import { BlockButton } from "@/components/BlockButton";
+import { RateBox } from "@/components/RateBox";
+import { rateBlocker, rateWarning, ratingSummary } from "@/lib/server/ratings";
 import { LiveTop } from "@/components/LiveTop";
 import { Applications } from "./Applications";
 import { rateLabel } from "@/lib/server/requests";
@@ -57,11 +59,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const msgs = await db.message.findMany({ where: { testId: id }, orderBy: { createdAt: "asc" }, include: { sender: true }, take: 2000 });
   const pendingApps = await db.application.findMany({ where: { testId: id, status: "pending" }, orderBy: { createdAt: "asc" } });
   const appUsers = await db.user.findMany({ where: { id: { in: pendingApps.map((a) => a.testerId) } }, include: { profile: true } });
+  const appRatings = new Map(await Promise.all(appUsers.map(async (x) => [x.id, (await ratingSummary(x.id)).line] as const)));
   const invitedIds = (await db.invite.findMany({ where: { testId: id, status: "sent" } })).map((i) => i.testerId);
   const preJoin = await db.user.findMany({ where: { id: { in: [...pendingApps.map((a) => a.testerId), ...invitedIds] } } });
   const apps = pendingApps.map((a) => {
     const x = appUsers.find((y) => y.id === a.testerId)!;
-    return { id: a.id, name: displayName(x), note: a.note, profile: [...(x.profile?.devices ?? []), ...(x.profile?.languages ?? [])].join(", ") };
+    return { id: a.id, name: displayName(x), note: a.note, profile: [...(x.profile?.devices ?? []), ...(x.profile?.languages ?? []), ...(appRatings.get(x.id) ? [appRatings.get(x.id)!] : [])].join(", ") };
   });
   const blockedIds = new Set((await db.block.findMany({ where: { blockerId: u.id } })).map((b) => b.blockedId));
   const blockedBy = new Set((await db.block.findMany({ where: { blockedId: u.id } })).map((b) => b.blockerId));
@@ -109,6 +112,15 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       })),
     };
   });
+  // (NEWEST+5) Rating each tester: available / done, the warning, and each tester's average.
+  const rateInfo = new Map(
+    await Promise.all(
+      t.contracts.map(async (c) => {
+        const mine = await db.rating.findUnique({ where: { contractId_side: { contractId: c.id, side: "developer" } } });
+        return [c.id, { mine, blocker: mine ? "rated" : await rateBlocker(c.id, "developer"), warn: await rateWarning(c.id, "developer"), avg: (await ratingSummary(c.testerId)).line }] as const;
+      }),
+    ),
+  );
   return (
     <>
       <AutoRefresh query={`test=${t.id}`} />
@@ -182,6 +194,20 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <p key={x.id} className="note">Call on {fmtDateTime(x.startsAt)}: {lateOf(c, x)}</p>
             ))}
             {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}
+            {rateInfo.get(c.id)?.avg && <p className="note">{displayName(c.tester)}: {rateInfo.get(c.id)?.avg}</p>}
+            {rateInfo.get(c.id)?.mine ? (
+              <p className="note">You rated {displayName(c.tester)}: {rateInfo.get(c.id)?.mine?.stars} ★</p>
+            ) : rateInfo.get(c.id)?.blocker === "" ? (
+              <RateBox
+                path={`/api/tests/${t.id}/rate`}
+                body={{ contractId: c.id }}
+                seenAt={seenAt}
+                name={displayName(c.tester)}
+                working={!!rateInfo.get(c.id)?.warn.working}
+                headline={rateInfo.get(c.id)?.warn.working ? `Rating ends ${displayName(c.tester)}'s part in ${t.title}: ${pronouns(c.tester.pronoun).subj} can't send more work or join again.` : `Once you rate, ${displayName(c.tester)}'s rating is final.`}
+                lines={rateInfo.get(c.id)?.warn.lines ?? []}
+              />
+            ) : null}
             {blockedIds.has(c.testerId) ? <p className="note">You blocked {displayName(c.tester)}. Unblock in Settings → Blocked people.</p> : <BlockButton seenAt={seenAt} testId={t.id} userId={c.testerId} name={displayName(c.tester)} effect="Their session ends now (work they sent stays payable), calls between you are cancelled, and chat closes." />}
             {c.submissions.length === 0 && c.calls.length === 0 && <p className="note">Nothing sent yet.</p>}
             {c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).map((x) => (

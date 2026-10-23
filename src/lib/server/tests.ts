@@ -76,7 +76,7 @@ export function parseListing(body: Record<string, unknown>, partial = false): Pa
   return out;
 }
 
-async function lockTest(tx: Tx, id: string) {
+export async function lockTest(tx: Tx, id: string) {
   await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${id} FOR UPDATE`;
   const t = await tx.test.findUnique({ where: { id } });
   if (!t) throw new HttpError(404, "not_found", "This test was deleted.");
@@ -432,6 +432,8 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     // a new invite. Their old session is restored (work, reviews, payments, chat, disputes, call history).
     const old = await tx.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } });
     if (old && old.status === "working") throw new HttpError(409, "already", "You've already joined this test.");
+    // (NEWEST+5) A rating finishes the part for good: no rejoin ever.
+    if (old && (await tx.rating.count({ where: { contractId: old.id } }))) throw new HttpError(409, "not_again", old.endKind === "rated" && old.status === "left" ? "You rated this test, so you can't join it again." : "You can't join this test again.");
     if (old && old.status === "ended" && !(await tx.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } }))) throw new HttpError(409, "not_again", "You can't join this test again.");
     const dev = await tx.user.findUniqueOrThrow({ where: { id: t.developerId } });
     if (dev.suspendedAt) throw new HttpError(409, "closed", "This test isn't taking new testers any more.");

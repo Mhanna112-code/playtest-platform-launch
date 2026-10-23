@@ -38,6 +38,7 @@ export async function joinRefusal(testerId: string, testId: string) {
   if (t.developer.holdStartedAt) return "This test is paused, so it isn't taking new testers right now.";
   const old = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId } } });
   if (old?.status === "working") return "You've already joined this test.";
+  if (old && (await db.rating.count({ where: { contractId: old.id } }))) return old.status === "left" && old.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't join this test again.";
   if (old?.status === "ended" && !(await db.invite.findFirst({ where: { testId, testerId, status: "sent" } }))) return "You can't join this test again.";
   const testersIn = await db.contract.count({ where: { testId, status: "working" } });
   if (testersIn >= t.spots) return (await db.invite.findFirst({ where: { testId, testerId, status: "sent" } })) ? `${t.title} is full right now.` : "This test is full.";

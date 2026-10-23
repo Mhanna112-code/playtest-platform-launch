@@ -19,6 +19,8 @@ import { rateLabel } from "@/lib/server/requests";
 import { chatMessages } from "@/lib/server/messages";
 import { BlockButton } from "@/components/BlockButton";
 import { LiveTop } from "@/components/LiveTop";
+import { RateBox } from "@/components/RateBox";
+import { rateBlocker, rateWarning } from "@/lib/server/ratings";
 import { openOffer } from "@/lib/server/terms";
 
 export const metadata = { title: "Your session · Playtest" };
@@ -56,6 +58,10 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const owedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", settledAt: null, owedUntil: { not: null }, callId: { not: null } }, select: { callId: true } })).map((p) => p.callId!));
   const failedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", callId: { not: null } }, select: { callId: true } })).map((p) => p.callId!));
   const cancelledText = (x: { status: string; cancelledBy: string | null }) => (x.status !== "cancelled" ? "" : x.cancelledBy === "tester" ? "you cancelled it" : `cancelled by ${x.cancelledBy === "developer" ? dev : "the site"}`);
+  // (NEWEST+5) Rating the developer.
+  const myRating = await db.rating.findUnique({ where: { contractId_side: { contractId: c.id, side: "tester" } } });
+  const rateBlock = myRating ? "rated" : await rateBlocker(c.id, "tester");
+  const rateWarn = await rateWarning(c.id, "tester");
   const infoChanged = (await db.testEvent.count({ where: { testId: c.testId, kind: "info", createdAt: { gt: c.joinedAt } } })) > 0;
   return (
     <>
@@ -88,7 +94,18 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         )}
         {c.keepPrivate && <p className="note">You agreed to keep this build and what you see private.</p>}
         {c.status === "working" && <LeaveButton sessionId={c.id} seenAt={seenAt} />}
-        {c.status === "left" && c.test.status === "open" && <p className="text-sm"><a href={`/app/find/${c.testId}`}>Join this test again</a> on the current listing: your session comes back with everything in it.</p>}
+        {myRating && <p className="note">You rated {dev}: {myRating.stars} ★{myRating.comment ? ` · “${myRating.comment}”` : ""}</p>}
+        {rateBlock === "" && (
+          <RateBox
+            path={`/api/sessions/${c.id}/rate`}
+            seenAt={seenAt}
+            name={dev}
+            working={rateWarn.working}
+            headline={rateWarn.working ? `Rating ends your part in ${c.title}. You won't be able to send more work, book calls or join this test again.` : `Once you rate, you won't be able to join ${c.title} again.`}
+            lines={rateWarn.lines}
+          />
+        )}
+        {c.status === "left" && c.endKind !== "rated" && !myRating && c.test.status === "open" && <p className="text-sm"><a href={`/app/find/${c.testId}`}>Join this test again</a> on the current listing: your session comes back with everything in it.</p>}
         {!(await db.block.count({ where: { blockerId: u.id, blockedId: c.test.developerId } })) && (
           <BlockButton seenAt={seenAt} sessionId={c.id} userId={c.test.developerId} name={dev} effect="Your session with them ends now (work you sent stays payable), calls between you are cancelled, and chat closes." />
         )}

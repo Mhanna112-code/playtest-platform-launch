@@ -5,7 +5,7 @@ import { api } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
 import { PressButton } from "@/components/PressButton";
 
-type Tester = { id: string; name: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string };
+type Tester = { id: string; name: string; rating?: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string };
 type Sent = { id: string; name: string; status: string };
 
 
@@ -63,7 +63,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
   const row = (t: Tester) => (
     <label key={t.id} className={"block " + (t.grey ? "text-slate-400" : "")}>
       <input type="checkbox" disabled={!!t.grey} checked={!t.grey && ticked.includes(t.id)} onChange={(e) => setTicked(e.target.checked ? [...ticked, t.id] : ticked.filter((x) => x !== t.id))} /> {t.name}{" "}
-      <span className="note">· {[...t.devices, ...t.languages].join(", ")}</span>
+      <span className="note">· {[...t.devices, ...t.languages].join(", ")}{t.rating && ` · ${t.rating}`}</span>
       {t.grey && <span className="ml-2 text-xs">{t.grey}</span>}
     </label>
   );

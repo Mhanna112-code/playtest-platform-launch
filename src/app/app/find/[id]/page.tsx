@@ -6,6 +6,7 @@ import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, needsGap } from "@/lib/server/tests";
 import { JoinBox } from "./JoinBox";
 import { LiveTop } from "@/components/LiveTop";
+import { ratingSummary } from "@/lib/server/ratings";
 import { Chat } from "@/components/Chat";
 import { chatMessages } from "@/lib/server/messages";
 
@@ -25,6 +26,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   const chatClosed = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: u.id }] } })) > 0;
   const blocked = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: u.id }] } })) > 0;
   const l = asListing(t);
+  const devRating = await ratingSummary(t.developerId);
+  const ratedHere = mine ? (await db.rating.count({ where: { contractId: mine.id } })) > 0 : false;
   const invite = await db.invite.findFirst({ where: { testId: t.id, testerId: u.id, status: "sent" } });
   const seenAt = new Date().toISOString();
   const closed = t.status !== "open" || testersIn >= t.spots || (t.openUntil && t.openUntil < new Date());
@@ -34,7 +37,13 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       {t.developerId !== u.id && <LiveTop scope={`listing:${t.id}`} seenAt={seenAt} seeIt="#listing" />}
       <div className="panel" id="listing">
         <h1>{t.title}</h1>
-        <p className="note">by {displayName(t.developer)}{t.category && ` · ${t.category}`}</p>
+        <p className="note">by {displayName(t.developer)}{devRating.line && ` · ${devRating.line}`}{t.category && ` · ${t.category}`}</p>
+        {devRating.comments.length > 0 && (
+          <details className="text-sm">
+            <summary className="cursor-pointer">What testers said</summary>
+            <ul className="list-disc pl-5">{devRating.comments.map((cm, i) => <li key={i}>“{cm}”</li>)}</ul>
+          </details>
+        )}
         {t.description && <p className="whitespace-pre-wrap text-sm">{t.description}</p>}
         <p className="text-sm"><b>What you get:</b> {termsLine(l, true)}</p>
         <p className="note">
@@ -52,7 +61,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           </>
         )}
         <p className="note">Everything above is fixed in your contract when you join: neither side can change it later.</p>
-        {mine && mine.status === "left" && <p className="info">You left this test. Joining again restores your session: work you sent, payments and chat stay; new work is on the current listing.</p>}
+        {ratedHere && <p className="info">{mine?.status === "left" && mine.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't join this test again."}</p>}
+        {mine && mine.status === "left" && !ratedHere && <p className="info">You left this test. Joining again restores your session: work you sent, payments and chat stay; new work is on the current listing.</p>}
         {canChat && (
           <details className="text-sm">
             <summary className="cursor-pointer">Chat with {displayName(t.developer)}</summary>
@@ -80,7 +90,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         ) : (
           <>{gap && <p className="info">{gap.replace(/ Add .*$/, "")} You don&apos;t list it in your profile.</p>}</>
         )}
-        {t.developerId === u.id || !u.isTester || closed || blocked ? null : (
+        {t.developerId === u.id || !u.isTester || closed || blocked || ratedHere ? null : (
           <JoinBox
             testId={t.id}
             seenAt={seenAt}

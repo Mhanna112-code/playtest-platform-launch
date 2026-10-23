@@ -25,6 +25,12 @@ export async function invitable(devId: string, testId: string) {
   const test = await db.test.findUniqueOrThrow({ where: { id: testId } });
   const workedWith = new Set((await db.contract.findMany({ where: { test: { developerId: devId } }, select: { testerId: true } })).map((c) => c.testerId));
   const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  // (NEWEST+5) "4.6 ★ (12 ratings)" on each invite row.
+  const grouped = await db.rating.groupBy({ by: ["rateeId"], where: { rateeId: { in: testers.map((t) => t.id) } }, _avg: { stars: true }, _count: { _all: true } });
+  const ratingLine = (id: string) => {
+    const g = grouped.find((x) => x.rateeId === id);
+    return g ? `${(g._avg.stars ?? 0).toFixed(1)} ★ (${g._count._all} rating${g._count._all === 1 ? "" : "s"})` : "";
+  };
   return testers
     .filter((t) => !removed.has(t.id))
     .map((t) => {
@@ -33,7 +39,7 @@ export async function invitable(devId: string, testId: string) {
       const grey = inTest.some((c) => c.testerId === t.id) ? "Already in this test" : inv ? `Invited ${fmt(inv.createdAt)}` : t.suspendedAt ? "Can't be invited right now" : n >= MAX_ACTIVE_TESTS ? "Can't join more tests right now" : null;
       return {
         id: t.id, name: displayName(t), devices: t.profile?.devices ?? [], languages: t.profile?.languages ?? [], categories: t.profile?.categories ?? [],
-        invited: !!inv, inviteId: inv?.id ?? null, grey,
+        invited: !!inv, inviteId: inv?.id ?? null, grey, rating: ratingLine(t.id),
         gap: missingNeed(test, t.profile),
         section: workedWith.has(t.id) ? "worked" : !needsGap(test, t.profile) ? "suggested" : "other",
       };

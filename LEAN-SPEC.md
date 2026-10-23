@@ -13,7 +13,7 @@ and look, but this version deliberately drops most of its complexity.
 - WARNING (in-page confirm on Rate, like the others):
   - still in the test: "Rating ends your part in Harbor Run. You won't be able to send more work, book calls or join
     this test again." + lines when they apply: "Not sent yet from your contract: recording ($12) — it won't be paid."
-    and "Your call on Thu, Nov 5 at 3:00 PM will be cancelled." [Rate and finish] [Cancel]
+    and, if any calls are booked, one short line: "All your upcoming calls will be cancelled." (no list) [Rate and finish] [Cancel]
   - already out: "Once you rate, you won't be able to join Harbor Run again." [Rate] [Cancel]
 - EFFECT: like Leave (session ends, upcoming calls cancelled, requests closed, no rejoin ever, the join page says
   "You rated this test, so you can't join it again."), BUT money actions stay: Charge / Let it go and Dispute remain
@@ -21,8 +21,8 @@ and look, but this version deliberately drops most of its complexity.
 - MIRRORED for the developer rating a tester (per tester, from their row): same conditions (1)-(3) from the
   developer's side (all that tester's sent parts decided by the developer or past 14 days; no open dispute). Rating
   ENDS that tester's session like End early (calls cancelled, requests closed, no rejoin), with the same kind of
-  in-page warning ("Rating ends Ana Silva's part in Harbor Run: she can't send more work or join again. Her call on
-  Thu 3:00 PM will be cancelled."); the tester's money actions stay. The tester is told "Nora Lane finished your part
+  in-page warning ("Rating ends Ana Silva's part in Harbor Run: she can't send more work or join again. All her upcoming
+  calls will be cancelled."); the tester's money actions stay. The tester is told "Nora Lane finished your part
   in Harbor Run." Each side rates independently.
 - WHAT A RATING IS: 1-5 stars + optional comment (max 500 chars). Shown as "4.6 ★ (12 ratings)" on the developer's
   profile and listings / the tester's profile and invite rows; comments shown WITHOUT the rater's name.
