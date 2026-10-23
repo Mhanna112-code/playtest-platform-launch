@@ -3,6 +3,7 @@ import { handle, HttpError, ok } from "@/lib/server/http";
 import { joinPageChanges } from "@/lib/server/joining";
 import { asLines, devChanges } from "@/lib/server/live";
 import { requireUser } from "@/lib/server/session";
+import { noteAlive, outageLines } from "@/lib/server/outages";
 import { testerChanges } from "@/lib/server/testerGate";
 import { ownTest } from "@/lib/server/tests";
 
@@ -29,6 +30,9 @@ export async function GET(req: Request) {
     } else if (kind === "listing") {
       changes = await joinPageChanges(u.id, id, since.toISOString(), tab);
     } else throw new HttpError(404, "not_found", "Nothing to watch here.");
-    return ok({ changes: asLines(changes.filter((c) => c.createdAt <= now)), now: now.toISOString() });
+    await noteAlive();
+    // (NEWEST+6) "The site was down from … Deadlines and payment dates moved … later." on every affected page.
+    const outages = await outageLines(since);
+    return ok({ changes: [...asLines(changes.filter((c) => c.createdAt <= now)), ...outages].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()), now: now.toISOString() });
   });
 }

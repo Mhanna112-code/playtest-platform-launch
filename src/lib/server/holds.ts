@@ -216,6 +216,8 @@ export async function closeHeldTests(devId: string) {
 /** The daily job: auto-pay after 14 days, owed charges → hold, 30-day hold alerts, Open until heads-ups. */
 export async function runDaily(now = new Date()) {
   const out = { autoPaid: 0, holds: 0, alerts: 0, headsUps: 0, choices: 0, retried: 0 };
+  // (NEWEST+6) The daily job also checks for an outage first (timers move before anything due runs).
+  if (!process.env.VITEST) await (await import("./outages")).heartbeat(now);
   // 0. Retry every owed payment once a day (before the cut-off and during holds). Chargebacks are never retried.
   const retry = await db.payment.findMany({ where: { status: "failed", owedUntil: { not: null }, settledAt: null, OR: [{ retriedAt: null }, { retriedAt: { lt: new Date(now.getTime() - 23 * 3_600_000) } }] } });
   for (const p of retry) {

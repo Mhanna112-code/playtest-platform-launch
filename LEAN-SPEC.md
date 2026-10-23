@@ -4,6 +4,19 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, NEWEST+6) Outages: detected automatically, every timer moves (no admin entry)
+- DETECTION: GET /api/health writes a heartbeat (time) when the app AND the database work. An outside uptime checker
+  (e.g. UptimeRobot, free, every 5 min; owner sets it up when the site goes online) calls it. The daily job and the
+  first request after a gap check the heartbeats: a gap longer than 15 minutes = an outage from the last heartbeat to
+  the next one. No admin entry. Each outage is recorded once (start, end, length).
+- EVERY TIMER that was running during it moves later by the outage length: 14-day review clocks / Charge points,
+  pay-by dates (3-day cut-off) and hold start, daily retries, tester deadlines, Open until, rating windows (14 days),
+  invite reminders, call-request times/expiry, notification schedules.
+- CALLS whose time fell inside the outage are cancelled as "missed because the site was down": never a no-show, no
+  charge, both told, both can request a new time. No charges or retries run during an outage (anything due runs after).
+- NOTICE afterwards: a top-box line on affected pages (both sides) + one bell: "The site was down from 2:10 to 4:40 PM.
+  Deadlines and payment dates moved 2 h 30 min later." (testers never see hold wording).
+
 ## (Owner, Oct 22, NEWEST+5) Ratings, both ways (tester rates developer; developer rates tester)
 - WHEN (tester rating the developer): available as soon as ALL of: (1) at least one part sent or one call done;
   (2) every part/call they sent is decided (paid / rejected) or has reached the 14-day point (Charge / Let it go

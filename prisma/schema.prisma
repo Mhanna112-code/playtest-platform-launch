@@ -573,3 +573,20 @@ model Rating {
   @@unique([contractId, side])
   @@index([rateeId])
 }
+
+/// (NEWEST+6) The app and the database answered (GET /api/health, page polls, the daily job).
+model Heartbeat {
+  id String   @id @default(cuid())
+  at DateTime @default(now())
+
+  @@index([at])
+}
+
+/// (NEWEST+6) A gap of more than 15 minutes between heartbeats: recorded once; every running timer moved by its length.
+model Outage {
+  id         String   @id @default(cuid())
+  startAt    DateTime @unique
+  endAt      DateTime
+  ms         Int
+  recordedAt DateTime @default(now())
+}

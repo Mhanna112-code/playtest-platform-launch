@@ -1,12 +1,14 @@
 import { db } from "@/lib/db";
 import { HttpError, handle, ok } from "@/lib/server/http";
 import { requireUser } from "@/lib/server/session";
+import { noteAlive } from "@/lib/server/outages";
 
 // A small fingerprint of what an open page shows (events, payments, holds, disputes): pages poll it every ~20 s and
 // refresh themselves when it changes (paid/rejected, paused/resumed, stop-once live lines, dispute status).
 export async function GET(req: Request) {
   return handle(async () => {
     const u = await requireUser(req);
+    await noteAlive(); // (NEWEST+6) the first request after a gap detects an outage
     const q = new URL(req.url).searchParams;
     let testId = q.get("test") ?? "";
     const sessionId = q.get("session") ?? "";
