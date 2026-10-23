@@ -56,7 +56,7 @@ describe("join and contract snapshots", () => {
     const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     await act(testId, "edit", dev.cookie, { version: v, fields: { writtenCents: "50.00", questions: ["New?"], deadlineDays: 1 } });
     const c = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });
-    expect(c).toMatchObject({ writtenCents: 1000, liveRateCents: 3000, liveMinutes: 30, deadlineDays: 7, testerId: tester.user.id });
+    expect(c).toMatchObject({ writtenCents: 1000, liveRateCents: 3000, liveMinutes: null, deadlineDays: 7, testerId: tester.user.id });
     expect(c.questions).toEqual(["What did you like?", "Where did you get stuck?"]);
   });
 

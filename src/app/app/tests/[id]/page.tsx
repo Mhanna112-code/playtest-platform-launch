@@ -31,6 +31,7 @@ export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
 
 export default async function TestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; offered?: string; skipped?: string; closed?: string; resent?: string; spotclosed?: string; spots?: string }> }) {
+  await (await import("@/lib/server/calls")).sweepNobodyJoined();
   const { id } = await params;
   const { saved, offered, skipped, closed, resent } = await searchParams;
   const u = await requirePageUser();
@@ -109,7 +110,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       calls: live.filter((x) => !x.setId).map(toCall),
       sets,
       requests: reqs.filter((r) => r.contractId === c.id).map((r) => ({
-        id: r.id, times: (r.times.length ? r.times : [r.startsAt]).map((d) => d.toISOString()), weeks: r.weeks, repeat: r.repeat, mine: r.fromSide === "developer",
+        id: r.id, minutes: r.minutes, times: (r.times.length ? r.times : [r.startsAt]).map((d) => d.toISOString()), weeks: r.weeks, repeat: r.repeat, mine: r.fromSide === "developer",
         rate: r.askRateCents != null ? `asks ${whole(r.askRateCents)}/h` : rateLabel(c.liveRateCents, c.liveRateCents),
       })),
     };

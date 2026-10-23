@@ -33,6 +33,7 @@ const partLine = (listing: number | null, asked: number | null | undefined, paid
   `${listing == null ? "Not in your contract" : `Listing: ${money(listing)}`}${asked != null ? ` · You asked ${money(asked)}` : ""} · Paid so far for this part: ${money(paid)} (you get 80%)`;
 
 export default async function SessionPage({ params }: { params: Promise<{ id: string }> }) {
+  await (await import("@/lib/server/calls")).sweepNobodyJoined();
   const { id } = await params;
   const u = await requirePageUser();
   const c = await db.contract.findUnique({
@@ -141,7 +142,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             seenAt={seenAt}
             canRequest={canRequestCall}
             targets={[{ contractId: c.id, name: dev, rate: "" }]}
-            requests={pendingReqs.map((r) => ({ id: r.id, times: (r.times.length ? r.times : [r.startsAt]).map((d) => d.toISOString()), weeks: r.weeks, repeat: r.repeat, mine: r.fromSide === "tester", who: dev, contractId: c.id, rate: r.askRateCents != null ? `you ask ${money(r.askRateCents).replace(/\.00$/, "")}/h` : rateLabel(c.liveRateCents, c.liveRateCents) }))}
+            requests={pendingReqs.map((r) => ({ id: r.id, minutes: r.minutes, times: (r.times.length ? r.times : [r.startsAt]).map((d) => d.toISOString()), weeks: r.weeks, repeat: r.repeat, mine: r.fromSide === "tester", who: dev, contractId: c.id, rate: r.askRateCents != null ? `you ask ${money(r.askRateCents).replace(/\.00$/, "")}/h` : rateLabel(c.liveRateCents, c.liveRateCents) }))}
           />
         </section>
       )}

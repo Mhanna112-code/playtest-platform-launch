@@ -94,7 +94,26 @@ describe("clash checks", () => {
     expect(r1.body.error.message).toMatch(/^You already have a call with Nora Lane at /);
     await sact(sessionId, "request-time", tester.cookie, { times: [atHours(80)] });
     const r2 = await devReq(testId, dev.cookie, [sessionId], { times: [atHours(80)], weeks: 2, confirmed: true });
-    expect(r2.body.error.message).toMatch(/^You already have a request with Ana Silva waiting for that time/);
+    // (NEWEST+8) The other side's waiting request is named, with its Accept right there.
+    expect(r2.body.error.code).toBe("their_request");
+    expect(r2.body.error.message).toMatch(/^Ana Silva already asked for .+ \(30 min\)\. Accept her request, or pick a time that doesn't overlap\.$/);
+    expect(r2.body.error.requestId).toBeTruthy();
+  });
+
+  it("the requester sets the length: same start but a different length is refused (not booked); an exact match books", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    const t = atHours(90);
+    expect((await sact(sessionId, "request-time", tester.cookie, { times: [t], minutes: 60 })).status).toBe(200);
+    const diff = await devReq(testId, dev.cookie, [sessionId], { times: [t], minutes: 45, confirmed: true });
+    expect(diff.body.error.code).toBe("their_request");
+    expect(diff.body.error.message).toMatch(/\(60 min\)/);
+    expect(await db.call.count({ where: { contractId: sessionId, status: "booked" } })).toBe(0);
+    const exact = await devReq(testId, dev.cookie, [sessionId], { times: [t], minutes: 60, confirmed: true });
+    expect(exact.body.booked).toBe(true);
+    expect((await db.call.findFirstOrThrow({ where: { contractId: sessionId, status: "booked" } })).minutes).toBe(60);
+    // A bad length is a form mistake (red).
+    expect((await sact(sessionId, "request-time", tester.cookie, { times: [atHours(120)], minutes: 5 })).body.error).toMatchObject({ code: "bad_minutes", message: "A live call lasts from 10 to 180 minutes." });
   });
 
   it("accepting: a clash with the developer's call with another tester → the tester sees only 'This time is no longer free.'", async () => {

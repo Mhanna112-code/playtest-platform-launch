@@ -130,7 +130,7 @@ describe("contract snapshot at join", () => {
   it("copies every term and counts the deadline from the join", () => {
     const joined = new Date("2026-11-01T10:00:00Z");
     const c = contractSnapshot({ ...listing(), listingVersion: 3 }, joined, true);
-    expect(c).toMatchObject({ listingVersion: 3, writtenCents: 1000, recordingCents: 1500, liveRateCents: 3000, liveMinutes: 30, deadlineDays: 7, keepPrivate: true });
+    expect(c).toMatchObject({ listingVersion: 3, writtenCents: 1000, recordingCents: 1500, liveRateCents: 3000, liveMinutes: null, deadlineDays: 7, keepPrivate: true });
     expect(c.dueAt.toISOString()).toBe("2026-11-08T10:00:00.000Z");
   });
   it("is a copy: changing the listing afterwards doesn't change it", () => {
@@ -141,8 +141,8 @@ describe("contract snapshot at join", () => {
     expect(c.questions).toEqual(["What did you like?"]);
     expect(c.writtenCents).toBe(1000);
   });
-  it("terms line", () => expect(termsLine(listing())).toBe("Written $10.00 · Recording $15.00 · Live call $30.00/h (30 min) · 7 days"));
-  it("testers see what they get (80%)", () => expect(termsLine(listing(), true)).toBe("Written $8.00 · Recording $12.00 · Live call $24.00/h (30 min) · 7 days"));
+  it("terms line", () => expect(termsLine(listing())).toBe("Written $10.00 · Recording $15.00 · Live call $30.00/h · 7 days"));
+  it("testers see what they get (80%)", () => expect(termsLine(listing(), true)).toBe("Written $8.00 · Recording $12.00 · Live call $24.00/h · 7 days"));
 });
 
 describe("stop once", () => {

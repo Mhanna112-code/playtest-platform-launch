@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
-import { displayName, fmtDateTime, fmtTime, money, toCents } from "@/lib/format";
+import { displayName, fmtDateTime, fmtTime, money, pronouns, toCents } from "@/lib/format";
+import { checkCallMinutes } from "@/lib/rules";
 import { PAUSED_FOR_TESTERS } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
@@ -48,6 +49,15 @@ export const requestTimes = (r: { times: Date[]; startsAt: Date; weeks: number; 
 const overlaps = (a: Date, am: number, b: Date, bm: number) => a.getTime() < b.getTime() + bm * 60_000 && b.getTime() < a.getTime() + am * 60_000;
 
 /** Read the request's kind and times from the form: times[] (1–3, choose one) or startsAt + weeks (2–8, weekly). */
+/** (NEWEST+8) The length the requester typed (minutes); API callers without one get 30. */
+function readMinutes(body: Record<string, unknown>) {
+  if (body.minutes === undefined || body.minutes === null) return 30;
+  if (body.minutes === "") throw new HttpError(400, "bad_minutes", "Enter the call's length in minutes.");
+  const r = checkCallMinutes(body.minutes);
+  if (!r.ok) throw new HttpError(400, "bad_minutes", r.message);
+  return r.minutes;
+}
+
 function readKind(body: Record<string, unknown>) {
   const weeks = Number(body.weeks ?? body.count ?? 0) || 0;
   const repeat = weeks ? (body.repeat === "daily" ? "daily" : "weekly") : "";
@@ -64,7 +74,7 @@ function readKind(body: Record<string, unknown>) {
 }
 
 /** Sending: a time overlapping a booked call or a pending request between the same two people is refused. */
-async function sendClash(contractId: string, times: Date[], minutes: number, otherName: string, exceptId?: string) {
+async function sendClash(contractId: string, times: Date[], minutes: number, otherName: string, exceptId?: string, mine?: { side: Side; otherPoss: string }) {
   const [calls, reqs] = await Promise.all([
     db.call.findMany({ where: { contractId, status: "booked", startsAt: { gt: new Date(Date.now() - 6 * 3_600_000) } } }),
     db.callRequest.findMany({ where: { contractId, status: "pending", ...(exceptId ? { id: { not: exceptId } } : {}) } }),
@@ -72,7 +82,13 @@ async function sendClash(contractId: string, times: Date[], minutes: number, oth
   for (const t of times) {
     const call = calls.find((x) => overlaps(t, minutes, x.startsAt, x.minutes));
     if (call) return `You already have a call with ${otherName} at ${fmtDateTime(call.startsAt)}.`;
-    for (const r of reqs) if (requestTimes(r).some((x) => overlaps(t, minutes, x, r.minutes))) return `You already have a request with ${otherName} waiting for that time (${fmtDateTime(t)}).`;
+    for (const r of reqs) {
+      const hit = requestTimes(r).find((x) => overlaps(t, minutes, x, r.minutes));
+      if (!hit) continue;
+      // (NEWEST+8) The other side's waiting request: name it; its Accept shows right there (no merging, no partial match).
+      if (mine && r.fromSide !== mine.side) throw new HttpError(409, "their_request", `${otherName} already asked for ${fmtDateTime(hit)} (${r.minutes} min). Accept ${mine.otherPoss} request, or pick a time that doesn't overlap.`, { requestId: r.id, contractId });
+      return `You already have a request with ${otherName} waiting for that time (${fmtDateTime(t)}).`;
+    }
   }
   return "";
 }
@@ -160,6 +176,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   const ids = Array.isArray(body.contractIds) ? body.contractIds.map(String) : body.contractId ? [String(body.contractId)] : [];
   if (!ids.length) throw new HttpError(400, "none", "Tick at least one tester.");
   const kind = readKind(body);
+  const reqMinutes = readMinutes(body);
   const all: Ctx[] = [];
   for (const id of ids) {
     const x = await ctx(dev.id, id);
@@ -171,7 +188,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   // Auto-match ("choose one" only): a tester already requested one of these exact times at the contract rate.
   if (!kind.weeks) {
     for (const { c } of all) {
-      const match = await db.callRequest.findFirst({ where: { contractId: c.id, status: "pending", fromSide: "tester", weeks: 0, startsAt: { gt: new Date() } } });
+      const match = await db.callRequest.findFirst({ where: { contractId: c.id, status: "pending", fromSide: "tester", weeks: 0, minutes: reqMinutes, startsAt: { gt: new Date() } } });
       const hit = match && askMatches(match.askRateCents, c.liveRateCents) ? requestTimes(match).find((t) => kind.times.some((x) => x.getTime() === t.getTime())) : undefined;
       if (match && hit) {
         const clash = await acceptClash(c, "developer", [hit], match.minutes);
@@ -188,8 +205,8 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   // Clashes and the 2-pending limit, per tester.
   const blocked: string[] = [], atLimit: string[] = [], ok: Ctx[] = [];
   for (const x of all) {
-    const minutes = x.c.liveMinutes ?? x.c.test.liveMinutes ?? 30;
-    const clash = await sendClash(x.c.id, requestTimes(kind), minutes, displayName(x.c.tester));
+    const minutes = reqMinutes;
+    const clash = await sendClash(x.c.id, requestTimes(kind), minutes, displayName(x.c.tester), undefined, all.length === 1 ? { side: "developer", otherPoss: pronouns(x.c.tester.pronoun).poss } : undefined);
     if (clash) blocked.push(clash);
     else if ((await pendingRequests(x.c.id)) >= MAX_REQUESTS) atLimit.push(displayName(x.c.tester));
     else ok.push(x);
@@ -203,7 +220,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   }
   const batchId = randomBytes(8).toString("hex");
   for (const { c } of ok) {
-    const minutes = c.liveMinutes ?? c.test.liveMinutes ?? 30;
+    const minutes = reqMinutes;
     await db.callRequest.create({ data: { testId, contractId: c.id, fromSide: "developer", startsAt: kind.startsAt, times: kind.weeks ? [kind.startsAt] : kind.times, weeks: kind.weeks, repeat: kind.repeat, minutes, batchId } });
     const line = bellFor(displayName(dev), kind);
     await notify(c.tester.email, line, [line, `Rate: ${rateLabel(c.liveRateCents, c.liveRateCents)}. Accept or decline it on your session page.`], `/app/sessions/${c.id}`);
@@ -221,11 +238,11 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   const kind = readKind(body);
   const ask = readAsk(body.ask);
   await testerGate(c.testerId, contractId, c.testId, body);
-  const minutes = c.liveMinutes ?? c.test.liveMinutes ?? 30;
+  const minutes = readMinutes(body);
   const devName = displayName(c.test.developer);
   // Auto-match ("choose one", rates match): a developer request with one of these exact times books it.
   if (!kind.weeks && askMatches(ask, c.liveRateCents)) {
-    const devReqs = await db.callRequest.findMany({ where: { contractId, status: "pending", fromSide: "developer", weeks: 0 } });
+    const devReqs = await db.callRequest.findMany({ where: { contractId, status: "pending", fromSide: "developer", weeks: 0, minutes } });
     for (const m of devReqs) {
       const hit = requestTimes(m).find((t) => kind.times.some((k) => k.getTime() === t.getTime()));
       if (!hit) continue;
@@ -251,7 +268,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
       }
     }
   }
-  const clash = await sendClash(contractId, requestTimes(kind), minutes, devName);
+  const clash = await sendClash(contractId, requestTimes(kind), minutes, devName, undefined, { side: "tester", otherPoss: pronouns(c.test.developer.pronoun).poss });
   if (clash) throw new HttpError(409, "clash", clash);
   if ((await pendingRequests(contractId)) >= MAX_REQUESTS) throw new HttpError(409, "limit", requestLimitLine(devName));
   const r = await db.callRequest.create({

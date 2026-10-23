@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, pronouns } from "@/lib/format";
-import { cancelLine, LENGTH_WAITS, checkActualMinutes, checkCancel, type TestEventLike } from "@/lib/rules";
+import { cancelLine, LENGTH_WAITS, checkActualMinutes, checkCancel, type TestEventLike, callClosed, NOBODY_JOINED } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { testerGate as sharedTesterGate } from "./testerGate";
@@ -107,6 +107,7 @@ export async function setCallLength(dev: U, testId: string, body: Record<string,
   if (call.status !== "booked") throw new HttpError(409, "cancelled", "This call was cancelled.");
   if (call.startsAt > new Date()) throw new HttpError(409, "not_yet", "You can enter the length once the call has started.");
   if (call.review) throw new HttpError(409, "paid", "This call was already paid, so its length can't change.");
+  if (callClosed(call.startsAt)) throw new HttpError(409, "closed", "This call closed 24 hours after its start: the booked length is used.");
   if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", LENGTH_WAITS);
   const minutes = Number(body.minutes);
   const ok = checkActualMinutes(Number.isFinite(minutes) ? minutes : null, call.minutes);
@@ -114,4 +115,22 @@ export async function setCallLength(dev: U, testId: string, body: Record<string,
   await devGateIfSeen(testId, body);
   await db.call.update({ where: { id: call.id }, data: { actualMinutes: minutes } });
   return { minutes };
+}
+
+/**
+ * (NEWEST+8) AUTO-CANCEL: a call nobody joined by its halfway point is cancelled ("Nobody joined, so the call was
+ * cancelled."): no charge, never a no-show, both told. Checked on every page load / poll and by the daily job, so it
+ * is minute-accurate while anyone has a page open.
+ */
+export async function sweepNobodyJoined(now = new Date()) {
+  const due = await db.$queryRaw<{ id: string }[]>`SELECT id FROM "Call" WHERE status = 'booked' AND "devJoinedAt" IS NULL AND "testerJoinedAt" IS NULL AND "noShowBy" IS NULL AND "startsAt" > (${new Date(now.getTime() - 7 * 86_400_000)}::timestamptz AT TIME ZONE 'UTC') AND "startsAt" + ("minutes" * interval '30 seconds') <= (${now}::timestamptz AT TIME ZONE 'UTC')`;
+  for (const { id } of due) {
+    const done = await db.call.updateMany({ where: { id, status: "booked", devJoinedAt: null, testerJoinedAt: null }, data: { status: "cancelled", cancelledBy: "system", cancelledAt: now, cancelNote: NOBODY_JOINED } });
+    if (done.count !== 1) continue;
+    const call = await db.call.findUniqueOrThrow({ where: { id }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } } });
+    const line = `Your call on ${fmtDateTime(call.startsAt)}: ${NOBODY_JOINED}`;
+    await notify(call.contract.tester.email, line, [line, "Nothing is charged."], `/app/sessions/${call.contractId}`);
+    await notify(call.contract.test.developer.email, line.replace("Your call", `Your call with ${displayName(call.contract.tester)}`), [line, "Nothing is charged."], `/app/tests/${call.contract.testId}`);
+  }
+  return due.length;
 }

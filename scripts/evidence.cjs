@@ -166,7 +166,7 @@ async function signIn(page, email) {
     await dev.waitForURL((u) => /\/app\/tests\/\w+$/.test(u.pathname) && !u.pathname.endsWith("/new"));
     testUrl = dev.url();
     check("test page with top panel", await has(dev, "text=Stop the test"), dev.url());
-    check("terms line", await has(dev, "text=Written $10.00 · Live call $30.00/h (30 min) · 7 days"));
+    check("terms line", await has(dev, "text=Written $10.00 · Live call $30.00/h · 7 days"));
     await shot(dev, "test-page");
   });
 
@@ -226,6 +226,7 @@ async function signIn(page, email) {
     const local = new Date(when.getTime() - when.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     await dev.check("section[aria-label='Call requests'] label:has-text('Ana Silva') input");
     await dev.fill("section[aria-label='Call requests'] input[type=datetime-local]", local);
+    await dev.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "30");
     await dev.click("section[aria-label='Call requests'] >> text=Request a time");
     await dev.waitForTimeout(1500);
     await shot(dev, "time-requested");
@@ -299,7 +300,7 @@ async function signIn(page, email) {
     const sql = (q) => execFileSync("psql", ["-h", "localhost", "-p", "5499", "-U", "postgres", "-d", "playtest_lite", "-t", "-A", "-c", q]).toString().trim();
     const devId = sql(`select id from "User" where email = '${DEV}'`);
     // The call from flow 06 becomes a held call (it started an hour ago); the developer's saved card is one the fake declines.
-    sql(`update "Call" c set "startsAt" = now() - interval '1 hour' from "Contract" k where c."contractId" = k.id and k."testId" = (select "testId" from "Contract" where "testerId" = (select id from "User" where email = '${TESTER}') limit 1) and c.status = 'booked'`);
+    sql(`update "Call" c set "startsAt" = (now() at time zone 'utc') - interval '1 hour', "devJoinedAt" = (now() at time zone 'utc') - interval '1 hour', "testerJoinedAt" = (now() at time zone 'utc') - interval '1 hour' from "Contract" k where c."contractId" = k.id and k."testId" = (select "testId" from "Contract" where "testerId" = (select id from "User" where email = '${TESTER}') limit 1) and c.status = 'booked'`);
     sql(`update "User" set "stripeCustomerId" = 'cus_fake_${TS}', "stripePaymentMethodId" = 'pm_card_declined' where id = '${devId}'`);
     const vdir = fs.mkdtempSync(path.join(os.tmpdir(), "pt-video-"));
     const vd = await (await browser.newContext({ ...DESKTOP, baseURL: BASE, storageState: await dev.context().storageState(), recordVideo: { dir: vdir, size: DESKTOP.viewport } })).newPage();
@@ -345,7 +346,7 @@ async function signIn(page, email) {
     check("stop-once line under the top panel", await has(vd, "text=Your bank reversed your $12.50 payment for Ana Silva's live call"));
     await shot(vd, "3-dev-chargeback-stop-once");
     sql(`update "User" set "holdStartedAt" = now() - interval '5 minutes' where id = '${devId}'`);
-    sql(`update "Call" set "startsAt" = now() - interval '1 minute' where status = 'booked' and "startsAt" > now() and "contractId" in (select id from "Contract" where "testId" in (select id from "Test" where "developerId" = '${devId}'))`);
+    sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '1 minute' where status = 'booked' and "startsAt" > now() and "contractId" in (select id from "Contract" where "testId" in (select id from "Test" where "developerId" = '${devId}'))`);
     await vd.reload();
     check("hold banner", await has(vd, "text=Your tests are paused."));
     await shot(vd, "3-dev-hold-banner");
@@ -412,9 +413,9 @@ async function signIn(page, email) {
     sql(`update "Submission" set "payBy" = now() - interval '1 minute' where "contractId" = '${SA}'`);
     // Three calls for Ana: one held before the hold (to show Pay waiting), one whose time comes during the hold, one after.
     const call1 = await requestAndAccept(dev, tester, T11, SA, 2);
-    sql(`update "Call" set "startsAt" = now() - interval '30 minutes' where id = '${call1}'`);
+    sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '30 minutes', "devJoinedAt" = (now() at time zone 'utc') - interval '30 minutes', "testerJoinedAt" = (now() at time zone 'utc') - interval '30 minutes' where id = '${call1}'`);
     const call2 = await requestAndAccept(dev, tester, T11, SA, 3);
-    sql(`update "Call" set "startsAt" = now() - interval '2 minutes' where id = '${call2}'`);
+    sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '2 minutes' where id = '${call2}'`);
     await requestAndAccept(dev, tester, T11, SA, 4);
     sql(`update "User" set "stripePaymentMethodId" = 'pm_card_declined' where id = '${devId}'`);
     await runCron(); // day 14: Ana is offered Charge / Let it go
@@ -740,6 +741,7 @@ async function signIn(page, email) {
     // Dee requests a time.
     await t2.goto(`/app/sessions/${SD}`);
     await t2.fill("section[aria-label='Call requests'] input[type=datetime-local]", localAt(8));
+    await t2.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "30");
     await t2.click("section[aria-label='Call requests'] >> text=Request a time");
     await t2.waitForTimeout(1500);
     check("tester's request is listed", await has(t2, "text=You requested"));
@@ -751,6 +753,7 @@ async function signIn(page, email) {
     const lbl = dev.locator("section[aria-label='Call requests'] label", { hasText: dee });
     if (await lbl.count()) await lbl.locator("input").check();
     await dev.fill("section[aria-label='Call requests'] input[type=datetime-local]", localAt(8));
+    await dev.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "30");
     await dev.click("section[aria-label='Call requests'] >> text=Request a time");
     await dev.waitForTimeout(1500);
     const booked = sql(`select count(*) from "Call" where "contractId" = '${SD}' and status = 'booked' and "startsAt" > now() + interval '7 days'`);
@@ -761,6 +764,7 @@ async function signIn(page, email) {
     // Accepting a request withdrawn meanwhile: refused for good under Accept.
     await t2.goto(`/app/sessions/${SD}`);
     await t2.fill("section[aria-label='Call requests'] input[type=datetime-local]", localAt(9));
+    await t2.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "30");
     await t2.click("section[aria-label='Call requests'] >> text=Request a time");
     await t2.waitForTimeout(1500);
     await dev.goto(t11Url()); // the developer's page shows the request
@@ -789,6 +793,7 @@ async function signIn(page, email) {
     await dev.check("section[aria-label='Call requests'] >> text=Select all");
     await dev.fill("section[aria-label='Call requests'] input[type=datetime-local]", local);
     await shot(dev, "select-all-developer");
+    await dev.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "30");
     await dev.click("section[aria-label='Call requests'] >> text=Request a time");
     await dev.waitForTimeout(1500);
     // Dee's page is open with the developer's request (she'll press Accept later).
@@ -799,6 +804,7 @@ async function signIn(page, email) {
     await t3.goto(`/app/sessions/${SC}`);
     await t3.fill("section[aria-label='Call requests'] input[type=datetime-local]", local);
     await t3.fill("section[aria-label='Call requests'] input[aria-label='Ask per hour']", "50");
+    await t3.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "30");
     await t3.click("section[aria-label='Call requests'] >> text=Request a time");
     await t3.waitForTimeout(1500);
     check("nothing booked on the tester's side", sql(`select count(*) from "Call" where "contractId" = '${SC}'`) === "0");
@@ -1019,6 +1025,7 @@ async function signIn(page, email) {
     const tabB = await t4.context().newPage();
     await tabB.goto(`/app/sessions/${SE}`);
     await reqBox(tabB).locator("input[aria-label='Requested time 1']").fill(local(atK(2)));
+    await tabB.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "30").catch(() => {});
     await tabB.getByRole("button", { name: "Request a time" }).click();
     await tabB.waitForTimeout(1500);
     await tabB.close();
@@ -1064,15 +1071,18 @@ async function signIn(page, email) {
     // A clash when sending: the same time as a request already waiting between them.
     // (10 minutes later than the waiting request: an exact match would auto-match instead.)
     await reqBox(tabA).locator("input[aria-label='Requested time 1']").fill(local(new Date(new Date(atK(3)).getTime() + 10 * 60000).toISOString()));
+    await tabA.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "30").catch(() => {});
     await tabA.getByRole("button", { name: "Request a time" }).click();
     check("send refused: a request is already waiting for that time", await has(tabA, "text=waiting for that time"));
     await shot(tabA, "send-clash-refused-tester");
     // The 3-requests limit: one more goes; the next is refused.
     await reqBox(tabA).locator("input[aria-label='Requested time 1']").fill(local(atK(20)));
+    await tabA.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "30").catch(() => {});
     await tabA.getByRole("button", { name: "Request a time" }).click();
     await tabA.waitForTimeout(2000);
     await tabA.reload();
     await reqBox(tabA).locator("input[aria-label='Requested time 1']").fill(local(atK(21)));
+    await tabA.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "30").catch(() => {});
     await tabA.getByRole("button", { name: "Request a time" }).click();
     check("4th request refused: 3 requests waiting", await has(tabA, "text=You already have 3 requests waiting with Nora Lane."));
     await shot(tabA, "three-requests-refused-tester");
@@ -1083,6 +1093,7 @@ async function signIn(page, email) {
     await t4.goto(`/app/sessions/${SE}`);
     await reqBox(t4).locator("input[aria-label='Requested time 1']").fill(local(atK(22)));
     await reqBox(t4).locator("input[aria-label='Ask per hour']").fill("abc");
+    await t4.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "30").catch(() => {});
     await t4.getByRole("button", { name: "Request a time" }).click();
     check("form mistake shown in red", await has(t4, ".err-field >> text=Enter the rate you ask like 50.00"));
     await shot(t4, "form-mistake-red-tester");
@@ -1253,7 +1264,7 @@ async function signIn(page, email) {
     await apiPost(tp, `/api/sessions/${S}/recording-done`, { recordingId: st.body.recordingId });
     await apiPost(tp, `/api/sessions/${S}/recording-send`, {});
     const past = await requestAndAccept(d, tp, T, S, 2);
-    sql(`update "Call" set "startsAt" = now() - interval '1 hour' where id = '${past}'`);
+    sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '1 hour', "devJoinedAt" = (now() at time zone 'utc') - interval '1 hour', "testerJoinedAt" = (now() at time zone 'utc') - interval '1 hour' where id = '${past}'`);
     await tp.goto(`/app/sessions/${S}`);
     check("not yet: no Rate button while work waits for review", !(await tp.isVisible("button:has-text('Rate Nora Lane')")));
     await shot(tp, "rate-not-yet-tester");
@@ -1336,8 +1347,8 @@ async function signIn(page, email) {
     const S = (await apiPost(tp, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
     await apiPost(tp, `/api/sessions/${S}/written`, { answers: ["Turtles."] });
     const call = await requestAndAccept(d, tp, T, S, 2);
-    // The call's time (1 hour ago) falls inside the outage below.
-    sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '1 hour' where id = '${call}'`);
+    // The call's time (10 minutes ago) falls inside the outage below (before its halfway point: not yet auto-cancelled).
+    sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '10 minutes' where id = '${call}'`);
     const dueBefore = Number(sql(`select extract(epoch from "dueAt") * 1000 from "Contract" where id = '${S}'`));
     const payByBefore = Number(sql(`select extract(epoch from "payBy") * 1000 from "Submission" where "contractId" = '${S}'`));
     await tp.goto(`/app/sessions/${S}`);

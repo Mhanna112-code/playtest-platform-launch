@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
 
-type Req = { id: string; times: string[]; weeks: number; repeat?: string; mine: boolean; who: string; contractId: string; rate: string };
+type Req = { id: string; times: string[]; weeks: number; repeat?: string; mine: boolean; who: string; contractId: string; rate: string; minutes?: number };
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 /**
@@ -12,7 +12,8 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  * "Ask $___/h" (only on their own request). Pending requests: Accept / Decline / Withdraw. Boxes under the button.
  */
 export function CallRequests(p: { path: string; seenAt: string; side: "developer" | "tester"; requests: Req[]; targets: { contractId: string; name: string; rate: string }[]; canRequest: boolean }) {
-  const { press, changes, error, busy, at } = usePress(p.seenAt);
+  const { press, changes, error, busy, at, errData } = usePress(p.seenAt);
+  const [minutes, setMinutes] = useState("");
   const [kind, setKind] = useState<"one" | "daily" | "weekly">("one");
   const [whens, setWhens] = useState<string[]>([""]);
   const [weeks, setWeeks] = useState(4);
@@ -34,6 +35,7 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
       "request-time",
       {
         ...(kind !== "one" ? { times: filled.slice(0, 1), weeks, repeat: kind } : { times: filled }),
+        minutes: minutes.trim() ? minutes.trim() : "",
         ...(p.side === "developer" ? { contractIds: ticked } : { ask }),
       },
       "request",
@@ -46,7 +48,7 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
             <li key={r.id} className="flex flex-wrap items-center gap-2">
               <span className="mr-auto">
                 {r.mine ? `You requested${p.side === "developer" ? ` with ${r.who}` : ""}` : `${r.who} requested`}{" "}
-                {r.weeks ? `${r.repeat === "daily" ? "daily" : "weekly"} calls: ${fmt(r.times[0])}, ${r.weeks} calls` : r.times.length > 1 ? `one of: ${r.times.map(fmt).join(" · ")}` : fmt(r.times[0])} · {r.rate}
+                {r.weeks ? `${r.repeat === "daily" ? "daily" : "weekly"} calls: ${fmt(r.times[0])}, ${r.weeks} calls` : r.times.length > 1 ? `one of: ${r.times.map(fmt).join(" · ")}` : fmt(r.times[0])}{r.minutes ? ` · ${r.minutes} min` : ""} · {r.rate}
               </span>
               {r.mine ? (
                 <button className="btn-ghost" disabled={busy} onClick={() => go("answer-request", { requestId: r.id, action: "withdraw", contractId: r.contractId }, "w-" + r.id)}>Withdraw</button>
@@ -97,12 +99,25 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
                 {[2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n} calls</option>)}
               </select>
             )}
+            <label className="inline-flex items-center gap-1">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min</label>
             {p.side === "tester" && (
               <label className="inline-flex items-center gap-1">Ask $<input className="input w-20" inputMode="decimal" placeholder="optional" aria-label="Ask per hour" value={ask} onChange={(e) => setAsk(e.target.value)} />/h</label>
             )}
             <button className="btn-ghost" disabled={busy || !filled.length || (p.side === "developer" && ticked.length === 0)} onClick={send}>Request a time</button>
           </div>
           {box("request")}
+          {at === "request" && typeof errData.requestId === "string" && (() => {
+            // (NEWEST+8) The other side's waiting request that overlaps: its Accept right here.
+            const r = p.requests.find((x) => x.id === errData.requestId);
+            if (!r) return null;
+            return (
+              <div className="flex flex-wrap gap-2">
+                {!r.weeks && r.times.length > 1 ? r.times.map((t) => (
+                  <button key={t} className="btn" disabled={busy} onClick={() => go("answer-request", { requestId: r.id, action: "accept", time: t, contractId: r.contractId }, "a-" + r.id)}>Accept {fmt(t)}</button>
+                )) : <button className="btn" disabled={busy} onClick={() => go("answer-request", { requestId: r.id, action: "accept", contractId: r.contractId }, "a-" + r.id)}>Accept {r.who}&apos;s request</button>}
+              </div>
+            );
+          })()}
         </div>
       )}
       {done && <p className="ok">{done}</p>}

@@ -35,7 +35,7 @@ function toApi(f: F): Record<string, unknown> {
     title: f.title, description: f.description, buildUrl: f.buildUrl, category: f.category, devices: f.devices, languages: f.languages,
     spots: f.spots, deadlineDays: f.deadlineDays, writtenCents: f.written ? f.writtenPrice || "" : null,
     recordingCents: f.recording ? f.recordingPrice || "" : null, liveRateCents: f.live ? f.liveRate || "" : null,
-    liveMinutes: f.live ? f.liveMinutes : null, questions: f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (f.optionalQs.includes(q) ? NOT_REQUIRED + q : q)), openUntil: f.openUntil, joinMode: f.joinMode,
+    liveMinutes: null, questions: f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (f.optionalQs.includes(q) ? NOT_REQUIRED + q : q)), openUntil: f.openUntil, joinMode: f.joinMode,
   };
 }
 // Which API fields each form field feeds.
@@ -149,8 +149,10 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
         <label className="block text-sm"><input type="checkbox" checked={f.live} onChange={(e) => set({ live: e.target.checked })} /> Live call</label>
         {f.live && (
           <div className="ml-6 grid gap-3 sm:grid-cols-2">
-            {text("liveRate", "Rate per hour ($, 0 for free)", { req: true, ph: "30.00", cls: "max-w-[10rem]" })}
-            {text("liveMinutes", "Call length (minutes)", { req: true, type: "number", cls: "max-w-[8rem]" })}
+            <div className="flex flex-wrap items-end gap-2 sm:col-span-2">
+              {text("liveRate", "Rate per hour ($, 0 for free)", { req: true, ph: "30.00", cls: "max-w-[10rem]" })}
+              <span className="note mb-2">$10-$200 an hour (or 0 for free). Each call request sets its own length.</span>
+            </div>
           </div>
         )}
       </div>

@@ -166,7 +166,6 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date()): strin
   if (l.liveRateCents != null) {
     if (l.liveRateCents !== 0 && l.liveRateCents < PRICE_LIMITS.rateMin) errs.push(`The live call rate must be at least ${money(PRICE_LIMITS.rateMin)} an hour (or free).`);
     if (l.liveRateCents > PRICE_LIMITS.rateMax) errs.push(`The live call rate can be at most ${money(PRICE_LIMITS.rateMax)} an hour.`);
-    if (!l.liveMinutes || l.liveMinutes < 10 || l.liveMinutes > 180) errs.push("A live call lasts from 10 to 180 minutes.");
   }
   if (l.writtenCents != null && l.questions.filter((q) => q.trim()).length === 0) errs.push("Add at least one question for the written answers.");
   if (l.questions.length > 20) errs.push("At most 20 questions.");
@@ -183,7 +182,7 @@ export function contractSnapshot(test: Listing & { listingVersion: number }, joi
     writtenCents: test.writtenCents,
     recordingCents: test.recordingCents,
     liveRateCents: test.liveRateCents,
-    liveMinutes: test.liveRateCents == null ? null : test.liveMinutes,
+    liveMinutes: null, // (NEWEST+8) each call request sets its own length
     deadlineDays: test.deadlineDays,
     questions: [...test.questions],
     keepPrivate,
@@ -199,7 +198,7 @@ export function termsLine(t: Pick<Listing, "writtenCents" | "recordingCents" | "
   const parts: string[] = [];
   if (t.writtenCents != null) parts.push(`Written ${p(t.writtenCents)}`);
   if (t.recordingCents != null) parts.push(`Recording ${p(t.recordingCents)}`);
-  if (t.liveRateCents != null) parts.push(`Live call ${t.liveRateCents === 0 ? "free" : p(t.liveRateCents) + "/h"} (${t.liveMinutes} min)`);
+  if (t.liveRateCents != null) parts.push(`Live call ${t.liveRateCents === 0 ? "free" : p(t.liveRateCents) + "/h"}`);
   parts.push(`${t.deadlineDays} day${t.deadlineDays === 1 ? "" : "s"}`);
   return parts.join(" · ");
 }
@@ -442,9 +441,23 @@ export function callReference(rateCents: number | null, minutes: number, contrac
 /** "How long was the call?": whole minutes, 1 to 3 times the booked length. */
 export function checkActualMinutes(minutes: number | null, booked: number): Check {
   if (minutes == null || !Number.isInteger(minutes) || minutes < 1) return no("Enter the call's length in whole minutes.");
-  if (minutes > booked * 3) return no(`At most ${booked * 3} minutes (3 times the ${booked} booked).`);
+  // (NEWEST+8) Up to 150% of the booked length.
+  const max = Math.floor(booked * 1.5);
+  if (minutes > max) return no(`You can log up to ${max} min for this ${booked}-min call.`);
   return yes;
 }
+
+/** (NEWEST+8) A call request's length, typed by the requester (the old listing field's limits). */
+export const CALL_MIN_MINUTES = 10, CALL_MAX_MINUTES = 180;
+export function checkCallMinutes(v: unknown): { ok: true; minutes: number } | { ok: false; message: string } {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
+  if (!Number.isInteger(n) || n < CALL_MIN_MINUTES || n > CALL_MAX_MINUTES) return { ok: false, message: `A live call lasts from ${CALL_MIN_MINUTES} to ${CALL_MAX_MINUTES} minutes.` };
+  return { ok: true, minutes: n };
+}
+/** (NEWEST+8) A call closes 24 hours after its planned start: no joining, no length logged any more. */
+export const CALL_CLOSE_MS = 24 * 3_600_000;
+export const callClosed = (startsAt: Date, now = new Date()) => now.getTime() >= startsAt.getTime() + CALL_CLOSE_MS;
+export const NOBODY_JOINED = "Nobody joined, so the call was cancelled.";
 
 /** A declined Pay, shown under that Pay button. */
 export const declinedLine = (name: string, cents: number, label: string) =>
@@ -591,7 +604,6 @@ export function termsDiff(a: ContractTerms, b: ContractTerms) {
     else if (b.liveRateCents == null) out.push("removed the live call");
     else out.push(`live call ${whole(a.liveRateCents)}/h → ${whole(b.liveRateCents)}/h`);
   }
-  if (a.liveRateCents != null && b.liveRateCents != null && a.liveMinutes !== b.liveMinutes) out.push(`call ${a.liveMinutes} → ${b.liveMinutes} min`);
   if (a.deadlineDays !== b.deadlineDays) out.push(`${a.deadlineDays} → ${b.deadlineDays} days`);
   if (JSON.stringify(a.questions) !== JSON.stringify(b.questions)) out.push("questions changed");
   return out.join(", ");

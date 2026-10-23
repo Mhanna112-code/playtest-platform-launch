@@ -13,10 +13,12 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [at, setAt] = useState("");
+  const [errData, setErrData] = useState<Record<string, unknown>>({});
 
   async function press<T>(path: string, body: Record<string, unknown> = {}, key = ""): Promise<T | null> {
     setBusy(true);
     setError("");
+    setErrData({});
     setAt(key);
     try {
       const r = await api<T>(path, { ...body, seenAt, confirmed: changes != null });
@@ -31,6 +33,7 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
       } else {
         setChanges(null);
         setError(errOf(e));
+        setErrData(e instanceof ApiError ? e.data : {});
       }
       return null;
     } finally {
@@ -39,5 +42,5 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
   }
   // The open box stays live: changes the page picks up meanwhile are added to it.
   useLiveAppend(changes != null, (added) => setChanges((c) => (c ? mergeChanges(c, added) : c)));
-  return { press, changes, error, busy, setError, at };
+  return { press, changes, error, busy, setError, at, errData };
 }

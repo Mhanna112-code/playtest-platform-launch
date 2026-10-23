@@ -57,6 +57,7 @@ export async function unblockUser(me: { id: string }, otherId: string) {
 
 /** Join call: the room link only when the call can be joined now; otherwise the refusal line (shown under Join). */
 export async function joinCall(user: { id: string }, callId: string) {
+  await (await import("./calls")).sweepNobodyJoined();
   const call = await db.call.findUnique({ where: { id: callId }, include: { slot: true, contract: { include: { test: { include: { developer: true } } } } } });
   const c = call?.contract;
   const side = c?.testerId === user.id ? "tester" : c?.test.developerId === user.id ? "developer" : null;

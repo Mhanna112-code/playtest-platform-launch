@@ -6,7 +6,7 @@ import { usePress } from "@/lib/usePress";
 
 export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string };
 export type DevSet = { id: string; label: string; calls: DevCall[] };
-export type DevReq = { id: string; times: string[]; weeks: number; repeat: string; mine: boolean; rate: string };
+export type DevReq = { id: string; times: string[]; weeks: number; repeat: string; mine: boolean; rate: string; minutes?: number };
 export type DevTester = { contractId: string; name: string; terms: string; booked: number; calls: DevCall[]; sets: DevSet[]; requests: DevReq[] };
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -23,6 +23,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest }: { testId: 
   const [kind, setKind] = useState<"one" | "daily" | "weekly">("one");
   const [whens, setWhens] = useState<string[]>([""]);
   const [count, setCount] = useState(4);
+  const [minutes, setMinutes] = useState("");
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [reason, setReason] = useState<Record<string, string>>({});
   const [done, setDone] = useState("");
@@ -86,6 +87,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest }: { testId: 
             {whens.map((w, i) => (
               <input key={i} type="datetime-local" aria-label={`Requested time ${i + 1}`} className="input max-w-xs" value={w} onChange={(e) => setWhens(whens.map((x, j) => (j === i ? e.target.value : x)))} />
             ))}
+            <label className="inline-flex items-center gap-1 text-sm">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min</label>
             {kind === "one" && whens.length < 3 && <button type="button" className="btn-ghost" onClick={() => setWhens([...whens, ""])}>+ Another time</button>}
             {kind !== "one" && (
               <select aria-label="How many calls" className="input w-auto" value={count} onChange={(e) => setCount(Number(e.target.value))}>
@@ -95,7 +97,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest }: { testId: 
             <button
               className="btn"
               disabled={busy || !filled.length || ticked.length === 0}
-              onClick={() => go("request-time", { contractIds: ticked, ...(kind === "one" ? { times: filled } : { times: filled.slice(0, 1), weeks: count, repeat: kind }) }, "request")}
+              onClick={() => go("request-time", { contractIds: ticked, minutes: minutes.trim() ? minutes.trim() : "", ...(kind === "one" ? { times: filled } : { times: filled.slice(0, 1), weeks: count, repeat: kind }) }, "request")}
             >
               Request a time
             </button>
@@ -127,7 +129,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest }: { testId: 
               <li key={r.id} className="flex flex-wrap items-center gap-2">
                 <span className="mr-auto">
                   {r.mine ? "You requested" : `${t.name} requested`}{" "}
-                  {r.weeks ? `${r.repeat === "daily" ? "daily" : "weekly"} calls: ${short(r.times[0])} · ${r.weeks} calls from ${fmt(r.times[0])}` : r.times.length > 1 ? `one of: ${r.times.map(fmt).join(" · ")}` : fmt(r.times[0])} · {r.rate}
+                  {r.weeks ? `${r.repeat === "daily" ? "daily" : "weekly"} calls: ${short(r.times[0])} · ${r.weeks} calls from ${fmt(r.times[0])}` : r.times.length > 1 ? `one of: ${r.times.map(fmt).join(" · ")}` : fmt(r.times[0])}{r.minutes ? ` · ${r.minutes} min` : ""} · {r.rate}
                 </span>
                 {r.mine ? (
                   <button className="btn-ghost" disabled={busy} onClick={() => go("answer-request", { requestId: r.id, action: "withdraw", contractId: t.contractId }, "w-" + r.id)}>Withdraw</button>
