@@ -81,7 +81,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           Your deadline counts from when you join: {t.deadlineDays} day{t.deadlineDays === 1 ? "" : "s"}.
           {t.openUntil && ` New testers can join until ${fmtDate(t.openUntil)}.`} {t.spots - testersIn} spot{t.spots - testersIn === 1 ? "" : "s"} left.
         </p>
-        <p className="note">Everything above is fixed in your contract when you join: neither side can change it later.</p>
+        <p className="note">Everything above is fixed in your contract when you join. If the developer changes the listing later, they can offer you the new terms: you choose Switch or Keep.</p>
         {ratedHere && <p className="info">{mine?.status === "left" && mine.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't join this test again."}</p>}
         {mine && mine.status === "left" && !ratedHere && <p className="info">You left this test. Joining again restores your session: work you sent, payments and chat stay; new work is on the current listing.</p>}
         {t.developerId === u.id ? (
