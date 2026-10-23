@@ -1,10 +1,11 @@
 "use client";
 import { useState } from "react";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
+import { Err } from "@/components/Err";
 import { mergeChanges, useLiveAppend } from "@/lib/live";
 import { NOT_REQUIRED, qOptional, qText } from "@/lib/questions";
 import { Choices } from "@/components/Choices";
-import { api, ApiError } from "@/lib/client";
+import { api, ApiError, isFieldError } from "@/lib/client";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import type { Listing } from "@/lib/rules";
 
@@ -54,6 +55,7 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
   const [listingEdited, setListingEdited] = useState(false);
   useLiveAppend(changes != null, (added) => setChanges((c) => (c ? mergeChanges(c, added) : c)));
   const [saved, setSaved] = useState("");
+  const [refusal, setRefusal] = useState("");
   const set = (p: Partial<F>) => {
     setF((o) => ({ ...o, ...p }));
     setTouched((t) => new Set([...t, ...(Object.keys(p) as (keyof F)[])]));
@@ -64,6 +66,7 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
     e.preventDefault();
     setBusy(true);
     setErrs([]);
+    setRefusal("");
     try {
       if (!edit) {
         const r = await api<{ id: string }>("/api/tests", toApi(f));
@@ -81,7 +84,11 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
         setChanges(err.data.changes as Change[]);
         setListingEdited(err.data.listingEdited === true);
       }
-      else {
+      else if (err instanceof ApiError && !isFieldError(err)) {
+        // A refusal (e.g. "Confirm your email first."): blue, under the button.
+        setChanges(null);
+        setRefusal(err.message);
+      } else {
         setChanges(null);
         setErrs(err instanceof ApiError && Array.isArray(err.data.errors) ? (err.data.errors as string[]) : [(err as Error).message]);
       }
@@ -181,6 +188,7 @@ export function TestForm({ init, edit }: { init: Listing; edit?: { id: string; v
         {edit && edit.testersIn > 0 && <p className="note">Testers already working keep their contract; each is offered these new terms and can switch. Work they&apos;ve already sent keeps its price.</p>}
         <button className="btn" disabled={busy}>{busy ? "Saving…" : edit ? "Save" : "Post the test"}</button>
         {saved && <p className="ok">{saved}</p>}
+        <Err text={refusal} />
         <ChangesBox changes={changes} tail={listingEdited ? "Press Save again to save your changes (fields you didn't touch keep the newer values)." : "Press Save again to save."} />
         {errs.length > 0 && <p className="err-field">Fix the {errs.length === 1 ? "mistake" : `${errs.length} mistakes`} above, then press {edit ? "Save" : "Post the test"} again.</p>}
         {errs.length > 0 && (

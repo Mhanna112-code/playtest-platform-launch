@@ -1378,6 +1378,126 @@ async function signIn(page, email) {
     await shot(tp, "outage-missed-call-tester");
   });
 
+
+  await flow("29", "Launch fixes: email confirmation required, a 90-min request, logging over 150% refused, auto-cancel, both needs lines, an optional question, 5 suggested + tick filters; the new layouts", async () => {
+    const d = await ctx(DESKTOP);
+    const DEV29 = `dev29+${TS}@playtest.test`, T29 = `tester29+${TS}@playtest.test`;
+    // (1) A new developer who hasn't confirmed the email yet: Post the test is refused (blue) with "Resend the email".
+    await d.goto("/signup");
+    await d.fill("#email", DEV29);
+    await d.fill("#password", PASSWORD);
+    await d.click("button:has-text('Sign up')");
+    await d.waitForURL("**/app");
+    await d.fill("#name", "Nora Lane");
+    await d.selectOption("#pronoun", "she");
+    await d.check("text=post tests for my game");
+    await d.click("text=Continue");
+    await d.waitForSelector("text=Welcome back,");
+    await d.goto("/app/tests/new");
+    await d.fill("#title", "Mangrove");
+    await d.fill("#description", "Paddle through the roots.");
+    await d.fill("#buildUrl", "https://example.com/mangrove");
+    await d.fill("#questions", "What did you see?\nAnything else?");
+    await d.locator("li", { hasText: "Anything else?" }).locator("text=Not required").click();
+    await d.check("text=Live call");
+    await d.fill("#liveRate", "30.00");
+    check("the rate shows its range", await has(d, "text=$10-$200 an hour (or 0 for free)"));
+    await d.click("fieldset:has-text('Devices testers need') label:has-text('Mac')");
+    await d.click("fieldset:has-text('Languages testers need') label:has-text('Korean')");
+    await d.click("button:has-text('Post the test')");
+    check("unconfirmed: refused (blue) with Resend the email", (await has(d, "p.err >> text=Confirm your email first.")) && (await has(d, "button:has-text('Resend the email')")));
+    await shot(d, "email-refused-developer");
+    await d.goto("/dev/outbox");
+    await d.goto(await d.locator("div.panel", { hasText: `To ${DEV29}` }).filter({ hasText: "Confirm your email" }).first().locator("a").first().getAttribute("href"));
+    await d.waitForSelector("text=Email confirmed");
+    await d.goto("/app/tests/new");
+    await d.fill("#title", "Mangrove");
+    await d.fill("#description", "Paddle through the roots.");
+    await d.fill("#buildUrl", "https://example.com/mangrove");
+    await d.fill("#questions", "What did you see?\nAnything else?");
+    await d.locator("li", { hasText: "Anything else?" }).locator("text=Not required").click();
+    await d.check("text=Live call");
+    await d.fill("#liveRate", "30.00");
+    await d.click("fieldset:has-text('Devices testers need') label:has-text('Mac')");
+    await d.click("fieldset:has-text('Languages testers need') label:has-text('Korean')");
+    await d.click("button:has-text('Post the test')");
+    await d.waitForURL((u) => /\/app\/tests\/\w+$/.test(u.pathname) && !u.pathname.endsWith("/new"));
+    const T = d.url().split("/").pop();
+    check("after confirming: posted", !!T);
+    await shot(d, "test-header-developer");
+    sql(`update "User" set "stripeCustomerId" = 'cus_fake29_${TS}', "stripePaymentMethodId" = 'pm_card_visa' where email = '${DEV29}'`);
+    // (3) A tester without Mac or Korean: a line for EACH need on the Find card, the listing and the Join anyway warning.
+    const tp = await ctx(PHONE);
+    await signIn(tp, T29);
+    await tp.fill("#name", "Ana Silva");
+    await tp.selectOption("#pronoun", "she");
+    await tp.check("text=test apps, games and more, and get paid");
+    await tp.click("label:has-text('Windows PC')");
+    await tp.click("label:has-text('English')");
+    await tp.click("text=Continue");
+    await tp.waitForSelector("text=Welcome back,");
+    await shot(tp, "dashboard-tester");
+    await tp.goto("/app/find");
+    const card = tp.locator("li", { hasText: "Mangrove" });
+    check("Find card: both needs lines", (await card.locator("text=This test needs one of: Mac. Add your device in your profile.").count()) > 0 && (await card.locator("text=This test needs one of: Korean. Add the language in your profile.").count()) > 0);
+    await card.scrollIntoViewIfNeeded();
+    await shot(tp, "find-both-needs-tester");
+    await tp.goto(`/app/find/${T}`);
+    check("listing: both needs lines", (await has(tp, "text=This test needs one of: Mac. Add your device in your profile.")) && (await has(tp, "text=This test needs one of: Korean. Add the language in your profile.")));
+    await tp.click("button:has-text('Join this test')");
+    check("Join anyway warning: both lines", (await tp.locator("div.info", { hasText: "Join anyway" }).locator("text=needs one of: Mac").count()) > 0 && (await tp.locator("div.info", { hasText: "Join anyway" }).locator("text=needs one of: Korean").count()) > 0);
+    await shot(tp, "join-anyway-both-needs-tester");
+    await tp.click("button:has-text('Join anyway')");
+    await tp.waitForURL(/\/app\/sessions\//);
+    const S = tp.url().split("/").pop();
+    // (4) The optional question is marked "not required"; sending without it works.
+    check("the optional question is marked 'not required'", await has(tp, "text=· not required"));
+    await tp.fill("#a0", "Roots and herons.");
+    await shot(tp, "optional-question-tester");
+    await tp.click("button:has-text('Send my written answers')");
+    await tp.waitForTimeout(1500);
+    check("sent with the optional question empty", sql(`select count(*) from "Submission" where "contractId" = '${S}' and kind = 'written'`) === "1");
+    // (2) A 90-minute request (typed by the requester); the tester accepts.
+    await d.goto(`/app/tests/${T}`);
+    const when = new Date(Date.now() + 3 * 86400000 + 7 * 3600000); when.setMinutes(0, 0, 0);
+    const local = new Date(when.getTime() - when.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    await d.check("section[aria-label='Call requests'] >> text=Select all");
+    await d.fill("section[aria-label='Call requests'] input[type=datetime-local]", local);
+    await d.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "90");
+    await d.click("section[aria-label='Call requests'] >> text=Request a time");
+    await d.waitForTimeout(1500);
+    check("a 90-min request", sql(`select minutes from "CallRequest" where "contractId" = '${S}' and status = 'pending' order by "createdAt" desc limit 1`) === "90");
+    await shot(d, "request-90-min-developer");
+    const rq = sql(`select id from "CallRequest" where "contractId" = '${S}' and status = 'pending' order by "createdAt" desc limit 1`);
+    await apiPost(tp, `/api/sessions/${S}/answer-request`, { seenAt: new Date().toISOString(), confirmed: true, requestId: rq, action: "accept" });
+    const call90 = sql(`select id from "Call" where "contractId" = '${S}' and status = 'booked' order by "createdAt" desc limit 1`);
+    check("booked for 90 min", sql(`select minutes from "Call" where id = '${call90}'`) === "90");
+    // Logging more than 150% is a red mistake at the field.
+    sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '2 hours', "devJoinedAt" = (now() at time zone 'utc') - interval '2 hours', "testerJoinedAt" = (now() at time zone 'utc') - interval '2 hours' where id = '${call90}'`);
+    await d.reload();
+    await d.fill(`#len-${call90}`, "136");
+    await d.click("button:has-text('Save the length')");
+    check("over 150% refused (red): up to 135 min for this 90-min call", await has(d, ".err-field >> text=You can log up to 135 min for this 90-min call."));
+    await shot(d, "log-over-150-red-developer");
+    // Auto-cancel: nobody joined by the halfway point.
+    const callX = await requestAndAccept(d, tp, T, S, 5);
+    sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '20 minutes' where id = '${callX}'`);
+    await tp.goto(`/app/sessions/${S}`);
+    check("auto-cancelled: nobody joined (no no-show, nothing charged)", sql(`select status || '|' || coalesce("cancelNote", '') || '|' || coalesce("noShowBy", 'none') from "Call" where id = '${callX}'`) === "cancelled|Nobody joined, so the call was cancelled.|none");
+    await tp.goto("/app/notifications");
+    check("both told", await has(tp, "text=Nobody joined, so the call was cancelled."));
+    await shot(tp, "auto-cancel-told-tester");
+    // (5) Suggested (up to 5) and the tick-box filters.
+    await d.goto(`/app/tests/${T}`);
+    const sug = await d.locator("#invite h3:has-text('Suggested') ~ label").count();
+    check("Suggested shows up to 5", sug > 0 && sug <= 5, sug);
+    await d.check("#invite fieldset:has-text('Devices') label:has-text('Mac') input");
+    await d.locator("#invite").scrollIntoViewIfNeeded();
+    await shot(d, "suggested-and-tick-filters-developer");
+    await d.goto("/app");
+    await shot(d, "dashboard-developer");
+  });
+
   await browser.close();
 
   // ---------- Coverage: one screenshot per stop / failure type, plus combined cases ----------
@@ -1452,6 +1572,16 @@ async function signIn(page, email) {
     C("Outage: top-box line (tester)", "tester", "28", "28-outage-top-box-tester.png"),
     C("Outage: top-box line (developer)", "developer", "28", "28-outage-top-box-developer.png"),
     C("Outage: a call inside was missed (no no-show, nothing charged)", "tester", "28", "28-outage-missed-call-tester.png"),
+    C("Email confirmation required: refused (blue) with Resend the email", "developer", "29", "29-email-refused-developer.png"),
+    C("A 90-min call request (length typed by the requester)", "developer", "29", "29-request-90-min-developer.png"),
+    C("Logging more than 150% refused (red)", "developer", "29", "29-log-over-150-red-developer.png"),
+    C("Auto-cancel: nobody joined by the halfway point", "tester", "29", "29-auto-cancel-told-tester.png"),
+    C("Both needs lines (Find card)", "tester", "29", "29-find-both-needs-tester.png"),
+    C("Both needs lines (Join anyway warning)", "tester", "29", "29-join-anyway-both-needs-tester.png"),
+    C("An optional question marked 'not required'", "tester", "29", "29-optional-question-tester.png"),
+    C("Suggested (up to 5) and tick-box filters", "developer", "29", "29-suggested-and-tick-filters-developer.png"),
+    C("New layout: developer test header", "developer", "29", "29-test-header-developer.png"),
+    C("New layout: dashboards", "developer", "29", "29-dashboard-developer.png"),
   ];
   summary.coverage = rows.map((r) => {
     const f = summary.flows.find((x) => x.id === r.flow);
