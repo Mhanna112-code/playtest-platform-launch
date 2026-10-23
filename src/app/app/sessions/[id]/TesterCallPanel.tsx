@@ -4,7 +4,7 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
 import { JoinCall } from "@/components/JoinCall";
 
-type Mine = { id: string; when: string; minutes: number; room: string; canCancel: boolean; started: boolean; reported: boolean; cancelled: string; late?: string; rate?: string };
+type Mine = { id: string; when: string; minutes: number; room: string; canCancel: boolean; started: boolean; reported: boolean; cancelled: string; late?: string; rate?: string; joinable?: boolean };
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
@@ -23,13 +23,14 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; label: s
     <div className="space-y-2" id="calls">
       <section className="panel" aria-label="Live call">
         <h2>Your calls</h2>
+        <p className="note">{p.label}</p>
         {p.lateNote && !p.refusal && <p className="note">{p.lateNote}</p>}
         {p.mine.length > 0 && (
           <ul className="space-y-2 text-sm">
             {p.mine.map((m) => (
               <li key={m.id} className="flex flex-wrap items-center gap-2">
                 <span className="mr-auto">{fmt(m.when)} · {m.minutes} min{m.rate && ` · ${m.rate}`}{m.cancelled && ` · ${m.cancelled}`}{m.late && <span className="ml-2 badge">{m.late}</span>}</span>
-                {!m.cancelled && <JoinCall callId={m.id} />}
+                {!m.cancelled && m.joinable && <JoinCall callId={m.id} />}
                 {!m.cancelled && !m.started && (m.canCancel ? <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: m.id }, "cancel-" + m.id)}>Cancel</button> : (
                   <span className="inline-flex gap-2">
                     <input className="input w-48" placeholder="Why? (less than 24 hours away)" value={report["c" + m.id] ?? ""} onChange={(e) => setReport({ ...report, ["c" + m.id]: e.target.value })} />

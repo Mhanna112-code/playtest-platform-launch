@@ -641,6 +641,13 @@ export function joinCallRefusal(
   return "";
 }
 
+/** (Owner, as in the full app) Join call shows only while the room can be joined: from 10 min before to 30 min after the end. */
+export function callJoinable(x: { status: string; startsAt: Date; minutes: number }, now = new Date()) {
+  if (x.status !== "booked") return false;
+  const t = now.getTime(), s = x.startsAt.getTime();
+  return t >= s - JOIN_OPENS_MIN * 60_000 && t <= s + (x.minutes + JOIN_CLOSES_AFTER_END_MIN) * 60_000;
+}
+
 /** The length's default: from when both joined to the booked end (at least 1 minute); else the booked length. */
 export function defaultCallMinutes(startsAt: Date, minutes: number, devJoinedAt: Date | null, testerJoinedAt: Date | null) {
   if (!devJoinedAt || !testerJoinedAt) return minutes;

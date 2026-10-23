@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, pronouns } from "@/lib/format";
-import { bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, defaultCallMinutes, choiceNoteLine, closesInLine, lateLabel, termsLine } from "@/lib/rules";
+import { callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, defaultCallMinutes, choiceNoteLine, closesInLine, lateLabel, termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
 import { Chat } from "@/components/Chat";
@@ -96,7 +96,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       part("Recording", c.recordingCents, "recording"),
       c.liveRateCents != null ? `Live call ${whole(c.liveRateCents)}/h, ${whole(callPaid)} paid so far` : "Live call not in contract",
     ].filter(Boolean).join(" · ");
-    const toCall = (x: (typeof c.calls)[number]): DevCall => ({ id: x.id, when: x.startsAt.toISOString(), minutes: x.minutes, rate: rateLabel(x.rateCents, c.liveRateCents), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, late: lateOf(c, x) });
+    const toCall = (x: (typeof c.calls)[number]): DevCall => ({ id: x.id, joinable: callJoinable(x, now), when: x.startsAt.toISOString(), minutes: x.minutes, rate: rateLabel(x.rateCents, c.liveRateCents), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, late: lateOf(c, x) });
     const live = c.calls.filter((x) => x.status === "booked" && !x.review);
     const setIds = [...new Set(live.filter((x) => x.setId).map((x) => x.setId!))];
     const sets = setIds.map((sid) => {

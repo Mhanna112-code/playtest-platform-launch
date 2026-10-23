@@ -235,8 +235,8 @@ async function signIn(page, email) {
     await shot(dev, "time-requested");
     await tester.reload();
     await tester.click("section[aria-label='Call requests'] >> button:has-text('Accept')");
-    await tester.waitForSelector("text=Join call");
-    check("tester has a booked call with Join call", await has(tester, "text=Join call"));
+    await tester.waitForSelector("#calls li");
+    check("tester has a booked call (Join call shows only once it can be joined)", (await has(tester, "#calls li")) && !(await tester.isVisible("button:has-text('Join call')")));
     await shot(tester, "call-booked");
     await dev.reload();
     check("developer sees the booking", await has(dev, "text=Ana Silva"));
@@ -686,8 +686,7 @@ async function signIn(page, email) {
   await flow("18", "Block and Join call refusals: too early to join; the developer blocks; the tester reads only that the session ended; Join refused", async () => {
     // Ana's booked call (from flow 16) is days away: Join call is refused with the opening time.
     await tester.goto(`/app/sessions/${SA}`);
-    await tester.click("button:has-text('Join call')");
-    check("join too early", await has(tester, "text=You can join from"));
+    check("too early: no Join call yet", (await has(tester, "#calls li")) && !(await tester.isVisible("button:has-text('Join call')")));
     await shot(tester, "join-too-early-tester");
     // The developer blocks Ana from her tester row.
     await dev.goto(t11Url());
@@ -1784,7 +1783,7 @@ async function signIn(page, email) {
     C("Refusal: a clash when sending (the other side's request named; the text links to it)", "tester", "24", "24-send-clash-refused-tester.png"),
     C("Refusal: weekly clash naming the week", "tester", "24", "24-weekly-clash-refused-tester.png"),
     C("Refusal: This time is no longer free", "tester", "24", "24-no-longer-free-refused-tester.png"),
-    C("Refusal: Join call too early", "tester", "18", "18-join-too-early-tester.png"),
+    C("Join call hidden until the call can be joined", "tester", "18", "18-join-too-early-tester.png"),
     C("Refusal: paused (hold)", "tester", "12", "12-hold-join-refused-tester.png"),
     C("Refusal: paused (hold, developer)", "developer", "12", "12-hold-pay-waits-developer.png"),
     C("Refusal: blocked", "developer", "18", "18-blocked-row-developer.png"),

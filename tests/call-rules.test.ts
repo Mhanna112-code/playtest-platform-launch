@@ -35,3 +35,17 @@ describe("call rules", () => {
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { endsWith: "Nobody joined, so the call was cancelled." } } })).toBe(1);
   });
 });
+
+describe("Join call shows only while the room can be joined (as in the full app)", () => {
+  it("from 10 min before the start to 30 min after the end; never when cancelled", async () => {
+    const { callJoinable } = await import("@/lib/rules");
+    const s = new Date("2026-11-01T15:00:00Z");
+    const at = (min: number) => new Date(s.getTime() + min * 60_000);
+    const call = { status: "booked", startsAt: s, minutes: 60 };
+    expect(callJoinable(call, at(-11))).toBe(false);
+    expect(callJoinable(call, at(-10))).toBe(true);
+    expect(callJoinable(call, at(90))).toBe(true);
+    expect(callJoinable(call, at(91))).toBe(false);
+    expect(callJoinable({ ...call, status: "cancelled" }, at(0))).toBe(false);
+  });
+});

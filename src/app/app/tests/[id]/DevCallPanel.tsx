@@ -5,7 +5,7 @@ import { JoinCall } from "@/components/JoinCall";
 import { usePress } from "@/lib/usePress";
 import { MARKABLE } from "@/lib/markJump";
 
-export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string };
+export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string; joinable?: boolean };
 export type DevSet = { id: string; label: string; calls: DevCall[] };
 export type DevReq = { id: string; times: string[]; weeks: number; repeat: string; mine: boolean; rate: string; minutes?: number };
 export type DevTester = { contractId: string; name: string; terms: string; booked: number; calls: DevCall[]; sets: DevSet[]; requests: DevReq[] };
@@ -43,7 +43,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest }: { testId: 
   const callRow = (t: DevTester, c: DevCall) => (
     <li key={c.id} className="flex flex-wrap items-center gap-2">
       <span className="mr-auto">{t.name} · {fmt(c.when)} · {c.minutes} min · {c.rate}{c.late && <span className="ml-2 badge">{c.late}</span>}</span>
-      <JoinCall callId={c.id} />
+      {c.joinable && <JoinCall callId={c.id} />}
       {!c.started && (c.canCancel ? (
         <button className="btn-ghost" disabled={busy} onClick={() => go("cancel-call", { callId: c.id }, "cancel-" + c.id)}>Cancel</button>
       ) : (
