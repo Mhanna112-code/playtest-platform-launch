@@ -14,17 +14,23 @@ export function Chat({ path, extra = {}, messages, other, closed }: { path: stri
   const [busy, setBusy] = useState(false);
   return (
     <div className="space-y-2">
-      {messages.length === 0 && <p className="note">No messages yet. Write to {other} here.</p>}
-      <ul className="max-h-72 space-y-1 overflow-y-auto">
+      {/* The full app's chat: bubbles, yours on the right in the brand colour, theirs on the left with the name. */}
+      {messages.length === 0 && <p className="py-6 text-center text-sm text-slate-500">No messages yet. Write to {other} here.</p>}
+      <ul className="max-h-80 space-y-3 overflow-y-auto" role="log" aria-label="Messages">
         {messages.map((m) => (
-          <li key={m.id} className={"rounded-lg px-3 py-2 text-sm " + (m.mine ? "ml-8 bg-volt-300/10" : "mr-8 bg-white/[0.06]")}>
-            <span className="text-xs text-ink-400">{m.who} · {new Date(m.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
-            <p className="whitespace-pre-wrap">{m.body}</p>
+          <li key={m.id} className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
+            <div className="max-w-[78%] space-y-1">
+              {!m.mine && <p className="px-1 text-xs text-slate-400">{m.who}</p>}
+              <div className={`rounded-2xl px-3.5 py-2 text-sm ${m.mine ? "bg-volt-300 text-ink-950" : "bg-white/[0.07] text-slate-100"}`}>
+                <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                <p className={`mt-1 text-[10px] ${m.mine ? "text-ink-950/75" : "text-slate-500"}`}>{new Date(m.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>
+              </div>
+            </div>
           </li>
         ))}
       </ul>
-      {closed ? <p className="note">This chat is closed.</p> : <form
-        className="flex gap-2"
+      {closed ? <p className="border-t border-white/10 pt-3 text-sm text-slate-400">This chat is closed.</p> : <form
+        className="flex gap-2 border-t border-white/10 pt-3"
         onSubmit={async (e) => {
           e.preventDefault();
           setBusy(true);

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { CalendarClock, ExternalLink, MessagesSquare } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
 import { bookedLateLabel, isBookedLate, chargeAmount, choiceLine, callReference, cancelNeedsReason, canDispute, closesInLine, DELAYED_CALL_LINE, isLate, PAUSED_FOR_TESTERS, lateLabel, termsLine, testerShare } from "@/lib/rules";
@@ -69,8 +70,10 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const canRequestCall = !refusal && !blockedPair && !c.test.developer.holdStartedAt;
   const pendingReqs = await db.callRequest.findMany({ where: { contractId: c.id, status: "pending", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
   const infoChanged = (await db.testEvent.count({ where: { testId: c.testId, kind: "info", createdAt: { gt: c.joinedAt } } })) > 0;
+  // The full app's session page: one centred column; the header card (title, by, badges, Chat, Open the product), then a
+  // card per part.
   return (
-    <>
+    <div className="mx-auto max-w-3xl space-y-6">
       <AutoRefresh query={`session=${c.id}`} />
       <LiveTop scope={`session:${c.id}`} seenAt={seenAt} seeIt="#listing" />
       <TesterTop sessionId={c.id} seenAt={seenAt} devName={dev} offer={offer && !refusal ? { id: offer.id, diff: offer.diff } : null} />
@@ -79,13 +82,27 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       {!refusal && c.test.openUntil && c.test.openUntil > now && c.test.openUntil.getTime() - now.getTime() < 3 * 86_400_000 && (
         <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(c.title, c.test.openUntil, now)}</p>
       )}
-      <div className="panel">
-        <h1 className="text-3xl font-bold tracking-tight text-white">{c.title}</h1>
-        <p className="note">by <a href={`/app/developers/${c.test.developerId}`}>{dev}</a> · joined {fmtDate(c.joinedAt)} · due {fmtDate(c.dueAt)}{isLate(c.dueAt, now) && !refusal ? " (late work is still accepted and marked late)" : ""}</p>
+      <section className="card space-y-4">
+        <div className="flex flex-wrap items-start gap-4">
+          <div className="min-w-[12rem] flex-1">
+            <h1 className="text-2xl font-bold tracking-tight text-white">{c.title}</h1>
+            <p className="text-sm text-slate-400">by <a href={`/app/developers/${c.test.developerId}`} className="text-slate-200">{dev}</a> · joined {fmtDate(c.joinedAt)}</p>
+            <div className="mt-1 flex flex-wrap gap-2">
+              <span className={`badge ${c.status === "working" ? "border-emerald-400/40 text-emerald-200" : ""}`}>{c.status === "working" ? "Working" : c.status === "left" ? "You left" : "Ended"}</span>
+              <span className="badge"><CalendarClock className="h-3.5 w-3.5" /> due {fmtDate(c.dueAt)}</span>
+            </div>
+          </div>
+          <a href="#chat" className="btn-secondary min-w-0 max-w-full no-underline hover:no-underline"><MessagesSquare className="h-4 w-4 shrink-0" /> <span className="truncate">Chat with {dev}</span></a>
+        </div>
+        {isLate(c.dueAt, now) && !refusal && <p className="text-sm text-slate-400">Your deadline has passed: late work is still accepted and marked late.</p>}
+        {c.description && <p className="whitespace-pre-wrap text-slate-300">{c.description}</p>}
         <p className="text-sm"><b>Your contract:</b> {termsLine(c, true)} (what you get)</p>
-        <p className="text-sm">{(await paidLines([c.id])).get(c.id)}</p>
-        {c.buildUrl && <p className="text-sm">Build: <a href={c.buildUrl} target="_blank" rel="noreferrer">{c.buildUrl}</a></p>}
-        {c.description && <p className="whitespace-pre-wrap text-sm">{c.description}</p>}
+        <p className="text-sm text-slate-300">{(await paidLines([c.id])).get(c.id)}</p>
+        {c.buildUrl && (
+          <a href={c.buildUrl} target="_blank" rel="noreferrer" className="btn w-fit no-underline hover:no-underline">
+            Open the product <ExternalLink className="h-4 w-4" />
+          </a>
+        )}
         {infoChanged && (
           <details id="listing" className="text-sm">
             <summary className="cursor-pointer">{dev} updated the listing since you joined: see it now</summary>
@@ -114,7 +131,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           />
         )}
         {c.status === "left" && c.endKind !== "rated" && !myRating && c.test.status === "open" && (
-          <section id="rejoin" className="panel scroll-mt-24 border-emerald-400/30 text-sm">
+          <section id="rejoin" className="card space-y-3 scroll-mt-24 border-emerald-400/30 text-sm">
             <p className="font-semibold text-white">Join {c.title} again</p>
             <p className="text-ink-300">You join on the current listing: your session comes back with everything in it (work you sent, payments and chat).</p>
             <a className="btn" href={`/app/find/${c.testId}`}>Join again</a>
@@ -123,7 +140,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         {!(await db.block.count({ where: { blockerId: u.id, blockedId: c.test.developerId } })) && (
           <BlockButton seenAt={seenAt} sessionId={c.id} userId={c.test.developerId} name={dev} effect="Your session with them ends now (work you sent stays payable), calls between you are cancelled, and chat closes." />
         )}
-      </div>
+      </section>
 
       <TesterCallPanel
         sessionId={c.id}
@@ -134,7 +151,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         lateNote={now > c.dueAt ? `Your deadline was ${fmtDate(c.dueAt).replace(/, \d{4}$/, "")} (a guide, not a limit): a call you book now reads “${bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, ""))}”.` : undefined}
       />
       {(canRequestCall || pendingReqs.length > 0) && (
-        <section className="panel" aria-label="Call requests">
+        <section className="card space-y-3" aria-label="Call requests">
           <h2>Live call requests</h2>
           <CallRequests
             side="tester"
@@ -152,13 +169,13 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         </p>
       ))}
       {c.calls.filter((x) => x.review).map((x) => (
-        <section key={x.id} className="panel">
+        <section key={x.id} className="card space-y-3">
           <h3>Live call on {fmtDateTime(x.startsAt)}</h3>
           {owedCalls.has(x.id) ? <p className="info">{DELAYED_CALL_LINE}</p> : <TesterReview sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} />}
         </section>
       ))}
 
-      <section className="panel" id="written">
+      <section className="card space-y-3" id="written">
         <h2>Written answers</h2>
         <p className="note">{label(c.writtenCents != null)}{c.writtenCents != null && ` · ${c.writtenCents === 0 ? "free" : money(testerShare(c.writtenCents)) + " for you"}`}</p>
         {written && <p className="text-sm">{partLine(written.agreedCents, written.askedCents, partPaid.get(written.id) ?? 0)}</p>}
@@ -186,7 +203,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         )}
       </section>
 
-      <section className="panel" id="recording">
+      <section className="card space-y-3" id="recording">
         <h2>Screen recording</h2>
         <p className="note">{label(c.recordingCents != null)}{c.recordingCents != null && ` · ${c.recordingCents === 0 ? "free" : money(testerShare(c.recordingCents)) + " for you"}`}</p>
         {recording && <p className="text-sm">{partLine(recording.agreedCents, recording.askedCents, partPaid.get(recording.id) ?? 0)}</p>}
@@ -209,7 +226,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         />
       </section>
 
-      <section className="panel" id="chat">
+      <section className="card scroll-mt-24 space-y-3" id="chat">
         <h2>Chat with {dev}</h2>
         <Chat
           closed={blockedPair}
@@ -218,7 +235,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           messages={(await chatMessages(c.testId, c.testerId)).map((m) => ({ id: m.id, mine: m.senderId === u.id, who: m.senderId === u.id ? "You" : displayName(m.sender), body: m.body, at: m.createdAt.toISOString() }))}
         />
       </section>
-    </>
+    </div>
   );
 }
 
