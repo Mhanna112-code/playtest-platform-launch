@@ -1,16 +1,15 @@
-import { BarChart3, CheckCircle2, Star, Timer } from "lucide-react";
+import { CheckCircle2, Star, Timer } from "lucide-react";
 import { StatTile } from "@/components/StatTile";
 import { DEV_FOOTNOTE, TESTER_FOOTNOTE, developerStats, ratingTile, testerStats } from "@/lib/server/profileStats";
 import { capacityCard } from "@/lib/capacity";
 import { testerCapacity } from "@/lib/server/capacity";
 
-/** A developer's tiles (their profile as testers see it, and their dashboard): the full app's three, plus the rating. */
+/** A developer's tiles (their profile as testers see it, and their dashboard): Pays on average, Typical review, Rating. */
 export async function DeveloperTiles({ userId }: { userId: string }) {
   const [s, r] = await Promise.all([developerStats(userId), ratingTile(userId)]);
   return (
     <>
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="How this developer reviews">
-        <StatTile icon={BarChart3} label="Reports reviewed" value={s.reviewed.value} hint={s.reviewed.hint} tone="indigo" />
+      <section className="grid gap-4 sm:grid-cols-3" aria-label="How this developer reviews">
         <StatTile icon={CheckCircle2} label="Pays on average" value={s.pays.value} hint={s.pays.hint} tone="emerald" />
         <StatTile icon={Timer} label="Typical review" value={s.review.value} hint={s.review.hint} tone="amber" />
         <StatTile icon={Star} label="Rating" value={r.value} hint={r.hint} tone="fuchsia" />

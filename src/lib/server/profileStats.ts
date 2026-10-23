@@ -13,7 +13,6 @@ const pct = (x: number | null) => (x == null ? "-" : `${Math.round(x * 100)}%`);
 
 /** What each tile counts, said once under the tiles (the full app's footnote under its profile tiles). */
 export const DEV_FOOTNOTE =
-  "Reports reviewed: the written answers, recordings and live calls this developer paid or rejected, plus the ones testers charged after the 14-day review window. " +
   "Pays on average: the share of the listing paid for work in testers' contracts once decided (after any dispute); parts testers let go and work outside the contract don't count. " +
   "Typical review: the median time from when the work was sent (or the call ended) to the developer's Pay or Reject. " +
   "Rating: the average of testers' ratings, one per test, counted once they show.";
@@ -27,7 +26,7 @@ export async function ratingTile(userId: string) {
   return { value: r.n ? `${r.avg.toFixed(1)} ★` : "-", hint: r.n ? `${r.n} rating${r.n === 1 ? "" : "s"}` : "no ratings yet" };
 }
 
-/** A developer's three tiles (the full app's "Reports reviewed", "Pays on average", "Typical review"), from lean data. */
+/** A developer's tiles (the full app's "Pays on average", "Typical review"), from lean data. */
 export async function developerStats(developerId: string) {
   const contractIds = (await db.contract.findMany({ where: { test: { developerId } }, select: { id: true } })).map((c) => c.id);
   const [reviews, disputes] = await Promise.all([
@@ -58,7 +57,6 @@ export async function developerStats(developerId: string) {
   }).length;
   const n = med == null ? null : Math.max(1, Math.round(med));
   return {
-    reviewed: { value: String(decided.length), hint: "by hand or automatically" },
     pays: { value: pct(avg), hint: `${pct(share((x) => x >= 1))} accepted in full, ${pct(share((x) => x > 0 && x < 1))} partly, ${pct(share((x) => x === 0))} rejected` },
     review: { value: n == null ? "-" : `${n} day${n === 1 ? "" : "s"}`, hint: `${charged} charged by testers after the review window · ${disputesWon} dispute${disputesWon === 1 ? "" : "s"} decided for testers` },
   };

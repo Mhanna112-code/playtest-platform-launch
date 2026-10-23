@@ -1548,7 +1548,7 @@ async function signIn(page, email) {
     check("both rated", tr.status === 200 && dr.status === 200, JSON.stringify([tr.body, dr.body]));
     // Developer tiles: on their profile as testers see it, and on their dashboard.
     await tp.goto(`/app/developers/${sql(`select id from "User" where email = '${DEV30}'`)}`);
-    check("developer profile: Reports reviewed", await has(tp, "section[aria-label='How this developer reviews'] >> text=Reports reviewed"));
+    check("developer profile: no Reports reviewed tile", !(await tp.isVisible("text=Reports reviewed")));
     check("developer profile: Pays on average 100% with the split line", await has(tp, "text=100% accepted in full, 0% partly, 0% rejected"));
     check("developer profile: Typical review 2 days with the charges/disputes line", (await has(tp, "text=2 days")) && (await has(tp, "text=0 charged by testers after the review window · 0 disputes decided for testers")));
     check("developer profile: Rating 5.0 ★, 1 rating", (await has(tp, "text=5.0 ★")) && (await has(tp, "text=1 rating")));
@@ -1635,7 +1635,7 @@ async function signIn(page, email) {
     await t.click("text=Continue");
     await t.waitForSelector("text=Welcome back,");
     await t.goto(`/app/developers/${sql(`select id from "User" where email = '${DEV31}'`)}`);
-    await t.waitForSelector("text=Reports reviewed");
+    await t.waitForSelector("text=Pays on average");
     check("the profile testers see: no capacity card", (await t.locator("#tester-limit").count()) === 0 && !(await t.isVisible("text=testers per test")));
     // Post with 11 spots: red at the spots field; the limit shown next to it.
     await d.goto("/app/tests/new");
