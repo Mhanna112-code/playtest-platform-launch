@@ -59,7 +59,7 @@ export function LeaveButton({ sessionId, seenAt }: { sessionId: string; seenAt: 
       {!sure ? (
         <button className="btn-ghost" onClick={() => setSure(true)}>Leave the test</button>
       ) : (
-        <div className="space-y-2 rounded-lg border border-rose-200 p-3">
+        <div className="space-y-2 rounded-lg border border-rose-400/40 p-3">
           <p className="text-sm">Leave this test? Work you already sent is still reviewed and paid. Calls ahead are cancelled. You can&apos;t rejoin.</p>
           <button
             className="btn-danger"

@@ -30,7 +30,7 @@ export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenA
       });
   };
   return (
-    <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+    <div className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">
       <p>{line}.</p>
       {confirmLetGo ? (
         <div className="flex flex-wrap items-center gap-2">

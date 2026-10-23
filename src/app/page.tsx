@@ -16,13 +16,14 @@ export default async function Home() {
       </nav>
 
       <section className="space-y-4 pt-6">
-        <h1 className="text-4xl font-bold leading-tight">
+        <p className="kicker">Playtesting, paid fairly</p>
+        <h1 className="text-4xl font-extrabold leading-tight sm:text-5xl">
           Real players test your game.
           <br />
           You choose what to pay.
         </h1>
-        <p className="max-w-2xl text-lg text-slate-700">
-          Post a test with your build, your questions and your prices. Testers join on a fixed contract, send written answers or a screen
+        <p className="max-w-2xl text-lg text-ink-200">
+          Post a test with your build, your questions and your prices. Testers join on a contract, send written answers or a screen
           recording, or jump on a live call. You review what they sent and pay what it was worth.
         </p>
         <WaitlistForm />
@@ -31,7 +32,7 @@ export default async function Home() {
       <section className="grid gap-4 sm:grid-cols-3">
         <div className="panel">
           <h3>One contract, no haggling</h3>
-          <p className="note">Prices, questions, call terms and the deadline are fixed when a tester joins. Nobody can change them later.</p>
+          <p className="note">Prices, questions, call terms and the deadline are set when a tester joins. If you update the listing, working testers get an offer they can Switch to or Keep; work already sent keeps its price.</p>
         </div>
         <div className="panel">
           <h3>Pay what it was worth</h3>
@@ -39,7 +40,7 @@ export default async function Home() {
         </div>
         <div className="panel">
           <h3>Testers get 80%</h3>
-          <p className="note">Payouts go straight to the tester&apos;s Stripe account. Paid less than the listing? They can ask our team once.</p>
+          <p className="note">Payouts go straight to the tester&apos;s Stripe account. Paid less than the listing? They can dispute it once: our team decides, and a decision can only raise the pay, up to the listing amount.</p>
         </div>
       </section>
     </main>

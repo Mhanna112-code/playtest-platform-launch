@@ -4,6 +4,16 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 22, NEWEST+7) Launch look and sign-in like the full site (app behaviour unchanged)
+- Theme the lean app like the full Playtest Platform (dark slate/indigo, its fonts, logo, header/nav, cards, buttons,
+  inputs, labels, notices), reusing the full app's styles/components where they fit. Blue stop/refusal notices stay
+  blue under the pressed button; form mistakes stay red at the field. No behaviour changes.
+- Sign-in like the full site: Sign up (email + password), Log in, Forgot password -> Reset (email link), email
+  verification, sign out other devices when the password changes; same wording and form behaviour as the full app.
+  The email sign-in link is replaced by passwords (Google stays only if configured).
+- Landing page wording updated to today's rules (terms can be updated by an offer the tester can Switch/Keep;
+  disputes as specced).
+
 ## (Owner, Oct 22, NEWEST+6) Outages: detected automatically, every timer moves (no admin entry)
 - DETECTION: GET /api/health writes a heartbeat (time) when the app AND the database work. An outside uptime checker
   (e.g. UptimeRobot, free, every 5 min; owner sets it up when the site goes online) calls it. The daily job and the

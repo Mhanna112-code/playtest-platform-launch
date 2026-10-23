@@ -22,7 +22,7 @@ export function OwedBox({ onHold, owed }: { onHold: boolean; owed: Line[] }) {
   const [total, setTotal] = useState(seenTotal);
   const first = retry.find((o) => o.until)?.until;
   return (
-    <div id="owed" className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+    <div id="owed" className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">
       {onHold ? (
         <p><b>Your tests are paused.</b> No new testers, invites or calls, and Pay waits, until you pay what you owe. Testers can still send work; their deadlines move on by the pause.</p>
       ) : (

@@ -72,7 +72,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       {refusal && <p className="info">{refusal}</p>}
       {!refusal && c.test.developer.holdStartedAt && <p className="info">{PAUSED_FOR_TESTERS}</p>}
       {!refusal && c.test.openUntil && c.test.openUntil > now && c.test.openUntil.getTime() - now.getTime() < 3 * 86_400_000 && (
-        <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{closesInLine(c.title, c.test.openUntil, now)}</p>
+        <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(c.title, c.test.openUntil, now)}</p>
       )}
       <div className="panel">
         <h1>{c.title}</h1>
@@ -162,7 +162,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         {written?.review ? (
           writtenQuestions(c).map((q, i) => (
             <div key={i} className="text-sm">
-              <p className="font-medium text-slate-700">{q}</p>
+              <p className="font-medium text-ink-200">{q}</p>
               <p className="whitespace-pre-wrap">{(written.answers as string[])[i]}</p>
             </div>
           ))
@@ -216,7 +216,7 @@ type Disp = { status: string; decidedCents: number | null; decisionNote: string;
 function TesterReview({ sessionId, kind, id, review, dispute }: { sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
   const may = canDispute(review.amountCents, review.agreedCents, !!dispute).ok;
   return (
-    <div className="space-y-2 rounded-lg bg-slate-50 p-3 text-sm">
+    <div className="space-y-2 rounded-lg bg-white/[0.03] p-3 text-sm">
       {review.rejected ? (
         <p><b>Not accepted</b> ({fmtDateTime(review.createdAt)}): “{review.reason}”</p>
       ) : (

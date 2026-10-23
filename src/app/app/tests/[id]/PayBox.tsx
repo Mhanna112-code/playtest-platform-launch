@@ -32,7 +32,7 @@ export function PayBox(p: { kind: "submission" | "call"; id: string; name: strin
   }
 
   return (
-    <div className="space-y-2 rounded-lg bg-slate-50 p-3">
+    <div className="space-y-2 rounded-lg bg-white/[0.03] p-3">
       <p className="text-sm">
         <b>{p.listingCents == null ? "Not in their contract" : `Listing: ${p.listingText}`}</b>
         {p.askedCents != null && <> · {p.name} asked {money(p.askedCents)}</>} · Paid so far for this part: {money(p.partPaidCents ?? 0)} · You&apos;ve paid {p.name} {money(paidSoFar)} so far on this test.

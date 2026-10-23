@@ -45,7 +45,7 @@ export default async function AppHome() {
             const working = t.contracts.filter((c) => c.status === "working").length;
             const toPay = t.contracts.flatMap((c) => c.submissions).filter((s) => !s.review).length;
             return (
-              <Link key={t.id} href={`/app/tests/${t.id}`} className="panel block text-slate-900 no-underline hover:no-underline">
+              <Link key={t.id} href={`/app/tests/${t.id}`} className="panel block text-ink-100 no-underline hover:no-underline">
                 <div className="flex flex-wrap items-baseline gap-2">
                   <h3 className="mr-auto">{t.title}</h3>
                   <span className="badge">{STATUS[t.status]}</span>
@@ -74,7 +74,7 @@ export default async function AppHome() {
           ))}
           {sessions.length === 0 && <p className="note">You haven&apos;t joined a test yet.</p>}
           {sessions.map((c) => (
-            <Link key={c.id} href={`/app/sessions/${c.id}`} className="panel block text-slate-900 no-underline hover:no-underline">
+            <Link key={c.id} href={`/app/sessions/${c.id}`} className="panel block text-ink-100 no-underline hover:no-underline">
               <h3>{c.title}</h3>
               <p className="note">
                 {c.status === "working" ? `Due ${fmtDate(c.dueAt)}` : c.status === "left" ? "You left" : "Ended"} · {termsLine(c, true)}

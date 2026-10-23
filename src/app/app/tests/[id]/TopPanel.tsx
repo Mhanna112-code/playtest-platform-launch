@@ -63,14 +63,14 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
         )}
         {openErr && <p className="err">{openErr}</p>}
         {open === "stop" && (
-          <div className="space-y-2 rounded-lg border border-rose-200 p-3">
+          <div className="space-y-2 rounded-lg border border-rose-400/40 p-3">
             <p className="text-sm">Stopping ends every tester&apos;s work now and closes the test for good. Work already sent still waits for you to pay; calls ahead are cancelled.</p>
             <button className="btn-danger" disabled={busy} onClick={() => go("stop")}>Stop the test now</button>
             {box("stop")}
           </div>
         )}
         {open === "end" && (
-          <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+          <div className="space-y-2 rounded-lg border border-white/10 p-3">
             <label className="label req" htmlFor="who">Tester</label>
             <select id="who" className="input max-w-xs" value={who} onChange={(e) => setWho(e.target.value)}>
               {p.working.map((t) => (
@@ -85,7 +85,7 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
           </div>
         )}
         {open === "next" && (
-          <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+          <div className="space-y-2 rounded-lg border border-white/10 p-3">
             <p className="text-sm">A copy of this test for your next build, saved as a draft so you can put in the new build&apos;s link first.</p>
             {p.status === "open" && (
               <label className="block text-sm">

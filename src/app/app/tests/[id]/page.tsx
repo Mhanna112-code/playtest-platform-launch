@@ -133,7 +133,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         working={working.map((c) => ({ contractId: c.id, name: displayName(c.tester) }))}
       />
       {(u.holdStartedAt || owedList.length > 0) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} />}
-      {soon && <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{closesInLine(t.title, t.openUntil!, new Date())}</p>}
+      {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date())}</p>}
       <Applications testId={t.id} seenAt={seenAt} apps={apps} />
       {preJoin.length > 0 && (
         <section className="panel">
@@ -213,7 +213,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             {blockedIds.has(c.testerId) ? <p className="note">You blocked {displayName(c.tester)}. Unblock in Settings → Blocked people.</p> : <BlockButton seenAt={seenAt} testId={t.id} userId={c.testerId} name={displayName(c.tester)} effect="Their session ends now (work they sent stays payable), calls between you are cancelled, and chat closes." />}
             {c.submissions.length === 0 && c.calls.length === 0 && <p className="note">Nothing sent yet.</p>}
             {c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).map((x) => (
-              <div key={x.id} className="space-y-2 rounded-lg border border-slate-200 p-3">
+              <div key={x.id} className="space-y-2 rounded-lg border border-white/10 p-3">
                 <p className="text-sm font-medium">
                   Live call · {x.rateCents == null ? "Not in their contract" : "In their contract"} · {fmtDateTime(x.startsAt)} · {x.minutes} min booked
                 </p>
@@ -231,7 +231,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               </div>
             ))}
             {c.submissions.map((s) => (
-              <div key={s.id} className="space-y-2 rounded-lg border border-slate-200 p-3">
+              <div key={s.id} className="space-y-2 rounded-lg border border-white/10 p-3">
                 <p className="text-sm font-medium">
                   {s.kind === "written" ? "Written answers" : "Recording"} · {s.agreedCents == null ? "Not in their contract" : "In their contract"} · sent{" "}
                   {fmtDateTime(s.updatedAt)}
@@ -240,7 +240,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {s.kind === "written" &&
                   writtenQuestions(c).map((q, i) => (
                     <div key={i} className="text-sm">
-                      <p className="font-medium text-slate-700">{q}</p>
+                      <p className="font-medium text-ink-200">{q}</p>
                       <p className="whitespace-pre-wrap">{(s.answers as string[])[i]}</p>
                     </div>
                   ))}
@@ -287,7 +287,7 @@ type Disp = { id: string; status: string; reason: string; decidedCents: number |
 function ReviewResult({ review, payments, dispute, testId, seenAt }: { review: Rev; payments: Pay[]; dispute: Disp; testId: string; seenAt: string }) {
   const main = payments.find((p) => p.kind !== "dispute" && p.status !== "failed") ?? payments.find((p) => p.kind !== "dispute");
   return (
-    <div className="space-y-1 rounded-lg bg-slate-50 p-3 text-sm">
+    <div className="space-y-1 rounded-lg bg-white/[0.03] p-3 text-sm">
       {review.rejected ? (
         <p><b>Rejected</b> {fmtDateTime(review.createdAt)}: “{review.reason}” · nothing charged</p>
       ) : (

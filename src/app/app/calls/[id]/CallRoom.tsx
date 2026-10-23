@@ -19,7 +19,7 @@ export function CallRoom({ callId, room, initialLine, initialBoth }: { callId: s
   return (
     <div className="space-y-2">
       {both && <p className="note">Both joined at {new Date(both).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</p>}
-      <iframe title="Call room" src={room} allow="camera; microphone; display-capture" className="h-[70vh] w-full rounded-lg border border-slate-200" />
+      <iframe title="Call room" src={room} allow="camera; microphone; display-capture" className="h-[70vh] w-full rounded-lg border border-white/10" />
       <p className="note">Trouble with the video? <a href={room} target="_blank" rel="noreferrer">Open the room in a new tab</a>.</p>
     </div>
   );

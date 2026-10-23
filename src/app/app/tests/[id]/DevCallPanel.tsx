@@ -107,7 +107,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest }: { testId: 
       )}
       {shown.length === 0 && <p className="note">No calls or requests yet.</p>}
       {shown.map((t) => (
-        <div key={t.contractId} className="space-y-1 rounded-lg border border-slate-200 p-3 text-sm">
+        <div key={t.contractId} className="space-y-1 rounded-lg border border-white/10 p-3 text-sm">
           <h3>{t.name}</h3>
           {!t.calls.length && !t.sets.length && !t.requests.length && <p className="note">No calls or requests</p>}
           {(t.calls.length > 0 || t.sets.length > 0) && <p className="font-medium">Booked</p>}

@@ -17,8 +17,8 @@ export function Chat({ path, extra = {}, messages, other, closed }: { path: stri
       {messages.length === 0 && <p className="note">No messages yet. Write to {other} here.</p>}
       <ul className="max-h-72 space-y-1 overflow-y-auto">
         {messages.map((m) => (
-          <li key={m.id} className={"rounded-lg px-3 py-2 text-sm " + (m.mine ? "ml-8 bg-indigo-50" : "mr-8 bg-slate-100")}>
-            <span className="text-xs text-slate-500">{m.who} · {new Date(m.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+          <li key={m.id} className={"rounded-lg px-3 py-2 text-sm " + (m.mine ? "ml-8 bg-volt-300/10" : "mr-8 bg-white/[0.06]")}>
+            <span className="text-xs text-ink-400">{m.who} · {new Date(m.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
             <p className="whitespace-pre-wrap">{m.body}</p>
           </li>
         ))}

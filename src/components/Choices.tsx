@@ -9,7 +9,7 @@ export function Choices({ options, value, onChange, label, required }: { options
         {options.map((o) => {
           const on = value.includes(o);
           return (
-            <label key={o} className={"cursor-pointer rounded-full border px-3 py-1 text-sm " + (on ? "border-indigo-600 bg-indigo-50 text-indigo-800" : "border-slate-300 bg-white")}>
+            <label key={o} className={"cursor-pointer rounded-full border px-3 py-1 text-sm " + (on ? "border-volt-300 bg-volt-300/10 text-volt-200" : "border-white/15 bg-white/[0.04]")}>
               <input type="checkbox" className="sr-only" checked={on} onChange={() => onChange(on ? value.filter((x) => x !== o) : [...value, o])} />
               {o}
             </label>

@@ -2,27 +2,68 @@
 @tailwind components;
 @tailwind utilities;
 
-body { @apply bg-slate-50 text-slate-900 antialiased; }
-a { @apply text-indigo-700 underline-offset-2 hover:underline; }
-h1 { @apply text-2xl font-semibold; }
-h2 { @apply text-lg font-semibold; }
-h3 { @apply font-semibold; }
+/* (NEWEST+7) The full Playtest Platform's look: dark ink background, lime (volt) actions, coral (punch) alerts, the
+   bundled Bricolage Grotesque / Inter / JetBrains Mono fonts. Stop-once boxes and refusals stay BLUE (sky) under the
+   pressed button; form mistakes stay RED at the field. */
+:root {
+  --font-display: "Bricolage Grotesque Variable";
+  --font-sans: "Inter Variable";
+  --font-mono: "JetBrains Mono";
+  --background: #0a0d18;
+  --foreground: #e8ecf5;
+  color-scheme: dark;
+}
+
+html { scroll-padding-top: 4.5rem; }
+
+body {
+  color: var(--foreground);
+  background:
+    radial-gradient(48rem 26rem at 88% -8%, rgba(255, 63, 114, 0.13), transparent 62%),
+    radial-gradient(52rem 30rem at -12% 4%, rgba(216, 252, 82, 0.08), transparent 60%),
+    radial-gradient(circle at 1px 1px, rgba(168, 179, 204, 0.07) 1px, transparent 0) 0 0 / 22px 22px,
+    var(--background);
+  background-attachment: fixed;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: rgba(216, 252, 82, 0.35); color: #fff; }
+
+@layer base {
+  body { overflow-wrap: anywhere; }
+  button, .btn, .btn-ghost, .btn-secondary, .badge, summary { overflow-wrap: break-word; }
+  h1, h2, h3, .font-display { font-family: var(--font-display), var(--font-sans), ui-sans-serif, sans-serif; letter-spacing: -0.02em; }
+  h1 { @apply text-2xl font-bold text-white; }
+  h2 { @apply text-lg font-semibold text-white; }
+  h3 { @apply font-semibold text-ink-100; }
+  a { @apply text-volt-300 underline-offset-2 hover:underline; }
+  :focus-visible { outline: 2px solid #d8fc52; outline-offset: 2px; }
+  * { scrollbar-width: thin; scrollbar-color: rgba(168, 179, 204, 0.25) transparent; }
+  select option { background: #0a0d18; }
+}
 
 @layer components {
   .wrap { @apply mx-auto max-w-4xl px-4 py-6; }
-  .panel { @apply rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3; }
-  .btn { @apply inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white no-underline hover:bg-indigo-700 hover:no-underline disabled:opacity-50; }
-  .btn-ghost { @apply inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 no-underline hover:bg-slate-50 hover:no-underline disabled:opacity-50; }
-  .btn-danger { @apply inline-flex items-center justify-center rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50; }
-  .btn-green { @apply inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50; }
-  .input { @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500; }
-  .label { @apply block text-sm font-medium text-slate-700 mb-1; }
-  .req::after { content: " *"; @apply text-rose-600; }
-  .note { @apply text-sm text-slate-600; }
-  .err { @apply rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900; }
-  .err-field { @apply text-sm font-medium text-rose-700; }
-  .field-bad { @apply border-rose-500 ring-1 ring-rose-500; }
-  .ok { @apply text-sm text-emerald-700; }
-  .info { @apply rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900; }
-  .badge { @apply inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700; }
+  /* The full app's .card */
+  .card, .panel { @apply space-y-3 rounded-2xl border border-white/[0.08] bg-ink-900/70 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_30px_-12px_rgba(0,0,0,0.6)] backdrop-blur-sm; }
+  /* Primary action: the tactile lime button. */
+  .btn { @apply inline-flex select-none items-center justify-center gap-2 rounded-xl bg-volt-300 px-4 py-2 text-sm font-semibold text-ink-950 no-underline shadow-[0_3px_0_0_#62820b,0_8px_24px_-10px_rgba(216,252,82,0.55)] transition duration-100 hover:-translate-y-px hover:bg-volt-200 hover:no-underline active:translate-y-[2px] active:shadow-[0_1px_0_0_#62820b] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0; }
+  .btn-secondary, .btn-ghost { @apply inline-flex select-none items-center justify-center gap-2 rounded-xl border border-white/[0.12] bg-white/[0.04] px-4 py-2 text-sm font-medium text-ink-100 no-underline shadow-[0_2px_0_0_rgba(0,0,0,0.35)] transition duration-100 hover:border-white/25 hover:bg-white/[0.08] hover:no-underline active:translate-y-px active:shadow-none disabled:cursor-not-allowed disabled:opacity-50; }
+  .btn-danger { @apply inline-flex select-none items-center justify-center gap-2 rounded-xl bg-punch-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_3px_0_0_#a71345] transition duration-100 hover:bg-punch-400 active:translate-y-[2px] active:shadow-[0_1px_0_0_#a71345] disabled:opacity-50; }
+  .btn-green { @apply inline-flex select-none items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-ink-950 shadow-[0_3px_0_0_#047857] transition duration-100 hover:bg-emerald-300 disabled:opacity-50; }
+  .input { @apply w-full rounded-xl border border-white/[0.12] bg-ink-950/80 px-3 py-2 text-sm text-ink-100 transition placeholder:text-ink-500 focus:border-volt-300/70 focus:outline-none focus:ring-4 focus:ring-volt-300/10; }
+  .label { @apply mb-1 block text-sm font-medium text-ink-200; }
+  .req::after { content: " *"; @apply text-punch-400; }
+  .note { @apply text-sm text-ink-300; }
+  /* Blue: stop-once boxes, refusals and notices (never red). */
+  .err, .info { @apply rounded-xl border border-sky-400/40 bg-sky-500/10 px-3 py-2 text-sm text-sky-100; }
+  .info { @apply p-3; }
+  /* Red: a form mistake, at the field. */
+  .err-field { @apply text-sm font-medium text-rose-300; }
+  .field-bad { @apply border-rose-400 ring-1 ring-rose-400; }
+  .ok { @apply text-sm text-emerald-300; }
+  .badge { @apply inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-0.5 text-xs font-medium text-ink-200; }
+  .nav-link { @apply inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-ink-300 no-underline transition hover:bg-white/[0.06] hover:text-white hover:no-underline; }
+  .kicker { @apply font-mono text-xs uppercase tracking-[0.2em] text-volt-300; }
 }

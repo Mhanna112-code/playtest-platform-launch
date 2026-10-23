@@ -61,7 +61,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
   }, [confirm, ticked, p.testId]);
 
   const row = (t: Tester) => (
-    <label key={t.id} className={"block " + (t.grey ? "text-slate-400" : "")}>
+    <label key={t.id} className={"block " + (t.grey ? "text-ink-500" : "")}>
       <input type="checkbox" disabled={!!t.grey} checked={!t.grey && ticked.includes(t.id)} onChange={(e) => setTicked(e.target.checked ? [...ticked, t.id] : ticked.filter((x) => x !== t.id))} /> {t.name}{" "}
       <span className="note">· {[...t.devices, ...t.languages].join(", ")}{t.rating && ` · ${t.rating}`}</span>
       {t.grey && <span className="ml-2 text-xs">{t.grey}</span>}

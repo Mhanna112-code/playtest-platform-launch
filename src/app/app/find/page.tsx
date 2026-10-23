@@ -24,12 +24,12 @@ export default async function FindPage() {
         {tests.map((t) => {
           const gap = needsGap(t, profile);
           return (
-            <Link key={t.id} href={`/app/find/${t.id}`} className="panel block text-slate-900 no-underline hover:border-indigo-300 hover:no-underline">
+            <Link key={t.id} href={`/app/find/${t.id}`} className="panel block text-ink-100 no-underline hover:border-volt-300/40 hover:no-underline">
               <h3>{t.title}</h3>
               <p className="note">by {displayName(t.developer)}{devRatings.get(t.developerId) && ` · ${devRatings.get(t.developerId)}`}{t.category && ` · ${t.category}`}</p>
               <p className="text-sm">{termsLine(asListing(t), true)}</p>
               <p className="note">{t.spots - t._count.contracts} spot{t.spots - t._count.contracts === 1 ? "" : "s"} left{t.devices.length ? ` · ${t.devices.join(", ")}` : ""}</p>
-              {gap && <p className="text-sm text-amber-700">{gap}</p>}
+              {gap && <p className="text-sm text-amber-300">{gap}</p>}
             </Link>
           );
         })}

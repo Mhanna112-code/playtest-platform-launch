@@ -18,7 +18,7 @@ export default async function Notifications() {
       {items.length === 0 && <p className="note">Nothing yet.</p>}
       <ul className="space-y-2">
         {items.map((n) => (
-          <li key={n.id} className={"panel !space-y-1 " + (n.readAt ? "" : "border-indigo-300")}>
+          <li key={n.id} className={"panel !space-y-1 " + (n.readAt ? "" : "border-volt-300/40")}>
             <p className="note">{fmtDateTime(n.createdAt)}</p>
             {n.link ? <Link href={n.link}>{n.text}</Link> : <p>{n.text}</p>}
           </li>

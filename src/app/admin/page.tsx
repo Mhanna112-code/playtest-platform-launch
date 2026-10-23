@@ -57,7 +57,7 @@ export default async function AdminPage() {
           const r = reviews.find((x) => (d.submissionId && x.submissionId === d.submissionId) || (d.callId && x.callId === d.callId));
           const c = contracts.find((x) => x.id === d.contractId);
           return (
-            <div key={d.id} className="space-y-1 border-t border-slate-100 pt-2 text-sm">
+            <div key={d.id} className="space-y-1 border-t border-white/[0.06] pt-2 text-sm">
               <p>
                 <b>{c ? displayName(c.tester) : "?"}</b> vs {c ? displayName(c.test.developer) : "?"} on “{c?.title}” · {d.callId ? "live call" : "sent work"} · paid {money(r?.amountCents)}
                 {r?.rejected ? " (rejected)" : ""}, listing {money(r?.agreedCents)}
