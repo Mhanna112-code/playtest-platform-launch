@@ -24,7 +24,7 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
 4b. [DONE c68cff4] Join anyway / Apply anyway: use the full app's popup and its behaviour
    (integration src/app/playtests/[id]/claim-form.tsx), replacing the lean in-page warning; lists every unmet need
    (devices and languages), same lean rules (warn, never refuse).
-5. [DONE] Join page (listing), dashboard and Find tests formatted EXACTLY like the full app's equivalents
+5. [DONE 4e5e6de] Join page (listing), dashboard and Find tests formatted EXACTLY like the full app's equivalents
    (app/playtests/[id], app/dev/page.tsx + app/tester/page.tsx, app/playtests/page.tsx).
 6. Developer/tester side switch like the full app (header switch, per-side nav/dashboard/pages, /switch links) -
    owner to confirm.
