@@ -407,7 +407,12 @@ export async function findTests(tester: U) {
     orderBy: { createdAt: "desc" },
     take: 100,
   });
-  return tests.filter((t) => t._count.contracts < t.spots);
+  // Most relevant first (owner): tests needing a device the tester has, then tests open to any device, then tests
+  // needing a device they don't list; newest first within each group.
+  const p = await db.testerProfile.findUnique({ where: { userId: tester.id } });
+  const rank = (t: { devices: string[]; languages: string[] }) =>
+    t.devices.length ? (t.devices.some((d) => p?.devices.includes(d)) ? 0 : 2) : 1;
+  return tests.filter((t) => t._count.contracts < t.spots).map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i).map((x) => x.t);
 }
 
 /** Why this tester's profile doesn't fit the test's needs, or "" when it does. */
@@ -422,7 +427,7 @@ export function needsGap(t: { devices: string[]; languages: string[] }, p: { dev
  * the second press joins on them. Closed, stopped or full tests refuse for good. The contract is a snapshot.
  */
 export async function joinTest(tester: U, testId: string, body: Record<string, unknown>) {
-  if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test games” in your profile to join tests.");
+  if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
   const profile = await db.testerProfile.findUnique({ where: { userId: tester.id } });
   const seen = Number(body.listingVersion);
   const { contract, dev, filled } = await db.$transaction(async (tx) => {

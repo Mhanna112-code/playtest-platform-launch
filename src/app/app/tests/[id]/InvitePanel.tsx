@@ -22,7 +22,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
   const [msg, setMsg] = useState("");
   const [confirm, setConfirm] = useState<string[] | null>(null);
   const notInvited = useMemo(
-    () => p.testers.filter((t) => !t.invited && (!f.device || t.devices.includes(f.device)) && (!f.language || t.languages.includes(f.language)) && (!f.category || t.categories.includes(f.category))),
+    () => p.testers.filter((t) => !t.invited && (!f.device || t.devices.includes(f.device)) && (!f.language || t.languages.includes(f.language))),
     [p.testers, f],
   );
   const worked = notInvited.filter((t) => t.section === "worked");
@@ -95,7 +95,6 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
       <div className="flex flex-wrap gap-2">
         {select("device", "Device", p.options.devices)}
         {select("language", "Language", p.options.languages)}
-        {select("category", "Likes", p.options.categories)}
       </div>
       <div className="max-h-80 space-y-2 overflow-y-auto text-sm">
         <h3>People you&apos;ve worked with</h3>

@@ -174,7 +174,7 @@ async function signIn(page, email) {
     await signIn(tester, TESTER);
     await tester.fill("#name", "Ana Silva");
     await tester.selectOption("#pronoun", "she");
-    await tester.check("text=test games and get paid");
+    await tester.check("text=test apps, games and more, and get paid");
     await tester.click("label:has-text('Windows PC')");
     await tester.click("label:has-text('English')");
     await tester.click("text=Continue");
@@ -259,7 +259,7 @@ async function signIn(page, email) {
     t2 = await ctx(PHONE);
     await signIn(t2, `tester2+${TS}@playtest.test`);
     await t2.fill("#name", `Dee Moss ${TS % 10000}`);
-    await t2.check("text=test games and get paid");
+    await t2.check("text=test apps, games and more, and get paid");
     await t2.click("label:has-text('Mac')");
     await t2.click("label:has-text('English')");
     await t2.click("text=Continue");
@@ -471,7 +471,7 @@ async function signIn(page, email) {
     t3 = await ctx(PHONE);
     await signIn(t3, `tester3+${TS}@playtest.test`);
     await t3.fill("#name", `Cara Diaz ${TS % 10000}`);
-    await t3.check("text=test games and get paid");
+    await t3.check("text=test apps, games and more, and get paid");
     await t3.click("label:has-text('Windows PC')");
     await t3.click("label:has-text('English')");
     await t3.click("text=Continue");
@@ -982,7 +982,7 @@ async function signIn(page, email) {
     t4 = await ctx(PHONE);
     await signIn(t4, `tester4+${TS}@playtest.test`);
     await t4.fill("#name", `Eve Ray ${TS % 10000}`);
-    await t4.check("text=test games and get paid");
+    await t4.check("text=test apps, games and more, and get paid");
     await t4.click("label:has-text('Windows PC')");
     await t4.click("label:has-text('English')");
     await t4.click("text=Continue");
@@ -1227,7 +1227,7 @@ async function signIn(page, email) {
     await signIn(tp, T27);
     await tp.fill("#name", "Ana Silva");
     await tp.selectOption("#pronoun", "she");
-    await tp.check("text=test games and get paid");
+    await tp.check("text=test apps, games and more, and get paid");
     await tp.click("label:has-text('Windows PC')");
     await tp.click("label:has-text('English')");
     await tp.click("text=Continue");
@@ -1315,7 +1315,7 @@ async function signIn(page, email) {
     await signIn(tp, T28);
     await tp.fill("#name", "Ana Silva");
     await tp.selectOption("#pronoun", "she");
-    await tp.check("text=test games and get paid");
+    await tp.check("text=test apps, games and more, and get paid");
     await tp.click("label:has-text('Windows PC')");
     await tp.click("label:has-text('English')");
     await tp.click("text=Continue");

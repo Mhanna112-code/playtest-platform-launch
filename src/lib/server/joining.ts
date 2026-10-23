@@ -105,7 +105,7 @@ async function replacedInvite(testerId: string, testId: string, body: Record<str
 
 /** Join (Who can join = Anyone, or an invited tester on an invite-only test). */
 export async function join(tester: U, testId: string, body: Record<string, unknown>) {
-  if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test games” in your profile to join tests.");
+  if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
   const t = await db.test.findUnique({ where: { id: testId } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
   const refusal = await joinRefusal(tester.id, testId);
@@ -123,7 +123,7 @@ export async function join(tester: U, testId: string, body: Record<string, unkno
 
 /** Apply to join (optional note). If the test now lets anyone join, the second press simply joins. */
 export async function apply(tester: U, testId: string, body: Record<string, unknown>) {
-  if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test games” in your profile to join tests.");
+  if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
   const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
   const refusal = await joinRefusal(tester.id, testId);

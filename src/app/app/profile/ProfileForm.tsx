@@ -3,7 +3,7 @@ import { Err } from "@/components/Err";
 import { useState } from "react";
 import { Choices } from "@/components/Choices";
 import { api, errOf } from "@/lib/client";
-import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
+import { DEVICES, LANGUAGES } from "@/lib/options";
 
 type Init = { name: string; pronoun: string; isDeveloper: boolean; isTester: boolean; devices: string[]; categories: string[]; languages: string[]; bio: string; emailPref?: string };
 
@@ -50,9 +50,8 @@ export function ProfileForm({ init, first }: { init: Init; first?: boolean }) {
       </fieldset>
       {v.isTester && (
         <>
-          <Choices label="Devices you play on" required options={DEVICES} value={v.devices} onChange={(devices) => set({ devices })} />
+          <Choices label="Devices you use" required options={DEVICES} value={v.devices} onChange={(devices) => set({ devices })} />
           <Choices label="Languages you can test in" required options={LANGUAGES} value={v.languages} onChange={(languages) => set({ languages })} />
-          <Choices label="What you like to test" options={CATEGORIES} value={v.categories} onChange={(categories) => set({ categories })} />
           <div>
             <label className="label" htmlFor="bio">About you as a tester</label>
             <textarea id="bio" className="input" rows={3} value={v.bio} onChange={(e) => set({ bio: e.target.value })} />
