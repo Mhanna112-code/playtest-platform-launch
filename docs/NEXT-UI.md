@@ -65,3 +65,5 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    its notice into view (block "nearest"); never jump to the top box because of a press.
 14. INVITE PANEL labels: a tester who left this test shows "Left this test", one you ended shows "You ended their work",
    to the right of their name (still tickable: a re-invite is how an ended tester can come back).
+12b. Finish item 12's gaps: the "What's missing changed" stop inside the Invite anyway box, the owed-total check
+   behind "Pay what you owe", and the call-request limit confirm must also stop again for anything newer.
