@@ -147,7 +147,7 @@ async function signIn(page, email) {
     await shot(p, "waitlist-done");
   });
 
-  await flow("02", "Developer signs in with an email link and posts a test (desktop)", async () => {
+  await flow("02", "Developer signs up with a password and posts a test (desktop)", async () => {
     await signIn(dev, DEV);
     await dev.fill("#name", "Nora Lane");
     await dev.selectOption("#pronoun", "she");

@@ -1,6 +1,6 @@
 {
-  "run": "2026-10-23T01:23:17.748Z",
-  "base": "http://localhost:3400",
+  "run": "2026-10-23T01:58:37.571Z",
+  "base": "http://localhost:3450",
   "flows": [
     {
       "id": "01",
@@ -20,7 +20,7 @@
       "title": "Developer signs in with an email link and posts a test (desktop)",
       "status": "pass",
       "checks": [
-        "PASS test page with top panel (saw: http://localhost:3400/app/tests/cmvk7qfa500v17k9466ny2uv9)",
+        "PASS test page with top panel (saw: http://localhost:3450/app/tests/cmvkbmu2100077krgnegd2bd0)",
         "PASS terms line"
       ],
       "screenshots": [
@@ -89,7 +89,7 @@
       "status": "pass",
       "checks": [
         "PASS payments page",
-        "PASS admin page (saw: http://localhost:3400/admin)"
+        "PASS admin page (saw: http://localhost:3450/admin)"
       ],
       "screenshots": [
         "07-chat.png",
@@ -167,7 +167,7 @@
       "title": "Charge declined: owed with a 3-day cut-off (developer banner + Payments, tester line); a second failure pauses at once",
       "status": "pass",
       "checks": [
-        "PASS test posted (saw: {\"id\":\"cmvk7r5u500yz7k947jouhhog\"})",
+        "PASS test posted (saw: {\"id\":\"cmvkbompk00477krgybh3lyfh\"})",
         "PASS both testers joined",
         "PASS tester offered the choice",
         "PASS developer banner with the cut-off",
@@ -403,10 +403,10 @@
       "title": "Developer live-call panel: one tester with a booked call, a weekly set and a waiting request; another at 3 of 3 refused",
       "status": "pass",
       "checks": [
-        "PASS weekly set booked (3 calls) (saw: {\"booked\":true,\"callId\":\"cmvk7u0ug01at7k94jxoi30y1\",\"calls\":3})",
-        "PASS Dee's call on day 8 booked (saw: {\"booked\":true,\"callId\":\"cmvk7u10101bt7k94uw9y7eju\",\"calls\":1})",
-        "PASS Dee's call on day 9 booked (saw: {\"booked\":true,\"callId\":\"cmvk7u15401ca7k94prhxdy95\",\"calls\":1})",
-        "PASS Dee's call on day 10 booked (saw: {\"booked\":true,\"callId\":\"cmvk7u18x01cr7k94e7ycwkc2\",\"calls\":1})",
+        "PASS weekly set booked (3 calls) (saw: {\"booked\":true,\"callId\":\"cmvkbro5700gc7krgcvzzrbop\",\"calls\":3})",
+        "PASS Dee's call on day 8 booked (saw: {\"booked\":true,\"callId\":\"cmvkbroa200hc7krgcsktlnro\",\"calls\":1})",
+        "PASS Dee's call on day 9 booked (saw: {\"booked\":true,\"callId\":\"cmvkbrog000ht7krg72tzd5f2\",\"calls\":1})",
+        "PASS Dee's call on day 10 booked (saw: {\"booked\":true,\"callId\":\"cmvkbrom700ia7krg2w8hmrr9\",\"calls\":1})",
         "PASS 4th booked time refused for the tester",
         "PASS rate line",
         "PASS Dee at 3 of 3 booked",
@@ -424,23 +424,23 @@
       "title": "Every button stops once: your own other-tab actions, Block after a payment, listing info (F), the live top box",
       "status": "pass",
       "checks": [
-        "PASS two testers in (saw: {\"id\":\"cmvk7u2i701dd7k94hvm8v4vz\"})",
+        "PASS two testers in (saw: {\"id\":\"cmvkbrq0y00iw7krgoayz842r\"})",
         "PASS tab 2 sent the answers",
         "PASS tab 1 Leave stopped once: 'You also did this in another tab'",
         "PASS second press left the test",
         "PASS Cara charged; the card was declined (owed) (saw: {\"choice\":\"charge\",\"amountCents\":800,\"status\":\"failed\"})",
         "PASS developer's top box: 'Payment failed on Tide Pool ... pay by ... to avoid a pause'",
-        "PASS tester's top box: 'delayed', never failed/hold/chargeback (saw: Updated · 7:12 PM: You also did this in another tab: charged for your written answers\nUpdated · 7:12 PM: Nora Lane's payment for your written answers ($8) is de)",
+        "PASS tester's top box: 'delayed', never failed/hold/chargeback (saw: Updated · 9:02 PM: You also did this in another tab: charged for your written answers\nUpdated · 9:02 PM: Nora Lane's payment for your written answers ($8) is de)",
         "PASS developer's OTHER test page shows the failure, naming Tide Pool",
         "PASS the developer paid what they owe (saw: {\"paid\":1,\"stillFailing\":[],\"lifted\":false})",
         "PASS Edit tab 1: Save stopped once with the other tab's change",
         "PASS second Save saved",
-        "PASS tester's top box: 'Nora Lane changed the description' with See it (saw: 19 s)",
-        "PASS the page scrolled up to the top box once (saw: 1007 → 133)",
-        "PASS developer paid Dee $8 (saw: {\"reviewId\":\"cmvk7v51f01fk7k94hi8x9vuj\",\"amountCents\":800,\"status\":\"charged\",\"rejected\":false,\"paidSoFarCents\":800})",
+        "PASS tester's top box: 'Nora Lane changed the description' with See it (saw: 18 s)",
+        "PASS the page scrolled up to the top box once (saw: 1120 → 89)",
+        "PASS developer paid Dee $8 (saw: {\"reviewId\":\"cmvkbsuxc00l67krg3ntsrk3n\",\"amountCents\":800,\"status\":\"charged\",\"rejected\":false,\"paidSoFarCents\":800})",
         "PASS Block stopped once: the developer paid",
         "PASS top box lists the payment above the description change",
-        "PASS no second scroll (only the new line's height) (saw: 205 → 183)",
+        "PASS no second scroll (only the new line's height) (saw: 197 → 239)",
         "PASS the stop box lists the payment once",
         "PASS second press blocked"
       ],
@@ -464,7 +464,7 @@
       "title": "Coverage: tester call refusals, limits, clashes, and combined stop boxes (info + call; another tab + paid)",
       "status": "pass",
       "checks": [
-        "PASS Eve and Cara in (saw: {\"id\":\"cmvk7vmdk01g77k94ffzl45ym\"})",
+        "PASS Eve and Cara in (saw: {\"id\":\"cmvkbtc7800lw7krgmtf5k0sj\"})",
         "PASS tester stop box: listing info (F) + call change (C) together",
         "PASS tester stop box: 'You also did this in another tab' + the developer paid",
         "PASS refused: the developer declined this request",
@@ -513,20 +513,20 @@
       "checks": [
         "PASS old invite replaced, a new one sent",
         "PASS Join on the old invite: one blue final notice with the new invite",
-        "PASS joined on the new invite (saw: http://localhost:3400/app/sessions/cmvk7wumb01m47k943yc7cfd8)",
+        "PASS joined on the new invite (saw: http://localhost:3450/app/sessions/cmvkbumkj00rz7krggmv8u21r)",
         "PASS Save result lists the closed application",
         "PASS tab 1 Accept: one final notice (closed when you changed the listing in another tab)",
         "PASS not joined",
         "PASS tester's join page top box: your application was closed",
         "PASS join page: 'You left this test. Joining again restores your session'",
-        "PASS the same session restored (saw: http://localhost:3400/app/sessions/cmvk7wumb01m47k943yc7cfd8)",
+        "PASS the same session restored (saw: http://localhost:3450/app/sessions/cmvkbumkj00rz7krggmv8u21r)",
         "PASS new terms on the contract (Written $9.60)",
         "PASS old work kept with its payment",
         "PASS the test is full; Eve's invite stays open",
         "PASS Eve's top box: full right now, the invite stays open",
         "PASS Join refused while full (blue, under the button)",
         "PASS Eve's top box: a spot opened",
-        "PASS Eve joined after the spot opened (saw: http://localhost:3400/app/sessions/cmvk7y8or01p07k94zlh1ggj0)",
+        "PASS Eve joined after the spot opened (saw: http://localhost:3450/app/sessions/cmvkbvzcb00uy7krgc2gedu6c)",
         "PASS sent (not stopped) and the note shows: renamed"
       ],
       "screenshots": [
@@ -546,9 +546,9 @@
       "title": "Ratings: the tester rates the developer (not yet, available after review, warning, red form mistake, rated; no rejoin; Charge stays; profile average)",
       "status": "pass",
       "checks": [
-        "PASS test posted and joined (saw: {\"id\":\"cmvk936w400347k8clh7560nk\"})",
+        "PASS test posted and joined (saw: {\"id\":\"cmvkbw4h900vz7krgctxtvtht\"})",
         "PASS not yet: no Rate button while work waits for review",
-        "PASS the developer paid the call (saw: {\"reviewId\":\"cmvk9383d004f7k8c4vzzxejz\",\"amountCents\":1500,\"status\":\"charged\",\"rejected\":false,\"paidSoFarCents\":1500})",
+        "PASS the developer paid the call (saw: {\"reviewId\":\"cmvkbw5t300xa7krgfq8fxqk9\",\"amountCents\":1500,\"status\":\"charged\",\"rejected\":false,\"paidSoFarCents\":1500})",
         "PASS the 'Rate Nora Lane' prompt was sent once",
         "PASS available after the review: Rate button",
         "PASS warning: rating ends your part",
@@ -585,9 +585,9 @@
       "status": "pass",
       "checks": [
         "PASS health answered",
-        "PASS outage recorded once (2 h 30 min) (saw: 9000014)",
-        "PASS the tester's deadline moved by the outage length (saw: 9000014)",
-        "PASS the review clock (pay-by) moved by the outage length (saw: 9000014)",
+        "PASS outage recorded once (2 h 30 min) (saw: 9000009)",
+        "PASS the tester's deadline moved by the outage length (saw: 9000009)",
+        "PASS the review clock (pay-by) moved by the outage length (saw: 9000009)",
         "PASS the call inside was missed: cancelled by the site, no no-show, nothing charged",
         "PASS bell: 'The site was down from … Deadlines and payment dates moved 2 h 30 min later.'",
         "PASS tester's top box: the outage line",
@@ -601,7 +601,6 @@
       ]
     }
   ],
-  "mergedInto": "2026-10-23T00:56:55.867Z",
   "coverage": [
     {
       "type": "Tester stop A: new terms (Send my recording)",
