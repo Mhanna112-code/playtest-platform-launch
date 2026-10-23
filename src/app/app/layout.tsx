@@ -3,6 +3,7 @@ import { Brand } from "@/components/Brand";
 import { db } from "@/lib/db";
 import { SignOut } from "@/components/SignOut";
 import { ResendConfirm } from "@/components/ResendConfirm";
+import { confirmSkipped } from "@/lib/server/users";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { isAdmin } from "@/lib/server/session";
 
@@ -28,7 +29,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
       {!u.emailVerifiedAt && (
         <p className="mx-auto mt-4 max-w-4xl px-4">
-          <span className="info flex flex-wrap items-center gap-2">Confirm your email: we sent a link to {u.email}. <ResendConfirm /></span>
+          {confirmSkipped() ? (
+            <span className="info block">Email confirmation is off for testing.</span>
+          ) : (
+            <span className="info flex flex-wrap items-center gap-2">Confirm your email: we sent a link to {u.email}. <ResendConfirm /></span>
+          )}
         </p>
       )}
       {u.suspendedAt && (

@@ -12,6 +12,9 @@ export async function requireActive(req: Request) {
   return u;
 }
 
+/** Testing switch: SKIP_EMAIL_CONFIRM=1 turns the requirement off, never in production. */
+export const confirmSkipped = () => process.env.SKIP_EMAIL_CONFIRM === "1" && process.env.NODE_ENV !== "production";
+
 /** (NEWEST+8) The refusal for an unconfirmed email (blue, under the button, with a Resend link). */
 export const CONFIRM_FIRST = "Confirm your email first.";
 /**
@@ -20,6 +23,7 @@ export const CONFIRM_FIRST = "Confirm your email first.";
  * sign-out still work.
  */
 export function requireConfirmed(u: { emailVerifiedAt: Date | null }) {
+  if (confirmSkipped()) return;
   if (!u.emailVerifiedAt) throw new HttpError(409, "confirm_email", CONFIRM_FIRST);
 }
 

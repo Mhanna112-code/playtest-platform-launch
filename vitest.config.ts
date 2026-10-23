@@ -21,7 +21,7 @@ export default defineConfig({
     env: {
       DATABASE_URL: testDb, DIRECT_URL: testDb, RESEND_API_KEY: "", STRIPE_SECRET_KEY: "", GOOGLE_CLIENT_ID: "", GOOGLE_CLIENT_SECRET: "",
       R2_ACCOUNT_ID: "", R2_ACCESS_KEY_ID: "", R2_SECRET_ACCESS_KEY: "", R2_BUCKET: "", UPLOAD_DIR: path.resolve(__dirname, ".test-uploads"),
-      ADMIN_EMAILS: "owner@playtest.test", APP_URL: "http://localhost:3400", STRIPE_WEBHOOK_SECRET: "whsec_test", CRON_SECRET: "cron-test",
+      ADMIN_EMAILS: "owner@playtest.test", SKIP_EMAIL_CONFIRM: "", APP_URL: "http://localhost:3400", STRIPE_WEBHOOK_SECRET: "whsec_test", CRON_SECRET: "cron-test",
     },
     fileParallelism: false,
     testTimeout: 30_000,

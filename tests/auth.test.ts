@@ -84,6 +84,21 @@ describe("sign up, confirm, log in, reset", () => {
     expect((await testsPOST(req("/api/tests", { cookie, body: listingBody() }))).status).toBe(200);
   });
 
+  it("the testing switch SKIP_EMAIL_CONFIRM=1 skips the requirement, but never in production", async () => {
+    const { requireConfirmed } = await import("@/lib/server/users");
+    const env = process.env as Record<string, string | undefined>;
+    const keep = { skip: env.SKIP_EMAIL_CONFIRM, node: env.NODE_ENV };
+    try {
+      env.SKIP_EMAIL_CONFIRM = "1";
+      expect(() => requireConfirmed({ emailVerifiedAt: null })).not.toThrow();
+      env.NODE_ENV = "production";
+      expect(() => requireConfirmed({ emailVerifiedAt: null })).toThrow("Confirm your email first.");
+    } finally {
+      env.SKIP_EMAIL_CONFIRM = keep.skip;
+      env.NODE_ENV = keep.node;
+    }
+  });
+
   it("sign out ends the session", async () => {
     const { cookie } = await makeUser();
     expect(await getUserFromRequest(req("/app", { cookie }))).not.toBeNull();
