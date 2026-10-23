@@ -2,7 +2,6 @@
 import { Err } from "@/components/Err";
 import { useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
-import { PressButton } from "@/components/PressButton";
 import { api, errOf, ApiError } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { useRouter } from "next/navigation";
@@ -123,9 +122,6 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
       )}
       <div className="flex flex-wrap gap-2">
         <button className="btn" disabled={busy || !!done} onClick={() => press(applying ? "apply" : "join")}>{busy ? "Sending…" : applying ? "Apply to join" : "Join this test"}</button>
-        {p.inviteId && !done && (
-          <PressButton seenAt={p.seenAt} path={`/api/invites/${inviteId}`} body={{}} onDone={() => (window.location.href = "/app")}>No thanks</PressButton>
-        )}
       </div>
       {covered && (
         <p role="status" className="info"><JustUpdated at={covered} /> {PROFILE_COVERS}</p>

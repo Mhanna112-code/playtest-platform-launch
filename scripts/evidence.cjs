@@ -181,7 +181,7 @@ async function signIn(page, email) {
     await tester.click("label:has-text('Windows PC')");
     await tester.click("label:has-text('English')");
     await tester.click("text=Continue");
-    await tester.waitForSelector("text=Your sessions");
+    await tester.waitForSelector("text=Welcome back");
     await tester.goto("/app/find");
     check("tester sees their share (80%)", await has(tester, "text=Written $8.00"));
     await shot(tester, "find");
@@ -269,7 +269,7 @@ async function signIn(page, email) {
     await t2.click("label:has-text('Mac')");
     await t2.click("label:has-text('English')");
     await t2.click("text=Continue");
-    await t2.waitForSelector("text=Your sessions");
+    await t2.waitForSelector("text=Welcome back");
     await dev.goto(testUrl);
     // Tick-box filters, then Find testers by name (Suggested shows up to 5).
     await dev.click("#invite > summary"); // the fold opens

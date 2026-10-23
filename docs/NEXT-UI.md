@@ -24,7 +24,7 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
 4b. [DONE c68cff4] Join anyway / Apply anyway: use the full app's popup and its behaviour
    (integration src/app/playtests/[id]/claim-form.tsx), replacing the lean in-page warning; lists every unmet need
    (devices and languages), same lean rules (warn, never refuse).
-5. Join page (listing), dashboard and Find tests formatted EXACTLY like the full app's equivalents
+5. [DONE] Join page (listing), dashboard and Find tests formatted EXACTLY like the full app's equivalents
    (app/playtests/[id], app/dev/page.tsx + app/tester/page.tsx, app/playtests/page.tsx).
 6. Developer/tester side switch like the full app (header switch, per-side nav/dashboard/pages, /switch links) -
    owner to confirm.
@@ -49,7 +49,7 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    which required and not-required parts are sent (full app's pattern), and to the tester in "Your parts" as
    "Required" / "Not required" (full app's pattern). Rating rule unchanged; the rating warning's unsent-parts line
    marks required ones "(required)". No part requests/extra parts/drops. Range hints and red-on-blur per item 0.
-10. [DONE] KEPT FORMS (owner chose b): typed-but-unsent text is saved (server-side, per user and form, any device) and comes
+10. [DONE af6ed41] KEPT FORMS (owner chose b): typed-but-unsent text is saved (server-side, per user and form, any device) and comes
    back after reload / sign-in with the full app's "Not sent yet" tag, as in the full app (integration
    components/use-kept-form + change-lock). ONLY on: written answers, chat messages, dispute text, rating comments,
    reject reasons, and the Post/Edit form. NOT on login/sign-up. Sending clears it.

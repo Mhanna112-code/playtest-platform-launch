@@ -1,58 +1,134 @@
 import Link from "next/link";
-import { CalendarClock, SearchX } from "lucide-react";
+import { CalendarClock, Languages, Monitor, SearchX } from "lucide-react";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { CategoryBadges } from "@/components/Category";
-import { displayName } from "@/lib/format";
+import { CategoryChips, CategoryTile, mainCategory, PartBadges } from "@/components/Ui";
+import { displayName, money } from "@/lib/format";
+import { DEVICES } from "@/lib/options";
 import { ratingSummary } from "@/lib/server/ratings";
-import { termsLine } from "@/lib/rules";
+import { termsLine, testerShare } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, findTests, needsLines } from "@/lib/server/tests";
 
 export const metadata = { title: "Find tests · Playtest" };
 export const dynamic = "force-dynamic";
 
-export default async function FindPage() {
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+const PARTS = { written: "Written answers", recording: "Screen recording", live: "Live call" } as const;
+
+type Sp = { category?: string; device?: string; part?: string; sort?: string; mine?: string };
+
+/** The cheapest fixed part (what the tester gets), else the live rate: the big "from $8.00" figure on a card. */
+function fromText(t: { writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null }) {
+  const fixed = [t.writtenCents, t.recordingCents].filter((c): c is number => c != null);
+  if (fixed.length) return `from ${money(testerShare(Math.min(...fixed)))}`.replace("from $0.00", "free");
+  return t.liveRateCents != null ? (t.liveRateCents === 0 ? "free" : `${money(testerShare(t.liveRateCents))}/h`) : "free";
+}
+const topPrice = (t: { writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null }) => Math.max(t.writtenCents ?? 0, t.recordingCents ?? 0, t.liveRateCents ?? 0);
+
+export default async function FindPage({ searchParams }: { searchParams: Promise<Sp> }) {
   const u = await requirePageUser();
   if (!u.isTester) redirect("/app/profile");
-  const [tests, profile] = await Promise.all([findTests(u), db.testerProfile.findUnique({ where: { userId: u.id } })]);
-  const devRatings = new Map(await Promise.all([...new Set(tests.map((t) => t.developerId))].map(async (id) => [id, (await ratingSummary(id)).line] as const)));
-  // The full app's Find page: the heading and intro, then the tests as cards (badges for devices and the deadline).
+  const sp = await searchParams;
+  const [open, profile] = await Promise.all([findTests(u), db.testerProfile.findUnique({ where: { userId: u.id } })]);
+  const devRatings = new Map(await Promise.all([...new Set(open.map((t) => t.developerId))].map(async (id) => [id, (await ratingSummary(id)).line] as const)));
+  const invitedTo = new Set((await db.invite.findMany({ where: { testerId: u.id, status: "sent", testId: { in: open.map((t) => t.id) } } })).map((i) => i.testId));
+  // The full app's filters: category chips, then Device / Part / Sort by / Show. "Everything" is the default (a test the
+  // profile doesn't fit is listed with what it needs).
+  const matchMine = sp.mine === "1";
+  const counts: Record<string, number> = {};
+  for (const t of open) for (const c of t.categories) counts[c] = (counts[c] ?? 0) + 1;
+  const shown = open
+    .filter((t) => (!sp.category || t.categories.includes(sp.category)) && (!sp.device || t.devices.length === 0 || t.devices.includes(sp.device)))
+    .filter((t) => !sp.part || (sp.part === "written" ? t.writtenCents != null : sp.part === "recording" ? t.recordingCents != null : sp.part === "live" ? t.liveRateCents != null : true))
+    .filter((t) => !matchMine || needsLines(t, profile).length === 0);
+  if (sp.sort === "pay") shown.sort((a, b) => topPrice(b) - topPrice(a));
+  else if (sp.sort === "deadline") shown.sort((a, b) => b.deadlineDays - a.deadlineDays);
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-white">Find tests</h1>
-        <p className="text-ink-400">Apps, websites and games looking for feedback. Prices show what you get (after the platform fee).</p>
+        <p className="text-slate-400">Apps, websites and games looking for feedback. You earn the amount shown as each part of your work is accepted.</p>
       </div>
-      {tests.length === 0 ? (
+
+      <CategoryChips basePath="/app/find" params={{ ...sp }} counts={counts} total={open.length} />
+
+      <form className="card flex flex-wrap items-end gap-3 p-4">
+        {sp.category && <input type="hidden" name="category" value={sp.category} />}
+        <div>
+          <label className="label" htmlFor="device">Device</label>
+          <select className="input w-44" id="device" name="device" defaultValue={sp.device ?? ""}>
+            <option value="">Any</option>
+            {DEVICES.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="part">Part</label>
+          <select className="input w-44" id="part" name="part" defaultValue={sp.part ?? ""}>
+            <option value="">Any</option>
+            {Object.entries(PARTS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="sort">Sort by</label>
+          <select className="input w-40" id="sort" name="sort" defaultValue={sp.sort ?? ""}>
+            <option value="">Newest</option>
+            <option value="pay">Highest pay</option>
+            <option value="deadline">Most time to finish</option>
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="mine">Show</label>
+          <select className="input w-52" id="mine" name="mine" defaultValue={matchMine ? "1" : "0"}>
+            <option value="1">Matching my profile</option>
+            <option value="0">Everything</option>
+          </select>
+        </div>
+        <button className="btn">Apply</button>
+      </form>
+
+      {shown.length === 0 ? (
         <div className="card flex flex-col items-center gap-2 py-12 text-center">
-          <SearchX className="h-10 w-10 text-ink-600" />
-          <p className="font-medium text-ink-300">No open tests right now</p>
-          <p className="text-sm text-ink-500">Check back soon, or <Link href="/app/profile">add more devices and languages</Link>.</p>
+          <SearchX className="h-10 w-10 text-slate-600" />
+          <p className="font-medium text-slate-300">No open tests match right now</p>
+          <p className="text-sm text-slate-500">
+            {matchMine ? <>Try <Link href="/app/find?mine=0">showing everything</Link>, or </> : "Try "}
+            <Link href="/app/profile">adding more devices and languages</Link>.
+          </p>
         </div>
       ) : (
         <ul className="grid gap-4 md:grid-cols-2">
-          {tests.map((t) => {
+          {shown.map((t) => {
             const gaps = needsLines(t, profile);
             const left = t.spots - t._count.contracts;
             return (
               <li key={t.id}>
-                <Link href={`/app/find/${t.id}`} className="card card-hover block h-full space-y-2 text-ink-100 no-underline hover:no-underline">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-white">{t.title}</p>
-                      <p className="text-sm text-ink-400">by {displayName(t.developer)}{devRatings.get(t.developerId) && ` · ${devRatings.get(t.developerId)}`}</p>
+                <Link href={`/app/find/${t.id}`} className="card card-hover flex h-full gap-4 text-ink-100 no-underline hover:no-underline">
+                  <CategoryTile category={mainCategory(t.categories)} />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-white">{t.title}</p>
+                        <p className="text-sm text-slate-400">by {displayName(t.developer)}{devRatings.get(t.developerId) && ` · ${devRatings.get(t.developerId)}`}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-lg font-bold text-emerald-300">{fromText(t)}</p>
+                        <p className="text-xs text-slate-400">{termsLine(asListing(t), true).split(" · ").slice(0, -1).join(" · ")}</p>
+                        <p className="text-xs text-slate-500">{plural(left, "spot")} open to you</p>
+                      </div>
                     </div>
-                    <p className="text-right text-xs text-ink-500">{left} spot{left === 1 ? "" : "s"} open</p>
+                    <div className="flex flex-wrap gap-2">
+                      <CategoryBadges categories={t.categories} />
+                      <PartBadges written={t.writtenCents != null} recording={t.recordingCents != null} live={t.liveRateCents != null} />
+                      {t.devices.length > 0 && <span className="badge"><Monitor className="h-3.5 w-3.5" /> {t.devices.join(" · ")}</span>}
+                      {t.languages.length > 0 && <span className="badge"><Languages className="h-3.5 w-3.5" /> {t.languages.join(" · ")}</span>}
+                      <span className="badge"><CalendarClock className="h-3.5 w-3.5" /> {t.deadlineDays} day{t.deadlineDays === 1 ? "" : "s"} to finish</span>
+                      {invitedTo.has(t.id) && <span className="badge border-emerald-400/40 text-emerald-200">Invited</span>}
+                    </div>
+                    {t.contracts.some((c) => c.status === "left") && <p className="note">You left this test</p>}
+                    {gaps.map((g) => <p key={g} className="text-sm text-amber-300">{g}</p>)}
                   </div>
-                  <p className="text-sm text-emerald-300">{termsLine(asListing(t), true)}</p>
-                  <div className="flex flex-wrap gap-2">
-                    <CategoryBadges categories={t.categories} />
-                    {t.devices.map((d) => <span key={d} className="badge">{d}</span>)}
-                    <span className="badge"><CalendarClock className="h-3.5 w-3.5" /> {t.deadlineDays} days to finish</span>
-                  </div>
-                  {t.contracts.some((c) => c.status === "left") && <p className="note">You left this test</p>}
-                  {gaps.map((g) => <p key={g} className="text-sm text-amber-300">{g}</p>)}
                 </Link>
               </li>
             );
