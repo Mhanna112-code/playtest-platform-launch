@@ -17,7 +17,7 @@ import type { Listing } from "@/lib/rules";
 type F = {
   title: string; description: string; buildUrl: string; categories: string[]; devices: string[]; languages: string[];
   spots: string; deadlineDays: string; written: boolean; writtenPrice: string; recording: boolean; recordingPrice: string;
-  live: boolean; liveRate: string; liveMinutes: string; questions: string; optionalQs: string[]; openUntil: string; joinMode: string;
+  live: boolean; liveRate: string; liveMinutes: string; writtenRequired: boolean; recordingRequired: boolean; liveRequired: boolean; questions: string; optionalQs: string[]; openUntil: string; joinMode: string;
 };
 
 const dollars = (c: number | null) => (c == null ? "" : (c / 100).toFixed(2));
@@ -26,7 +26,8 @@ export function toForm(l: Listing): F {
     title: l.title, description: l.description, buildUrl: l.buildUrl, categories: l.categories, devices: l.devices, languages: l.languages,
     spots: String(l.spots), deadlineDays: String(l.deadlineDays), written: l.writtenCents != null, writtenPrice: dollars(l.writtenCents),
     recording: l.recordingCents != null, recordingPrice: dollars(l.recordingCents), live: l.liveRateCents != null,
-    liveRate: dollars(l.liveRateCents), liveMinutes: String(l.liveMinutes ?? 30), questions: l.questions.map(qText).join("\n"), optionalQs: l.questions.filter(qOptional).map(qText),
+    liveRate: dollars(l.liveRateCents), liveMinutes: String(l.liveMinutes ?? 30),
+    writtenRequired: !!l.writtenRequired, recordingRequired: !!l.recordingRequired, liveRequired: !!l.liveRequired, questions: l.questions.map(qText).join("\n"), optionalQs: l.questions.filter(qOptional).map(qText),
     openUntil: l.openUntil ? l.openUntil.slice(0, 10) : "",
     joinMode: l.joinMode ?? "anyone",
   };
@@ -38,15 +39,22 @@ function toApi(f: F): Record<string, unknown> {
     title: f.title, description: f.description, buildUrl: f.buildUrl, categories: f.categories, devices: f.devices, languages: f.languages,
     spots: f.spots, deadlineDays: f.deadlineDays, writtenCents: f.written ? f.writtenPrice || "" : null,
     recordingCents: f.recording ? f.recordingPrice || "" : null, liveRateCents: f.live ? f.liveRate || "" : null,
-    liveMinutes: null, questions: f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (f.optionalQs.includes(q) ? NOT_REQUIRED + q : q)), openUntil: f.openUntil, joinMode: f.joinMode,
+    liveMinutes: null, writtenRequired: f.written && f.writtenRequired, recordingRequired: f.recording && f.recordingRequired, liveRequired: f.live && f.liveRequired, questions: f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (f.optionalQs.includes(q) ? NOT_REQUIRED + q : q)), openUntil: f.openUntil, joinMode: f.joinMode,
   };
 }
 // Which API fields each form field feeds.
 const API_FIELDS: Record<keyof F, string[]> = {
   title: ["title"], description: ["description"], buildUrl: ["buildUrl"], categories: ["categories"], devices: ["devices"], languages: ["languages"],
   spots: ["spots"], deadlineDays: ["deadlineDays"], written: ["writtenCents"], writtenPrice: ["writtenCents"], recording: ["recordingCents"],
-  recordingPrice: ["recordingCents"], live: ["liveRateCents", "liveMinutes"], liveRate: ["liveRateCents"], liveMinutes: ["liveMinutes"], questions: ["questions"], optionalQs: ["questions"], openUntil: ["openUntil"], joinMode: ["joinMode"],
+  recordingPrice: ["recordingCents"], live: ["liveRateCents", "liveMinutes"], liveRate: ["liveRateCents"], liveMinutes: ["liveMinutes"], writtenRequired: ["writtenRequired"], recordingRequired: ["recordingRequired"], liveRequired: ["liveRequired"], questions: ["questions"], optionalQs: ["questions"], openUntil: ["openUntil"], joinMode: ["joinMode"],
 };
+
+// The parts, as the full app's Parts and prices cards (prices-widget.tsx there), with lean's names and price limits.
+const PARTS = [
+  { on: "written", req: "writtenRequired", price: "writtenPrice", title: "Written report", help: "Answers to your questions", ph: "10.00", unit: "", min: "1", max: "1000", msg: "The written answers price must be from $1.00 to $1,000.00 (or Free)." },
+  { on: "recording", req: "recordingRequired", price: "recordingPrice", title: "Recorded session", help: "Screen recording, thinking out loud", ph: "15.00", unit: "", min: "1", max: "1000", msg: "The recording price must be from $1.00 to $1,000.00 (or Free)." },
+  { on: "live", req: "liveRequired", price: "liveRate", title: "Live session", help: "A call while you watch, billed by the minute", ph: "30.00", unit: "/h", min: "10", max: "200", msg: "The live call rate must be from $10 to $200 an hour (or Free)." },
+] as const;
 
 export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: { id: string; version: number; testersIn: number; draft: boolean; seenAt?: string }; spotsLimit?: number }) {
   const [f, setF] = useState<F>(toForm(init));
@@ -141,37 +149,58 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: { i
       <div className="panel">
         <h2>Feedback and prices</h2>
         <p className="note">Every term is fixed in each tester&apos;s contract when they join. Edits change the listing for new testers only.</p>
-        <label className="block text-sm"><input type="checkbox" checked={f.written} onChange={(e) => set({ written: e.target.checked })} /> Written answers</label>
+        {/* The full app's Parts and prices: one card per part (tick, title, what it is, Required, price, Free). Required is
+            a label only (NEWEST+10): part of the terms, it blocks nothing. */}
+        <fieldset className="space-y-2">
+          <legend className="label req">Parts and prices</legend>
+          {PARTS.map((part) => {
+            const on = f[part.on] as boolean;
+            const price = f[part.price] as string;
+            const free = on && /^0+(\.0+)?$/.test(price.trim());
+            return (
+              <div key={part.on} className={`space-y-1.5 rounded-xl border p-3 text-sm ${on ? "border-indigo-400/60 bg-indigo-500/10" : "border-white/10 bg-white/[0.03]"}`}>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  <label className="flex min-w-[11rem] flex-1 cursor-pointer gap-2">
+                    <input type="checkbox" checked={on} onChange={(e) => set({ [part.on]: e.target.checked } as Partial<F>)} aria-label={`Include the ${part.title.toLowerCase()}`} />
+                    <span><span className="block text-white">{part.title}</span><span className="text-xs text-slate-400">{part.help}</span></span>
+                  </label>
+                  <label className={`flex items-center gap-1.5 ${on ? "text-slate-200" : "text-slate-600"}`}>
+                    <input type="checkbox" disabled={!on} checked={on && (f[part.req] as boolean)} onChange={(e) => set({ [part.req]: e.target.checked } as Partial<F>)} aria-label={`${part.title}: required`} /> Required
+                  </label>
+                  <span className="flex flex-wrap items-center gap-2">
+                    <label className={`flex items-center gap-1 ${free || !on ? "text-slate-600" : "text-slate-300"}`}>
+                      $
+                      <input id={part.price} className={"input w-24 py-1" + (bad(part.price) ? " field-bad" : "")} inputMode="decimal" disabled={!on || free} placeholder={part.ph} value={free ? "" : price}
+                        onChange={(e) => set({ [part.price]: e.target.value } as Partial<F>)} aria-label={`Price for the ${part.title.toLowerCase()}`}
+                        data-min={part.min} data-max={part.max} data-zero-ok="" data-msg={part.msg} />
+                      {part.unit}
+                    </label>
+                    <label className={`flex items-center gap-1 ${on ? "text-sky-200" : "text-slate-600"}`}>
+                      <input type="checkbox" disabled={!on} checked={free} onChange={(e) => set({ [part.price]: e.target.checked ? "0" : "" } as Partial<F>)} aria-label={`${part.title}: free`} /> Free
+                    </label>
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+          <p className="text-xs text-slate-500">Any cents. Free makes a part unpaid. Otherwise from $1 to $1,000 for the written answers or a recording, and from $10 to $200 an hour for a live call (each call request sets its own length).</p>
+        </fieldset>
         {f.written && (
-          <div className="ml-6 grid gap-3 sm:grid-cols-2">
-            {text("writtenPrice", "Price for written answers ($, 0 for free)", { req: true, ph: "10.00", cls: "max-w-[10rem]", hint: "$1–$1,000, or 0 for free", attrs: { "data-min": "1", "data-max": "1000", "data-zero-ok": "", "data-msg": "The written answers price must be from $1.00 to $1,000.00 (or 0 for free)." } })}
-            <div className="sm:col-span-2">
-              <label className="label req" htmlFor="questions">Questions (one per line)</label>
-              <textarea id="questions" rows={4} className="input" value={f.questions} onChange={(e) => set({ questions: e.target.value })} placeholder={"What did you like?\nWhere did you get stuck?"} />
-              {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).length > 0 && (
-                <ul className="mt-2 space-y-1">
-                  {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (
-                    <li key={q} className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm">
-                      <span className="min-w-0 break-words text-ink-200">{q}</span>
-                      <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-ink-300">
-                        <input type="checkbox" checked={f.optionalQs.includes(q)} onChange={(e) => set({ optionalQs: e.target.checked ? [...f.optionalQs, q] : f.optionalQs.filter((x) => x !== q) })} /> Not required
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        )}
-        <label className="block text-sm"><input type="checkbox" checked={f.recording} onChange={(e) => set({ recording: e.target.checked })} /> Screen recording</label>
-        {f.recording && <div className="ml-6">{text("recordingPrice", "Price for a recording ($, 0 for free)", { req: true, ph: "15.00", cls: "max-w-[10rem]", hint: "$1–$1,000, or 0 for free", attrs: { "data-min": "1", "data-max": "1000", "data-zero-ok": "", "data-msg": "The recording price must be from $1.00 to $1,000.00 (or 0 for free)." } })}</div>}
-        <label className="block text-sm"><input type="checkbox" checked={f.live} onChange={(e) => set({ live: e.target.checked })} /> Live call</label>
-        {f.live && (
-          <div className="ml-6 grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-wrap items-end gap-2 sm:col-span-2">
-              {text("liveRate", "Rate per hour ($, 0 for free)", { req: true, ph: "30.00", cls: "max-w-[10rem]", attrs: { "data-min": "10", "data-max": "200", "data-zero-ok": "", "data-msg": "The live call rate must be from $10 to $200 an hour (or 0 for free)." } })}
-              <span className="note mb-2">$10-$200 an hour (or 0 for free). Each call request sets its own length.</span>
-            </div>
+          <div>
+            <label className="label req" htmlFor="questions">Your questions (one per line)</label>
+            <textarea id="questions" rows={4} className="input" value={f.questions} onChange={(e) => set({ questions: e.target.value })} placeholder={"What did you like?\nWhere did you get stuck?"} />
+            {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (
+                  <li key={q} className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm">
+                    <span className="min-w-0 break-words text-ink-200">{q}</span>
+                    <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-ink-300">
+                      <input type="checkbox" checked={f.optionalQs.includes(q)} onChange={(e) => set({ optionalQs: e.target.checked ? [...f.optionalQs, q] : f.optionalQs.filter((x) => x !== q) })} /> Not required
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
       </div>

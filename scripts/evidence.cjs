@@ -162,7 +162,7 @@ async function signIn(page, email) {
     await dev.fill("#description", "Sail through the harbor and tell us where it gets confusing.");
     await dev.fill("#buildUrl", "https://example.com/harbor-run");
     await dev.fill("#questions", "What did you like?\nWhere did you get stuck?");
-    await dev.check("text=Live call");
+    await dev.check("input[aria-label='Include the live session']");
     await dev.fill("#liveRate", "30.00");
     await shot(dev, "post-form");
     await dev.click("text=Post the test");
@@ -1408,7 +1408,7 @@ async function signIn(page, email) {
     await d.fill("#buildUrl", "https://example.com/mangrove");
     await d.fill("#questions", "What did you see?\nAnything else?");
     await d.locator("li", { hasText: "Anything else?" }).locator("text=Not required").click();
-    await d.check("text=Live call");
+    await d.check("input[aria-label='Include the live session']");
     await d.fill("#liveRate", "30.00");
     check("the rate shows its range", await has(d, "text=$10-$200 an hour (or 0 for free)"));
     await d.click("fieldset:has-text('Devices testers need') label:has-text('Mac')");
@@ -1425,7 +1425,7 @@ async function signIn(page, email) {
     await d.fill("#buildUrl", "https://example.com/mangrove");
     await d.fill("#questions", "What did you see?\nAnything else?");
     await d.locator("li", { hasText: "Anything else?" }).locator("text=Not required").click();
-    await d.check("text=Live call");
+    await d.check("input[aria-label='Include the live session']");
     await d.fill("#liveRate", "30.00");
     await d.click("fieldset:has-text('Devices testers need') label:has-text('Mac')");
     await d.click("fieldset:has-text('Languages testers need') label:has-text('Korean')");
@@ -1944,11 +1944,11 @@ async function signIn(page, email) {
     await onboard(d, DEV36, "Nora Lane", true);
     // Post a test: prices, rate, spots (up to the limit), days, Open until.
     await d.goto("/app/tests/new");
-    check("ranges shown next to the fields", (await has(d, "text=$1–$1,000, or 0 for free")) && (await has(d, "text=1–10")) && (await has(d, "text=1–90 days")) && (await has(d, "text=from tomorrow, up to a year ahead")));
+    check("ranges shown next to the fields", (await has(d, "text=from $1 to $1,000 for the written answers")) && (await has(d, "text=1–10")) && (await has(d, "text=1–90 days")) && (await has(d, "text=from tomorrow, up to a year ahead")));
     await blurCheck(d, "#writtenPrice", "0.50", "10.00", "Post: written answers price", "from $1.00 to $1,000.00");
-    await d.check("text=Screen recording");
+    await d.check("input[aria-label='Include the recorded session']");
     await blurCheck(d, "#recordingPrice", "2000", "15.00", "Post: recording price", "from $1.00 to $1,000.00");
-    await d.check("text=Live call");
+    await d.check("input[aria-label='Include the live session']");
     await blurCheck(d, "#liveRate", "5", "30.00", "Post: live call rate", "from $10 to $200");
     await blurCheck(d, "#spots", "11", "4", "Post: spots (up to the tester limit)", "up to 10 testers");
     await blurCheck(d, "#deadlineDays", "91", "7", "Post: days each tester has", "1 to 90 days");
@@ -2013,6 +2013,47 @@ async function signIn(page, email) {
     await tb.goto(`/app/sessions/${SB}`);
     await blurCheck(tb, "input[aria-label='Amount to charge']", "50", "8.00", "Charge amount (up to the listing)", "up to $10.00");
     await shot(tb, "charge-amount-tester");
+  });
+
+  await flow("37", "Parts and prices like the full app (a card per part: tick, title, what it is, Required, price, Free); Required is a label: the developer sees per tester which required / not-required parts were sent", async () => {
+    const DEV37 = `dev37+${TS}@playtest.test`;
+    const d = await ctx(DESKTOP);
+    await signIn(d, DEV37);
+    await d.fill("#name", "Nora Lane");
+    await d.selectOption("#pronoun", "she");
+    await d.check("text=post tests for my app, game or product");
+    await d.click("text=Continue");
+    await d.waitForSelector("text=Welcome back,");
+    await d.goto("/app/tests/new");
+    check("three part cards with Required and Free", (await d.locator("input[aria-label$=': required']").count()) === 3 && (await d.locator("input[aria-label$=': free']").count()) === 3 && (await has(d, "text=Written report")) && (await has(d, "text=Recorded session")) && (await has(d, "text=Live session")));
+    await d.fill("#title", "Rock Pool");
+    await d.fill("#questions", "What did you see?");
+    await d.check("input[aria-label='Written report: required']");
+    await d.check("input[aria-label='Include the recorded session']");
+    await d.check("input[aria-label='Recorded session: free']");
+    await d.check("input[aria-label='Include the live session']");
+    await d.fill("#liveRate", "30.00");
+    await d.locator("fieldset:has(legend:text('Parts and prices'))").scrollIntoViewIfNeeded();
+    await shot(d, "parts-and-prices-developer");
+    await d.click("button:has-text('Post the test')");
+    await d.waitForURL((u) => /\/app\/tests\/\w+$/.test(u.pathname) && !u.pathname.endsWith("/new"));
+    const T = d.url().split("/").pop();
+    check("saved: written required, recording free, live $30/h", sql(`select "writtenRequired" || '|' || coalesce("recordingCents", -1) || '|' || "liveRateCents" from "Test" where id = '${T}'`) === "true|0|3000");
+    const tp = await ctx(PHONE);
+    await signIn(tp, `tester37+${TS}@playtest.test`);
+    await tp.fill("#name", "Ana Silva");
+    await tp.selectOption("#pronoun", "she");
+    await tp.check("text=test apps, games and more, and get paid");
+    await tp.click("label:has-text('Windows PC')");
+    await tp.click("label:has-text('English')");
+    await tp.click("text=Continue");
+    await tp.waitForSelector("text=Welcome back,");
+    const S = (await apiPost(tp, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
+    await apiPost(tp, `/api/sessions/${S}/written`, { answers: ["Crabs."], seenAt: new Date().toISOString(), confirmed: true });
+    await d.reload();
+    check("per tester: which required / not-required parts were sent", (await has(d, `#tester-${S} >> text=Written answers · required · sent`)) && (await has(d, `#tester-${S} >> text=Recording · not required · not sent yet`)));
+    await d.locator(`#tester-${S}`).scrollIntoViewIfNeeded();
+    await shot(d, "parts-sent-per-tester-developer");
   });
 
   await browser.close();
@@ -2131,6 +2172,8 @@ async function signIn(page, email) {
     C("Call request: a past time is red at the field; the press is stopped", "tester", "36", "36-call-request-past-red-tester.png"),
     C("Pay amount: red at the field on leaving", "developer", "36", "36-pay-amount-developer.png"),
     C("Charge amount: red at the field on leaving", "tester", "36", "36-charge-amount-tester.png"),
+    C("Parts and prices cards (tick, title, Required, price, Free)", "developer", "37", "37-parts-and-prices-developer.png"),
+    C("Per tester: which required / not-required parts were sent", "developer", "37", "37-parts-sent-per-tester-developer.png"),
   ];
   summary.coverage = rows.map((r) => {
     const f = summary.flows.find((x) => x.id === r.flow);

@@ -122,6 +122,10 @@ export type Listing = {
   recordingCents: number | null;
   liveRateCents: number | null;
   liveMinutes: number | null;
+  /** (NEWEST+10) "Required" on each part: a label only (part of the terms) */
+  writtenRequired?: boolean;
+  recordingRequired?: boolean;
+  liveRequired?: boolean;
   deadlineDays: number;
   questions: string[];
   /** After this date (ISO): no new joiners, no sending, no booking. null = no end date */
@@ -132,7 +136,7 @@ export type Listing = {
 
 export const LISTING_FIELDS = [
   "title", "description", "buildUrl", "categories", "devices", "languages", "spots",
-  "writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "deadlineDays", "questions", "openUntil", "joinMode",
+  "writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "deadlineDays", "questions", "openUntil", "joinMode",
 ] as const satisfies readonly (keyof Listing)[];
 
 /** Fields whose change alters the terms new testers join on (checked by Join). Spots only changes availability. */
@@ -184,6 +188,9 @@ export function contractSnapshot(test: Listing & { listingVersion: number }, joi
     recordingCents: test.recordingCents,
     liveRateCents: test.liveRateCents,
     liveMinutes: null, // (NEWEST+8) each call request sets its own length
+    writtenRequired: !!test.writtenRequired,
+    recordingRequired: !!test.recordingRequired,
+    liveRequired: !!test.liveRequired,
     deadlineDays: test.deadlineDays,
     questions: [...test.questions],
     keepPrivate,
@@ -586,7 +593,7 @@ export const chargeAmount = (listingCents: number | null, askedCents: number | n
 
 // ---------- New terms offered to working testers (owner) ----------
 
-export type ContractTerms = { writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null; liveMinutes: number | null; deadlineDays: number; questions: string[] };
+export type ContractTerms = { writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null; liveMinutes: number | null; deadlineDays: number; questions: string[]; writtenRequired?: boolean; recordingRequired?: boolean; liveRequired?: boolean };
 const whole = (c: number) => money(c).replace(/\.00$/, "");
 
 /** "written $8 → $10, added a recording ($12)"; "" when the contract terms are the same. */
@@ -607,6 +614,11 @@ export function termsDiff(a: ContractTerms, b: ContractTerms) {
   }
   if (a.deadlineDays !== b.deadlineDays) out.push(`${a.deadlineDays} → ${b.deadlineDays} days`);
   if (JSON.stringify(a.questions) !== JSON.stringify(b.questions)) out.push("questions changed");
+  // (NEWEST+10) The Required label is part of the terms.
+  const req = (x: boolean | undefined, y: boolean | undefined, name: string, on: boolean) => { if (on && !!x !== !!y) out.push(`${name} now ${y ? "required" : "not required"}`); };
+  req(a.writtenRequired, b.writtenRequired, "written answers", b.writtenCents != null);
+  req(a.recordingRequired, b.recordingRequired, "the recording", b.recordingCents != null);
+  req(a.liveRequired, b.liveRequired, "the live call", b.liveRateCents != null);
   return out.join(", ");
 }
 

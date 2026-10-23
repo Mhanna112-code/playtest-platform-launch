@@ -12,8 +12,9 @@ const nameOf = async (id: string) => displayName(await db.user.findUniqueOrThrow
 // New terms offered to working testers (owner rule): an Edit that changes contract terms offers them to every working
 // tester; their contract changes only if they switch. Work already sent keeps its price; the deadline never moves earlier.
 
-const termsOf = (x: { writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null; liveMinutes: number | null; deadlineDays: number; questions: unknown }): ContractTerms => ({
+const termsOf = (x: { writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null; liveMinutes: number | null; deadlineDays: number; questions: unknown; writtenRequired: boolean; recordingRequired: boolean; liveRequired: boolean }): ContractTerms => ({
   writtenCents: x.writtenCents, recordingCents: x.recordingCents, liveRateCents: x.liveRateCents, liveMinutes: x.liveMinutes, deadlineDays: x.deadlineDays, questions: (x.questions as string[]) ?? [],
+  writtenRequired: x.writtenRequired, recordingRequired: x.recordingRequired, liveRequired: x.liveRequired,
 });
 
 /** After an Edit: offer the test's current terms to each working tester whose contract differs. Returns how many. */

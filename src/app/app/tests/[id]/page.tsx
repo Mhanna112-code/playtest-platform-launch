@@ -230,6 +230,18 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               Their contract: {termsLine(c)} · joined {fmtDate(c.joinedAt)}
             </p>
             <p className="text-sm">{paidKinds.get(c.id)}</p>
+            {/* (NEWEST+10) Which required and not-required parts this tester sent (Required is a label only). */}
+            <div className="flex flex-wrap gap-1.5" data-parts-sent="">
+              {([
+                ["Written answers", c.writtenCents != null, c.writtenRequired, c.submissions.some((s) => s.kind === "written")],
+                ["Recording", c.recordingCents != null, c.recordingRequired, c.submissions.some((s) => s.kind === "recording")],
+                ["Live call", c.liveRateCents != null, c.liveRequired, c.calls.some((x) => x.status === "booked" && x.startsAt <= now)],
+              ] as const).filter(([, inContract]) => inContract).map(([name, , required, sent]) => (
+                <span key={name} className={`badge ${sent ? "border-emerald-400/40 text-emerald-200" : required ? "border-amber-300/40 text-amber-200" : ""}`}>
+                  {name} · {required ? "required" : "not required"} · {sent ? "sent" : "not sent yet"}
+                </span>
+              ))}
+            </div>
             {c.calls.filter((x) => x.status !== "cancelled" && isBookedLate(x.createdAt, c.dueAt)).map((x) => (
               <p key={x.id} className="note">Call on {fmtDateTime(x.startsAt)}: {lateOf(c, x)}</p>
             ))}

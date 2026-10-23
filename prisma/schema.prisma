@@ -108,6 +108,10 @@ model Test {
   /// Live call: hourly rate (cents) and booked length (minutes); null = no live call
   liveRateCents Int?
   liveMinutes   Int?
+  /// (NEWEST+10) "Required" on each part: a label only (part of the terms; blocks nothing)
+  writtenRequired   Boolean @default(false)
+  recordingRequired Boolean @default(false)
+  liveRequired      Boolean @default(false)
   /// Each tester's deadline: days from their own join (late work is still allowed, marked "Sent late")
   deadlineDays  Int
   /// After this date: no new joiners, no sending, no booking (null = no end date)
@@ -176,6 +180,10 @@ model Contract {
   recordingCents Int?
   liveRateCents  Int?
   liveMinutes    Int?
+  /// (NEWEST+10) "Required" on each part: a label only (part of the terms; blocks nothing)
+  writtenRequired   Boolean @default(false)
+  recordingRequired Boolean @default(false)
+  liveRequired      Boolean @default(false)
   deadlineDays   Int
   questions      Json
   keepPrivate    Boolean  @default(false)
@@ -481,6 +489,10 @@ model TermsOffer {
   recordingCents Int?
   liveRateCents  Int?
   liveMinutes    Int?
+  /// (NEWEST+10) "Required" on each part: a label only (part of the terms; blocks nothing)
+  writtenRequired   Boolean @default(false)
+  recordingRequired Boolean @default(false)
+  liveRequired      Boolean @default(false)
   deadlineDays   Int
   questions      Json
   /// "written $8 → $10, added a recording ($12)"

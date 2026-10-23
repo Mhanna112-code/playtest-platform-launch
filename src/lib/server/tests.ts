@@ -26,6 +26,7 @@ export const asListing = (t: { [K in keyof Listing]: unknown }): Listing => ({
   devices: t.devices as string[], languages: t.languages as string[], spots: t.spots as number,
   writtenCents: t.writtenCents as number | null, recordingCents: t.recordingCents as number | null,
   liveRateCents: t.liveRateCents as number | null, liveMinutes: t.liveMinutes as number | null,
+  writtenRequired: !!t.writtenRequired, recordingRequired: !!t.recordingRequired, liveRequired: !!t.liveRequired,
   deadlineDays: t.deadlineDays as number, questions: (t.questions as string[]) ?? [],
   openUntil: t.openUntil ? new Date(t.openUntil as string | Date).toISOString() : null,
   joinMode: (t.joinMode as string) ?? "anyone",
@@ -67,6 +68,9 @@ export function parseListing(body: Record<string, unknown>, partial = false): Pa
   if (has("spots")) out.spots = int(body.spots);
   if (has("writtenCents")) out.writtenCents = price(body.writtenCents, "written answers price");
   if (has("recordingCents")) out.recordingCents = price(body.recordingCents, "recording price");
+  if (has("writtenRequired")) out.writtenRequired = body.writtenRequired === true;
+  if (has("recordingRequired")) out.recordingRequired = body.recordingRequired === true;
+  if (has("liveRequired")) out.liveRequired = body.liveRequired === true;
   if (has("liveRateCents")) out.liveRateCents = price(body.liveRateCents, "live call rate");
   if (has("liveMinutes")) out.liveMinutes = body.liveMinutes === null || body.liveMinutes === "" ? null : int(body.liveMinutes);
   if (has("deadlineDays")) out.deadlineDays = int(body.deadlineDays);
@@ -233,7 +237,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const fields = LISTING_FIELDS.filter((k) => JSON.stringify(current[k]) !== JSON.stringify(next[k]));
     if (!fields.length) return t;
     const what = fields.map((f) => FIELD_NAMES[f]).join(", ");
-    termsChanged = terms.some((f) => ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "deadlineDays", "questions"].includes(f));
+    termsChanged = terms.some((f) => ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "deadlineDays", "questions"].includes(f));
     const listingFields = fields.filter((f) => f !== "spots");
     switchedToAnyone = fields.includes("joinMode") && next.joinMode === "anyone";
     await recordEvent(tx, testId, listingFields.length ? "edited" : "edited_spots", `The listing was edited: ${what}`, true, {
@@ -271,11 +275,11 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
 /** (F) The listing info a working tester sees change live: title, description, devices, languages. */
 export const INFO_FIELDS: (keyof Listing)[] = ["description", "devices", "languages"];
 /** (Correction 2) The changes that close applications and re-send invites: prices / parts / questions, deadline, devices, languages, description. */
-export const CLOSING_FIELDS: (keyof Listing)[] = ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "questions", "deadlineDays", "devices", "languages", "description"];
+export const CLOSING_FIELDS: (keyof Listing)[] = ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "questions", "deadlineDays", "devices", "languages", "description"];
 
 const FIELD_NAMES: Record<keyof Listing, string> = {
   title: "title", description: "description", buildUrl: "build link", categories: "categories", devices: "devices", languages: "languages",
-  openUntil: "Open until", joinMode: "who can join", spots: "spots", writtenCents: "written answers price", recordingCents: "recording price", liveRateCents: "live call rate",
+  openUntil: "Open until", joinMode: "who can join", spots: "spots", writtenCents: "written answers price", writtenRequired: "written answers required", recordingRequired: "recording required", liveRequired: "live call required", recordingCents: "recording price", liveRateCents: "live call rate",
   liveMinutes: "call length", deadlineDays: "deadline", questions: "questions",
 };
 

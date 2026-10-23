@@ -78,7 +78,9 @@ export async function rateWarning(contractId: string) {
   if (!working) return { working, lines: [] as string[] };
   const sent = new Set(c.submissions.map((s) => s.kind));
   const share = (cents: number) => money(Math.round(cents * 0.8)).replace(/\.00$/, "");
-  const missing = [c.writtenCents != null && !sent.has("written") ? `written answers (${share(c.writtenCents)})` : "", c.recordingCents != null && !sent.has("recording") ? `recording (${share(c.recordingCents)})` : ""].filter(Boolean);
+  // (NEWEST+10) An unsent part marked Required says so (a label only: rating is still available).
+  const req = (on: boolean) => (on ? " (required)" : "");
+  const missing = [c.writtenCents != null && !sent.has("written") ? `written answers (${share(c.writtenCents)})${req(c.writtenRequired)}` : "", c.recordingCents != null && !sent.has("recording") ? `recording (${share(c.recordingCents)})${req(c.recordingRequired)}` : ""].filter(Boolean);
   const lines: string[] = [];
   if (missing.length) lines.push(`Not sent yet from your contract: ${missing.join(", ")} — it won't be paid.`);
   if (c.calls.some((x) => x.status === "booked" && x.startsAt > new Date())) lines.push("All your upcoming calls will be cancelled.");

@@ -41,7 +41,7 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
 8. [DONE] INVITED list (owner): show ONLY invites still waiting (joined people are already in Testers joined; drop "· joined"
    rows; closed/declined invites aren't listed). When long it becomes a scroll box like the full app's invite lists
    (about 5 rows tall, then scroll).
-9. POST/EDIT "Parts and prices" exactly like the full app's block (integration src/app/dev/test-form.tsx): one card per
+9. [DONE] POST/EDIT "Parts and prices" exactly like the full app's block (integration src/app/dev/test-form.tsx): one card per
    part (Written report / Recorded session / Live session) with its tick, title, one-line description, price box
    ("$ 7.50", live "up to $ 25 /h"), and "Free" tick; ticked cards highlighted. INCLUDE the "Required" tick (owner, Oct 23):
    it is a LABEL only (no new blocking): it's part of the terms (snapshotted at join; changing it is a terms change
@@ -58,3 +58,10 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
      "You asked $X" if they asked, and "Paid so far $Y" (plus the listing price / "Not in your contract").
    - Every other section in the full app's layout and order; the live-call area is the lean "Live session" panel
      (same component as the developer side). Nothing the lean app doesn't do.
+12. STOP RULE FIX (owner, high priority, do right after item 0): the second press goes ahead ONLY if nothing new
+   happened since its stop box last updated (send the box's newest line time; anything newer stops again with the new
+   lines added). Applies to every button EXCEPT the tester's Leave and Block, which still stop only once. Tests.
+13. NOTICE IN VIEW (owner): when a stop box or refusal appears after a press, scroll just enough to bring the button and
+   its notice into view (block "nearest"); never jump to the top box because of a press.
+14. INVITE PANEL labels: a tester who left this test shows "Left this test", one you ended shows "You ended their work",
+   to the right of their name (still tickable: a re-invite is how an ended tester can come back).
