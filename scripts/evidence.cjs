@@ -151,7 +151,7 @@ async function signIn(page, email) {
     await signIn(dev, DEV);
     await dev.fill("#name", "Nora Lane");
     await dev.selectOption("#pronoun", "she");
-    await dev.check("text=post tests for my game");
+    await dev.check("text=post tests for my app, game or product");
     await dev.click("text=Continue");
     await dev.waitForSelector("text=Your tests");
     await dev.goto("/app/tests/new");
@@ -1241,7 +1241,7 @@ async function signIn(page, email) {
     await signIn(d, DEV27);
     await d.fill("#name", "Nora Lane");
     await d.selectOption("#pronoun", "she");
-    await d.check("text=post tests for my game");
+    await d.check("text=post tests for my app, game or product");
     await d.click("text=Continue");
     await d.waitForSelector("text=Your tests");
     sql(`update "User" set "stripeCustomerId" = 'cus_fake27_${TS}', "stripePaymentMethodId" = 'pm_card_visa' where email = '${DEV27}'`);
@@ -1330,7 +1330,7 @@ async function signIn(page, email) {
     await signIn(d, DEV28);
     await d.fill("#name", "Nora Lane");
     await d.selectOption("#pronoun", "she");
-    await d.check("text=post tests for my game");
+    await d.check("text=post tests for my app, game or product");
     await d.click("text=Continue");
     await d.waitForSelector("text=Your tests");
     const tp = await ctx(PHONE);
@@ -1390,7 +1390,7 @@ async function signIn(page, email) {
     await d.waitForURL("**/app");
     await d.fill("#name", "Nora Lane");
     await d.selectOption("#pronoun", "she");
-    await d.check("text=post tests for my game");
+    await d.check("text=post tests for my app, game or product");
     await d.click("text=Continue");
     await d.waitForSelector("text=Welcome back,");
     await d.goto("/app/tests/new");
@@ -1445,7 +1445,10 @@ async function signIn(page, email) {
     await tp.goto(`/app/find/${T}`);
     check("listing: both needs lines", (await has(tp, "text=This test needs one of: Mac. Add your device in your profile.")) && (await has(tp, "text=This test needs one of: Korean. Add the language in your profile.")));
     await tp.click("button:has-text('Join this test')");
-    check("Join anyway warning: both lines", (await tp.locator("div.info", { hasText: "Join anyway" }).locator("text=needs one of: Mac").count()) > 0 && (await tp.locator("div.info", { hasText: "Join anyway" }).locator("text=needs one of: Korean").count()) > 0);
+    const warnBox = tp.locator("div.info:has(button:has-text('Join anyway'))");
+    await warnBox.waitFor({ timeout: 6000 }).catch(() => {});
+    const warnText = await warnBox.innerText().catch(() => "");
+    check("Join anyway warning: both lines", warnText.includes("needs one of: Mac") && warnText.includes("needs one of: Korean"), warnText);
     await shot(tp, "join-anyway-both-needs-tester");
     await tp.click("button:has-text('Join anyway')");
     await tp.waitForURL(/\/app\/sessions\//);

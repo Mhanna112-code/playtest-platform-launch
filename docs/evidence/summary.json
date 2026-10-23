@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-23T01:58:37.571Z",
+  "run": "2026-10-23T04:07:13.622Z",
   "base": "http://localhost:3450",
   "flows": [
     {
@@ -599,8 +599,43 @@
         "28-outage-top-box-developer.png",
         "28-outage-missed-call-tester.png"
       ]
+    },
+    {
+      "id": "29",
+      "title": "Launch fixes: email confirmation required, a 90-min request, logging over 150% refused, auto-cancel, both needs lines, an optional question, 5 suggested + tick filters; the new layouts",
+      "status": "fail",
+      "checks": [
+        "PASS the rate shows its range",
+        "PASS unconfirmed: refused (blue) with Resend the email",
+        "PASS after confirming: posted",
+        "PASS Find card: both needs lines",
+        "PASS listing: both needs lines",
+        "FAIL Join anyway warning: both lines",
+        "PASS the optional question is marked 'not required'",
+        "PASS sent with the optional question empty",
+        "PASS a 90-min request",
+        "PASS booked for 90 min",
+        "PASS over 150% refused (red): up to 135 min for this 90-min call",
+        "PASS auto-cancelled: nobody joined (no no-show, nothing charged)",
+        "PASS both told",
+        "PASS Suggested shows up to 5 (saw: 5)"
+      ],
+      "screenshots": [
+        "29-email-refused-developer.png",
+        "29-test-header-developer.png",
+        "29-dashboard-tester.png",
+        "29-find-both-needs-tester.png",
+        "29-join-anyway-both-needs-tester.png",
+        "29-optional-question-tester.png",
+        "29-request-90-min-developer.png",
+        "29-log-over-150-red-developer.png",
+        "29-auto-cancel-told-tester.png",
+        "29-suggested-and-tick-filters-developer.png",
+        "29-dashboard-developer.png"
+      ]
     }
   ],
+  "mergedInto": "2026-10-23T04:06:39.096Z",
   "coverage": [
     {
       "type": "Tester stop A: new terms (Send my recording)",
@@ -1042,7 +1077,77 @@
       "flow": "28",
       "screenshot": "28-outage-missed-call-tester.png",
       "status": "pass"
+    },
+    {
+      "type": "Email confirmation required: refused (blue) with Resend the email",
+      "side": "developer",
+      "flow": "29",
+      "screenshot": "29-email-refused-developer.png",
+      "status": "fail"
+    },
+    {
+      "type": "A 90-min call request (length typed by the requester)",
+      "side": "developer",
+      "flow": "29",
+      "screenshot": "29-request-90-min-developer.png",
+      "status": "fail"
+    },
+    {
+      "type": "Logging more than 150% refused (red)",
+      "side": "developer",
+      "flow": "29",
+      "screenshot": "29-log-over-150-red-developer.png",
+      "status": "fail"
+    },
+    {
+      "type": "Auto-cancel: nobody joined by the halfway point",
+      "side": "tester",
+      "flow": "29",
+      "screenshot": "29-auto-cancel-told-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Both needs lines (Find card)",
+      "side": "tester",
+      "flow": "29",
+      "screenshot": "29-find-both-needs-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Both needs lines (Join anyway warning)",
+      "side": "tester",
+      "flow": "29",
+      "screenshot": "29-join-anyway-both-needs-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "An optional question marked 'not required'",
+      "side": "tester",
+      "flow": "29",
+      "screenshot": "29-optional-question-tester.png",
+      "status": "fail"
+    },
+    {
+      "type": "Suggested (up to 5) and tick-box filters",
+      "side": "developer",
+      "flow": "29",
+      "screenshot": "29-suggested-and-tick-filters-developer.png",
+      "status": "fail"
+    },
+    {
+      "type": "New layout: developer test header",
+      "side": "developer",
+      "flow": "29",
+      "screenshot": "29-test-header-developer.png",
+      "status": "fail"
+    },
+    {
+      "type": "New layout: dashboards",
+      "side": "developer",
+      "flow": "29",
+      "screenshot": "29-dashboard-developer.png",
+      "status": "fail"
     }
   ],
-  "pass": true
+  "pass": false
 }
