@@ -45,14 +45,14 @@ export function ProfileForm({ init, first }: { init: Init; first?: boolean }) {
       </div>
       <fieldset>
         <legend className="label req">I&apos;m here to</legend>
-        <label className="mr-4 text-sm"><input type="checkbox" checked={v.isDeveloper} onChange={(e) => set({ isDeveloper: e.target.checked })} /> post tests for my game (developer)</label>
-        <label className="text-sm"><input type="checkbox" checked={v.isTester} onChange={(e) => set({ isTester: e.target.checked })} /> test games and get paid (tester)</label>
+        <label className="mr-4 text-sm"><input type="checkbox" checked={v.isDeveloper} onChange={(e) => set({ isDeveloper: e.target.checked })} /> post tests for my app, game or product (developer)</label>
+        <label className="text-sm"><input type="checkbox" checked={v.isTester} onChange={(e) => set({ isTester: e.target.checked })} /> test apps, games and more, and get paid (tester)</label>
       </fieldset>
       {v.isTester && (
         <>
           <Choices label="Devices you play on" required options={DEVICES} value={v.devices} onChange={(devices) => set({ devices })} />
           <Choices label="Languages you can test in" required options={LANGUAGES} value={v.languages} onChange={(languages) => set({ languages })} />
-          <Choices label="Kinds of games you like" options={CATEGORIES} value={v.categories} onChange={(categories) => set({ categories })} />
+          <Choices label="What you like to test" options={CATEGORIES} value={v.categories} onChange={(categories) => set({ categories })} />
           <div>
             <label className="label" htmlFor="bio">About you as a tester</label>
             <textarea id="bio" className="input" rows={3} value={v.bio} onChange={(e) => set({ bio: e.target.value })} />

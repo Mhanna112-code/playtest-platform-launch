@@ -396,7 +396,7 @@ async function signIn(page, email) {
 
   await flow("11", "Charge declined: owed with a 3-day cut-off (developer banner + Payments, tester line); a second failure pauses at once", async () => {
     const day = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
-    const r = await apiPost(dev, "/api/tests", { title: "Lighthouse Keeper", description: "Keep the light on.", buildUrl: "https://example.com/lighthouse", category: "Puzzle", devices: [], languages: [], spots: 5, writtenCents: "10.00", recordingCents: "15.00", liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7, questions: ["What did you think?"], openUntil: day(10) });
+    const r = await apiPost(dev, "/api/tests", { title: "Lighthouse Keeper", description: "Keep the light on.", buildUrl: "https://example.com/lighthouse", category: "Game: Puzzle", devices: [], languages: [], spots: 5, writtenCents: "10.00", recordingCents: "15.00", liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7, questions: ["What did you think?"], openUntil: day(10) });
     T11 = r.body.id;
     check("test posted", !!T11, JSON.stringify(r.body));
     SA = (await apiPost(tester, `/api/tests/${T11}/join`, { listingVersion: 1 })).body.sessionId;
@@ -702,7 +702,7 @@ async function signIn(page, email) {
 
   await flow("19", "Apply to join: the test takes applications; Apply stops once after a listing change; the developer accepts", async () => {
     // A fresh test that takes applications.
-    const r = await apiPost(dev, "/api/tests", { title: "Signal Fire", description: "Light the beacons.", buildUrl: "https://example.com/signal", category: "Puzzle", devices: [], languages: [], spots: 4, writtenCents: "9.00", recordingCents: null, liveRateCents: null, liveMinutes: 30, deadlineDays: 7, questions: ["How did it feel?"], openUntil: "", joinMode: "apply" });
+    const r = await apiPost(dev, "/api/tests", { title: "Signal Fire", description: "Light the beacons.", buildUrl: "https://example.com/signal", category: "Game: Puzzle", devices: [], languages: [], spots: 4, writtenCents: "9.00", recordingCents: null, liveRateCents: null, liveMinutes: 30, deadlineDays: 7, questions: ["How did it feel?"], openUntil: "", joinMode: "apply" });
     const T19 = r.body.id;
     await t3.goto(`/app/find/${T19}`); // Cara's page loads (the "seen" marker)
     check("Apply to join shown", await has(t3, "button:has-text('Apply to join')"));
@@ -922,13 +922,13 @@ async function signIn(page, email) {
     await devTab2.click("button:has-text('Save')");
     await devTab2.waitForURL(`**/app/tests/${T}?saved=1**`);
     // Edit tab 1 (opened before the other tab's save): Save stops once under Save; the second press saves.
-    await devTab1.selectOption("#category", "Puzzle");
+    await devTab1.selectOption("#category", "Game: Puzzle");
     await devTab1.click("button:has-text('Save')");
     check("Edit tab 1: Save stopped once with the other tab's change", await has(devTab1, "text=Nora Lane changed the description"));
     await shot(devTab1, "edit-save-stopped-developer");
     await devTab1.click("button:has-text('Save')");
     await devTab1.waitForURL(`**/app/tests/${T}?saved=1**`).catch(() => {});
-    check("second Save saved", sql(`select category from "Test" where id = '${T}'`) === "Puzzle");
+    check("second Save saved", sql(`select category from "Test" where id = '${T}'`) === "Game: Puzzle");
     await devTab2.close();
     // Dee's page: the top box shows the change by itself within ~20 s, and scrolls up to it once.
     const t0 = Date.now();
@@ -1076,7 +1076,7 @@ async function signIn(page, email) {
     check("form mistake shown in red", await has(t4, ".err-field >> text=Enter the rate you ask like 50.00"));
     await shot(t4, "form-mistake-red-tester");
     // Another test (Reef) where Cara's written answers waited 14 days.
-    const rr = await apiPost(dev, "/api/tests", { title: "Reef", description: "Count the coral.", buildUrl: "https://example.com/reef", category: "Puzzle", devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["How many?"], openUntil: "", joinMode: "anyone" });
+    const rr = await apiPost(dev, "/api/tests", { title: "Reef", description: "Count the coral.", buildUrl: "https://example.com/reef", category: "Game: Puzzle", devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["How many?"], openUntil: "", joinMode: "anyone" });
     const TR = rr.body.id;
     const SR = (await apiPost(t3, `/api/tests/${TR}/join`, { confirmed: true })).body.sessionId;
     await apiPost(t3, `/api/sessions/${SR}/written`, { answers: ["Eleven."] });

@@ -29,8 +29,8 @@ export function WaitlistForm() {
     >
       <input className="input max-w-xs" type="email" aria-label="Email" placeholder="you@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
       <select className="input w-auto" aria-label="I'm a" value={role} onChange={(e) => setRole(e.target.value)}>
-        <option value="developer">I make games</option>
-        <option value="tester">I want to test games</option>
+        <option value="developer">I make apps, games or other products</option>
+        <option value="tester">I want to test and get paid</option>
         <option value="both">Both</option>
       </select>
       <button className="btn" disabled={busy}>Join the waitlist</button>

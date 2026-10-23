@@ -11,7 +11,7 @@ export const metadata = { title: "Create an account · Playtest" };
 export default async function SignupPage() {
   if (await getPageUser()) redirect("/app");
   return (
-    <AuthShell title="Create an account" intro="Then tell us your name and whether you make games, test them, or both.">
+    <AuthShell title="Create an account" intro="Then tell us your name and whether you make apps, games or other products, test them, or both.">
       <AuthForm path="/api/auth/signup" next="/app" submit="Sign up" busy="Creating…" footer={<p className="note">Already have an account? <Link href="/login">Log in</Link></p>}>
         {googleConfigured() && (
           <>

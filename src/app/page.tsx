@@ -21,14 +21,14 @@ export default async function Home() {
       </nav>
 
       <section className="space-y-4 pt-6">
-        <p className="kicker">Playtesting, paid fairly</p>
+        <p className="kicker">Real-user testing, paid fairly</p>
         <h1 className="text-4xl font-extrabold leading-tight sm:text-5xl">
-          Real players test your game.
+          Real people test your apps, games and more.
           <br />
           You choose what to pay.
         </h1>
         <p className="max-w-2xl text-lg text-ink-200">
-          Post a test with your build, your questions and your prices. Testers join on a contract, send written answers or a screen
+          Post a test for your app, game, website or other product: your build or link, your questions and your prices. Testers join on a contract, send written answers or a screen
           recording, or jump on a live call. You review what they sent and pay what it was worth.
         </p>
         <WaitlistForm />

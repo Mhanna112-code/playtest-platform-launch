@@ -1,3 +1,3 @@
 export const DEVICES = ["Windows PC", "Mac", "Linux", "Steam Deck", "iPhone", "Android phone", "iPad", "Android tablet", "PlayStation", "Xbox", "Switch", "VR headset"];
-export const CATEGORIES = ["Action", "Adventure", "Casual", "Horror", "Multiplayer", "Platformer", "Puzzle", "Racing", "RPG", "Shooter", "Simulation", "Sports", "Strategy"];
+export const CATEGORIES = ["Mobile app", "Web app", "Website", "Desktop software", "Browser extension", "AI tool", "Hardware / device", "Other", "Game: Action", "Game: Adventure", "Game: Casual", "Game: Horror", "Game: Multiplayer", "Game: Platformer", "Game: Puzzle", "Game: Racing", "Game: RPG", "Game: Shooter", "Game: Simulation", "Game: Sports", "Game: Strategy"];
 export const LANGUAGES = ["English", "Spanish", "Portuguese", "French", "German", "Italian", "Polish", "Turkish", "Russian", "Japanese", "Korean", "Chinese"];

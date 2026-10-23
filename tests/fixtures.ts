@@ -6,7 +6,7 @@ import { POST as sessionAction } from "@/app/api/sessions/[id]/[action]/route";
 import { json, makeUser, req } from "./helpers";
 
 export const listingBody = (over: Record<string, unknown> = {}) => ({
-  title: "Harbor Run", description: "Sail", buildUrl: "https://example.com/b", category: "Action", devices: [], languages: [],
+  title: "Harbor Run", description: "Sail", buildUrl: "https://example.com/b", category: "Game: Action", devices: [], languages: [],
   spots: 3, writtenCents: "10.00", recordingCents: null, liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7,
   questions: ["What did you like?", "Where did you get stuck?"], openUntil: "", ...over,
 });

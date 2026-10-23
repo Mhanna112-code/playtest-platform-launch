@@ -84,11 +84,11 @@ describe("sign up, confirm, log in, reset", () => {
 describe("roles and tester profile", () => {
   it("saves name, pronoun, roles and the tester profile", async () => {
     const { user, cookie } = await makeUser();
-    const r = await json(await profilePOST(req("/api/profile", { cookie, body: { name: "Ana Silva", pronoun: "she", isDeveloper: true, isTester: true, devices: ["Mac", "Nope"], languages: ["English"], categories: ["Puzzle"] } })));
+    const r = await json(await profilePOST(req("/api/profile", { cookie, body: { name: "Ana Silva", pronoun: "she", isDeveloper: true, isTester: true, devices: ["Mac", "Nope"], languages: ["English"], categories: ["Game: Puzzle"] } })));
     expect(r).toMatchObject({ status: 200, body: { isDeveloper: true, isTester: true } });
     const u = await db.user.findUniqueOrThrow({ where: { id: user.id }, include: { profile: true } });
     expect(u).toMatchObject({ name: "Ana Silva", pronoun: "she" });
-    expect(u.profile).toMatchObject({ devices: ["Mac"], languages: ["English"], categories: ["Puzzle"] });
+    expect(u.profile).toMatchObject({ devices: ["Mac"], languages: ["English"], categories: ["Game: Puzzle"] });
   });
   it("needs a role, and testers need a device and a language", async () => {
     const { cookie } = await makeUser();

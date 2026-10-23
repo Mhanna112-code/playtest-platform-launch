@@ -80,7 +80,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         {t.developerId === u.id ? (
           <p className="note">This is your test.</p>
         ) : !u.isTester ? (
-          <p className="note">Turn on “test games” in your <a href="/app/profile">profile</a> to join.</p>
+          <p className="note">Turn on “test apps, games and more” in your <a href="/app/profile">profile</a> to join.</p>
         ) : blocked ? (
           <p className="note">This test isn&apos;t taking new testers right now.</p>
         ) : closed && invite && t.status === "open" && testersIn >= t.spots ? (
