@@ -8,7 +8,6 @@ import { Chat } from "@/components/Chat";
 import { DevCallPanel, type DevCall, type DevTester } from "./DevCallPanel";
 import { CallLength } from "./CallLength";
 import { InvitePanel } from "./InvitePanel";
-import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { invitable, inviteExpired } from "@/lib/server/invites";
 import { owedForBox, sweepHeldCalls } from "@/lib/server/holds";
 import { paidLines } from "@/lib/server/paid";
@@ -129,7 +128,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         id={t.id}
         title={t.title}
         status={t.status}
-        terms={termsLine(asListing(t)) + (t.openUntil ? ` · open until ${fmtDate(t.openUntil)}` : "")}
+        terms={termsLine(asListing(t))}
+        openUntil={t.openUntil ? t.openUntil.toISOString() : null}
+        version={t.version}
         seenAt={seenAt}
         nextRoundId={next?.id ?? null}
         spotsLine={`${working.length} of ${t.spots} spots used`}
@@ -164,7 +165,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         <InvitePanel
           testId={t.id}
           seenAt={seenAt}
-          options={{ devices: DEVICES, languages: LANGUAGES, categories: CATEGORIES }}
+          options={{ devices: t.devices, languages: t.languages }}
           testers={testers}
           sent={invites.map((i) => ({ id: i.id, name: people.get(i.testerId) ?? "?", status: i.status === "joined" ? "joined" : expired ? "expired" : "waiting for them to join" }))}
         />
