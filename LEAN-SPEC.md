@@ -4,6 +4,12 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 23, NEWEST+10) Required parts = a label only
+- Post/Edit: each part has a "Required" tick (full app's Parts and prices cards). It's part of the terms (snapshotted;
+  a change is a terms change). It blocks nothing: the developer sees per tester which required / not-required parts
+  were sent (under Testers); the tester sees "Required" / "Not required" in Your parts; the rating warning marks unsent
+  required parts "(required)". Rating availability is unchanged.
+
 ## (Owner, Oct 23, NEWEST+9) Tester capacity per test (as in the full app)
 - A developer can take up to N testers per test: starts at 10; after every 10 new ratings it grows by 10% (at least
   +1) when at least half of those 10 are 3 stars or more OR the developer reviewed at least 90% of the work testers
