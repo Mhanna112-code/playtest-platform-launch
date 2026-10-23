@@ -32,6 +32,18 @@ export async function invitable(devId: string, testId: string) {
     const g = grouped.find((x) => x.rateeId === id);
     return g ? `${(g._avg.stars ?? 0).toFixed(1)} ★ (${g._count._all} rating${g._count._all === 1 ? "" : "s"})` : "";
   };
+  // (NEWEST+8) Suggested: up to 5, not people you've worked with: meeting the test's needs first, then the highest
+  // rating, then the most matching devices and languages.
+  const avg = (id: string) => grouped.find((x) => x.rateeId === id)?._avg.stars ?? 0;
+  const matches = (t: (typeof testers)[number]) => (t.profile?.devices ?? []).filter((d) => test.devices.includes(d)).length + (t.profile?.languages ?? []).filter((l) => test.languages.includes(l)).length;
+  const suggested = new Set(
+    testers
+      .filter((t) => !removed.has(t.id) && !workedWith.has(t.id))
+      .map((t) => ({ t, meets: needsGap(test, t.profile) ? 0 : 1, r: avg(t.id), m: matches(t) }))
+      .sort((a, b) => b.meets - a.meets || b.r - a.r || b.m - a.m)
+      .slice(0, 5)
+      .map((x) => x.t.id),
+  );
   return testers
     .filter((t) => !removed.has(t.id))
     .map((t) => {
@@ -42,7 +54,7 @@ export async function invitable(devId: string, testId: string) {
         id: t.id, name: displayName(t), devices: t.profile?.devices ?? [], languages: t.profile?.languages ?? [], categories: t.profile?.categories ?? [],
         invited: !!inv, inviteId: inv?.id ?? null, grey, rating: ratingLine(t.id),
         gap: missingNeed(test, t.profile),
-        section: workedWith.has(t.id) ? "worked" : !needsGap(test, t.profile) ? "suggested" : "other",
+        section: workedWith.has(t.id) ? "worked" : suggested.has(t.id) ? "suggested" : "other",
       };
     });
 }

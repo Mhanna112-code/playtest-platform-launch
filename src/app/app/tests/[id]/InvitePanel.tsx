@@ -16,13 +16,14 @@ type Sent = { id: string; name: string; status: string };
  */
 export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester[]; sent: Sent[]; options: { devices: string[]; languages: string[]; categories: string[] } }) {
   const { press, changes, error, busy, setError } = usePress(p.seenAt);
-  const [f, setF] = useState({ device: "", language: "", category: "" });
+  // Tick-box filters: any ticked device / any ticked language.
+  const [f, setF] = useState<{ devices: string[]; languages: string[] }>({ devices: [], languages: [] });
   const [q, setQ] = useState("");
   const [ticked, setTicked] = useState<string[]>([]);
   const [msg, setMsg] = useState("");
   const [confirm, setConfirm] = useState<string[] | null>(null);
   const notInvited = useMemo(
-    () => p.testers.filter((t) => !t.invited && (!f.device || t.devices.includes(f.device)) && (!f.language || t.languages.includes(f.language))),
+    () => p.testers.filter((t) => !t.invited && (!f.devices.length || t.devices.some((d) => f.devices.includes(d))) && (!f.languages.length || t.languages.some((l) => f.languages.includes(l)))),
     [p.testers, f],
   );
   const worked = notInvited.filter((t) => t.section === "worked");
@@ -67,11 +68,17 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
       {t.grey && <span className="ml-2 text-xs">{t.grey}</span>}
     </label>
   );
-  const select = (k: keyof typeof f, label: string, opts: string[]) => (
-    <select aria-label={label} className="input w-auto" value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })}>
-      <option value="">{label}: any</option>
-      {opts.map((o) => <option key={o}>{o}</option>)}
-    </select>
+  const ticks = (k: keyof typeof f, label: string, opts: string[]) => (
+    <fieldset className="space-y-1">
+      <legend className="label">{label}</legend>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
+        {opts.map((o) => (
+          <label key={o} className="inline-flex items-center gap-1.5">
+            <input type="checkbox" checked={f[k].includes(o)} onChange={(e) => setF({ ...f, [k]: e.target.checked ? [...f[k], o] : f[k].filter((x) => x !== o) })} /> {o}
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 
   return (
@@ -92,9 +99,9 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
           </ul>
         </>
       )}
-      <div className="flex flex-wrap gap-2">
-        {select("device", "Device", p.options.devices)}
-        {select("language", "Language", p.options.languages)}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {ticks("devices", "Devices", p.options.devices)}
+        {ticks("languages", "Languages", p.options.languages)}
       </div>
       <div className="max-h-80 space-y-2 overflow-y-auto text-sm">
         <h3>People you&apos;ve worked with</h3>

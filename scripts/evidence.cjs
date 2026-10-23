@@ -265,7 +265,9 @@ async function signIn(page, email) {
     await t2.click("text=Continue");
     await t2.waitForSelector("text=Your sessions");
     await dev.goto(testUrl);
-    await dev.selectOption('select[aria-label="Device"]', "Mac");
+    // Tick-box filters, then Find testers by name (Suggested shows up to 5).
+    await dev.check("#invite fieldset:has-text('Devices') label:has-text('Mac') input");
+    await dev.fill("#invite input[aria-label='Find testers']", `Dee Moss ${TS % 10000}`);
     await dev.check(`#invite label:has-text('Dee Moss ${TS % 10000}') input`);
     await shot(dev, "invite-panel");
     await dev.click("#invite button:has-text('Invite')");
@@ -481,6 +483,7 @@ async function signIn(page, email) {
     check("join refused", await has(t3, "text=This test is paused, so it isn't taking new testers right now."));
     await shot(t3, "hold-join-refused-tester");
     await dev.goto(t11Url());
+    await dev.fill("#invite input[aria-label='Find testers']", `Cara Diaz ${TS % 10000}`);
     await dev.check(`#invite label:has-text('Cara Diaz ${TS % 10000}') input`);
     await dev.click("#invite button:has-text('Invite')");
     check("invite refused", await has(dev, "text=This test is paused until you pay what you owe, so nobody can be invited."));

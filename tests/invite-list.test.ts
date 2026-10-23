@@ -41,6 +41,28 @@ describe("invite list: greyed vs removed", () => {
     expect(r2.body.message).toBe("Ben Carter can't be invited right now.");
   });
 
+  it("Suggested: up to 5, meeting the needs first, then rating, then matches; testers already in show greyed", async () => {
+    // A rare need (Steam Deck + Korean) so the ranking is visible among everyone in the test database.
+    const { dev, testId } = await setup({ devices: ["Steam Deck"], languages: ["Korean"] });
+    const people: Awaited<ReturnType<typeof makeUser>>[] = [];
+    for (let i = 0; i < 7; i++) {
+      const p = await makeUser({ tester: true, name: `Tester ${i}` });
+      await db.testerProfile.update({ where: { userId: p.user.id }, data: { devices: ["Steam Deck"], languages: ["Korean", "English"] } });
+      people.push(p);
+    }
+    // The best-rated one (5 stars, revealed).
+    await db.rating.create({ data: { testId, contractId: "x-" + people[6].user.id, side: "developer", raterId: dev.user.id, rateeId: people[6].user.id, stars: 5, revealedAt: new Date() } });
+    const list = await invitable(dev.user.id, testId);
+    const sug = list.filter((x) => x.section === "suggested");
+    expect(sug.length).toBe(5);
+    expect(sug.every((x) => !x.gap)).toBe(true);
+    expect(sug.some((x) => x.id === people[6].user.id)).toBe(true);
+    // A tester already in this test still shows, greyed.
+    expect((await act(testId, "join", people[0].cookie, { listingVersion: 1 })).status).toBe(200);
+    const again = await invitable(dev.user.id, testId);
+    expect(again.find((x) => x.id === people[0].user.id)?.grey).toBe("Already in this test");
+  });
+
   it("sections: worked-with and suggested; a missing need asks in place (Invite anyway)", async () => {
     const { dev, testId } = await setup({ languages: ["English"] });
     const past = await joined(testId, "Ana Silva");
@@ -49,7 +71,7 @@ describe("invite list: greyed vs removed", () => {
     await db.testerProfile.update({ where: { userId: spanish.user.id }, data: { languages: ["Spanish"] } });
     const list = await invitable(dev.user.id, testId);
     expect(list.find((x) => x.id === past.tester.user.id)?.section).toBe("worked");
-    expect(list.find((x) => x.id === fits.user.id)?.section).toBe("suggested");
+    expect(["suggested", "other"]).toContain(list.find((x) => x.id === fits.user.id)?.section); // up to 5 suggested
     expect(list.find((x) => x.id === spanish.user.id)?.gap).toBe("English");
     const first = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [spanish.user.id] });
     expect(first.body.error.code).toBe("needs_confirm");
