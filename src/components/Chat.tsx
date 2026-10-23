@@ -3,15 +3,18 @@ import { Err } from "@/components/Err";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, errOf } from "@/lib/client";
+import { NotSentTag, useKept } from "@/lib/useKept";
 
 type Msg = { id: string; mine: boolean; who: string; body: string; at: string };
 
 /** The simple chat between the developer and one tester. New messages show on send or when the page is reloaded. */
-export function Chat({ path, extra = {}, messages, other, closed }: { path: string; extra?: Record<string, unknown>; messages: Msg[]; other: string; closed?: boolean }) {
+export function Chat({ path, extra = {}, messages, other, closed, keepKey }: { path: string; extra?: Record<string, unknown>; messages: Msg[]; other: string; closed?: boolean; keepKey: string }) {
   const router = useRouter();
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  // (NEXT-UI 10) The message typed and not sent is kept on the server (back after a reload / another device, "Not sent yet").
+  const keep = useKept(keepKey, { text }, text === "", (v) => setText(v.text ?? ""));
   return (
     <div className="space-y-2">
       {/* The full app's chat: bubbles, yours on the right in the brand colour, theirs on the left with the name. */}
@@ -38,6 +41,7 @@ export function Chat({ path, extra = {}, messages, other, closed }: { path: stri
           try {
             await api(path, { ...extra, body: text });
             setText("");
+            await keep.clear();
             router.refresh();
           } catch (e2) {
             setErr(errOf(e2));
@@ -48,6 +52,7 @@ export function Chat({ path, extra = {}, messages, other, closed }: { path: stri
       >
         <input className="input" aria-label={`Message ${other}`} placeholder={`Message ${other}…`} value={text} onChange={(e) => setText(e.target.value)} />
         <button className="btn" disabled={busy || !text.trim()}>Send</button>
+        {keep.restored && <span className="self-center"><NotSentTag /></span>}
       </form>}
       <Err text={err} />
     </div>

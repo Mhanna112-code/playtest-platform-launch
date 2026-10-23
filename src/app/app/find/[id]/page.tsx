@@ -118,6 +118,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           <div className="pt-3">
             <Chat
               closed={chatClosed}
+              keepKey={`chat:${t.id}:${u.id}`}
               path={`/api/tests/${t.id}/message`}
               extra={{ testerId: u.id }}
               other={dev}

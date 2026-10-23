@@ -28,7 +28,7 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    (app/playtests/[id], app/dev/page.tsx + app/tester/page.tsx, app/playtests/page.tsx).
 6. Developer/tester side switch like the full app (header switch, per-side nav/dashboard/pages, /switch links) -
    owner to confirm.
-7. [DONE] CALL REQUEST FORM (owner, final):
+7. [DONE 790f802] CALL REQUEST FORM (owner, final):
    - Remove the "Choose one / Daily / Weekly" radios. Each time row has its own "Once / Daily / Weekly" picker (Once
      default) and, when it repeats, a calls dropdown: 2-8 and "Forever" at the bottom. Up to 3 rows; with more than
      one row the other side picks ONE (a repeating pick books the whole set). Length and Ask $/h stay per request.
@@ -49,7 +49,7 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    which required and not-required parts are sent (full app's pattern), and to the tester in "Your parts" as
    "Required" / "Not required" (full app's pattern). Rating rule unchanged; the rating warning's unsent-parts line
    marks required ones "(required)". No part requests/extra parts/drops. Range hints and red-on-blur per item 0.
-10. KEPT FORMS (owner chose b): typed-but-unsent text is saved (server-side, per user and form, any device) and comes
+10. [DONE] KEPT FORMS (owner chose b): typed-but-unsent text is saved (server-side, per user and form, any device) and comes
    back after reload / sign-in with the full app's "Not sent yet" tag, as in the full app (integration
    components/use-kept-form + change-lock). ONLY on: written answers, chat messages, dispute text, rating comments,
    reject reasons, and the Post/Edit form. NOT on login/sign-up. Sending clears it.

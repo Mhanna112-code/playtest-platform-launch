@@ -188,6 +188,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <div className="pt-2">
                 <Chat
                   closed={blockedIds.has(x.id) || blockedBy.has(x.id)}
+                  keepKey={`chat:${t.id}:${x.id}`}
                   path={`/api/tests/${t.id}/message`}
                   extra={{ testerId: x.id }}
                   other={displayName(x)}

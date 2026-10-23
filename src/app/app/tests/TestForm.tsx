@@ -8,6 +8,7 @@ import { limitHint } from "@/lib/capacity";
 import { useLocalMin } from "@/components/FieldChecks";
 import { Choices } from "@/components/Choices";
 import { api, ApiError, isFieldError } from "@/lib/client";
+import { NotSentTag, useKept } from "@/lib/useKept";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import type { Listing } from "@/lib/rules";
 
@@ -72,6 +73,11 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: { i
   });
   const [saved, setSaved] = useState("");
   const [refusal, setRefusal] = useState("");
+  // (NEXT-UI 10) The form typed and not sent is kept on the server ("Not sent yet"), for Post and for each Edit.
+  const keep = useKept(edit ? `test:edit:${edit.id}` : "test:new", { f, touched: [...touched] }, touched.size === 0, (v) => {
+    setF(v.f);
+    setTouched(new Set(v.touched));
+  });
   const set = (p: Partial<F>) => {
     setF((o) => ({ ...o, ...p }));
     setTouched((t) => new Set([...t, ...(Object.keys(p) as (keyof F)[])]));
@@ -86,6 +92,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: { i
     try {
       if (!edit) {
         const r = await api<{ id: string }>("/api/tests", toApi(f));
+        await keep.clear();
         window.location.href = `/app/tests/${r.id}`;
         return;
       }
@@ -93,6 +100,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: { i
       const fields: Record<string, unknown> = {};
       for (const k of touched) for (const a of API_FIELDS[k]) fields[a] = all[a];
       const r = await api<{ offered: number; notReinvited?: string[]; resent?: string[]; closedApps?: string[]; spotClosed?: string[]; spots?: number }>(`/api/tests/${edit.id}/edit`, { version: edit.version, fields, seenAt: edit.seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}) });
+      await keep.clear();
       const q = (k: string, v?: string[]) => (v?.length ? `&${k}=${encodeURIComponent(v.join(", "))}` : "");
       window.location.href = `/app/tests/${edit.id}?saved=1&offered=${r.offered ?? 0}${q("closed", r.closedApps)}${q("resent", r.resent)}${q("skipped", r.notReinvited)}${r.spotClosed?.length ? `${q("spotclosed", r.spotClosed)}&spots=${r.spots}` : ""}`;
     } catch (err) {
@@ -235,7 +243,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: { i
 
       <div className="space-y-2">
         {edit && edit.testersIn > 0 && <p className="note">Testers already working keep their contract; each is offered these new terms and can switch. Work they&apos;ve already sent keeps its price.</p>}
-        <button className="btn" disabled={busy}>{busy ? "Saving…" : edit ? "Save" : "Post the test"}</button>
+        <div className="flex flex-wrap items-center"><button className="btn" disabled={busy}>{busy ? "Saving…" : edit ? "Save" : "Post the test"}</button>{keep.restored && <NotSentTag />}</div>
         {saved && <p className="ok">{saved}</p>}
         <Err text={refusal} />
         <ChangesBox changes={changes} tail={listingEdited ? "Press Save again to save your changes (fields you didn't touch keep the newer values)." : "Press Save again to save."} />

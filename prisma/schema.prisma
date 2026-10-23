@@ -52,6 +52,7 @@ model User {
   contracts Contract[]
   messages  Message[]
   chatReads ChatRead[]
+  keptForms KeptForm[]
 }
 
 /// One-use sign-in link tokens (only the SHA-256 hash is stored)
@@ -432,6 +433,18 @@ model ChatRead {
   readAt   DateTime @default(now())
 
   @@id([userId, testId, testerId])
+}
+
+/// (NEXT-UI 10) Typed but not sent: kept on the server per person and form (any device), put back with "Not sent yet"; sending clears it.
+/// Only written answers, chat messages, dispute text, rating comments, reject reasons and the Post / Edit form (never sign-in / sign-up).
+model KeptForm {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, key])
 }
 
 /// Emails written instead of sent when RESEND_API_KEY is empty (/dev/outbox)

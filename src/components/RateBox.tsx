@@ -4,6 +4,7 @@ import { Star } from "lucide-react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { usePress } from "@/lib/usePress";
+import { NotSentTag, useKept } from "@/lib/useKept";
 
 /**
  * (NEWEST+5) Rate, as the full app's rating box: 1-5 and an optional note (500 max). A rating that finishes the part
@@ -14,9 +15,14 @@ export function RateBox(p: { path: string; seenAt: string; name: string; body?: 
   const [stars, setStars] = useState("");
   const [comment, setComment] = useState("");
   const { press, changes, error, busy } = usePress(p.seenAt);
+  // (NEXT-UI 10) The note typed and not sent is kept on the server ("Not sent yet").
+  const keep = useKept(`rate:${p.path.replace(/[^A-Za-z0-9]+/g, "-")}${p.body?.contractId ? ":" + String(p.body.contractId) : ""}`, { comment }, comment === "", (v) => setComment(v.comment ?? ""));
   const send = async () => {
     const r = await press(p.path, { ...(p.body ?? {}), stars: stars ? Number(stars) : null, comment });
-    if (r) window.location.reload();
+    if (r) {
+      await keep.clear();
+      window.location.reload();
+    }
   };
   return (
     <div className="space-y-2 rounded-xl border border-amber-300/25 bg-amber-300/[0.04] p-3 text-sm text-ink-200" id="rate">
@@ -37,6 +43,7 @@ export function RateBox(p: { path: string; seenAt: string; name: string; body?: 
           <button className="btn-secondary" disabled={busy} onClick={send}>Rate</button>
         )}
       </div>
+      {keep.restored && <p><NotSentTag /></p>}
       <ChangesBox changes={changes} error={error} />
     </div>
   );

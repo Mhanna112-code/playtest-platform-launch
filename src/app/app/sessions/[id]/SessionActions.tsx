@@ -4,6 +4,7 @@ import { checkFields } from "@/components/FieldChecks";
 import { useState } from "react";
 import { api, errOf } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
+import { NotSentTag, useKept } from "@/lib/useKept";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { qOptional, qText } from "@/lib/questions";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -19,6 +20,13 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   const [ask, setAsk] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // (NEXT-UI 10) Typed and not sent: kept on the server, back after a reload or on another device, with "Not sent yet".
+  const same = answers.every((a, i) => a === (initial[i] ?? "")) && notes === initialNotes && ask === "";
+  const keep = useKept(`written:${sessionId}`, { answers, notes, ask }, same, (v) => {
+    setAnswers(questions.map((_, i) => v.answers?.[i] ?? initial[i] ?? ""));
+    setNotes(v.notes ?? initialNotes);
+    setAsk(v.ask ?? "");
+  });
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
@@ -26,6 +34,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     setMsg(null);
     try {
       await api(`/api/sessions/${sessionId}/written`, { answers, notes, ask, seenAt, confirmed, boxAt });
+      await keep.clear();
       window.location.reload();
     } catch (err) {
       const sb = stopBox(err); if (sb) { setBox(sb); setBoxAt(sb.now); }
@@ -47,7 +56,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
         <textarea id="notes" rows={2} className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
       <label className="block text-sm">Ask $ <input className="input inline w-24" inputMode="decimal" placeholder="optional" aria-label="Ask for this" data-min="0" data-max="5000" data-msg="Ask at most $5,000.00." value={ask} onChange={(e) => setAsk(e.target.value)} /> for this <span className="text-xs text-slate-500">up to $5,000</span></label>
-      <button className="btn" disabled={busy}>{busy ? "Sending…" : update ? "Send the updated answers" : "Send my written answers"}</button>
+      <span><button className="btn" disabled={busy}>{busy ? "Sending…" : update ? "Send the updated answers" : "Send my written answers"}</button>{keep.restored && <NotSentTag />}</span>
       <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {msg && (msg.ok ? <p className="ok">{msg.text}</p> : <Err text={msg.text} />)}
     </form>
@@ -95,6 +104,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt }: { sessionId: string
   const [reason, setReason] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const keep = useKept(`dispute:${kind}:${id}`, { reason }, reason === "", (v) => setReason(v.reason ?? ""));
   // The full app's fold (no separate mode): "Dispute the pay" opens the form in place.
   return (
     <details className="space-y-2">
@@ -112,6 +122,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt }: { sessionId: string
           setErr("");
           try {
             await api(`/api/sessions/${sessionId}/dispute`, { kind, id, reason, seenAt, confirmed, boxAt });
+            await keep.clear();
             window.location.reload();
           } catch (e) {
             const sb = stopBox(e);
@@ -125,6 +136,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt }: { sessionId: string
       >
         Send the dispute
       </button>
+      {keep.restored && <NotSentTag />}
       <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       <Err text={err} />
     </details>

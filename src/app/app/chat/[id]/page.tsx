@@ -33,6 +33,7 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
         <p className="text-sm text-slate-400">{c.title}</p>
         <Chat
           closed={blocked}
+          keepKey={`chat:${c.testId}:${c.testerId}`}
           path={dev ? `/api/tests/${c.testId}/message` : `/api/sessions/${c.id}/message`}
           extra={dev ? { contractId: c.id } : {}}
           other={other}
