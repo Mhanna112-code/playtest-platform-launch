@@ -5,7 +5,7 @@ import {
 } from "@/lib/rules";
 
 const listing = (over: Partial<Listing> = {}): Listing => ({
-  title: "Harbor Run", description: "A boat game", buildUrl: "https://example.com/build", category: "Game: Action",
+  title: "Harbor Run", description: "A boat game", buildUrl: "https://example.com/build", categories: ["Game"],
   devices: ["Windows PC"], languages: ["English"], spots: 5, writtenCents: 1000, recordingCents: 1500,
   liveRateCents: 3000, liveMinutes: 30, deadlineDays: 7, questions: ["What did you like?"], openUntil: null, joinMode: "anyone", ...over,
 });

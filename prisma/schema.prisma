@@ -96,7 +96,8 @@ model Test {
   title       String
   description String   @default("")
   buildUrl    String   @default("")
-  category    String   @default("")
+  /// The full app's categories (at least one)
+  categories  String[] @default([])
   /// Devices a tester needs (any one of them); empty = any device
   devices     String[]
   languages   String[]

@@ -402,7 +402,7 @@ async function signIn(page, email) {
 
   await flow("11", "Charge declined: owed with a 3-day cut-off (developer banner + Payments, tester line); a second failure pauses at once", async () => {
     const day = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
-    const r = await apiPost(dev, "/api/tests", { title: "Lighthouse Keeper", description: "Keep the light on.", buildUrl: "https://example.com/lighthouse", category: "Game: Puzzle", devices: [], languages: [], spots: 5, writtenCents: "10.00", recordingCents: "15.00", liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7, questions: ["What did you think?"], openUntil: day(10) });
+    const r = await apiPost(dev, "/api/tests", { title: "Lighthouse Keeper", description: "Keep the light on.", buildUrl: "https://example.com/lighthouse", categories: ["Game"], devices: [], languages: [], spots: 5, writtenCents: "10.00", recordingCents: "15.00", liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7, questions: ["What did you think?"], openUntil: day(10) });
     T11 = r.body.id;
     check("test posted", !!T11, JSON.stringify(r.body));
     SA = (await apiPost(tester, `/api/tests/${T11}/join`, { listingVersion: 1 })).body.sessionId;
@@ -709,7 +709,7 @@ async function signIn(page, email) {
 
   await flow("19", "Apply to join: the test takes applications; Apply stops once after a listing change; the developer accepts", async () => {
     // A fresh test that takes applications.
-    const r = await apiPost(dev, "/api/tests", { title: "Signal Fire", description: "Light the beacons.", buildUrl: "https://example.com/signal", category: "Game: Puzzle", devices: [], languages: [], spots: 4, writtenCents: "9.00", recordingCents: null, liveRateCents: null, liveMinutes: 30, deadlineDays: 7, questions: ["How did it feel?"], openUntil: "", joinMode: "apply" });
+    const r = await apiPost(dev, "/api/tests", { title: "Signal Fire", description: "Light the beacons.", buildUrl: "https://example.com/signal", categories: ["Game"], devices: [], languages: [], spots: 4, writtenCents: "9.00", recordingCents: null, liveRateCents: null, liveMinutes: 30, deadlineDays: 7, questions: ["How did it feel?"], openUntil: "", joinMode: "apply" });
     const T19 = r.body.id;
     await t3.goto(`/app/find/${T19}`); // Cara's page loads (the "seen" marker)
     check("Apply to join shown", await has(t3, "button:has-text('Apply to join')"));
@@ -781,7 +781,7 @@ async function signIn(page, email) {
 
   let T21 = "", SC = "", SDee = "";
   await flow("21", "Call requests with a rate ask: Select all to two testers; one asks $50/h and the developer accepts; the other's Accept is refused", async () => {
-    const r = await apiPost(dev, "/api/tests", { title: "Night Ferry", description: "Cross the bay.", buildUrl: "https://example.com/ferry", category: "Adventure", devices: [], languages: [], spots: 4, writtenCents: "8.00", recordingCents: null, liveRateCents: "40.00", liveMinutes: 30, deadlineDays: 7, questions: ["Anything?"], openUntil: "", joinMode: "anyone" });
+    const r = await apiPost(dev, "/api/tests", { title: "Night Ferry", description: "Cross the bay.", buildUrl: "https://example.com/ferry", categories: ["Game"], devices: [], languages: [], spots: 4, writtenCents: "8.00", recordingCents: null, liveRateCents: "40.00", liveMinutes: 30, deadlineDays: 7, questions: ["Anything?"], openUntil: "", joinMode: "anyone" });
     T21 = r.body.id;
     SC = (await apiPost(t3, `/api/tests/${T21}/join`, { confirmed: true })).body.sessionId;
     SDee = (await apiPost(t2, `/api/tests/${T21}/join`, { confirmed: true })).body.sessionId;
@@ -864,7 +864,7 @@ async function signIn(page, email) {
   });
 
   await flow("23", "Every button stops once: your own other-tab actions, Block after a payment, listing info (F), the live top box", async () => {
-    const r = await apiPost(dev, "/api/tests", { title: "Tide Pool", description: "Explore the rock pools.", buildUrl: "https://example.com/tide", category: "Adventure", devices: [], languages: [], spots: 4, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["What did you find?"], openUntil: "", joinMode: "anyone" });
+    const r = await apiPost(dev, "/api/tests", { title: "Tide Pool", description: "Explore the rock pools.", buildUrl: "https://example.com/tide", categories: ["Game"], devices: [], languages: [], spots: 4, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["What did you find?"], openUntil: "", joinMode: "anyone" });
     const T = r.body.id;
     const SCara = (await apiPost(t3, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
     const SDee3 = (await apiPost(t2, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
@@ -935,7 +935,7 @@ async function signIn(page, email) {
     await devTab2.click("button:has-text('Save')");
     await devTab2.waitForURL(`**/app/tests/${T}?saved=1**`);
     // Edit tab 1 (opened before the other tab's save): Save stops once under Save; the second press saves.
-    await devTab1.selectOption("#category", "Game: Puzzle");
+    await devTab1.click("fieldset:has-text('Categories') label:has-text('Education')");
     await devTab1.click("button:has-text('Save')");
     check("Edit tab 1: Save stopped once with the other tab's change", await has(devTab1, "text=Nora Lane changed the description"));
     await shot(devTab1, "edit-save-stopped-developer");
@@ -951,7 +951,7 @@ async function signIn(page, email) {
     check("after the stopped Save, the page stays at the button (no jump to the top box)", boxSeen && Math.abs(yAfter - yStop) < 40, `Save at ${yStop} px → ${yAfter} px on screen; top box ${boxSeen ? "shown" : "not shown"}`);
     await devTab1.click("button:has-text('Save')");
     await devTab1.waitForURL(`**/app/tests/${T}?saved=1**`).catch(() => {});
-    check("second Save saved", sql(`select category from "Test" where id = '${T}'`) === "Game: Puzzle");
+    check("second Save saved", sql(`select 'Education' = any(categories) from "Test" where id = '${T}'`) === "t");
     await devTab2.close();
     // Dee's page: the top box shows the change by itself within ~20 s, and scrolls up to it once.
     const t0 = Date.now();
@@ -1001,7 +1001,7 @@ async function signIn(page, email) {
   const lastDevReq = (sid) => sql(`select id from "CallRequest" where "contractId" = '${sid}' and "fromSide" = 'developer' order by "createdAt" desc limit 1`);
 
   await flow("24", "Coverage: tester call refusals, limits, clashes, and combined stop boxes (info + call; another tab + paid)", async () => {
-    const r = await apiPost(dev, "/api/tests", { title: "Kelp Forest", description: "Swim through the kelp.", buildUrl: "https://example.com/kelp", category: "Adventure", devices: [], languages: [], spots: 4, writtenCents: "8.00", recordingCents: null, liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7, questions: ["What did you see?"], openUntil: "", joinMode: "anyone" });
+    const r = await apiPost(dev, "/api/tests", { title: "Kelp Forest", description: "Swim through the kelp.", buildUrl: "https://example.com/kelp", categories: ["Game"], devices: [], languages: [], spots: 4, writtenCents: "8.00", recordingCents: null, liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7, questions: ["What did you see?"], openUntil: "", joinMode: "anyone" });
     TK = r.body.id;
     t4 = await ctx(PHONE);
     await signIn(t4, `tester4+${TS}@playtest.test`);
@@ -1106,7 +1106,7 @@ async function signIn(page, email) {
     check("form mistake shown in red", await has(t4, ".err-field >> text=Enter the rate you ask like 50.00"));
     await shot(t4, "form-mistake-red-tester");
     // Another test (Reef) where Cara's written answers waited 14 days.
-    const rr = await apiPost(dev, "/api/tests", { title: "Reef", description: "Count the coral.", buildUrl: "https://example.com/reef", category: "Game: Puzzle", devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["How many?"], openUntil: "", joinMode: "anyone" });
+    const rr = await apiPost(dev, "/api/tests", { title: "Reef", description: "Count the coral.", buildUrl: "https://example.com/reef", categories: ["Game"], devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["How many?"], openUntil: "", joinMode: "anyone" });
     const TR = rr.body.id;
     const SR = (await apiPost(t3, `/api/tests/${TR}/join`, { confirmed: true })).body.sessionId;
     await apiPost(t3, `/api/sessions/${SR}/written`, { answers: ["Eleven."] });
@@ -1156,7 +1156,7 @@ async function signIn(page, email) {
   await flow("26", "NEWEST+4: a listing change re-sends the invite (old Accept refused); Accept after a change asks the applicant; rejoining restores the session", async () => {
     const edit = async (testId, fields) => apiPost(dev, `/api/tests/${testId}/edit`, { version: Number(sql(`select version from "Test" where id = '${testId}'`)), fields, confirmed: true });
     // (a) Re-sent invite: Eve's join page shows the invite; the developer changes the price; her Join is refused with the new invite.
-    const rl = await apiPost(dev, "/api/tests", { title: "Lagoon", description: "Float.", buildUrl: "https://example.com/lagoon", category: "Casual", devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Calm?"], openUntil: "", joinMode: "invite" });
+    const rl = await apiPost(dev, "/api/tests", { title: "Lagoon", description: "Float.", buildUrl: "https://example.com/lagoon", categories: ["Game"], devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Calm?"], openUntil: "", joinMode: "invite" });
     const TL = rl.body.id;
     const eveId = sql(`select id from "User" where email = 'tester4+${TS}@playtest.test'`);
     await apiPost(dev, `/api/tests/${TL}/invite`, { seenAt: new Date().toISOString(), confirmed: true, testerIds: [eveId] });
@@ -1176,7 +1176,7 @@ async function signIn(page, email) {
     check("joined on the new invite", !!SL && t4.url().includes(SL), t4.url());
     // (b) A listing change closes Cara's application: the developer saves in tab 2 (the Save result lists it); tab 1's
     // Accept gets one final notice; Cara's join page top box shows it.
-    const ra = await apiPost(dev, "/api/tests", { title: "Atoll", description: "Circle the island.", buildUrl: "https://example.com/atoll", category: "Casual", devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Round?"], openUntil: "", joinMode: "apply" });
+    const ra = await apiPost(dev, "/api/tests", { title: "Atoll", description: "Circle the island.", buildUrl: "https://example.com/atoll", categories: ["Game"], devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Round?"], openUntil: "", joinMode: "apply" });
     const TA = ra.body.id;
     await apiPost(t3, `/api/tests/${TA}/apply`, { note: "I like islands." });
     await t3.goto(`/app/find/${TA}`);
@@ -1212,7 +1212,7 @@ async function signIn(page, email) {
     check("old work kept with its payment", await has(t4, "text=paid $10.00"));
     await shot(t4, "rejoined-session-restored-tester");
     // (d) The test fills: Cara's Accept takes the last spot; Eve's invite stays open; her Join is refused; a spot opens.
-    const rs = await apiPost(dev, "/api/tests", { title: "Shoal", description: "Swim with the fish.", buildUrl: "https://example.com/shoal", category: "Casual", devices: [], languages: [], spots: 1, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["How many fish?"], openUntil: "", joinMode: "apply" });
+    const rs = await apiPost(dev, "/api/tests", { title: "Shoal", description: "Swim with the fish.", buildUrl: "https://example.com/shoal", categories: ["Game"], devices: [], languages: [], spots: 1, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["How many fish?"], openUntil: "", joinMode: "apply" });
     const TS2 = rs.body.id;
     await apiPost(dev, `/api/tests/${TS2}/invite`, { seenAt: new Date().toISOString(), confirmed: true, testerIds: [eveId] });
     await apiPost(t3, `/api/tests/${TS2}/apply`, { note: "Fish!" });
@@ -1262,7 +1262,7 @@ async function signIn(page, email) {
     await tp.click("label:has-text('English')");
     await tp.click("text=Continue");
     await tp.waitForSelector("text=Your sessions");
-    const r = await apiPost(d, "/api/tests", { title: "Coral Cove", description: "Dive and count the fish.", buildUrl: "https://example.com/coral", category: "Adventure", devices: [], languages: [], spots: 3, writtenCents: "10.00", recordingCents: "15.00", liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7, questions: ["What did you see?"], openUntil: "", joinMode: "anyone" });
+    const r = await apiPost(d, "/api/tests", { title: "Coral Cove", description: "Dive and count the fish.", buildUrl: "https://example.com/coral", categories: ["Game"], devices: [], languages: [], spots: 3, writtenCents: "10.00", recordingCents: "15.00", liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7, questions: ["What did you see?"], openUntil: "", joinMode: "anyone" });
     const T = r.body.id;
     const S = (await apiPost(tp, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
     check("test posted and joined", !!T && !!S, JSON.stringify(r.body));
@@ -1350,7 +1350,7 @@ async function signIn(page, email) {
     await tp.click("label:has-text('English')");
     await tp.click("text=Continue");
     await tp.waitForSelector("text=Your sessions");
-    const r = await apiPost(d, "/api/tests", { title: "Reef Run", description: "Swim the reef.", buildUrl: "https://example.com/reefrun", category: "Adventure", devices: [], languages: [], spots: 3, writtenCents: "10.00", recordingCents: null, liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7, questions: ["What did you see?"], openUntil: "", joinMode: "anyone" });
+    const r = await apiPost(d, "/api/tests", { title: "Reef Run", description: "Swim the reef.", buildUrl: "https://example.com/reefrun", categories: ["Game"], devices: [], languages: [], spots: 3, writtenCents: "10.00", recordingCents: null, liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7, questions: ["What did you see?"], openUntil: "", joinMode: "anyone" });
     const T = r.body.id;
     const S = (await apiPost(tp, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
     await apiPost(tp, `/api/sessions/${S}/written`, { answers: ["Turtles."] });
@@ -1518,7 +1518,7 @@ async function signIn(page, email) {
     await d.check("text=post tests for my app, game or product");
     await d.click("text=Continue");
     await d.waitForSelector("text=Welcome back,");
-    const r = await apiPost(d, "/api/tests", { title: "Kelp Forest", description: "Drift through the kelp and find the hidden cave.", buildUrl: "https://example.com/kelp", category: "Game: Adventure", devices: ["Windows PC"], languages: ["English"], spots: 4, writtenCents: "10.00", recordingCents: null, liveRateCents: "30.00", liveMinutes: null, deadlineDays: 7, questions: ["What did you find?", "[not required] Anything else?"], openUntil: "", joinMode: "anyone" });
+    const r = await apiPost(d, "/api/tests", { title: "Kelp Forest", description: "Drift through the kelp and find the hidden cave.", buildUrl: "https://example.com/kelp", categories: ["Game"], devices: ["Windows PC"], languages: ["English"], spots: 4, writtenCents: "10.00", recordingCents: null, liveRateCents: "30.00", liveMinutes: null, deadlineDays: 7, questions: ["What did you find?", "[not required] Anything else?"], openUntil: "", joinMode: "anyone" });
     const T = r.body.id;
     check("test posted", !!T, JSON.stringify(r.body));
     sql(`update "User" set "stripeCustomerId" = 'cus_fake30_${TS}', "stripePaymentMethodId" = 'pm_card_visa' where email = '${DEV30}'`);

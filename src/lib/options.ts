@@ -1,3 +1,4 @@
 export const DEVICES = ["Windows PC", "Mac", "Linux", "Steam Deck", "iPhone", "Android phone", "iPad", "Android tablet", "PlayStation", "Xbox", "Switch", "VR headset"];
-export const CATEGORIES = ["Mobile app", "Web app", "Website", "Desktop software", "Browser extension", "AI tool", "Hardware / device", "Other", "Game: Action", "Game: Adventure", "Game: Casual", "Game: Horror", "Game: Multiplayer", "Game: Platformer", "Game: Puzzle", "Game: Racing", "Game: RPG", "Game: Shooter", "Game: Simulation", "Game: Sports", "Game: Strategy"];
+// The full app's categories (src/lib/constants.ts there), exactly.
+export const CATEGORIES = ["Game", "Productivity", "Social", "Entertainment", "Education", "Health & fitness", "Finance", "Shopping", "Business", "Developer tools", "AI", "Other"];
 export const LANGUAGES = ["English", "Spanish", "Portuguese", "French", "German", "Italian", "Polish", "Turkish", "Russian", "Japanese", "Korean", "Chinese"];

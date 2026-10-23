@@ -22,7 +22,7 @@ type U = { id: string; email: string; name: string; pronoun: string; isDeveloper
 // ---------- helpers ----------
 
 export const asListing = (t: { [K in keyof Listing]: unknown }): Listing => ({
-  title: t.title as string, description: t.description as string, buildUrl: t.buildUrl as string, category: t.category as string,
+  title: t.title as string, description: t.description as string, buildUrl: t.buildUrl as string, categories: (t.categories as string[]) ?? [],
   devices: t.devices as string[], languages: t.languages as string[], spots: t.spots as number,
   writtenCents: t.writtenCents as number | null, recordingCents: t.recordingCents as number | null,
   liveRateCents: t.liveRateCents as number | null, liveMinutes: t.liveMinutes as number | null,
@@ -61,7 +61,7 @@ export function parseListing(body: Record<string, unknown>, partial = false): Pa
     out.buildUrl = str(body.buildUrl, 500);
     if (out.buildUrl && !/^https?:\/\//i.test(out.buildUrl)) throw new HttpError(400, "bad_url", "The build link must start with https://");
   }
-  if (has("category")) out.category = CATEGORIES.includes(body.category as string) ? (body.category as string) : "";
+  if (has("categories")) out.categories = list(body.categories, CATEGORIES);
   if (has("devices")) out.devices = list(body.devices, DEVICES);
   if (has("languages")) out.languages = list(body.languages, LANGUAGES);
   if (has("spots")) out.spots = int(body.spots);
@@ -274,7 +274,7 @@ export const INFO_FIELDS: (keyof Listing)[] = ["description", "devices", "langua
 export const CLOSING_FIELDS: (keyof Listing)[] = ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "questions", "deadlineDays", "devices", "languages", "description"];
 
 const FIELD_NAMES: Record<keyof Listing, string> = {
-  title: "title", description: "description", buildUrl: "build link", category: "category", devices: "devices", languages: "languages",
+  title: "title", description: "description", buildUrl: "build link", categories: "categories", devices: "devices", languages: "languages",
   openUntil: "Open until", joinMode: "who can join", spots: "spots", writtenCents: "written answers price", recordingCents: "recording price", liveRateCents: "live call rate",
   liveMinutes: "call length", deadlineDays: "deadline", questions: "questions",
 };

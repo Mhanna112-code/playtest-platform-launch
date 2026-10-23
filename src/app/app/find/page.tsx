@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CalendarClock, SearchX } from "lucide-react";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { CategoryBadges } from "@/components/Category";
 import { displayName } from "@/lib/format";
 import { ratingSummary } from "@/lib/server/ratings";
 import { termsLine } from "@/lib/rules";
@@ -46,7 +47,7 @@ export default async function FindPage() {
                   </div>
                   <p className="text-sm text-emerald-300">{termsLine(asListing(t), true)}</p>
                   <div className="flex flex-wrap gap-2">
-                    {t.category && <span className="badge">{t.category}</span>}
+                    <CategoryBadges categories={t.categories} />
                     {t.devices.map((d) => <span key={d} className="badge">{d}</span>)}
                     <span className="badge"><CalendarClock className="h-3.5 w-3.5" /> {t.deadlineDays} days to finish</span>
                   </div>

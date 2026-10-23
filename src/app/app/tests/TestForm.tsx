@@ -14,7 +14,7 @@ import type { Listing } from "@/lib/rules";
 // user touched plus the version it loaded; if the test changed since, Save stops once and lists what changed.
 
 type F = {
-  title: string; description: string; buildUrl: string; category: string; devices: string[]; languages: string[];
+  title: string; description: string; buildUrl: string; categories: string[]; devices: string[]; languages: string[];
   spots: string; deadlineDays: string; written: boolean; writtenPrice: string; recording: boolean; recordingPrice: string;
   live: boolean; liveRate: string; liveMinutes: string; questions: string; optionalQs: string[]; openUntil: string; joinMode: string;
 };
@@ -22,7 +22,7 @@ type F = {
 const dollars = (c: number | null) => (c == null ? "" : (c / 100).toFixed(2));
 export function toForm(l: Listing): F {
   return {
-    title: l.title, description: l.description, buildUrl: l.buildUrl, category: l.category, devices: l.devices, languages: l.languages,
+    title: l.title, description: l.description, buildUrl: l.buildUrl, categories: l.categories, devices: l.devices, languages: l.languages,
     spots: String(l.spots), deadlineDays: String(l.deadlineDays), written: l.writtenCents != null, writtenPrice: dollars(l.writtenCents),
     recording: l.recordingCents != null, recordingPrice: dollars(l.recordingCents), live: l.liveRateCents != null,
     liveRate: dollars(l.liveRateCents), liveMinutes: String(l.liveMinutes ?? 30), questions: l.questions.map(qText).join("\n"), optionalQs: l.questions.filter(qOptional).map(qText),
@@ -34,7 +34,7 @@ export function toForm(l: Listing): F {
 /** Form values → API fields (prices in dollars; the server turns them into cents). */
 function toApi(f: F): Record<string, unknown> {
   return {
-    title: f.title, description: f.description, buildUrl: f.buildUrl, category: f.category, devices: f.devices, languages: f.languages,
+    title: f.title, description: f.description, buildUrl: f.buildUrl, categories: f.categories, devices: f.devices, languages: f.languages,
     spots: f.spots, deadlineDays: f.deadlineDays, writtenCents: f.written ? f.writtenPrice || "" : null,
     recordingCents: f.recording ? f.recordingPrice || "" : null, liveRateCents: f.live ? f.liveRate || "" : null,
     liveMinutes: null, questions: f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (f.optionalQs.includes(q) ? NOT_REQUIRED + q : q)), openUntil: f.openUntil, joinMode: f.joinMode,
@@ -42,7 +42,7 @@ function toApi(f: F): Record<string, unknown> {
 }
 // Which API fields each form field feeds.
 const API_FIELDS: Record<keyof F, string[]> = {
-  title: ["title"], description: ["description"], buildUrl: ["buildUrl"], category: ["category"], devices: ["devices"], languages: ["languages"],
+  title: ["title"], description: ["description"], buildUrl: ["buildUrl"], categories: ["categories"], devices: ["devices"], languages: ["languages"],
   spots: ["spots"], deadlineDays: ["deadlineDays"], written: ["writtenCents"], writtenPrice: ["writtenCents"], recording: ["recordingCents"],
   recordingPrice: ["recordingCents"], live: ["liveRateCents", "liveMinutes"], liveRate: ["liveRateCents"], liveMinutes: ["liveMinutes"], questions: ["questions"], optionalQs: ["questions"], openUntil: ["openUntil"], joinMode: ["joinMode"],
 };
@@ -99,7 +99,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: { i
   }
 
   // Mark the field a mistake is about (red at the field).
-  const FIELD_WORDS: Partial<Record<keyof F, RegExp>> = { title: /title/i, writtenPrice: /written answers price/i, recordingPrice: /recording price/i, liveRate: /live call rate/i, liveMinutes: /call lasts/i, spots: /spots|testers per test/i, deadlineDays: /deadline/i, openUntil: /open until/i, buildUrl: /build link/i };
+  const FIELD_WORDS: Partial<Record<keyof F, RegExp>> = { title: /title/i, writtenPrice: /written answers price/i, recordingPrice: /recording price/i, liveRate: /live call rate/i, liveMinutes: /call lasts/i, spots: /spots|testers per test/i, deadlineDays: /deadline/i, openUntil: /open until/i, buildUrl: /build link/i, categories: /category/i };
   const bad = (k: keyof F) => !!FIELD_WORDS[k] && errs.some((e) => FIELD_WORDS[k]!.test(e));
   const text = (k: keyof F, label: string, opts: { req?: boolean; ph?: string; type?: string; cls?: string } = {}) => (
     <div>
@@ -118,13 +118,17 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: { i
           <textarea id="description" rows={4} className="input" value={f.description} onChange={(e) => set({ description: e.target.value })} />
         </div>
         {text("buildUrl", "Build link", { ph: "https://…" })}
-        <div>
-          <label className="label" htmlFor="category">Category</label>
-          <select id="category" className="input max-w-xs" value={f.category} onChange={(e) => set({ category: e.target.value })}>
-            <option value="">Choose…</option>
-            {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-          </select>
-        </div>
+        {/* The full app's Categories: a row of tick boxes, at least one. */}
+        <fieldset className={"space-y-2 " + (bad("categories") ? "rounded-xl p-2 ring-1 ring-rose-400" : "")}>
+          <legend className="label req">Categories</legend>
+          <div className="flex flex-wrap gap-2">
+            {CATEGORIES.map((o) => (
+              <label key={o} className="flex cursor-pointer items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm text-slate-300 has-[:checked]:border-indigo-400/60 has-[:checked]:bg-indigo-500/15 has-[:checked]:text-white">
+                <input type="checkbox" name="categories" value={o} checked={f.categories.includes(o)} onChange={(e) => set({ categories: e.target.checked ? [...f.categories, o] : f.categories.filter((x) => x !== o) })} /> {o}
+              </label>
+            ))}
+          </div>
+        </fieldset>
       </div>
 
       <div className="panel">

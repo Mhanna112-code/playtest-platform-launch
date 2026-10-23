@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
-import { CalendarClock, FileSignature, HelpCircle, Languages, Monitor, Tag, Users } from "lucide-react";
+import { CalendarClock, FileSignature, HelpCircle, Languages, Monitor, Users } from "lucide-react";
+import { CategoryBadges } from "@/components/Category";
 import { db } from "@/lib/db";
 import { displayName, fmtDate } from "@/lib/format";
 import { termsLine } from "@/lib/rules";
@@ -49,7 +50,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {t.category && <span className="badge"><Tag className="h-3.5 w-3.5" /> {t.category}</span>}
+          <CategoryBadges categories={t.categories} />
           {t.devices.length > 0 && <span className="badge"><Monitor className="h-3.5 w-3.5" /> {t.devices.join(", ")}</span>}
           {t.languages.length > 0 && <span className="badge"><Languages className="h-3.5 w-3.5" /> {t.languages.join(", ")}</span>}
           {t.status === "open" && <span className="badge"><CalendarClock className="h-3.5 w-3.5" /> {t.deadlineDays} day{t.deadlineDays === 1 ? "" : "s"} to finish</span>}

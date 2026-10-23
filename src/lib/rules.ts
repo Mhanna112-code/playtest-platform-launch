@@ -114,7 +114,7 @@ export type Listing = {
   title: string;
   description: string;
   buildUrl: string;
-  category: string;
+  categories: string[];
   devices: string[];
   languages: string[];
   spots: number;
@@ -131,7 +131,7 @@ export type Listing = {
 };
 
 export const LISTING_FIELDS = [
-  "title", "description", "buildUrl", "category", "devices", "languages", "spots",
+  "title", "description", "buildUrl", "categories", "devices", "languages", "spots",
   "writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "deadlineDays", "questions", "openUntil", "joinMode",
 ] as const satisfies readonly (keyof Listing)[];
 
@@ -152,6 +152,7 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date()): strin
   }
   if (!l.title.trim()) errs.push("Give the test a title.");
   if (l.title.length > 120) errs.push("Keep the title under 120 characters.");
+  if (!l.categories?.length) errs.push("Tick at least one category.");
   if (!Number.isInteger(l.spots) || l.spots < 1 || l.spots > MAX_SPOTS) errs.push(`Spots must be a whole number from 1 to ${MAX_SPOTS}.`);
   else if (l.spots < testersIn) errs.push(`Spots can't go below the ${testersIn} tester${testersIn === 1 ? "" : "s"} already in.`);
   if (!Number.isInteger(l.deadlineDays) || l.deadlineDays < 1 || l.deadlineDays > 90) errs.push("Testers' deadline must be from 1 to 90 days after they join.");

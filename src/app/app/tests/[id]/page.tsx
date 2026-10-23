@@ -135,6 +135,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         spotsLine={`${working.length} of ${t.spots} spots used`}
         joinMode={t.joinMode}
         deadlineDays={t.deadlineDays}
+        categories={t.categories}
         working={working.map((c) => ({ contractId: c.id, name: displayName(c.tester) }))}
       />
       {(u.holdStartedAt || owedList.length > 0) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} />}

@@ -4,6 +4,7 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { api } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
 import { CalendarClock, Pencil } from "lucide-react";
+import { CategoryBadges } from "@/components/Category";
 
 type Tester = { contractId: string; name: string };
 
@@ -11,7 +12,7 @@ type Tester = { contractId: string; name: string };
  * The test page's top title panel: the developer's big buttons (Stop the test, End early, Next round).
  * Its stop-once box sits directly under this panel.
  */
-export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number }) {
+export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[] }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
   const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={error} /> : null);
   const [open, setOpen] = useState<"" | "stop" | "end" | "next">("");
@@ -38,6 +39,7 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
             <h1 className="text-3xl font-bold tracking-tight text-white">{p.title}</h1>
             <div className="flex flex-wrap gap-2">
               <span className={`badge ${p.status === "open" ? "border-emerald-400/40 text-emerald-200" : ""}`}>{STATUS[p.status]}</span>
+              <CategoryBadges categories={p.categories ?? []} />
               {p.joinMode && (
                 <a href={`/app/tests/${p.id}/edit`} className={`badge no-underline hover:no-underline ${p.joinMode === "apply" ? "border-sky-300/40 text-sky-200" : ""}`} title="Change who can join in Edit">
                   {p.joinMode === "apply" ? "You approve each tester" : p.joinMode === "invite" ? "Invite only" : "Anyone who matches joins instantly"}
