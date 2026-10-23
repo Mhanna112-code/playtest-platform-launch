@@ -92,6 +92,6 @@ describe("invite list: greyed vs removed", () => {
     const none = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [cara.user.id], anyway: true, seenGaps: changed.body.error.lines, confirmed: true });
     expect(none.body.error.message).toBe("Everyone you ticked now meets this test's needs. Press Invite to send.");
     expect(await db.invite.count({ where: { testId, testerId: cara.user.id } })).toBe(0);
-    expect((await act(testId, "invite-check", dev.cookie, { testerIds: [cara.user.id] })).body).toEqual({ lines: [] });
+    expect((await act(testId, "invite-check", dev.cookie, { testerIds: [cara.user.id] })).body).toMatchObject({ lines: [] });
   });
 });

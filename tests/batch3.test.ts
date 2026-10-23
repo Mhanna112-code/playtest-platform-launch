@@ -252,8 +252,15 @@ describe("Pay what you owe stops once when the total changed", () => {
     expect(first.status).toBe(409);
     expect(first.body.error.changes[0].text).toBe("Another payment failed meanwhile: Ana Silva's written answers $5.00. New total $13.00. Press again to pay $13.00.");
     setStripeForTests({ paymentIntents: { create: async (p: { amount: number }) => { if (p.amount === 500) throw new Error("Your card has insufficient funds."); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
-    const second = await press({ seenTotalCents: 800, confirmed: true });
-    expect(second.body.paid).toBe(1);
+    // (NEXT-UI 12b) The second press names the total the box showed; something newer than the box stops it again.
+    const third = await mk(300);
+    const again = await press({ seenTotalCents: first.body.error.totalCents, seenIds: first.body.error.ids, confirmed: true });
+    expect(again.status).toBe(409);
+    expect(again.body.error.changes[0].text).toContain("$3.00");
+    expect(again.body.error.changes[0].text).not.toContain("$5.00");
+    expect(third.id).toBeTruthy();
+    const second = await press({ seenTotalCents: again.body.error.totalCents, seenIds: again.body.error.ids, confirmed: true });
+    expect(second.body.paid).toBe(2);
     expect(second.body.stillFailing[0]).toMatch(/\$5\.00 · card declined .+ \(Your card has insufficient funds\)$/);
     expect(second.body.lifted).toBe(false);
   });

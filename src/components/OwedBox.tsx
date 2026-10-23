@@ -3,6 +3,7 @@ import { Err } from "@/components/Err";
 import { useState } from "react";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { api, ApiError, errOf } from "@/lib/client";
+import { mergeChanges } from "@/lib/live";
 import { money } from "@/lib/format";
 
 type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string };
@@ -19,7 +20,9 @@ export function OwedBox({ onHold, owed }: { onHold: boolean; owed: Line[] }) {
   const [done, setDone] = useState("");
   const retry = owed.filter((o) => o.retry);
   const seenTotal = retry.reduce((s, o) => s + o.amountCents, 0);
+  // What the page / the stop box showed last: every press (the second too) is checked against it.
   const [total, setTotal] = useState(seenTotal);
+  const [shownIds, setShownIds] = useState(retry.map((o) => o.id));
   const first = retry.find((o) => o.until)?.until;
   return (
     <div id="owed" className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">
@@ -41,7 +44,7 @@ export function OwedBox({ onHold, owed }: { onHold: boolean; owed: Line[] }) {
           setErr("");
           setFailing([]);
           try {
-            const r = await api<{ stillFailing: string[]; lifted: boolean }>("/api/payments/owed", { seenTotalCents: seenTotal, seenIds: retry.map((o) => o.id), confirmed: changes != null });
+            const r = await api<{ stillFailing: string[]; lifted: boolean }>("/api/payments/owed", { seenTotalCents: total, seenIds: shownIds, confirmed: changes != null });
             setChanges(null);
             if (r.stillFailing.length) {
               setFailing(r.stillFailing);
@@ -52,8 +55,9 @@ export function OwedBox({ onHold, owed }: { onHold: boolean; owed: Line[] }) {
             }
           } catch (e) {
             if (e instanceof ApiError && e.code === "stop_once") {
-              setChanges(e.data.changes as Change[]);
+              setChanges((c) => (c ? mergeChanges(c, e.data.changes as Change[]) : (e.data.changes as Change[])));
               if (typeof e.data.totalCents === "number") setTotal(e.data.totalCents);
+              if (Array.isArray(e.data.ids)) setShownIds(e.data.ids as string[]);
             } else setErr(errOf(e));
             setBusy(false);
           }

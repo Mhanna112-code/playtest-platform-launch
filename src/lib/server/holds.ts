@@ -112,13 +112,16 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
   const total = list.reduce((a, p) => a + p.amountCents, 0);
   const seen = typeof body.seenTotalCents === "number" ? body.seenTotalCents : null;
   const lines = await owedLines(dev.id);
-  if (seen != null && seen !== total && body.confirmed !== true) {
-    const seenIds = Array.isArray(body.seenIds) ? (body.seenIds as unknown[]).map(String) : [];
+  const seenIds = Array.isArray(body.seenIds) ? (body.seenIds as unknown[]).map(String) : [];
+  // (Owner, NEXT-UI 12b) Every press checks what the box showed (total and which payments), the second one too: if
+  // anything is new it stops again with just the new line(s).
+  const nowIds = lines.filter((l) => l.retry).map((l) => l.id);
+  if (seen != null && (seen !== total || (Array.isArray(body.seenIds) && (seenIds.length !== nowIds.length || nowIds.some((i) => !seenIds.includes(i)))))) {
     const fresh = lines.filter((l) => l.retry && !seenIds.includes(l.id)).map((l) => l.text.replace(/ · card declined .*$/, ""));
     const text = fresh.length
       ? `Another payment failed meanwhile: ${fresh.join(", ")}. New total ${money(total)}. Press again to pay ${money(total)}.`
       : `What you owe changed: now ${money(total)}. Press again to pay ${money(total)}.`;
-    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text, at: new Date() }], totalCents: total });
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text, at: new Date() }], totalCents: total, ids: nowIds });
   }
   const stillFailing: string[] = [];
   for (const p of list) {

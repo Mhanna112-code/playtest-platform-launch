@@ -18,7 +18,10 @@ type Sent = { id: string; name: string; status: string };
  * ticked tester missing something the test needs gets an in-page confirm under Invite (Invite anyway / Cancel).
  */
 export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester[]; sent: Sent[]; options: { devices: string[]; languages: string[] } }) {
-  const { press, changes, error, busy, setError, at } = usePress(p.seenAt);
+  const { press, changes, error, busy, setError, at, errData } = usePress(p.seenAt);
+  // (NEXT-UI 12b) When the Invite anyway box last updated (its first showing, a changed list, a live update): Invite anyway
+  // goes ahead only if nothing new happened since; anything newer stops it again inside the box.
+  const [gapAt, setGapAt] = useState("");
   // Tick-box filters: any ticked device / any ticked language.
   const [f, setF] = useState<{ devices: string[]; languages: string[] }>({ devices: [], languages: [] });
   const [q, setQ] = useState("");
@@ -38,7 +41,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
 
   async function invite(anyway: boolean) {
     setMsg("");
-    const r = await press<{ message: string }>(`/api/tests/${p.testId}/invite`, { testerIds: ticked, anyway, seenGaps: confirm ? confirm.filter((l) => l.endsWith("which this test needs.")) : undefined }, anyway ? "anyway" : "invite");
+    const r = await press<{ message: string }>(`/api/tests/${p.testId}/invite`, { testerIds: ticked, anyway, seenGaps: confirm ? confirm.filter((l) => l.endsWith("which this test needs.")) : undefined, ...(anyway && gapAt ? { confirmed: true, boxAt: gapAt } : {}) }, anyway ? "anyway" : "invite");
     if (r) {
       setConfirm(null);
       setMsg(r.message);
@@ -53,6 +56,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
   useEffect(() => {
     if (error.startsWith("CONFIRM:")) {
       setConfirm(error.slice(8).split("\n"));
+      if (typeof errData.now === "string") setGapAt(errData.now);
       setError("");
     } else if (error.startsWith("Everyone you ticked now meets")) {
       // Nothing sent: the box closes; the notice goes under the original Invite button.
@@ -60,7 +64,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
       setMsg(error);
       setError("");
     }
-  }, [error, setError]);
+  }, [error, setError, errData]);
   // The box stays up while anyone ticked misses a need, updating live; when everyone fits it closes with a notice.
   const boxOpen = confirm != null;
   // After a press: the Invite anyway box (or the notice under Invite) comes into view with the least scrolling.
@@ -74,12 +78,19 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
     if (!boxOpen) return;
     // At once when the ticks change, then every 15 s as profiles change.
     const check = async () => {
-      const r = await api<{ lines: string[] }>(`/api/tests/${p.testId}/invite-check`, { testerIds: ticked }).catch(() => null);
+      const r = await api<{ lines: string[]; now: string }>(`/api/tests/${p.testId}/invite-check`, { testerIds: ticked }).catch(() => null);
       if (!r) return;
       if (!r.lines.length) {
         setConfirm(null);
         setMsg("Everyone you ticked now meets this test's needs. Press Invite to send.");
-      } else setConfirm((c) => (c && JSON.stringify(r.lines) !== JSON.stringify(c.filter((l) => l.endsWith("which this test needs."))) ? r.lines : c));
+      } else
+        setConfirm((c) => {
+          if (c && JSON.stringify(r.lines) !== JSON.stringify(c.filter((l) => l.endsWith("which this test needs.")))) {
+            setGapAt(r.now);
+            return r.lines;
+          }
+          return c;
+        });
     };
     void check();
     const t = setInterval(check, 15_000);

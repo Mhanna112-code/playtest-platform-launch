@@ -214,9 +214,13 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   if (all.length === 1 && blocked.length) throw new HttpError(409, "clash", blocked[0]);
   if (all.length === 1 && atLimit.length) throw new HttpError(409, "limit", requestLimitLine(atLimit[0]));
   if (!ok.length) throw new HttpError(409, "limit", [...blocked, ...atLimit.map(requestLimitLine)].join(" "));
-  if ((blocked.length || atLimit.length) && body.limitConfirmed !== true && body.confirmed !== true) {
+  if (blocked.length || atLimit.length) {
     const text = [...blocked, ...(atLimit.length ? [`${atLimit.join(" and ")} already ${atLimit.length === 1 ? "has" : "have"} ${MAX_REQUESTS} requests waiting with you.`] : [])].join(" ");
-    throw new HttpError(409, "stop_once", "Press again to send to the others.", { changes: [{ text, at: new Date() }], tail: `Press again to send to the others (${ok.map((x) => displayName(x.c.tester)).join(", ")}).`, limit: true });
+    // (Owner, NEXT-UI 12b) The second press names what the box said (limitSeen); if who is blocked / at the limit changed
+    // since, it stops again with the new line.
+    if (body.confirmed !== true || body.limitSeen !== text) {
+      throw new HttpError(409, "stop_once", "Press again to send to the others.", { changes: [{ text, at: new Date() }], tail: `Press again to send to the others (${ok.map((x) => displayName(x.c.tester)).join(", ")}).`, limit: true, limitSeen: text });
+    }
   }
   const batchId = randomBytes(8).toString("hex");
   for (const { c } of ok) {

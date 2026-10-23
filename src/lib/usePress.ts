@@ -24,7 +24,7 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
     setErrData({});
     setAt(key);
     try {
-      const r = await api<T>(path, { ...body, seenAt, confirmed: changes != null, ...(changes != null && !opts.once && boxAt ? { boxAt } : {}) });
+      const r = await api<T>(path, { ...body, seenAt, confirmed: changes != null || body.confirmed === true, ...(changes != null && !opts.once && boxAt ? { boxAt } : {}) });
       setChanges(null);
       const note = (r as { note?: unknown } | null)?.note;
       if (typeof note === "string") setError(note); // shown under the button (blue)

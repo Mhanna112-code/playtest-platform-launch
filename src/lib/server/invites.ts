@@ -179,7 +179,7 @@ export const inviteExpired = (t: { status: string; openUntil: Date | null }, now
 export async function inviteGaps(devId: string, testId: string, testerIds: string[]) {
   const t = await ownTest(devId, testId);
   const people = await db.user.findMany({ where: { id: { in: testerIds } }, include: { profile: true } });
-  return { lines: people.filter((p) => missingNeed(t, p.profile)).map((p) => `${displayName(p)} doesn't list ${missingNeed(t, p.profile)}, which this test needs.`) };
+  return { now: new Date().toISOString(), lines: people.filter((p) => missingNeed(t, p.profile)).map((p) => `${displayName(p)} doesn't list ${missingNeed(t, p.profile)}, which this test needs.`) };
 }
 
 /**

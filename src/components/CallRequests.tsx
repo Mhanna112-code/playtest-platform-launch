@@ -14,7 +14,11 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  * "Ask $___/h" (only on their own request). Pending requests: Accept / Decline / Withdraw. Boxes under the button.
  */
 export function CallRequests(p: { path: string; seenAt: string; side: "developer" | "tester"; requests: Req[]; targets: { contractId: string; name: string; rate: string }[]; canRequest: boolean }) {
-  const { press, changes, error, busy, at, errData } = usePress(p.seenAt);
+  // (NEXT-UI 12b) What the limit box said: the next press sends it, and stops again if who is blocked / at the limit changed.
+  const [limitSeen, setLimitSeen] = useState("");
+  const { press, changes, error, busy, at, errData } = usePress(p.seenAt, (d) => {
+    if (typeof d.limitSeen === "string") setLimitSeen(d.limitSeen);
+  });
   const [minutes, setMinutes] = useState("");
   const [kind, setKind] = useState<"one" | "daily" | "weekly">("one");
   const [whens, setWhens] = useState<string[]>([""]);
@@ -41,7 +45,7 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
       {
         ...(kind !== "one" ? { times: filled.slice(0, 1), weeks, repeat: kind } : { times: filled }),
         minutes: minutes.trim() ? minutes.trim() : "",
-        ...(p.side === "developer" ? { contractIds: ticked } : { ask }),
+        ...(p.side === "developer" ? { contractIds: ticked, limitSeen } : { ask }),
       },
       "request",
     );
