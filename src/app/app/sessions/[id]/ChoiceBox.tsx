@@ -1,5 +1,6 @@
 "use client";
 import { Err } from "@/components/Err";
+import { checkFields } from "@/components/FieldChecks";
 import { useState } from "react";
 import { api, errOf } from "@/lib/client";
 import { money, toCents } from "@/lib/format";
@@ -35,13 +36,13 @@ export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenA
       {(
         <div className="flex flex-wrap items-center gap-2">
           <label className="inline-flex items-center gap-1">
-            $ <input className="input w-24" inputMode="decimal" aria-label="Amount to charge" value={amount} onChange={(e) => { setAmount(e.target.value); setTicked(false); }} />
+            $ <input className="input w-24" inputMode="decimal" aria-label="Amount to charge" data-min="0.5" data-max={String(cents / 100)} data-msg={`Charge from $0.50 up to ${money(cents)}.`} value={amount} onChange={(e) => { setAmount(e.target.value); setTicked(false); }} />
             <span className="note">(up to {money(cents)})</span>
           </label>
           <label>
             <input type="checkbox" checked={ticked} disabled={typed == null} onChange={(e) => setTicked(e.target.checked)} /> charge {devName} {typed == null ? "–" : money(typed)} now
           </label>
-          <button className="btn" disabled={busy || !ticked || typed == null} onClick={() => go("charge")}>{`Charge ${devName} ${typed == null ? "" : money(typed)}`}</button>
+          <button className="btn" disabled={busy || !ticked || typed == null} onClick={(e) => checkFields(e.currentTarget.parentElement) && go("charge")}>{`Charge ${devName} ${typed == null ? "" : money(typed)}`}</button>
           <ConfirmButton className="btn-secondary" disabled={busy} title="Let it go?" confirmLabel="Let it go" onConfirm={() => go("letgo")}
             body={<p>This closes with nothing more paid.</p>}>
             Let it go

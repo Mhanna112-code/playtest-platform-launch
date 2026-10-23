@@ -1,5 +1,6 @@
 "use client";
 import { Err } from "@/components/Err";
+import { checkFields } from "@/components/FieldChecks";
 import { useState } from "react";
 import { api, errOf } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
@@ -60,13 +61,14 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
       )}
       {progress != null && <p className="note">Uploading… {progress}%</p>}
       {canSend && uploaded.length > 0 && (
-        <label className="block text-sm">Ask $ <input className="input inline w-24" inputMode="decimal" placeholder="optional" value={ask} onChange={(e) => setAsk(e.target.value)} /> for this</label>
+        <label className="block text-sm">Ask $ <input className="input inline w-24" inputMode="decimal" placeholder="optional" aria-label="Ask for this" data-min="0" data-max="5000" data-msg="Ask at most $5,000.00." value={ask} onChange={(e) => setAsk(e.target.value)} /> for this <span className="text-xs text-slate-500">up to $5,000</span></label>
       )}
       {canSend && uploaded.length > 0 && (
         <button
           className="btn"
           disabled={busy}
-          onClick={async () => {
+          onClick={async (e) => {
+            if (!checkFields(e.currentTarget.parentElement)) return;
             setBusy(true);
             try {
               await api(`/api/sessions/${sessionId}/recording-send`, { ask, seenAt, confirmed });

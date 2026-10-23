@@ -1,5 +1,5 @@
 {
-  "run": "2026-10-23T17:24:38.915Z",
+  "run": "2026-10-23T17:42:59.680Z",
   "base": "http://localhost:3450",
   "flows": [
     {
@@ -784,9 +784,43 @@
         "35-invite-anyway-box-developer.png",
         "35-invite-anyway-changed-developer.png"
       ]
+    },
+    {
+      "id": "36",
+      "title": "Every min / max / date field: its range next to it; red at the field as soon as it's left with a bad value (and on the press); clears when fixed (checked in the browser)",
+      "status": "pass",
+      "checks": [
+        "PASS ranges shown next to the fields",
+        "PASS Post: written answers price: red on leaving with \"0.50\" (The written answers price must be from $1.00 to $1,000.00 (or 0 for free).); clears with \"10.00\" (saw: The written answers price must be from $1.00 to $1,000.00 (or 0 for free).)",
+        "PASS Post: recording price: red on leaving with \"2000\" (The recording price must be from $1.00 to $1,000.00 (or 0 for free).); clears with \"15.00\" (saw: The recording price must be from $1.00 to $1,000.00 (or 0 for free).)",
+        "PASS Post: live call rate: red on leaving with \"5\" (The live call rate must be from $10 to $200 an hour (or 0 for free).); clears with \"30.00\" (saw: The live call rate must be from $10 to $200 an hour (or 0 for free).)",
+        "PASS Post: spots (up to the tester limit): red on leaving with \"11\" (You can take up to 10 testers per test right now.); clears with \"4\" (saw: You can take up to 10 testers per test right now.)",
+        "PASS Post: days each tester has: red on leaving with \"91\" (Testers' deadline must be from 1 to 90 days after they join.); clears with \"7\" (saw: Testers' deadline must be from 1 to 90 days after they join.)",
+        "PASS Post: Open until (past date): red on leaving with \"2020-01-01\" (Open until must be a date in the future.); clears with \"2026-11-12\" (saw: Open until must be a date in the future.)",
+        "PASS Post: a bad field stops the press and shows red at it",
+        "PASS Tester call request: time (past): red on leaving with \"2020-01-01T10:00\" (Pick a time in the future.); clears with \"2026-10-26T12:43\" (saw: Pick a time in the future.)",
+        "PASS Tester call request: length: red on leaving with \"300\" (A live call lasts from 10 to 180 minutes.); clears with \"60\" (saw: A live call lasts from 10 to 180 minutes.)",
+        "PASS Tester call request: Ask $/h: red on leaving with \"9000\" (Ask at most $5,000.00 an hour.); clears with \"40\" (saw: Ask at most $5,000.00 an hour.)",
+        "PASS Tester call request: the press is stopped, red at the time",
+        "PASS Tester written answers: Ask $: red on leaving with \"9000\" (Ask at most $5,000.00.); clears with \"\" (saw: Ask at most $5,000.00.)",
+        "PASS Developer call request: time (past): red on leaving with \"2020-01-01T10:00\" (Pick a time in the future.); clears with \"2026-10-26T12:43\" (saw: Pick a time in the future.)",
+        "PASS Developer call request: length: red on leaving with \"5\" (A live call lasts from 10 to 180 minutes.); clears with \"45\" (saw: A live call lasts from 10 to 180 minutes.)",
+        "PASS Header: Open until (past date): red on leaving with \"2020-01-01\" (Open until must be a date in the future.); clears with \"2026-11-17\" (saw: Open until must be a date in the future.)",
+        "PASS End early: reason (5+ characters): red on leaving with \"ab\" (Say why you're ending their work (they read it).); clears with \"Not needed any more.\" (saw: Say why you're ending their work (they read it).)",
+        "PASS Call length (up to 150%): red on leaving with \"200\" (You can log up to 45 min for this 30-min call.); clears with \"30\" (saw: You can log up to 45 min for this 30-min call.)",
+        "PASS Pay amount: red on leaving with \"0.20\" (Pay $0.00, or from $0.50 (the smallest card charge) to $5,000.00.); clears with \"4.00\" (saw: Pay $0.00, or from $0.50 (the smallest card charge) to $5,000.00.)",
+        "PASS Dispute reason (10+ characters): red on leaving with \"short\" (Say why you think the pay should be higher (at least a sentence).); clears with \"I answered every question in full.\" (saw: Say why you think the pay should be higher (at least a sentence).)",
+        "PASS Charge amount (up to the listing): red on leaving with \"50\" (Charge from $0.50 up to $10.00.); clears with \"8.00\" (saw: Charge from $0.50 up to $10.00.)"
+      ],
+      "screenshots": [
+        "36-post-field-red-developer.png",
+        "36-call-request-past-red-tester.png",
+        "36-pay-amount-developer.png",
+        "36-charge-amount-tester.png"
+      ]
     }
   ],
-  "mergedInto": "2026-10-23T17:00:27.464Z",
+  "mergedInto": "2026-10-23T17:41:58.524Z",
   "coverage": [
     {
       "type": "Tester stop A: new terms (Send my recording)",
@@ -1493,6 +1527,34 @@
       "side": "developer",
       "flow": "35",
       "screenshot": "35-invite-anyway-changed-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Post form: ranges next to fields, red at the field on leaving and on the press",
+      "side": "developer",
+      "flow": "36",
+      "screenshot": "36-post-field-red-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Call request: a past time is red at the field; the press is stopped",
+      "side": "tester",
+      "flow": "36",
+      "screenshot": "36-call-request-past-red-tester.png",
+      "status": "pass"
+    },
+    {
+      "type": "Pay amount: red at the field on leaving",
+      "side": "developer",
+      "flow": "36",
+      "screenshot": "36-pay-amount-developer.png",
+      "status": "pass"
+    },
+    {
+      "type": "Charge amount: red at the field on leaving",
+      "side": "tester",
+      "flow": "36",
+      "screenshot": "36-charge-amount-tester.png",
       "status": "pass"
     }
   ],

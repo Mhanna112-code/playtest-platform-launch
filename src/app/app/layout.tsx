@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FieldChecks } from "@/components/FieldChecks";
 import { Bell, Compass, CreditCard, LayoutDashboard, MailCheck, PlusCircle, ShieldCheck, UserRound } from "lucide-react";
 import { Brand } from "@/components/Brand";
 import { db } from "@/lib/db";
@@ -61,6 +62,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </p>
       )}
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">{children}</main>
+      <FieldChecks />
     </>
   );
 }

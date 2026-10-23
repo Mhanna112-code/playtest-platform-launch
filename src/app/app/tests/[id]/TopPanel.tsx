@@ -5,6 +5,7 @@ import { api } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
 import { CalendarClock, Pencil, Play, Repeat } from "lucide-react";
 import { OpenUntilFold } from "./OpenUntilFold";
+import { checkFields } from "@/components/FieldChecks";
 import { CategoryBadges } from "@/components/Category";
 
 type Tester = { contractId: string; name: string };
@@ -96,9 +97,9 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
               ))}
             </select>
             <label className="label req" htmlFor="reason">Why? (they read it)</label>
-            <textarea id="reason" rows={2} className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+            <textarea id="reason" rows={2} className="input" maxLength={1000} data-min-chars="5" data-msg="Say why you're ending their work (they read it)." value={reason} onChange={(e) => setReason(e.target.value)} />
             <p className="note">Their work ends now. What they already sent still waits for you to pay; calls ahead are cancelled.</p>
-            <button className="btn" disabled={busy} onClick={() => go("end-early", { contractId: who, reason })}>End their work now</button>
+            <button className="btn" disabled={busy} onClick={(e) => checkFields(e.currentTarget.parentElement) && go("end-early", { contractId: who, reason })}>End their work now</button>
             {box("end-early")}
           </div>
         )}

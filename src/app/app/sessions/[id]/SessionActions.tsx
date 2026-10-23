@@ -1,5 +1,6 @@
 "use client";
 import { Err } from "@/components/Err";
+import { checkFields } from "@/components/FieldChecks";
 import { useState } from "react";
 import { api, errOf } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
@@ -43,7 +44,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
         <label className="label" htmlFor="notes">Anything else (bugs, ideas)</label>
         <textarea id="notes" rows={2} className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
-      <label className="block text-sm">Ask $ <input className="input inline w-24" inputMode="decimal" placeholder="optional" value={ask} onChange={(e) => setAsk(e.target.value)} /> for this</label>
+      <label className="block text-sm">Ask $ <input className="input inline w-24" inputMode="decimal" placeholder="optional" aria-label="Ask for this" data-min="0" data-max="5000" data-msg="Ask at most $5,000.00." value={ask} onChange={(e) => setAsk(e.target.value)} /> for this <span className="text-xs text-slate-500">up to $5,000</span></label>
       <button className="btn" disabled={busy}>{busy ? "Sending…" : update ? "Send the updated answers" : "Send my written answers"}</button>
       <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {msg && (msg.ok ? <p className="ok">{msg.text}</p> : <Err text={msg.text} />)}
@@ -89,12 +90,14 @@ export function DisputeForm({ sessionId, kind, id, seenAt }: { sessionId: string
     <details className="space-y-2">
       <summary className="cursor-pointer text-sm text-volt-300">Dispute the pay</summary>
       <label className="label req" htmlFor={`d-${id}`}>Why should the pay be higher? (the team and the developer read it)</label>
-      <textarea id={`d-${id}`} rows={3} className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+      <textarea id={`d-${id}`} rows={3} className="input" maxLength={2000} data-min-chars="10" data-msg="Say why you think the pay should be higher (at least a sentence)." value={reason} onChange={(e) => setReason(e.target.value)} />
+      <p className="text-xs text-slate-500">10–2,000 characters</p>
       <p className="note">You can dispute this once. Our team decides; a decision can only raise the pay, up to the listing amount.</p>
       <button
         className="btn"
         disabled={busy}
-        onClick={async () => {
+        onClick={async (e) => {
+          if (!checkFields(e.currentTarget.closest("details"))) return;
           setBusy(true);
           setErr("");
           try {

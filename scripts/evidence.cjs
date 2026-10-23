@@ -1489,7 +1489,7 @@ async function signIn(page, email) {
     await d.reload();
     await d.fill(`#len-${call90}`, "136");
     await d.click("button:has-text('Enter the length')");
-    check("over 150% refused (red): up to 135 min for this 90-min call", await has(d, ".err-field >> text=You can log up to 135 min for this 90-min call."));
+    check("over 150% refused (red at the field): up to 135 min for this 90-min call", await has(d, "[data-field-error] >> text=You can log up to 135 min for this 90-min call."));
     await shot(d, "log-over-150-red-developer");
     // Auto-cancel: nobody joined by the halfway point.
     const callX = await requestAndAccept(d, tp, T, S, 5);
@@ -1647,7 +1647,7 @@ async function signIn(page, email) {
     await d.fill("#questions", "Where did you get lost?");
     await d.fill("#spots", "11");
     await d.click("button:has-text('Post the test')");
-    check("refused in red at the spots field", await has(d, ".err-field >> text=You can take up to 10 testers per test right now."));
+    check("refused in red at the spots field", await has(d, "[data-field-error] >> text=You can take up to 10 testers per test right now."));
     check("nothing posted", sql(`select count(*) from "Test" t join "User" u on u.id = t."developerId" where u.email = '${DEV31}'`) === "0");
     await d.locator("#spots").scrollIntoViewIfNeeded();
     await shot(d, "spots-over-limit-red-developer");
@@ -1911,6 +1911,110 @@ async function signIn(page, email) {
     check("Invite sends to Ana", sql(`select count(*) from "Invite" where "testId" = '${T}' and "testerId" = '${ana}' and status = 'sent'`) === "1");
   });
 
+  await flow("36", "Every min / max / date field: its range next to it; red at the field as soon as it's left with a bad value (and on the press); clears when fixed (checked in the browser)", async () => {
+    const DEV36 = `dev36+${TS}@playtest.test`, T36 = `tester36+${TS}@playtest.test`, T36B = `tester36b+${TS}@playtest.test`;
+    // Type a bad value, leave the box: red with its message right under it; type a good one: it clears.
+    const blurCheck = async (pg, sel, bad, good, label, text) => {
+      const el = pg.locator(sel).first();
+      await el.scrollIntoViewIfNeeded();
+      await el.fill(bad);
+      await el.blur();
+      await pg.waitForTimeout(150);
+      const red = await el.evaluate((x) => x.classList.contains("field-bad") && !!x.nextElementSibling && x.nextElementSibling.hasAttribute("data-field-error") ? x.nextElementSibling.textContent : "");
+      await el.fill(good);
+      await el.blur();
+      await pg.waitForTimeout(150);
+      const clear = await el.evaluate((x) => !x.classList.contains("field-bad") && !(x.nextElementSibling && x.nextElementSibling.hasAttribute("data-field-error")));
+      check(`${label}: red on leaving with "${bad}" (${red}); clears with "${good}"`, !!red && (!text || red.includes(text)) && clear, red);
+    };
+    const onboard = async (pg, email, name, dev) => {
+      await signIn(pg, email);
+      await pg.fill("#name", name);
+      await pg.selectOption("#pronoun", "she");
+      if (dev) await pg.check("text=post tests for my app, game or product");
+      else {
+        await pg.check("text=test apps, games and more, and get paid");
+        await pg.click("label:has-text('Windows PC')");
+        await pg.click("label:has-text('English')");
+      }
+      await pg.click("text=Continue");
+      await pg.waitForSelector("text=Welcome back,");
+    };
+    const d = await ctx(DESKTOP);
+    await onboard(d, DEV36, "Nora Lane", true);
+    // Post a test: prices, rate, spots (up to the limit), days, Open until.
+    await d.goto("/app/tests/new");
+    check("ranges shown next to the fields", (await has(d, "text=$1–$1,000, or 0 for free")) && (await has(d, "text=1–10")) && (await has(d, "text=1–90 days")) && (await has(d, "text=from tomorrow, up to a year ahead")));
+    await blurCheck(d, "#writtenPrice", "0.50", "10.00", "Post: written answers price", "from $1.00 to $1,000.00");
+    await d.check("text=Screen recording");
+    await blurCheck(d, "#recordingPrice", "2000", "15.00", "Post: recording price", "from $1.00 to $1,000.00");
+    await d.check("text=Live call");
+    await blurCheck(d, "#liveRate", "5", "30.00", "Post: live call rate", "from $10 to $200");
+    await blurCheck(d, "#spots", "11", "4", "Post: spots (up to the tester limit)", "up to 10 testers");
+    await blurCheck(d, "#deadlineDays", "91", "7", "Post: days each tester has", "1 to 90 days");
+    await blurCheck(d, "#openUntil", "2020-01-01", new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10), "Post: Open until (past date)", "in the future");
+    await d.fill("#spots", "11");
+    await d.fill("#title", "Tidepool Range");
+    await d.fill("#questions", "Anything?");
+    await d.click("button:has-text('Post the test')");
+    await d.waitForTimeout(500);
+    check("Post: a bad field stops the press and shows red at it", (await d.locator("#spots").evaluate((x) => !!x.nextElementSibling && x.nextElementSibling.hasAttribute("data-field-error"))) && d.url().endsWith("/new"));
+    await d.locator("#spots").scrollIntoViewIfNeeded();
+    await shot(d, "post-field-red-developer");
+    await d.fill("#spots", "4");
+    await d.click("button:has-text('Post the test')");
+    await d.waitForURL((u) => /\/app\/tests\/\w+$/.test(u.pathname) && !u.pathname.endsWith("/new"));
+    const T = d.url().split("/").pop();
+    sql(`update "User" set "stripeCustomerId" = 'cus_fake36_${TS}', "stripePaymentMethodId" = 'pm_card_visa' where email = '${DEV36}'`);
+    const tp = await ctx(PHONE);
+    await onboard(tp, T36, "Ana Silva");
+    const S = (await apiPost(tp, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
+    const tb = await ctx(PHONE);
+    await onboard(tb, T36B, "Ben Ito");
+    const SB = (await apiPost(tb, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
+    // The tester's side: call request time / length / ask, written answers' Ask $.
+    await tp.goto(`/app/sessions/${S}`);
+    await blurCheck(tp, "section[aria-label='Call requests'] input[type=datetime-local]", "2020-01-01T10:00", (() => { const x = new Date(Date.now() + 3 * 86400000); return new Date(x.getTime() - x.getTimezoneOffset() * 60000).toISOString().slice(0, 16); })(), "Tester call request: time (past)", "Pick a time in the future.");
+    await blurCheck(tp, "section[aria-label='Call requests'] input[aria-label='Length in minutes']", "300", "60", "Tester call request: length", "10 to 180 minutes");
+    await blurCheck(tp, "section[aria-label='Call requests'] input[aria-label='Ask per hour']", "9000", "40", "Tester call request: Ask $/h", "at most $5,000.00");
+    await tp.fill("section[aria-label='Call requests'] input[type=datetime-local]", "2020-01-01T10:00");
+    await tp.click("section[aria-label='Call requests'] >> text=Request a time");
+    check("Tester call request: the press is stopped, red at the time", (await has(tp, "section[aria-label='Call requests'] [data-field-error] >> text=Pick a time in the future.")) && sql(`select count(*) from "CallRequest" where "contractId" = '${S}' and "fromSide" = 'tester'`) === "0");
+    await shot(tp, "call-request-past-red-tester");
+    await blurCheck(tp, "input[aria-label='Ask for this']", "9000", "", "Tester written answers: Ask $", "at most $5,000.00");
+    // The developer's side: call request time and length.
+    await d.goto(`/app/tests/${T}`);
+    await blurCheck(d, "#calls input[type=datetime-local]", "2020-01-01T10:00", (() => { const x = new Date(Date.now() + 3 * 86400000); return new Date(x.getTime() - x.getTimezoneOffset() * 60000).toISOString().slice(0, 16); })(), "Developer call request: time (past)", "Pick a time in the future.");
+    await blurCheck(d, "#calls input[aria-label='Length in minutes']", "5", "45", "Developer call request: length", "10 to 180 minutes");
+    // Open until (the header fold).
+    await d.click("#open-until > summary");
+    await blurCheck(d, "#open-until input[type=date]", "2020-01-01", new Date(Date.now() + 25 * 86400000).toISOString().slice(0, 10), "Header: Open until (past date)", "in the future");
+    // End early reason.
+    await d.click("section[aria-label='Test'] button:has-text('End early')");
+    await blurCheck(d, "#reason", "ab", "Not needed any more.", "End early: reason (5+ characters)", "Say why");
+    // A call that took place: its length (up to 150%); written answers: the Pay amount.
+    const call = await requestAndAccept(d, tp, T, S, 2);
+    sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '2 hours', "devJoinedAt" = (now() at time zone 'utc') - interval '2 hours', "testerJoinedAt" = (now() at time zone 'utc') - interval '2 hours' where id = '${call}'`);
+    await apiPost(tp, `/api/sessions/${S}/written`, { answers: ["Fine."], seenAt: new Date().toISOString(), confirmed: true });
+    await apiPost(tb, `/api/sessions/${SB}/written`, { answers: ["Okay."], seenAt: new Date().toISOString(), confirmed: true });
+    await d.reload();
+    await blurCheck(d, `#len-${call}`, "200", "30", "Call length (up to 150%)", "up to 45 min");
+    const subA = sql(`select id from "Submission" where "contractId" = '${S}' and kind = 'written'`);
+    await blurCheck(d, `#amt-${subA}`, "0.20", "4.00", "Pay amount", "$0.50");
+    await shot(d, "pay-amount-developer");
+    // Pay less than listed, so the tester can dispute; the dispute reason needs a sentence.
+    await apiPost(d, "/api/review", { payKey: `ev36-${TS}`, seenAt: new Date().toISOString(), confirmed: true, kind: "submission", id: subA, amount: "4.00", tickedCents: 400, reason: "Very short answer." });
+    await tp.goto(`/app/sessions/${S}`);
+    await tp.click("text=Dispute the pay");
+    await blurCheck(tp, "textarea[id^='d-']", "short", "I answered every question in full.", "Dispute reason (10+ characters)", "at least a sentence");
+    // Ben's answers reached the review window: the Charge amount (up to the listing).
+    const subB = sql(`select id from "Submission" where "contractId" = '${SB}' and kind = 'written'`);
+    sql(`update "Submission" set "choiceOfferedAt" = (now() at time zone 'utc'), "choiceBy" = (now() at time zone 'utc') + interval '3 days' where id = '${subB}'`);
+    await tb.goto(`/app/sessions/${SB}`);
+    await blurCheck(tb, "input[aria-label='Amount to charge']", "50", "8.00", "Charge amount (up to the listing)", "up to $10.00");
+    await shot(tb, "charge-amount-tester");
+  });
+
   await browser.close();
 
   // ---------- Coverage: one screenshot per stop / failure type, plus combined cases ----------
@@ -2023,6 +2127,10 @@ async function signIn(page, email) {
     C("Invite rows: tick, name, amber missing-needs pill, grey rated / tests with you", "developer", "35", "35-invite-rows-developer.png"),
     C("Invite anyway box lists each ticked tester missing a need", "developer", "35", "35-invite-anyway-box-developer.png"),
     C("Invite anyway stops once inside the box when what is missing changed", "developer", "35", "35-invite-anyway-changed-developer.png"),
+    C("Post form: ranges next to fields, red at the field on leaving and on the press", "developer", "36", "36-post-field-red-developer.png"),
+    C("Call request: a past time is red at the field; the press is stopped", "tester", "36", "36-call-request-past-red-tester.png"),
+    C("Pay amount: red at the field on leaving", "developer", "36", "36-pay-amount-developer.png"),
+    C("Charge amount: red at the field on leaving", "tester", "36", "36-charge-amount-tester.png"),
   ];
   summary.coverage = rows.map((r) => {
     const f = summary.flows.find((x) => x.id === r.flow);

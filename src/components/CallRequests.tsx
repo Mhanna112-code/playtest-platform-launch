@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { checkFields, useLocalMin } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
 import { MARKABLE } from "@/lib/markJump";
@@ -31,7 +32,10 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
   };
   const all = p.targets.length > 0 && p.targets.every((t) => ticked.includes(t.contractId));
   const filled = whens.filter(Boolean).map((w) => new Date(w).toISOString());
+  const form = useRef<HTMLDivElement>(null);
+  const minNow = useLocalMin(5);
   const send = () =>
+    checkFields(form.current) &&
     go(
       "request-time",
       {
@@ -73,7 +77,7 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
         </ul>
       )}
       {p.canRequest && (
-        <div className="space-y-2">
+        <div className="space-y-2" ref={form}>
           {p.side === "developer" && p.targets.length > 0 && (
             <fieldset className="space-y-1">
               <legend className="label">With</legend>
@@ -92,7 +96,7 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
           </div>
           <div className="flex flex-wrap items-end gap-2">
             {whens.map((w, i) => (
-              <input key={i} type="datetime-local" aria-label={`Requested time ${i + 1}`} className="input max-w-xs" value={w} onChange={(e) => setWhens(whens.map((x, j) => (j === i ? e.target.value : x)))} />
+              <input key={i} type="datetime-local" min={minNow} data-msg="Pick a time in the future." aria-label={`Requested time ${i + 1}`} className="input max-w-xs" value={w} onChange={(e) => setWhens(whens.map((x, j) => (j === i ? e.target.value : x)))} />
             ))}
             {kind === "one" && whens.length < 3 && <button type="button" className="btn-ghost" onClick={() => setWhens([...whens, ""])}>+ Another time</button>}
             {kind !== "one" && (
@@ -100,9 +104,9 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
                 {[2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n} calls</option>)}
               </select>
             )}
-            <label className="inline-flex items-center gap-1">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min</label>
+            <label className="inline-flex items-center gap-1">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max="180" data-whole="" data-msg="A live call lasts from 10 to 180 minutes." value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min <span className="text-xs text-slate-500">10–180</span></label>
             {p.side === "tester" && (
-              <label className="inline-flex items-center gap-1">Ask $<input className="input w-20" inputMode="decimal" placeholder="optional" aria-label="Ask per hour" value={ask} onChange={(e) => setAsk(e.target.value)} />/h</label>
+              <label className="inline-flex items-center gap-1">Ask $<input className="input w-20" inputMode="decimal" placeholder="optional" aria-label="Ask per hour" data-min="0" data-max="5000" data-msg="Ask at most $5,000.00 an hour." value={ask} onChange={(e) => setAsk(e.target.value)} />/h <span className="text-xs text-slate-500">up to $5,000</span></label>
             )}
             <button className="btn-ghost" disabled={busy || !filled.length || (p.side === "developer" && ticked.length === 0)} onClick={send}>Request a time</button>
           </div>

@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { checkFields, useLocalMin } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
 import { JoinCall } from "@/components/JoinCall";
 import { CalendarPlus } from "lucide-react";
@@ -32,6 +33,8 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }:
   const [whens, setWhens] = useState<string[]>([""]);
   const [count, setCount] = useState(4);
   const [minutes, setMinutes] = useState("");
+  const form = useRef<HTMLDivElement>(null);
+  const minNow = useLocalMin(5);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [reason, setReason] = useState<Record<string, string>>({});
   const [done, setDone] = useState("");
@@ -84,7 +87,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }:
         </fieldset>
       )}
       {canRequest && (
-        <div className="space-y-2 text-sm">
+        <div className="space-y-2 text-sm" ref={form}>
           <div className="flex flex-wrap gap-4">
             <label><input type="radio" checked={kind === "one"} onChange={() => setKind("one")} /> Choose one (up to 3 times)</label>
             <label><input type="radio" checked={kind === "daily"} onChange={() => { setKind("daily"); setWhens([whens[0] ?? ""]); }} /> Daily</label>
@@ -92,9 +95,9 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }:
           </div>
           <div className="flex flex-wrap items-end gap-2">
             {whens.map((w, i) => (
-              <input key={i} type="datetime-local" aria-label={`Requested time ${i + 1}`} className="input max-w-xs" value={w} onChange={(e) => setWhens(whens.map((x, j) => (j === i ? e.target.value : x)))} />
+              <input key={i} type="datetime-local" min={minNow} data-msg="Pick a time in the future." aria-label={`Requested time ${i + 1}`} className="input max-w-xs" value={w} onChange={(e) => setWhens(whens.map((x, j) => (j === i ? e.target.value : x)))} />
             ))}
-            <label className="inline-flex items-center gap-1 text-sm">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min</label>
+            <label className="inline-flex items-center gap-1 text-sm">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max="180" data-whole="" data-msg="A live call lasts from 10 to 180 minutes." value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min <span className="text-xs text-slate-500">10–180</span></label>
             {kind === "one" && whens.length < 3 && <button type="button" className="btn-ghost" onClick={() => setWhens([...whens, ""])}>+ Another time</button>}
             {kind !== "one" && (
               <select aria-label="How many calls" className="input w-auto" value={count} onChange={(e) => setCount(Number(e.target.value))}>
@@ -104,7 +107,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }:
             <button
               className="btn"
               disabled={busy || !filled.length || ticked.length === 0}
-              onClick={() => go("request-time", { contractIds: ticked, minutes: minutes.trim() ? minutes.trim() : "", ...(kind === "one" ? { times: filled } : { times: filled.slice(0, 1), weeks: count, repeat: kind }) }, "request")}
+              onClick={() => checkFields(form.current) && go("request-time", { contractIds: ticked, minutes: minutes.trim() ? minutes.trim() : "", ...(kind === "one" ? { times: filled } : { times: filled.slice(0, 1), weeks: count, repeat: kind }) }, "request")}
             >
               Request a time
             </button>

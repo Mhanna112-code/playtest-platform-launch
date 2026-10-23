@@ -3,7 +3,7 @@
 Rule for all of it: match the full app (integration folder, localhost:3200) exactly; keep lean behaviour (LEAN-SPEC.md);
 add nothing the owner didn't ask for; list any non-exact pattern for approval.
 
-0. EVERY input with a min and/or max (call length 10-180 min, rates $10-$200/h, prices, spots up to the tester limit,
+0. [DONE] EVERY input with a min and/or max (call length 10-180 min, rates $10-$200/h, prices, spots up to the tester limit,
    repeat counts 2-8, comment lengths, Ask $, Charge amount up to the cap, etc.) shows its range briefly next to it
    ("10-180 min", "up to $14.00"), and shows the red error AS SOON AS the field loses focus with a bad value (and on
    submit), not only after pressing the button. Clears when fixed.
@@ -41,3 +41,20 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
 8. [DONE] INVITED list (owner): show ONLY invites still waiting (joined people are already in Testers joined; drop "· joined"
    rows; closed/declined invites aren't listed). When long it becomes a scroll box like the full app's invite lists
    (about 5 rows tall, then scroll).
+9. POST/EDIT "Parts and prices" exactly like the full app's block (integration src/app/dev/test-form.tsx): one card per
+   part (Written report / Recorded session / Live session) with its tick, title, one-line description, price box
+   ("$ 7.50", live "up to $ 25 /h"), and "Free" tick; ticked cards highlighted. INCLUDE the "Required" tick (owner, Oct 23):
+   it is a LABEL only (no new blocking): it's part of the terms (snapshotted at join; changing it is a terms change
+   like prices: offer to working testers / closes applications), shown to the developer under Testers per tester as
+   which required and not-required parts are sent (full app's pattern), and to the tester in "Your parts" as
+   "Required" / "Not required" (full app's pattern). Rating rule unchanged; the rating warning's unsent-parts line
+   marks required ones "(required)". No part requests/extra parts/drops. Range hints and red-on-blur per item 0.
+10. KEPT FORMS (owner chose b): typed-but-unsent text is saved (server-side, per user and form, any device) and comes
+   back after reload / sign-in with the full app's "Not sent yet" tag, as in the full app (integration
+   components/use-kept-form + change-lock). ONLY on: written answers, chat messages, dispute text, rating comments,
+   reject reasons, and the Post/Edit form. NOT on login/sign-up. Sending clears it.
+11. TESTER SESSION PAGE exactly like the full app's (integration src/app/tester/claims/[id]/page.tsx), lean behaviour:
+   - "Your parts" card (full app :686-716) showing, per part (written / recording / live calls): Required / Not required, sent or not sent yet,
+     "You asked $X" if they asked, and "Paid so far $Y" (plus the listing price / "Not in your contract").
+   - Every other section in the full app's layout and order; the live-call area is the lean "Live session" panel
+     (same component as the developer side). Nothing the lean app doesn't do.

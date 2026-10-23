@@ -5,6 +5,7 @@ import { Err } from "@/components/Err";
 import { mergeChanges, useLiveAppend } from "@/lib/live";
 import { NOT_REQUIRED, qOptional, qText } from "@/lib/questions";
 import { limitHint } from "@/lib/capacity";
+import { useLocalMin } from "@/components/FieldChecks";
 import { Choices } from "@/components/Choices";
 import { api, ApiError, isFieldError } from "@/lib/client";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
@@ -101,12 +102,18 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: { i
   // Mark the field a mistake is about (red at the field).
   const FIELD_WORDS: Partial<Record<keyof F, RegExp>> = { title: /title/i, writtenPrice: /written answers price/i, recordingPrice: /recording price/i, liveRate: /live call rate/i, liveMinutes: /call lasts/i, spots: /spots|testers per test/i, deadlineDays: /deadline/i, openUntil: /open until/i, buildUrl: /build link/i, categories: /category/i };
   const bad = (k: keyof F) => !!FIELD_WORDS[k] && errs.some((e) => FIELD_WORDS[k]!.test(e));
-  const text = (k: keyof F, label: string, opts: { req?: boolean; ph?: string; type?: string; cls?: string } = {}) => (
+  // (Owner) Every box with a range says it next to it and is checked as soon as it's left (FieldChecks).
+  const text = (k: keyof F, label: string, opts: { req?: boolean; ph?: string; type?: string; cls?: string; attrs?: Record<string, string>; hint?: string } = {}) => (
     <div>
       <label className={"label" + (opts.req ? " req" : "")} htmlFor={k}>{label}</label>
-      <input id={k} type={opts.type ?? "text"} className={"input " + (opts.cls ?? "") + (bad(k) ? " field-bad" : "")} placeholder={opts.ph} value={f[k] as string} onChange={(e) => set({ [k]: e.target.value } as Partial<F>)} />
+      <div className="flex flex-wrap items-center gap-2">
+        <input id={k} type={opts.type ?? "text"} className={"input " + (opts.cls ?? "") + (bad(k) ? " field-bad" : "")} placeholder={opts.ph} value={f[k] as string} onChange={(e) => set({ [k]: e.target.value } as Partial<F>)} {...opts.attrs} />
+        {opts.hint && <span className="text-xs text-slate-500">{opts.hint}</span>}
+      </div>
     </div>
   );
+  const tomorrow = useLocalMin(24 * 60, true), yearOut = useLocalMin(366 * 24 * 60, true);
+  const limit = spotsLimit ?? 50;
 
   return (
     <form className="space-y-4" onSubmit={submit}>
@@ -137,7 +144,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: { i
         <label className="block text-sm"><input type="checkbox" checked={f.written} onChange={(e) => set({ written: e.target.checked })} /> Written answers</label>
         {f.written && (
           <div className="ml-6 grid gap-3 sm:grid-cols-2">
-            {text("writtenPrice", "Price for written answers ($, 0 for free)", { req: true, ph: "10.00", cls: "max-w-[10rem]" })}
+            {text("writtenPrice", "Price for written answers ($, 0 for free)", { req: true, ph: "10.00", cls: "max-w-[10rem]", hint: "$1–$1,000, or 0 for free", attrs: { "data-min": "1", "data-max": "1000", "data-zero-ok": "", "data-msg": "The written answers price must be from $1.00 to $1,000.00 (or 0 for free)." } })}
             <div className="sm:col-span-2">
               <label className="label req" htmlFor="questions">Questions (one per line)</label>
               <textarea id="questions" rows={4} className="input" value={f.questions} onChange={(e) => set({ questions: e.target.value })} placeholder={"What did you like?\nWhere did you get stuck?"} />
@@ -157,12 +164,12 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: { i
           </div>
         )}
         <label className="block text-sm"><input type="checkbox" checked={f.recording} onChange={(e) => set({ recording: e.target.checked })} /> Screen recording</label>
-        {f.recording && <div className="ml-6">{text("recordingPrice", "Price for a recording ($, 0 for free)", { req: true, ph: "15.00", cls: "max-w-[10rem]" })}</div>}
+        {f.recording && <div className="ml-6">{text("recordingPrice", "Price for a recording ($, 0 for free)", { req: true, ph: "15.00", cls: "max-w-[10rem]", hint: "$1–$1,000, or 0 for free", attrs: { "data-min": "1", "data-max": "1000", "data-zero-ok": "", "data-msg": "The recording price must be from $1.00 to $1,000.00 (or 0 for free)." } })}</div>}
         <label className="block text-sm"><input type="checkbox" checked={f.live} onChange={(e) => set({ live: e.target.checked })} /> Live call</label>
         {f.live && (
           <div className="ml-6 grid gap-3 sm:grid-cols-2">
             <div className="flex flex-wrap items-end gap-2 sm:col-span-2">
-              {text("liveRate", "Rate per hour ($, 0 for free)", { req: true, ph: "30.00", cls: "max-w-[10rem]" })}
+              {text("liveRate", "Rate per hour ($, 0 for free)", { req: true, ph: "30.00", cls: "max-w-[10rem]", attrs: { "data-min": "10", "data-max": "200", "data-zero-ok": "", "data-msg": "The live call rate must be from $10 to $200 an hour (or 0 for free)." } })}
               <span className="note mb-2">$10-$200 an hour (or 0 for free). Each call request sets its own length.</span>
             </div>
           </div>
@@ -172,9 +179,9 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: { i
       <div className="panel">
         <h2>Who and how long</h2>
         <div className="grid gap-3 sm:grid-cols-2">
-          {text("spots", "Spots (testers)", { req: true, type: "number", cls: "max-w-[8rem]" })}
-          {text("deadlineDays", "Days each tester has from joining", { req: true, type: "number", cls: "max-w-[8rem]" })}
-          {text("openUntil", "Open until (no new testers or work after it; blank = no end)", { type: "date", cls: "max-w-[12rem]" })}
+          {text("spots", "Spots (testers)", { req: true, type: "number", cls: "max-w-[8rem]", hint: `1–${limit}`, attrs: { "data-min": "1", "data-max": String(limit), "data-whole": "", "data-msg": spotsLimit != null ? `You can take up to ${limit} testers per test right now.` : `Spots must be a whole number from 1 to ${limit}.` } })}
+          {text("deadlineDays", "Days each tester has from joining", { req: true, type: "number", cls: "max-w-[8rem]", hint: "1–90 days", attrs: { "data-min": "1", "data-max": "90", "data-whole": "", "data-msg": "Testers' deadline must be from 1 to 90 days after they join." } })}
+          {text("openUntil", "Open until (no new testers or work after it; blank = no end)", { type: "date", cls: "max-w-[12rem]", hint: "from tomorrow, up to a year ahead", attrs: { min: tomorrow, max: yearOut, "data-msg": "Open until must be a date in the future.", "data-max-msg": "Open until can be at most a year ahead." } })}
         </div>
         {spotsLimit != null && <p className="note">{limitHint(spotsLimit)}</p>}
         {edit && edit.testersIn > 0 && <p className="note">{edit.testersIn} tester{edit.testersIn === 1 ? " is" : "s are"} in: spots can&apos;t go below that.</p>}
