@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
+import { MARKABLE } from "@/lib/markJump";
 
 type Req = { id: string; times: string[]; weeks: number; repeat?: string; mine: boolean; who: string; contractId: string; rate: string; minutes?: number };
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -20,7 +21,7 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
   const [ticked, setTicked] = useState<string[]>(p.targets.length === 1 ? [p.targets[0].contractId] : []);
   const [ask, setAsk] = useState("");
   const [done, setDone] = useState("");
-  const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={error} /> : null);
+  const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={error} link={typeof errData.requestId === "string" ? `req-${errData.requestId}` : undefined} /> : null);
   const go = async (action: string, body: Record<string, unknown>, key: string) => {
     const r = await press<{ message?: string }>(`${p.path}/${action}`, body, key);
     if (r) {
@@ -45,7 +46,7 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
       {p.requests.length > 0 && (
         <ul className="space-y-2">
           {p.requests.map((r) => (
-            <li key={r.id} className="flex flex-wrap items-center gap-2">
+            <li key={r.id} id={`req-${r.id}`} className={`flex flex-wrap items-center gap-2 ${MARKABLE}`}>
               <span className="mr-auto">
                 {r.mine ? `You requested${p.side === "developer" ? ` with ${r.who}` : ""}` : `${r.who} requested`}{" "}
                 {r.weeks ? `${r.repeat === "daily" ? "daily" : "weekly"} calls: ${fmt(r.times[0])}, ${r.weeks} calls` : r.times.length > 1 ? `one of: ${r.times.map(fmt).join(" · ")}` : fmt(r.times[0])}{r.minutes ? ` · ${r.minutes} min` : ""} · {r.rate}
@@ -106,18 +107,6 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
             <button className="btn-ghost" disabled={busy || !filled.length || (p.side === "developer" && ticked.length === 0)} onClick={send}>Request a time</button>
           </div>
           {box("request")}
-          {at === "request" && typeof errData.requestId === "string" && (() => {
-            // (NEWEST+8) The other side's waiting request that overlaps: its Accept right here.
-            const r = p.requests.find((x) => x.id === errData.requestId);
-            if (!r) return null;
-            return (
-              <div className="flex flex-wrap gap-2">
-                {!r.weeks && r.times.length > 1 ? r.times.map((t) => (
-                  <button key={t} className="btn" disabled={busy} onClick={() => go("answer-request", { requestId: r.id, action: "accept", time: t, contractId: r.contractId }, "a-" + r.id)}>Accept {fmt(t)}</button>
-                )) : <button className="btn" disabled={busy} onClick={() => go("answer-request", { requestId: r.id, action: "accept", contractId: r.contractId }, "a-" + r.id)}>Accept {r.who}&apos;s request</button>}
-              </div>
-            );
-          })()}
         </div>
       )}
       {done && <p className="ok">{done}</p>}

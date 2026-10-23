@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { JoinCall } from "@/components/JoinCall";
 import { usePress } from "@/lib/usePress";
+import { MARKABLE } from "@/lib/markJump";
 
 export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string };
 export type DevSet = { id: string; label: string; calls: DevCall[] };
@@ -18,7 +19,7 @@ const short = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: 
  * request when nothing is ticked): booked calls, daily/weekly sets as one line, waiting requests. Boxes under the button.
  */
 export function DevCallPanel({ testId, seenAt, testers, canRequest }: { testId: string; seenAt: string; testers: DevTester[]; canRequest: boolean }) {
-  const { press, changes, error, busy, at } = usePress(seenAt);
+  const { press, changes, error, busy, at, errData } = usePress(seenAt);
   const [ticked, setTicked] = useState<string[]>([]);
   const [kind, setKind] = useState<"one" | "daily" | "weekly">("one");
   const [whens, setWhens] = useState<string[]>([""]);
@@ -27,7 +28,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest }: { testId: 
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [reason, setReason] = useState<Record<string, string>>({});
   const [done, setDone] = useState("");
-  const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={error} /></div> : null);
+  const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={error} link={typeof errData.requestId === "string" ? `req-${errData.requestId}` : undefined} /></div> : null);
   const go = async (path: string, body: Record<string, unknown>, key: string) => {
     const r = await press<{ message?: string }>(`/api/tests/${testId}/${path}`, body, key);
     if (r) {
@@ -126,7 +127,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest }: { testId: 
           {t.requests.length > 0 && <p className="font-medium">Waiting</p>}
           <ul className="space-y-1">
             {t.requests.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-center gap-2">
+              <li key={r.id} id={`req-${r.id}`} className={`flex flex-wrap items-center gap-2 ${MARKABLE}`}>
                 <span className="mr-auto">
                   {r.mine ? "You requested" : `${t.name} requested`}{" "}
                   {r.weeks ? `${r.repeat === "daily" ? "daily" : "weekly"} calls: ${short(r.times[0])} · ${r.weeks} calls from ${fmt(r.times[0])}` : r.times.length > 1 ? `one of: ${r.times.map(fmt).join(" · ")}` : fmt(r.times[0])}{r.minutes ? ` · ${r.minutes} min` : ""} · {r.rate}

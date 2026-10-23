@@ -2,6 +2,7 @@
 import { useEffect, useRef } from "react";
 import { ResendConfirm } from "@/components/ResendConfirm";
 import { markShownInBox } from "@/lib/live";
+import { jumpTo } from "@/lib/markJump";
 
 export type Change = { text: string; at: string; kind?: string };
 
@@ -11,7 +12,7 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: 
  * The stop-once box (and any refusal): a blue notice placed directly under the button that was pressed, scrolled into
  * view. Lists exactly what changed since the page loaded, then "Press again to go ahead."
  */
-export function ChangesBox({ changes, error, tail = "Press again to go ahead." }: { changes: Change[] | null; error?: string; tail?: string }) {
+export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link }: { changes: Change[] | null; error?: string; tail?: string; link?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (changes) markShownInBox(changes); // seen: the top box lists them quietly, without its scroll
@@ -34,7 +35,10 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead." }
           <p>{tail}</p>
         </>
       )}
-      {error && (error.startsWith("Confirm your email first.") ? <p className="flex flex-wrap items-center gap-2">{error} <ResendConfirm label="Resend the email" /></p> : <p>{error}</p>)}
+      {error && (error.startsWith("Confirm your email first.") ? <p className="flex flex-wrap items-center gap-2">{error} <ResendConfirm label="Resend the email" /></p> : link ? (
+        // The refusal names something on this page (the other side's waiting request): the text links to it.
+        <p><a href={`#${link}`} onClick={(e) => { e.preventDefault(); jumpTo(link); }}>{error}</a></p>
+      ) : <p>{error}</p>)}
     </div>
   );
 }
