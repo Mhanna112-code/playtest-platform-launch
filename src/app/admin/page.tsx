@@ -32,15 +32,15 @@ export default async function AdminPage() {
   const cases = await adminCases();
   const chargebacks = await db.payment.findMany({ where: { chargeback: "open" } });
   return (
-    <main className="wrap space-y-6">
+    <main className="wrap space-y-8">
       <div className="flex items-center gap-4">
         <Brand />
         <Link href="/app">Back to the app</Link>
       </div>
       <h1 className="text-3xl font-bold tracking-tight text-white">Admin</h1>
 
-      <section className="panel">
-        <h2>Needs the team today ({cases.length})</h2>
+      <section className="card space-y-3">
+        <h2 className="text-lg font-semibold text-white">Needs the team today ({cases.length})</h2>
         <p className="note">The same list goes out once a day in the admin digest email.</p>
         {cases.length === 0 ? <p className="note">Nothing waiting.</p> : (
           <ul className="list-disc pl-5 text-sm">
@@ -49,8 +49,8 @@ export default async function AdminPage() {
         )}
       </section>
 
-      <section className="panel" id="disputes">
-        <h2>Disputes</h2>
+      <section className="card scroll-mt-24 space-y-3" id="disputes">
+        <h2 className="text-lg font-semibold text-white">Disputes</h2>
         <p className="note">A decision can only raise the pay, up to the listing amount. The extra is charged to the developer. Stripe card disputes are handled by hand in the Stripe dashboard.</p>
         {disputes.length === 0 && <p className="note">No disputes.</p>}
         {disputes.map((d) => {
@@ -77,8 +77,8 @@ export default async function AdminPage() {
         })}
       </section>
 
-      <section className="panel">
-        <h2 id="holds">Payment holds and chargebacks</h2>
+      <section className="card space-y-3">
+        <h2 id="holds" className="scroll-mt-24 text-lg font-semibold text-white">Payment holds and chargebacks</h2>
         {held.length === 0 && chargebacks.length === 0 && <p className="note">None.</p>}
         {held.map((x) => (
           <p key={x.id} className="text-sm">
@@ -93,8 +93,8 @@ export default async function AdminPage() {
         ))}
       </section>
 
-      <section className="panel">
-        <h2 id="no-shows">No-show reports</h2>
+      <section className="card space-y-3">
+        <h2 id="no-shows" className="scroll-mt-24 text-lg font-semibold text-white">No-show reports</h2>
         {noShows.length === 0 && <p className="note">None.</p>}
         {noShows.map((c) => (
           <p key={c.id} className="text-sm">
@@ -103,18 +103,18 @@ export default async function AdminPage() {
         ))}
       </section>
 
-      <section className="panel">
-        <h2 id="payouts">Payouts waiting for a payout account</h2>
+      <section className="card space-y-3">
+        <h2 id="payouts" className="scroll-mt-24 text-lg font-semibold text-white">Payouts waiting for a payout account</h2>
         {waiting.length === 0 && <p className="note">None.</p>}
         {waiting.map((p) => (
           <p key={p.id} className="text-sm">
             {fmtDateTime(p.createdAt)} · {byId.get(p.testerId)?.email} · {money(p.testerCents)} <AdminButton action="transfer" id={p.id} label="Send now" />
           </p>
         ))}
-        <h3>Latest payments</h3>
-        <ul className="text-sm">
+        <h3 className="font-semibold text-white">Latest payments</h3>
+        <ul className="divide-y divide-white/5 text-sm">
           {payments.map((p) => (
-            <li key={p.id}>
+            <li key={p.id} className="py-2 text-slate-300">
               {fmtDateTime(p.createdAt)} · {p.kind} · {money(p.amountCents)} (fee {money(p.feeCents)}) · {p.status}
               {p.failure ? ` · ${p.failure}` : ""} · {byId.get(p.developerId)?.email} → {byId.get(p.testerId)?.email}
             </li>
@@ -122,11 +122,11 @@ export default async function AdminPage() {
         </ul>
       </section>
 
-      <section className="panel">
-        <h2>Users</h2>
-        <ul className="space-y-1 text-sm">
+      <section className="card space-y-3">
+        <h2 className="text-lg font-semibold text-white">Users</h2>
+        <ul className="divide-y divide-white/5 text-sm">
           {users.map((x) => (
-            <li key={x.id}>
+            <li key={x.id} className="py-2 text-slate-300">
               {x.email} · {displayName(x)} · {[x.isDeveloper && "developer", x.isTester && "tester"].filter(Boolean).join(" + ") || "no role"}
               {x.suspendedAt ? (
                 <>
@@ -140,22 +140,22 @@ export default async function AdminPage() {
         </ul>
       </section>
 
-      <section className="panel">
-        <h2>Tests</h2>
-        <ul className="text-sm">
+      <section className="card space-y-3">
+        <h2 className="text-lg font-semibold text-white">Tests</h2>
+        <ul className="divide-y divide-white/5 text-sm">
           {tests.map((t) => (
-            <li key={t.id}>
+            <li key={t.id} className="py-2 text-slate-300">
               {fmtDateTime(t.createdAt)} · “{t.title}” · {t.status} · {displayName(t.developer)} · {t._count.contracts} joined
             </li>
           ))}
         </ul>
       </section>
 
-      <section className="panel">
-        <h2>Waitlist ({waitlist.length})</h2>
-        <ul className="text-sm">
+      <section className="card space-y-3">
+        <h2 className="text-lg font-semibold text-white">Waitlist ({waitlist.length})</h2>
+        <ul className="divide-y divide-white/5 text-sm">
           {waitlist.map((w) => (
-            <li key={w.id}>
+            <li key={w.id} className="py-2 text-slate-300">
               {fmtDateTime(w.createdAt)} · {w.email} · {w.role}
             </li>
           ))}
