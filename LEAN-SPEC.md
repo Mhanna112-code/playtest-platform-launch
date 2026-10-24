@@ -17,6 +17,10 @@ and look, but this version deliberately drops most of its complexity.
   the test was stopped or they rated it. Rejoining is ALWAYS an ask the developer accepts, even on "Anyone can join"
   tests (an invite + an ask still auto-match). Accepting gives back exactly the time they had left. (This replaces
   "ended testers need a new invite".)
+  The DEVELOPER is told this wherever they decide: the ask row in Needs you reads e.g. "Ana Silva asks to rejoin.
+  If you accept, she gets back the 3 days 4 h she had left (deadline Oct 30, 2:00 PM)."; the same line in the bell /
+  email for the ask, and after accepting ("Ana Silva rejoined: her deadline is Oct 30, 2:00 PM."). An ask with no
+  time left says "She had no time left: her deadline stays passed."
 - PAYOUT PROBLEMS (tester side; do after the rest if usage allows): when Stripe reports a failed payout or an account
   that needs attention, the tester sees a banner on Payments and the dashboard "Your bank couldn't receive a payout.
   Update your payout details." with a button to Stripe, and a bell reminder every 3 days until fixed. The money stays
