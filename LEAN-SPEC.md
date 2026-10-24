@@ -4,6 +4,15 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 24, NEWEST+12) Which test changes alert testers (session page AND join page)
+- Testers are alerted (live top box + stop once on every button) to EVERY change to the test EXCEPT the number of
+  spots and Open until, on BOTH the session page and the join page. This now includes "who can join" on the session
+  page too.
+- Spots: alerted only when it affects them: the test is now full (a final refusal on the join page / their pending
+  application closes).
+- Open until: never a stop; only when it passes does it matter (join refused for good / the ask or application closes).
+- Title stays info only (shown in the top box, never stops).
+
 ## (Owner, Oct 23, NEWEST+11) No chat before joining
 - Remove chats with applicants and invited testers (the developer's "Chats with applicants and invited testers" and
   the listing's pre-join chat). Chat is only between the developer and testers who are or were in the test. Bells
