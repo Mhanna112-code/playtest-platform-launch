@@ -97,7 +97,7 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    refused red otherwise, wording from src/lib/key-needs.ts); a tester who left and comes back gets their key back;
    "This key doesn't work" report and the developer's replacement flow as in the full app. Port its rules
    (key-needs.ts, key-diff.ts, keyRoom) adapted to lean.
-20. STOP ACCEPTING TESTERS / ACCEPT TESTERS AGAIN on open tests like the full app (page.tsx:487-498): hides the test from
+20. [DROPPED by owner Oct 23 - do not build] STOP ACCEPTING TESTERS / ACCEPT TESTERS AGAIN on open tests like the full app (page.tsx:487-498): hides the test from
    new testers (Join/Apply/Ask to rejoin/invite accept refused "This test isn't taking new testers right now."), joined
    testers keep working, it CLOSES waiting invitations and applications and says how many next to the button (stops
    once if that number changed), and is undone with "Accept testers again". Stop-once/refusal rules as usual.
