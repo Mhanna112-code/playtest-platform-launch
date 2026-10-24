@@ -111,7 +111,7 @@ describe("top panel stops once", () => {
     expect(second.status).toBe(200);
     const copy = await db.test.findUniqueOrThrow({ where: { id: second.body.id } });
     expect(copy).toMatchObject({ status: "draft", round: 2, title: "Harbor Run (round 2)", previousId: testId });
-    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).status).toBe("closed");
+    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).status).toBe("open") // (Owner) a next round no longer closes the current round;
   });
 
   it("nothing new: the press goes straight through", async () => {
