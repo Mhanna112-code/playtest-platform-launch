@@ -70,7 +70,7 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
       case "my-gaps": {
         // The join page's "What this test needs" pop-up checks the profile and the test again while it is open.
         const t = await db.test.findUniqueOrThrow({ where: { id } });
-        return ok({ gaps: gapsOf(t, await db.testerProfile.findUnique({ where: { userId: u.id } })) });
+        return ok({ gaps: gapsOf(t, await db.testerProfile.findUnique({ where: { userId: u.id } })), needs: { devices: t.devices, languages: t.languages } });
       }
       case "invite-check":
         return ok(await inviteGaps(u.id, id, Array.isArray(body.testerIds) ? body.testerIds.map(String) : []));

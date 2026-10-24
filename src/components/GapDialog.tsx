@@ -27,7 +27,20 @@ export type PopupAnswer = { ok: true } | { stop: string[]; gaps?: undefined } | 
  * button ("Join anyway" / "Apply anyway") sends the press. Something missing that it didn't show, or a listing change,
  * stops once INSIDE it. Mounting it opens it.
  */
-export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; send: (shown: Gaps) => Promise<PopupAnswer>; onCovered: (at: string) => void; onClose: () => void }) {
+export type Needs = { devices: string[]; languages: string[] };
+
+/** What the test itself changed in what it needs: "Nora Lane added Spanish to the languages this test needs", and so on. */
+export function needsChange(dev: string, before: Needs, now: Needs) {
+  const out: string[] = [];
+  for (const [noun, a, b] of [["languages", before.languages, now.languages], ["devices", before.devices, now.devices]] as const) {
+    const added = b.filter((x) => !a.includes(x)), removed = a.filter((x) => !b.includes(x));
+    if (added.length) out.push(`${dev} added ${added.join(", ")} to the ${noun} this test needs`);
+    if (removed.length) out.push(`${dev} removed ${removed.join(", ")} from the ${noun} this test needs`);
+  }
+  return out;
+}
+
+export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs: Needs; devName: string; send: (shown: Gaps) => Promise<PopupAnswer>; onCovered: (at: string) => void; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
   const [shown, setShown] = useState<Gaps>(p.initial);
@@ -37,6 +50,13 @@ export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; send:
   const [stop, setStop] = useState<{ lines: string[]; button: string } | null>(null);
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
+  // The TEST's needs when this opened, and what it changed since: a listing change, so the first "anyway" press stops
+  // once, naming it (like the Invite anyway box), then the next goes ahead.
+  const needs0 = useRef(p.needs);
+  const [testChange, setTestChange] = useState<string[]>([]);
+  const testChangeRef = useRef<string[]>([]);
+  testChangeRef.current = testChange;
+  const acked = useRef(true);
 
   useEffect(() => {
     const d = ref.current;
@@ -47,8 +67,14 @@ export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; send:
   useEffect(() => {
     const live = async () => {
       if (sendingRef.current) return;
-      const r = await api<{ gaps: Gaps }>(`/api/tests/${p.testId}/my-gaps`, {}).catch(() => null);
-      if (!r || sendingRef.current || sameGaps(r.gaps, shownRef.current)) return;
+      const r = await api<{ gaps: Gaps; needs: Needs }>(`/api/tests/${p.testId}/my-gaps`, {}).catch(() => null);
+      if (!r || sendingRef.current) return;
+      const changed = needsChange(p.devName, needs0.current, r.needs);
+      if (JSON.stringify(changed) !== JSON.stringify(testChangeRef.current)) {
+        setTestChange(changed);
+        acked.current = changed.length === 0;
+      }
+      if (sameGaps(r.gaps, shownRef.current)) return;
       if (noGaps(r.gaps)) {
         ref.current?.close();
         p.onCovered(new Date().toISOString());
@@ -70,10 +96,17 @@ export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; send:
 
   async function go() {
     if (sendingRef.current) return;
+    const button = testerGapButton(shownRef.current, p.ask);
+    // The test's needs changed while this was open: stop once, naming the change, before joining.
+    if (!acked.current && testChangeRef.current.length) {
+      acked.current = true;
+      setStop({ lines: testChangeRef.current, button });
+      setChangedAt(new Date().toISOString());
+      return;
+    }
     sendingRef.current = true;
     setSending(true);
     setStop(null);
-    const button = testerGapButton(shownRef.current, p.ask);
     const r = await p.send(shownRef.current);
     if ("ok" in r) return; // the page moves on
     sendingRef.current = false;

@@ -12,6 +12,7 @@ import { LiveTop } from "@/components/LiveTop";
 import { qOptional, qText } from "@/lib/questions";
 import { ratingSummary } from "@/lib/server/ratings";
 import { NoThanksButton } from "./NoThanksButton";
+import { BlockButton } from "@/components/BlockButton";
 import { gapsOf } from "@/lib/gaps";
 import { developerStats } from "@/lib/server/profileStats";
 import { sideLink } from "@/lib/sides";
@@ -190,7 +191,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         <>{gaps.map((g) => <p key={g} className="info">{g}</p>)}</>
       )}
       {t.developerId === u.id || !u.isTester || closed || blocked || ratedHere ? null : (
-        <section className="card space-y-3">
+        <div>
           <JoinBox
             testId={t.id}
             seenAt={seenAt}
@@ -198,9 +199,20 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             invited={!!invite}
             inviteId={invite?.id ?? null}
             missing={gapsOf(t, profile)}
+            needs={{ devices: t.devices, languages: t.languages }}
+            devName={dev}
+            spotsLeft={t.spots - testersIn}
+            days={t.deadlineDays}
+            dueIfNow={dueIfNow}
             application={await db.application.findUnique({ where: { testId_testerId: { testId: t.id, testerId: u.id } } }).then((a) => (a ? { status: a.status, changed: !!a.changedAt } : null))}
           />
-        </section>
+        </div>
+      )}
+      {/* Block the developer, as in the full app: a small link at the bottom of the page. */}
+      {u.isTester && t.developerId !== u.id && !blocked && (
+        <div className="text-right text-xs text-slate-500">
+          <BlockButton plain userId={t.developerId} name={dev} effect="You won't see their tests or profile any more, and they can't invite you." />
+        </div>
       )}
     </div>
   );

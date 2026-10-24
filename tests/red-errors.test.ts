@@ -45,3 +45,28 @@ describe("(NEXT-UI 4b) the pop-up's Join anyway / Apply anyway", () => {
     expect(mine.body.gaps).toEqual({ languages: ["Spanish"], devices: ["Mac"] });
   });
 });
+
+describe("(NEXT-UI 4b) the pop-up follows both sides live", () => {
+  it("my-gaps drops items when the tester adds them and adds/drops them when the developer changes the test's needs, both directions", async () => {
+    const { dev, testId } = await setup({ devices: ["Mac"], languages: ["Spanish"] });
+    const ben = await makeUser({ tester: true });
+    const gaps = async () => (await act(testId, "my-gaps", ben.cookie, {})).body;
+    expect((await gaps()).gaps).toEqual({ languages: ["Spanish"], devices: ["Mac"] });
+    // The tester adds a language in their profile: it drops off.
+    await db.testerProfile.update({ where: { userId: ben.user.id }, data: { languages: ["English", "Spanish"] } });
+    expect((await gaps()).gaps).toEqual({ languages: [], devices: ["Mac"] });
+    // The developer adds a language the tester lacks: it comes back, and the test's needs are reported.
+    const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
+    await act(testId, "edit", dev.cookie, { version: v, confirmed: true, fields: { languages: ["Korean"] } });
+    const after = await gaps();
+    expect(after.gaps).toEqual({ languages: ["Korean"], devices: ["Mac"] });
+    expect(after.needs).toEqual({ devices: ["Mac"], languages: ["Korean"] });
+    // The tester removes the device they had and adds the new need: everything is met.
+    await db.testerProfile.update({ where: { userId: ben.user.id }, data: { languages: ["Korean"], devices: ["Mac"] } });
+    expect((await gaps()).gaps).toEqual({ languages: [], devices: [] });
+    // Removed again later: missing again (the popup opens again with the current list).
+    await db.testerProfile.update({ where: { userId: ben.user.id }, data: { devices: ["Windows PC"] } });
+    expect((await gaps()).gaps).toEqual({ languages: [], devices: ["Mac"] });
+    expect((await act(testId, "join", ben.cookie, {})).body.error).toMatchObject({ code: "needs", gaps: { languages: [], devices: ["Mac"] } });
+  });
+});

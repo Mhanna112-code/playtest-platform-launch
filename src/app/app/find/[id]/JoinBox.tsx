@@ -5,6 +5,7 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { api, errOf, ApiError } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { useRouter } from "next/navigation";
+import { UserPlus } from "lucide-react";
 import { GapDialog, JustUpdated, type PopupAnswer } from "@/components/GapDialog";
 import { noGaps, PROFILE_COVERS, type GapAsk, type Gaps } from "@/lib/gaps";
 
@@ -12,7 +13,7 @@ import { noGaps, PROFILE_COVERS, type GapAsk, type Gaps } from "@/lib/gaps";
  * Join or Apply to join. Stops once (box under the button) if anything about the listing changed since the page loaded;
  * the second press goes ahead on the current listing. No offers or counter-offers here.
  */
-export function JoinBox(p: { testId: string; seenAt: string; mode: string; invited: boolean; inviteId?: string | null; application: { status: string; changed: boolean } | null; missing: Gaps }) {
+export function JoinBox(p: { testId: string; seenAt: string; mode: string; invited: boolean; inviteId?: string | null; application: { status: string; changed: boolean } | null; missing: Gaps; needs: { devices: string[]; languages: string[] }; devName: string; spotsLeft: number; days: number; dueIfNow: string }) {
   const router = useRouter();
   const [keepPrivate, setKeepPrivate] = useState(false);
   const [note, setNote] = useState("");
@@ -26,7 +27,7 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
   // (NEXT-UI 4b) The full app's "What this test needs" pop-up (devices and languages), and the blue notice under the
   // button when the profile covers everything by the time it is pressed.
   const [asking, setAsking] = useState<{ ask: GapAsk; gaps: Gaps } | null>(null);
-  const [covered, setCovered] = useState<string | null>(null);
+  const [covered, setCovered] = useState<{ at: string; ask: GapAsk } | null>(null);
   const [inviteId, setInviteId] = useState(p.inviteId ?? "");
 
   // The pop-up's press: "Join anyway" / "Apply anyway", checked on the server against what the pop-up showed.
@@ -55,7 +56,7 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
     const now = await api<{ gaps: Gaps }>(`/api/tests/${p.testId}/my-gaps`, {}).catch(() => null);
     setBusy(false);
     if (now && noGaps(now.gaps)) {
-      setCovered(new Date().toISOString());
+      setCovered({ at: new Date().toISOString(), ask: action });
       router.refresh();
       return;
     }
@@ -110,8 +111,9 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
   if (p.mode === "invite" && !p.invited) return <p className="note">This test is invite only.</p>;
   const applying = p.mode === "apply" && !p.invited; // an invited tester just joins
   return (
-    <div className="space-y-2">
-      <label className="block text-sm">
+    // The full app's join card (claim-form.tsx): the choices, the button with the spots left, and how long they'll have.
+    <div className="card space-y-4">
+      <label className="flex items-center gap-2 text-sm text-white">
         <input type="checkbox" checked={keepPrivate} onChange={(e) => setKeepPrivate(e.target.checked)} /> I&apos;ll keep this build and what I see private
       </label>
       {applying && (
@@ -120,25 +122,29 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
           <textarea id="note" rows={2} className="input" value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
       )}
-      <div className="flex flex-wrap gap-2">
-        <button className="btn" disabled={busy || !!done} onClick={() => press(applying ? "apply" : "join")}>{busy ? "Sending…" : applying ? "Apply to join" : "Join this test"}</button>
+      <div className="flex flex-wrap items-center gap-3">
+        <button className="btn" disabled={busy || !!done} onClick={() => press(applying ? "apply" : "join")}><UserPlus className="h-4 w-4" /> {busy ? (applying ? "Sending…" : "Joining…") : applying ? "Apply to join" : "Join this test"}</button>
+        <span className="text-sm text-slate-400">{p.spotsLeft} spot{p.spotsLeft === 1 ? "" : "s"} left{applying && " · the developer approves each tester"}</span>
       </div>
       {covered && (
-        <p role="status" className="info"><JustUpdated at={covered} /> {PROFILE_COVERS}</p>
+        <p role="status" className="info"><JustUpdated at={covered.at} /> You now meet this test&apos;s needs. Press {covered.ask === "apply" ? "Apply" : "Join"} to {covered.ask === "apply" ? "apply" : "join"}.</p>
       )}
       {asking && (
         <GapDialog
           testId={p.testId}
           ask={asking.ask}
           initial={asking.gaps}
+          needs={p.needs}
+          devName={p.devName}
           send={sendFromPopup}
-          onCovered={(at) => { setAsking(null); setCovered(at); router.refresh(); }}
+          onCovered={(at) => { setCovered({ at, ask: asking.ask }); setAsking(null); router.refresh(); }}
           onClose={() => setAsking(null)}
         />
       )}
       <ChangesBox changes={box?.changes ?? null} tail={box?.tail} />
       {done && <p className="ok">{done}</p>}
       <Err text={err} />
+      <p className="text-sm text-slate-300">You&apos;ll have {p.days} day{p.days === 1 ? "" : "s"}{applying ? " from when you're approved" : ""} (until {p.dueIfNow} if {applying ? "you're approved" : "you join"} now).</p>
     </div>
   );
 }
