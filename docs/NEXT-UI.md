@@ -26,8 +26,8 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    (devices and languages), same lean rules (warn, never refuse).
 5. [DONE 4e5e6de] Join page (listing), dashboard and Find tests formatted EXACTLY like the full app's equivalents
    (app/playtests/[id], app/dev/page.tsx + app/tester/page.tsx, app/playtests/page.tsx).
-6. Developer/tester side switch like the full app (header switch, per-side nav/dashboard/pages, /switch links) -
-   owner to confirm.
+6. Developer/tester side switch like the full app (header switch, per-side nav/dashboard/pages, /switch links,
+   each tab labelled by its page's side) - OWNER APPROVED Oct 23.
 7. [DONE 790f802] CALL REQUEST FORM (owner, final):
    - Remove the "Choose one / Daily / Weekly" radios. Each time row has its own "Once / Daily / Weekly" picker (Once
      default) and, when it repeats, a calls dropdown: 2-8 and "Forever" at the bottom. Up to 3 rows; with more than
@@ -67,3 +67,9 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    to the right of their name (still tickable: a re-invite is how an ended tester can come back).
 12b. [DONE 7832eb5] Finish item 12's gaps: the "What's missing changed" stop inside the Invite anyway box, the owed-total check
    behind "Pay what you owe", and the call-request limit confirm must also stop again for anything newer.
+15. EVERY OTHER PAGE EXACTLY LIKE THE FULL APP (owner, Oct 23): everything except the developer test page, the tester
+   session page, Post/Edit and the join (listing) page, which keep their agreed lean layouts. That includes the
+   header/nav (per side), both dashboards, Find, profile pages (keep the agreed stat tiles: developer Pays on average /
+   Typical review / Rating + developer-only capacity card; tester Accepted parts / Rating), payments, notifications,
+   messages/chat, account settings, admin, landing, login/sign-up/reset/verify. Copy the full app's markup and
+   wording, adapting only where lean behaviour differs; list each adaptation.
