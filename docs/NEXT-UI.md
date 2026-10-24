@@ -101,3 +101,10 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    new testers (Join/Apply/Ask to rejoin/invite accept refused "This test isn't taking new testers right now."), joined
    testers keep working, it CLOSES waiting invitations and applications and says how many next to the button (stops
    once if that number changed), and is undone with "Accept testers again". Stop-once/refusal rules as usual.
+21. DEVELOPER TEST PAGE structure (owner, Oct 23), following the full app's sections:
+   - "NEEDS YOU" section near the top (full app page.tsx:518 pattern): everything waiting for the developer, INCLUDING
+     paying for parts (each piece's Pay / Reject box lives here, not inside tester cards), applications, asks to rejoin,
+     call requests waiting for them, calls waiting for a length / Pay, disputes waiting for their side.
+   - "TESTERS JOINED": the avatar row, then one row per tester showing only: their parts sent (Required / Not required,
+     sent / not sent), how much paid per part and in total, call summary; and a "History (N)" fold at the bottom of each
+     tester's row (full app testers-section.tsx "History" pattern) with their past events. No Pay boxes here.
