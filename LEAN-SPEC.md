@@ -4,6 +4,18 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 24, NEWEST+15) Paying a suspended tester = held share; reinstatement notices
+- The developer can Pay / Reject a suspended tester's sent work as normal (replaces "can't be paid"). The card IS
+  charged; the tester's share is HELD (not transferred). When the suspension lifts, held shares go out automatically.
+  If the account is closed for good, the admin decides per payment: refund the developer or release to the tester.
+  The developer sees "Paid $8.00 · Ana Silva will receive it later" (neutral, never "suspended"); the tester, once
+  active, sees it as paid. Admin sees held shares in the admin page.
+- REINSTATEMENT is a change: the reinstated person's own pages show "Your account is active again · 3:10 PM" in the
+  top box and the next press stops once. A reinstated DEVELOPER's testers see "This test resumed · 3:10 PM" and stop
+  once (same as a lifted hold). Developers are never told a TESTER was reinstated.
+- EVIDENCE (required in the re-record): Pay on a suspended tester's work (held line), lift -> share released, admin
+  refund of a held share, and the reinstatement top-box + stop for both sides.
+
 ## (Owner, Oct 24, NEWEST+14) Suspended testers leave their tests; rejoining is always an ask
 - SUSPENDED TESTER (replaces the tester part of NEWEST+13): removed from every test they're in AT ONCE (calls ahead
   cancelled, waiting requests closed); work already sent stays and is reviewed; pay for it waits until the suspension
