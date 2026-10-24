@@ -68,7 +68,8 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
 12b. [DONE 7832eb5] Finish item 12's gaps: the "What's missing changed" stop inside the Invite anyway box, the owed-total check
    behind "Pay what you owe", and the call-request limit confirm must also stop again for anything newer.
 15. EVERY OTHER PAGE EXACTLY LIKE THE FULL APP (owner, Oct 23): everything except the developer test page, the tester
-   session page, Post/Edit and the join (listing) page, which keep their agreed lean layouts. That includes the
+   session page and Post/Edit, which keep their agreed lean layouts. The JOIN (listing) page IS included: pretty much
+   exactly the full app's (re-check item 5 against it section by section; adapt only where lean behaviour differs). That includes the
    header/nav (per side), both dashboards, Find, profile pages (keep the agreed stat tiles: developer Pays on average /
    Typical review / Rating + developer-only capacity card; tester Accepted parts / Rating), payments, notifications,
    messages/chat, account settings, admin, landing, login/sign-up/reset/verify. Copy the full app's markup and
