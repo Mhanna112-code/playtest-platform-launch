@@ -17,7 +17,7 @@ export default async function ResetPage({ params }: { params: Promise<{ token: s
           <label className="label req" htmlFor="confirm">Type it again</label>
           <PasswordInput id="confirm" name="confirm" autoComplete="new-password" minLength={8} required />
         </div>
-        <p className="text-xs text-ink-500">At least 8 characters. Saving signs you out on every device.</p>
+        <p className="text-xs text-slate-500">At least 8 characters. Saving signs you out on every device.</p>
       </AuthForm>
     </AuthShell>
   );

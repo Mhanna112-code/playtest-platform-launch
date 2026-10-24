@@ -86,7 +86,7 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
      joined at once (the developer chose them; no Join anyway popup), unless a final refusal applies (full, stopped,
      blocked, paused, 10 tests). Both told: "You're back in Harbor Run" / "Ana Silva rejoined (you'd invited her and she'd
      asked)". Covered by tests.
-17. TERMS OF USE, PRIVACY, HELP pages copied from the full app (owner said yes), adapted to lean rules, linked in
+17. [DONE] TERMS OF USE, PRIVACY, HELP pages copied from the full app (owner said yes), adapted to lean rules, linked in
    the footer and at sign-up. Mark them "Draft - owner to review wording" in the report.
 18. NDA like the full app (owner, Oct 23): Post/Edit has the full app's NDA option with its text (incl. its sample NDA,
    src/lib/sample-nda.ts); testers must accept it to join/apply/accept an invite/rejoin (the full app's accept step);

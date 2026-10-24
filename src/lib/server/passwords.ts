@@ -43,7 +43,18 @@ export async function signUp(body: Record<string, unknown>, base: string) {
   const email = readEmail(body.email);
   const password = readNewPassword(body.password);
   if (await db.user.findUnique({ where: { email } })) throw field("An account with that email already exists");
-  const user = await db.user.create({ data: { email, passwordHash: await hashPassword(password) } });
+  // (NEXT-UI 15) The full app's sign-up form also asks who you are (developer, tester or both), your name and the Terms.
+  const role = body.role === "developer" || body.role === "tester" || body.role === "both" ? body.role : "";
+  let who: { name: string; isDeveloper: boolean; isTester: boolean } | null = null;
+  if (role) {
+    const name = typeof body.name === "string" ? body.name.trim().slice(0, 80) : "";
+    if (name.length < 2) throw field("Enter your name");
+    if (!body.acceptTerms) throw field("Agree to the Terms of Use to sign up");
+    who = { name, isDeveloper: role !== "tester", isTester: role !== "developer" };
+  }
+  const user = await db.user.create({
+    data: { email, passwordHash: await hashPassword(password), ...(who ?? {}), ...(who?.isTester ? { profile: { create: { devices: [], languages: [], categories: [] } } } : {}) },
+  });
   await sendVerification(user.id, base);
   return { user, ...(await createSession(user.id)) };
 }
