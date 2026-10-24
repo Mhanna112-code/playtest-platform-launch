@@ -19,6 +19,8 @@ and look, but this version deliberately drops most of its complexity.
   right now."; Send (written / recording) GOES THROUGH with a blue note under the button ("Sent. This test is paused
   right now, so it'll be reviewed once it resumes."); every other action (calls, join, accept requests, charge...) is a
   blue refusal under the button: "This test is paused right now."
+  CHARGE / LET IT GO there: "Charge" is refused (blue, under it): "This test is paused right now. You can charge once it
+  resumes." "Let it go" STILL WORKS. The Charge box comes back as soon as the suspension lifts (unchanged amount rules).
 - Every notice after a press is brought into view at its button (nearest scroll), as in NEXT-UI 13; only the new-terms
   stop scrolls to the top offer box.
 
