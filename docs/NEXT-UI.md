@@ -112,3 +112,6 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    SAME day stack into one entry ("Harbor Run · 4 updates today", newest line shown, unread count); clicking it expands
    to show every one of that day's lines for that test, each still linking to its place. Other days and other tests
    stay separate. Unread state per line; opening the stack marks them read. Emails unchanged.
+   Call events stay RECORDED as bell lines for the other side and stack the same way: call requested (and
+   withdrawn / declined / closed), call booked (incl. auto-booked), call cancelled (by whom, incl. "nobody joined" and
+   "the site was down"). They also appear in each tester's History fold (item 21).
