@@ -21,7 +21,7 @@ describe("call request rows", () => {
       { startsAt: atHours(98), repeat: "daily", count: 2 },
     ];
     expect((await devReq(testId, dev.cookie, [sessionId], { rows })).status).toBe(200);
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane asked for a call: pick one of 3 times" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane asked for a call: pick one of 3 times" } })).toBe(0); // (Owner) a call request is not a bell line
     const r = await pending(sessionId, "developer");
     expect((await sact(sessionId, "answer-request", tester.cookie, { requestId: r.id, action: "accept" })).body.error.message).toBe("Pick one of the times.");
     const done = await sact(sessionId, "answer-request", tester.cookie, { requestId: r.id, action: "accept", time: rows[1].startsAt });
@@ -91,5 +91,29 @@ describe("call request rows", () => {
     await topUpForeverSets();
     expect((await db.callSet.findFirstOrThrow({ where: { contractId: sessionId } })).status).toBe("ended");
     expect(await db.call.count({ where: { contractId: sessionId, status: "booked", startsAt: { gt: new Date() } } })).toBe(0);
+  });
+});
+
+describe("(Owner, item 22) bell lines for calls: booked and cancelled are bell lines for the other side; requests are not", () => {
+  it("a request makes no bell; booking tells the requester; each cancel tells the other side", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    const bells = (userId: string) => db.notification.count({ where: { userId } });
+    const at = (h: number) => { const d = new Date(Date.now() + h * 3_600_000); d.setSeconds(0, 0); return d.toISOString(); };
+    await devReq(testId, dev.cookie, [sessionId], { times: [at(80)] });
+    const before = await bells(tester.user.id);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "asked for" } } })).toBe(0);
+    await sact(sessionId, "answer-request", tester.cookie, { requestId: (await pending(sessionId, "developer")).id, action: "accept" });
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Booked:" } } })).toBe(1); // booked: the other side
+    const call = await db.call.findFirstOrThrow({ where: { contractId: sessionId } });
+    await act(testId, "cancel-call", dev.cookie, { seenAt: seen(), confirmed: true, callId: call.id });
+    expect(await bells(tester.user.id)).toBeGreaterThan(before); // cancelled by the developer: the tester
+    await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: at(100) });
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "asked for" } } })).toBe(0);
+    await act(testId, "answer-request", dev.cookie, { contractId: sessionId, requestId: (await pending(sessionId, "tester")).id, action: "accept", seenAt: seen(), confirmed: true });
+    const call2 = await db.call.findFirstOrThrow({ where: { contractId: sessionId, status: "booked" } });
+    const devBells = await bells(dev.user.id);
+    await sact(sessionId, "cancel-call", tester.cookie, { seenAt: seen(), confirmed: true, callId: call2.id });
+    expect(await bells(dev.user.id)).toBeGreaterThan(devBells); // cancelled by the tester: the developer
   });
 });

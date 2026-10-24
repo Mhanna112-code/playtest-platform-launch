@@ -52,9 +52,7 @@ export async function startHold(devId: string, reason: string) {
     // Calls are not cancelled now: only a booked call whose time comes while still on hold (sweepHeldCalls).
     // Pending call requests close (both told).
     for (const r of await (await import("./requests")).closeRequests({ contractIds: (await db.contract.findMany({ where: { testId: t.id }, select: { id: true } })).map((x) => x.id) }, "the test is paused")) {
-      const k = await db.contract.findUniqueOrThrow({ where: { id: r.contractId }, include: { tester: true } });
-      await notify(k.tester.email, `Your call request for ${fmtDateTime(r.startsAt)} closed`, ["It closed because the test is paused."], `/app/sessions/${k.id}`);
-      await bell(devId, `The call request for ${fmtDateTime(r.startsAt)} closed: the test is paused.`, `/app/tests/${t.id}#calls`);
+      void r; // (Owner) a closed call request is not a bell line
     }
     await db.$transaction((tx) => recordEvent(tx, t.id, "paused", "Your tests are paused until you pay what you owe", false));
   }

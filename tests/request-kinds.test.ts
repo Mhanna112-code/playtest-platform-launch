@@ -13,7 +13,7 @@ describe("request kinds", () => {
     const { tester, sessionId } = await joined(testId);
     const t = [atHours(50), atHours(74), atHours(98)];
     await devReq(testId, dev.cookie, [sessionId], { times: t });
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane asked for a call: pick one of 3 times" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane asked for a call: pick one of 3 times" } })).toBe(0); // (Owner) a call request is not a bell line
     const r = await pending(sessionId, "developer");
     expect((await sact(sessionId, "answer-request", tester.cookie, { requestId: r.id, action: "accept" })).body.error.message).toBe("Pick one of the times.");
     await sact(sessionId, "answer-request", tester.cookie, { requestId: r.id, action: "accept", time: t[1] });
@@ -27,7 +27,7 @@ describe("request kinds", () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await devReq(testId, dev.cookie, [sessionId], { times: [atHours(50)], weeks: 4 });
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Nora Lane asked for weekly calls: " }, AND: { text: { endsWith: ", 4 weeks" } } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Nora Lane asked for weekly calls: " }, AND: { text: { endsWith: ", 4 weeks" } } } })).toBe(0); // (Owner) a call request is not a bell line
     const r = await pending(sessionId, "developer");
     expect((await sact(sessionId, "answer-request", tester.cookie, { requestId: r.id, action: "accept" })).body.calls).toBe(4);
     const calls = await db.call.findMany({ where: { contractId: sessionId }, orderBy: { startsAt: "asc" } });
@@ -65,7 +65,7 @@ describe("request kinds", () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await devReq(testId, dev.cookie, [sessionId], { times: [atHours(30)], weeks: 2, repeat: "daily" });
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Nora Lane asked for daily calls: " } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Nora Lane asked for daily calls: " } } })).toBe(0); // (Owner) a call request is not a bell line
     const r = await pending(sessionId, "developer");
     await sact(sessionId, "answer-request", tester.cookie, { requestId: r.id, action: "accept" });
     const calls = await db.call.findMany({ where: { contractId: sessionId }, orderBy: { startsAt: "asc" } });

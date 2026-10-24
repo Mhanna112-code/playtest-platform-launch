@@ -208,13 +208,8 @@ async function refusals(c: Ctx["c"], side: Side) {
   if (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) throw new HttpError(409, "gone", "This time isn't available.");
 }
 
-const bellFor = (name: string, k: { rows: CallRow[] }) => {
-  const w = (d: Date) => d.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
-  const one = k.rows.length === 1 ? k.rows[0] : null;
-  if (one && one.repeat !== "once") return `${name} asked for ${unitOf(one.repeat)} calls: ${w(one.startsAt)}, ${one.count ? `${one.count} ${one.repeat === "daily" ? "days" : "weeks"}` : "until cancelled"}`;
-  if (k.rows.length > 1) return `${name} asked for a call: pick one of ${k.rows.length} times`;
-  return `${name} asked for a call: ${fmtDateTime(k.rows[0].startsAt)}`;
-};
+// (Owner) Call REQUESTS (requested, withdrawn, declined, closed) are not bell lines: they show in Needs you, the Live session
+// panel and the live top box. Booked and cancelled calls are bell lines (and stack there).
 
 /** Developer: Request a time with one or more ticked working testers. */
 export async function devRequestTime(dev: U, testId: string, body: Record<string, unknown>) {
@@ -272,8 +267,6 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   for (const { c } of ok) {
     const minutes = reqMinutes;
     await db.callRequest.create({ data: { testId, contractId: c.id, fromSide: "developer", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes, batchId } });
-    const line = bellFor(displayName(dev), kind);
-    await notify(c.tester.email, line, [line, `Rate: ${rateLabel(c.liveRateCents, c.liveRateCents)}. Accept or decline it on your session page.`], `/app/sessions/${c.id}`);
   }
   await db.$transaction((tx) => recordEvent(tx, testId, "requested", `You requested ${kindWords(kind.rows)} from ${fmtDateTime(kind.startsAt)} with ${ok.length} tester${ok.length === 1 ? "" : "s"}`, false));
   return { requested: ok.length, batchId };
@@ -326,8 +319,6 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
     data: { testId: c.testId, contractId, fromSide: "tester", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes, askRateCents: ask == null || ask === c.liveRateCents ? null : ask, batchId: closedCopy ? `ask-${closedCopy}` : "" },
   });
   await db.$transaction((tx) => recordEvent(tx, c.testId, "requested", `${displayName(c.tester)} requested ${kind.rows.length === 1 && kind.rows[0].repeat !== "once" ? `${kindWords(kind.rows)} from` : "a call for"} ${fmtDateTime(kind.startsAt)}${r.askRateCents != null ? ` and asks ${money(r.askRateCents)}/h` : ""}`, false, {}, contractId));
-  const line = bellFor(displayName(c.tester), kind);
-  await notify(c.test.developer.email, line, [r.askRateCents != null ? `They ask ${money(r.askRateCents)}/h.` : `At their contract rate (${rateLabel(c.liveRateCents, c.liveRateCents)}).`, "Accept or decline it on the test page."], `/app/tests/${c.testId}#calls`);
   return { requested: true, id: r.id };
 }
 
@@ -397,7 +388,6 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   const status = action === "withdraw" ? "withdrawn" : "declined";
   await db.callRequest.update({ where: { id: r.id }, data: { status, decidedAt: new Date() } });
   await db.$transaction((tx) => recordEvent(tx, c.testId, status === "withdrawn" ? "withdrew_req" : "declined_req", `${displayName(user)} ${status} a call request for ${fmtDateTime(r.startsAt)}`, false, {}, contractId));
-  if (status === "declined") await notify(other.email, `${displayName(user)} declined your call request`, [`${displayName(user)} declined your request for ${fmtDateTime(r.startsAt)}.`], side === "tester" ? `/app/tests/${c.testId}#calls` : `/app/sessions/${c.id}`);
   return { [status]: true };
 }
 

@@ -57,7 +57,7 @@ describe("call requests on both sides", () => {
     const qa = await db.callRequest.findFirstOrThrow({ where: { contractId: a.sessionId } });
     const qb = await db.callRequest.findFirstOrThrow({ where: { contractId: b.sessionId } });
     expect(qa.batchId).toBe(qb.batchId);
-    expect(await db.notification.count({ where: { userId: b.tester.user.id, text: { startsWith: "Nora Lane asked for a call: " } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: b.tester.user.id, text: { startsWith: "Nora Lane asked for a call: " } } })).toBe(0); // (Owner) a call request is not a bell line
     expect((await sact(a.sessionId, "answer-request", a.tester.cookie, { requestId: qa.id, action: "accept" })).body.booked).toBe(true);
     const late = await sact(b.sessionId, "answer-request", b.tester.cookie, { requestId: qb.id, action: "accept" });
     expect(late.body.error.message).toMatch(/^Another tester took this time at .+\.$/);
