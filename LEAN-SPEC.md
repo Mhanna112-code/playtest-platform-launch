@@ -4,6 +4,24 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 24, NEWEST+14) Suspended testers leave their tests; rejoining is always an ask
+- SUSPENDED TESTER (replaces the tester part of NEWEST+13): removed from every test they're in AT ONCE (calls ahead
+  cancelled, waiting requests closed); work already sent stays and is reviewed; pay for it waits until the suspension
+  lifts. Developers only see "Left this test". While suspended: sign in and look only; Find tests hidden ("Your account
+  is paused."); messages read-only; every action refused blue under the button.
+- WHEN LIFTED: bell + email "Your account is active again" -> their tests page; the tests they were removed from are at
+  the TOP with a "Suspended" label that stays until they rejoin or dismiss it; waiting pay goes out.
+- SUSPENDED DEVELOPER messages are read-only too.
+- REJOINING (all cases): a tester who LEFT (incl. removed by suspension) or whose work the developer ENDED, BEFORE their
+  deadline passed, sees "Ask to rejoin" on that test wherever it's listed (dashboard, tests page, session page) unless
+  the test was stopped or they rated it. Rejoining is ALWAYS an ask the developer accepts, even on "Anyone can join"
+  tests (an invite + an ask still auto-match). Accepting gives back exactly the time they had left. (This replaces
+  "ended testers need a new invite".)
+- PAYOUT PROBLEMS (tester side; do after the rest if usage allows): when Stripe reports a failed payout or an account
+  that needs attention, the tester sees a banner on Payments and the dashboard "Your bank couldn't receive a payout.
+  Update your payout details." with a button to Stripe, and a bell reminder every 3 days until fixed. The money stays
+  in their Stripe balance. (Admin "Payout problems" list: after launch.)
+
 ## (Owner, Oct 24, NEWEST+13) Suspensions
 - SUSPENDED DEVELOPER: can sign in; Dashboard, Payments, Profile open; can view tester profiles. Banner on every page:
   "Your account is paused. You can still pay for work testers sent. Contact support if you think this is a mistake."

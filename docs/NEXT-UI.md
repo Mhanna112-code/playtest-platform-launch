@@ -157,3 +157,5 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
        Total pay for this piece  $[      ]  $0.00-$3.00 · leave blank to keep it as it is
        Note to both [                    ]   [Decide]
    - Blank = keep the pay unchanged ("The team kept the pay at $0.00 (rejected)."); range hint + red on blur per item 0.
+29. SUSPENDED TESTERS + REJOIN RULES per LEAN-SPEC NEWEST+14 (do with item 26 and update item 16's ask-to-rejoin rules).
+30. PAYOUT PROBLEMS banner + 3-day bell reminder for testers per NEWEST+14 - ONLY after everything else, if usage remains.
