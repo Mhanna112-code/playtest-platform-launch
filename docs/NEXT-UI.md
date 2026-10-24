@@ -108,3 +108,7 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    - "TESTERS JOINED": the avatar row, then one row per tester showing only: their parts sent (Required / Not required,
      sent / not sent), how much paid per part and in total, call summary; and a "History (N)" fold at the bottom of each
      tester's row (full app testers-section.tsx "History" pattern) with their past events. No Pay boxes here.
+22. BELL STACKING (owner, Oct 24; LAST, only if usage allows): in the bell list, notifications about the SAME test on the
+   SAME day stack into one entry ("Harbor Run · 4 updates today", newest line shown, unread count); clicking it expands
+   to show every one of that day's lines for that test, each still linking to its place. Other days and other tests
+   stay separate. Unread state per line; opening the stack marks them read. Emails unchanged.
