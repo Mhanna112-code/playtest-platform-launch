@@ -145,3 +145,14 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
 27. PAYMENTS PAGE panel (owner, Oct 24; for ALL developers): under "Your card", a "Waiting for your review" panel listing
    every test with unreviewed parts (test name, how many pieces, oldest waiting / 14-day date) with a "Pay" button
    linking to that test's Needs you panel (#needs-you). Empty -> "Nothing waiting for review."
+28. ADMIN DISPUTE DECISION (owner, Oct 24) - fix + layout:
+   - MAX = the part's listing minus what was already paid for that part on OTHER pieces (same rule as the Charge cap);
+     MIN = what this piece was paid. Server-enforced (checkDisputeDecision) + tests (incl. paid $5 earlier + this piece
+     rejected, listing $8 -> max $3).
+   - Admin row layout:
+       Ana Silva vs Nora Lane · Harbor Run · Written answers (sent Oct 20)
+       Listing $8.00 · Paid for this piece $0.00 (rejected) · Paid for this part so far $5.00
+       Tester: "..."   Developer's note when rejecting: "..."   Developer's side: "..."
+       Total pay for this piece  $[      ]  $0.00-$3.00 · leave blank to keep it as it is
+       Note to both [                    ]   [Decide]
+   - Blank = keep the pay unchanged ("The team kept the pay at $0.00 (rejected)."); range hint + red on blur per item 0.
