@@ -89,7 +89,7 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
           <div className="flex flex-wrap items-end gap-2">
             <label className="inline-flex items-center gap-1">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max="180" data-whole="" data-msg="A live call lasts from 10 to 180 minutes." value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min <span className="text-xs text-slate-500">10–180</span></label>
             {p.side === "tester" && (
-              <label className="inline-flex items-center gap-1">Ask $<input className="input w-20" inputMode="decimal" placeholder="optional" aria-label="Ask per hour" data-min="0" data-max="5000" data-msg="Ask at most $5,000.00 an hour." value={ask} onChange={(e) => setAsk(e.target.value)} />/h <span className="text-xs text-slate-500">up to $5,000</span></label>
+              <label className="inline-flex items-center gap-1">Ask $<input className="input w-20" inputMode="decimal" placeholder="optional" aria-label="Ask per hour" data-min="0" data-max="999999.99" data-msg="Ask $0 or more (Stripe can't take more than $999,999.99 in one charge)." value={ask} onChange={(e) => setAsk(e.target.value)} />/h <span className="text-xs text-slate-500">at least $0</span></label>
             )}
             <button className="btn-ghost" disabled={busy || !filled.length || (p.side === "developer" && ticked.length === 0)} onClick={send}>Request a time</button>
           </div>

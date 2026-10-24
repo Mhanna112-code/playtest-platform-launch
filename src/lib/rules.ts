@@ -12,9 +12,7 @@ export const MIN_CHARGE_CENTS = 50;
 
 export const PRICE_LIMITS = {
   partMin: 100, // $1.00 for written answers or a recording (or free)
-  partMax: 100_000, // $1000 per part
   rateMin: 1000, // $10.00 an hour for a live call (or free)
-  rateMax: 20_000, // $200 an hour
 };
 
 /** Split a charge: the platform fee (20%) and what the tester gets (the rest). */
@@ -30,8 +28,13 @@ export type Check = { ok: true } | { ok: false; message: string };
 const no = (message: string): Check => ({ ok: false, message });
 const yes: Check = { ok: true };
 
-/** A sanity cap on one Pay press. */
-export const MAX_PAY_CENTS = 500_000;
+/**
+ * (Owner) No upper cap on money. The one limit is Stripe's own: a card charge can't be more than about $999,999.99, so an
+ * amount above it is refused in red with that reason.
+ */
+export const STRIPE_MAX_CENTS = 99_999_999;
+export const MAX_PAY_CENTS = STRIPE_MAX_CENTS;
+export const STRIPE_MAX_LINE = `Stripe can't take more than ${"$999,999.99"} in one charge.`;
 
 /**
  * The one Pay box (owner update, Oct 22): any amount from $0 up. A reason is required when the amount is below the
@@ -40,7 +43,7 @@ export const MAX_PAY_CENTS = 500_000;
  */
 export function checkPay(amountCents: number | null, listingCents: number | null, reason: string, tickedCents: number | null): Check {
   if (amountCents == null || !Number.isInteger(amountCents) || amountCents < 0) return no("Enter an amount like 7.50.");
-  if (amountCents > MAX_PAY_CENTS) return no(`At most ${money(MAX_PAY_CENTS)} in one payment.`);
+  if (amountCents > STRIPE_MAX_CENTS) return no(STRIPE_MAX_LINE);
   if (listingCents != null && amountCents < listingCents && reason.trim().length < 5)
     return no(`Say why you're paying less than the listing's ${money(listingCents)} (the tester reads it).`);
   if (amountCents > 0 && amountCents < MIN_CHARGE_CENTS) return no(`The smallest card charge is ${money(MIN_CHARGE_CENTS)}: pay $0.00 or at least ${money(MIN_CHARGE_CENTS)}.`);
@@ -164,13 +167,13 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date()): strin
   const part = (c: number | null, name: string) => {
     if (c == null || c === 0) return;
     if (c < PRICE_LIMITS.partMin) errs.push(`The ${name} price must be at least ${money(PRICE_LIMITS.partMin)} (or free).`);
-    if (c > PRICE_LIMITS.partMax) errs.push(`The ${name} price can be at most ${money(PRICE_LIMITS.partMax)}.`);
+    if (c > STRIPE_MAX_CENTS) errs.push(`The ${name} price: ${STRIPE_MAX_LINE}`);
   };
   part(l.writtenCents, "written answers");
   part(l.recordingCents, "recording");
   if (l.liveRateCents != null) {
     if (l.liveRateCents !== 0 && l.liveRateCents < PRICE_LIMITS.rateMin) errs.push(`The live call rate must be at least ${money(PRICE_LIMITS.rateMin)} an hour (or free).`);
-    if (l.liveRateCents > PRICE_LIMITS.rateMax) errs.push(`The live call rate can be at most ${money(PRICE_LIMITS.rateMax)} an hour.`);
+    if (l.liveRateCents > STRIPE_MAX_CENTS) errs.push(`The live call rate: ${STRIPE_MAX_LINE}`);
   }
   if (l.writtenCents != null && l.questions.filter((q) => q.trim()).length === 0) errs.push("Add at least one question for the written answers.");
   if (l.questions.length > 20) errs.push("At most 20 questions.");
@@ -492,11 +495,11 @@ export const autoPayFor = (listingCents: number | null, askedCents: number | nul
   listingCents == null ? null : Math.min(listingCents, askedCents ?? listingCents);
 export const REMIND_DAYS = 3;
 
-/** "Ask $___ for this": optional; any amount from $0 up to the one-payment cap. */
+/** "Ask $___ for this": optional; any amount from $0 up (no maximum; only Stripe's own limit). */
 export function checkAsk(cents: number | null): Check {
   if (cents == null) return yes;
   if (!Number.isInteger(cents) || cents < 0) return no("Enter the amount you ask like 7.50, or leave it empty.");
-  if (cents > MAX_PAY_CENTS) return no(`Ask at most ${money(MAX_PAY_CENTS)}.`);
+  if (cents > STRIPE_MAX_CENTS) return no(STRIPE_MAX_LINE);
   return yes;
 }
 

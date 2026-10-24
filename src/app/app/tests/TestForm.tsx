@@ -52,9 +52,9 @@ const API_FIELDS: Record<keyof F, string[]> = {
 
 // The parts, as the full app's Parts and prices cards (prices-widget.tsx there), with lean's names and price limits.
 const PARTS = [
-  { on: "written", req: "writtenRequired", price: "writtenPrice", title: "Written report", help: "Answers to your questions", ph: "10.00", unit: "", min: "1", max: "1000", msg: "The written answers price must be from $1.00 to $1,000.00 (or Free)." },
-  { on: "recording", req: "recordingRequired", price: "recordingPrice", title: "Recorded session", help: "Screen recording, thinking out loud", ph: "15.00", unit: "", min: "1", max: "1000", msg: "The recording price must be from $1.00 to $1,000.00 (or Free)." },
-  { on: "live", req: "liveRequired", price: "liveRate", title: "Live session", help: "A call while you watch, billed by the minute", ph: "30.00", unit: "/h", min: "10", max: "200", msg: "The live call rate must be from $10 to $200 an hour (or Free)." },
+  { on: "written", req: "writtenRequired", price: "writtenPrice", title: "Written report", help: "Answers to your questions", ph: "10.00", unit: "", min: "1", max: "999999.99", msg: "The written answers price must be at least $1.00 (or Free); Stripe can't take more than $999,999.99 in one charge." },
+  { on: "recording", req: "recordingRequired", price: "recordingPrice", title: "Recorded session", help: "Screen recording, thinking out loud", ph: "15.00", unit: "", min: "1", max: "999999.99", msg: "The recording price must be at least $1.00 (or Free); Stripe can't take more than $999,999.99 in one charge." },
+  { on: "live", req: "liveRequired", price: "liveRate", title: "Live session", help: "A call while you watch, billed by the minute", ph: "30.00", unit: "/h", min: "10", max: "999999.99", msg: "The live call rate must be at least $10 an hour (or Free); Stripe can't take more than $999,999.99 in one charge." },
 ] as const;
 
 export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: { id: string; version: number; testersIn: number; draft: boolean; seenAt?: string }; spotsLimit?: number }) {
@@ -198,7 +198,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: { i
               </div>
             );
           })}
-          <p className="text-xs text-slate-500">Any cents. Free makes a part unpaid. Otherwise from $1 to $1,000 for the written answers or a recording, and from $10 to $200 an hour for a live call (each call request sets its own length).</p>
+          <p className="text-xs text-slate-500">Any cents. Free makes a part unpaid. Otherwise at least $1 for the written answers or a recording, and at least $10 an hour for a live call (each call request sets its own length).</p>
         </fieldset>
         {f.written && (
           <div>

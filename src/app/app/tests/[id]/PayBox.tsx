@@ -45,13 +45,13 @@ export function PayBox(p: { kind: "submission" | "call"; id: string; name: strin
       <div className="flex flex-wrap items-end gap-2">
         <div>
           <label className="label req" htmlFor={`amt-${p.id}`}>Amount ($)</label>
-          <input id={`amt-${p.id}`} className="input w-32" inputMode="decimal" data-min="0.5" data-max="5000" data-zero-ok="" data-msg="Pay $0.00, or from $0.50 (the smallest card charge) to $5,000.00." value={amount} onChange={(e) => { setAmount(e.target.value); setTicked(false); }} placeholder="0.00" />
+          <input id={`amt-${p.id}`} className="input w-32" inputMode="decimal" data-min="0.5" data-max="999999.99" data-zero-ok="" data-msg="Pay $0.00, or at least $0.50 (the smallest card charge). Stripe can't take more than $999,999.99 in one charge." value={amount} onChange={(e) => { setAmount(e.target.value); setTicked(false); }} placeholder="0.00" />
         </div>
         <label className="mb-2 flex items-center gap-2 text-sm text-ink-200">
           <input type="checkbox" checked={ticked} disabled={cents == null} onChange={(e) => setTicked(e.target.checked)} /> charged now: {cents == null ? "–" : money(cents)}
         </label>
         <button className="btn" disabled={busy || !ticked || cents == null} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go("pay")}>Pay</button>
-        <span className="text-xs text-slate-500">$0.50–$5,000 (or 0)</span>
+        <span className="text-xs text-slate-500">at least $0.50 (or 0)</span>
       </div>
       {at === "pay" && <ChangesBox changes={changes} error={error} />}
       <div className="flex flex-wrap items-end gap-2">

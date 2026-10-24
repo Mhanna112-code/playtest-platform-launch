@@ -55,7 +55,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
         <label className="label" htmlFor="notes">Anything else (bugs, ideas)</label>
         <textarea id="notes" rows={2} className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
-      <label className="block text-sm">Ask $ <input className="input inline w-24" inputMode="decimal" placeholder="optional" aria-label="Ask for this" data-min="0" data-max="5000" data-msg="Ask at most $5,000.00." value={ask} onChange={(e) => setAsk(e.target.value)} /> for this <span className="text-xs text-slate-500">up to $5,000</span></label>
+      <label className="block text-sm">Ask $ <input className="input inline w-24" inputMode="decimal" placeholder="optional" aria-label="Ask for this" data-min="0" data-max="999999.99" data-msg="Ask $0 or more (Stripe can't take more than $999,999.99 in one charge)." value={ask} onChange={(e) => setAsk(e.target.value)} /> for this <span className="text-xs text-slate-500">at least $0</span></label>
       <span><button className="btn" disabled={busy}>{busy ? "Sending…" : update ? "Send the updated answers" : "Send my written answers"}</button>{keep.restored && <NotSentTag />}</span>
       <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {msg && (msg.ok ? <p className="ok">{msg.text}</p> : <Err text={msg.text} />)}
