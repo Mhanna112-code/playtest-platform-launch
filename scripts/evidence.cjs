@@ -708,7 +708,7 @@ async function signIn(page, email) {
     check("never says blocked", !(await tester.isVisible("text=blocked")));
     await shot(tester, "session-ended-tester");
     await dev.goto("/app/profile#blocked");
-    check("Settings → Blocked people", await has(dev, "text=Blocked people"));
+    check("Account → Blocked people", await has(dev, "text=Blocked people"));
     await shot(dev, "blocked-people-developer");
     await dev.locator("#blocked button:has-text('Unblock')").first().click();
     await dev.waitForTimeout(1200);

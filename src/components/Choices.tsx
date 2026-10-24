@@ -9,9 +9,8 @@ export function Choices({ options, value, onChange, label, required }: { options
         {options.map((o) => {
           const on = value.includes(o);
           return (
-            <label key={o} className={"cursor-pointer rounded-full border px-3 py-1 text-sm " + (on ? "border-volt-300 bg-volt-300/10 text-volt-200" : "border-white/15 bg-white/[0.04]")}>
-              <input type="checkbox" className="sr-only" checked={on} onChange={() => onChange(on ? value.filter((x) => x !== o) : [...value, o])} />
-              {o}
+            <label key={o} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-600 px-3 py-1.5 text-sm has-[:checked]:border-indigo-400 has-[:checked]:bg-indigo-500/10">
+              <input type="checkbox" checked={on} onChange={() => onChange(on ? value.filter((x) => x !== o) : [...value, o])} /> {o}
             </label>
           );
         })}

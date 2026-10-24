@@ -27,8 +27,8 @@ export function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
     }
   }
   return (
-    <form className="panel" onSubmit={submit} noValidate aria-label="Password">
-      <h2>{hasPassword ? "Change your password" : "Choose a password"}</h2>
+    <form className="card space-y-5" onSubmit={submit} noValidate aria-label="Password">
+      <h2 className="font-semibold text-white">{hasPassword ? "Change your password" : "Choose a password"}</h2>
       {hasPassword && (
         <div>
           <label className="label req" htmlFor="current">Current password</label>
@@ -43,9 +43,9 @@ export function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
         <label className="label req" htmlFor="confirm-password">Type it again</label>
         <PasswordInput id="confirm-password" name="confirm" autoComplete="new-password" minLength={8} />
       </div>
-      <p className="text-xs text-ink-500">At least 8 characters. Saving signs you out on your other devices.</p>
+      <p className="text-xs text-slate-500">At least 8 characters. Saving signs you out on your other devices.</p>
       <Err text={err} />
-      {done && <p className="ok">Password changed. Your other devices are signed out.</p>}
+      {done && <p className="text-emerald-300">Password changed. Your other devices are signed out.</p>}
       <button className="btn" disabled={busy}>{busy ? "Saving…" : "Save the new password"}</button>
     </form>
   );

@@ -5,6 +5,8 @@ import { requirePageUser } from "@/lib/server/page-auth";
 import { stripeOn } from "@/lib/server/stripe";
 import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
+import { sideFor } from "@/lib/sides";
+import { testerShare } from "@/lib/rules";
 
 export const metadata = { title: "Payments · Playtest" };
 export const dynamic = "force-dynamic";
@@ -19,25 +21,38 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const u = await requirePageUser();
   const q = await searchParams;
   const on = stripeOn();
+  // (NEXT-UI 6 / 15) Each side has its own payments page, as in the full app (Billing / Payments): the side in use.
+  const side = sideFor(u, "/app/payments");
+  const dev = side === "developer", tester = side === "tester";
+  // The tester's "Everything you sent": each part by test, newest first, with where its money is.
+  const sent = tester
+    ? await db.contract.findMany({
+        where: { testerId: u.id },
+        orderBy: { joinedAt: "desc" },
+        include: { test: { include: { developer: true } }, submissions: { include: { review: true, dispute: true } }, calls: { include: { review: true, dispute: true } } },
+      })
+    : [];
+  const owed = tester ? await db.payment.findMany({ where: { testerId: u.id, status: "failed", settledAt: null, owedUntil: { not: null } }, select: { submissionId: true, callId: true } }) : [];
+  const owedKeys = new Set(owed.map((p) => p.submissionId ?? p.callId));
   const [paidOut, paidIn] = await Promise.all([
-    u.isDeveloper ? db.payment.findMany({ where: { developerId: u.id, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "desc" }, take: 100 }) : [],
-    u.isTester ? db.payment.findMany({ where: { testerId: u.id, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "desc" }, take: 100 }) : [],
+    dev ? db.payment.findMany({ where: { developerId: u.id, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "desc" }, take: 100 }) : [],
+    tester ? db.payment.findMany({ where: { testerId: u.id, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "desc" }, take: 100 }) : [],
   ]);
   // The full app's billing / payouts pages: one column of cards, each with its icon heading; lists as rows.
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <h1 className="text-3xl font-bold tracking-tight text-white">Payments</h1>
       {!on && <p className="info">{MESSAGES.off}</p>}
-      {u.isDeveloper && (await owedForBox(u.id).then((o) => (u.holdStartedAt || o.length ? <OwedBox onHold={!!u.holdStartedAt} owed={o} /> : null)))}
+      {dev && (await owedForBox(u.id).then((o) => (u.holdStartedAt || o.length ? <OwedBox onHold={!!u.holdStartedAt} owed={o} /> : null)))}
       {q.error && q.error !== "off" && <p className="err">{MESSAGES[q.error]}</p>}
       {q.saved === "card" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card saved.</p>}
       {q.saved === "payout" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Your payout account is connected.</p>}
       {q.pending === "payout" && <p className="info">Stripe still needs a few details before you can be paid. Continue setup below.</p>}
 
-      {u.isDeveloper && (
+      {dev && (
         <>
           <section id="card" className="card scroll-mt-24 space-y-3">
-            <h2 className="flex items-center gap-2 font-semibold text-white"><CreditCard className="h-5 w-5 text-indigo-300" /> Your card (developer)</h2>
+            <h2 className="flex items-center gap-2 font-semibold text-white"><CreditCard className="h-5 w-5 text-indigo-300" /> Your card</h2>
             <p className="text-sm text-slate-300">{u.stripePaymentMethodId ? "A card is saved." : "No card yet."} You&apos;re charged only when you press Pay, for exactly the amount you tick.</p>
             {on && <a className="btn no-underline hover:no-underline" href="/api/payments/card"><CreditCard className="h-4 w-4" /> {u.stripePaymentMethodId ? "Change card" : "Add a card"}</a>}
             <p className="flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck className="h-3.5 w-3.5" /> Card details are entered on Stripe&apos;s page and never reach this site.</p>
@@ -60,10 +75,40 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         </>
       )}
 
-      {u.isTester && (
+      {tester && (
         <>
+          <section id="sent" className="card scroll-mt-24 space-y-3">
+            <h2 className="font-semibold text-white">Everything you sent</h2>
+            <p className="text-xs text-slate-500">Each part you sent, by test, newest first, and where its money is now. A rejected or partly paid part can be disputed once, on its session page.</p>
+            {sent.every((c) => c.submissions.length + c.calls.filter((x) => x.review).length === 0) && <p className="text-sm text-slate-500">Nothing sent yet.</p>}
+            {sent.filter((c) => c.submissions.length + c.calls.filter((x) => x.review).length > 0).map((c) => (
+              <div key={c.id} className="space-y-1">
+                <p className="text-sm font-medium text-slate-200">{c.title} <span className="font-normal text-slate-500">· {c.test.developer.name || c.test.developer.email}</span></p>
+                <ul className="divide-y divide-white/5 text-sm">
+                  {[
+                    ...c.submissions.map((x) => ({ id: x.id, at: x.sentAt, what: x.kind === "recording" ? "Screen recording" : "Written answers", review: x.review, dispute: x.dispute })),
+                    ...c.calls.filter((x) => x.review).map((x) => ({ id: x.id, at: x.startsAt, what: "Live call", review: x.review, dispute: x.dispute })),
+                  ].sort((a, b) => b.at.getTime() - a.at.getTime()).map((r) => {
+                    const status = owedKeys.has(r.id) ? { label: "Payment may be delayed", tone: "text-amber-200" }
+                      : !r.review ? { label: "Waiting for review", tone: "text-slate-300" }
+                      : r.dispute ? { label: r.dispute.status === "open" ? "Disputed: waiting for the team" : "Dispute decided", tone: "text-amber-200" }
+                      : r.review.rejected ? { label: "Not accepted", tone: "text-rose-300" }
+                      : { label: `Paid · you get ${money(testerShare(r.review.amountCents))}`, tone: "text-emerald-300" };
+                    return (
+                      <li key={r.id} className="py-2">
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                          <a href={`/app/sessions/${c.id}#parts`} className="text-slate-200 hover:underline">{r.what}</a>
+                          <span className={status.tone}>{status.label}</span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </section>
           <section className="card space-y-3">
-            <h2 className="flex items-center gap-2 font-semibold text-white"><Banknote className="h-5 w-5 text-emerald-300" /> Your payout account (tester)</h2>
+            <h2 className="flex items-center gap-2 font-semibold text-white"><Banknote className="h-5 w-5 text-emerald-300" /> Where your money goes</h2>
             <p className="text-sm text-slate-300">
               {u.payoutsReady ? "Your payout account is connected. Each payment is sent to it." : u.stripeAccountId ? "Stripe still needs a few details before you can be paid." : "Connect a payout account to receive money for your work."}
             </p>
@@ -72,7 +117,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
           </section>
           <section className="card space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-white">What you&apos;ve earned</h2>
+              <h2 className="font-semibold text-white">Your earnings</h2>
               <span className="text-sm text-slate-400">Total {money(paidIn.reduce((a, p) => a + p.testerCents, 0))}</span>
             </div>
             <ul className="divide-y divide-white/5 text-sm">

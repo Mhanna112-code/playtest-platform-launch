@@ -14,7 +14,7 @@ export function BlockButton({ userId, name, effect, seenAt, sessionId, testId, p
   return (
     <div className="space-y-2">
       <ConfirmButton className={plain ? "hover:text-rose-200" : "btn-secondary px-3 py-1.5 text-xs"} disabled={busy} title={`Block ${name}?`} confirmLabel={`Block ${name}`}
-        body={<p>{effect} They aren&apos;t told. You can unblock in Settings → Blocked people.</p>}
+        body={<p>{effect} They aren&apos;t told. You can unblock in Account → Blocked people.</p>}
         onConfirm={async () => {
           const r = await press("/api/blocks", { userId, sessionId, testId });
           if (r) window.location.reload();
@@ -28,7 +28,7 @@ export function BlockButton({ userId, name, effect, seenAt, sessionId, testId, p
 
 export function UnblockButton({ userId }: { userId: string }) {
   return (
-    <button className="btn-ghost text-xs" onClick={() => api("/api/blocks", { userId, action: "unblock" }).then(() => window.location.reload())}>
+    <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => api("/api/blocks", { userId, action: "unblock" }).then(() => window.location.reload())}>
       Unblock
     </button>
   );

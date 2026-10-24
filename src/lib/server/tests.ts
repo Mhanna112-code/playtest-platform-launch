@@ -506,7 +506,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
         listingVersion: t.listingVersion, terms: termsLine(asListing(t), true), questions: t.questions,
       });
     }
-    if (await tx.block.count({ where: { blockerId: tester.id, blockedId: t.developerId } })) throw new HttpError(409, "blocked", `You blocked ${displayName(dev)}: unblock them in Settings → Blocked people to join.`);
+    if (await tx.block.count({ where: { blockerId: tester.id, blockedId: t.developerId } })) throw new HttpError(409, "blocked", `You blocked ${displayName(dev)}: unblock them in Account → Blocked people to join.`);
     if (await tx.block.count({ where: { blockerId: t.developerId, blockedId: tester.id } })) throw new HttpError(409, "closed", "This test isn't taking new testers right now.");
     gapStop(t, profile, body, "Join");
     const snap = contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion }, new Date(), body.keepPrivate === true);

@@ -259,7 +259,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 </>
               );
             })()}
-            {blockedIds.has(c.testerId) && <p className="note">You blocked {displayName(c.tester)}. Unblock in Settings → Blocked people.</p>}
+            {blockedIds.has(c.testerId) && <p className="note">You blocked {displayName(c.tester)}. Unblock in Account → Blocked people.</p>}
             {c.submissions.length === 0 && c.calls.length === 0 && <p className="note">Nothing sent yet.</p>}
             {c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).map((x) => (
               <div key={x.id} className="space-y-2 rounded-lg border border-white/10 p-3">

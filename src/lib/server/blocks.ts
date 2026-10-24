@@ -8,7 +8,7 @@ import { roomUrl } from "./calls";
 // Block (owner rule): either side can block the other. At once: their sessions together end (sent work stays payable
 // and reviewable; disputes still allowed), booked calls between them are cancelled, neither can book or join a call with
 // the other, no invites or joins to the blocker's tests, and chat between them closes. Never revealed to the blocked
-// person, who only reads neutral lines. Unblock from Settings → Blocked people (nothing reopens by itself).
+// person, who only reads neutral lines. Unblock from Account → Blocked people (nothing reopens by itself).
 
 /** Is there a block either way between these two people? */
 export async function blockedEitherWay(a: string, b: string) {

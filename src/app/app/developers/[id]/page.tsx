@@ -6,6 +6,7 @@ import { displayName, fmtDate } from "@/lib/format";
 import { termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { DeveloperTiles } from "@/components/ProfileTiles";
+import { BlockButton } from "@/components/BlockButton";
 
 export const metadata = { title: "Developer · Playtest" };
 export const dynamic = "force-dynamic";
@@ -58,6 +59,12 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
           </ul>
         )}
       </section>
+      {/* Block the developer, as in the full app: a small link at the bottom of their profile (testers only). */}
+      {viewer.isTester && !mine && !(await db.block.count({ where: { blockerId: viewer.id, blockedId: p.id } })) && (
+        <div className="text-right text-xs text-slate-500">
+          <BlockButton plain userId={p.id} name={name} effect="You won't see their tests or profile any more, and they can't invite you." />
+        </div>
+      )}
     </div>
   );
 }

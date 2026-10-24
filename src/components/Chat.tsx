@@ -1,60 +1,84 @@
 "use client";
 import { Err } from "@/components/Err";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, errOf } from "@/lib/client";
 import { NotSentTag, useKept } from "@/lib/useKept";
 
 type Msg = { id: string; mine: boolean; who: string; body: string; at: string };
 
-/** The simple chat between the developer and one tester. New messages show on send or when the page is reloaded. */
-export function Chat({ path, extra = {}, messages, other, closed, keepKey }: { path: string; extra?: Record<string, unknown>; messages: Msg[]; other: string; closed?: boolean; keepKey: string }) {
+const day = (iso: string) => new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+/**
+ * The chat page's conversation, as the full app's: one card (the other person's name and the test in its header), the
+ * messages with a day line between days (yours on the right in the brand colour), and the message box at the bottom.
+ */
+export function Chat({ path, extra = {}, messages, other, title, closed, keepKey }: { path: string; extra?: Record<string, unknown>; messages: Msg[]; other: string; title: string; closed?: boolean; keepKey: string }) {
   const router = useRouter();
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const bottom = useRef<HTMLDivElement>(null);
+  const count = useRef(0);
   // (NEXT-UI 10) The message typed and not sent is kept on the server (back after a reload / another device, "Not sent yet").
   const keep = useKept(keepKey, { text }, text === "", (v) => setText(v.text ?? ""));
+  // Scroll to the newest message when one arrives.
+  useEffect(() => {
+    if (messages.length > count.current) bottom.current?.scrollIntoView({ behavior: count.current ? "smooth" : "auto" });
+    count.current = messages.length;
+  }, [messages.length]);
   return (
-    <div className="space-y-2">
-      {/* The full app's chat: bubbles, yours on the right in the brand colour, theirs on the left with the name. */}
-      {messages.length === 0 && <p className="py-6 text-center text-sm text-slate-500">No messages yet. Write to {other} here.</p>}
-      <ul className="max-h-80 space-y-3 overflow-y-auto" role="log" aria-label="Messages">
-        {messages.map((m) => (
-          <li key={m.id} className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
-            <div className="max-w-[78%] space-y-1">
-              {!m.mine && <p className="px-1 text-xs text-slate-400">{m.who}</p>}
-              <div className={`rounded-2xl px-3.5 py-2 text-sm ${m.mine ? "bg-volt-300 text-ink-950" : "bg-white/[0.07] text-slate-100"}`}>
-                <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                <p className={`mt-1 text-[10px] ${m.mine ? "text-ink-950/75" : "text-slate-500"}`}>{new Date(m.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>
+    <div className="card flex h-[70vh] flex-col p-0">
+      <div className="border-b border-white/10 px-5 py-3">
+        <p className="font-semibold text-white">{other}</p>
+        <p className="text-xs text-slate-400">{title}</p>
+      </div>
+      <div className="relative flex-1 space-y-3 overflow-y-auto px-5 py-4" tabIndex={0} role="log" aria-label="Messages" aria-live="polite">
+        {messages.length === 0 && <p className="py-10 text-center text-sm text-slate-500">No messages yet. Ask a question, or say hello.</p>}
+        {messages.map((m, i) => (
+          <div key={m.id}>
+            {(i === 0 || day(messages[i - 1].at) !== day(m.at)) && <p className="my-2 text-center text-xs text-slate-500">{day(m.at)}</p>}
+            <div className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
+              <div className="max-w-[78%] space-y-1">
+                {!m.mine && <p className="px-1 text-xs text-slate-400">{m.who}</p>}
+                <div className={`rounded-2xl px-3.5 py-2 text-sm ${m.mine ? "bg-volt-300 text-ink-950" : "bg-white/[0.07] text-slate-100"}`}>
+                  <div className="whitespace-pre-wrap break-words">{m.body}</div>
+                  <p className={`mt-1 text-[10px] ${m.mine ? "text-ink-950/75" : "text-slate-500"}`}>{time(m.at)}</p>
+                </div>
               </div>
             </div>
-          </li>
+          </div>
         ))}
-      </ul>
-      {closed ? <p className="border-t border-white/10 pt-3 text-sm text-slate-400">This chat is closed.</p> : <form
-        className="flex gap-2 border-t border-white/10 pt-3"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setBusy(true);
-          setErr("");
-          try {
-            await api(path, { ...extra, body: text });
-            setText("");
-            await keep.clear();
-            router.refresh();
-          } catch (e2) {
-            setErr(errOf(e2));
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <input className="input" aria-label={`Message ${other}`} placeholder={`Message ${other}…`} value={text} onChange={(e) => setText(e.target.value)} />
-        <button className="btn" disabled={busy || !text.trim()}>Send</button>
-        {keep.restored && <span className="self-center"><NotSentTag /></span>}
-      </form>}
-      <Err text={err} />
+        <div ref={bottom} />
+      </div>
+      {closed ? (
+        <p className="border-t border-white/10 px-5 py-3 text-sm text-slate-400">This chat is closed.</p>
+      ) : (
+        <form
+          className="flex items-end gap-2 border-t border-white/10 px-4 py-3"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setBusy(true);
+            setErr("");
+            try {
+              await api(path, { ...extra, body: text });
+              setText("");
+              await keep.clear();
+              router.refresh();
+            } catch (e2) {
+              setErr(errOf(e2));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <input className="input" aria-label={`Message ${other}`} placeholder={`Message ${other}…`} value={text} onChange={(e) => setText(e.target.value)} />
+          <button className="btn" disabled={busy || !text.trim()}>Send</button>
+          {keep.restored && <span className="self-center"><NotSentTag /></span>}
+        </form>
+      )}
+      {err && <div className="px-5 pb-3"><Err text={err} /></div>}
     </div>
   );
 }

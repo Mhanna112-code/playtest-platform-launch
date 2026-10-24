@@ -7,6 +7,8 @@ import { requirePageUser } from "@/lib/server/page-auth";
 import { isAdmin } from "@/lib/server/session";
 import { AdminButton } from "./AdminButton";
 import { adminCases } from "@/lib/server/holds";
+import { StatTile } from "@/components/StatTile";
+import { BadgeDollarSign, FlaskConical, Inbox, ListChecks, Users, Wallet } from "lucide-react";
 
 export const metadata = { title: "Admin · Playtest" };
 export const dynamic = "force-dynamic";
@@ -31,6 +33,11 @@ export default async function AdminPage() {
   const held = users.filter((x) => x.holdStartedAt);
   const cases = await adminCases();
   const chargebacks = await db.payment.findMany({ where: { chargeback: "open" } });
+  // The full app's admin tiles: people, parts awaiting review, what was charged, the platform's share, what testers are owed.
+  const charged = await db.payment.aggregate({ where: { status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true, feeCents: true }, _count: { _all: true } });
+  const toReview = (await db.submission.count({ where: { review: null } })) + (await db.call.count({ where: { review: null, status: "booked", startsAt: { lte: new Date() } } }));
+  const openTests = tests.filter((t) => t.status === "open").length;
+  const owedToTesters = payments.length ? (await db.payment.aggregate({ where: { transferStatus: "waiting" }, _sum: { testerCents: true } }))._sum.testerCents ?? 0 : 0;
   return (
     <main className="wrap space-y-8">
       <div className="flex items-center gap-4">
@@ -38,6 +45,15 @@ export default async function AdminPage() {
         <Link href="/app">Back to the app</Link>
       </div>
       <h1 className="text-3xl font-bold tracking-tight text-white">Admin</h1>
+
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <StatTile icon={Users} label="Developers / testers" value={`${users.filter((x) => x.isDeveloper).length} / ${users.filter((x) => x.isTester).length}`} hint={`${openTests} tests accepting testers`} tone="indigo" />
+        <StatTile icon={Inbox} label="Parts awaiting review" value={String(toReview)} hint="written answers, recordings and calls" tone="amber" />
+        <StatTile icon={Wallet} label="Charged so far" value={money(charged._sum.amountCents ?? 0)} hint={`${charged._count._all} payment${charged._count._all === 1 ? "" : "s"}`} tone="emerald" />
+        <StatTile icon={FlaskConical} label="Your revenue (20%)" value={money(charged._sum.feeCents ?? 0)} hint="the platform's share of what was charged" tone="fuchsia" />
+        <StatTile icon={BadgeDollarSign} label="Owed to testers" value={money(owedToTesters)} hint="waiting for a payout account" tone="amber" />
+        <StatTile icon={ListChecks} label="On the waitlist" value={String(waitlist.length)} hint="→ Waitlist" tone="indigo" />
+      </section>
 
       <section className="card space-y-3">
         <h2 className="text-lg font-semibold text-white">Needs the team today ({cases.length})</h2>

@@ -42,7 +42,7 @@ export async function joinRefusal(testerId: string, testId: string) {
   if (old?.status === "ended" && !(await db.invite.findFirst({ where: { testId, testerId, status: "sent" } }))) return "You can't join this test again.";
   const testersIn = await db.contract.count({ where: { testId, status: "working" } });
   if (testersIn >= t.spots) return (await db.invite.findFirst({ where: { testId, testerId, status: "sent" } })) ? `${t.title} is full right now.` : "This test is full.";
-  if (await db.block.count({ where: { blockerId: testerId, blockedId: t.developerId } })) return `You blocked ${displayName(t.developer)}: unblock them in Settings → Blocked people to join.`;
+  if (await db.block.count({ where: { blockerId: testerId, blockedId: t.developerId } })) return `You blocked ${displayName(t.developer)}: unblock them in Account → Blocked people to join.`;
   if (await db.block.count({ where: { blockerId: t.developerId, blockedId: testerId } })) return "This test isn't taking new testers right now.";
   if ((await db.contract.count({ where: { testerId, status: "working" } })) >= MAX_ACTIVE_TESTS) return "You can't join more tests right now.";
   return "";

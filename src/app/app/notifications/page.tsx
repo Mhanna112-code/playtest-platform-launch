@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { fmtDate } from "@/lib/format";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { sideLink } from "@/lib/sides";
+import { AlertSettings } from "./AlertSettings";
 
 export const metadata = { title: "Notifications · Playtest" };
 export const dynamic = "force-dynamic";
@@ -16,12 +17,12 @@ export default async function Notifications() {
   await db.notification.updateMany({ where: { userId: u.id, readAt: null }, data: { readAt: new Date() } });
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div className="space-y-1">
+      <AlertSettings emailPref={u.emailPref} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight text-white"><Bell className="h-7 w-7 text-indigo-300" /> Notifications</h1>
-        <p className="text-sm text-slate-400">Emails follow your setting in <Link href="/app/profile">Profile</Link>; everything is kept here.</p>
       </div>
       {items.length === 0 ? (
-        <p className="card py-10 text-center text-slate-400">Nothing yet. You&apos;ll hear here when testers join, send work, or get paid.</p>
+        <p className="card py-10 text-center text-slate-400">Nothing yet. You&apos;ll hear here when testers join, send feedback, or get reviewed.</p>
       ) : (
         <ul className="card divide-y divide-white/5 p-0">
           {items.map((n) => (

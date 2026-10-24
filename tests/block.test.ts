@@ -79,7 +79,7 @@ describe("block", () => {
     expect((await join(dev.cookie, call.id)).body.error.message).toBe("This call was cancelled.");
     const s2 = await setup();
     await db.test.update({ where: { id: s2.testId }, data: { developerId: dev.user.id } });
-    expect((await act(s2.testId, "join", tester.cookie, { listingVersion: 1 })).body.error.message).toBe("You blocked Nora Lane: unblock them in Settings → Blocked people to join.");
+    expect((await act(s2.testId, "join", tester.cookie, { listingVersion: 1 })).body.error.message).toBe("You blocked Nora Lane: unblock them in Account → Blocked people to join.");
     expect(testId).toBeTruthy();
   });
 });
