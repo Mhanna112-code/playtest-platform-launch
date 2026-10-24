@@ -73,3 +73,11 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    Typical review / Rating + developer-only capacity card; tester Accepted parts / Rating), payments, notifications,
    messages/chat, account settings, admin, landing, login/sign-up/reset/verify. Copy the full app's markup and
    wording, adapting only where lean behaviour differs; list each adaptation.
+16. ASK TO REJOIN like the full app (owner, Oct 23; integration RejoinAsk / wrapUp kind REJOIN): a tester who LEFT
+   no longer rejoins directly; "Join again" becomes "Ask to rejoin" (optional note). The developer sees it where the
+   full app shows rejoin asks (with applications / Needs you) with Accept / Decline. Accept restores their session on
+   the CURRENT listing (time-left deadline, as specced); Decline tells them. The ask closes like an application
+   (test full, stopped, Open until passed, listing change that closes applications) and follows the stop-once and
+   refusal rules. Ended testers still need a new invite. Testers who rated can't ask.
+17. TERMS OF USE, PRIVACY, HELP pages copied from the full app (owner said yes), adapted to lean rules, linked in
+   the footer and at sign-up. Mark them "Draft - owner to review wording" in the report.
