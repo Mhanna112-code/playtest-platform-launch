@@ -4,6 +4,24 @@ A fresh, simple rebuild of the core of Playtest Platform. The full app (C:/Users
 branch integration; plain-English feature list in docs/FEATURES-SPEC.md) is the REFERENCE for wording, money rules
 and look, but this version deliberately drops most of its complexity.
 
+## (Owner, Oct 24, NEWEST+13) Suspensions
+- SUSPENDED DEVELOPER: can sign in; Dashboard, Payments, Profile open; can view tester profiles. Banner on every page:
+  "Your account is paused. You can still pay for work testers sent. Contact support if you think this is a mistake."
+  Each test page: "This test is paused while your account is paused." Pay and "Pay what you owe" GO THROUGH (the
+  suspension never stops them; normal stop-once reasons still do). Every other button: final blue refusal under the
+  button, every press: "Your account is paused: you can still pay for work testers sent."
+- SUSPENDED TESTER: banner "Your account is paused. Contact support if you think this is a mistake."; every button:
+  final blue refusal with the same line. Developers see only neutral wording ("Can't be invited right now"; Pay refused
+  "…account is closed for now, so they can't be paid"). Never the word "suspended" to anyone else.
+- Suspension starting while a page is open: top box "Your account was paused · 3:10 PM" + the next press stops once
+  (never ignorable).
+- TESTERS IN A SUSPENDED DEVELOPER'S TEST: treated like a payment hold (never told why): page line "This test is paused
+  right now."; Send (written / recording) GOES THROUGH with a blue note under the button ("Sent. This test is paused
+  right now, so it'll be reviewed once it resumes."); every other action (calls, join, accept requests, charge...) is a
+  blue refusal under the button: "This test is paused right now."
+- Every notice after a press is brought into view at its button (nearest scroll), as in NEXT-UI 13; only the new-terms
+  stop scrolls to the top offer box.
+
 ## (Owner, Oct 24, NEWEST+12) Which test changes alert testers (session page AND join page)
 - Testers are alerted (live top box + stop once on every button) to EVERY change to the test EXCEPT the number of
   spots and Open until, on BOTH the session page and the join page. This now includes "who can join" on the session

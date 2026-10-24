@@ -136,7 +136,8 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    (in any tab) brings other tabs that were on the login page back to the page they were on, signed in; signing in as a
    DIFFERENT account hides pages of the old account (they show the "wrong account" step like the full app); Back /
    Forward restore the page and bring it up to date; signed out meanwhile -> login. Port it, adapt to lean auth.
-26. SUSPENDED DEVELOPER (owner, Oct 24): can sign in; Dashboard, Payments and Profile stay open; on their test pages
+26. SUSPENSIONS - follow LEAN-SPEC NEWEST+13 exactly (it supersedes the text below; work was IN PROGRESS, uncommitted, when
+   the spend limit stopped the builder). SUSPENDED DEVELOPER (owner, Oct 24): can sign in; Dashboard, Payments and Profile stay open; on their test pages
    the ONLY allowed actions are Pay (in Needs you) and, during a payment hold, "Pay what you owe". Everything else
    (chat, invites, Edit, calls, End early, Reject, Next round, ratings...) is refused blue under the button ("Your
    account is paused: you can still pay for work testers sent."). They can VIEW tester profiles (read-only). Each of
