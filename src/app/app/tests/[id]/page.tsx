@@ -27,6 +27,7 @@ import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
 import { PayBox } from "./PayBox";
 import { TopPanel } from "./TopPanel";
+import { SavedNote } from "@/components/SavedNote";
 import { TestersJoined } from "./TestersJoined";
 import { testerStats } from "@/lib/server/profileStats";
 import { ByQuestion } from "./ByQuestion";
@@ -198,12 +199,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           .sort((a, b) => b.when.localeCompare(a.when))}
       />
       {saved && (
-        <p className="ok">
+        <SavedNote><p className="ok">
           {Number(offered) > 0 ? `Saved. Offered the new terms to ${offered} working tester${Number(offered) === 1 ? "" : "s"}.` : "Saved. New testers join on the new listing; testers already in keep their contract."}
           {closed && ` Closed ${closed.split(", ").length} application${closed.split(", ").length === 1 ? "" : "s"}: ${closed.slice(0, 500)}.`}
           {resent && ` Invites re-sent on the new listing: ${resent.slice(0, 500)}.`}
           {skipped && ` Not re-invited: ${skipped.slice(0, 500)}.`}
-        </p>
+        </p></SavedNote>
       )}
 
       <section className="space-y-3">

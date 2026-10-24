@@ -51,7 +51,7 @@ export async function testerTermsGate(contractId: string, _devName: string, body
 export async function decideTerms(tester: { id: string }, contractId: string, body: Record<string, unknown>) {
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== tester.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
-  await testerGate(c.testerId, contractId, c.testId, body);
+  await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: true });
   const offer = await db.termsOffer.findUnique({ where: { id: String(body.offerId ?? "") } });
   if (!offer || offer.contractId !== contractId) throw new HttpError(404, "not_found", "That offer doesn't exist.");
   const newest = await openOffer(contractId);

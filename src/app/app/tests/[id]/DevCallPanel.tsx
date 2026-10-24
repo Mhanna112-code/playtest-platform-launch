@@ -38,13 +38,11 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }:
   const form = useRef<HTMLDivElement>(null);
   const minNow = useLocalMin(5);
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const [done, setDone] = useState("");
   const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={error} link={typeof errData.requestId === "string" ? `req-${errData.requestId}` : undefined} /></div> : null);
   const go = async (path: string, body: Record<string, unknown>, key: string) => {
     const r = await press<{ message?: string }>(`/api/tests/${testId}/${path}`, body, key);
     if (r) {
-      if (r.message) setDone(r.message);
-      setTimeout(() => window.location.reload(), r.message ? 1500 : 0);
+      window.location.reload();
     }
   };
   const all = testers.length > 0 && testers.every((t) => ticked.includes(t.contractId));
@@ -95,7 +93,6 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }:
           </div>
           {ticked.length === 0 && <p className="note">Tick one or more testers to request a time.</p>}
           {box("request")}
-          {done && <p className="ok">{done}</p>}
         </div>
       )}
       {shown.length === 0 && <p className="note">No calls or requests yet.</p>}

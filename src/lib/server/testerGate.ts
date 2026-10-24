@@ -16,11 +16,12 @@ import { asLines, ownChanges, seenOf, tabOf, testerPaymentChanges, withRenamed }
 /** Closed because of the tester's own press (their own action, reason E). */
 const CLOSED_BY_TESTER = new Set(["you asked a different rate", "the tester left"]);
 
-export async function testerChanges(testerId: string, contractId: string, testId: string, seenAt: Date, tab = ""): Promise<TestEventLike[]> {
+export async function testerChanges(testerId: string, contractId: string, testId: string, seenAt: Date, tab = "", termsFrom: Date = seenAt): Promise<TestEventLike[]> {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   const dev = displayName(c.test.developer);
   const [offers, reviews, calls, devReqs, mine] = await Promise.all([
-    db.termsOffer.findMany({ where: { contractId, createdAt: { gt: seenAt } } }),
+    // (Owner, reason A) An offer still waiting (or replaced by a newer one) stops the press even when the top box already showed it; one the tester already decided on does not.
+    db.termsOffer.findMany({ where: { contractId, createdAt: { gt: termsFrom < seenAt ? termsFrom : seenAt }, status: { in: ["open", "superseded"] } } }),
     db.review.findMany({ where: { contractId, createdAt: { gt: seenAt }, reason: { notIn: [CHARGED_BY_TESTER, LET_GO_BY_TESTER] } }, include: { submission: true } }),
     db.call.findMany({ where: { contractId, cancelledAt: { gt: seenAt }, cancelledBy: { not: "tester" } } }),
     db.callRequest.findMany({ where: { contractId, fromSide: "developer", updatedAt: { gt: seenAt } } }),
@@ -64,16 +65,21 @@ export async function testerChanges(testerId: string, contractId: string, testId
 const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", "info", "payment", "admin", "own"];
 
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
-export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.") {
+export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean } = {}) {
   // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt); Leave and
   // Block send no boxAt, so they still stop just once.
   const boxAt = seenOf(body.boxAt);
   if (body.confirmed === true && !boxAt) return;
   const seenAt = body.confirmed === true ? boxAt : seenOf(body.seenAt);
   if (!seenAt) return;
-  const changes = withRenamed(await testerChanges(testerId, contractId, testId, seenAt, tabOf(body)), body);
-  const r = stopOnce(changes, seenAt, false, [...KINDS, "renamed"]);
-  if (!r.go) throw new HttpError(409, "stop_once", tail, { changes: asLines(r.changes), tail, top: r.changes.some((e) => e.kind === "terms") });
+  // New terms count from the page's own render (pageSeenAt), or from the box's time on a second press; everything else from `seenAt`.
+  const termsFrom = body.confirmed === true ? seenAt : seenOf(body.pageSeenAt) ?? seenAt;
+  const all = withRenamed(await testerChanges(testerId, contractId, testId, seenAt, tabOf(body), termsFrom), body);
+  const changes = all.filter((e) => (e.kind === "terms" ? !opts.skipTerms && e.createdAt > termsFrom : true));
+  const terms = changes.filter((e) => e.kind === "terms");
+  const r = stopOnce(changes.filter((e) => e.kind !== "terms"), seenAt, false, [...KINDS, "renamed"]);
+  const list = [...terms, ...(r.go ? [] : r.changes)].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  if (list.length) throw new HttpError(409, "stop_once", tail, { changes: asLines(list), tail, top: terms.length > 0 });
 }
 
 /** "weekly calls from Thu, Nov 5, 3:00 PM" / "a call (pick one of 3 times)" / "a call for Thu, Nov 5, 3:00 PM". */

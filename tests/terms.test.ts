@@ -71,3 +71,34 @@ describe("new terms offered to working testers", () => {
     expect((await edit(testId, dev.cookie, { spots: 9 })).body.offered).toBe(0);
   });
 });
+
+describe("(Owner, reason A) new terms always stop the next press, even when the top box showed them", () => {
+  it("an offer arrives while the page is open and the top box shows it: Cancel call stops (top = true), the second press goes ahead", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    const pageSeenAt = new Date(Date.now() - 1000).toISOString();
+    // A call to cancel (a request the tester books themselves is enough: use a booked call through the developer's request).
+    const at = new Date(Date.now() + 72 * 3_600_000); at.setSeconds(0, 0);
+    await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], times: [at.toISOString()] });
+    const r = await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId } });
+    await sact(sessionId, "answer-request", tester.cookie, { requestId: r.id, action: "accept" });
+    const call = await db.call.findFirstOrThrow({ where: { contractId: sessionId } });
+    await later();
+    await edit(testId, dev.cookie, { writtenCents: "12.00" });
+    await later();
+    // The top box showed the offer: the page's marker moved to now, but the page itself was rendered before it.
+    const shown = new Date().toISOString();
+    const first = await sact(sessionId, "cancel-call", tester.cookie, { callId: call.id, seenAt: shown, pageSeenAt });
+    expect(first.status).toBe(409);
+    expect(first.body.error.code).toBe("stop_once");
+    expect(first.body.error.top).toBe(true);
+    expect((first.body.error.changes as { text: string }[])[0].text).toContain("offered new terms");
+    // The second press (with the box's time) cancels under the tester's current terms.
+    const second = await sact(sessionId, "cancel-call", tester.cookie, { callId: call.id, seenAt: shown, pageSeenAt, confirmed: true, boxAt: first.body.error.now });
+    expect(second.status).toBe(200);
+    // Once they have decided on the offer, it no longer stops anything.
+    const offer = await db.termsOffer.findFirstOrThrow({ where: { contractId: sessionId } });
+    await sact(sessionId, "terms", tester.cookie, { offerId: offer.id, choice: "keep", seenAt: shown, pageSeenAt, confirmed: true, boxAt: shown });
+    expect((await sact(sessionId, "leave", tester.cookie, { seenAt: new Date().toISOString(), pageSeenAt })).status).toBe(200);
+  });
+});

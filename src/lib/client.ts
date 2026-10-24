@@ -18,7 +18,8 @@ export const TAB = typeof window === "undefined" ? "" : Math.random().toString(3
 
 export async function api<T = unknown>(path: string, body?: unknown, method?: string): Promise<T> {
   // Every press sends the later of the page's render time and what the live top notice has shown (NEWEST+3).
-  if (body && typeof body === "object" && typeof (body as { seenAt?: unknown }).seenAt === "string") body = { ...body, seenAt: seenNow((body as { seenAt: string }).seenAt) };
+  // (Owner) New terms (reason A) are measured from the page itself: `pageSeenAt` is when the page was rendered, whatever the top box showed.
+  if (body && typeof body === "object" && typeof (body as { seenAt?: unknown }).seenAt === "string") body = { ...body, pageSeenAt: (body as { seenAt: string }).seenAt, seenAt: seenNow((body as { seenAt: string }).seenAt) };
   let res: Response;
   try {
     res = await fetch(path, {

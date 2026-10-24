@@ -25,13 +25,11 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
   const [rows, setRows] = useState<RowState[]>([newRow()]);
   const [ticked, setTicked] = useState<string[]>(p.targets.length === 1 ? [p.targets[0].contractId] : []);
   const [ask, setAsk] = useState("");
-  const [done, setDone] = useState("");
   const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={error} link={typeof errData.requestId === "string" ? `req-${errData.requestId}` : undefined} /> : null);
   const go = async (action: string, body: Record<string, unknown>, key: string) => {
     const r = await press<{ message?: string }>(`${p.path}/${action}`, body, key);
     if (r) {
-      if (r.message) setDone(r.message);
-      setTimeout(() => window.location.reload(), r.message ? 1500 : 0);
+      window.location.reload();
     }
   };
   const all = p.targets.length > 0 && p.targets.every((t) => ticked.includes(t.contractId));
@@ -98,7 +96,6 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
           {box("request")}
         </div>
       )}
-      {done && <p className="ok">{done}</p>}
     </div>
   );
 }
