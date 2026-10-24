@@ -127,3 +127,7 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    changes, Payments (card payments going through / failing), Disputes, Admin decisions, Your saves somewhere else,
    Ratings given, Listing changes. NEVER ignorable (always stop, not in the menu): payment hold / pause, a tester
    account closed, the test stopped, final refusals. Saved per developer. Tests.
+24. TESTER SESSION PAGE part panels (owner, Oct 24): like the Live session panel's "Live call: $40/h" line, the Written
+   answers panel and the Recording panel each show the tester's contract term for that part at the top: "Written
+   answers: $8 · Required" / "Recording: $12 · Not required" / "Not in your contract" (+ "You asked $X" and "Paid so far
+   $Y" if any, matching Your parts). Same wording in all three panels.
