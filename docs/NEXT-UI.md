@@ -88,3 +88,16 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
      asked)". Covered by tests.
 17. TERMS OF USE, PRIVACY, HELP pages copied from the full app (owner said yes), adapted to lean rules, linked in
    the footer and at sign-up. Mark them "Draft - owner to review wording" in the report.
+18. NDA like the full app (owner, Oct 23): Post/Edit has the full app's NDA option with its text (incl. its sample NDA,
+   src/lib/sample-nda.ts); testers must accept it to join/apply/accept an invite/rejoin (the full app's accept step);
+   acceptance time stored on the contract and shown to both sides. Replaces lean's optional "keep it private" tick and
+   its badge. NDA text is part of the terms (a change = terms change: offer / closes applications).
+19. ACCESS KEYS like the full app (owner, Oct 23): Edit/Post "Access keys" (one per line); each joining tester gets the
+   next unused key, shown on their session page; "N keys left" badge; every open spot needs an unused key (Save/Post
+   refused red otherwise, wording from src/lib/key-needs.ts); a tester who left and comes back gets their key back;
+   "This key doesn't work" report and the developer's replacement flow as in the full app. Port its rules
+   (key-needs.ts, key-diff.ts, keyRoom) adapted to lean.
+20. STOP ACCEPTING TESTERS / ACCEPT TESTERS AGAIN on open tests like the full app (page.tsx:487-498): hides the test from
+   new testers (Join/Apply/Ask to rejoin/invite accept refused "This test isn't taking new testers right now."), joined
+   testers keep working, it CLOSES waiting invitations and applications and says how many next to the button (stops
+   once if that number changed), and is undone with "Accept testers again". Stop-once/refusal rules as usual.
