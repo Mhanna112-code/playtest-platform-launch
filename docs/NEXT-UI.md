@@ -79,5 +79,11 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    the CURRENT listing (time-left deadline, as specced); Decline tells them. The ask closes like an application
    (test full, stopped, Open until passed, listing change that closes applications) and follows the stop-once and
    refusal rules. Ended testers still need a new invite. Testers who rated can't ask.
+   - INVITED AFTER LEAVING / BEING ENDED: their old session page shows the invite with a Join button (Join anyway popup
+     if a need is missing) in place of "Ask to rejoin" / "You can't join this test again"; joining restores the session.
+   - AUTO-MATCH: a pending ask to rejoin (or a pending application) + an invite from the developer, in either order, =
+     joined at once (the developer chose them; no Join anyway popup), unless a final refusal applies (full, stopped,
+     blocked, paused, 10 tests). Both told: "You're back in Harbor Run" / "Ana Silva rejoined (you'd invited her and she'd
+     asked)". Covered by tests.
 17. TERMS OF USE, PRIVACY, HELP pages copied from the full app (owner said yes), adapted to lean rules, linked in
    the footer and at sign-up. Mark them "Draft - owner to review wording" in the report.
