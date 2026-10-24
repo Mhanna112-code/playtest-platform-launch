@@ -26,7 +26,7 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    (devices and languages), same lean rules (warn, never refuse).
 5. [DONE 4e5e6de] Join page (listing), dashboard and Find tests formatted EXACTLY like the full app's equivalents
    (app/playtests/[id], app/dev/page.tsx + app/tester/page.tsx, app/playtests/page.tsx).
-6. Developer/tester side switch like the full app (header switch, per-side nav/dashboard/pages, /switch links,
+6. [DONE] Developer/tester side switch like the full app (header switch, per-side nav/dashboard/pages, /switch links,
    each tab labelled by its page's side) - OWNER APPROVED Oct 23.
 7. [DONE 790f802] CALL REQUEST FORM (owner, final):
    - Remove the "Choose one / Daily / Weekly" radios. Each time row has its own "Once / Daily / Weekly" picker (Once

@@ -1,0 +1,46 @@
+import Link from "next/link";
+import { MessagesSquare } from "lucide-react";
+import { db } from "@/lib/db";
+import { displayName } from "@/lib/format";
+import { requirePageUser } from "@/lib/server/page-auth";
+import { unreadCount } from "@/lib/server/messages";
+
+export const metadata = { title: "Messages · Playtest" };
+export const dynamic = "force-dynamic";
+
+/** Every conversation you're in, newest activity first, with unread counts (the full app's /messages). */
+export default async function MessagesPage() {
+  const u = await requirePageUser();
+  const contracts = await db.contract.findMany({
+    where: { OR: [{ testerId: u.id }, { test: { developerId: u.id } }] },
+    include: { test: { include: { developer: true } }, tester: true },
+  });
+  const convos = await Promise.all(contracts.map(async (c) => {
+    const last = await db.message.findFirst({ where: { testId: c.testId, testerId: c.testerId }, orderBy: { createdAt: "desc" }, include: { sender: true } });
+    return { c, last, unread: await unreadCount(u.id, c.testId, c.testerId) };
+  }));
+  convos.sort((a, b) => (b.last?.createdAt.getTime() ?? b.c.joinedAt.getTime()) - (a.last?.createdAt.getTime() ?? a.c.joinedAt.getTime()));
+  return (
+    <div className="mx-auto max-w-3xl space-y-4">
+      <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight text-white"><MessagesSquare className="h-7 w-7 text-indigo-300" /> Messages</h1>
+      <p className="text-sm text-slate-400">One conversation per test you&apos;re part of. It opens as soon as a tester joins.</p>
+      <ul className="space-y-2">
+        {convos.map(({ c, last, unread }) => {
+          const other = c.testerId === u.id ? displayName(c.test.developer) : displayName(c.tester);
+          return (
+            <li key={c.id}>
+              <Link href={`/app/chat/${c.id}`} className="card card-hover flex items-center gap-3 p-4 no-underline hover:no-underline">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-white">{other} <span className="text-sm font-normal text-slate-400">· {c.title}</span></p>
+                  <p className="truncate text-sm text-slate-400">{last ? `${last.senderId === u.id ? "You" : displayName(last.sender)}: ${last.body}` : "No messages yet."}</p>
+                </div>
+                {unread > 0 && <span className="rounded-full bg-fuchsia-500 px-2 py-0.5 text-xs text-white">{unread}</span>}
+              </Link>
+            </li>
+          );
+        })}
+        {convos.length === 0 && <li className="card text-sm text-slate-400">No conversations yet.</li>}
+      </ul>
+    </div>
+  );
+}

@@ -14,6 +14,7 @@ import { ratingSummary } from "@/lib/server/ratings";
 import { NoThanksButton } from "./NoThanksButton";
 import { gapsOf } from "@/lib/gaps";
 import { developerStats } from "@/lib/server/profileStats";
+import { sideLink } from "@/lib/sides";
 
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
@@ -175,7 +176,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       {t.developerId === u.id ? (
         <div className="card flex flex-wrap items-center gap-3">
           <p className="flex-1 text-slate-200">This is your own test: this is how testers see it. You can&apos;t test it yourself.</p>
-          <a href={`/app/tests/${t.id}`} className="btn-secondary no-underline hover:no-underline">Manage it as the developer <ArrowRight className="h-4 w-4" /></a>
+          <a href={sideLink(u, `/app/tests/${t.id}`)} className="btn-secondary no-underline hover:no-underline">Manage it as the developer <ArrowRight className="h-4 w-4" /></a>
         </div>
       ) : !u.isTester ? (
         <p className="card note">Turn on “test apps, games and more” in your <a href="/app/profile">profile</a> to join.</p>

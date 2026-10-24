@@ -3,6 +3,7 @@ import { Bell } from "lucide-react";
 import { db } from "@/lib/db";
 import { fmtDate } from "@/lib/format";
 import { requirePageUser } from "@/lib/server/page-auth";
+import { sideLink } from "@/lib/sides";
 
 export const metadata = { title: "Notifications · Playtest" };
 export const dynamic = "force-dynamic";
@@ -28,7 +29,7 @@ export default async function Notifications() {
               <div className="flex items-start gap-3">
                 <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.readAt ? "bg-transparent" : "bg-indigo-400"}`} />
                 {n.link ? (
-                  <Link href={n.link} className={`flex-1 no-underline hover:underline ${n.readAt ? "text-slate-400" : "text-slate-100"}`}>{n.text}</Link>
+                  <Link href={sideLink(u, n.link)} className={`flex-1 no-underline hover:underline ${n.readAt ? "text-slate-400" : "text-slate-100"}`}>{n.text}</Link>
                 ) : (
                   <span className={`flex-1 ${n.readAt ? "text-slate-400" : "text-slate-100"}`}>{n.text}</span>
                 )}

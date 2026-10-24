@@ -17,6 +17,8 @@ model User {
   /// "she" | "he" | "they" | "" (blank: wording uses "they")
   pronoun     String    @default("")
   isDeveloper Boolean   @default(false)
+  /// (NEXT-UI 6) The side in use now when the account has both: "developer" | "tester" ("" = not chosen yet)
+  side        String    @default("")
   isTester    Boolean   @default(false)
   isAdmin     Boolean   @default(false)
   /// (NEWEST+7) bcrypt hash ("" = no password yet: set one through Forgot password)

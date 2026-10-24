@@ -3,6 +3,7 @@ import { ArrowRight, Award, CalendarClock, CheckCircle2, Clock, Compass, Hourgla
 import { db } from "@/lib/db";
 import { displayName, fmtDate, money } from "@/lib/format";
 import { requirePageUser } from "@/lib/server/page-auth";
+import { sideFor } from "@/lib/sides";
 import { ProfileForm } from "./profile/ProfileForm";
 import { NoThanks } from "./NoThanks";
 import { CapacityCard, DeveloperTiles } from "@/components/ProfileTiles";
@@ -36,6 +37,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
       </>
     );
   const now = new Date();
+  const side = sideFor(u, "/app");
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -44,12 +46,13 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
           <h1 className="text-3xl font-bold tracking-tight text-white">{u.name || u.email}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
-          {u.isDeveloper && <Link className="btn" href="/app/tests/new"><PlusCircle className="h-4 w-4" /> Post a test</Link>}
-          {u.isTester && <Link className={u.isDeveloper ? "btn-secondary" : "btn"} href="/app/find"><Compass className="h-4 w-4" /> Find tests</Link>}
+          {side === "developer" && <Link className="btn" href="/app/tests/new"><PlusCircle className="h-4 w-4" /> Post a test</Link>}
+          {side === "tester" && <Link className="btn" href="/app/find"><Compass className="h-4 w-4" /> Find tests</Link>}
         </div>
       </div>
-      {u.isDeveloper && <DeveloperDashboard userId={u.id} now={now} category={category} />}
-      {u.isTester && <TesterDashboard userId={u.id} now={now} />}
+      {/* (NEXT-UI 6) One side at a time: the dashboard of the side in use (the header switch changes it). */}
+      {side === "developer" && <DeveloperDashboard userId={u.id} now={now} category={category} />}
+      {side === "tester" && <TesterDashboard userId={u.id} now={now} />}
     </div>
   );
 }
