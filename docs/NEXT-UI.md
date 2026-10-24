@@ -131,3 +131,8 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    answers panel and the Recording panel each show the tester's contract term for that part at the top: "Written
    answers: $8 · Required" / "Recording: $12 · Not required" / "Not in your contract" (+ "You asked $X" and "Paid so far
    $Y" if any, matching Your parts). Same wording in all three panels.
+25. CROSS-TAB SIGN-IN / SIGN-OUT like the full app (owner, Oct 24; integration components/signed-in-page.tsx,
+   signed-out.ts, page-restore.ts): signing out in one tab sends the other open tabs to the login page; signing in
+   (in any tab) brings other tabs that were on the login page back to the page they were on, signed in; signing in as a
+   DIFFERENT account hides pages of the old account (they show the "wrong account" step like the full app); Back /
+   Forward restore the page and bring it up to date; signed out meanwhile -> login. Port it, adapt to lean auth.
