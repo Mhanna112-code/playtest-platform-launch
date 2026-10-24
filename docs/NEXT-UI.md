@@ -119,3 +119,11 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    show in Needs you, the Live session panel and the live top box). Call BOOKED (incl. auto-booked) and CANCELLED (by
    whom, "nobody joined", "the site was down") ARE bell lines for the other side and stack. All of them appear in each
    tester's History fold (item 21).
+23. ALERTS MENU on the developer test page and Edit page like the full app (owner, Oct 24; integration
+   components/press-notice.tsx AlertsMenu + src/lib/alerts.ts): an "Alerts" menu at the top where the developer ticks
+   alert types to IGNORE; ignored types no longer stop presses and show greyed in the live top box; the blue stop box
+   adds "You can turn these stops off in Alerts, at the top of the page." and a "Don't stop me for:" quick option.
+   Lean types (adapt the full app's list to what lean has): Joins and applications, Testers leaving, Work sent, Call
+   changes, Payments (card payments going through / failing), Disputes, Admin decisions, Your saves somewhere else,
+   Ratings given, Listing changes. NEVER ignorable (always stop, not in the menu): payment hold / pause, a tester
+   account closed, the test stopped, final refusals. Saved per developer. Tests.
