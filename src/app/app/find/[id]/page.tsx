@@ -11,8 +11,6 @@ import { JoinBox } from "./JoinBox";
 import { LiveTop } from "@/components/LiveTop";
 import { qOptional, qText } from "@/lib/questions";
 import { ratingSummary } from "@/lib/server/ratings";
-import { Chat } from "@/components/Chat";
-import { chatMessages } from "@/lib/server/messages";
 import { NoThanksButton } from "./NoThanksButton";
 import { gapsOf } from "@/lib/gaps";
 import { developerStats } from "@/lib/server/profileStats";
@@ -38,9 +36,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   const testersIn = await db.contract.count({ where: { testId: id, status: "working" } });
   const profile = await db.testerProfile.findUnique({ where: { userId: u.id } });
   const gaps = needsLines(t, profile);
-  const canChat = !!(await db.invite.findFirst({ where: { testId: t.id, testerId: u.id, status: "sent" } })) || !!(await db.application.findFirst({ where: { testId: t.id, testerId: u.id, status: "pending" } }));
   const blocked = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: u.id }] } })) > 0;
-  const chatClosed = blocked;
   const l = asListing(t);
   const devRating = await ratingSummary(t.developerId);
   const devStats = await developerStats(t.developerId);
@@ -204,22 +200,6 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             application={await db.application.findUnique({ where: { testId_testerId: { testId: t.id, testerId: u.id } } }).then((a) => (a ? { status: a.status, changed: !!a.changedAt } : null))}
           />
         </section>
-      )}
-
-      {canChat && (
-        <details className="card text-sm">
-          <summary className="cursor-pointer font-semibold text-white">Chat with {dev}</summary>
-          <div className="pt-3">
-            <Chat
-              closed={chatClosed}
-              keepKey={`chat:${t.id}:${u.id}`}
-              path={`/api/tests/${t.id}/message`}
-              extra={{ testerId: u.id }}
-              other={dev}
-              messages={(await chatMessages(t.id, u.id)).map((m) => ({ id: m.id, mine: m.senderId === u.id, who: m.senderId === u.id ? "You" : displayName(m.sender), body: m.body, at: m.createdAt.toISOString() }))}
-            />
-          </div>
-        </details>
       )}
     </div>
   );

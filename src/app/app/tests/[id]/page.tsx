@@ -4,7 +4,6 @@ import { displayName, fmtDate, fmtDateTime, money, pronouns } from "@/lib/format
 import { CALL_CLOSE_MS, callClosed, callOutcome, joinedWords, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, defaultCallMinutes, choiceNoteLine, closesInLine, lateLabel, termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
-import { Chat } from "@/components/Chat";
 import { unreadCount } from "@/lib/server/messages";
 import { MessagesSquare } from "lucide-react";
 import { DevCallPanel, type DevCall, type DevTester } from "./DevCallPanel";
@@ -66,12 +65,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const callSets = await db.callSet.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } } });
   const reqs = await db.callRequest.findMany({ where: { testId: id, status: "pending", startsAt: { gt: new Date() } }, orderBy: { startsAt: "asc" } });
   // A developer batch sent to several testers shows once per tester; that's fine: each copy is that tester's.
-  const msgs = await db.message.findMany({ where: { testId: id }, orderBy: { createdAt: "asc" }, include: { sender: true }, take: 2000 });
   const pendingApps = await db.application.findMany({ where: { testId: id, status: "pending" }, orderBy: { createdAt: "asc" } });
   const appUsers = await db.user.findMany({ where: { id: { in: pendingApps.map((a) => a.testerId) } }, include: { profile: true } });
   const appRatings = new Map(await Promise.all(appUsers.map(async (x) => [x.id, (await ratingSummary(x.id)).line] as const)));
-  const invitedIds = (await db.invite.findMany({ where: { testId: id, status: "sent" } })).map((i) => i.testerId);
-  const preJoin = await db.user.findMany({ where: { id: { in: [...pendingApps.map((a) => a.testerId), ...invitedIds] } } });
   const apps = pendingApps.map((a) => {
     const x = appUsers.find((y) => y.id === a.testerId)!;
     return { id: a.id, userId: x.id, name: displayName(x), note: a.note, profile: [...(x.profile?.devices ?? []), ...(x.profile?.languages ?? []), ...(appRatings.get(x.id) ? [appRatings.get(x.id)!] : [])].join(", ") };
@@ -179,26 +175,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {(u.holdStartedAt || owedList.length > 0) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} />}
       {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date())}</p>}
       <Applications testId={t.id} seenAt={seenAt} apps={apps} />
-      {preJoin.length > 0 && (
-        <section className="panel">
-          <h2>Chats with applicants and invited testers</h2>
-          {preJoin.map((x) => (
-            <details key={x.id} className="text-sm">
-              <summary className="cursor-pointer">Chat with {displayName(x)} ({msgs.filter((m) => m.testerId === x.id).length})</summary>
-              <div className="pt-2">
-                <Chat
-                  closed={blockedIds.has(x.id) || blockedBy.has(x.id)}
-                  keepKey={`chat:${t.id}:${x.id}`}
-                  path={`/api/tests/${t.id}/message`}
-                  extra={{ testerId: x.id }}
-                  other={displayName(x)}
-                  messages={msgs.filter((m) => m.testerId === x.id).map((m) => ({ id: m.id, mine: m.senderId === u.id, who: m.senderId === u.id ? "You" : displayName(m.sender), body: m.body, at: m.createdAt.toISOString() }))}
-                />
-              </div>
-            </details>
-          ))}
-        </section>
-      )}
       {t.status !== "stopped" && (
         <InvitePanel
           testId={t.id}

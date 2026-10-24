@@ -11,14 +11,11 @@ import { notify } from "./notify";
 export async function chatAccess(userId: string, testId: string, testerId: string) {
   const test = await db.test.findUnique({ where: { id: testId } });
   if (!test || (userId !== testerId && userId !== test.developerId) || testerId === test.developerId) throw new HttpError(404, "not_found", "That chat doesn't exist.");
-  const [contract, invite, application] = await Promise.all([
-    db.contract.findUnique({ where: { testId_testerId: { testId, testerId } } }),
-    db.invite.findFirst({ where: { testId, testerId, status: "sent" } }),
-    db.application.findFirst({ where: { testId, testerId, status: "pending" } }),
-  ]);
-  if (!contract && !invite && !application) throw new HttpError(404, "not_found", "That chat doesn't exist.");
+  // (NEWEST+11) Only testers who are or were in the test: never an applicant or an invited tester before they join.
+  const contract = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId } } });
+  if (!contract) throw new HttpError(404, "not_found", "That chat doesn't exist.");
   const blocked = (await db.block.count({ where: { OR: [{ blockerId: testerId, blockedId: test.developerId }, { blockerId: test.developerId, blockedId: testerId }] } })) > 0;
-  const active = test.status === "open" && (contract?.status === "working" || !!invite || !!application);
+  const active = test.status === "open" && contract.status === "working";
   return { test, contract, blocked, active };
 }
 
@@ -36,12 +33,12 @@ export async function sendChat(user: { id: string; name: string; email: string }
   if (a.blocked) throw new HttpError(409, "closed", "This chat is closed.");
   const body = typeof raw === "string" ? raw.trim().slice(0, 4000) : "";
   if (!body) throw new HttpError(400, "empty", "Type a message first.");
-  const m = await db.message.create({ data: { testId, testerId, contractId: a.contract?.id ?? null, senderId: user.id, body } });
+  const m = await db.message.create({ data: { testId, testerId, contractId: a.contract.id, senderId: user.id, body } });
   const toDev = user.id === testerId;
   const recipient = await db.user.findUniqueOrThrow({ where: { id: toDev ? a.test.developerId : testerId } });
   const from = displayName(user);
   const line = a.active ? `${from} · ${a.test.title}: ${firstWords(body)}` : `New message from ${from}`;
-  const link = toDev ? `/app/tests/${testId}` : a.contract ? `/app/sessions/${a.contract.id}` : `/app/find/${testId}`;
+  const link = toDev ? `/app/tests/${testId}` : `/app/sessions/${a.contract.id}`;
   await notify(recipient.email, line, [line, "", body], link);
   return m;
 }
