@@ -242,14 +242,15 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (!fields.length) return t;
     const what = fields.map((f) => FIELD_NAMES[f]).join(", ");
     termsChanged = terms.some((f) => ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "deadlineDays", "questions"].includes(f));
-    const listingFields = fields.filter((f) => f !== "spots");
+    // (NEWEST+12) Testers are alerted to EVERY change except the number of spots and Open until: those two never make an "edited" line / bump the listing version.
+    const listingFields = fields.filter((f) => f !== "spots" && f !== "openUntil");
     switchedToAnyone = fields.includes("joinMode") && next.joinMode === "anyone";
-    await recordEvent(tx, testId, listingFields.length ? "edited" : "edited_spots", `The listing was edited: ${what}`, true, {
+    await recordEvent(tx, testId, listingFields.length ? "edited" : "edited_spots", `The listing was edited: ${listingFields.length ? listingFields.map((f) => FIELD_NAMES[f]).join(", ") : what}`, true, {
       ...listingData(next), ...(fields.includes("openUntil") ? { notified3d: false, notified1d: false } : {}), ...(listingFields.length ? { listingVersion: { increment: 1 } } : {}),
     });
     // (F) Listing info (description, devices, languages): shown to working testers and on the join page; stops once.
     const info = fields.filter((f) => INFO_FIELDS.includes(f));
-    if (info.length) await tx.testEvent.create({ data: { testId, kind: "info", text: `${displayName(dev)} changed the ${andList(info.map((f) => FIELD_NAMES[f]))}` } });
+    if (info.length) await tx.testEvent.create({ data: { testId, kind: "info", text: `${displayName(dev)} changed ${andList(info.map((f) => (f === "joinMode" ? FIELD_NAMES[f] : `the ${FIELD_NAMES[f]}`)))}` } });
     // A title change is info only everywhere (never stops; a press notes it).
     if (fields.includes("title")) await tx.testEvent.create({ data: { testId, kind: "renamed", text: `${displayName(dev)} renamed the test to ${next.title}` } });
     changedNames = fields.map((f) => FIELD_NAMES[f]);
@@ -277,7 +278,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
 }
 
 /** (F) The listing info a working tester sees change live: title, description, devices, languages. */
-export const INFO_FIELDS: (keyof Listing)[] = ["description", "devices", "languages"];
+export const INFO_FIELDS: (keyof Listing)[] = ["description", "devices", "languages", "buildUrl", "categories", "joinMode"];
 /** (Correction 2) The changes that close applications and re-send invites: prices / parts / questions, deadline, devices, languages, description. */
 export const CLOSING_FIELDS: (keyof Listing)[] = ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "questions", "deadlineDays", "devices", "languages", "description"];
 

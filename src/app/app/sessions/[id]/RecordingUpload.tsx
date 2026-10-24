@@ -82,7 +82,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
             }
           }}
         >
-          {sentBefore ? "Send the updated recordings" : "Send my recording"}
+          {sentBefore ? "Send my updated recording" : "Send my recording"}
         </button>
       )}
       <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />

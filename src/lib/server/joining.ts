@@ -55,7 +55,7 @@ export async function listingChanges(testId: string, seenAt: unknown): Promise<T
   return db.testEvent.findMany({ where: { testId, kind: "edited", createdAt: { gt: d } }, orderBy: { createdAt: "asc" } });
 }
 
-const INFO_NAMES = ["title", "description", "devices", "languages"];
+const INFO_NAMES = ["title", "description", "devices", "languages", "build link", "categories", "who can join"];
 
 /** The join page's stop-once reasons: (D) the listing changed (spots excepted), (E) the tester's own actions in another tab. */
 export async function joinPageChanges(userId: string, testId: string, seenAt: unknown, tab: string): Promise<TestEventLike[]> {

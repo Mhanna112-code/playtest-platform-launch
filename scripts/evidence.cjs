@@ -197,7 +197,7 @@ async function signIn(page, email) {
     await dev.goto(testUrl); // the page's "seen" marker is now
     await tester.fill("#a0", "The boat handling feels great.");
     await tester.fill("#a1", "The second bridge: I couldn't tell where to go.");
-    await tester.click("text=Send my written answers");
+    await tester.click("text=Send my answers");
     await tester.waitForSelector("text=/^Sent [A-Z]/");
     await shot(tester, "answers-sent");
     await dev.click("button:has-text('Next round')");
@@ -506,7 +506,7 @@ async function signIn(page, email) {
     // A tester still sends work during the hold.
     await t2.goto(`/app/sessions/${SD}`);
     await t2.fill("#a0", "Beautiful lighthouse, the stairs puzzle was hard.");
-    await t2.click("text=Send my written answers");
+    await t2.click("text=Send my answers");
     check("tester still sends", await has(t2, "text=/^Sent [A-Z]/"));
     await dev.goto(t11Url());
     await both("hold-tester-still-sends", t2);
@@ -883,7 +883,7 @@ async function signIn(page, email) {
     await tab1.goto(`/app/sessions/${SCara}`);
     await tab2.goto(`/app/sessions/${SCara}`);
     await tab2.fill("#a0", "A crab and two starfish.");
-    await tab2.click("button:has-text('Send my written answers')");
+    await tab2.click("button:has-text('Send my answers')");
     await tab2.waitForTimeout(1500);
     check("tab 2 sent the answers", sql(`select count(*) from "Submission" where "contractId" = '${SCara}' and kind = 'written'`) === "1");
     await shot(tab2, "tab2-sent-tester");
@@ -1030,10 +1030,10 @@ async function signIn(page, email) {
     const v = sql(`select version from "Test" where id = '${TK}'`);
     await apiPost(dev, `/api/tests/${TK}/edit`, { version: Number(v), fields: { description: "Swim through the kelp at dawn." }, confirmed: true });
     await t4.fill("#a0", "Fish and a turtle.");
-    await t4.click("button:has-text('Send my written answers')");
+    await t4.click("button:has-text('Send my answers')");
     check("tester stop box: listing info (F) + call change (C) together", (await has(t4, "text=Nora Lane changed the description")) && (await has(t4, "text=Nora Lane requested a call for")));
     await shot(t4, "combined-info-and-call-tester");
-    await t4.click("button:has-text('Send my written answers')");
+    await t4.click("button:has-text('Send my answers')");
     await t4.waitForTimeout(1500);
     // (a) Another tab + a developer payment in ONE stop box (tester): tab B sends a call request; the developer pays.
     const tabA = t4;
@@ -1246,7 +1246,7 @@ async function signIn(page, email) {
     // (e) A title change is info only: Eve's press goes through with a note.
     await edit(TS2, { title: "Shoal 2" });
     await t4.fill("#a0", "Twelve fish.");
-    await t4.click("button:has-text('Send my written answers')");
+    await t4.click("button:has-text('Send my answers')");
     await t4.waitForTimeout(2500);
     check("sent (not stopped) and the note shows: renamed", (await has(t4, "text=Done. Also: the test was renamed to Shoal 2 at")) && sql(`select count(*) from "Submission" s join "Contract" c on c.id = s."contractId" where c."testId" = '${TS2}' and c."testerId" = '${eveId}'`) === "1");
     await shot(t4, "renamed-note-tester");
@@ -1476,7 +1476,7 @@ async function signIn(page, email) {
     check("the optional question is marked 'not required'", await has(tp, "text=· not required"));
     await tp.fill("#a0", "Roots and herons.");
     await shot(tp, "optional-question-tester");
-    await tp.click("button:has-text('Send my written answers')");
+    await tp.click("button:has-text('Send my answers')");
     await tp.waitForTimeout(1500);
     check("sent with the optional question empty", sql(`select count(*) from "Submission" where "contractId" = '${S}' and kind = 'written'`) === "1");
     // (2) A 90-minute request (typed by the requester); the tester accepts.

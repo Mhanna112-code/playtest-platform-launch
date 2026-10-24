@@ -75,6 +75,16 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const blockedByMe = (await db.block.count({ where: { blockerId: u.id, blockedId: c.test.developerId } })) > 0;
   const devRating = (await ratingSummary(c.test.developerId)).line;
   const testersIn = await db.contract.count({ where: { testId: c.testId, status: "working" } });
+  // (NEXT-UI 24) The same contract line at the top of the Written answers, Recording and Live session panels:
+  // "Written answers: $8 · Required" / "Recording: Not in your contract", then "You asked $X" and "Paid so far $Y" if any.
+  const whole = (cents: number) => money(cents).replace(/\.00$/, "");
+  const termLine = (name: string, cents: number | null, required: boolean, perHour: boolean, asked: (number | null)[], paid: number) => (
+    <p className="note" data-term-line={name}>
+      {name}: {cents == null ? "Not in your contract" : `${cents === 0 ? "free" : `${whole(testerShare(cents))}${perHour ? "/h" : ""}`} · ${required ? "Required" : "Not required"}`}
+      {asked.filter((x): x is number => x != null).length > 0 && ` · You asked ${asked.filter((x): x is number => x != null).map(whole).join(", ")}`}
+      {paid > 0 && ` · Paid so far ${whole(paid)}`}
+    </p>
+  );
   const liveCalls = c.calls.filter((x) => x.status === "booked");
   const heldCalls = liveCalls.filter((x) => x.startsAt <= now);
   const aheadCalls = liveCalls.filter((x) => x.startsAt > now);
@@ -227,7 +237,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       {/* The full app's ONE Live session panel: the rate, Booked, Past calls and Requests (calls are always requests). */}
       {(c.calls.length > 0 || canRequestCall || pendingReqs.length > 0) && (
         <LivePanel minutes={c.calls.filter((x) => x.status === "booked" && x.startsAt > now).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())[0]?.minutes ?? null}>
-          <p className="note">{c.liveRateCents != null ? `Live call: ${money(c.liveRateCents).replace(/\.00$/, "")}/h` : "Live call: not in your contract"}</p>
+          {termLine("Live call", c.liveRateCents, c.liveRequired, true, heldCalls.map((x) => x.askedCents), liveCalls.reduce((a, x) => a + (partPaid.get(x.id) ?? 0), 0))}
           <TesterCallPanel
             sessionId={c.id}
             seenAt={seenAt}
@@ -256,6 +266,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       <section className="card space-y-3" id="recording">
         <h2 className="flex flex-wrap items-center gap-2 font-semibold text-white"><Clapperboard className="h-5 w-5 text-fuchsia-300" /> Your recordings
           <span className="text-sm font-normal text-slate-400">{c.recordingCents != null ? "(the recorded session part)" : "(clips, if you like)"}</span></h2>
+        {termLine("Recording", c.recordingCents, c.recordingRequired, false, [recording?.askedCents ?? null], recording ? partPaid.get(recording.id) ?? 0 : 0)}
         <RecordingUpload
           seenAt={seenAt}
           sessionId={c.id}
@@ -267,6 +278,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
 
       <section className="card space-y-3" id="written">
         <h2 className="font-semibold text-white">The written part</h2>
+        {termLine("Written answers", c.writtenCents, c.writtenRequired, false, [written?.askedCents ?? null], written ? partPaid.get(written.id) ?? 0 : 0)}
         {written?.review ? (
           writtenQuestions(c).map((q, i) => (
             <div key={i} className="text-sm">
