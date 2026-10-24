@@ -66,11 +66,15 @@ export function canDispute(paidCents: number, listingCents: number | null, alrea
   return yes;
 }
 
-/** An admin's decision can only raise pay: from what was paid up to the listing amount. Returns the extra to charge. */
-export function checkDisputeDecision(decidedCents: number | null, paidCents: number, listingCents: number): Check & { extraCents?: number } {
+/**
+ * An admin's decision can only raise pay. (Owner, item 28) MIN = what this piece was paid; MAX = the part's listing minus what
+ * was already paid for that part on OTHER pieces (the same rule as the Charge cap). Returns the extra to charge.
+ */
+export function checkDisputeDecision(decidedCents: number | null, paidCents: number, listingCents: number, otherPaidCents = 0): Check & { extraCents?: number } {
   if (decidedCents == null || !Number.isInteger(decidedCents)) return no("Enter the total pay, like 7.50.");
-  if (decidedCents < paidCents) return no(`A decision can only raise pay: at least the ${money(paidCents)} already paid.`);
-  if (decidedCents > listingCents) return no(`At most the listing's ${money(listingCents)}.`);
+  if (decidedCents < paidCents) return no(`A decision can only raise pay: at least the ${money(paidCents)} paid for this piece.`);
+  const max = Math.max(paidCents, listingCents - otherPaidCents);
+  if (decidedCents > max) return no(`At most ${money(max)}: the listing's ${money(listingCents)}${otherPaidCents > 0 ? ` minus the ${money(otherPaidCents)} already paid for this part` : ""}.`);
   const extra = decidedCents - paidCents;
   if (extra > 0 && extra < MIN_CHARGE_CENTS) return no(`The extra would be under the smallest card charge (${money(MIN_CHARGE_CENTS)}). Keep the pay as it is or raise it by at least ${money(MIN_CHARGE_CENTS)}.`);
   return { ok: true, extraCents: extra };

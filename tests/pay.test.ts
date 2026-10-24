@@ -175,4 +175,24 @@ describe("admin decides disputes", () => {
     expect(await db.payment.findFirstOrThrow({ where: { disputeId: d.id } })).toMatchObject({ kind: "dispute", amountCents: 600, testerCents: 480 });
     expect((await admin("decide", owner.cookie, { id: d.id, total: "10.00" })).body.error.message).toBe("This dispute was already decided.");
   });
+  it("(Item 28) MAX = the listing minus what was already paid for that part on other pieces; MIN = this piece's pay; blank keeps the pay", async () => {
+    const { dev, sub, sessionId, tester } = await sent();
+    // The listing is $10; $5 was already paid for this part on another piece; this piece was rejected.
+    await db.payment.create({ data: { kind: "review", submissionId: sub.id, contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 500, feeCents: 100, testerCents: 400, status: "charged" } });
+    await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "0", tickedCents: 0, reason: "Nothing usable" });
+    await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I did answer everything fully" });
+    const d = await db.dispute.findFirstOrThrow({ where: { submissionId: sub.id } });
+    const owner = await makeUser({ email: `admin-${randomUUID()}@playtest.test` });
+    await db.user.update({ where: { id: owner.user.id }, data: { isAdmin: true } });
+    const { disputeBounds } = await import("@/lib/server/payments");
+    expect(await disputeBounds(d)).toMatchObject({ min: 0, max: 500, other: 500, listing: 1000 });
+    const over = await admin("decide", owner.cookie, { id: d.id, total: "6.00" });
+    expect(over.body.error.message).toBe("At most $5.00: the listing's $10.00 minus the $5.00 already paid for this part.");
+    expect(over.status).toBe(400);
+    // Blank keeps the pay as it is (nothing charged).
+    const kept = await admin("decide", owner.cookie, { id: d.id, total: "" });
+    expect(kept.body).toEqual({ extraCents: 0 });
+    expect((await db.dispute.findUniqueOrThrow({ where: { id: d.id } })).decidedCents).toBe(0);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "dispute" } } })).toBeGreaterThan(0);
+  });
 });

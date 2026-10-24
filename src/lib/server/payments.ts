@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money, toCents } from "@/lib/format";
-import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, canDispute, checkDisputeDecision, delayedPayLine, owedPayLine, owedUntilFrom, checkPay, checkReject, MAX_PAY_CENTS, PAY_WAITS, testerShare } from "@/lib/rules";
+import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, canDispute, checkDisputeDecision, delayedPayLine, owedPayLine, owedUntilFrom, checkPay, checkReject, STRIPE_MAX_CENTS, PAY_WAITS, testerShare } from "@/lib/rules";
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
 import { isAdmin } from "./session";
@@ -155,15 +155,29 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   return d;
 }
 
-/** Admin: decide a dispute. The total can only go up (to at most the listing amount); the extra is charged. */
+/**
+ * (Item 28) What an admin may decide for a dispute: MIN = what this piece was paid; MAX = the part's listing minus what was
+ * already paid for that part on OTHER pieces (payments on the same work that are not this review's).
+ */
+export async function disputeBounds(d: { submissionId: string | null; callId: string | null }) {
+  const review = await db.review.findFirstOrThrow({ where: d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! } });
+  const paid = await db.payment.aggregate({ where: { ...(d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! }), kind: { not: "dispute" }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } });
+  const other = d.submissionId ? Math.max(0, (paid._sum.amountCents ?? 0) - review.amountCents) : 0;
+  const listing = review.agreedCents ?? STRIPE_MAX_CENTS;
+  return { review, listing, other, min: review.amountCents, max: Math.max(review.amountCents, listing - other) };
+}
+
+/** Admin: decide a dispute. The total can only go up (to at most the listing minus what the part was already paid on other pieces); blank keeps the pay; the extra is charged. */
 export async function decideDispute(admin: U, disputeId: string, body: Record<string, unknown>) {
   if (!isAdmin(admin)) throw new HttpError(403, "not_admin", "Only admins can decide disputes.");
   const d = await db.dispute.findUnique({ where: { id: disputeId } });
   if (!d) throw new HttpError(404, "not_found", "That dispute doesn't exist.");
   if (d.status !== "open") throw new HttpError(409, "decided", "This dispute was already decided.");
-  const review = await db.review.findFirstOrThrow({ where: d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! } });
-  const decided = toCents(body.total);
-  const check = checkDisputeDecision(decided, review.amountCents, review.agreedCents ?? MAX_PAY_CENTS);
+  const { review, other } = await disputeBounds(d);
+  // A blank box keeps the pay as it is.
+  const blank = body.total === undefined || body.total === null || String(body.total).trim() === "";
+  const decided = blank ? review.amountCents : toCents(body.total);
+  const check = checkDisputeDecision(decided, review.amountCents, review.agreedCents ?? STRIPE_MAX_CENTS, other);
   if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
   const extra = check.extraCents!;
   const c = await db.contract.findUniqueOrThrow({ where: { id: d.contractId }, include: { tester: true, test: { include: { developer: true } } } });
@@ -185,7 +199,7 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
     await receipt(c.test.developer.email, `the dispute decision on ${displayName(c.tester)}'s work`, extra, result.status, `/app/tests/${c.testId}`);
     await db.payment.create({ data: { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, ...result } });
   }
-  const line = extra > 0 ? `The team raised the pay to ${money(decided!)} (${money(extra)} more).` : `The team kept the pay at ${money(review.amountCents)}.`;
+  const line = extra > 0 ? `The team raised the pay to ${money(decided!)} (${money(extra)} more).` : `The team kept the pay at ${money(review.amountCents)}${review.rejected ? " (rejected)" : ""}.`;
   await logEvent(c.testId, "admin", `The team decided ${displayName(c.tester)}'s dispute: ${line.replace(/^The team /, "").replace(/\.$/, "")}`, c.id);
   await (await import("./ratings")).maybePromptRating(c.id);
   await notify(c.tester.email, `Your dispute on “${c.title}” was decided`, [line, ...(note ? [`Their note: “${note}”`] : [])], `/app/sessions/${c.id}`);

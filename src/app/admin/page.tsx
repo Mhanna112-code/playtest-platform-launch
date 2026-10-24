@@ -6,6 +6,7 @@ import { displayName, fmtDateTime, money } from "@/lib/format";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { isAdmin } from "@/lib/server/session";
 import { AdminButton } from "./AdminButton";
+import { DisputeDecision } from "./DisputeDecision";
 import { adminCases } from "@/lib/server/holds";
 import { StatTile } from "@/components/StatTile";
 import { BadgeDollarSign, FlaskConical, Inbox, ListChecks, Users, Wallet } from "lucide-react";
@@ -30,6 +31,11 @@ export default async function AdminPage() {
   const reviews = await db.review.findMany({ where: { OR: [{ submissionId: { in: subIds } }, { callId: { in: callIds } }] } });
   const contracts = await db.contract.findMany({ where: { id: { in: disputes.map((d) => d.contractId) } }, include: { tester: true, test: { include: { developer: true } } } });
   const byId = new Map(users.map((x) => [x.id, x]));
+  // (Item 28) What each open dispute may be decided at, and the facts for its row.
+  const { disputeBounds } = await import("@/lib/server/payments");
+  const bounds = new Map(await Promise.all(disputes.filter((d) => d.status === "open").map(async (d) => [d.id, await disputeBounds(d)] as const)));
+  const subs = new Map((await db.submission.findMany({ where: { id: { in: subIds } } })).map((x) => [x.id, x]));
+  const calls = new Map((await db.call.findMany({ where: { id: { in: callIds } } })).map((x) => [x.id, x]));
   const held = users.filter((x) => x.holdStartedAt);
   const cases = await adminCases();
   const chargebacks = await db.payment.findMany({ where: { chargeback: "open" } });
@@ -75,14 +81,16 @@ export default async function AdminPage() {
           return (
             <div key={d.id} className="space-y-1 border-t border-white/[0.06] pt-2 text-sm">
               <p>
-                <b>{c ? displayName(c.tester) : "?"}</b> vs {c ? displayName(c.test.developer) : "?"} on “{c?.title}” · {d.callId ? "live call" : "sent work"} · paid {money(r?.amountCents)}
-                {r?.rejected ? " (rejected)" : ""}, listing {money(r?.agreedCents)}
+                <b>{c ? displayName(c.tester) : "?"}</b> vs {c ? displayName(c.test.developer) : "?"} · {c?.title} · {d.callId ? `Live call (${calls.get(d.callId) ? fmtDateTime(calls.get(d.callId)!.startsAt) : ""})` : `${subs.get(d.submissionId ?? "")?.kind === "recording" ? "Recording" : "Written answers"} (sent ${subs.get(d.submissionId ?? "") ? fmtDateTime(subs.get(d.submissionId ?? "")!.sentAt) : ""})`}
               </p>
               <p>
-                Tester: “{d.reason}”{r?.reason ? ` · Developer's note when paying: “${r.reason}”` : ""}{d.devSide ? ` · Developer's side: “${d.devSide}”` : ""}
+                Listing {money(r?.agreedCents)} · Paid for this piece {money(r?.amountCents)}{r?.rejected ? " (rejected)" : ""}{bounds.get(d.id) ? ` · Paid for this part so far ${money(bounds.get(d.id)!.other + (r?.amountCents ?? 0))}` : ""}
               </p>
-              {d.status === "open" ? (
-                <AdminButton action="decide" id={d.id} label="Decide" fields={[{ name: "total", label: "Total pay ($)", ph: "Total pay, e.g. 10.00" }, { name: "note", label: "Note to both" }]} />
+              <p>
+                Tester: “{d.reason}”{r?.reason ? ` · Developer's note when ${r.rejected ? "rejecting" : "paying"}: “${r.reason}”` : ""}{d.devSide ? ` · Developer's side: “${d.devSide}”` : ""}
+              </p>
+              {d.status === "open" && bounds.get(d.id) ? (
+                <DisputeDecision id={d.id} minCents={bounds.get(d.id)!.min} maxCents={bounds.get(d.id)!.max} />
               ) : (
                 <p className="note">
                   Decided {d.decidedAt && fmtDateTime(d.decidedAt)}: {money(d.decidedCents)} in all{d.decisionNote ? ` · “${d.decisionNote}”` : ""}
