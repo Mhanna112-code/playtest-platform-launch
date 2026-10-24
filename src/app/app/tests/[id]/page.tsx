@@ -5,21 +5,20 @@ import { CALL_CLOSE_MS, callClosed, callOutcome, joinedWords, callJoinable, book
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
 import { unreadCount } from "@/lib/server/messages";
-import { MessagesSquare } from "lucide-react";
 import { DevCallPanel, type DevCall, type DevTester } from "./DevCallPanel";
 import { CallLength } from "./CallLength";
 import { InvitePanel } from "./InvitePanel";
 import { invitable, inviteExpired } from "@/lib/server/invites";
 import { owedForBox, sweepHeldCalls } from "@/lib/server/holds";
-import { paidLines } from "@/lib/server/paid";
 import { termsRowLines } from "@/lib/server/terms";
 import { BlockButton } from "@/components/BlockButton";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, rateBlocker, ratingSummary } from "@/lib/server/ratings";
 import { LiveTop } from "@/components/LiveTop";
 import { qOptional, qText } from "@/lib/questions";
-import { Users } from "lucide-react";
+import { MessagesSquare } from "lucide-react";
 import { Applications } from "./Applications";
+import { NeedsRequests } from "./NeedsRequests";
 import { rateLabel } from "@/lib/server/requests";
 import { rowsOf, toJson } from "@/lib/callRows";
 import { AutoRefresh } from "@/components/AutoRefresh";
@@ -61,7 +60,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const paid = await db.payment.groupBy({ by: ["contractId"], where: { contractId: { in: t.contracts.map((c) => c.id) }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } });
   const paidSoFar = (id: string) => paid.find((p) => p.contractId === id)?._sum.amountCents ?? 0;
   await sweepHeldCalls(u.id);
-  const paidKinds = await paidLines(t.contracts.map((c) => c.id));
   const termsRows = await termsRowLines(t.contracts.map((c) => c.id));
   const callSets = await db.callSet.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } } });
   const reqs = await db.callRequest.findMany({ where: { testId: id, status: "pending", startsAt: { gt: new Date() } }, orderBy: { startsAt: "asc" } });
@@ -76,7 +74,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (NEXT-UI 4) Chat is its own page per session: each tester's row links to it with an unread badge.
   const unread = new Map(await Promise.all(t.contracts.map(async (c) => [c.id, await unreadCount(u.id, t.id, c.testerId)] as const)));
   const blockedIds = new Set((await db.block.findMany({ where: { blockerId: u.id } })).map((b) => b.blockedId));
-  const blockedBy = new Set((await db.block.findMany({ where: { blockedId: u.id } })).map((b) => b.blockerId));
   const [testers, invites, owedList] = await Promise.all([invitable(u.id, id), db.invite.findMany({ where: { testId: id, status: { in: ["sent", "joined"] } }, orderBy: { createdAt: "desc" } }), owedForBox(u.id)]);
   const people = new Map((await db.user.findMany({ where: { id: { in: invites.map((i) => i.testerId) } } })).map((x) => [x.id, displayName(x)]));
   const expired = inviteExpired(t);
@@ -119,7 +116,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       contractId: c.id, name: displayName(c.tester), terms, booked,
       calls: live.filter((x) => !x.setId).map(toCall),
       sets,
-      requests: reqs.filter((r) => r.contractId === c.id).map((r) => ({
+      // (NEXT-UI 21) The testers' requests wait in Needs you; here only the developer's own.
+      requests: reqs.filter((r) => r.contractId === c.id && r.fromSide === "developer").map((r) => ({
         id: r.id, minutes: r.minutes, rows: toJson(rowsOf(r)), mine: r.fromSide === "developer",
         rate: r.askRateCents != null ? `asks ${whole(r.askRateCents)}/h` : rateLabel(c.liveRateCents, c.liveRateCents),
       })),
@@ -130,6 +128,48 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     await Promise.all(
       t.contracts.map(async (c) => [c.id, { ...(await contractRatings(c.id)), blocker: await rateBlocker(c.id, "developer"), avg: (await ratingSummary(c.testerId)).line }] as const),
     ),
+  );
+  // (NEXT-UI 21) Needs you: sent work and held calls waiting for Pay / Reject, the testers' call requests, disputes waiting for the developer's side.
+  const pieces = t.contracts
+    .flatMap((c) => [
+      ...c.submissions.filter((x) => !x.review).map((x) => ({ kind: "sub" as const, id: x.id, c, s: x, x: null, at: x.sentAt })),
+      ...c.calls.filter((x) => x.status === "booked" && x.startsAt <= now && !x.review).map((x) => ({ kind: "call" as const, id: x.id, c, s: null, x, at: x.startsAt })),
+    ])
+    .sort((a, b) => a.at.getTime() - b.at.getTime());
+  const needsRequests = reqs.filter((r) => r.fromSide === "tester").flatMap((r) => {
+    const c = t.contracts.find((x) => x.id === r.contractId);
+    return c ? [{ id: r.id, contractId: c.id, name: displayName(c.tester), rows: toJson(rowsOf(r)), minutes: r.minutes, rate: r.askRateCents != null ? `asks ${whole(r.askRateCents)}/h` : rateLabel(c.liveRateCents, c.liveRateCents) }] : [];
+  });
+  const disputesWaiting = t.contracts.flatMap((c) => [
+    ...c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), what: x.kind === "written" ? "their written answers" : "their recording", reason: x.dispute!.reason })),
+    ...c.calls.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), what: `the call on ${fmtDateTime(x.startsAt)}`, reason: x.dispute!.reason })),
+  ]);
+  const needsCount = pieces.length + apps.length + needsRequests.length + disputesWaiting.length;
+  // History per tester: what happened with them (the test's events about them, what was paid or rejected, disputes), newest first.
+  const events = await db.testEvent.findMany({ where: { testId: id, contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "desc" }, take: 500 });
+  const historyOf = new Map(
+    t.contracts.map((c) => {
+      const items: { key: string; at: Date; text: string; detail?: React.ReactNode }[] = [];
+      for (const e of events.filter((x) => x.contractId === c.id)) items.push({ key: `e-${e.id}`, at: e.createdAt, text: e.text.replace(/^You /, "You ") });
+      const pieceLine = (label: string, rev: { amountCents: number; rejected: boolean; reason: string; createdAt: Date }, id: string, dispute: { status: string; reason: string; decidedCents: number | null; decisionNote: string; devSide: string } | null, detail?: React.ReactNode) => {
+        items.push({ key: `r-${id}`, at: rev.createdAt, text: rev.rejected ? `You rejected ${label}: “${rev.reason}”` : `You paid ${money(rev.amountCents)} for ${label}${rev.reason ? `: “${rev.reason}”` : ""}`, detail });
+        if (dispute) items.push({ key: `d-${id}`, at: rev.createdAt, text: dispute.status === "open" ? `${displayName(c.tester)} disputed it: “${dispute.reason}”${dispute.devSide ? ` · your side: “${dispute.devSide}”` : ""}` : `Dispute decided: total ${money(dispute.decidedCents)}${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : ""}` });
+      };
+      for (const x of c.submissions) {
+        const label = x.kind === "written" ? "the written answers" : "the recording";
+        const detail = (
+          <details className="ml-4 mt-1 text-xs text-slate-400">
+            <summary className="cursor-pointer">What they sent</summary>
+            {x.kind === "written" ? writtenQuestions(c).map((q, i) => <p key={i} className="whitespace-pre-wrap"><b>{qText(q)}</b> {(x.answers as string[])[i]}</p>) : x.recordings.filter((r) => r.uploadedAt).map((r) => <a key={r.id} className="block" href={`/api/recordings/${r.id}/file`} target="_blank" rel="noreferrer">{r.filename}</a>)}
+            {x.notes && <p className="whitespace-pre-wrap">Notes: {x.notes}</p>}
+          </details>
+        );
+        if (x.review) pieceLine(label, x.review, x.id, x.dispute, detail);
+      }
+      for (const x of c.calls) if (x.review) pieceLine(`the call on ${fmtDateTime(x.startsAt)}`, x.review, x.id, x.dispute);
+      items.sort((a, b) => b.at.getTime() - a.at.getTime());
+      return [c.id, items] as const;
+    }),
   );
   return (
     <>
@@ -156,6 +196,62 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           ahead: c.calls.filter((x) => x.status === "booked" && x.startsAt > now).length,
         }))}
       />
+      {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay / Reject box for sent work lives here. */}
+      {needsCount > 0 && (
+        <section id="needs-you" className="card scroll-mt-24 space-y-4 border-amber-300/30" aria-label="Needs you">
+          <h2 className="flex items-center gap-2 font-semibold text-white"><span className="h-2 w-2 rounded-full bg-amber-400" /> Needs you <span className="text-sm font-normal text-slate-400">{needsCount}</span></h2>
+          <Applications testId={t.id} seenAt={seenAt} apps={apps} />
+          <NeedsRequests testId={t.id} seenAt={seenAt} requests={needsRequests} />
+          {disputesWaiting.map((d) => (
+            <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
+              <p className="text-slate-300"><b className="text-white">{d.name}</b> disputed what you paid for {d.what}: “{d.reason}” · waiting for the team.</p>
+              <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
+            </div>
+          ))}
+          {pieces.map((x) => (
+            <div key={x.id} id={x.kind === "sub" ? `piece-${x.id}` : `call-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 scroll-mt-24">
+              <p className="text-sm font-medium">
+                <a href={`/app/testers/${x.c.testerId}`}>{displayName(x.c.tester)}</a> · {x.kind === "sub" ? (x.s!.kind === "written" ? "Written answers" : "Recording") : "Live call"} · {x.kind === "sub" ? `sent ${fmtDateTime(x.s!.updatedAt)}` : `${fmtDateTime(x.x!.startsAt)} · ${x.x!.minutes} min booked`} · {(x.kind === "sub" ? x.s!.agreedCents : x.x!.rateCents) == null ? "Not in their contract" : "In their contract"}
+                {x.kind === "sub" && x.s!.late && <span className="ml-2 badge">{lateLabel(x.c.dueAt, fmtDate)}</span>}
+              </p>
+              {x.kind === "sub" ? (
+                <>
+                  {x.s!.kind === "written" && writtenQuestions(x.c).map((q, i) => (
+                    <div key={i} className="text-sm">
+                      <p className="font-medium text-ink-200">{qText(q)}{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</p>
+                      <p className="whitespace-pre-wrap">{(x.s!.answers as string[])[i]}</p>
+                    </div>
+                  ))}
+                  {x.s!.notes && <p className="whitespace-pre-wrap text-sm">Notes: {x.s!.notes}</p>}
+                  {x.s!.recordings.filter((r) => r.uploadedAt).map((r) => (
+                    <div key={r.id} className="text-sm">
+                      <video controls preload="metadata" className="max-h-72 w-full rounded bg-black" src={`/api/recordings/${r.id}/file`} />
+                      <a href={`/api/recordings/${r.id}/file`} target="_blank" rel="noreferrer">{r.filename}</a>
+                    </div>
+                  ))}
+                  <PayBox kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} askedCents={x.s!.askedCents} partPaidCents={partPaid(x.s!.id)}
+                    note={x.s!.agreedCents != null && x.s!.payBy && !x.s!.choiceOfferedAt ? choiceNoteLine(fmtDate(x.s!.payBy).replace(/, \d{4}$/, ""), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, x.s!.askedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
+                    listingCents={x.s!.agreedCents} listingText={`${money(x.s!.agreedCents)} for ${x.s!.kind === "written" ? "written answers" : "a recording"}`} />
+                </>
+              ) : (
+                <>
+                  {x.x!.devJoinedAt && x.x!.testerJoinedAt && <p className="note">Both joined at {fmtDateTime(new Date(Math.max(x.x!.devJoinedAt.getTime(), x.x!.testerJoinedAt.getTime())))}</p>}
+                  <CallLength
+                    seenAt={seenAt} testId={t.id} callId={x.x!.id} tester={displayName(x.c.tester)}
+                    minutes={x.x!.actualMinutes ?? x.x!.minutes} booked={x.x!.minutes} entered={x.x!.actualMinutes} note={x.x!.lengthNote}
+                    measured={x.x!.devJoinedAt && x.x!.testerJoinedAt ? defaultCallMinutes(x.x!.startsAt, x.x!.minutes, x.x!.devJoinedAt, x.x!.testerJoinedAt) : null}
+                    max={Math.floor(x.x!.minutes * 1.5)} closesAt={new Date(x.x!.startsAt.getTime() + CALL_CLOSE_MS).toISOString()} closed={callClosed(x.x!.startsAt, now)}
+                  />
+                  <PayBox key={x.x!.actualMinutes ?? 0} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} askedCents={x.x!.askedCents} partPaidCents={partPaid(x.x!.id)}
+                    listingCents={callReference(x.x!.rateCents, x.x!.actualMinutes ?? x.x!.minutes, x.c.liveRateCents).cents}
+                    listingText={callReference(x.x!.rateCents, x.x!.actualMinutes ?? x.x!.minutes, x.c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
+                </>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
+
       {/* (Owner) The full app's "Testers joined" right after the header: avatars with their hover cards (Block inside). */}
       <TestersJoined
         testId={t.id}
@@ -173,9 +269,87 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         })))}
         gone={t.contracts.filter((c) => c.status !== "working").map((c) => ({ contractId: c.id, name: displayName(c.tester), how: c.status === "left" ? (c.endKind === "rated" ? "rated and finished" : "left") : "work ended", at: c.endedAt }))}
       />
+      {/* (NEXT-UI 21) TESTERS JOINED, one row per tester: parts sent (Required / Not required), paid per part and in total, the call summary, and a History fold. No Pay boxes here. */}
+      {t.contracts.length > 0 && (
+        <section className="space-y-3" aria-label="Testers">
+          {t.contracts.map((c) => {
+            const name = displayName(c.tester);
+            const ri = rateInfo.get(c.id);
+            const unreadN = unread.get(c.id) ?? 0;
+            const callPaid = payments.filter((p) => p.contractId === c.id && p.callId && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
+            const bookedAhead = c.calls.filter((x) => x.status === "booked" && x.startsAt > now).length;
+            const held = c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).length;
+            const cancelledN = c.calls.filter((x) => x.status === "cancelled").length;
+            const history = historyOf.get(c.id) ?? [];
+            const partRows = [
+              { name: "Written answers", on: c.writtenCents != null, required: c.writtenRequired, sub: c.submissions.find((s) => s.kind === "written"), cents: c.writtenCents },
+              { name: "Recording", on: c.recordingCents != null, required: c.recordingRequired, sub: c.submissions.find((s) => s.kind === "recording"), cents: c.recordingCents },
+            ];
+            return (
+              <div key={c.id} className="panel" id={`tester-${c.id}`}>
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <h3 className="mr-auto"><a href={`/app/testers/${c.testerId}`}>{name}</a></h3>
+                  <span className="badge">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
+                  {c.keepPrivate && <span className="badge">Keeps it private</span>}
+                  <a href={`/app/chat/${c.id}`} className="btn-secondary relative px-3 py-1 text-xs no-underline hover:no-underline"><MessagesSquare className="h-3.5 w-3.5" /> Chat
+                    {unreadN > 0 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950" aria-label={`${unreadN} unread`}>{unreadN}</span>}
+                  </a>
+                </div>
+                <p className="note">Their contract: {termsLine(c)} · joined {fmtDate(c.joinedAt)}</p>
+                <ul className="space-y-1 text-sm" data-parts-sent="">
+                  {partRows.filter((r) => r.on).map((r) => (
+                    <li key={r.name} className="flex flex-wrap items-center gap-2">
+                      <b className="text-white">{r.name}</b>
+                      <span className={`badge ${r.required ? "border-amber-300/40 text-amber-200" : ""}`}>{r.required ? "Required" : "Not required"}</span>
+                      <span className={r.sub ? "text-emerald-200" : "text-slate-400"}>{r.sub ? `Sent ${fmtDate(r.sub.sentAt)}` : "Not sent yet"}</span>
+                      {r.sub && <span className="text-slate-300">· paid {money(partPaid(r.sub.id))} of {r.sub.agreedCents != null ? money(r.sub.agreedCents) : "(not in the contract)"}</span>}
+                    </li>
+                  ))}
+                  {c.liveRateCents != null && (
+                    <li className="flex flex-wrap items-center gap-2">
+                      <b className="text-white">Live call</b>
+                      <span className={`badge ${c.liveRequired ? "border-amber-300/40 text-amber-200" : ""}`}>{c.liveRequired ? "Required" : "Not required"}</span>
+                      <span className={held ? "text-emerald-200" : "text-slate-400"}>{held ? `${held} held` : "None held yet"}</span>
+                      <span className="text-slate-300">· paid {money(callPaid)}</span>
+                    </li>
+                  )}
+                </ul>
+                <p className="text-sm"><b>Paid in all:</b> {money(paidSoFar(c.id))}{(bookedAhead || held || cancelledN) ? ` · Calls: ${[bookedAhead ? `${bookedAhead} booked ahead` : "", held ? `${held} held` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}` : ""}</p>
+                {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}
+                {ri?.avg && <p className="note">{name}: {ri.avg}</p>}
+                {ri?.tester && (
+                  <>
+                    {ri.testerRevealed ? (
+                      <p className="note">{name} rated you: {ri.tester.stars} ★{ri.tester.comment ? ` · “${ri.tester.comment}”` : ""}</p>
+                    ) : (
+                      <p className="note">{name} rated you: you&apos;ll see it after you rate {pronouns(c.tester.pronoun).obj} (or on {fmtDate(ri.revealOn!)}).</p>
+                    )}
+                    {ri.developer && <p className="note">You rated {name}: {ri.developer.stars} ★</p>}
+                    {ri.blocker === "" && (
+                      <RateBox path={`/api/tests/${t.id}/rate`} body={{ contractId: c.id }} seenAt={seenAt} name={name} working={false} headline={`Your rating of ${name} is final. Both ratings show once you rate.`} lines={[]} />
+                    )}
+                  </>
+                )}
+                {blockedIds.has(c.testerId) && <p className="note">You blocked {name}. Unblock in Account → Blocked people.</p>}
+                <details className="text-sm" data-history="">
+                  <summary className="cursor-pointer">History ({history.length})</summary>
+                  <ul className="mt-2 space-y-1.5 border-l border-white/10 pl-3">
+                    {history.length === 0 && <li className="text-slate-500">Nothing yet.</li>}
+                    {history.map((h) => (
+                      <li key={h.key} className="text-slate-300">
+                        <span className="text-xs text-slate-500">{fmtDateTime(h.at)}</span> · {h.text}
+                        {h.detail}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </div>
+            );
+          })}
+        </section>
+      )}
       {(u.holdStartedAt || owedList.length > 0) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} />}
       {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date())}</p>}
-      <Applications testId={t.id} seenAt={seenAt} apps={apps} />
       {t.status !== "stopped" && (
         <InvitePanel
           testId={t.id}
@@ -208,117 +382,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       )}
 
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="flex items-center gap-2"><Users className="h-5 w-5 text-volt-300" /> Testers joined</h2>
-          <span className="text-sm text-ink-400">{working.length} of {t.spots}</span>
-        </div>
-        {t.contracts.length === 0 && <p className="note">Nobody has joined yet.</p>}
-        {t.contracts.map((c) => (
-          <div key={c.id} className="panel" id={`tester-${c.id}`}>
-            <div className="flex flex-wrap items-baseline gap-2">
-              <h3 className="mr-auto"><a href={`/app/testers/${c.testerId}`}>{displayName(c.tester)}</a></h3>
-              <span className="badge">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
-              {c.keepPrivate && <span className="badge">Keeps it private</span>}
-            </div>
-            <p className="note">
-              Their contract: {termsLine(c)} · joined {fmtDate(c.joinedAt)}
-            </p>
-            <p className="text-sm">{paidKinds.get(c.id)}</p>
-            {/* (NEWEST+10) Which required and not-required parts this tester sent (Required is a label only). */}
-            <div className="flex flex-wrap gap-1.5" data-parts-sent="">
-              {([
-                ["Written answers", c.writtenCents != null, c.writtenRequired, c.submissions.some((s) => s.kind === "written")],
-                ["Recording", c.recordingCents != null, c.recordingRequired, c.submissions.some((s) => s.kind === "recording")],
-                ["Live call", c.liveRateCents != null, c.liveRequired, c.calls.some((x) => x.status === "booked" && x.startsAt <= now)],
-              ] as const).filter(([, inContract]) => inContract).map(([name, , required, sent]) => (
-                <span key={name} className={`badge ${sent ? "border-emerald-400/40 text-emerald-200" : required ? "border-amber-300/40 text-amber-200" : ""}`}>
-                  {name} · {required ? "required" : "not required"} · {sent ? "sent" : "not sent yet"}
-                </span>
-              ))}
-            </div>
-            {c.calls.filter((x) => x.status !== "cancelled" && isBookedLate(x.createdAt, c.dueAt)).map((x) => (
-              <p key={x.id} className="note">Call on {fmtDateTime(x.startsAt)}: {lateOf(c, x)}</p>
-            ))}
-            {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}
-            {rateInfo.get(c.id)?.avg && <p className="note">{displayName(c.tester)}: {rateInfo.get(c.id)?.avg}</p>}
-            {(() => {
-              const ri = rateInfo.get(c.id);
-              if (!ri?.tester) return null;
-              const name = displayName(c.tester);
-              return (
-                <>
-                  {ri.testerRevealed ? (
-                    <p className="note">{name} rated you: {ri.tester.stars} ★{ri.tester.comment ? ` · “${ri.tester.comment}”` : ""}</p>
-                  ) : (
-                    <p className="note">{name} rated you: you&apos;ll see it after you rate {pronouns(c.tester.pronoun).obj} (or on {fmtDate(ri.revealOn!)}).</p>
-                  )}
-                  {ri.developer && <p className="note">You rated {name}: {ri.developer.stars} ★</p>}
-                  {ri.blocker === "" && (
-                    <RateBox path={`/api/tests/${t.id}/rate`} body={{ contractId: c.id }} seenAt={seenAt} name={name} working={false} headline={`Your rating of ${name} is final. Both ratings show once you rate.`} lines={[]} />
-                  )}
-                </>
-              );
-            })()}
-            {blockedIds.has(c.testerId) && <p className="note">You blocked {displayName(c.tester)}. Unblock in Account → Blocked people.</p>}
-            {c.submissions.length === 0 && c.calls.length === 0 && <p className="note">Nothing sent yet.</p>}
-            {c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).map((x) => (
-              <div key={x.id} className="space-y-2 rounded-lg border border-white/10 p-3">
-                <p className="text-sm font-medium">
-                  Live call · {x.rateCents == null ? "Not in their contract" : "In their contract"} · {fmtDateTime(x.startsAt)} · {x.minutes} min booked
-                </p>
-                {x.review ? (
-                  <ReviewResult seenAt={seenAt} review={x.review} payments={payments.filter((p) => p.callId === x.id)} dispute={x.dispute} testId={t.id} />
-                ) : (
-                  <>
-                    {x.devJoinedAt && x.testerJoinedAt && <p className="note">Both joined at {fmtDateTime(new Date(Math.max(x.devJoinedAt.getTime(), x.testerJoinedAt.getTime())))}</p>}
-                    <CallLength
-                      seenAt={seenAt} testId={t.id} callId={x.id} tester={displayName(c.tester)}
-                      minutes={x.actualMinutes ?? x.minutes} booked={x.minutes} entered={x.actualMinutes} note={x.lengthNote}
-                      measured={x.devJoinedAt && x.testerJoinedAt ? defaultCallMinutes(x.startsAt, x.minutes, x.devJoinedAt, x.testerJoinedAt) : null}
-                      max={Math.floor(x.minutes * 1.5)} closesAt={new Date(x.startsAt.getTime() + CALL_CLOSE_MS).toISOString()} closed={callClosed(x.startsAt, now)}
-                    />
-                    <PayBox key={x.actualMinutes ?? 0} kind="call" id={x.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} askedCents={x.askedCents} partPaidCents={partPaid(x.id)}
-                      listingCents={callReference(x.rateCents, x.actualMinutes ?? x.minutes, c.liveRateCents).cents}
-                      listingText={callReference(x.rateCents, x.actualMinutes ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
-                  </>
-                )}
-              </div>
-            ))}
-            {c.submissions.map((s) => (
-              <div key={s.id} className="space-y-2 rounded-lg border border-white/10 p-3">
-                <p className="text-sm font-medium">
-                  {s.kind === "written" ? "Written answers" : "Recording"} · {s.agreedCents == null ? "Not in their contract" : "In their contract"} · sent{" "}
-                  {fmtDateTime(s.updatedAt)}
-                  {s.late && <span className="ml-2 badge">{lateLabel(c.dueAt, fmtDate)}</span>}
-                </p>
-                {s.kind === "written" &&
-                  writtenQuestions(c).map((q, i) => (
-                    <div key={i} className="text-sm">
-                      <p className="font-medium text-ink-200">{qText(q)}{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</p>
-                      <p className="whitespace-pre-wrap">{(s.answers as string[])[i]}</p>
-                    </div>
-                  ))}
-                {s.notes && <p className="whitespace-pre-wrap text-sm">Notes: {s.notes}</p>}
-                {s.recordings.filter((r) => r.uploadedAt).map((r) => (
-                  <div key={r.id} className="text-sm">
-                    <video controls preload="metadata" className="max-h-72 w-full rounded bg-black" src={`/api/recordings/${r.id}/file`} />
-                    <a href={`/api/recordings/${r.id}/file`} target="_blank" rel="noreferrer">{r.filename}</a>
-                  </div>
-                ))}
-                {s.review ? (
-                  <ReviewResult seenAt={seenAt} review={s.review} payments={payments.filter((p) => p.submissionId === s.id)} dispute={s.dispute} testId={t.id} />
-                ) : (
-                  <PayBox kind="submission" id={s.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} askedCents={s.askedCents} partPaidCents={partPaid(s.id)}
-                    note={s.agreedCents != null && s.payBy && !s.choiceOfferedAt ? choiceNoteLine(fmtDate(s.payBy).replace(/, \d{4}$/, ""), displayName(c.tester), chargeAmount(s.agreedCents, s.askedCents, partPaid(s.id)), pronouns(c.tester.pronoun).poss) : undefined}
-                    listingCents={s.agreedCents} listingText={`${money(s.agreedCents)} for ${s.kind === "written" ? "written answers" : "a recording"}`} />
-                )}
-              </div>
-            ))}
-            <a href={`/app/chat/${c.id}`} className="btn-secondary relative w-fit max-w-full no-underline hover:no-underline"><MessagesSquare className="h-4 w-4 shrink-0" /> <span className="truncate">Chat with {displayName(c.tester)}</span>
-              {(unread.get(c.id) ?? 0) > 0 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950" aria-label={`${unread.get(c.id)} unread`}>{unread.get(c.id)}</span>}
-            </a>
-          </div>
-        ))}
         <ByQuestion
           blocks={byQuestion(
             (t.questions as string[]) ?? [],
@@ -335,35 +398,5 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         />
       </section>
     </>
-  );
-}
-
-type Rev = { amountCents: number; rejected: boolean; reason: string; createdAt: Date };
-type Pay = { status: string; amountCents: number; kind: string };
-type Disp = { id: string; status: string; reason: string; decidedCents: number | null; decisionNote: string; devSide: string } | null;
-
-/** What happened to a piece after Pay / Reject, for the developer. */
-function ReviewResult({ review, payments, dispute, testId, seenAt }: { review: Rev; payments: Pay[]; dispute: Disp; testId: string; seenAt: string }) {
-  const main = payments.find((p) => p.kind !== "dispute" && p.status !== "failed") ?? payments.find((p) => p.kind !== "dispute");
-  return (
-    <div className="space-y-1 rounded-lg bg-white/[0.03] p-3 text-sm">
-      {review.rejected ? (
-        <p><b>Rejected</b> {fmtDateTime(review.createdAt)}: “{review.reason}” · nothing charged</p>
-      ) : (
-        <p>
-          <b>Paid {money(review.amountCents)}</b> {fmtDateTime(review.createdAt)}
-          {main?.status === "charged" && review.amountCents > 0 && " · ✓ charged now"}
-          {main?.status === "not_set_up" && " · payments not set up: recorded, nothing charged"}
-          {review.reason && <> · “{review.reason}”</>}
-        </p>
-      )}
-      {dispute && (
-        <p>
-          {dispute.status === "open" ? `Disputed: “${dispute.reason}” · waiting for the team.` : `Dispute decided: total ${money(dispute.decidedCents)}${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : ""}.`}
-        </p>
-      )}
-      {dispute?.devSide && <p>Your side: “{dispute.devSide}”</p>}
-      {dispute && dispute.status === "open" && !dispute.devSide && <DisputeSide seenAt={seenAt} testId={testId} disputeId={dispute.id} />}
-    </div>
   );
 }

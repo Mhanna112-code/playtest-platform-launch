@@ -573,7 +573,7 @@ async function signIn(page, email) {
 
   await flow("15", "Dispute: tester disputes, developer adds their side, admin raises pay, extra charged, receipt, paid so far updates", async () => {
     await dev.goto(t11Url());
-    const card = dev.locator(`#tester-${SD}`);
+    const card = dev.locator("#needs-you"); // (NEXT-UI 21) every Pay / Reject box is in Needs you
     const box = card.locator("div.rounded-lg", { hasText: "Written answers" }).filter({ hasText: "Amount" }).first();
     await box.locator("input[id^='amt-']").fill("4.00");
     await box.locator("input[id^='why-']").fill("Only one short answer.");
@@ -588,9 +588,10 @@ async function signIn(page, email) {
     check("tester disputed", await has(t2, "text=You disputed this: waiting for the team."));
     await both("dispute-opened", t2);
     await dev.goto(t11Url());
-    await dev.fill(`#tester-${SD} textarea[id^='side-']`, "The answer was a single sentence.");
-    await dev.click(`#tester-${SD} >> text=Send your side`);
-    check("developer's side shown", await has(dev, "text=Your side: “The answer was a single sentence.”"));
+    await dev.fill(`#needs-you textarea[id^='side-']`, "The answer was a single sentence.");
+    await dev.click(`#needs-you >> text=Send your side`);
+    await dev.locator(`#tester-${SD} summary:has-text('History')`).click(); // (NEXT-UI 21) the side shows in the tester's History
+    check("developer's side shown", await has(dev, "text=your side: “The answer was a single sentence.”"));
     await shot(dev, "dispute-side-developer");
     const adm = adminPage;
     await adm.goto("/admin");
@@ -2060,7 +2061,7 @@ async function signIn(page, email) {
     const S = (await apiPost(tp, `/api/tests/${T}/join`, { confirmed: true })).body.sessionId;
     await apiPost(tp, `/api/sessions/${S}/written`, { answers: ["Crabs."], seenAt: new Date().toISOString(), confirmed: true });
     await d.reload();
-    check("per tester: which required / not-required parts were sent", (await has(d, `#tester-${S} >> text=Written answers · required · sent`)) && (await has(d, `#tester-${S} >> text=Recording · not required · not sent yet`)));
+    check("per tester: which required / not-required parts were sent", (await d.locator(`#tester-${S} [data-parts-sent]`).innerText().then((x) => /Written answers\s*Required\s*Sent/.test(x) && /Recording\s*Not required\s*Not sent yet/.test(x))));
     await d.locator(`#tester-${S}`).scrollIntoViewIfNeeded();
     await shot(d, "parts-sent-per-tester-developer");
   });
