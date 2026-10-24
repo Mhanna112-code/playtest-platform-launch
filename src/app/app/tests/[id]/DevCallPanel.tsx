@@ -30,7 +30,7 @@ const short = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: 
  * "N of 3 booked"; [Request a time] to everyone ticked; then per-tester blocks (ticked testers, or everyone with a call or
  * request when nothing is ticked): booked calls, daily/weekly sets as one line, waiting requests. Boxes under the button.
  */
-export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }: { testId: string; seenAt: string; testers: DevTester[]; canRequest: boolean; past?: DevPast[] }) {
+export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestReason = "", past = [] }: { testId: string; seenAt: string; testers: DevTester[]; canRequest: boolean; noRequestReason?: string; past?: DevPast[] }) {
   const { press, changes, error, busy, at, errData } = usePress(seenAt);
   const [ticked, setTicked] = useState<string[]>([]);
   const [rows, setRows] = useState<RowState[]>([newRow()]);
@@ -68,6 +68,9 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, past = [] }:
     <LivePanel fold minutes={testers.flatMap((t) => [...t.calls, ...t.sets.flatMap((x) => x.calls)]).filter((c) => !c.started).sort((a, b) => a.when.localeCompare(b.when))[0]?.minutes ?? null}>
     <section className="space-y-3" id="calls" aria-label="Call requests">
       <p className="note">Calls you request use each tester&apos;s contract rate. A tester can ask for a different rate if they request a call.</p>
+      {/* The form is never hidden silently: a short line says why. */}
+      {!canRequest && noRequestReason && <p className="note" data-no-request="">{noRequestReason}</p>}
+      {canRequest && testers.length === 0 && <p className="note">Nobody is working on this test right now, so there is nobody to request a call with.</p>}
       {canRequest && testers.length > 0 && (
         <fieldset className="space-y-1 text-sm">
           <label className="block font-medium"><input type="checkbox" checked={all} onChange={() => setTicked(all ? [] : testers.map((t) => t.contractId))} /> Select all ({testers.length})</label>

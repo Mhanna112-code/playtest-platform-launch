@@ -25,7 +25,6 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
   const [picked, setPicked] = useState<string[]>([]);
   const [noTick, setNoTick] = useState(false);
   const [reason, setReason] = useState("");
-  const [closeThis, setCloseThis] = useState(true);
   const [openErr, setOpenErr] = useState("");
   const stopped = p.status === "stopped";
   const ahead = p.working.reduce((n, w) => n + w.ahead, 0);
@@ -159,12 +158,7 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
         {open === "next" && (
           <div className="space-y-2 rounded-lg border border-white/10 p-3">
             <p className="text-sm">A copy of this test for your next build, saved as a draft so you can put in the new build&apos;s link first.</p>
-            {p.status === "open" && (
-              <label className="block text-sm">
-                <input type="checkbox" checked={closeThis} onChange={(e) => setCloseThis(e.target.checked)} /> Stop new testers joining this round (testers already in carry on)
-              </label>
-            )}
-            <button className="btn" disabled={busy} onClick={() => go("next-round", { closeThis })}>Start the next round</button>
+            <button className="btn" disabled={busy} onClick={() => go("next-round", {})}>Start the next round</button>
             {box("next-round")}
           </div>
         )}

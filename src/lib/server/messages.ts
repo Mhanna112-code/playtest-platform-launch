@@ -15,7 +15,7 @@ export async function chatAccess(userId: string, testId: string, testerId: strin
   const contract = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId } } });
   if (!contract) throw new HttpError(404, "not_found", "That chat doesn't exist.");
   const blocked = (await db.block.count({ where: { OR: [{ blockerId: testerId, blockedId: test.developerId }, { blockerId: test.developerId, blockedId: testerId }] } })) > 0;
-  const active = test.status === "open" && contract.status === "working";
+  const active = test.status !== "stopped" && contract.status === "working";
   return { test, contract, blocked, active };
 }
 

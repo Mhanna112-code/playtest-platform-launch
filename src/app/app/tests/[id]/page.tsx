@@ -28,6 +28,7 @@ import { PayBox } from "./PayBox";
 import { TopPanel } from "./TopPanel";
 import { SavedNote } from "@/components/SavedNote";
 import { TestersJoined } from "./TestersJoined";
+import { RowsBox } from "./RowsBox";
 import { testerStats } from "@/lib/server/profileStats";
 import { ByQuestion } from "./ByQuestion";
 import { byQuestion } from "@/lib/byQuestion";
@@ -268,10 +269,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           block: blockedIds.has(c.testerId) ? <span className="text-xs text-slate-400">You blocked {displayName(c.tester)}.</span> : <BlockButton seenAt={seenAt} testId={t.id} userId={c.testerId} name={displayName(c.tester)} effect="Their session ends now (work they sent stays payable), calls between you are cancelled, and chat closes." />,
         })))}
         gone={t.contracts.filter((c) => c.status !== "working").map((c) => ({ contractId: c.id, name: displayName(c.tester), how: c.status === "left" ? (c.endKind === "rated" ? "rated and finished" : "left") : "work ended", at: c.endedAt }))}
-      />
+      >
       {/* (NEXT-UI 21) TESTERS JOINED, one row per tester: parts sent (Required / Not required), paid per part and in total, the call summary, and a History fold. No Pay boxes here. */}
       {t.contracts.length > 0 && (
-        <section className="space-y-3" aria-label="Testers">
+        <RowsBox many={t.contracts.length > 6}>
           {t.contracts.map((c) => {
             const name = displayName(c.tester);
             const ri = rateInfo.get(c.id);
@@ -286,7 +287,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               { name: "Recording", on: c.recordingCents != null, required: c.recordingRequired, sub: c.submissions.find((s) => s.kind === "recording"), cents: c.recordingCents },
             ];
             return (
-              <div key={c.id} className="panel" id={`tester-${c.id}`}>
+              <div key={c.id} className="panel" id={`tester-${c.id}`} data-tester-name={name}>
                 <div className="flex flex-wrap items-baseline gap-2">
                   <h3 className="mr-auto"><a href={`/app/testers/${c.testerId}`}>{name}</a></h3>
                   <span className="badge">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
@@ -346,8 +347,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               </div>
             );
           })}
-        </section>
+        </RowsBox>
       )}
+      </TestersJoined>
       {(u.holdStartedAt || owedList.length > 0) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} />}
       {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date())}</p>}
       {t.status !== "stopped" && (
@@ -362,7 +364,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       <DevCallPanel
         testId={t.id}
         seenAt={seenAt}
-        canRequest={t.status === "open"}
+        canRequest={t.status !== "stopped" && t.status !== "draft" && !u.holdStartedAt}
+        noRequestReason={t.status === "stopped" ? "This test was stopped, so no calls can be requested or booked." : u.holdStartedAt ? "Your tests are paused until you pay what you owe: calls wait meanwhile." : ""}
         testers={devTesters}
         past={t.contracts
           .flatMap((c) => c.calls.filter((x) => x.status === "cancelled" || x.review).map((x) => ({

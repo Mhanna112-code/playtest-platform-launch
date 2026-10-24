@@ -403,7 +403,6 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
 /** Next round: a draft copy of the test for the next build. Optionally stops new testers joining this one. */
 export async function nextRound(dev: U, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
-  let closedCalls: Awaited<ReturnType<typeof cancelCallsAhead>> = [];
   const res = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped." + (await staleNote(testId, body.seenAt)));
@@ -418,16 +417,10 @@ export async function nextRound(dev: U, testId: string, body: Record<string, unk
         questions: t.questions as Prisma.InputJsonValue,
       },
     });
-    const close = body.closeThis !== false && t.status === "open";
-    if (close) {
-      const ids = (await tx.contract.findMany({ where: { testId, status: "working" }, select: { id: true } })).map((x) => x.id);
-      closedCalls = await cancelCallsAhead(tx, ids, "The test was closed.");
-      await tx.callSlot.updateMany({ where: { testId, status: "open" }, data: { status: "removed" } });
-    }
-    await recordEvent(tx, testId, "next_round", `Round ${round} was started${close ? "; this round stopped taking new testers" : ""}`, true, close ? { status: "closed" } : {});
+    // (Owner) Starting a next round never changes this round: it keeps taking testers and everyone carries on.
+    await recordEvent(tx, testId, "next_round", `Round ${round} was started`, true, {});
     return { id: copy.id };
   });
-  await tellCancelled(closedCalls, "closed");
   return res;
 }
 

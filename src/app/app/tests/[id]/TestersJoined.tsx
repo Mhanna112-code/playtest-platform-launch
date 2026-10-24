@@ -29,20 +29,21 @@ function TesterAvatar({ seat }: { seat: Seat }) {
   );
 }
 
-export function TestersJoined({ testId, spots, seats, gone, status }: { testId: string; spots: number; seats: Seat[]; gone: Gone[]; status: string }) {
+export function TestersJoined({ testId, spots, seats, gone, status, children }: { testId: string; spots: number; seats: Seat[]; gone: Gone[]; status: string; children?: ReactNode }) {
   const joined = seats.length;
   const shown = Math.min(spots, 12);
   const stopped = status === "stopped";
   return (
     <section className="card space-y-3" id="testers-joined" aria-label="Testers joined">
       <div className="flex items-center justify-between">
-        <h2 className="flex items-center gap-2 font-semibold text-white"><Users className="h-5 w-5 text-indigo-300" /> Testers joined</h2>
+        <h2 className="flex items-center gap-2 font-semibold text-white"><Users className="h-5 w-5 text-indigo-300" /> Testers</h2>
         <span className="text-sm text-slate-400">{joined} of {spots}</span>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         {Array.from({ length: shown }, (_, i) => (seats[i] ? <TesterAvatar key={seats[i].testerId} seat={seats[i]} /> : <span key={i} className="h-9 w-9 rounded-full border-2 border-dashed border-slate-600" />))}
         {spots > shown && <span className="text-sm text-slate-400">+{spots - shown} more</span>}
       </div>
+      {children}
       {gone.length > 0 && (
         <details className="text-sm text-slate-400">
           <summary className="cursor-pointer">No longer working ({gone.length})</summary>

@@ -204,7 +204,8 @@ const refusalFor = (r: { status: string; updatedAt: Date; closedReason: string; 
 async function refusals(c: Ctx["c"], side: Side) {
   if (c.status !== "working") throw new HttpError(409, "closed", side === "tester" ? "Your session has ended." : `${displayName(c.tester)}'s session has ended.`);
   if (c.test.developer.holdStartedAt) throw new HttpError(409, "paused", side === "tester" ? PAUSED_FOR_TESTERS : "Pay what you owe first.");
-  if (c.test.status !== "open") throw new HttpError(409, "closed", "This test isn't open.");
+  // (Owner) "Closed" only means no NEW testers: testers already in carry on, so calls work. Only a stopped test refuses.
+  if (c.test.status === "stopped") throw new HttpError(409, "closed", "This test was stopped.");
   if (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) throw new HttpError(409, "gone", "This time isn't available.");
 }
 
@@ -435,7 +436,7 @@ export async function topUpForeverSets(now = new Date()) {
   let booked = 0, skipped = 0;
   for (const set of sets) {
     const c = set.contract;
-    if (c.status !== "working" || c.test.status !== "open") {
+    if (c.status !== "working" || c.test.status === "stopped") {
       await db.callSet.update({ where: { id: set.id }, data: { status: "ended" } });
       continue;
     }

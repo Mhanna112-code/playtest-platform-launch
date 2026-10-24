@@ -124,12 +124,21 @@ describe("live calls blocked during holds and on stopped/closed tests", () => {
     expect((await db.call.findUniqueOrThrow({ where: { id: b.call.id } })).status).toBe("cancelled");
   });
 
-  it("a closed test (next round) blocks offering and booking and cancels booked calls", async () => {
-    const { dev, testId, tester, sessionId, call, slots } = await withCall();
-    await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true, closeThis: true });
-    expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).status).toBe("cancelled");
-    expect((await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: inHours(150) })).body.error.message).toBe("This test isn't open.");
-    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: inHours(150) })).status).toBe(409);
+  it("(Owner) starting a next round changes nothing here; calls work on an open OR closed test for testers already in; a stopped test refuses", async () => {
+    const { dev, testId, tester, sessionId, call } = await withCall();
+    await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true });
+    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).status).toBe("open"); // the round is untouched
+    expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).status).toBe("booked");
+    // A test that is "closed" (no new testers; e.g. from before): the working tester's calls still work, both ways.
+    await db.test.update({ where: { id: testId }, data: { status: "closed" } });
+    expect((await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: inHours(150) })).status).toBe(200);
+    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: inHours(200) })).status).toBe(200);
+    const req = await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId, fromSide: "tester", status: "pending" } });
+    expect((await act(testId, "answer-request", dev.cookie, { seenAt: seen(), confirmed: true, contractId: sessionId, requestId: req.id, action: "accept" })).status).toBe(200);
+    expect((await act(testId, "cancel-call", dev.cookie, { seenAt: seen(), confirmed: true, callId: call.id })).status).toBe(200);
+    // Stopped: refused.
+    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: inHours(250) })).status).toBe(409);
   });
 });
 
