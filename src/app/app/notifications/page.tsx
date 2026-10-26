@@ -5,6 +5,7 @@ import { requirePageUser } from "@/lib/server/page-auth";
 import { sideLink } from "@/lib/sides";
 import { AlertSettings } from "./AlertSettings";
 import { BellList, type BellEntry } from "./BellList";
+import { bellKey, dayKey } from "@/lib/bell";
 
 export const metadata = { title: "Notifications · Playtest" };
 export const dynamic = "force-dynamic";
@@ -14,12 +15,11 @@ export const dynamic = "force-dynamic";
 export default async function Notifications() {
   const u = await requirePageUser();
   const items = await db.notification.findMany({ where: { userId: u.id }, orderBy: { createdAt: "desc" }, take: 200 });
-  // (Design doc 9) Same-day lines about the same test stack into one entry; opening a stack marks its lines read, the rest are read by looking.
+  // (Design doc 9) Same-day lines about the same test stack into one entry, except the lines that always arrive on their own (own); opening a stack marks its lines read, the rest are read by looking.
   const titles = new Map((await db.test.findMany({ where: { id: { in: [...new Set(items.map((n) => n.testId).filter((x): x is string => !!x))] } }, select: { id: true, title: true } })).map((t) => [t.id, t.title]));
-  const dayKey = (d: Date) => d.toISOString().slice(0, 10);
   const groups = new Map<string, typeof items>();
   for (const n of items) {
-    const k = n.testId ? `${n.testId}|${dayKey(n.createdAt)}` : `solo|${n.id}`;
+    const k = bellKey(n);
     groups.set(k, [...(groups.get(k) ?? []), n]);
   }
   const todayKey = dayKey(new Date());

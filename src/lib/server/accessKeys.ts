@@ -114,7 +114,7 @@ export async function reportKeyBroken(tester: { id: string; name: string; email:
   if (result.already) return { reported: true, replaced: false, note: "The developer was already told. You'll see a new key here as soon as they add one." };
   const name = displayName(tester);
   await logEvent(c.testId, "key", `${name} says their access key doesn't work`, c.id);
-  await notify(c.test.developer.email, `${name} reports an access key not working on “${c.title}”`, [`${name} says the access key they were given for “${c.title}” doesn't work.`, "Press Assign a free key on their row in the yellow box on your test page."], `/app/tests/${c.testId}#keys`, { about: tester.id });
+  await notify(c.test.developer.email, `${name} reports an access key not working on “${c.title}”`, [`${name} says the access key they were given for “${c.title}” doesn't work.`, "Press Assign a free key on their row in the yellow box on your test page."], `/app/tests/${c.testId}#keys-notice`, { about: tester.id });
   return { reported: true, replaced: false, note: "Thanks. The developer was told; a new key shows here once they give you one." };
 }
 

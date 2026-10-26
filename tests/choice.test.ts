@@ -14,28 +14,28 @@ const pay = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/
 const later = () => new Promise((r) => setTimeout(r, 30));
 afterEach(() => setStripeForTests(null));
 
-async function waiting14(ask?: string) {
+async function waiting14() {
   const s = await setup();
   const j = await joined(s.testId);
-  await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"], ...(ask ? { ask } : {}) });
+  await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] });
   const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
   await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000) } });
   return { ...s, ...j, sub };
 }
 
 describe("Charge / Let it go at day 14", () => {
-  it("offers the tester the choice (bell + email), then they charge the lower of listing and asked", async () => {
-    const { tester, sessionId, sub, dev } = await waiting14("8.00"); // asked lower than the $10.00 listing
+  it("offers the tester the choice (bell + email), then they charge the listing amount", async () => {
+    const { tester, sessionId, sub, dev } = await waiting14();
     await cron();
-    const line = "Nora Lane didn't review your written answers in 14 days: charge $8.00 or let it go";
+    const line = "Nora Lane didn't review your written answers in 14 days: charge $10.00 or let it go";
     expect(await db.notification.count({ where: { userId: tester.user.id, text: line } })).toBe(1);
     expect(await db.outboxEmail.count({ where: { to: tester.user.email, subject: line } })).toBe(1);
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe("Tick “charge Nora Lane $8.00 now” to charge.");
-    const r = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 800 });
-    expect(r.body).toMatchObject({ choice: "charge", amountCents: 800 });
-    expect(await db.outboxEmail.count({ where: { to: dev.user.email, subject: { startsWith: "Receipt: you paid $8.00" } } })).toBe(1);
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe("Tick “charge Nora Lane $10.00 now” to charge.");
+    const r = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000 });
+    expect(r.body).toMatchObject({ choice: "charge", amountCents: 1000 });
+    expect(await db.outboxEmail.count({ where: { to: dev.user.email, subject: { startsWith: "Receipt: you paid $10.00" } } })).toBe(1);
     // The developer's Pay is now final, naming the tester's choice.
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.message).toBe("Ana Silva already charged $8.00 for this.");
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.message).toBe("Ana Silva already charged $10.00 for this.");
   });
 
   it("refused for good once the developer paid meanwhile", async () => {
@@ -111,13 +111,13 @@ describe("daily retry of owed payments", () => {
 });
 
 describe("charge amount and a second failure", () => {
-  it("charge = lower of listing and asked minus what's already been paid for that part", async () => {
+  it("charge cap = listing minus what's already been paid for that part (no Ask $)", async () => {
     const R = await import("@/lib/rules");
-    expect(R.chargeAmount(1000, 800, 0)).toBe(800);
-    expect(R.chargeAmount(1000, 1500, 400)).toBe(600);
-    expect(R.chargeAmount(1000, null, 1000)).toBe(0); // paid in full: no Charge / Let it go at all
-    expect(R.chargeAmount(700, 200, 500)).toBe(200); // listing $7, paid $5, asked $2 → $2
-    expect(R.chargeAmount(700, 500, 500)).toBe(200); // the ask is capped by what's left of the listing
+    expect(R.chargeAmount(1000, 0)).toBe(1000);
+    expect(R.chargeAmount(1000, 400)).toBe(600);
+    expect(R.chargeAmount(1000, 1000)).toBe(0); // paid in full: no Charge / Let it go at all
+    expect(R.chargeAmount(700, 1200)).toBe(0); // paid more than the listing: nothing left to charge
+    expect(R.chargeAmount(null, 0)).toBe(0); // not in the contract
   });
 
   it("a second failed payment while one is still owed starts the hold at once", async () => {

@@ -75,8 +75,8 @@ export async function recordOutage(start: Date, end: Date) {
   for (const c of calls) {
     await db.call.update({ where: { id: c.id }, data: { status: "cancelled", cancelledBy: "system", cancelledAt: new Date(), cancelNote: "missed because the site was down" } });
     const line = `Your call on ${fmtDateTime(c.startsAt)} was missed because the site was down. Nothing is charged; you can request a new time.`;
-    await notify(c.contract.tester.email, line, [line], `/app/sessions/${c.contractId}`);
-    await notify(c.contract.test.developer.email, line.replace("Your call", `Your call with ${displayName(c.contract.tester)}`), [line], `/app/tests/${c.contract.testId}`);
+    await notify(c.contract.tester.email, line, [line], `/app/sessions/${c.contractId}#call-${c.id}`);
+    await notify(c.contract.test.developer.email, line.replace("Your call", `Your call with ${displayName(c.contract.tester)}`), [line], `/app/tests/${c.contract.testId}#call-${c.id}`);
   }
   // One bell for everyone with something running.
   const line = outageLine(start, end, ms);

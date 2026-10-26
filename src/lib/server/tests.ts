@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, pronouns, toCents } from "@/lib/format";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import {
-  andList, askNote, testPaused, openUntilShortened, changedTerms, checkAsk, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
+  andList, testPaused, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { gapsOf, gapsUnseen, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError } from "./http";
@@ -378,12 +378,12 @@ export async function cancelCallsAhead(tx: Tx, contractIds: string[], note: stri
     await tx.call.update({ where: { id: c.id }, data: { status: "cancelled", cancelledBy: "system", cancelledAt: new Date(), cancelNote: note } });
     await tx.callSlot.update({ where: { id: c.slotId }, data: { status: "removed" } });
   }
-  return ahead.map((c) => ({ email: c.contract.tester.email, startsAt: c.startsAt, contractId: c.contractId, title: c.contract.title }));
+  return ahead.map((c) => ({ email: c.contract.tester.email, startsAt: c.startsAt, contractId: c.contractId, title: c.contract.title, callId: c.id }));
 }
 
 /** Tell each tester their booked call was cancelled (never any fault). */
-export async function tellCancelled(list: { email: string; startsAt: Date; contractId: string; title: string }[], why: Parameters<typeof callCancelledLine>[1]) {
-  for (const c of list) await notify(c.email, callCancelledLine(c.startsAt, why), [callCancelledLine(c.startsAt, why)], `/app/sessions/${c.contractId}`);
+export async function tellCancelled(list: { email: string; startsAt: Date; contractId: string; title: string; callId?: string }[], why: Parameters<typeof callCancelledLine>[1]) {
+  for (const c of list) await notify(c.email, callCancelledLine(c.startsAt, why), [callCancelledLine(c.startsAt, why)], `/app/sessions/${c.contractId}${c.callId ? `#call-${c.callId}` : ""}`);
 }
 
 export async function stopTest(dev: U, testId: string, body: Record<string, unknown>) {
@@ -403,7 +403,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
   });
   await tellCancelled(cancelled, "stopped");
   for (const c of contracts)
-    await notify(c.tester.email, `“${c.title}” was stopped`, [`${displayName(dev)} stopped “${c.title}”. Your work on it has ended.`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`);
+    await notify(c.tester.email, `“${c.title}” was stopped`, [`${displayName(dev)} stopped “${c.title}”. Your work on it has ended.`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { own: true });
   return { stopped: true, testers: contracts.length };
 }
 
@@ -566,7 +566,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     return { contract, dev, filled };
   });
   if (filled) await tellFull(filled);
-  await notify(dev.email, `${displayName(tester)} joined “${contract.title}”`, [`${displayName(tester)} joined your test “${contract.title}”.`, `Their deal: ${termsLine(contract)}.`], `/app/tests/${testId}`, { about: tester.id });
+  await notify(dev.email, `${displayName(tester)} joined “${contract.title}”`, [`${displayName(tester)} joined your test “${contract.title}”.`, `Their deal: ${termsLine(contract)}.`], `/app/tests/${testId}#tester-${contract.id}`, { about: tester.id });
   return contract;
 }
 
@@ -598,7 +598,7 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
     await recordEvent(tx, c.testId, "left", `${displayName(tester)} left the test`, true, {}, c.id);
     return c;
   });
-  await notify(c0.test.developer.email, `${displayName(tester)} left “${c.title}”`, [`${displayName(tester)} left your test “${c.title}”. Work they already sent still waits for your review.`], `/app/tests/${c.testId}`, { about: tester.id });
+  await notify(c0.test.developer.email, `${displayName(tester)} left “${c.title}”`, [`${displayName(tester)} left your test “${c.title}”. Work they already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: tester.id });
   await spotOpened(c.testId);
   return { left: true };
 }
@@ -615,10 +615,6 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   if (answers.length !== qs.length || qs.some((q, i) => !qOptional(q) && !answers[i])) throw new HttpError(400, "bad_answers", "Answer every required question before sending.");
   const notes = str(body.notes, 10_000);
   await testerTermsGate(contractId, displayName(c0.test.developer), body);
-  const askedCents = body.ask === undefined || body.ask === null || body.ask === "" ? null : toCents(body.ask);
-  if (body.ask && askedCents == null) throw new HttpError(400, "bad_ask", "Enter the amount you ask like 7.50, or leave it empty.");
-  const askOk = checkAsk(askedCents);
-  if (!askOk.ok) throw new HttpError(400, "bad_ask", askOk.message);
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   const { sub, updated } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);
@@ -628,15 +624,15 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     const now = new Date();
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
     if (existing?.review) throw new HttpError(409, "paid", "Your written answers were already paid for, so they can't be changed. Send anything new in the chat.");
-    const data = { answers, notes, late: isLate(c.dueAt, now), updatedAt: now, payBy: payByFrom(now), askedCents };
+    const data = { answers, notes, late: isLate(c.dueAt, now), updatedAt: now, payBy: payByFrom(now) };
     const sub = existing
       ? await tx.submission.update({ where: { id: existing.id }, data })
       : await tx.submission.create({ data: { contractId, kind: "written", agreedCents: c.writtenCents, ...data } });
-    await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} written answers${askNote(existing?.askedCents, askedCents)}`, false, {}, c.id);
+    await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} written answers`, false, {}, c.id);
     return { sub, updated: !!existing };
   });
-  await notify(tester.email, `Work sent: your written answers for “${c0.title}”`, [`Your written answers were ${updated ? "updated" : "sent"} to ${displayName(c0.test.developer)}.`], `/app/sessions/${c0.id}`);
-  await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} written answers for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} written answers${sub.late ? " (late)" : ""}. Review them and choose what to pay.`], `/app/tests/${c0.testId}`, { about: tester.id });
+  await notify(tester.email, `Work sent: your written answers for “${c0.title}”`, [`Your written answers were ${updated ? "updated" : "sent"} to ${displayName(c0.test.developer)}.`], `/app/sessions/${c0.id}#part-written`);
+  await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} written answers for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} written answers${sub.late ? " (late)" : ""}. Review them and choose what to pay.`], `/app/tests/${c0.testId}#piece-${sub.id}`, { about: tester.id });
   return sub;
 }
 

@@ -127,6 +127,9 @@ model Test {
   adminPausedAt   DateTime?
   adminStoppedAt  DateTime?
   adminNote       String   @default("")
+  /// (Owner, Oct 26) Which admin paused / stopped it (the admin dashboard lists each admin's own actions)
+  adminPausedById  String?
+  adminStoppedById String?
   /// (Owner, Oct 26) A paused test closes after 7 days (whatever the cause). The admin can move that date (valid only if set during the
   /// current pause: pauseCloseSetAt >= the pause's start); pauseClosedAt/Reason record a closure caused by the pause.
   pauseCloseAt      DateTime?
@@ -535,6 +538,9 @@ model Notification {
   link      String    @default("")
   /// (Design doc 9) The test the line is about (same-day lines about one test stack into one entry)
   testId    String?
+  /// (Owner, Oct 26) Always its own line in the bell (never stacked): admin decisions, a test stopped, payment failures and holds starting,
+  /// a hold or pause lifted, a chargeback
+  own       Boolean   @default(false)
   readAt    DateTime?
   /// Included in a daily summary email (users on "One daily summary")
   summarizedAt DateTime?

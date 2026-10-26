@@ -634,6 +634,18 @@ and look, but this version deliberately drops most of its complexity.
   for this call may be delayed." A chargeback on a paid call starts the hold with the stop-once line "Your bank
   reversed your $16.67 payment for Ana Silva's live call".
 
+## (Owner, Oct 26) The tester's "Ask $" is removed
+
+No ask on sends or call requests; the Pay box starts at the listing (or the call's agreed rate x length), developers may pay more, Charge cap = listing minus
+what is already paid for that part, auto-pay is the listing amount. Old ask data stays unused in the database. This overrides every "asked amount" line below.
+
+## (Owner, Oct 26) Bell stacking, bell links, no pause countdown, admin dashboard
+
+- No countdown on the dashboard or test overview; the bell says when a paused test closes (once when paused, once a day before).
+- Bell stacking: same-day lines about one test stack, except admin decisions, a stop, payment failures and holds starting, a hold or pause lifted, a chargeback (own line each). Admins' dispute lines stack per day per test.
+- Every bell line links to the exact place (#piece-ID / #tester-ID / #call-ID on the test page, #part-written / #part-recording / #part-live / #call-ID on the session page, /admin?dispute=ID#dispute-ID for admins).
+- Admin dashboard: open disputes, then this admin's own pauses/stops/suspensions, then the other lists; 20 at a time with Load more.
+
 ## (Owner, Oct 22) Invites, chargebacks, payment hold, Open until
 
 ### Invite panel (test page only, never in Edit). No moves at all.

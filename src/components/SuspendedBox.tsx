@@ -15,7 +15,7 @@ export function SuspendedBox({ failed, developer, tester }: { failed?: string; d
           <>
             <li data-suspended-dev="">Your account is suspended: your tests are paused. You can still cancel calls, end a tester&apos;s work early or stop a test. Paying and reviewing work wait until the suspension is lifted.</li>
             <li>Your testers are still in your tests, but nothing can happen on them. You can&apos;t post a test, read messages or use the other buttons on your test pages.</li>
-            <li data-suspended-closing="">A paused test closes after 7 days; its date is on its card below. When the suspension is lifted before then, your tests unpause and carry on as normal.</li>
+            <li>When the suspension is lifted your tests unpause and carry on as normal.</li>
           </>
         )}
         {tester && (

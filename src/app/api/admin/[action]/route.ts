@@ -41,7 +41,7 @@ export async function POST(req: Request, { params }: Ctx) {
       case "unpause-test":
         return ok(await unpauseTest(id));
       case "stop-test":
-        return ok(await adminStopTest(id, typeof body.note === "string" ? body.note.trim().slice(0, 500) : ""));
+        return ok(await adminStopTest(id, typeof body.note === "string" ? body.note.trim().slice(0, 500) : "", u.id));
       case "release-share": {
         const p = await db.payment.findUniqueOrThrow({ where: { id } });
         return ok(await releaseHeldShares(p.testerId, [p.id]));
@@ -59,7 +59,7 @@ export async function POST(req: Request, { params }: Ctx) {
       case "extend-pause":
         return ok(await extendPauseClosure(id, body.days));
       case "close-paused":
-        return ok(await closePausedTest(id, "admin"));
+        return ok(await closePausedTest(id, "admin", new Date(), u.id));
       case "transfer":
         await sendWaitingTransfer(id);
         return ok({ ok: true });

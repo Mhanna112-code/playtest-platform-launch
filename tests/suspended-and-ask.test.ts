@@ -5,7 +5,7 @@ import { POST as reviewPOST } from "@/app/api/review/route";
 import { POST as adminPOST } from "@/app/api/admin/[action]/route";
 import { POST as owedPOST } from "@/app/api/payments/owed/route";
 import { GET as cronGET } from "@/app/api/cron/daily/route";
-import { chargeAmount, payStart } from "@/lib/rules";
+import { chargeAmount } from "@/lib/rules";
 import { startHold } from "@/lib/server/holds";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
@@ -61,56 +61,31 @@ describe("a suspended developer keeps Cancel call, End early and Stop, with or w
   });
 });
 
-describe("a tester's updated written answers or recording can change the ask (owner, Oct 26)", () => {
-  async function sentWith(ask?: string) {
+describe("no Ask $ on sends (owner, Oct 26): the Pay box starts at the listing; the Charge cap is the listing minus what was paid", () => {
+  async function sent() {
     const s = await setup();
     const j = await joined(s.testId);
-    await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"], ...(ask ? { ask } : {}) });
+    await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"], ask: "6.00" }); // a stale client's ask is ignored
     await later();
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
     return { ...s, ...j, sub };
   }
   const newest = (id: string) => db.submission.findUniqueOrThrow({ where: { id } });
 
-  it("the newest ask replaces the old one (raised, lowered or taken back); the developer reads it in the live feed", async () => {
-    const { sessionId, tester, sub, testId } = await sentWith("8.00");
-    expect((await newest(sub.id)).askedCents).toBe(800);
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], ask: "15.00" })).status).toBe(200);
-    expect((await newest(sub.id)).askedCents).toBe(1500); // raised above the first ask
-    expect(await db.testEvent.count({ where: { testId, text: "Ana Silva updated her written answers and now asks $15.00" } })).toBe(1);
-    // Unchanged ask: nothing extra said.
-    await sact(sessionId, "written", tester.cookie, { answers: ["a", "c"], ask: "15.00" });
-    expect(await db.testEvent.count({ where: { testId, text: "Ana Silva updated her written answers" } })).toBe(1);
-    // Taken back.
-    await sact(sessionId, "written", tester.cookie, { answers: ["a", "c"] });
+  it("an ask is never stored, and an updated send says nothing about asks in the live feed", async () => {
+    const { sessionId, tester, sub, testId } = await sent();
     expect((await newest(sub.id)).askedCents).toBeNull();
-    expect(await db.testEvent.count({ where: { testId, text: "Ana Silva updated her written answers and took back the ask" } })).toBe(1);
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "c"], ask: "15.00" })).status).toBe(200);
+    expect((await newest(sub.id)).askedCents).toBeNull();
+    expect(await db.testEvent.count({ where: { testId, text: "Ana Silva updated her written answers" } })).toBe(1);
+    expect(await db.testEvent.count({ where: { testId, text: { contains: "asks" } } })).toBe(0);
   });
 
-  it("an updated recording can change the ask too", async () => {
-    const s = await setup({ recordingCents: "12.00" });
-    const { sessionId, tester } = await joined(s.testId);
-    await db.recording.create({ data: { contractId: sessionId, storageKey: "k", filename: "run.mp4", sizeBytes: 10, contentType: "video/mp4", uploadedAt: new Date() } });
-    expect((await sact(sessionId, "recording-send", tester.cookie, { ask: "5.00" })).status).toBe(200);
-    const rec = await db.submission.findFirstOrThrow({ where: { contractId: sessionId, kind: "recording" } });
-    expect(rec.askedCents).toBe(500);
-    expect((await sact(sessionId, "recording-send", tester.cookie, { ask: "9.50" })).status).toBe(200);
-    expect((await newest(rec.id)).askedCents).toBe(950);
-    expect(await db.testEvent.count({ where: { testId: s.testId, text: "Ana Silva updated her recording and now asks $9.50" } })).toBe(1);
-  });
-
-  it("the Pay box starts at the newest ask; the Charge cap uses it but never goes above listing minus what was paid", async () => {
-    expect(payStart(1000, 800)).toBe(800);
-    expect(payStart(1000, 1500)).toBe(1500); // raised: the box starts at the new ask
-    expect(chargeAmount(1000, 1500, 0)).toBe(1000); // never above the listing
-    expect(chargeAmount(1000, 1500, 400)).toBe(600); // ... minus what was already paid for that part
-    expect(chargeAmount(1000, 300, 0)).toBe(300);
-    expect(chargeAmount(1000, null, 400)).toBe(600);
-
-    // Through the real flow: asked 6.00, then raised to 15.00; at day 14 the tester can charge the listing ($10.00) but not more.
-    const { sessionId, tester, sub, dev } = await sentWith("6.00");
-    await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], ask: "15.00" });
-    await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000) } });
+  it("an old ask in the database is unused: the cap is the listing minus what was paid", async () => {
+    expect(chargeAmount(1000, 0)).toBe(1000);
+    expect(chargeAmount(1000, 400)).toBe(600);
+    const { sessionId, tester, sub } = await sent();
+    await db.submission.update({ where: { id: sub.id }, data: { askedCents: 300, payBy: new Date(Date.now() - 1000) } }); // old data
     await cron();
     expect((await newest(sub.id)).choiceOfferedAt).not.toBeNull();
     const tooMuch = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "12.00", tickedCents: 1200 });
@@ -118,15 +93,5 @@ describe("a tester's updated written answers or recording can change the ask (ow
     expect(tooMuch.body.error.message).toBe("At most $10.00.");
     const ok = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000 });
     expect(ok.body).toMatchObject({ choice: "charge", amountCents: 1000 });
-    void dev;
-  });
-
-  it("after a lowered update the cap follows the lower ask", async () => {
-    const { sessionId, tester, sub } = await sentWith("9.00");
-    await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], ask: "4.00" });
-    await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000) } });
-    await cron();
-    const r = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "5.00", tickedCents: 500 });
-    expect(r.body.error.message).toBe("At most $4.00.");
   });
 });

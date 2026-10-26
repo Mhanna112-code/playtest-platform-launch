@@ -22,7 +22,7 @@ import { rejoinAskLine } from "@/lib/server/joining";
 import { pronouns } from "@/lib/format";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
-import { PAUSE_CLOSE_DAYS, pauseClosesAt, pauseCountdownLine } from "@/lib/pause";
+import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
 
 export const metadata = { title: "Home · Playtest" };
 export const dynamic = "force-dynamic";
@@ -57,11 +57,11 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
       {side === "developer" && u.holdStartedAt && !u.suspendedAt && (cbSteps ? (
         <>
           <ChargebackSteps steps={cbSteps} />
-          <p className="note" data-hold-box="">A paused test closes after {PAUSE_CLOSE_DAYS} days; each one below shows its date. <Link href="/app/payments">Open Payments</Link>.</p>
+          <p className="note" data-hold-box=""><Link href="/app/payments">Open Payments</Link></p>
         </>
       ) : (
         <section className="info" role="status" data-hold-box="">
-          <b>Your tests are paused until you pay what you owe.</b> Testers can still send work; no new testers, invites or calls. A paused test closes after {PAUSE_CLOSE_DAYS} days; each one below shows its date. <Link href="/app/payments">Pay what you owe in Payments</Link>.
+          <b>Your tests are paused until you pay what you owe.</b> Testers can still send work; no new testers, invites or calls. <Link href="/app/payments">Pay what you owe in Payments</Link>.
         </section>
       ))}
       {!u.suspendedAt && u.reinstatedAt && now.getTime() - u.reinstatedAt.getTime() < 3 * DAY && (
@@ -207,7 +207,6 @@ async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: 
               const waiting = t.contracts.filter((c) => c.submissions.some((s) => !s.review) && !c.submissions.some((s) => s.review && !s.review.rejected)).length;
               const messages = t.contracts.reduce((n, c) => n + (unread.get(c.id) ?? 0), 0);
               const paused = !!(user.holdStartedAt || user.suspendedAt || t.adminPausedAt);
-              const closing = t.status === "stopped" ? null : pauseClosesAt(user, t);
               const why = user.suspendedAt ? "account suspended" : user.holdStartedAt ? "payment hold" : t.adminPausedAt ? "paused by the team" : "";
               const nInvited = invitesBy.get(t.id) ?? 0, nApps = appsBy.get(t.id) ?? 0;
               const title = <span className="text-lg font-semibold text-white">{t.title}</span>;
@@ -226,7 +225,6 @@ async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: 
                           {t.mature && <span className="badge border-rose-300/40 text-rose-200">Mature (18+)</span>}
                           {t.ndaText && <span className="badge"><FileSignature className="h-3.5 w-3.5" /> NDA</span>}
                         </div>
-                        {closing && <p className="text-xs text-amber-200" data-pause-countdown="">{pauseCountdownLine(closing.at, closing.causes)}</p>}
                         {t.pauseClosedAt && <p className="text-xs text-rose-200" data-pause-closed="">Closed after {PAUSE_CLOSE_DAYS} days paused</p>}
                         {/* Tags describing the terms. */}
                         <div className="flex flex-wrap gap-2">
@@ -313,7 +311,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   // "Charge or cancel": parts past 14 days unreviewed, by test.
   const paidFor = (sid: string) => payments.filter((p) => p.submissionId === sid && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
   const chargeable = contracts
-    .map((c) => ({ c, parts: c.submissions.filter((s) => !s.review && s.choiceOfferedAt && chargeAmount(s.agreedCents, s.askedCents, paidFor(s.id)) > 0) }))
+    .map((c) => ({ c, parts: c.submissions.filter((s) => !s.review && s.choiceOfferedAt && chargeAmount(s.agreedCents, paidFor(s.id)) > 0) }))
     .filter((x) => x.parts.length > 0);
   const answers = [
     ...offers.flatMap((o) => { const c = byId.get(o.contractId); return c ? [{ key: `offer-${o.id}`, c, text: `${displayName(c.test.developer)} offered new terms: ${o.diff}`, href: `/app/sessions/${c.id}`, cta: "Switch or keep your terms" }] : []; }),

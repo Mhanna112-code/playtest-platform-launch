@@ -10,23 +10,20 @@ import { qOptional, qText } from "@/lib/questions";
 import { ChangesBox } from "@/components/ChangesBox";
 
 /** Written answers: one box per question in the tester's contract. Can be updated until it's paid. */
-export function WrittenForm({ sessionId, questions, initial, initialNotes, initialAsk = "", update, seenAt }: { sessionId: string; questions: string[]; initial: string[]; initialNotes: string; initialAsk?: string; update: boolean; seenAt: string }) {
+export function WrittenForm({ sessionId, questions, initial, initialNotes, update, seenAt }: { sessionId: string; questions: string[]; initial: string[]; initialNotes: string; update: boolean; seenAt: string }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
   const [box, setBox] = useStopBox();
   const [answers, setAnswers] = useState<string[]>(questions.map((_, i) => initial[i] ?? ""));
   const [notes, setNotes] = useState(initialNotes);
-  // (Owner, Oct 26) An updated version starts at the ask already sent; the tester may change it (raise it too) or clear it.
-  const [ask, setAsk] = useState(initialAsk);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // (NEXT-UI 10) Typed and not sent: kept on the server, back after a reload or on another device, with "Not sent yet".
-  const same = answers.every((a, i) => a === (initial[i] ?? "")) && notes === initialNotes && ask === initialAsk;
-  const keep = useKept(`written:${sessionId}`, { answers, notes, ask }, same, (v) => {
+  const same = answers.every((a, i) => a === (initial[i] ?? "")) && notes === initialNotes;
+  const keep = useKept(`written:${sessionId}`, { answers, notes }, same, (v) => {
     setAnswers(questions.map((_, i) => v.answers?.[i] ?? initial[i] ?? ""));
     setNotes(v.notes ?? initialNotes);
-    setAsk(v.ask ?? initialAsk);
   });
 
   async function send(e: React.FormEvent) {
@@ -34,7 +31,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, initi
     setBusy(true);
     setMsg(null);
     try {
-      await api(`/api/sessions/${sessionId}/written`, { answers, notes, ask, seenAt, confirmed, boxAt });
+      await api(`/api/sessions/${sessionId}/written`, { answers, notes, seenAt, confirmed, boxAt });
       await keep.clear();
       window.location.reload();
     } catch (err) {
@@ -56,7 +53,6 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, initi
         <label className="label" htmlFor="notes">Anything else (bugs, ideas)</label>
         <textarea id="notes" rows={2} className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
-      <label className="block text-sm">Ask $ <input className="input inline w-24" inputMode="decimal" placeholder="optional" aria-label="Ask for this" data-min="0" data-max="999999.99" data-msg="Ask $0 or more (Stripe can't take more than $999,999.99 in one charge)." value={ask} onChange={(e) => setAsk(e.target.value)} /> for this <span className="text-xs text-slate-500">at least $0</span></label>
       <span><button className="btn" disabled={busy}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>{keep.restored && <NotSentTag />}</span>
       <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {msg && (msg.ok ? <p className="ok">{msg.text}</p> : <Err text={msg.text} />)}

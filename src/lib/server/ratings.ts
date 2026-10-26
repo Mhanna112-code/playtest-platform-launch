@@ -114,7 +114,7 @@ export async function testerRate(tester: { id: string; name: string; email: stri
     }
     await recordEvent(tx, c.testId, "left", `${displayName(tester)} finished ${c0.title} and rated you`, true, {}, c.id);
   });
-  await bell(c0.test.developerId, `${displayName(tester)} finished ${c0.title}. You can rate ${pronouns(tester.pronoun).obj} for ${WINDOW_DAYS} days.`, `/app/tests/${c0.testId}`);
+  await bell(c0.test.developerId, `${displayName(tester)} finished ${c0.title}. You can rate ${pronouns(tester.pronoun).obj} for ${WINDOW_DAYS} days.`, `/app/tests/${c0.testId}#tester-${c0.id}`);
   await spotOpened(c0.testId);
   return { rated: true };
 }

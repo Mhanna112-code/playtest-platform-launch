@@ -33,9 +33,9 @@ export const metadata = { title: "Your session · Playtest" };
 export const dynamic = "force-dynamic";
 
 const label = (inContract: boolean) => (inContract ? "In your contract" : "Not in your contract");
-/** Listing (or "Not in your contract"), the amount asked, and what's been paid for this part. */
-const partLine = (listing: number | null, asked: number | null | undefined, paid: number) =>
-  `${listing == null ? "Not in your contract" : `Listing: ${money(listing)}`}${asked != null ? ` · You asked ${money(asked)}` : ""} · Paid so far for this part: ${money(paid)} (you get 80%)`;
+/** Listing (or "Not in your contract") and what's been paid for this part. */
+const partLine = (listing: number | null, paid: number) =>
+  `${listing == null ? "Not in your contract" : `Listing: ${money(listing)}`} · Paid so far for this part: ${money(paid)} (you get 80%)`;
 
 export default async function SessionPage({ params }: { params: Promise<{ id: string }> }) {
   await (await import("@/lib/server/calls")).sweepNobodyJoined();
@@ -85,12 +85,11 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const devRating = (await ratingSummary(c.test.developerId)).line;
   const testersIn = await db.contract.count({ where: { testId: c.testId, status: "working" } });
   // (NEXT-UI 24) The same contract line at the top of the Written answers, Recording and Live session panels:
-  // "Written answers: $8 · Required" / "Recording: Not in your contract", then "You asked $X" and "Paid so far $Y" if any.
+  // "Written answers: $8 · Required" / "Recording: Not in your contract", then "Paid so far $Y" if any.
   const whole = (cents: number) => money(cents).replace(/\.00$/, "");
-  const termLine = (name: string, cents: number | null, required: boolean, perHour: boolean, asked: (number | null)[], paid: number) => (
+  const termLine = (name: string, cents: number | null, required: boolean, perHour: boolean, paid: number) => (
     <p className="note" data-term-line={name}>
       {name}: {cents == null ? "Not in your contract" : `${cents === 0 ? "free" : `${whole(testerShare(cents))}${perHour ? "/h" : ""}`} · ${required ? "Required" : "Not required"}`}
-      {asked.filter((x): x is number => x != null).length > 0 && ` · You asked ${asked.filter((x): x is number => x != null).map(whole).join(", ")}`}
       {paid > 0 && ` · Paid so far ${whole(paid)}`}
     </p>
   );
@@ -251,10 +250,10 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
                 <span className="text-slate-200">{sub ? <>Sent {fmtDateTime(sub.updatedAt)}{sub.late && <span className="ml-2 badge">{lateLabel(c.dueAt, fmtDate)}</span>}</> : "Not sent yet"}</span>
                 {cents != null && <span className={`badge ${required ? "border-amber-300/40 text-amber-200" : ""}`}>{required ? "Required" : "Not required"}</span>}
               </p>
-              <p className="text-slate-400">{cents == null ? "Not in your contract" : `In your contract · ${cents === 0 ? "free" : `${money(testerShare(cents))} for you`}`}{sub?.askedCents != null && ` · You asked ${money(sub.askedCents)}`}{` · Paid so far ${money(sub ? partPaid.get(sub.id) ?? 0 : 0)}`}</p>
-              {sub && <p className="text-xs text-slate-500">{partLine(sub.agreedCents, sub.askedCents, partPaid.get(sub.id) ?? 0)}</p>}
-              {sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && chargeAmount(sub.agreedCents, sub.askedCents, partPaid.get(sub.id) ?? 0) > 0 && (
-                <ChoiceBox paused={paused} seenAt={seenAt} sessionId={c.id} submissionId={sub.id} devName={dev} cents={chargeAmount(sub.agreedCents, sub.askedCents, partPaid.get(sub.id) ?? 0)} line={choiceLine(dev, key, chargeAmount(sub.agreedCents, sub.askedCents, partPaid.get(sub.id) ?? 0))} />
+              <p className="text-slate-400">{cents == null ? "Not in your contract" : `In your contract · ${cents === 0 ? "free" : `${money(testerShare(cents))} for you`}`}{` · Paid so far ${money(sub ? partPaid.get(sub.id) ?? 0 : 0)}`}</p>
+              {sub && <p className="text-xs text-slate-500">{partLine(sub.agreedCents, partPaid.get(sub.id) ?? 0)}</p>}
+              {sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0 && (
+                <ChoiceBox paused={paused} seenAt={seenAt} sessionId={c.id} submissionId={sub.id} devName={dev} cents={chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0)} line={choiceLine(dev, key, chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0))} />
               )}
               {sub && delayedSubs.has(sub.id) ? <p className="info">Payment for this part may be delayed.</p> : sub?.review && <TesterReview sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} />}
             </li>
@@ -266,10 +265,10 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
               <span className="text-slate-200">{heldCalls.length ? `${heldCalls.length} held` : aheadCalls.length ? `${aheadCalls.length} booked` : "Not booked yet"}</span>
               {c.liveRateCents != null && <span className={`badge ${c.liveRequired ? "border-amber-300/40 text-amber-200" : ""}`}>{c.liveRequired ? "Required" : "Not required"}</span>}
             </p>
-            <p className="text-slate-400">{c.liveRateCents == null ? "Not in your contract" : `In your contract · ${c.liveRateCents === 0 ? "free" : `${money(testerShare(c.liveRateCents))}/h for you`}`}{heldCalls.some((x) => x.askedCents != null) && ` · You asked ${heldCalls.filter((x) => x.askedCents != null).map((x) => money(x.askedCents)).join(", ")}`}{` · Paid so far ${money(liveCalls.reduce((a, x) => a + (partPaid.get(x.id) ?? 0), 0))}`}</p>
+            <p className="text-slate-400">{c.liveRateCents == null ? "Not in your contract" : `In your contract · ${c.liveRateCents === 0 ? "free" : `${money(testerShare(c.liveRateCents))}/h for you`}`}{` · Paid so far ${money(liveCalls.reduce((a, x) => a + (partPaid.get(x.id) ?? 0), 0))}`}</p>
             {c.calls.filter((x) => !x.review && x.status === "booked" && x.startsAt <= now).map((x) => (
               <p key={x.id} className="info">
-                Live call on {fmtDateTime(x.startsAt)}: waiting for {dev} to pay. {partLine(callReference(x.rateCents, x.actualMinutes ?? x.minutes).cents, x.askedCents, partPaid.get(x.id) ?? 0)}{failedCalls.has(x.id) && ` ${DELAYED_CALL_LINE}`}
+                Live call on {fmtDateTime(x.startsAt)}: waiting for {dev} to pay. {partLine(callReference(x.rateCents, x.actualMinutes ?? x.minutes).cents, partPaid.get(x.id) ?? 0)}{failedCalls.has(x.id) && ` ${DELAYED_CALL_LINE}`}
               </p>
             ))}
             {c.calls.filter((x) => x.review).map((x) => (
@@ -285,7 +284,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       {/* The full app's ONE Live session panel: the rate, Booked, Past calls and Requests (calls are always requests). */}
       {(c.calls.length > 0 || canRequestCall || pendingReqs.length > 0) && (
         <LivePanel minutes={c.calls.filter((x) => x.status === "booked" && x.startsAt > now).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())[0]?.minutes ?? null}>
-          {termLine("Live call", c.liveRateCents, c.liveRequired, true, heldCalls.map((x) => x.askedCents), liveCalls.reduce((a, x) => a + (partPaid.get(x.id) ?? 0), 0))}
+          {termLine("Live call", c.liveRateCents, c.liveRequired, true, liveCalls.reduce((a, x) => a + (partPaid.get(x.id) ?? 0), 0))}
           <TesterCallPanel
             sessionId={c.id}
             seenAt={seenAt}
@@ -304,7 +303,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
                 seenAt={seenAt}
                 canRequest={canRequestCall}
                 targets={[{ contractId: c.id, name: dev, rate: "" }]}
-                requests={pendingReqs.map((r) => ({ id: r.id, minutes: r.minutes, rows: toJson(rowsOf(r)), mine: r.fromSide === "tester", who: dev, contractId: c.id, rate: r.askRateCents != null ? `you ask ${money(r.askRateCents).replace(/\.00$/, "")}/h` : rateLabel(c.liveRateCents, c.liveRateCents) }))}
+                requests={pendingReqs.map((r) => ({ id: r.id, minutes: r.minutes, rows: toJson(rowsOf(r)), mine: r.fromSide === "tester", who: dev, contractId: c.id, rate: rateLabel(c.liveRateCents, c.liveRateCents) }))}
               />
             </section>
           )}
@@ -314,20 +313,19 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       <section className="card space-y-3" id="recording">
         <h2 className="flex flex-wrap items-center gap-2 font-semibold text-white"><Clapperboard className="h-5 w-5 text-fuchsia-300" /> Your recordings
           <span className="text-sm font-normal text-slate-400">{c.recordingCents != null ? "(the recorded session part)" : "(clips, if you like)"}</span></h2>
-        {termLine("Recording", c.recordingCents, c.recordingRequired, false, [recording?.askedCents ?? null], recording ? partPaid.get(recording.id) ?? 0 : 0)}
+        {termLine("Recording", c.recordingCents, c.recordingRequired, false, recording ? partPaid.get(recording.id) ?? 0 : 0)}
         <RecordingUpload
           seenAt={seenAt}
           sessionId={c.id}
           canSend={!refusal && !recording?.review}
           sentBefore={!!recording}
-          initialAsk={recording?.askedCents != null ? (recording.askedCents / 100).toFixed(2) : ""}
           recordings={c.recordings.map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, uploaded: !!r.uploadedAt }))}
         />
       </section>
 
       <section className="card space-y-3" id="written">
         <h2 className="font-semibold text-white">The written part</h2>
-        {termLine("Written answers", c.writtenCents, c.writtenRequired, false, [written?.askedCents ?? null], written ? partPaid.get(written.id) ?? 0 : 0)}
+        {termLine("Written answers", c.writtenCents, c.writtenRequired, false, written ? partPaid.get(written.id) ?? 0 : 0)}
         {written?.review ? (
           writtenQuestions(c).map((q, i) => (
             <div key={i} className="text-sm">
@@ -338,7 +336,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         ) : refusal ? (
           !written && <p className="note">Nothing sent.</p>
         ) : (
-          <WrittenForm seenAt={seenAt} sessionId={c.id} questions={writtenQuestions(c)} initial={(written?.answers as string[]) ?? []} initialNotes={written?.notes ?? ""} initialAsk={written?.askedCents != null ? (written.askedCents / 100).toFixed(2) : ""} update={!!written} />
+          <WrittenForm seenAt={seenAt} sessionId={c.id} questions={writtenQuestions(c)} initial={(written?.answers as string[]) ?? []} initialNotes={written?.notes ?? ""} update={!!written} />
         )}
       </section>
 

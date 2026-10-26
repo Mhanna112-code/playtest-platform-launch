@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money, toCents } from "@/lib/format";
 import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, canDispute, checkDisputeDecision, delayedPayLine, owedPayLine, owedUntilFrom, checkPay, checkReject, STRIPE_MAX_CENTS, PAUSED_RIGHT_NOW, testPaused, testerShare } from "@/lib/rules";
 import { HttpError } from "./http";
-import { bell, notify } from "./notify";
+import { adminUsers, bell, notify } from "./notify";
+import { partAnchor } from "@/lib/links";
 import { isAdmin } from "./session";
 import { cardRefusal, charge } from "./stripe";
 import { devGate, devGateIfSeen, devOnHold, recordEvent } from "./tests";
@@ -93,12 +94,12 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
   const { rev, payment, c, piece, name } = reserved;
   if (reject) {
     const canDisp = rev.agreedCents != null && rev.agreedCents > 0;
-    await notify(c.tester.email, `Your ${piece.label} on “${c.title}” wasn't accepted`, [`${displayName(dev)} rejected your ${piece.label}: “${rev.reason}”`, canDisp ? "It's part of your contract, so you can dispute this once from your session page." : "It wasn't in your contract, so this is final."], `/app/sessions/${c.id}`);
+    await notify(c.tester.email, `Your ${piece.label} on “${c.title}” wasn't accepted`, [`${displayName(dev)} rejected your ${piece.label}: “${rev.reason}”`, canDisp ? "It's part of your contract, so you can dispute this once from your session page." : "It wasn't in your contract, so this is final."], `/app/sessions/${c.id}#${partAnchor(piece.label)}`);
     return { reviewId: rev.id, amountCents: 0, rejected: true, paidSoFarCents: await paidSoFar(c.id) };
   }
   if (payment!.status === "deferred") {
     await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `You paid ${name} ${money(rev.amountCents)} for the ${piece.label}`, false, {}, c.id));
-    await notify(c.tester.email, `You were paid for your ${piece.label} on “${c.title}”`, [`${displayName(dev)} paid ${money(rev.amountCents)} for your ${piece.label}: you get ${money(testerShare(rev.amountCents))}.`, ...(rev.reason ? [`Their note: “${rev.reason}”`] : []), "Payment may be delayed."], `/app/sessions/${c.id}`, { always: true, about: dev.id });
+    await notify(c.tester.email, `You were paid for your ${piece.label} on “${c.title}”`, [`${displayName(dev)} paid ${money(rev.amountCents)} for your ${piece.label}: you get ${money(testerShare(rev.amountCents))}.`, ...(rev.reason ? [`Their note: “${rev.reason}”`] : []), "Payment may be delayed."], `/app/sessions/${c.id}#${partAnchor(piece.label)}`, { always: true, about: dev.id });
     return { reviewId: rev.id, amountCents: rev.amountCents, status: "deferred", rejected: false, paidSoFarCents: await paidSoFar(c.id), later: "charged when your account is clear" };
   }
   let result;
@@ -118,8 +119,8 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     const stillOwed = await db.payment.count({ where: { developerId: dev.id, status: "failed", settledAt: null, owedUntil: { not: null } } });
     if (stillOwed >= 2) await (await import("./holds")).startHold(dev.id, "unpaid");
     // The tester is told at once (bell; their top box and stop-once read the owed payment): never "failed".
-    await bell(c.testerId, delayedPayLine(displayName(dev), piece.label, rev.amountCents), `/app/sessions/${c.id}`);
-    await notify(dev.email, "A payment failed: pay within 3 days", [`Your card was declined for ${name}'s ${piece.label} on “${c.title}” (${money(rev.amountCents)}).`, `Pay it by ${fmtDateTime(by)} or your tests are paused.`], "/app/payments");
+    await bell(c.testerId, delayedPayLine(displayName(dev), piece.label, rev.amountCents), `/app/sessions/${c.id}#${partAnchor(piece.label)}`, undefined, { own: true });
+    await notify(dev.email, "A payment failed: pay within 3 days", [`Your card was declined for ${name}'s ${piece.label} on “${c.title}” (${money(rev.amountCents)}).`, `Pay it by ${fmtDateTime(by)} or your tests are paused.`], "/app/payments", { own: true });
     throw new HttpError(402, "card_failed", owedPayLine(name, rev.amountCents, piece.label, fmtDateTime(by)));
   }
   await db.$transaction(async (tx) => {
@@ -134,10 +135,10 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
       ...(rev.reason ? [`Their note: “${rev.reason}”`] : []),
       ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : []),
     ],
-    `/app/sessions/${c.id}`,
+    `/app/sessions/${c.id}#${partAnchor(piece.label)}`,
     { always: true },
   );
-  if (rev.amountCents > 0) await receipt(dev.email, `${name}'s ${piece.label}`, rev.amountCents, result.status, `/app/tests/${c.testId}`);
+  if (rev.amountCents > 0) await receipt(dev.email, `${name}'s ${piece.label}`, rev.amountCents, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
   // A suspended tester is paid later (their share is held): said neutrally, never why.
   return { reviewId: rev.id, amountCents: rev.amountCents, status: result.status, rejected: false, paidSoFarCents: await paidSoFar(c.id), ...(c.tester.suspendedAt && rev.amountCents > 0 ? { later: `${name} will receive it later` } : {}) };
 }
@@ -160,7 +161,9 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   if (!ok.ok) throw new HttpError(409, "no_dispute", ok.message);
   const d = await db.dispute.create({ data: { ...where, contractId, testerId: tester.id, reason } });
   await logEvent(c.testId, "dispute", `${displayName(tester)} disputed the pay for their ${kind === "call" ? "live call" : (await db.submission.findUnique({ where: { id } }))?.kind === "recording" ? "recording" : "written answers"}`, contractId);
-  await notify(c.test.developer.email, `${displayName(tester)} disputed a payment on “${c.title}”`, [`${displayName(tester)} thinks the pay should be higher: “${reason}”`, "Our team decides. A decision can only raise the pay, up to the listing amount."], `/app/tests/${c.testId}`);
+  await notify(c.test.developer.email, `${displayName(tester)} disputed a payment on “${c.title}”`, [`${displayName(tester)} thinks the pay should be higher: “${reason}”`, "Our team decides. A decision can only raise the pay, up to the listing amount."], `/app/tests/${c.testId}#item-dispute-${d.id}`);
+  // (Owner, Oct 26) Admins are told too: dispute lines about the same test stack per day; each links to the dispute row.
+  for (const a of await adminUsers()) await bell(a.id, `Dispute on “${c.title}”: ${displayName(tester)} says the pay should be higher`, `/admin?dispute=${d.id}#dispute-${d.id}`, undefined, { testId: c.testId });
   return d;
 }
 
@@ -213,14 +216,14 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
       await db.dispute.update({ where: { id: d.id }, data: { status: "open", decidedCents: null, decidedAt: null } });
       throw e;
     }
-    await receipt(c.test.developer.email, `the dispute decision on ${displayName(c.tester)}'s work`, extra, result.status, `/app/tests/${c.testId}`);
+    await receipt(c.test.developer.email, `the dispute decision on ${displayName(c.tester)}'s work`, extra, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
     await db.payment.create({ data: { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, ...result } });
   }
   const line = extra > 0 ? `The team raised the pay to ${money(decided!)} (${money(extra)} more).` : `The team kept the pay at ${money(review.amountCents)}${review.rejected ? " (rejected)" : ""}.`;
   await logEvent(c.testId, "admin", `The team decided ${displayName(c.tester)}'s dispute: ${line.replace(/^The team /, "").replace(/\.$/, "")}`, c.id);
   await (await import("./ratings")).maybePromptRating(c.id);
-  await notify(c.tester.email, `Your dispute on “${c.title}” was decided`, [line, ...(note ? [`Their note: “${note}”`] : [])], `/app/sessions/${c.id}`);
-  await notify(c.test.developer.email, `A dispute on “${c.title}” was decided`, [line, ...(note ? [`The team's note: “${note}”`] : [])], `/app/tests/${c.testId}`);
+  await notify(c.tester.email, `Your dispute on “${c.title}” was decided`, [line, ...(note ? [`Their note: “${note}”`] : [])], `/app/sessions/${c.id}#${d.callId ? "part-live" : partAnchor((await db.submission.findUnique({ where: { id: d.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers")}`, { own: true });
+  await notify(c.test.developer.email, `A dispute on “${c.title}” was decided`, [line, ...(note ? [`The team's note: “${note}”`] : [])], `/app/tests/${c.testId}#tester-${c.id}`, { own: true });
   return { extraCents: extra };
 }
 

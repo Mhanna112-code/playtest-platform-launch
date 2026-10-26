@@ -117,7 +117,7 @@ export async function approveChargebackHold(devId: string) {
   const lifted = await liftHoldIfClear(devId);
   if (!lifted) {
     const u = await db.user.findUniqueOrThrow({ where: { id: devId } });
-    await notify(u.email, "The team approved lifting your hold", ["The team approved lifting your hold."], "/app/payments");
+    await notify(u.email, "The team approved lifting your hold", ["The team approved lifting your hold."], "/app/payments", { own: true });
   }
   return { ok: true, lifted };
 }

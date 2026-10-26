@@ -197,14 +197,11 @@ describe("leaving", () => {
 });
 
 describe("newest owner rules", () => {
-  it("rules: ask, pay start, auto-pay, cancel reason and line, heads-up line, summaries, failed lines", () => {
-    expect(R.payStart(1000, 1200)).toBe(1200);
-    expect(R.payStart(1000, null)).toBe(1000);
-    expect(R.payStart(null, null)).toBeNull();
-    expect(R.autoPayFor(1000, 600)).toBe(600);
-    expect(R.autoPayFor(1000, 1500)).toBe(1000);
-    expect(R.autoPayFor(null, 500)).toBeNull();
-    expect(R.checkAsk(-5).ok).toBe(false);
+  it("rules: auto-pay, cancel reason and line, heads-up line, summaries, failed lines", () => {
+    expect(R.autoPayFor(1000)).toBe(1000);
+    expect(R.autoPayFor(null)).toBeNull();
+    expect((R as Record<string, unknown>).payStart).toBeUndefined(); // the tester's Ask $ is gone
+    expect((R as Record<string, unknown>).checkAsk).toBeUndefined();
     const now = new Date(2026, 10, 4, 15, 0);
     const call = new Date(2026, 10, 5, 15, 0);
     expect(R.checkCancel(new Date(now.getTime() + 20 * 3_600_000), now, "").ok).toBe(false);
@@ -220,14 +217,14 @@ describe("newest owner rules", () => {
     expect(R.failedLine("Ana Silva's written answers", 800, new Date(2026, 9, 20))).toBe("Ana Silva's written answers $8.00 · card declined Oct 20");
   });
 
-  it("asked amounts are stored on written answers and call requests (rate asks)", async () => {
+  it("there is no Ask $: a stray ask on a send or a call request is ignored and nothing is stored", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
-    await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], ask: "12.00" });
-    expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId } })).askedCents).toBe(1200);
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], ask: "abc" })).status).toBe(400);
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], ask: "12.00" })).status).toBe(200);
+    expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId } })).askedCents).toBeNull();
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], ask: "abc" })).status).toBe(200);
     await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: inHours(48), ask: "20" });
-    expect((await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId } })).askRateCents).toBe(2000);
+    expect((await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId } })).askRateCents).toBeNull();
     expect(dev).toBeTruthy();
   });
 

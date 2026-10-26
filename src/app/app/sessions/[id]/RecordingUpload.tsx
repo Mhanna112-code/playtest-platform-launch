@@ -9,7 +9,7 @@ import { ChangesBox } from "@/components/ChangesBox";
 type Rec = { id: string; filename: string; size: number; uploaded: boolean };
 
 /** Upload up to 5 screen recordings (500 MB each), then send them. Can be sent again with new ones until paid. */
-export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, initialAsk = "", seenAt }: { sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean; initialAsk?: string; seenAt: string }) {
+export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, seenAt }: { sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean; seenAt: string }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
@@ -17,8 +17,6 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, in
   const [progress, setProgress] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  // (Owner, Oct 26) An updated recording starts at the ask already sent; the tester may change it (raise it too) or clear it.
-  const [ask, setAsk] = useState(initialAsk);
   const uploaded = recordings.filter((r) => r.uploaded);
 
   async function upload(file: File) {
@@ -64,9 +62,6 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, in
       )}
       {progress != null && <p className="note">Uploading… {progress}%</p>}
       {canSend && uploaded.length > 0 && (
-        <label className="block text-sm">Ask $ <input className="input inline w-24" inputMode="decimal" placeholder="optional" aria-label="Ask for this" data-min="0" data-max="999999.99" data-msg="Ask $0 or more (Stripe can't take more than $999,999.99 in one charge)." value={ask} onChange={(e) => setAsk(e.target.value)} /> for this <span className="text-xs text-slate-500">at least $0</span></label>
-      )}
-      {canSend && uploaded.length > 0 && (
         <button
           className="btn"
           disabled={busy}
@@ -74,7 +69,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, in
             if (!checkFields(e.currentTarget.parentElement)) return;
             setBusy(true);
             try {
-              await api(`/api/sessions/${sessionId}/recording-send`, { ask, seenAt, confirmed, boxAt });
+              await api(`/api/sessions/${sessionId}/recording-send`, { seenAt, confirmed, boxAt });
               window.location.reload();
             } catch (e) {
               const sb = stopBox(e); if (sb) { setBox(sb); setBoxAt(sb.now); }

@@ -1,8 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { displayName, pronouns } from "@/lib/format";
-import { askNote, checkAsk, isLate, payByFrom } from "@/lib/rules";
-import { toCents } from "@/lib/format";
+import { isLate, payByFrom } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { MAX_RECORDING_BYTES, MAX_RECORDINGS, uploadTarget } from "./storage";
@@ -38,17 +37,13 @@ export async function finishRecording(tester: U, contractId: string, body: Recor
   return { ok: true };
 }
 
-/** Send the uploaded recordings (or send them again with new ones, until paid), with an optional asked amount. */
+/** Send the uploaded recordings (or send them again with new ones, until paid). */
 export async function sendRecording(tester: U, contractId: string, body: Record<string, unknown> = {}) {
   const c0 = await ownContract(tester.id, contractId);
   await testerTermsGate(contractId, displayName(c0.test.developer), body);
-  const askedCents = body.ask === undefined || body.ask === null || body.ask === "" ? null : toCents(body.ask);
-  if (body.ask && askedCents == null) throw new HttpError(400, "bad_ask", "Enter the amount you ask like 7.50, or leave it empty.");
-  const askOk = checkAsk(askedCents);
-  if (!askOk.ok) throw new HttpError(400, "bad_ask", askOk.message);
 
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
-  const { updated, late } = await db.$transaction(async (tx) => {
+  const { updated, late, subId } = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
     const t = await tx.test.findUniqueOrThrow({ where: { id: c.testId } });
@@ -59,16 +54,16 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });
     if (existing?.review) throw new HttpError(409, "paid", "Your recording was already paid for, so it can't be changed. Send anything new in the chat.");
     const now = new Date();
-    const data = { late: isLate(c.dueAt, now), updatedAt: now, payBy: payByFrom(now), askedCents };
+    const data = { late: isLate(c.dueAt, now), updatedAt: now, payBy: payByFrom(now) };
     const sub = existing
       ? await tx.submission.update({ where: { id: existing.id }, data })
       : await tx.submission.create({ data: { contractId, kind: "recording", agreedCents: c.recordingCents, ...data } });
     await tx.recording.updateMany({ where: { contractId, uploadedAt: { not: null } }, data: { submissionId: sub.id } });
-    await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} recording${askNote(existing?.askedCents, askedCents)}`, false, {}, c.id);
-    return { updated: !!existing, late: data.late };
+    await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} recording`, false, {}, c.id);
+    return { updated: !!existing, late: data.late, subId: sub.id };
   });
-  await notify(tester.email, `Work sent: your recording for “${c0.title}”`, [`Your recording was ${updated ? "updated" : "sent"} to ${displayName(c0.test.developer)}.`], `/app/sessions/${c0.id}`);
-  await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} a recording for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} screen recording${late ? " (late)" : ""}. Watch it and choose what to pay.`], `/app/tests/${c0.testId}`, { about: tester.id });
+  await notify(tester.email, `Work sent: your recording for “${c0.title}”`, [`Your recording was ${updated ? "updated" : "sent"} to ${displayName(c0.test.developer)}.`], `/app/sessions/${c0.id}#part-recording`);
+  await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} a recording for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} screen recording${late ? " (late)" : ""}. Watch it and choose what to pay.`], `/app/tests/${c0.testId}#piece-${subId}`, { about: tester.id });
   return { sent: true };
 }
 

@@ -29,10 +29,16 @@ export async function testIdOfLink(path: string) {
   return null;
 }
 
-export async function notify(to: string, subject: string, lines: string[], path: string, opts: { always?: boolean; about?: string } = {}) {
+/**
+ * `own`: the line always arrives as its own entry in the bell (admin decisions, a test stopped, payment failures and holds starting, a hold or
+ * pause lifted, a chargeback); every other line about the same test on the same day stacks. `testId` names the test when the link doesn't.
+ */
+export type Opts = { always?: boolean; about?: string; own?: boolean; testId?: string };
+
+export async function notify(to: string, subject: string, lines: string[], path: string, opts: Opts = {}) {
   const user = await db.user.findUnique({ where: { email: to }, select: { id: true, emailPref: true } });
   if (user && opts.about && !(await inReach(user.id, opts.about))) return;
-  if (user) await db.notification.create({ data: { userId: user.id, text: subject, link: path, testId: await testIdOfLink(path) } });
+  if (user) await db.notification.create({ data: { userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), own: !!opts.own } });
   const decision = emailDecision(user?.emailPref ?? "each", !!opts.always);
   if (decision !== "send") return;
   try {
@@ -43,9 +49,15 @@ export async function notify(to: string, subject: string, lines: string[], path:
 }
 
 /** A bell notification only (no email), e.g. the Open until heads-ups. */
-export async function bell(userId: string, text: string, link: string, about?: string) {
+export async function bell(userId: string, text: string, link: string, about?: string, opts: { own?: boolean; testId?: string } = {}) {
   if (about && !(await inReach(userId, about))) return;
-  await db.notification.create({ data: { userId, text, link, testId: await testIdOfLink(link) } });
+  await db.notification.create({ data: { userId, text, link, testId: opts.testId ?? (await testIdOfLink(link)), own: !!opts.own } });
+}
+
+/** Everyone who is an admin (flagged, or listed in ADMIN_EMAILS). */
+export async function adminUsers() {
+  const listed = (process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  return db.user.findMany({ where: { deletedAt: null, OR: [{ isAdmin: true }, ...(listed.length ? [{ email: { in: listed } }] : [])] }, select: { id: true, email: true } });
 }
 
 /** Summary emails for people on daily / weekly / monthly: one email listing their new notifications. */

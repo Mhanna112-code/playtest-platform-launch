@@ -26,13 +26,13 @@ describe("calls are always requests", () => {
     expect((await sact(sessionId, "book", tester.cookie, { slotId: "x" })).status).toBe(404);
   });
 
-  it("not in the contract: the tester must ask a rate, and it books only if the developer accepts", async () => {
+  it("not in the contract: the tester's request books only if the developer accepts, at no listed rate (there is no Ask $)", async () => {
     const { dev, testId } = await setup({ liveRateCents: null });
     const { tester, sessionId } = await joined(testId);
     const r = await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(48), ask: "35" });
     expect(r.body.requested).toBe(true);
     await act(testId, "answer-request", dev.cookie, { contractId: sessionId, requestId: r.body.id, action: "accept", seenAt: seen(), confirmed: true });
-    expect((await db.call.findFirstOrThrow({ where: { contractId: sessionId } })).rateCents).toBe(3500);
+    expect((await db.call.findFirstOrThrow({ where: { contractId: sessionId } })).rateCents).toBeNull();
   });
 
   it("cancel up to the start; within 24 hours a reason is required and the other side sees it", async () => {

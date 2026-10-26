@@ -35,7 +35,7 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
     return c;
   });
   const line = cancelLine(displayName(dev), call.startsAt, reason);
-  await notify(call.contract.tester.email, line, [line], `/app/sessions/${call.contractId}`, { about: dev.id });
+  await notify(call.contract.tester.email, line, [line], `/app/sessions/${call.contractId}#call-${call.id}`, { about: dev.id });
   return { cancelled: true };
 }
 
@@ -79,7 +79,7 @@ export async function testerCancelCall(tester: U, contractId: string, body: Reco
     return call;
   });
   const line = cancelLine(displayName(tester), call.startsAt, reason);
-  await notify(c0.test.developer.email, line, [line, "The time is open again for other testers."], `/app/tests/${c0.testId}#calls`, { about: tester.id });
+  await notify(c0.test.developer.email, line, [line, "The time is open again for other testers."], `/app/tests/${c0.testId}#call-${call.id}`, { about: tester.id });
   return { cancelled: true };
 }
 
@@ -134,8 +134,8 @@ export async function sweepNobodyJoined(now = new Date()) {
     if (done.count !== 1) continue;
     const call = await db.call.findUniqueOrThrow({ where: { id }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } } });
     const line = `Your call on ${fmtDateTime(call.startsAt)}: ${NOBODY_JOINED}`;
-    await notify(call.contract.tester.email, line, [line, "Nothing is charged."], `/app/sessions/${call.contractId}`);
-    await notify(call.contract.test.developer.email, line.replace("Your call", `Your call with ${displayName(call.contract.tester)}`), [line, "Nothing is charged."], `/app/tests/${call.contract.testId}`);
+    await notify(call.contract.tester.email, line, [line, "Nothing is charged."], `/app/sessions/${call.contractId}#call-${call.id}`);
+    await notify(call.contract.test.developer.email, line.replace("Your call", `Your call with ${displayName(call.contract.tester)}`), [line, "Nothing is charged."], `/app/tests/${call.contract.testId}#call-${call.id}`);
   }
   return due.length;
 }

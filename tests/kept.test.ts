@@ -12,13 +12,13 @@ describe("kept forms", () => {
     const a = await makeUser({ tester: true, name: "Ana Silva" });
     const b = await makeUser({ tester: true, name: "Ben Ito" });
     expect((await get(a.cookie, "written:s1")).body.data).toBeNull();
-    expect((await put(a.cookie, "written:s1", { answers: ["Loved it", ""], notes: "n", ask: "" })).status).toBe(200);
-    expect((await get(a.cookie, "written:s1")).body.data).toEqual({ answers: ["Loved it", ""], notes: "n", ask: "" });
+    expect((await put(a.cookie, "written:s1", { answers: ["Loved it", ""], notes: "n" })).status).toBe(200);
+    expect((await get(a.cookie, "written:s1")).body.data).toEqual({ answers: ["Loved it", ""], notes: "n" });
     // Not shared between people or between forms.
     expect((await get(b.cookie, "written:s1")).body.data).toBeNull();
     expect((await get(a.cookie, "chat:t1:u1")).body.data).toBeNull();
     // Typing again replaces it; sending clears it.
-    await put(a.cookie, "written:s1", { answers: ["Loved it more", ""], notes: "", ask: "" });
+    await put(a.cookie, "written:s1", { answers: ["Loved it more", ""], notes: "" });
     expect((await get(a.cookie, "written:s1")).body.data.answers[0]).toBe("Loved it more");
     await put(a.cookie, "written:s1", null);
     expect((await get(a.cookie, "written:s1")).body.data).toBeNull();

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
-import { displayName, fmtDateTime, fmtTime, money, pronouns, toCents } from "@/lib/format";
+import { displayName, fmtDateTime, fmtTime, money, pronouns } from "@/lib/format";
 import { checkCallMinutes, checkCancel } from "@/lib/rules";
 import { FOREVER_AHEAD, MAX_ROWS, occurrences, rowsOf, stepMs, toJson, type CallRow, type RowRepeat } from "@/lib/callRows";
 import type { Prisma } from "@prisma/client";
@@ -16,8 +16,7 @@ import { testerGate } from "./testerGate";
 //   "Choose one": up to 3 possible times; the other side picks one → 1 call.
 //   "Daily"/"Weekly": 1 time repeated 2–8 times; accepting books them all (each an ordinary call afterwards).
 // The developer requests with one or more ticked testers (the first tester to accept takes the whole request); the
-// developer never sets a price. The tester can "Ask $___/h" on their own requests only; a different ask never books on
-// the tester's side. Limit: 3 items per tester per test (both sides' pending requests and booked calls; a daily/weekly set = 1). Clash checks:
+// developer never sets a price, and neither does the tester (the "Ask $" was removed; every call is at the contract rate). Limit: 3 items per tester per test (both sides' pending requests and booked calls; a daily/weekly set = 1). Clash checks:
 // sending refuses overlaps with calls/requests between the same two; accepting refuses overlaps with anyone's calls.
 
 type Side = "developer" | "tester";
@@ -36,13 +35,6 @@ async function ctx(userId: string, contractId: string) {
 }
 type Ctx = Awaited<ReturnType<typeof ctx>>;
 
-function readAsk(v: unknown) {
-  if (v === undefined || v === null || v === "") return null;
-  const c = toCents(v);
-  if (c == null || c < 0) throw new HttpError(400, "bad_ask", "Enter the rate you ask like 50.00, or leave it empty.");
-  return c;
-}
-const askMatches = (ask: number | null, contractRate: number | null) => ask == null || ask === contractRate;
 export const rateLabel = (rateCents: number | null, contractRate: number | null) =>
   rateCents == null ? "Not in your contract" : `${rateCents === contractRate ? "Contract" : "Agreed"} ${money(rateCents).replace(/\.00$/, "")}/h`;
 
@@ -232,7 +224,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   if (onceStarts.length) {
     for (const { c } of all) {
       const match = await db.callRequest.findFirst({ where: { contractId: c.id, status: "pending", fromSide: "tester", weeks: 0, minutes: reqMinutes, startsAt: { gt: new Date() } } });
-      const hit = match && askMatches(match.askRateCents, c.liveRateCents) ? onceTimes(match).find((t) => onceStarts.some((x) => x.getTime() === t.getTime())) : undefined;
+      const hit = match ? onceTimes(match).find((t) => onceStarts.some((x) => x.getTime() === t.getTime())) : undefined;
       if (match && hit) {
         const clash = await acceptClash(c, "developer", [hit], match.minutes);
         if (clash.length) throw new HttpError(409, "clash", clash[0]);
@@ -240,7 +232,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
         const call = await bookAt(c.id, hit, match.minutes, c.liveRateCents, null, true);
         await db.callRequest.update({ where: { id: match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
         const line = `Booked: you both picked ${fmtDateTime(hit)}`;
-        await notify(c.tester.email, line, [line], `/app/sessions/${c.id}`, { about: c.test.developerId });
+        await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: c.test.developerId });
         return { booked: true, callId: call.id, message: line };
       }
     }
@@ -274,20 +266,19 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   return { requested: ok.length, batchId };
 }
 
-/** Tester: Request a time (choose one or weekly) with an optional "Ask $___/h". A different ask never books. */
+/** Tester: Request a time (choose one or weekly), always at the contract rate. */
 export async function testerRequestTime(user: U, contractId: string, body: Record<string, unknown>) {
   const x = await ctx(user.id, contractId);
   const { c, side } = x;
   if (side !== "tester") throw new HttpError(404, "not_found", "That session doesn't exist.");
   await refusals(c, "tester");
   const kind = readKind(body);
-  const ask = readAsk(body.ask);
   await testerGate(c.testerId, contractId, c.testId, body);
   const minutes = readMinutes(body);
   const devName = displayName(c.test.developer);
   // Auto-match ("choose one", rates match): a developer request with one of these exact times books it.
   const onceStarts = kind.rows.filter((r) => r.repeat === "once").map((r) => r.startsAt);
-  if (onceStarts.length && askMatches(ask, c.liveRateCents)) {
+  if (onceStarts.length) {
     const devReqs = await db.callRequest.findMany({ where: { contractId, status: "pending", fromSide: "developer", weeks: 0, minutes } });
     for (const m of devReqs) {
       const hit = onceTimes(m).find((t) => onceStarts.some((k) => k.getTime() === t.getTime()));
@@ -299,28 +290,17 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
       await db.callRequest.update({ where: { id: m.id }, data: { status: "booked", callId: call.id, decidedAt: new Date() } });
       await closeBatch(m.batchId, m.id);
       const line = `Booked: you both picked ${fmtDateTime(hit)}`;
-      await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#calls`, { about: c.testerId });
+      await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#call-${call.id}`, { about: c.testerId });
       return { booked: true, callId: call.id, message: line };
-    }
-  }
-  // A different ask for a time the developer requested closes this tester's copy of that request (it isn't a clash).
-  let closedCopy = "";
-  if (!askMatches(ask, c.liveRateCents)) {
-    const same = await db.callRequest.findMany({ where: { contractId, status: "pending", fromSide: "developer" } });
-    for (const m of same) {
-      if (requestTimes(m).some((t) => kind.times.some((k) => k.getTime() === t.getTime()))) {
-        await db.callRequest.update({ where: { id: m.id }, data: { status: "closed", closedReason: "you asked a different rate", decidedAt: new Date() } });
-        closedCopy = m.batchId;
-      }
     }
   }
   const clash = await sendClash(contractId, requestTimes(kind), minutes, devName, undefined, { side: "tester", otherPoss: pronouns(c.test.developer.pronoun).poss });
   if (clash) throw new HttpError(409, "clash", clash);
   if ((await pendingRequests(contractId)) >= MAX_REQUESTS) throw new HttpError(409, "limit", requestLimitLine(devName));
   const r = await db.callRequest.create({
-    data: { testId: c.testId, contractId, fromSide: "tester", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes, askRateCents: ask == null || ask === c.liveRateCents ? null : ask, batchId: closedCopy ? `ask-${closedCopy}` : "" },
+    data: { testId: c.testId, contractId, fromSide: "tester", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes },
   });
-  await db.$transaction((tx) => recordEvent(tx, c.testId, "requested", `${displayName(c.tester)} requested ${kind.rows.length === 1 && kind.rows[0].repeat !== "once" ? `${kindWords(kind.rows)} from` : "a call for"} ${fmtDateTime(kind.startsAt)}${r.askRateCents != null ? ` and asks ${money(r.askRateCents)}/h` : ""}`, false, {}, contractId));
+  await db.$transaction((tx) => recordEvent(tx, c.testId, "requested", `${displayName(c.tester)} requested ${kind.rows.length === 1 && kind.rows[0].repeat !== "once" ? `${kindWords(kind.rows)} from` : "a call for"} ${fmtDateTime(kind.startsAt)}`, false, {}, contractId));
   return { requested: true, id: r.id };
 }
 
@@ -346,9 +326,8 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   else await testerGate(c.testerId, contractId, c.testId, body);
   if (action === "accept") {
     await refusals(c, side);
-    // A tester's Accept always books at the contract rate; the developer accepting a tester's priced request books at
-    // the asked rate ("Agreed"). The rate is fixed at acceptance (every week of a weekly).
-    const rate = side === "developer" && r.askRateCents != null ? r.askRateCents : c.liveRateCents;
+    // Every call books at the contract rate, fixed at acceptance (every week of a weekly).
+    const rate = c.liveRateCents;
     // The other side picks ONE row; a repeating row books its whole set (Forever: the next 4 ahead).
     const rowsR = rowsOf(r);
     let row: CallRow;
@@ -382,9 +361,8 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     }
     await db.callRequest.update({ where: { id: r.id }, data: { status: "booked", callId: first!.id, decidedAt: new Date() } });
     if (side === "tester") await closeBatch(r.batchId, r.id);
-    else if (r.batchId.startsWith("ask-")) await closeBatch(r.batchId.slice(4), r.id); // the rest of the developer's batch
     const what = row.repeat === "once" ? fmtDateTime(times[0]) : row.count ? `${row.count} ${unitOf(row.repeat)} calls from ${fmtDateTime(times[0])}` : `${unitOf(row.repeat)} calls from ${fmtDateTime(times[0])} (until cancelled)`;
-    await notify(other.email, `Booked: ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#calls` : `/app/sessions/${c.id}`, { about: user.id });
+    await notify(other.email, `Booked: ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#call-${first!.id}` : `/app/sessions/${c.id}#call-${first!.id}`, { about: user.id });
     return { booked: true, callId: first!.id, calls: times.length };
   }
   const status = action === "withdraw" ? "withdrawn" : "declined";
@@ -423,7 +401,7 @@ export async function cancelCallSet(user: U, contractId: string, body: Record<st
     await recordEvent(tx, c.testId, "cancelled", `${displayName(user)} cancelled the ${unit} calls from ${fmtDateTime(calls[0].startsAt)} (${calls.length} left)`, false, {}, contractId);
   });
   const line = `${displayName(user)} cancelled the remaining ${unit} calls (${calls.length}), starting ${fmtDateTime(calls[0].startsAt)}${reason ? `: ${reason}` : "."}`;
-  await notify(other.email, line, [line], side === "developer" ? `/app/sessions/${contractId}` : `/app/tests/${c.testId}#calls`, { about: user.id });
+  await notify(other.email, line, [line], side === "developer" ? `/app/sessions/${contractId}#call-${calls[0].id}` : `/app/tests/${c.testId}#call-${calls[0].id}`, { about: user.id });
   return { cancelled: calls.length };
 }
 

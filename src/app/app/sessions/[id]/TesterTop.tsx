@@ -38,7 +38,7 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
         } else setErr(errOf(e));
       });
   return (
-    <div className="info space-y-2">
+    <div id="terms-offer" className="info scroll-mt-24 space-y-2">
       <p>
         {devName} updated the listing: {offer.diff}.
       </p>

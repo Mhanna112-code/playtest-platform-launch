@@ -35,7 +35,7 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
   const booked = p.mine.filter((m) => !m.cancelled && !m.ended && !inSet.has(m.id));
   const past = p.mine.filter((m) => m.cancelled || m.ended);
   const row = (m: Mine) => (
-    <li key={m.id} data-call={m.cancelled || m.ended ? "past" : "booked"} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+    <li key={m.id} id={`call-${m.id}`} data-call={m.cancelled || m.ended ? "past" : "booked"} className="flex flex-wrap items-center gap-2 py-2 text-sm">
       {m.ended || m.cancelled ? (
         // Past calls (the full app's PastRow): when · length · who joined · outcome badges.
         <span className="mr-auto flex flex-wrap items-center gap-2">

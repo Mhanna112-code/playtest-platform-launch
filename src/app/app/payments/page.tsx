@@ -138,7 +138,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
               </div>
             ))}
           </section>
-          <section className="card space-y-3">
+          <section id="payout" className="card scroll-mt-24 space-y-3">
             <h2 className="flex items-center gap-2 font-semibold text-white"><Banknote className="h-5 w-5 text-emerald-300" /> Where your money goes</h2>
             <p className="text-sm text-slate-300">
               {u.payoutsReady ? "Your payout account is connected. Each payment is sent to it." : u.stripeAccountId ? "Stripe still needs a few details before you can be paid." : "Connect a payout account to receive money for your work."}

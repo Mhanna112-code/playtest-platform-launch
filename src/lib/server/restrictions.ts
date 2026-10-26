@@ -34,8 +34,8 @@ export async function cancelCallsNearSuspension(devId: string, now = new Date())
     await db.callSlot.update({ where: { id: c.slotId }, data: { status: "removed" } }).catch(() => null);
     n++;
     const line = callCancelledLine(c.startsAt, "paused");
-    await notify(c.contract.tester.email, line, [line], `/app/sessions/${c.contractId}`, { about: c.contract.test.developerId });
-    await notify(c.contract.test.developer.email, line.replace("Your call", `Your call with ${displayName(c.contract.tester)}`), [line], `/app/tests/${c.contract.testId}`);
+    await notify(c.contract.tester.email, line, [line], `/app/sessions/${c.contractId}#call-${c.id}`, { about: c.contract.test.developerId });
+    await notify(c.contract.test.developer.email, line.replace("Your call", `Your call with ${displayName(c.contract.tester)}`), [line], `/app/tests/${c.contract.testId}#call-${c.id}`);
   }
   return n;
 }
@@ -53,6 +53,7 @@ async function pauseDeveloper(u: { id: string; email: string }) {
   await closeRequests({ contractIds }, "the test is paused");
   for (const t of tests) await db.$transaction((tx) => recordEvent(tx, t.id, "paused", "Your account is paused", false));
   await cancelCallsNearSuspension(u.id);
+  await (await import("./pauseClosure")).bellPausedTests(u.id);
 }
 
 async function removeTester(u: { id: string; name: string; email: string; pronoun: string }, kind: "suspended" | "deleted") {
@@ -67,7 +68,7 @@ async function removeTester(u: { id: string; name: string; email: string; pronou
       return list;
     });
     await tellCancelled(cancelled, "ended");
-    await notify(c.test.developer.email, `${displayName(u)} left “${c.title}”`, [`${displayName(u)} left your test “${c.title}”. Work they already sent still waits for your review.`], `/app/tests/${c.testId}`, { about: u.id });
+    await notify(c.test.developer.email, `${displayName(u)} left “${c.title}”`, [`${displayName(u)} left your test “${c.title}”. Work they already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: u.id });
     await spotOpened(c.testId);
   }
   await db.application.updateMany({ where: { testerId: u.id, status: "pending" }, data: { status: "withdrawn", decidedAt: new Date() } });
@@ -82,7 +83,7 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
   await db.user.update({ where: { id: userId }, data: { suspendedAt: new Date(), suspendNote: note, suspendedById: adminId, reinstatedAt: null } });
   if (u.isDeveloper) await pauseDeveloper(u);
   if (u.isTester) await removeTester(u, "suspended");
-  await notify(u.email, "Your account is paused", ["Your account is paused. Contact us in Settings if you think this is a mistake."], "/app/help", { always: true });
+  await notify(u.email, "Your account is paused", ["Your account is paused. Contact us in Settings if you think this is a mistake."], "/app/help", { always: true, own: true });
   return { ok: true };
 }
 
@@ -131,13 +132,13 @@ export async function reinstateAccount(userId: string) {
     await db.$transaction((tx) => resumeTests(tx, userId, start, now));
     if (!u.holdStartedAt) await chargeDeferred(userId);
     const testers = await db.contract.findMany({ where: { status: "working", test: { developerId: userId } }, include: { tester: true } });
-    for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: userId });
+    for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: userId, own: true });
   }
   if (u.isTester) {
     await reinviteAfterSuspension(u);
     await releaseHeldShares(userId);
   }
-  await notify(u.email, "Your account is active again", ["Your account is active again."], "/app", { always: true });
+  await notify(u.email, "Your account is active again", ["Your account is active again."], "/app", { always: true, own: true });
   return { ok: true };
 }
 
@@ -167,7 +168,7 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
         return list;
       });
       await tellCancelled(cancelled, "stopped");
-      for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`);
+      for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { own: true });
     }
   }
   if (u.isTester) await removeTester(u, "deleted");
@@ -191,15 +192,15 @@ export async function suspendedAccountsReminder(now = new Date()) {
 
 /** Admin: pause one test. It behaves like a stop for the developer, who can only stop it; testers see it as paused. */
 export async function pauseTest(adminId: string, testId: string, note: string) {
-  void adminId;
   const t = await db.test.findUnique({ where: { id: testId } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
   if (t.status === "stopped") throw new HttpError(409, "stopped", "That test was stopped.");
   if (t.adminPausedAt) throw new HttpError(409, "already", "That test is already paused.");
-  await db.$transaction((tx) => recordEvent(tx, testId, "paused", "The team paused this test", true, { adminPausedAt: new Date(), adminNote: note }));
+  await db.$transaction((tx) => recordEvent(tx, testId, "paused", "The team paused this test", true, { adminPausedAt: new Date(), adminNote: note, adminPausedById: adminId }));
   await closeRequests({ contractIds: (await db.contract.findMany({ where: { testId }, select: { id: true } })).map((c) => c.id) }, "the test is paused");
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
-  await notify(dev.email, `The team paused “${t.title}”`, [`The team paused “${t.title}”${note ? `: ${note}` : "."} You can only stop it for now.`, "Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true });
+  await (await import("./pauseClosure")).bellPausedTests(dev.id);
+  await notify(dev.email, `The team paused “${t.title}”`, [`The team paused “${t.title}”${note ? `: ${note}` : "."} You can only stop it for now.`, "Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, own: true });
   return { ok: true };
 }
 
@@ -213,11 +214,13 @@ export async function unpauseTest(testId: string) {
     for (const c of await tx.contract.findMany({ where: { testId, status: "working" } })) await tx.contract.update({ where: { id: c.id }, data: { dueAt: new Date(c.dueAt.getTime() + gap) } });
     await recordEvent(tx, testId, "resumed", "The team lifted the pause on this test", true);
   });
+  const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
+  await notify(dev.email, `The team lifted the pause on “${t.title}”`, [`The team lifted the pause on “${t.title}”: it is running again.`], `/app/tests/${testId}`, { always: true, own: true });
   return { ok: true };
 }
 
 /** Admin: stop one test for good (what was sent still waits to be paid or rejected). */
-export async function adminStopTest(testId: string, note: string) {
+export async function adminStopTest(testId: string, note: string, adminId: string | null = null) {
   const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
   if (t.status === "stopped") throw new HttpError(409, "stopped", "That test was already stopped.");
@@ -228,12 +231,12 @@ export async function adminStopTest(testId: string, note: string) {
     await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test was stopped", decidedAt: new Date() } });
     await tx.invite.updateMany({ where: { testId, status: "sent" }, data: { status: "cancelled" } });
     await tx.application.updateMany({ where: { testId, status: "pending" }, data: { status: "closed", closedReason: "stopped", decidedAt: new Date() } });
-    await recordEvent(tx, testId, "admin", "The team stopped this test", true, { status: "stopped", stoppedAt: new Date(), adminStoppedAt: new Date(), adminNote: note });
+    await recordEvent(tx, testId, "admin", "The team stopped this test", true, { status: "stopped", stoppedAt: new Date(), adminStoppedAt: new Date(), adminNote: note, adminStoppedById: adminId });
     return list;
   });
   await tellCancelled(cancelled, "stopped");
-  for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`);
-  await notify(t.developer.email, `The team stopped “${t.title}”`, [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay or reject. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true });
+  for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { own: true });
+  await notify(t.developer.email, `The team stopped “${t.title}”`, [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay or reject. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, own: true });
   return { ok: true };
 }
 
@@ -270,7 +273,7 @@ export async function payoutProblem(accountId: string, now = new Date()) {
   if (!u) return false;
   if (!u.payoutProblemAt) {
     await db.user.update({ where: { id: u.id }, data: { payoutProblemAt: now, payoutRemindedAt: now } });
-    await bell(u.id, PAYOUT_LINE, "/app/payments");
+    await bell(u.id, PAYOUT_LINE, "/app/payments#payout");
   }
   return true;
 }
@@ -284,7 +287,7 @@ export async function payoutFixed(accountId: string) {
 export async function payoutReminders(now = new Date()) {
   const due = await db.user.findMany({ where: { payoutProblemAt: { not: null }, OR: [{ payoutRemindedAt: null }, { payoutRemindedAt: { lt: new Date(now.getTime() - REMIND_DAYS * DAY + 3_600_000) } }] } });
   for (const u of due) {
-    await bell(u.id, PAYOUT_LINE, "/app/payments");
+    await bell(u.id, PAYOUT_LINE, "/app/payments#payout");
     await db.user.update({ where: { id: u.id }, data: { payoutRemindedAt: now } });
   }
   return due.length;

@@ -63,28 +63,18 @@ describe("call requests on both sides", () => {
     expect(late.body.error.message).toMatch(/^Another tester took this time at .+\.$/);
   });
 
-  it("STRICT: a tester's ask different from the contract rate never books; requesting the developer's time with an ask closes their copy; the developer accepts → agreed rate", async () => {
+  it("no Ask $: a tester requesting the developer's exact time books it at the contract rate, whatever ask the request carries", async () => {
     const { dev, testId } = await setup(); // live call $30/h in the contract
     const a = await joined(testId, "Ana Silva");
     const b = await joined(testId, "Ben Carter", "he");
     const t = at(110);
     await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [a.sessionId, b.sessionId], startsAt: t });
-    const qa = await db.callRequest.findFirstOrThrow({ where: { contractId: a.sessionId, fromSide: "developer" } });
     const r = await sact(a.sessionId, "request-time", a.tester.cookie, { startsAt: t, ask: "50" });
-    expect(r.body.requested).toBe(true);
-    expect((await db.callRequest.findUniqueOrThrow({ where: { id: qa.id } })).status).toBe("closed"); // their copy closes
-    expect(await db.call.count({ where: { contractId: a.sessionId } })).toBe(0); // nothing booked
-    const tr = await db.callRequest.findFirstOrThrow({ where: { contractId: a.sessionId, fromSide: "tester" } });
-    expect(tr.askRateCents).toBe(5000);
-    expect((await db.callRequest.findFirstOrThrow({ where: { contractId: b.sessionId } })).status).toBe("pending"); // stays open for others
-    await act(testId, "answer-request", dev.cookie, { contractId: a.sessionId, requestId: tr.id, action: "accept", seenAt: seen(), confirmed: true });
-    expect((await db.call.findFirstOrThrow({ where: { contractId: a.sessionId } })).rateCents).toBe(5000);
-    // Auto-match on the same time only when the ask is blank or the contract rate.
-    const s2 = await setup();
-    const c = await joined(s2.testId, "Cara Diaz");
-    await sact(c.sessionId, "request-time", c.tester.cookie, { startsAt: at(120), ask: "45" });
-    const m = await act(s2.testId, "request-time", s2.dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [c.sessionId], startsAt: at(120) });
-    expect(m.body.booked).toBeUndefined();
-    expect(await db.call.count({ where: { contractId: c.sessionId } })).toBe(0);
+    expect(r.body.booked).toBe(true); // auto-match: both picked the same time
+    expect((await db.call.findFirstOrThrow({ where: { contractId: a.sessionId } })).rateCents).toBe(3000);
+    expect((await db.callRequest.findFirstOrThrow({ where: { contractId: b.sessionId } })).status).toBe("taken"); // the time is taken for the others
+    expect(await db.callRequest.count({ where: { contractId: a.sessionId, askRateCents: { not: null } } })).toBe(0);
+    void dev;
   });
+
 });

@@ -545,29 +545,12 @@ export function emailDecision(pref: string, always: boolean): "send" | "summary"
 
 // ---------- Newest owner rules (Oct 22): asked amounts, cancelling, summaries, heads-up line ----------
 
-/** The Pay box starts at the asked amount if there is one, else the listing amount (else empty). */
-export const payStart = (listingCents: number | null, askedCents: number | null) => askedCents ?? listingCents;
+// (Owner, Oct 26) The tester's "Ask $" is gone: the Pay box always starts at the listing (or the call's agreed rate × length), and the Charge cap
+// is the listing minus what is already paid for that part. Old asks stay in the database, unused.
 
-/** Auto-pay at 14 days: contract parts only, the listing amount or the asked amount if lower; null = never auto-paid. */
-export const autoPayFor = (listingCents: number | null, askedCents: number | null) =>
-  listingCents == null ? null : Math.min(listingCents, askedCents ?? listingCents);
+/** Auto-pay at 14 days: contract parts only, the listing amount; null = never auto-paid. */
+export const autoPayFor = (listingCents: number | null) => (listingCents == null ? null : listingCents);
 export const REMIND_DAYS = 3;
-
-/**
- * (Owner, Oct 26) An UPDATED version of written answers or a recording may change the ask (raise it too): the line the developer reads
- * in the live box / stop-once so they know the Pay box now starts somewhere else. "" for a first send or an unchanged ask.
- * `prev` is undefined for a first send, null for an earlier version without an ask.
- */
-export const askNote = (prev: number | null | undefined, next: number | null) =>
-  prev === undefined || prev === next ? "" : next == null ? " and took back the ask" : ` and now asks ${money(next)}`;
-
-/** "Ask $___ for this": optional; any amount from $0 up (no maximum; only Stripe's own limit). */
-export function checkAsk(cents: number | null): Check {
-  if (cents == null) return yes;
-  if (!Number.isInteger(cents) || cents < 0) return no("Enter the amount you ask like 7.50, or leave it empty.");
-  if (cents > STRIPE_MAX_CENTS) return no(STRIPE_MAX_LINE);
-  return yes;
-}
 
 /** Cancel a call any time; within 24 hours of it a reason is required (the other side sees it). */
 export const cancelNeedsReason = (startsAt: Date, now: Date) => startsAt.getTime() - now.getTime() < CANCEL_HOURS * 3_600_000;
@@ -652,13 +635,8 @@ export function countdownDue(deadline: Date | null, now: Date, sent: string[], s
 export const ADMIN_DIGEST_DAYS = 3;
 export const INVITE_REMIND_DAYS = 3;
 
-/** "Charge": the lower of listing and asked, minus what's already been paid for that part (0 = only "Close it"). */
-export const chargeAmount = (listingCents: number | null, askedCents: number | null, paidCents: number) => {
-  // Owner: cap = min(this piece's ask if any, listing − already paid for that part). No room → no box.
-  if (listingCents == null) return 0;
-  const room = listingCents - paidCents;
-  return Math.max(0, askedCents != null ? Math.min(askedCents, room) : room);
-};
+/** "Charge": the listing minus what's already been paid for that part (0 = only "Close it"). */
+export const chargeAmount = (listingCents: number | null, paidCents: number) => (listingCents == null ? 0 : Math.max(0, listingCents - paidCents));
 
 // ---------- New terms offered to working testers (owner) ----------
 

@@ -50,7 +50,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   const shown = ticked.length ? testers.filter((t) => ticked.includes(t.contractId)) : testers.filter((t) => t.calls.length || t.sets.length || t.requests.length);
 
   const callRow = (t: DevTester, c: DevCall) => (
-    <li key={c.id} className="flex flex-wrap items-center gap-2">
+    <li key={c.id} id={`call-${c.id}`} className="flex flex-wrap items-center gap-2">
       <span className="mr-auto">{t.name} · {fmt(c.when)} · {c.minutes} min · {c.rate}{c.late && <span className="ml-2 badge">{c.late}</span>}</span>
       {c.joinable && <JoinCall callId={c.id} />}
       {!c.started && <a href={`/api/calls/${c.id}/ics`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline"><CalendarPlus className="h-3.5 w-3.5" /> Add to calendar</a>}
@@ -67,7 +67,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
     // The full app's ONE Live session panel (a fold on the test page), its length the next booked call's.
     <LivePanel fold minutes={testers.flatMap((t) => [...t.calls, ...t.sets.flatMap((x) => x.calls)]).filter((c) => !c.started).sort((a, b) => a.when.localeCompare(b.when))[0]?.minutes ?? null}>
     <section className="space-y-3" id="calls" aria-label="Call requests">
-      <p className="note">Calls you request use each tester&apos;s contract rate. A tester can ask for a different rate if they request a call.</p>
+      <p className="note">Calls you request use each tester&apos;s contract rate.</p>
       {/* The form is never hidden silently: a short line says why. */}
       {!canRequest && noRequestReason && <p className="note" data-no-request="">{noRequestReason}</p>}
       {canRequest && testers.length === 0 && <p className="note">Nobody is working on this test right now, so there is nobody to request a call with.</p>}
@@ -151,7 +151,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
     {/* Past calls (the full app's PastRow): when · who · length · who joined · outcome badges, and the room timeline. */}
     <LiveSection title={LIVE_SECTIONS.past} show={past.length > 0}>
       {past.map((x) => (
-        <li key={x.id} data-call="past" className="flex flex-wrap items-center gap-2 py-2 text-sm">
+        <li key={x.id} id={`call-${x.id}`} data-call="past" className="flex flex-wrap items-center gap-2 py-2 text-sm">
           <span className="text-slate-200">{fmt(x.when)}</span>
           <span className="text-slate-400">· {x.who}</span>
           <span className="text-slate-400">· {x.logged ?? x.minutes} min{x.logged != null && x.logged !== x.minutes ? ` (booked ${x.minutes})` : ""}</span>

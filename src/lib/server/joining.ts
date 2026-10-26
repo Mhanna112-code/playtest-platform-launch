@@ -167,7 +167,7 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
     create: { testId, testerId: tester.id, note, listing: snap, ndaAcceptedAt },
   });
   await db.$transaction((tx) => tx.testEvent.create({ data: { testId, kind: "applied", text: `${displayName(tester)} applied to join` } }));
-  await notify(t.developer.email, `${displayName(tester)} applied to join “${t.title}”`, [`${displayName(tester)} applied to join “${t.title}”.`, ...(note ? [`Their note: “${note}”`] : []), "Accept or decline on the test page."], `/app/tests/${testId}`);
+  await notify(t.developer.email, `${displayName(tester)} applied to join “${t.title}”`, [`${displayName(tester)} applied to join “${t.title}”.`, ...(note ? [`Their note: “${note}”`] : []), "Accept or decline on the test page."], `/app/tests/${testId}#needs-you`);
   return { applied: true };
 }
 
@@ -323,6 +323,6 @@ export async function matchInviteAndAsk(testId: string, testerId: string) {
   await db.application.update({ where: { id: app.id }, data: { status: "joined", decidedAt: new Date() } });
   const back = app.kind === "rejoin";
   await notify(tester.email, back ? `You're back in ${t.title}` : `You're in: ${t.title}`, [back ? `You're back in ${t.title}: your deadline is ${fmtDateTime(c.dueAt)}.` : `You're in: ${t.title}.`], `/app/sessions/${c.id}`, { about: t.developerId });
-  await notify(t.developer.email, `${displayName(tester)} ${back ? "rejoined" : "joined"} “${t.title}”`, [`${displayName(tester)} ${back ? "rejoined" : "joined"} (you'd invited ${pronouns(tester.pronoun).obj} and ${pronouns(tester.pronoun).subj === "they" ? "they'd" : `${pronouns(tester.pronoun).subj} had`} asked).`], `/app/tests/${testId}`, { about: testerId });
+  await notify(t.developer.email, `${displayName(tester)} ${back ? "rejoined" : "joined"} “${t.title}”`, [`${displayName(tester)} ${back ? "rejoined" : "joined"} (you'd invited ${pronouns(tester.pronoun).obj} and ${pronouns(tester.pronoun).subj === "they" ? "they'd" : `${pronouns(tester.pronoun).subj} had`} asked).`], `/app/tests/${testId}#tester-${c.id}`, { about: testerId });
   return c;
 }

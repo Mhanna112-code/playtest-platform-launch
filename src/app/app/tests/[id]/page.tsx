@@ -27,7 +27,6 @@ import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
-import { pauseClosesAt, pauseCountdownLine } from "@/lib/pause";
 import { PayBox } from "./PayBox";
 import { TopPanel } from "./TopPanel";
 import { NeedsYou } from "./NeedsYou";
@@ -93,8 +92,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const expired = inviteExpired(t);
   const soon = t.openUntil && t.openUntil > new Date() && t.openUntil.getTime() - Date.now() < 3 * 86_400_000;
   const now = new Date();
-  // (Owner, Oct 26) A paused test closes after 7 days: the countdown; a chargeback hold's steps.
-  const closing = pauseClosesAt(u, t);
+  // (Owner, Oct 26) A chargeback hold's steps. (A paused test's closing date is told by bell and shown to the admin, not on the page.)
   const cbSteps = await chargebackSteps(u.id);
   const lateOf = (c: { dueAt: Date; tester: { name: string; email: string } }, x: { createdAt: Date }) => (isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(c.tester), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined);
   const partPaid = (id: string) => payments.filter((p) => (p.submissionId === id || p.callId === id) && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
@@ -136,7 +134,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       // (NEXT-UI 21) The testers' requests wait in Needs you; here only the developer's own.
       requests: reqs.filter((r) => r.contractId === c.id && r.fromSide === "developer").map((r) => ({
         id: r.id, minutes: r.minutes, rows: toJson(rowsOf(r)), mine: r.fromSide === "developer",
-        rate: r.askRateCents != null ? `asks ${whole(r.askRateCents)}/h` : rateLabel(c.liveRateCents, c.liveRateCents),
+        rate: rateLabel(c.liveRateCents, c.liveRateCents),
       })),
     };
   });
@@ -155,7 +153,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     .sort((a, b) => a.at.getTime() - b.at.getTime());
   const needsRequests = reqs.filter((r) => r.fromSide === "tester").flatMap((r) => {
     const c = t.contracts.find((x) => x.id === r.contractId);
-    return c ? [{ id: r.id, contractId: c.id, name: displayName(c.tester), rows: toJson(rowsOf(r)), minutes: r.minutes, rate: r.askRateCents != null ? `asks ${whole(r.askRateCents)}/h` : rateLabel(c.liveRateCents, c.liveRateCents) }] : [];
+    return c ? [{ id: r.id, contractId: c.id, name: displayName(c.tester), rows: toJson(rowsOf(r)), minutes: r.minutes, rate: rateLabel(c.liveRateCents, c.liveRateCents) }] : [];
   });
   const disputesWaiting = t.contracts.flatMap((c) => [
     ...c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), what: x.kind === "written" ? "their written answers" : "their recording", reason: x.dispute!.reason })),
@@ -236,11 +234,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           ahead: c.calls.filter((x) => x.status === "booked" && x.startsAt > now).length,
         }))}
       />
-      {closing && (
-        <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100" data-pause-countdown="" role="status">
-          <b>This test is paused.</b> {pauseCountdownLine(closing.at, closing.causes)}.{closing.extended ? " The team moved this date." : ""}
-        </p>
-      )}
       {t.pauseClosedAt && <p role="alert" className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100" data-pause-closed="">{t.pauseClosedReason}</p>}
       {/* (Design doc 6) A stopped test: one short line saying what can still be done. */}
       {t.status === "stopped" && <p className="note" data-stopped-line="">This test is stopped. You can still pay or reject work testers already sent, chat with them, rate testers, and read their answers.</p>}
@@ -294,8 +287,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       <a href={`/api/recordings/${r.id}/file`} target="_blank" rel="noreferrer">{r.filename}</a>
                     </div>
                   ))}
-                  <PayBox key={`${x.s!.id}-${x.s!.askedCents ?? "none"}`} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} askedCents={x.s!.askedCents} partPaidCents={partPaid(x.s!.id)}
-                    note={x.s!.agreedCents != null && x.s!.payBy && !x.s!.choiceOfferedAt ? choiceNoteLine(fmtDate(x.s!.payBy).replace(/, \d{4}$/, ""), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, x.s!.askedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
+                  <PayBox key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} partPaidCents={partPaid(x.s!.id)}
+                    note={x.s!.agreedCents != null && x.s!.payBy && !x.s!.choiceOfferedAt ? choiceNoteLine(fmtDate(x.s!.payBy).replace(/, \d{4}$/, ""), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
                     listingCents={x.s!.agreedCents} listingText={`${money(x.s!.agreedCents)} for ${x.s!.kind === "written" ? "written answers" : "a recording"}`} />
                 </>
               ) : (
@@ -307,7 +300,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     measured={x.x!.devJoinedAt && x.x!.testerJoinedAt ? defaultCallMinutes(x.x!.startsAt, x.x!.minutes, x.x!.devJoinedAt, x.x!.testerJoinedAt) : null}
                     max={Math.floor(x.x!.minutes * 1.5)} closesAt={new Date(x.x!.startsAt.getTime() + CALL_CLOSE_MS).toISOString()} closed={callClosed(x.x!.startsAt, now)}
                   />
-                  <PayBox key={`${x.x!.actualMinutes ?? 0}-${x.x!.askedCents ?? "none"}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} askedCents={x.x!.askedCents} partPaidCents={partPaid(x.x!.id)}
+                  <PayBox key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} partPaidCents={partPaid(x.x!.id)}
                     listingCents={callReference(x.x!.rateCents, x.x!.actualMinutes ?? x.x!.minutes, x.c.liveRateCents).cents}
                     listingText={callReference(x.x!.rateCents, x.x!.actualMinutes ?? x.x!.minutes, x.c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
                 </>

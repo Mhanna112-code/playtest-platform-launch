@@ -145,7 +145,7 @@ describe("daily job", () => {
     expect((await cronGET(new Request("http://localhost:3400/api/cron/daily"))).status).toBe(401);
   });
 
-  it("offers Charge / Let it go after 14 days unreviewed (lower of listing and asked); never for parts outside the contract; not during a hold", async () => {
+  it("offers Charge / Let it go after 14 days unreviewed (the listing amount); never for parts outside the contract; not during a hold", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -169,20 +169,12 @@ describe("daily job", () => {
     await cron(); // not reminded twice within 7 days
     expect(await db.review.count({ where: { submissionId: xs.id } })).toBe(0);
     expect(await db.notification.count({ where: { userId: x.dev.user.id, text: { contains: "still waits for you to pay or reject" } } })).toBe(1);
-    // A contract part with a lower asked amount auto-pays the asked amount.
-    const y = await setup();
-    const k = await joined(y.testId);
-    await sact(k.sessionId, "written", k.tester.cookie, { answers: ["a", "b"], ask: "6.00" });
-    const ys = await db.submission.findFirstOrThrow({ where: { contractId: k.sessionId } });
-    expect(ys.askedCents).toBe(600);
-    await db.submission.update({ where: { id: ys.id }, data: { payBy: new Date(Date.now() - 1000) } });
-    await cron();
-    expect((await sact(k.sessionId, "choose", k.tester.cookie, { submissionId: ys.id, choice: "charge", tickedCents: 600 })).body).toMatchObject({ amountCents: 600 });
-    // Asked higher than the listing: Charge uses the listing (the lower one).
+    // A stray ask on a send is ignored: Charge is always the listing.
     const z = await setup();
     const m = await joined(z.testId);
-    await sact(m.sessionId, "written", m.tester.cookie, { answers: ["a", "b"], ask: "25.00" });
+    await sact(m.sessionId, "written", m.tester.cookie, { answers: ["a", "b"], ask: "6.00" });
     const zs = await db.submission.findFirstOrThrow({ where: { contractId: m.sessionId } });
+    expect(zs.askedCents).toBeNull();
     await db.submission.update({ where: { id: zs.id }, data: { payBy: new Date(Date.now() - 1000) } });
     await cron();
     expect((await sact(m.sessionId, "choose", m.tester.cookie, { submissionId: zs.id, choice: "charge", tickedCents: 1000 })).body).toMatchObject({ amountCents: 1000 });
