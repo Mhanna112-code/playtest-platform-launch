@@ -7,7 +7,9 @@ import { answerRequest, cancelCallSet, devRequestTime } from "@/lib/server/reque
 import { apply, decideApplication, join, withdrawApplication } from "@/lib/server/joining";
 import { addDevSide } from "@/lib/server/payments";
 import { sendChat, sendMessage } from "@/lib/server/messages";
-import { editTest, endEarly, nextRound, openDraft, stopTest } from "@/lib/server/tests";
+import { asListing, editTest, endEarly, nextRound, openDraft, ownTest, stopTest } from "@/lib/server/tests";
+import { assignFreeKey, keyBoxes } from "@/lib/server/accessKeys";
+import { getUserFromRequest } from "@/lib/server/session";
 import { requireActive, requireConfirmed } from "@/lib/server/users";
 
 // (NEWEST+8) Presses that need a confirmed email.
@@ -16,6 +18,18 @@ import { devRate } from "@/lib/server/ratings";
 import { logTestAction } from "@/lib/server/actionText";
 
 type Ctx = { params: Promise<{ id: string; action: string }> };
+
+/** (Design doc 5) The Edit page's live view of the test: its listing and version, and the In use / Free access keys. */
+export async function GET(req: Request, { params }: Ctx) {
+  return handle(async () => {
+    const { id, action } = await params;
+    const u = await getUserFromRequest(req);
+    if (!u) throw new HttpError(401, "signed_out", "You're signed out. Sign in again to keep going.");
+    if (action !== "listing") throw new HttpError(404, "not_found", "That doesn't exist.");
+    const t = await ownTest(u.id, id);
+    return ok({ version: t.version, listing: asListing(t), keys: await keyBoxes(id), at: new Date().toISOString() });
+  });
+}
 
 // Developer actions on their test, and the tester's Join. Every one re-checks on the server.
 export async function POST(req: Request, { params }: Ctx) {
@@ -40,6 +54,8 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         const t = await editTest(u, id, body);
         return ok({ version: t.version, offered: (t as { offered?: number }).offered ?? 0, changed: (t as { changed?: string[] }).changed ?? [], notReinvited: (t as { notReinvited?: string[] }).notReinvited ?? [], resent: (t as { resent?: string[] }).resent ?? [], closedApps: (t as { closedApps?: string[] }).closedApps ?? [], spotClosed: (t as { spotClosed?: string[] }).spotClosed ?? [], spots: t.spots });
       }
+      case "assign-key":
+        return ok(await assignFreeKey(u, id, String(body.contractId ?? "")));
       case "open":
         await openDraft(u, id);
         return ok({ ok: true });

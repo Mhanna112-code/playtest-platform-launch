@@ -53,7 +53,7 @@ describe("calls are always requests", () => {
     await bookCall(testId, dev.cookie, sessionId, tester.cookie, 48);
     await act(testId, "end-early", dev.cookie, { seenAt: seen(), confirmed: true, contractId: sessionId, reason: "We have enough" });
     expect((await db.call.findFirstOrThrow({ where: { contractId: sessionId } })).status).toBe("cancelled");
-    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: atHours(72) })).body.error.message).toBe("Your session has ended.");
+    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: atHours(72) })).body.error.message).toMatch(/^Nora Lane ended your session early on .+\. Work you sent is still reviewed\.$/);
   });
 });
 

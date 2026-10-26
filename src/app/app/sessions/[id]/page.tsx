@@ -26,6 +26,8 @@ import { qOptional, qText } from "@/lib/questions";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, rateBlocker, rateWarning, ratingSummary } from "@/lib/server/ratings";
 import { openOffer } from "@/lib/server/terms";
+import { keyOf } from "@/lib/server/accessKeys";
+import { KeyBox } from "./KeyBox";
 
 export const metadata = { title: "Your session · Playtest" };
 export const dynamic = "force-dynamic";
@@ -57,6 +59,11 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const seenAt = now.toISOString();
   await sweepHeldCalls(c.test.developerId);
   const offer = await openOffer(c.id);
+  const key = c.status === "working" ? await keyOf(c.id) : null;
+  // A key the developer gave after one was reported: shown as new on the session page.
+  const freshKey = key && key.status === "inuse" && (await db.accessKey.count({ where: { contractId: c.id, status: "retired" } })) > 0;
+  // (Design doc 9) Terms history: what they joined on, every offer and what they chose (previous questions, answers and NDAs stay here).
+  const offers = await db.termsOffer.findMany({ where: { contractId: c.id }, orderBy: { createdAt: "asc" } });
   const blockedPair = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: u.id }] } })) > 0;
   const partPaid = new Map((await db.payment.groupBy({ by: ["submissionId", "callId"], where: { contractId: c.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } })).map((g) => [g.submissionId ?? g.callId ?? "", g._sum.amountCents ?? 0]));
   const delayedSubs = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", settledAt: null, owedUntil: { not: null }, submissionId: { not: null } }, select: { submissionId: true } })).map((p) => p.submissionId!));
@@ -106,8 +113,18 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <AutoRefresh query={`session=${c.id}`} />
+      {/* (Design doc 8, owner Oct 26) The top, in this order: the test name, the access-key box, the live updates box (every change except the
+          contract's), and right below it the Switch / Keep offer box. */}
+      <div>
+        {c.test.productName && <p className="kicker">{c.test.productName}</p>}
+        <h1 className="text-2xl font-bold tracking-tight text-white">{c.title}</h1>
+      </div>
+      {key && <KeyBox sessionId={c.id} seenAt={seenAt} value={key.value} broken={key.status === "broken"} fresh={!!freshKey} />}
       <LiveTop scope={`session:${c.id}`} seenAt={seenAt} seeIt="#listing" />
-      <TesterTop sessionId={c.id} seenAt={seenAt} devName={dev} offer={offer && !refusal ? { id: offer.id, diff: offer.diff } : null} />
+      <TesterTop sessionId={c.id} seenAt={seenAt} devName={dev} offer={offer && !refusal ? {
+        id: offer.id, diff: offer.diff, ndaText: offer.ndaText, fromNdaText: c.ndaText, questions: ((offer.questions as string[]) ?? []).map(qText), fromQuestions: ((c.questions as string[]) ?? []).map(qText),
+        answers: written ? ((written.answers as string[]) ?? []) : [],
+      } : null} />
       {refusal && <p className="info">{refusal}</p>}
       {!refusal && c.test.developer.holdStartedAt && <p className="info">{PAUSED_FOR_TESTERS}</p>}
       {!refusal && c.test.openUntil && c.test.openUntil > now && c.test.openUntil.getTime() - now.getTime() < 3 * 86_400_000 && (
@@ -116,7 +133,6 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       <section className="card space-y-4">
         <div className="flex flex-wrap items-start gap-4">
           <div className="min-w-[12rem] flex-1">
-            <h1 className="text-2xl font-bold tracking-tight text-white">{c.title}</h1>
             <p className="text-sm text-slate-400">by{" "}
               <PersonHover name={dev} href={`/app/developers/${c.test.developerId}`} summary={[devRating || "No ratings yet"]} />
               {" "}· joined {fmtDate(c.joinedAt)}</p>
@@ -126,6 +142,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
               {c.recordingCents != null && <span className="badge">Screen recording</span>}
               {c.liveRateCents != null && <span className="badge">Live call</span>}
               <span className="badge"><Users className="h-3.5 w-3.5" /> {testersIn} tester{testersIn === 1 ? "" : "s"} on this test</span>
+              {c.test.mature && <span className="badge border-rose-300/40 text-rose-200" title={c.test.matureWhy}>Mature (18+)</span>}
             </div>
           </div>
           <a href={`/app/chat/${c.id}`} className="btn-secondary relative min-w-0 max-w-full no-underline hover:no-underline"><MessagesSquare className="h-4 w-4 shrink-0" /> <span className="truncate">Chat with {dev}</span>
@@ -151,7 +168,13 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             </div>
           </details>
         )}
-        {c.keepPrivate && <p className="note">You agreed to keep this build and what you see private.</p>}
+        {c.ndaText && c.ndaAcceptedAt && (
+          <details className="text-sm" data-nda="">
+            <summary className="cursor-pointer text-slate-300">NDA accepted {fmtDate(c.ndaAcceptedAt)}</summary>
+            <p className="mt-1 whitespace-pre-wrap rounded-lg bg-white/[0.03] p-2 text-slate-300">{c.ndaText}</p>
+          </details>
+        )}
+
       </section>
 
       {myRating && !rated.testerRevealed && <p className="note">You rated {dev}.</p>}
@@ -185,6 +208,26 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           {writtenQuestions(c).length > 0 && <li>Questions: {writtenQuestions(c).map((q) => `“${qText(q)}”`).join(", ")}</li>}
           <li>Agreed {fmtDate(c.joinedAt)}. Everything above is fixed in your contract; if {dev} changes the listing later you choose Switch or Keep.</li>
         </ul>
+        {/* (Design doc 9) The terms history: every offer and what you chose, with the questions and NDA you were on. */}
+        <div className="mt-3 space-y-2 text-sm" data-terms-history="">
+          <p className="font-medium text-white">Terms history</p>
+          <ul className="space-y-1.5 text-slate-300">
+            <li>{fmtDate(c.joinedAt)}: you joined on {termsLine(c, true)}{c.ndaAcceptedAt ? ` and accepted the NDA` : ""}.</li>
+            {offers.map((o) => (
+              <li key={o.id}>
+                {fmtDate(o.createdAt)}: {dev} offered new terms ({o.diff}) · {o.status === "switched" ? `you switched${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "kept" ? `you kept your terms${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "open" ? "waiting for your answer" : "replaced by a newer offer"}
+                {Array.isArray(o.fromQuestions) && JSON.stringify(o.fromQuestions) !== JSON.stringify(o.questions) && (
+                  <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">Questions then and now</summary>
+                    <p>Then: {(o.fromQuestions as string[]).map(qText).join(" · ") || "none"}</p><p>Offered: {((o.questions as string[]) ?? []).map(qText).join(" · ") || "none"}</p></details>
+                )}
+                {o.fromNdaText !== o.ndaText && (
+                  <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">NDA then and now</summary>
+                    <p className="whitespace-pre-wrap">Then: {o.fromNdaText || "none"}</p><p className="whitespace-pre-wrap">Offered: {o.ndaText || "none"}</p></details>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       </details>
 
       {/* The full app's "Your parts" card: each part on its own, sent, reviewed and paid in any order. */}

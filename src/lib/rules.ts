@@ -2,6 +2,7 @@
 // the Edit version check, the join check and contract snapshots live here so they are tested in one place.
 
 import { money } from "./format";
+import { LIMITS } from "./limits";
 
 // ---------- Money ----------
 
@@ -118,8 +119,15 @@ export function canCancelCall(startsAt: Date, now: Date): Check {
 // ---------- Listing ----------
 
 export type Listing = {
+  /** (Design doc 4) The game, website, app or other product; `title` is this test's own name */
+  productName: string;
   title: string;
   description: string;
+  /** Mature (18+) and why (required when ticked) */
+  mature: boolean;
+  matureWhy: string;
+  /** Optional NDA text testers accept before joining ("" = none) */
+  ndaText: string;
   buildUrl: string;
   categories: string[];
   devices: string[];
@@ -142,31 +150,59 @@ export type Listing = {
 };
 
 export const LISTING_FIELDS = [
-  "title", "description", "buildUrl", "categories", "devices", "languages", "spots",
+  "productName", "title", "description", "mature", "matureWhy", "ndaText", "buildUrl", "categories", "devices", "languages", "spots",
   "writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "deadlineDays", "questions", "openUntil", "joinMode",
 ] as const satisfies readonly (keyof Listing)[];
 
 /** Fields whose change alters the terms new testers join on (checked by Join). Spots only changes availability. */
 export const TERM_FIELDS = LISTING_FIELDS.filter((f) => f !== "spots");
 
-export const MAX_SPOTS = 50;
+export const MAX_SPOTS = LIMITS.spots.max;
+
+/** The day a deadline needs Open until to reach: the test's opening + the deadline's days + the buffer (11.5: "must leave 3 days inside Open until"). */
+export function openUntilNeeded(openedAt: Date, deadlineDays: number) {
+  return new Date(openedAt.getTime() + (deadlineDays + LIMITS.deadlineBufferDays) * 86_400_000);
+}
+const shortDay = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+export type ListingCtx = {
+  /** Edit: only the fields that changed get the newer rules (older tests keep working); Post: everything. */
+  changed?: ReadonlySet<string>;
+  /** When the test opened (Post: now). The deadline must leave 3 days inside Open until, counted from here. */
+  openedAt?: Date;
+  /** Edit: the wording says Extend rather than Set. */
+  edit?: boolean;
+};
 
 /** Check a listing's values. Returns every problem, each in a plain sentence. */
-export function checkListing(l: Listing, testersIn = 0, now = new Date()): string[] {
+export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: ListingCtx = {}): string[] {
   const errs: string[] = [];
+  const isNew = (f: string) => !ctx.changed || ctx.changed.has(f);
   if (!["anyone", "apply", "invite"].includes(l.joinMode ?? "anyone")) errs.push("Choose who can join: anyone, apply, or invite only.");
   if (l.openUntil != null) {
     const d = new Date(l.openUntil);
     if (isNaN(d.getTime())) errs.push("Enter the Open until date like 2026-12-01.");
     else if (d.getTime() <= now.getTime()) errs.push("Open until must be a date in the future.");
-    else if (d.getTime() > now.getTime() + 366 * 86_400_000) errs.push("Open until can be at most a year ahead.");
+    else if (d.getTime() > now.getTime() + LIMITS.openUntilMaxDays * 86_400_000) errs.push("Open until can be at most a year ahead.");
+    // (11.5) The tester deadline must leave 3 days inside Open until, counted from when the test opened.
+    else if (Number.isInteger(l.deadlineDays) && l.deadlineDays >= 1 && (isNew("openUntil") || isNew("deadlineDays"))) {
+      const need = openUntilNeeded(ctx.openedAt ?? now, l.deadlineDays);
+      if (d.toISOString().slice(0, 10) < need.toISOString().slice(0, 10)) errs.push(`${ctx.edit ? "Extend" : "Set"} Open until to ${shortDay(need)} or later to allow a ${l.deadlineDays}-day deadline.`);
+    }
   }
+  // (4) Product name and the test's own name: 60 characters each; the instructions 1,000, required.
+  if (!l.productName?.trim()) { if (isNew("productName")) errs.push("Enter the product name."); }
+  else if (l.productName.length > LIMITS.productName && isNew("productName")) errs.push(`Keep the product name to ${LIMITS.productName} characters.`);
   if (!l.title.trim()) errs.push("Give the test a title.");
-  if (l.title.length > 120) errs.push("Keep the title under 120 characters.");
+  else if (l.title.length > LIMITS.testName && isNew("title")) errs.push(`Keep the title to ${LIMITS.testName} characters.`);
+  if (!l.description?.trim()) { if (isNew("description")) errs.push("Say what testers should do (What to do)."); }
+  else if (l.description.length > LIMITS.whatToDo && isNew("description")) errs.push(`Keep What to do to ${LIMITS.whatToDo.toLocaleString("en-US")} characters.`);
+  if (l.mature && (l.matureWhy ?? "").trim().length < 5 && (isNew("mature") || isNew("matureWhy"))) errs.push("Say why this test is mature (18+): it's required for mature content.");
+  if ((l.ndaText ?? "").length > LIMITS.nda) errs.push(`Keep the NDA to ${LIMITS.nda.toLocaleString("en-US")} characters.`);
   if (!l.categories?.length) errs.push("Tick at least one category.");
-  if (!Number.isInteger(l.spots) || l.spots < 1 || l.spots > MAX_SPOTS) errs.push(`Spots must be a whole number from 1 to ${MAX_SPOTS}.`);
+  if (!Number.isInteger(l.spots) || l.spots < LIMITS.spots.min || l.spots > MAX_SPOTS) errs.push(`Spots must be a whole number from 1 to ${MAX_SPOTS}.`);
   else if (l.spots < testersIn) errs.push(`Spots can't go below the ${testersIn} tester${testersIn === 1 ? "" : "s"} already in.`);
-  if (!Number.isInteger(l.deadlineDays) || l.deadlineDays < 1 || l.deadlineDays > 90) errs.push("Testers' deadline must be from 1 to 90 days after they join.");
+  if (!Number.isInteger(l.deadlineDays) || l.deadlineDays < LIMITS.deadlineDays.min || l.deadlineDays > LIMITS.deadlineDays.max) errs.push("Testers' deadline must be from 1 to 90 days after they join.");
   if (l.writtenCents == null && l.recordingCents == null && l.liveRateCents == null) errs.push("Choose at least one kind of feedback.");
   const part = (c: number | null, name: string) => {
     if (c == null || c === 0) return;
@@ -180,13 +216,16 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date()): strin
     if (l.liveRateCents > STRIPE_MAX_CENTS) errs.push(`The live call rate: ${STRIPE_MAX_LINE}`);
   }
   if (l.writtenCents != null && l.questions.filter((q) => q.trim()).length === 0) errs.push("Add at least one question for the written answers.");
-  if (l.questions.length > 20) errs.push("At most 20 questions.");
+  if (l.questions.length > LIMITS.questions.max) errs.push(`At most ${LIMITS.questions.max} questions.`);
   return errs;
 }
 
 /** The contract: every term copied from the listing at join. Edits later never touch it. */
-export function contractSnapshot(test: Listing & { listingVersion: number }, joinedAt: Date, keepPrivate: boolean) {
+export function contractSnapshot(test: Listing & { listingVersion: number }, joinedAt: Date, keepPrivate: boolean, ndaAcceptedAt: Date | null = null) {
   return {
+    // (4) The NDA the tester accepted (text and time) is part of their terms.
+    ndaText: test.ndaText ?? "",
+    ndaAcceptedAt: test.ndaText ? ndaAcceptedAt ?? joinedAt : null,
     listingVersion: test.listingVersion,
     title: test.title,
     description: test.description,
@@ -268,6 +307,7 @@ export const DEV_EXEMPT_KINDS: Record<string, string> = {
   ended: "the developer's own End early (reason E from another tab)",
   next_round: "the developer's own Next round (reason E from another tab)",
   invited: "the developer's own invites (reason E from another tab)",
+  key: "an access key reported as not working: shown quietly in the yellow keys box, never a stop (owner, Oct 26)",
   paused: "a payment hold: every paused button refuses for good, and the page shows the hold",
   resumed: "the hold lifted because the developer paid (their own action, reason E)",
 };
@@ -311,6 +351,7 @@ export const TESTER_EXEMPT_KINDS: Record<string, string> = {
   ended: "the session ends: every button refuses for good",
   next_round: "a new round never changes a working tester's contract",
   invited: "the developer's invites to others",
+  key: "the developer's yellow keys box only",
   paused: "a hold shows as the paused banner and refusals",
   resumed: "the paused banner goes away",
 };
@@ -400,6 +441,13 @@ export function checkOpenUntilChange(current: Date | null, next: Date | null, no
   return yes;
 }
 
+/** (Design doc 5) Open until can only be extended: a red line when the new date is earlier (or a date is added to a test with no end). "" when fine. */
+export function openUntilShortened(current: string | null, next: string | null, fmt: (d: Date) => string) {
+  if (next == null) return "";
+  if (current == null) return "Open until can only be extended: this test has no end date now.";
+  return new Date(next).toISOString().slice(0, 10) < new Date(current).toISOString().slice(0, 10) ? `Open until can only be extended: it's ${fmt(new Date(current))} now.` : "";
+}
+
 /** Which Open until heads-up is due now (3 days, then 1 day before), if any. */
 export function headsUpDue(openUntil: Date | null, now: Date, sent3d: boolean, sent1d: boolean): "3d" | "1d" | null {
   if (!openUntil || openUntil.getTime() <= now.getTime()) return null;
@@ -425,7 +473,9 @@ export function inviteTestRefusal(
   return "";
 }
 
-export const MAX_ACTIVE_TESTS = 10;
+export const MAX_ACTIVE_TESTS = LIMITS.testsPerTester;
+/** (7.3) Joining, applying, accepting an invite and asking to rejoin all refuse with this line at the limit. */
+export const TEST_LIMIT_LINE = "You can't join more tests right now.";
 /** Invite: per-tester refusals. Never reveals a block or a suspension. */
 export function inviteTesterRefusal(name: string, x: { suspended: boolean; blocked: boolean; deleted: boolean; activeTests: number }) {
   if (x.deleted) return `${name}'s account was closed, so they can't be invited.`;
@@ -600,7 +650,7 @@ export const chargeAmount = (listingCents: number | null, askedCents: number | n
 
 // ---------- New terms offered to working testers (owner) ----------
 
-export type ContractTerms = { writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null; liveMinutes: number | null; deadlineDays: number; questions: string[]; writtenRequired?: boolean; recordingRequired?: boolean; liveRequired?: boolean };
+export type ContractTerms = { ndaText?: string; writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null; liveMinutes: number | null; deadlineDays: number; questions: string[]; writtenRequired?: boolean; recordingRequired?: boolean; liveRequired?: boolean };
 const whole = (c: number) => money(c).replace(/\.00$/, "");
 
 /** "written $8 → $10, added a recording ($12)"; "" when the contract terms are the same. */
@@ -621,6 +671,8 @@ export function termsDiff(a: ContractTerms, b: ContractTerms) {
   }
   if (a.deadlineDays !== b.deadlineDays) out.push(`${a.deadlineDays} → ${b.deadlineDays} days`);
   if (JSON.stringify(a.questions) !== JSON.stringify(b.questions)) out.push("questions changed");
+  // (5) A changed NDA is always a new offer the tester accepts, never applied silently.
+  if ((a.ndaText ?? "") !== (b.ndaText ?? "")) out.push(!(a.ndaText ?? "") ? "added an NDA" : !(b.ndaText ?? "") ? "removed the NDA" : "NDA changed");
   // (NEWEST+10) The Required label is part of the terms.
   const req = (x: boolean | undefined, y: boolean | undefined, name: string, on: boolean) => { if (on && !!x !== !!y) out.push(`${name} now ${y ? "required" : "not required"}`); };
   req(a.writtenRequired, b.writtenRequired, "written answers", b.writtenCents != null);

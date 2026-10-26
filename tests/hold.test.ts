@@ -199,7 +199,7 @@ describe("daily job", () => {
 
 describe("Open until", () => {
   it("can be moved later before it passes, never after", async () => {
-    const { dev, testId } = await setup({ openUntil: new Date(Date.now() + 5 * DAY).toISOString().slice(0, 10) });
+    const { dev, testId } = await setup({ deadlineDays: 2, openUntil: new Date(Date.now() + 5 * DAY).toISOString().slice(0, 10) });
     let v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     expect((await act(testId, "edit", dev.cookie, { version: v, fields: { openUntil: new Date(Date.now() + 9 * DAY).toISOString().slice(0, 10) } })).status).toBe(200);
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - DAY) } });

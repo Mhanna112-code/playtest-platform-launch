@@ -6,6 +6,10 @@ import { chooseOutcome } from "@/lib/server/holds";
 import { answerRequest, cancelCallSet, requestTime } from "@/lib/server/requests";
 import { decideTerms } from "@/lib/server/terms";
 import { openDispute } from "@/lib/server/payments";
+import { reportKeyBroken } from "@/lib/server/accessKeys";
+import { db } from "@/lib/db";
+import { displayName, fmtDate } from "@/lib/format";
+import { testerRefusal } from "@/lib/rules";
 import { leaveTest, sendWritten } from "@/lib/server/tests";
 import { requireActive, requireConfirmed } from "@/lib/server/users";
 
@@ -16,6 +20,20 @@ import { logTesterAction } from "@/lib/server/actionText";
 
 type Ctx = { params: Promise<{ id: string; action: string }> };
 
+/**
+ * (Owner, Oct 26) When the test was stopped or the tester's work was ended while the page is open, every later press is a FINAL
+ * refusal, blue under the button (not a stop-once): Send, any call action, Switch / Keep, Request. (Charge / Let it go, Dispute, Rate,
+ * Report a problem, chat and Leave keep their own rules.)
+ */
+const FINAL_AFTER_END = new Set(["terms", "written", "recording-start", "recording-done", "recording-send", "request-time", "answer-request", "cancel-call", "cancel-set"]);
+async function finalRefusal(userId: string, contractId: string, action: string) {
+  if (!FINAL_AFTER_END.has(action)) return;
+  const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
+  if (!c || c.testerId !== userId || c.status === "working") return;
+  const line = testerRefusal(c, { openUntil: null }, displayName(c.test.developer), fmtDate, new Date());
+  if (line) throw new HttpError(409, "gone", line);
+}
+
 // Tester actions on their own session (contract).
 export async function POST(req: Request, { params }: Ctx) {
   return handle(async () => {
@@ -23,6 +41,7 @@ export async function POST(req: Request, { params }: Ctx) {
     const u = await requireActive(req);
     const body = await readJson(req);
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
+    await finalRefusal(u.id, id, action);
     const res0 = await run(u, id, action, body);
     const data = await res0.clone().json().catch(() => null);
     // A rename the page hadn't shown: the press went ahead; the note goes under the button.
@@ -38,6 +57,8 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
     switch (action) {
       case "leave":
         return ok(await leaveTest(u, id, body));
+      case "key-broken":
+        return ok(await reportKeyBroken(u, id));
       case "rate":
         return ok(await testerRate(u, id, body));
       case "recording-start":

@@ -98,6 +98,15 @@ model Test {
   developerId String
   developer   User     @relation(fields: [developerId], references: [id], onDelete: Cascade)
   title       String
+  /// (Design doc 4) The game, website, app or other product (60 characters); the title above is this test's own name (60)
+  productName String   @default("")
+  /// (Design doc 4) Mature (18+): the developer says why the content is mature (required when ticked)
+  mature      Boolean  @default(false)
+  matureWhy   String   @default("")
+  /// (Design doc 4) Optional NDA: text testers must accept before joining ("" = none)
+  ndaText     String   @default("")
+  /// (Design doc 5) Saves that changed a critical field (instructions, link, languages, technology, parts, Open until) after the first tester joined; the limit is 3
+  criticalChanges Int  @default(0)
   description String   @default("")
   buildUrl    String   @default("")
   /// The full app's categories (at least one)
@@ -140,6 +149,7 @@ model Test {
   slots     CallSlot[]
   events    TestEvent[]
   invites   Invite[]
+  accessKeys AccessKey[]
   /// Open until heads-up notices sent (3 days and 1 day before)
   notified3d Boolean @default(false)
   /// Countdown notices already sent for Open until: "1m" | "1w" | "3d" | "1d"
@@ -191,6 +201,9 @@ model Contract {
   deadlineDays   Int
   questions      Json
   keepPrivate    Boolean  @default(false)
+  /// (Design doc 4) The NDA the tester accepted when they joined ("" = none) and when
+  ndaText        String   @default("")
+  ndaAcceptedAt  DateTime?
   joinedAt       DateTime @default(now())
   dueAt          DateTime
   /// "working" | "left" | "ended" (developer ended early / stopped the test)
@@ -210,6 +223,7 @@ model Contract {
   calls       Call[]
   callSets    CallSet[]
   messages    Message[]
+  accessKeys  AccessKey[]
 
   @@unique([testId, testerId])
   @@index([testerId])
@@ -523,6 +537,10 @@ model TermsOffer {
   liveRequired      Boolean @default(false)
   deadlineDays   Int
   questions      Json
+  /// (Design doc 5) The NDA text of the offered terms, and the questions / NDA the tester was on when it was offered (their terms history)
+  ndaText        String    @default("")
+  fromQuestions  Json?
+  fromNdaText    String    @default("")
   /// "written $8 → $10, added a recording ($12)"
   diff           String
   /// "open" | "switched" | "kept" | "superseded"
@@ -552,6 +570,8 @@ model Application {
   note       String    @default("")
   /// The listing when they applied (to tell whether anything changed since)
   listing    Json
+  /// (Design doc 7.3) When they accepted the test's NDA while applying
+  ndaAcceptedAt DateTime?
   /// "pending" | "accepted" | "declined" | "withdrawn" | "joined"
   status     String    @default("pending")
   /// Set when the test switched to Anyone but something else changed since they applied
@@ -662,4 +682,22 @@ model Outage {
   endAt      DateTime
   ms         Int
   recordedAt DateTime @default(now())
+}
+
+/// (Design doc 5) A test's access keys. status: "free" (available) | "inuse" (a working tester has it) | "broken" (that tester reported it) |
+/// "held" (its tester left or was ended: not free, not reusable; they get it back if they return) | "retired" (replaced or removed: can never be added again).
+model AccessKey {
+  id         String    @id @default(cuid())
+  testId     String
+  test       Test      @relation(fields: [testId], references: [id], onDelete: Cascade)
+  value      String
+  status     String    @default("free")
+  contractId String?
+  contract   Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  assignedAt DateTime?
+  brokenAt   DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([testId, value])
+  @@index([testId, status])
 }

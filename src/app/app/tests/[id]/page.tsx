@@ -26,6 +26,8 @@ import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
 import { PayBox } from "./PayBox";
 import { TopPanel } from "./TopPanel";
+import { KeysNotice } from "./KeysNotice";
+import { brokenKeyTesters } from "@/lib/server/accessKeys";
 import { SavedNote } from "@/components/SavedNote";
 import { TestersJoined } from "./TestersJoined";
 import { RowsBox } from "./RowsBox";
@@ -57,6 +59,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   });
   if (!t || t.developerId !== u.id) notFound();
   const next = await db.test.findFirst({ where: { previousId: id }, select: { id: true } });
+  const brokenKeys = await brokenKeyTesters(id);
   const working = t.contracts.filter((c) => c.status === "working");
   const paid = await db.payment.groupBy({ by: ["contractId"], where: { contractId: { in: t.contracts.map((c) => c.id) }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } });
   const paidSoFar = (id: string) => paid.find((p) => p.contractId === id)?._sum.amountCents ?? 0;
@@ -175,7 +178,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   return (
     <>
       <AutoRefresh query={`test=${t.id}`} />
-      <LiveTop scope={`test:${t.id}`} seenAt={seenAt} />
+      {u.suspendedAt && <p className="info" data-paused="">This test is paused while your account is paused.</p>}
       <TopPanel
         id={t.id}
         title={t.title}
@@ -197,6 +200,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           ahead: c.calls.filter((x) => x.status === "booked" && x.startsAt > now).length,
         }))}
       />
+      {/* (Design doc 6) The order: overview, the live updates box, the yellow keys notice, then the panels. */}
+      <LiveTop scope={`test:${t.id}`} seenAt={seenAt} />
+      <KeysNotice testId={t.id} seenAt={seenAt} rows={brokenKeys.map((b) => ({ contractId: b.contractId, name: b.name, at: b.at.toISOString() }))} />
       {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay / Reject box for sent work lives here. */}
       {needsCount > 0 && (
         <section id="needs-you" className="card scroll-mt-24 space-y-4 border-amber-300/30" aria-label="Needs you">
@@ -352,15 +358,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       </TestersJoined>
       {(u.holdStartedAt || owedList.length > 0) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} />}
       {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date())}</p>}
-      {t.status !== "stopped" && (
-        <InvitePanel
-          testId={t.id}
-          seenAt={seenAt}
-          options={{ devices: t.devices, languages: t.languages }}
-          testers={testers}
-          sent={expired ? [] : invites.filter((i) => i.status === "sent").map((i) => ({ id: i.id, name: people.get(i.testerId) ?? "?", status: "waiting for them to join" }))}
-        />
-      )}
       <DevCallPanel
         testId={t.id}
         seenAt={seenAt}
@@ -375,6 +372,15 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           })))
           .sort((a, b) => b.when.localeCompare(a.when))}
       />
+      {t.status !== "stopped" && (
+        <InvitePanel
+          testId={t.id}
+          seenAt={seenAt}
+          options={{ devices: t.devices, languages: t.languages }}
+          testers={testers}
+          sent={expired ? [] : invites.filter((i) => i.status === "sent").map((i) => ({ id: i.id, name: people.get(i.testerId) ?? "?", status: "waiting for them to join" }))}
+        />
+      )}
       {saved && (
         <SavedNote><p className="ok">
           {Number(offered) > 0 ? `Saved. Offered the new terms to ${offered} working tester${Number(offered) === 1 ? "" : "s"}.` : "Saved. New testers join on the new listing; testers already in keep their contract."}

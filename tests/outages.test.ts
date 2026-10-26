@@ -23,7 +23,7 @@ describe("outages", () => {
   it("a gap over 15 minutes is recorded once; every running timer moves by its length; calls inside are missed", async () => {
     await db.heartbeat.deleteMany({});
     await db.outage.deleteMany({});
-    const { dev, testId } = await setup({ openUntil: new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10) });
+    const { dev, testId } = await setup({ deadlineDays: 2, openUntil: new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10) });
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     // A call booked for 1 hour from now (it will fall inside the outage), another 3 days ahead (it won't).

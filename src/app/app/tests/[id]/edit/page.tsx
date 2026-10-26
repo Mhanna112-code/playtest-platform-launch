@@ -5,6 +5,7 @@ import { asListing } from "@/lib/server/tests";
 import { TestForm } from "../../TestForm";
 import { testerCapacity } from "@/lib/server/capacity";
 import { LiveTop } from "@/components/LiveTop";
+import { keyBoxes } from "@/lib/server/accessKeys";
 
 export const metadata = { title: "Edit test · Playtest" };
 export const dynamic = "force-dynamic";
@@ -19,14 +20,19 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
   return (
     <>
       <p><a href={`/app/tests/${id}`}>← Back to the test</a></p>
-      <LiveTop scope={`test:${id}`} seenAt={seenAt} />
       <h1 className="text-3xl font-bold tracking-tight text-white">Edit “{t.title}”</h1>
       {t.status === "stopped" ? (
         <p className="err">This test was stopped.</p>
       ) : (
         <>
           <p className="note">Edit changes the listing for new testers only. Testers already in keep the contract they joined on.</p>
-          <TestForm init={asListing(t)} edit={{ id, version: t.version, testersIn, draft: t.status === "draft", seenAt }} spotsLimit={(await testerCapacity(u.id)).limit} />
+          <TestForm
+            init={asListing(t)}
+            edit={{ id, version: t.version, testersIn, draft: t.status === "draft", seenAt, keys: await keyBoxes(id), criticalUsed: t.criticalChanges, everJoined: (await db.contract.count({ where: { testId: id } })) > 0, openedAt: t.createdAt.toISOString() }}
+            spotsLimit={(await testerCapacity(u.id)).limit}
+          />
+          {/* (Design doc 5) Live updates from every page's rules show in a blue box under the Save button. */}
+          <LiveTop scope={`test:${id}`} seenAt={seenAt} />
         </>
       )}
     </>

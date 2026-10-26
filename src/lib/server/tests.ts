@@ -1,13 +1,16 @@
 import { devChanges, seenOf, tabOf, withRenamed } from "./live";
 import { qOptional } from "@/lib/questions";
 import { overLimitText } from "@/lib/capacity";
+import { LIMITS, criticalLine, isCritical } from "@/lib/limits";
+import { applyKeyChange, assignKeyAtJoin, checkTypedKeys, planKeyChange } from "./accessKeys";
+import { keyNeedLine, parseKeys } from "@/lib/keys";
 import { testerCapacity } from "./capacity";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, pronouns, toCents } from "@/lib/format";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import {
-  andList, changedTerms, checkAsk, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
+  andList, openUntilShortened, changedTerms, checkAsk, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { gapsOf, gapsUnseen, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError } from "./http";
@@ -23,6 +26,7 @@ type U = { id: string; email: string; name: string; pronoun: string; isDeveloper
 // ---------- helpers ----------
 
 export const asListing = (t: { [K in keyof Listing]: unknown }): Listing => ({
+  productName: (t.productName as string) ?? "", mature: !!t.mature, matureWhy: (t.matureWhy as string) ?? "", ndaText: (t.ndaText as string) ?? "",
   title: t.title as string, description: t.description as string, buildUrl: t.buildUrl as string, categories: (t.categories as string[]) ?? [],
   devices: t.devices as string[], languages: t.languages as string[], spots: t.spots as number,
   writtenCents: t.writtenCents as number | null, recordingCents: t.recordingCents as number | null,
@@ -57,8 +61,13 @@ function price(v: unknown, label: string): number | null {
 export function parseListing(body: Record<string, unknown>, partial = false): Partial<Listing> {
   const out: Partial<Listing> = {};
   const has = (k: string) => !partial || k in body;
-  if (has("title")) out.title = str(body.title, 200);
+  // (Design doc 4) Longer than the limits are kept so the check can say so (never cut silently).
+  if (has("productName")) out.productName = str(body.productName, 400);
+  if (has("title")) out.title = str(body.title, 400);
   if (has("description")) out.description = str(body.description, 5000);
+  if (has("mature")) out.mature = body.mature === true;
+  if (has("matureWhy")) out.matureWhy = str(body.matureWhy, 1000);
+  if (has("ndaText")) out.ndaText = typeof body.ndaText === "string" ? body.ndaText.replace(/\r\n/g, "\n").trim().slice(0, 30_000) : "";
   if (has("buildUrl")) {
     out.buildUrl = str(body.buildUrl, 500);
     if (out.buildUrl && !/^https?:\/\//i.test(out.buildUrl)) throw new HttpError(400, "bad_url", "The build link must start with https://");
@@ -180,12 +189,21 @@ export async function createTest(dev: U, body: Record<string, unknown>) {
   if (!dev.isDeveloper) throw new HttpError(403, "not_developer", "Turn on “post tests” in your profile to post a test.");
   if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", `${PAY_WAITS} New tests can't be posted while payments are on hold.`);
   const l = parseListing(body) as Listing;
-  const errs = checkListing(l);
+  if (!l.mature) l.matureWhy = "";
+  const now = new Date();
+  const errs = checkListing(l, 0, now, { openedAt: now });
   // (NEWEST+9) Spots up to the developer's tester capacity.
   const cap = await testerCapacity(dev.id);
   if (Number.isInteger(l.spots) && l.spots > cap.limit && !errs.some((e) => e.startsWith("Spots"))) errs.push(overLimitText(cap.limit));
+  // (Design doc 4) With access keys, there must be at least as many keys as open spots.
+  const keys = checkTypedKeys(body.accessKeys);
+  if (keys.length && Number.isInteger(l.spots) && keys.length < l.spots) errs.push(keyNeedLine(l.spots, keys.length));
   if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs });
-  return db.test.create({ data: { ...listingData(l), developerId: dev.id, status: "open" } });
+  return db.$transaction(async (tx) => {
+    const t = await tx.test.create({ data: { ...listingData(l), developerId: dev.id, status: "open" } });
+    if (keys.length) await tx.accessKey.createMany({ data: keys.map((value) => ({ testId: t.id, value })) });
+    return t;
+  });
 }
 
 /**
@@ -198,6 +216,9 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   const loaded = Number(body.version);
   const confirmed = body.confirmed === true;
   const touched = parseListing((body.fields ?? {}) as Record<string, unknown>, true);
+  // (Design doc 5) Access keys: the keys added and the free keys removed in this tab (applied on top of the newest keys).
+  const keysAdd = checkTypedKeys(body.keysAdd);
+  const keysRemove = parseKeys(body.keysRemove);
   let termsChanged = false;
   let switchedToAnyone = false;
   let changedNames: string[] = [];
@@ -219,41 +240,56 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const dc = seen ? withRenamed(await devChanges(dev.id, testId, seen, tabOf(body), tx), body) : [];
     // The "fields you didn't touch keep the newer values" tail only when the listing itself was saved elsewhere.
     const listingEdited = events.some((e) => e.kind === "edited" || e.kind === "edited_spots");
-    if (dc.length) {
-      throw new HttpError(409, "changed", "Press Save again to save.", { changes: dc.map((c) => ({ text: c.text, at: c.createdAt })), version: t.version, current: asListing(t), listingEdited });
-    }
-    if (!gate.go) {
-      throw new HttpError(409, "changed", "This test changed since you opened Edit. Press Save again to save your changes on top.", {
-        changes: gate.changes.map((c) => ({ text: c.text, at: c.createdAt })), version: t.version, current: asListing(t), listingEdited,
-      });
-    }
     const current = asListing(t);
     const next = mergeEdit(current, touched);
+    if (!next.mature) next.matureWhy = "";
     const ou = checkOpenUntilChange(t.openUntil, next.openUntil ? new Date(next.openUntil) : null, new Date(), fmtDate);
     if (!ou.ok) throw new HttpError(409, "open_until_passed", ou.message);
     if (next.liveRateCents == null) next.liveMinutes = null;
     const testersIn = await tx.contract.count({ where: working(testId) });
-    const errs = checkListing(next, testersIn);
+    const fields = LISTING_FIELDS.filter((k) => JSON.stringify(current[k]) !== JSON.stringify(next[k]));
+    // (Design doc 4/5) The Post rules, then the critical-change limit and the access keys: every red mistake is found FIRST
+    // (a stop-once reason never hides one), and nothing saves while any remains.
+    const errs = checkListing(next, testersIn, new Date(), { changed: new Set(fields), openedAt: t.createdAt, edit: true });
+    if (fields.includes("openUntil")) { const short = openUntilShortened(current.openUntil, next.openUntil, fmtDate); if (short) errs.push(short); }
     // (NEWEST+9) Raising spots above the capacity is refused; a test already above it keeps its spots.
     if (Number.isInteger(next.spots) && next.spots > current.spots && next.spots > cap.limit && !errs.some((e) => e.startsWith("Spots"))) errs.push(overLimitText(cap.limit));
-    if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs });
+    const critical = fields.filter(isCritical);
+    const everJoined = (await tx.contract.count({ where: { testId } })) > 0;
+    if (critical.length && everJoined && t.criticalChanges >= LIMITS.criticalChanges) errs.push(criticalLine(critical, t.criticalChanges));
+    const plan = await planKeyChange(tx, testId, keysAdd, keysRemove, next.spots);
+    const keyErrs = [...plan.errors, ...(plan.need ? [plan.need] : [])];
+    errs.push(...keyErrs);
+    const keysChanged = plan.toAdd.length > 0 || plan.removable.length > 0;
+    const stop = dc.length ? dc.map((c) => ({ text: c.text, at: c.createdAt })) : !gate.go ? gate.changes.map((c) => ({ text: c.text, at: c.createdAt })) : null;
+    if (stop) {
+      // Both together: the blue stop and any red mistakes (red wins: the next press still saves nothing while red remains).
+      throw new HttpError(409, "changed", dc.length ? "Press Save again to save." : "This test changed since you opened Edit. Press Save again to save your changes on top.", {
+        changes: stop, version: t.version, current, listingEdited, errors: errs, keys: await keysState(tx, testId), critical: critical.length ? critical : undefined,
+      });
+    }
+    if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs, critical: critical.length && everJoined && t.criticalChanges >= LIMITS.criticalChanges ? critical : undefined });
+    if (!fields.length && !keysChanged) return t;
     const terms = changedTerms(current, next);
-    const fields = LISTING_FIELDS.filter((k) => JSON.stringify(current[k]) !== JSON.stringify(next[k]));
-    if (!fields.length) return t;
-    const what = fields.map((f) => FIELD_NAMES[f]).join(", ");
-    termsChanged = terms.some((f) => ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "deadlineDays", "questions"].includes(f));
+    const what = [...fields.map((f) => FIELD_NAMES[f]), ...(keysChanged ? ["access keys"] : [])].join(", ");
+    termsChanged = terms.some((f) => ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "deadlineDays", "questions", "ndaText"].includes(f));
     // (NEWEST+12) Testers are alerted to EVERY change except the number of spots and Open until: those two never make an "edited" line / bump the listing version.
     const listingFields = fields.filter((f) => f !== "spots" && f !== "openUntil");
     switchedToAnyone = fields.includes("joinMode") && next.joinMode === "anyone";
     await recordEvent(tx, testId, listingFields.length ? "edited" : "edited_spots", `The listing was edited: ${listingFields.length ? listingFields.map((f) => FIELD_NAMES[f]).join(", ") : what}`, true, {
       ...listingData(next), ...(fields.includes("openUntil") ? { notified3d: false, notified1d: false } : {}), ...(listingFields.length ? { listingVersion: { increment: 1 } } : {}),
+      // (5) A save that changed a critical field after the first tester joined counts as one of the three.
+      ...(critical.length && everJoined ? { criticalChanges: { increment: 1 } } : {}),
     });
+    if (keysChanged) {
+      await applyKeyChange(tx, testId, plan.toAdd, plan.removable);
+    }
     // (F) Listing info (description, devices, languages): shown to working testers and on the join page; stops once.
     const info = fields.filter((f) => INFO_FIELDS.includes(f));
     if (info.length) await tx.testEvent.create({ data: { testId, kind: "info", text: `${displayName(dev)} changed ${andList(info.map((f) => (f === "joinMode" ? FIELD_NAMES[f] : `the ${FIELD_NAMES[f]}`)))}` } });
     // A title change is info only everywhere (never stops; a press notes it).
     if (fields.includes("title")) await tx.testEvent.create({ data: { testId, kind: "renamed", text: `${displayName(dev)} renamed the test to ${next.title}` } });
-    changedNames = fields.map((f) => FIELD_NAMES[f]);
+    changedNames = [...fields.map((f) => FIELD_NAMES[f]), ...(keysChanged ? ["access keys"] : [])];
     reinvite = fields.some((f) => CLOSING_FIELDS.includes(f));
     spotsChanged = fields.includes("spots");
     switchedToInvite = fields.includes("joinMode") && next.joinMode === "invite";
@@ -277,12 +313,19 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   return Object.assign(result, { offered, changed: changedNames, notReinvited, resent, closedApps });
 }
 
+/** The access keys as an Edit tab needs them to tell what changed elsewhere (the free keys and how many are in use). */
+async function keysState(tx: Tx, testId: string) {
+  const keys = await tx.accessKey.findMany({ where: { testId }, orderBy: { createdAt: "asc" } });
+  return { free: keys.filter((k) => k.status === "free").map((k) => k.value), inUse: keys.filter((k) => k.status === "inuse" || k.status === "broken").length };
+}
+
 /** (F) The listing info a working tester sees change live: title, description, devices, languages. */
-export const INFO_FIELDS: (keyof Listing)[] = ["description", "devices", "languages", "buildUrl", "categories", "joinMode"];
+export const INFO_FIELDS: (keyof Listing)[] = ["description", "devices", "languages", "buildUrl", "categories", "joinMode", "productName", "mature", "matureWhy"];
 /** (Correction 2) The changes that close applications and re-send invites: prices / parts / questions, deadline, devices, languages, description. */
-export const CLOSING_FIELDS: (keyof Listing)[] = ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "questions", "deadlineDays", "devices", "languages", "description"];
+export const CLOSING_FIELDS: (keyof Listing)[] = ["ndaText", "writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "questions", "deadlineDays", "devices", "languages", "description"];
 
 const FIELD_NAMES: Record<keyof Listing, string> = {
+  productName: "product name", mature: "Mature (18+) box", matureWhy: "Mature (18+) note", ndaText: "NDA",
   title: "title", description: "description", buildUrl: "build link", categories: "categories", devices: "devices", languages: "languages",
   openUntil: "Open until", joinMode: "who can join", spots: "spots", writtenCents: "written answers price", writtenRequired: "written answers required", recordingRequired: "recording required", liveRequired: "live call required", recordingCents: "recording price", liveRateCents: "live call rate",
   liveMinutes: "call length", deadlineDays: "deadline", questions: "questions",
@@ -503,11 +546,16 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     if (await tx.block.count({ where: { blockerId: tester.id, blockedId: t.developerId } })) throw new HttpError(409, "blocked", `You blocked ${displayName(dev)}: unblock them in Account → Blocked people to join.`);
     if (await tx.block.count({ where: { blockerId: t.developerId, blockedId: tester.id } })) throw new HttpError(409, "closed", "This test isn't taking new testers right now.");
     gapStop(t, profile, body, "Join");
-    const snap = contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion }, new Date(), body.keepPrivate === true);
+    // (Design doc 7.3) Joining needs the NDA accepted (the time it was accepted is kept with the terms).
+    const ndaAt = typeof body.ndaAcceptedAt === "string" && !isNaN(new Date(body.ndaAcceptedAt).getTime()) ? new Date(body.ndaAcceptedAt) : null;
+    if (t.ndaText && body.ndaAccepted !== true && !ndaAt) throw new HttpError(400, "nda", "Accept the NDA to join.");
+    const snap = contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion }, new Date(), body.keepPrivate === true, ndaAt ?? new Date());
     const contract = old
       ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, dueAt: rejoinDue(old.dueAt, old.endedAt, new Date()), status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null } })
       : await tx.contract.create({ data: { testId, testerId: tester.id, ...snap } });
     if (old) await tx.termsOffer.updateMany({ where: { contractId: old.id, status: "open" }, data: { status: "superseded", decidedAt: new Date() } });
+    // (Design doc 5) Each joining tester gets an access key (the key they had, if it still works, else the oldest free one).
+    await assignKeyAtJoin(tx, testId, contract.id, body.keyStillWorks === true);
     await recordEvent(tx, testId, "joined", old ? `${displayName(tester)} joined again` : `${displayName(tester)} joined`, true, {}, contract.id);
     await tx.invite.updateMany({ where: { testId, testerId: tester.id, status: "sent" }, data: { status: "joined" } });
     // (Correction 4) The last spot taken: every other pending application and open invite closes, in this transaction.

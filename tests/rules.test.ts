@@ -5,7 +5,7 @@ import {
 } from "@/lib/rules";
 
 const listing = (over: Partial<Listing> = {}): Listing => ({
-  title: "Harbor Run", description: "A boat game", buildUrl: "https://example.com/build", categories: ["Game"],
+  productName: "Harbor Run", mature: false, matureWhy: "", ndaText: "", title: "Harbor Run", description: "A boat game", buildUrl: "https://example.com/build", categories: ["Game"],
   devices: ["Windows PC"], languages: ["English"], spots: 5, writtenCents: 1000, recordingCents: 1500,
   liveRateCents: 3000, liveMinutes: 30, deadlineDays: 7, questions: ["What did you like?"], openUntil: null, joinMode: "anyone", ...over,
 });
@@ -121,7 +121,28 @@ describe("listing checks", () => {
   });
   it("Open until must be in the future", () => {
     expect(checkListing(listing({ openUntil: "2020-01-01" }))).toContain("Open until must be a date in the future.");
-    expect(checkListing(listing({ openUntil: new Date(Date.now() + 5 * 86_400_000).toISOString() }))).toEqual([]);
+    expect(checkListing(listing({ openUntil: new Date(Date.now() + 12 * 86_400_000).toISOString() }))).toEqual([]);
+  });
+  it("(design doc 11.5) the deadline must leave 3 days inside Open until, counted from when the test opened", () => {
+    const now = new Date("2026-11-01T12:00:00Z");
+    const l = (openUntil: string, deadlineDays = 7) => listing({ openUntil, deadlineDays });
+    expect(checkListing(l("2026-11-10T23:59:59Z"), 0, now, { openedAt: now })).toEqual(["Set Open until to Nov 11 or later to allow a 7-day deadline."]);
+    expect(checkListing(l("2026-11-11T23:59:59Z"), 0, now, { openedAt: now })).toEqual([]);
+    expect(checkListing(l("2026-11-10T23:59:59Z"), 0, now, { openedAt: now, edit: true })).toEqual(["Extend Open until to Nov 11 or later to allow a 7-day deadline."]);
+    // Edit only checks it when the deadline or Open until changed.
+    expect(checkListing(l("2026-11-10T23:59:59Z"), 0, now, { openedAt: now, edit: true, changed: new Set(["description"]) })).toEqual([]);
+  });
+  it("(design doc 4) product, title, instructions and the Mature note", () => {
+    const now = new Date();
+    expect(checkListing(listing({ productName: "" }), 0, now)).toContain("Enter the product name.");
+    expect(checkListing(listing({ productName: "x".repeat(61) }), 0, now)).toContain("Keep the product name to 60 characters.");
+    expect(checkListing(listing({ title: "x".repeat(61) }), 0, now)).toContain("Keep the title to 60 characters.");
+    expect(checkListing(listing({ description: "" }), 0, now)).toContain("Say what testers should do (What to do).");
+    expect(checkListing(listing({ description: "x".repeat(1001) }), 0, now)).toContain("Keep What to do to 1,000 characters.");
+    expect(checkListing(listing({ mature: true, matureWhy: "" }), 0, now)).toContain("Say why this test is mature (18+): it's required for mature content.");
+    expect(checkListing(listing({ mature: true, matureWhy: "Boss fights with blood" }), 0, now)).toEqual([]);
+    // Older tests keep working when only other fields change.
+    expect(checkListing(listing({ productName: "", description: "" }), 0, now, { changed: new Set(["spots"]) })).toEqual([]);
   });
   it("written answers need a question", () => expect(checkListing(listing({ questions: [] }))).toContain("Add at least one question for the written answers."));
 });

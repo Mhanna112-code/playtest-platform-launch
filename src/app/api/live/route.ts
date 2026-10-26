@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { displayName } from "@/lib/format";
 import { handle, HttpError, ok } from "@/lib/server/http";
 import { joinPageChanges } from "@/lib/server/joining";
 import { asLines, devChanges } from "@/lib/server/live";
@@ -26,7 +27,13 @@ export async function GET(req: Request) {
     if (kind === "session") {
       const c = await db.contract.findUnique({ where: { id } });
       if (!c || c.testerId !== u.id) throw new HttpError(404, "not_found", "That session doesn't exist.");
-      changes = await testerChanges(u.id, c.id, c.testId, since, tab);
+      // The offer of new terms has its own box right below this one: the live box lists every change except the contract's.
+      changes = (await testerChanges(u.id, c.id, c.testId, since, tab)).filter((x) => x.kind !== "terms");
+      // The test was stopped, or this tester's work was ended: a line in the live box (a final refusal for later presses, never a stop-once reason).
+      if (c.status === "ended" && c.endedAt && c.endedAt > since && (c.endKind === "stopped" || c.endKind === "early")) {
+        const dev = displayName((await db.user.findUniqueOrThrow({ where: { id: (await db.test.findUniqueOrThrow({ where: { id: c.testId } })).developerId } })));
+        changes.push({ kind: "ended", text: c.endKind === "stopped" ? `${dev} stopped the test` : `${dev} ended your work`, createdAt: c.endedAt });
+      }
     } else if (kind === "test") {
       await ownTest(u.id, id);
       changes = await devChanges(u.id, id, since, tab);

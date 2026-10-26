@@ -13,9 +13,12 @@ import { noGaps, PROFILE_COVERS, type GapAsk, type Gaps } from "@/lib/gaps";
  * Join or Apply to join. Stops once (box under the button) if anything about the listing changed since the page loaded;
  * the second press goes ahead on the current listing. No offers or counter-offers here.
  */
-export function JoinBox(p: { testId: string; seenAt: string; mode: string; invited: boolean; inviteId?: string | null; application: { status: string; changed: boolean } | null; missing: Gaps; needs: { devices: string[]; languages: string[] }; devName: string; spotsLeft: number; days: number; dueIfNow: string }) {
+export function JoinBox(p: { nda?: string; brokenKey?: boolean; testId: string; seenAt: string; mode: string; invited: boolean; inviteId?: string | null; application: { status: string; changed: boolean } | null; missing: Gaps; needs: { devices: string[]; languages: string[] }; devName: string; spotsLeft: number; days: number; dueIfNow: string }) {
   const router = useRouter();
-  const [keepPrivate, setKeepPrivate] = useState(false);
+  // (Design doc 7.3) The NDA is accepted before joining or applying; a returning tester says whether the key they had works again.
+  const [nda, setNda] = useState(false);
+  const [ndaErr, setNdaErr] = useState("");
+  const [keyWorks, setKeyWorks] = useState(false);
   const [note, setNote] = useState("");
   const [box, setBox] = useStopBox();
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
@@ -34,7 +37,7 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
   async function sendFromPopup(shown: Gaps): Promise<PopupAnswer> {
     const action = applying ? "apply" : "join";
     try {
-      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { keepPrivate, note, seenAt: p.seenAt, confirmed, boxAt, anyway: true, gapsShown: shown, inviteId });
+      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt: p.seenAt, confirmed, boxAt, anyway: true, gapsShown: shown, inviteId });
       if (r.sessionId) window.location.href = `/app/sessions/${r.sessionId}`;
       else setDone("Application sent. You'll hear back when the developer answers.");
       return { ok: true };
@@ -51,6 +54,11 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
   // Join / Apply with something missing: the pop-up asks first (never a refusal). Covered by now: a notice, no pop-up.
   async function press(action: "join" | "apply") {
     setCovered(null);
+    if (p.nda && !nda) {
+      setNdaErr("Accept the NDA to " + (action === "apply" ? "apply." : "join."));
+      document.getElementById("nda-accept")?.focus();
+      return;
+    }
     if (noGaps(p.missing)) return go(action);
     setBusy(true);
     const now = await api<{ gaps: Gaps }>(`/api/tests/${p.testId}/my-gaps`, {}).catch(() => null);
@@ -67,7 +75,7 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
     setBusy(true);
     setErr("");
     try {
-      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { keepPrivate, note, seenAt: p.seenAt, confirmed, boxAt, anyway, inviteId });
+      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt: p.seenAt, confirmed, boxAt, anyway, inviteId });
       if (r.sessionId) window.location.href = `/app/sessions/${r.sessionId}`;
       else if (action === "withdraw-application") window.location.reload();
       else setDone("Application sent. You'll hear back when the developer answers.");
@@ -113,9 +121,21 @@ export function JoinBox(p: { testId: string; seenAt: string; mode: string; invit
   return (
     // The full app's join card (claim-form.tsx): the choices, the button with the spots left, and how long they'll have.
     <div className="card space-y-4">
-      <label className="flex items-center gap-2 text-sm text-white">
-        <input type="checkbox" checked={keepPrivate} onChange={(e) => setKeepPrivate(e.target.checked)} /> I&apos;ll keep this build and what I see private
-      </label>
+      {p.nda && (
+        <div className="space-y-2" id="nda">
+          <p className="label !mb-0">The developer&apos;s NDA</p>
+          <div className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-ink-950/60 p-3 text-sm text-slate-300" tabIndex={0}>{p.nda}</div>
+          <label className="flex items-center gap-2 text-sm text-white">
+            <input id="nda-accept" type="checkbox" checked={nda} onChange={(e) => { setNda(e.target.checked); if (e.target.checked) setNdaErr(""); }} onBlur={() => !nda && setNdaErr("Accept the NDA to " + (applying ? "apply." : "join."))} /> I accept this NDA
+          </label>
+          {ndaErr && <p className="err-field" role="alert">{ndaErr}</p>}
+        </div>
+      )}
+      {p.brokenKey && (
+        <label className="flex items-center gap-2 text-sm text-white">
+          <input type="checkbox" checked={keyWorks} onChange={(e) => setKeyWorks(e.target.checked)} /> The access key I had before works again (otherwise you get a new one)
+        </label>
+      )}
       {applying && (
         <div>
           <label className="label" htmlFor="note">A note to the developer</label>

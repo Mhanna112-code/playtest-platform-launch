@@ -16,6 +16,7 @@ import { BlockButton } from "@/components/BlockButton";
 import { gapsOf } from "@/lib/gaps";
 import { developerStats } from "@/lib/server/profileStats";
 import { sideLink } from "@/lib/sides";
+import { heldBrokenKey } from "@/lib/server/accessKeys";
 
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
@@ -65,6 +66,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         <div className="flex items-start gap-4">
           <CategoryTile category={mainCategory(t.categories)} size="h-14 w-14" />
           <div className="min-w-0 flex-1">
+            {t.productName && <p className="kicker">{t.productName}</p>}
             <h1 className="text-2xl font-bold tracking-tight text-white">{t.title}</h1>
             <p className="text-sm text-slate-400">
               by <a href={`/app/developers/${t.developerId}`} className="text-slate-200">{dev}</a>{devRating.line && ` · ${devRating.line}`}
@@ -80,12 +82,15 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         <div className="flex flex-wrap gap-2">
           <CategoryBadges categories={t.categories} />
           <PartBadges written={t.writtenCents != null} recording={t.recordingCents != null} live={t.liveRateCents != null} />
+          {t.mature && <span className="badge border-rose-300/40 text-rose-200" title={t.matureWhy}>Mature (18+)</span>}
+          {t.ndaText && <span className="badge"><FileSignature className="h-3.5 w-3.5" /> NDA</span>}
           {t.devices.length > 0 && <span className="badge"><Monitor className="h-3.5 w-3.5" /> {t.devices.join(" · ")}</span>}
           {t.languages.length > 0 && <span className="badge"><Languages className="h-3.5 w-3.5" /> {t.languages.join(", ")}</span>}
           {t.status === "open" && <span className="badge"><CalendarClock className="h-3.5 w-3.5" /> {t.deadlineDays} day{t.deadlineDays === 1 ? "" : "s"} to finish</span>}
           <span className="badge"><Users className="h-3.5 w-3.5" /> {plural(testersIn, "tester")} on this test</span>
         </div>
         {t.description && <p className="whitespace-pre-wrap text-slate-300">{t.description}</p>}
+        {t.mature && <p className="info !border-rose-300/30 !bg-rose-400/10 !text-rose-100"><b>Mature (18+):</b> {t.matureWhy}</p>}
         {devRating.comments.length > 0 && (
           <details className="text-sm">
             <summary className="cursor-pointer">What testers said</summary>
@@ -193,6 +198,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       {t.developerId === u.id || !u.isTester || closed || blocked || ratedHere ? null : (
         <div>
           <JoinBox
+            nda={t.ndaText}
+            brokenKey={!!(await heldBrokenKey(t.id, u.id))}
             testId={t.id}
             seenAt={seenAt}
             mode={t.joinMode}

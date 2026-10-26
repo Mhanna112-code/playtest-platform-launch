@@ -12,8 +12,8 @@ const nameOf = async (id: string) => displayName(await db.user.findUniqueOrThrow
 // New terms offered to working testers (owner rule): an Edit that changes contract terms offers them to every working
 // tester; their contract changes only if they switch. Work already sent keeps its price; the deadline never moves earlier.
 
-const termsOf = (x: { writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null; liveMinutes: number | null; deadlineDays: number; questions: unknown; writtenRequired: boolean; recordingRequired: boolean; liveRequired: boolean }): ContractTerms => ({
-  writtenCents: x.writtenCents, recordingCents: x.recordingCents, liveRateCents: x.liveRateCents, liveMinutes: x.liveMinutes, deadlineDays: x.deadlineDays, questions: (x.questions as string[]) ?? [],
+const termsOf = (x: { ndaText: string; writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null; liveMinutes: number | null; deadlineDays: number; questions: unknown; writtenRequired: boolean; recordingRequired: boolean; liveRequired: boolean }): ContractTerms => ({
+  ndaText: x.ndaText ?? "", writtenCents: x.writtenCents, recordingCents: x.recordingCents, liveRateCents: x.liveRateCents, liveMinutes: x.liveMinutes, deadlineDays: x.deadlineDays, questions: (x.questions as string[]) ?? [],
   writtenRequired: x.writtenRequired, recordingRequired: x.recordingRequired, liveRequired: x.liveRequired,
 });
 
@@ -23,10 +23,19 @@ export async function offerNewTerms(testId: string) {
   const working = await db.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } });
   let offered = 0;
   for (const c of working) {
-    const diff = termsDiff(termsOf(c), termsOf(t));
+    // (5) Shortening the deadline applies to new testers only and is ignored here: an existing tester is only ever offered more time.
+    const newTerms = { ...termsOf(t), deadlineDays: Math.max(c.deadlineDays, t.deadlineDays) };
+    const diff = termsDiff(termsOf(c), newTerms);
+    // Repeated saves replace a waiting offer with the newest one.
     await db.termsOffer.updateMany({ where: { contractId: c.id, status: "open" }, data: { status: "superseded", decidedAt: new Date() } });
     if (!diff) continue;
-    await db.termsOffer.create({ data: { contractId: c.id, testId, listingVersion: t.listingVersion, ...termsOf(t), questions: termsOf(t).questions as Prisma.InputJsonValue, diff } });
+    await db.termsOffer.create({
+      data: {
+        contractId: c.id, testId, listingVersion: t.listingVersion, ...newTerms, questions: newTerms.questions as Prisma.InputJsonValue, diff,
+        // The terms the tester is on when this is offered stay in their terms history (previous questions and NDA).
+        fromQuestions: c.questions as Prisma.InputJsonValue, fromNdaText: c.ndaText,
+      },
+    });
     const line = `${displayName(t.developer)} updated the listing: ${diff}`;
     await notify(c.tester.email, line, [line + ".", "Switch to the new terms or keep your current ones on your session page. Work you've already sent keeps its price."], `/app/sessions/${c.id}`);
     offered++;
@@ -67,7 +76,8 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
     await db.$transaction([
       db.contract.update({
         where: { id: contractId },
-        data: { ...termsOf(target), questions: target.questions as Prisma.InputJsonValue, listingVersion: target.listingVersion, dueAt: newDueAt(c.dueAt, c.joinedAt, target.deadlineDays), termsSwitchedAt: now },
+        // Switching to terms with an NDA means accepting it now.
+        data: { ...termsOf(target), questions: target.questions as Prisma.InputJsonValue, listingVersion: target.listingVersion, dueAt: newDueAt(c.dueAt, c.joinedAt, target.deadlineDays), termsSwitchedAt: now, ndaAcceptedAt: target.ndaText ? (target.ndaText === c.ndaText ? c.ndaAcceptedAt ?? now : now) : null },
       }),
       db.termsOffer.update({ where: { id: target.id }, data: { status: "switched", decidedAt: now } }),
     ]);

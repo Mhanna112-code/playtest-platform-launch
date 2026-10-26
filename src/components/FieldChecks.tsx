@@ -4,17 +4,19 @@
 // with its message under it, and clears as soon as what's typed is fine. Rules come from the box itself:
 //   - number boxes: data-min / data-max (and data-zero-ok: 0 is allowed too), data-msg for the message;
 //   - date / time boxes: min / max (data-msg, e.g. "Pick a time in the future.");
-//   - text: maxLength, and data-min-chars (counted after trimming).
+//   - text: maxLength, data-min-chars (counted after trimming), and data-required (+ data-required-msg): blank is red.
 // Presses that aren't form submits call checkFields(root) first: every box in it is checked and marked.
 import { useEffect, useState } from "react";
 
 type Field = HTMLInputElement | HTMLTextAreaElement;
 const isField = (el: EventTarget | null): el is Field => el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
-const hasRules = (el: Field) => el.dataset.min != null || el.dataset.max != null || el.dataset.minChars != null || (el instanceof HTMLInputElement && (el.type === "date" || el.type === "datetime-local") && (!!el.min || !!el.max));
+const hasRules = (el: Field) => el.dataset.required != null || el.dataset.min != null || el.dataset.max != null || el.dataset.minChars != null || (el instanceof HTMLInputElement && (el.type === "date" || el.type === "datetime-local") && (!!el.min || !!el.max));
 
 function ruleMessage(el: Field): string {
   const v = el.value.trim();
   const msg = el.dataset.msg;
+  // (Design doc 4) A required box left blank is red at the field (on blur and on submit).
+  if (el.dataset.required != null && !v) return el.dataset.requiredMsg ?? "This is required.";
   if (el instanceof HTMLInputElement && (el.type === "date" || el.type === "datetime-local")) {
     if (!v) return "";
     if (el.min && v < el.min) return msg ?? "Pick a time in the future.";
@@ -105,6 +107,8 @@ export function FieldChecks() {
     const onSubmit = (e: Event) => {
       if (!(e.target instanceof HTMLFormElement)) return;
       if (!checkFields(e.target)) {
+        // (Design doc 5) Edit's Save still goes to the server, so a blue stop and the red mistakes can show together; the server never saves while red remains.
+        if (e.target.hasAttribute("data-red-and-blue")) return;
         e.preventDefault();
         e.stopImmediatePropagation();
       }
