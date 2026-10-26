@@ -553,6 +553,14 @@ export const autoPayFor = (listingCents: number | null, askedCents: number | nul
   listingCents == null ? null : Math.min(listingCents, askedCents ?? listingCents);
 export const REMIND_DAYS = 3;
 
+/**
+ * (Owner, Oct 26) An UPDATED version of written answers or a recording may change the ask (raise it too): the line the developer reads
+ * in the live box / stop-once so they know the Pay box now starts somewhere else. "" for a first send or an unchanged ask.
+ * `prev` is undefined for a first send, null for an earlier version without an ask.
+ */
+export const askNote = (prev: number | null | undefined, next: number | null) =>
+  prev === undefined || prev === next ? "" : next == null ? " and took back the ask" : ` and now asks ${money(next)}`;
+
 /** "Ask $___ for this": optional; any amount from $0 up (no maximum; only Stripe's own limit). */
 export function checkAsk(cents: number | null): Check {
   if (cents == null) return yes;

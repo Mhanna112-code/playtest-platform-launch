@@ -7,7 +7,6 @@ import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
 import { sideFor } from "@/lib/sides";
 import { PayoutBanner } from "@/components/PayoutBanner";
-import { PayBox } from "../tests/[id]/PayBox";
 import { waitingForReview } from "@/lib/server/payments";
 import { testerShare } from "@/lib/rules";
 
@@ -49,7 +48,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       <h1 className="text-3xl font-bold tracking-tight text-white">Payments</h1>
       {tester && u.payoutProblemAt && <PayoutBanner />}
       {!on && <p className="info">{MESSAGES.off}</p>}
-      {dev && (await owedForBox(u.id).then((o) => (u.holdStartedAt || o.length ? <OwedBox onHold={!!u.holdStartedAt} owed={o} /> : null)))}
+      {dev && (await owedForBox(u.id).then((o) => (u.holdStartedAt || (o.length && !u.suspendedAt) ? <OwedBox onHold={!!u.holdStartedAt} owed={o} /> : null)))}
       {q.error && q.error !== "off" && <p className="err">{MESSAGES[q.error]}</p>}
       {q.saved === "card" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card saved.</p>}
       {q.saved === "payout" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Your payout account is connected.</p>}
@@ -65,6 +64,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
           </section>
           <section className="card space-y-3" id="waiting-review" aria-label="Waiting for your review">
             <h2 className="font-semibold text-white">Waiting for your review</h2>
+            {u.suspendedAt && <p className="text-sm text-slate-400" data-suspended-pay-note="">Paying and reviewing work wait until your suspension is lifted.</p>}
             {waitingTests.length === 0 ? <p className="text-sm text-slate-500">Nothing waits for your review.</p> : (
               <ul className="divide-y divide-white/5 text-sm">
                 {waitingTests.map((t) => {
@@ -73,15 +73,9 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                     <li key={t.id} className="space-y-2 py-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="text-slate-200">{t.title} <span className="text-slate-400">· {n} part{n === 1 ? "" : "s"} to pay or reject</span></span>
-                        {/* A suspended developer can't open test pages: they pay right here. */}
+                        {/* (Owner, Oct 26) A suspended developer can neither Pay nor Reject: the button is hidden until the suspension is lifted. */}
                         {!u.suspendedAt && <a href={`/app/tests/${t.id}#needs-you`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline">Pay</a>}
                       </div>
-                      {u.suspendedAt && t.contracts.flatMap((c) => c.submissions.map((s) => (
-                        <details key={s.id} className="rounded-xl border border-white/10 p-2" open>
-                          <summary className="cursor-pointer text-sm text-white">{displayName(c.tester)} · {s.kind === "recording" ? "Recording" : "Written answers"} · sent {fmtDateTime(s.updatedAt)}</summary>
-                          <PayBox kind="submission" id={s.id} name={displayName(c.tester)} seenAt={new Date().toISOString()} paidSoFarCents={0} askedCents={s.askedCents} listingCents={s.agreedCents} listingText={`${money(s.agreedCents)} for ${s.kind === "recording" ? "a recording" : "written answers"}`} />
-                        </details>
-                      )))}
                     </li>
                   );
                 })}

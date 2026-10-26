@@ -10,22 +10,23 @@ import { qOptional, qText } from "@/lib/questions";
 import { ChangesBox } from "@/components/ChangesBox";
 
 /** Written answers: one box per question in the tester's contract. Can be updated until it's paid. */
-export function WrittenForm({ sessionId, questions, initial, initialNotes, update, seenAt }: { sessionId: string; questions: string[]; initial: string[]; initialNotes: string; update: boolean; seenAt: string }) {
+export function WrittenForm({ sessionId, questions, initial, initialNotes, initialAsk = "", update, seenAt }: { sessionId: string; questions: string[]; initial: string[]; initialNotes: string; initialAsk?: string; update: boolean; seenAt: string }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
   const [box, setBox] = useStopBox();
   const [answers, setAnswers] = useState<string[]>(questions.map((_, i) => initial[i] ?? ""));
   const [notes, setNotes] = useState(initialNotes);
-  const [ask, setAsk] = useState("");
+  // (Owner, Oct 26) An updated version starts at the ask already sent; the tester may change it (raise it too) or clear it.
+  const [ask, setAsk] = useState(initialAsk);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // (NEXT-UI 10) Typed and not sent: kept on the server, back after a reload or on another device, with "Not sent yet".
-  const same = answers.every((a, i) => a === (initial[i] ?? "")) && notes === initialNotes && ask === "";
+  const same = answers.every((a, i) => a === (initial[i] ?? "")) && notes === initialNotes && ask === initialAsk;
   const keep = useKept(`written:${sessionId}`, { answers, notes, ask }, same, (v) => {
     setAnswers(questions.map((_, i) => v.answers?.[i] ?? initial[i] ?? ""));
     setNotes(v.notes ?? initialNotes);
-    setAsk(v.ask ?? "");
+    setAsk(v.ask ?? initialAsk);
   });
 
   async function send(e: React.FormEvent) {

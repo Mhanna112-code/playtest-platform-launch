@@ -6,10 +6,11 @@ import { requireUser } from "./session";
 export const SUSPENDED = "Your account is paused. Contact support if you think this is a mistake.";
 
 /** Signed in and not suspended: every action that changes something goes through this. */
-// (Design doc 2, 11.4) A suspended developer: Pay (Payments), "Pay what you owe" and Cancel call are the only presses that go through;
-// everything else is refused (blue, final) and names the press that failed so the dashboard top can say so. A suspended tester:
-// every press is refused. Testers never read "suspended" about a developer.
-export const DEV_SUSPENDED = "Your account is paused: you can still pay for work testers sent and cancel booked calls.";
+// (Design doc 2, 11.4; owner, Oct 26) A suspended developer: only Cancel call, End early and Stop the test go through (Pay and Reject are
+// hidden and refused too: paying and reviewing wait until the suspension is lifted); everything else is refused (blue, final) and names
+// the press that failed so the dashboard top can say so. A suspended tester: every press is refused. Testers never read "suspended"
+// about a developer.
+export const DEV_SUSPENDED = "Your account is suspended: your tests are paused. You can still cancel calls, end a tester's work early or stop a test. Paying and reviewing work wait until the suspension is lifted.";
 
 const VERBS: Record<string, string> = {
   edit: "Save", stop: "Stop", "end-early": "End early", "next-round": "Next round", invite: "Invite", "cancel-invite": "Cancel invite", "request-time": "Call request", "answer-request": "Answer",
@@ -44,9 +45,9 @@ export async function failedLine(req: Request, what?: string, piece?: { kind: st
   return `Your ${verb}${title ? ` on ${title}` : ""} didn't go through`;
 }
 
-export async function requireActive(req: Request, opts: { allowPay?: boolean; devOk?: boolean; what?: string; piece?: { kind: string; id: string } } = {}) {
+export async function requireActive(req: Request, opts: { devOk?: boolean; what?: string; piece?: { kind: string; id: string } } = {}) {
   const u = await requireUser(req);
-  const exempt = (opts.allowPay || opts.devOk) && u.isDeveloper;
+  const exempt = opts.devOk && u.isDeveloper;
   if (u.suspendedAt && !exempt) {
     throw new HttpError(403, "suspended", u.isDeveloper ? DEV_SUSPENDED : SUSPENDED, { failed: await failedLine(req, opts.what, opts.piece), suspended: true });
   }

@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { displayName, pronouns } from "@/lib/format";
-import { checkAsk, isLate, payByFrom } from "@/lib/rules";
+import { askNote, checkAsk, isLate, payByFrom } from "@/lib/rules";
 import { toCents } from "@/lib/format";
 import { HttpError } from "./http";
 import { notify } from "./notify";
@@ -64,7 +64,7 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
       ? await tx.submission.update({ where: { id: existing.id }, data })
       : await tx.submission.create({ data: { contractId, kind: "recording", agreedCents: c.recordingCents, ...data } });
     await tx.recording.updateMany({ where: { contractId, uploadedAt: { not: null } }, data: { submissionId: sub.id } });
-    await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} recording`, false, {}, c.id);
+    await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} recording${askNote(existing?.askedCents, askedCents)}`, false, {}, c.id);
     return { updated: !!existing, late: data.late };
   });
   await notify(tester.email, `Work sent: your recording for “${c0.title}”`, [`Your recording was ${updated ? "updated" : "sent"} to ${displayName(c0.test.developer)}.`], `/app/sessions/${c0.id}`);

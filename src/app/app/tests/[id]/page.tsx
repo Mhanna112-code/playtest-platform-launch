@@ -282,7 +282,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       <a href={`/api/recordings/${r.id}/file`} target="_blank" rel="noreferrer">{r.filename}</a>
                     </div>
                   ))}
-                  <PayBox kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} askedCents={x.s!.askedCents} partPaidCents={partPaid(x.s!.id)}
+                  <PayBox key={`${x.s!.id}-${x.s!.askedCents ?? "none"}`} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} askedCents={x.s!.askedCents} partPaidCents={partPaid(x.s!.id)}
                     note={x.s!.agreedCents != null && x.s!.payBy && !x.s!.choiceOfferedAt ? choiceNoteLine(fmtDate(x.s!.payBy).replace(/, \d{4}$/, ""), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, x.s!.askedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
                     listingCents={x.s!.agreedCents} listingText={`${money(x.s!.agreedCents)} for ${x.s!.kind === "written" ? "written answers" : "a recording"}`} />
                 </>
@@ -295,7 +295,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     measured={x.x!.devJoinedAt && x.x!.testerJoinedAt ? defaultCallMinutes(x.x!.startsAt, x.x!.minutes, x.x!.devJoinedAt, x.x!.testerJoinedAt) : null}
                     max={Math.floor(x.x!.minutes * 1.5)} closesAt={new Date(x.x!.startsAt.getTime() + CALL_CLOSE_MS).toISOString()} closed={callClosed(x.x!.startsAt, now)}
                   />
-                  <PayBox key={x.x!.actualMinutes ?? 0} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} askedCents={x.x!.askedCents} partPaidCents={partPaid(x.x!.id)}
+                  <PayBox key={`${x.x!.actualMinutes ?? 0}-${x.x!.askedCents ?? "none"}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} askedCents={x.x!.askedCents} partPaidCents={partPaid(x.x!.id)}
                     listingCents={callReference(x.x!.rateCents, x.x!.actualMinutes ?? x.x!.minutes, x.c.liveRateCents).cents}
                     listingText={callReference(x.x!.rateCents, x.x!.actualMinutes ?? x.x!.minutes, x.c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
                 </>
@@ -406,7 +406,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         </RowsBox>
       )}
       </TestersJoined>
-      {(u.holdStartedAt || owedList.length > 0) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} />}
+      {(u.holdStartedAt || (owedList.length > 0 && !u.suspendedAt)) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} />}
       {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date())}</p>}
       <DevCallPanel
         testId={t.id}

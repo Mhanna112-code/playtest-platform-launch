@@ -131,6 +131,8 @@ async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: 
   }
   items.sort((a, b) => b.at.getTime() - a.at.getTime());
   const toReview = items.filter((i) => i.key.startsWith("s-") || i.key.startsWith("c-")).length;
+  // (Owner, Oct 26) A suspended developer can neither Pay nor Reject: sent work and held calls are not offered for review until it is lifted.
+  const shown = suspended ? items.filter((i) => !/^s-|^c-/.test(i.key)) : items;
   const testersTotal = allTests.reduce((n, t) => n + t.contracts.filter((c) => c.status === "working").length, 0);
   const initial = (name: string) => name.trim().charAt(0).toUpperCase();
   const invitesBy = new Map(invites.map((i) => [i.testId, i._count._all]));
@@ -149,24 +151,24 @@ async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: 
       </section>
       <DeveloperTiles userId={userId} />
 
-      {items.length > 0 && (
+      {shown.length > 0 && (
         <section className="space-y-3" id="needs-you">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
-            <span className="h-2 w-2 rounded-full bg-amber-400" /> Needs you <span className="text-sm font-normal text-slate-400">{num(items.length)}</span>
+            <span className="h-2 w-2 rounded-full bg-amber-400" /> Needs you <span className="text-sm font-normal text-slate-400">{num(shown.length)}</span>
           </h2>
-          {/* More than 4 items: a scroll box (newest first). A suspended developer's rows are shown but only Payments can pay. */}
-          <ul className={`space-y-2 ${items.length > 4 ? "max-h-[22rem] overflow-y-auto pr-1" : ""}`} data-needs-list={items.length > 4 ? "scroll" : "plain"}>
-            {items.map((r) => {
+          {/* More than 4 items: a scroll box (newest first). */}
+          <ul className={`space-y-2 ${shown.length > 4 ? "max-h-[22rem] overflow-y-auto pr-1" : ""}`} data-needs-list={shown.length > 4 ? "scroll" : "plain"}>
+            {shown.map((r) => {
               const inner = (
                 <>
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-volt-300 to-sky-300 text-sm font-semibold text-ink-950">{initial(r.who)}</span>
                   <p className="min-w-0 flex-1 text-slate-300"><span className="font-medium text-white">{r.who}</span> {r.text}</p>
-                  <span className="flex items-center gap-1 text-sm text-indigo-300">{suspended && /^s-|^c-/.test(r.key) ? "Payments" : r.cta} <ArrowRight className="h-4 w-4" /></span>
+                  <span className="flex items-center gap-1 text-sm text-indigo-300">{r.cta} <ArrowRight className="h-4 w-4" /></span>
                 </>
               );
               return (
                 <li key={r.key}>
-                  <Link href={suspended && /^s-|^c-/.test(r.key) ? "/app/payments#waiting-review" : r.href} className="card card-hover flex items-center gap-3 p-4 no-underline hover:no-underline">{inner}</Link>
+                  <Link href={r.href} className="card card-hover flex items-center gap-3 p-4 no-underline hover:no-underline">{inner}</Link>
                 </li>
               );
             })}

@@ -320,6 +320,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           sessionId={c.id}
           canSend={!refusal && !recording?.review}
           sentBefore={!!recording}
+          initialAsk={recording?.askedCents != null ? (recording.askedCents / 100).toFixed(2) : ""}
           recordings={c.recordings.map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, uploaded: !!r.uploadedAt }))}
         />
       </section>
@@ -337,7 +338,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         ) : refusal ? (
           !written && <p className="note">Nothing sent.</p>
         ) : (
-          <WrittenForm seenAt={seenAt} sessionId={c.id} questions={writtenQuestions(c)} initial={(written?.answers as string[]) ?? []} initialNotes={written?.notes ?? ""} update={!!written} />
+          <WrittenForm seenAt={seenAt} sessionId={c.id} questions={writtenQuestions(c)} initial={(written?.answers as string[]) ?? []} initialNotes={written?.notes ?? ""} initialAsk={written?.askedCents != null ? (written.askedCents / 100).toFixed(2) : ""} update={!!written} />
         )}
       </section>
 

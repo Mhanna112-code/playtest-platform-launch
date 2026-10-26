@@ -78,9 +78,9 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     }
     await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name });
     const rev = await tx.review.create({ data: { ...piece.where, contractId: c.id, amountCents: amountCents!, agreedCents: piece.listing, reason, payKey, rejected: reject } });
-    // (Design doc 2/11.4) During a payment hold (or a suspension, from the Payments list) Pay is still a decision: it is recorded, but the
-    // CHARGE waits until the account is clear. Reject takes effect at once.
-    const waits = !reject && (!!dev.holdStartedAt || !!dev.suspendedAt || (await devOnHold(dev.id)));
+    // (Design doc 2/11.4) During a payment hold Pay is still a decision: it is recorded, but the CHARGE waits until the account is clear.
+    // Reject takes effect at once. (A suspended developer never gets here: Pay and Reject are refused for them.)
+    const waits = !reject && (!!dev.holdStartedAt || (await devOnHold(dev.id)));
     const payment = reject
       ? null
       : await tx.payment.create({

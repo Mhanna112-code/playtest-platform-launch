@@ -9,7 +9,7 @@ import { ChangesBox } from "@/components/ChangesBox";
 type Rec = { id: string; filename: string; size: number; uploaded: boolean };
 
 /** Upload up to 5 screen recordings (500 MB each), then send them. Can be sent again with new ones until paid. */
-export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, seenAt }: { sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean; seenAt: string }) {
+export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, initialAsk = "", seenAt }: { sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean; initialAsk?: string; seenAt: string }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
@@ -17,7 +17,8 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
   const [progress, setProgress] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [ask, setAsk] = useState("");
+  // (Owner, Oct 26) An updated recording starts at the ask already sent; the tester may change it (raise it too) or clear it.
+  const [ask, setAsk] = useState(initialAsk);
   const uploaded = recordings.filter((r) => r.uploaded);
 
   async function upload(file: File) {

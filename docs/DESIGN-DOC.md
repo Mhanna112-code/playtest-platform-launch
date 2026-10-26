@@ -115,10 +115,10 @@ These rules hold on every signed-in page; page sections only add what's specific
 
 **Restrictions on every page**
 
-- Suspended developer: routed to the dashboard top, which names the press that failed and explains the suspension and appeal (Contact us in Settings); test pages, Post a test and Messages are closed; tests are paused. \[SUGGEST\] Pay remains possible from the Payments page's waiting list, and Cancel call from the dashboard's upcoming calls.
+- Suspended developer: routed to the dashboard top, which names the press that failed and explains the suspension and appeal (Contact us in Settings); Post a test and Messages are closed; tests are paused. The dashboard top banner reads: "Your account is suspended: your tests are paused. You can still cancel calls, end a tester's work early or stop a test. Paying and reviewing work wait until the suspension is lifted." On a test page only Cancel call, End early and Stop the test work (with or without a payment hold). Pay and Reject are hidden everywhere (the test page and the Payments page's "Waiting for your review" list) and refused if pressed; a suspension is not a payment hold, so nothing is recorded.
 - Suspended tester: routed to the dashboard top with the same explanation; removed from all tests; Find tests, profile editing and Messages closed; Contact us stays open (Settings without the profile editor).
 - Deleted account: red notice and logout on every open tab.
-- Payment hold: all the developer's tests paused; Pay what you owe on every test and Payments.
+- Payment hold (only; not a suspension): all the developer's tests paused; Pay what you owe on every test and Payments, and only during a hold (a suspension alone never shows it). Pay and Reject still work during a hold: Pay is recorded and the charge waits.
 
 **Outages and mobile**
 
@@ -336,7 +336,7 @@ Everything a tester does inside one test: see their terms, send work, run calls,
 
 **Actions**
 
-- Send written answers or a recording ("Send my answers" / "Send my recording", then "Send my updated answers" / "Send my updated recording"), with an optional "Ask $" for that piece; sending after the deadline is allowed and labelled "Sent late".
+- Send written answers or a recording ("Send my answers" / "Send my recording", then "Send my updated answers" / "Send my updated recording"), with an optional "Ask $" for that piece (an updated version starts at the ask already sent and may change it, raise it too, or take it back; the newest ask counts: the developer's Pay box starts there, the Charge cap uses it, "You asked $X" shows on the newest version, and the developer reads "... and now asks $X" in the live box); sending after the deadline is allowed and labelled "Sent late".
 - Live session panel (same as the developer's, tester side): their rate ("Live call: $40/h"), Request a time (up to 3 rows, Once/Daily/Weekly with 2–8 calls or Forever, one length, optional Ask $/h), Accept / Decline / Withdraw requests, booked calls with timer, presence, Add to calendar, Cancel ▾, Join (10 min before to 30 min after), Past calls; they see the length the developer logged and why.
 - Charge or Let it go on contract parts left unreviewed 14 days (up to listing minus already paid for that part, typed amount); reminders every 3 days; works after leaving too.
 - Dispute a rejected or underpaid contract piece once.
@@ -383,7 +383,7 @@ Pages both sides use, each with its own behavior.
 
 **Payments**
 
-- Developer: card on file; a "Waiting for your review" panel listing every test with unreviewed parts and a Pay button to that test's Needs you; "Pay what you owe" during a hold; receipts and history; paid so far per part.
+- Developer: card on file; a "Waiting for your review" panel listing every test with unreviewed parts and a Pay button to that test's Needs you (hidden while the developer is suspended, with a line saying paying and reviewing wait); "Pay what you owe" during a payment hold only; receipts and history; paid so far per part.
 - Tester: payout setup (Stripe), earnings and statuses; on a payout failure a banner "Your bank couldn’t receive a payout. Update your payout details." with a button to Stripe and a bell reminder every 3 days until fixed (money stays in their Stripe balance).
 
 **Call page**
@@ -421,7 +421,7 @@ The lifecycle, money, rating and restriction rules referenced above, plus every 
 - Pay: one box per piece (amount starts at the asked amount or listing; reason required to Reject); charged at once; nothing shows success before the result.
 - A declined charge becomes owed: daily retry, 3-day pay-by date; a second failure or a missed cut-off starts a payment hold that pauses all the developer's tests until they pay what they owe (that box pays exactly what it shows).
 - Chargebacks: treated as a hold resolved by the admin. \[SUGGEST\] The original spec called for a suspension plus card re-verification; pick one.
-- Charge cap: listing minus what's already paid for that part, and no more than the asked amount. Dispute range: from what this piece was paid to listing minus what was paid on other pieces.
+- Charge cap: listing minus what's already paid for that part, and no more than the newest asked amount (an updated version may raise or lower its ask). Dispute range: from what this piece was paid to listing minus what was paid on other pieces.
 - A suspended tester's pay is charged but their share is held until reinstatement (admin refunds or releases if never lifted).
 - No upper price caps except Stripe's per-charge maximum; minimum $1 per part, $10/h per call (or free), $0.50 smallest charge.
 - Testers only ever see "delayed", never "failed", "hold" or "chargeback".
@@ -439,9 +439,9 @@ The lifecycle, money, rating and restriction rules referenced above, plus every 
 |  | Payment hold | Developer suspended | Tester suspended |
 | --- | --- | --- | --- |
 | Developer's tests | Paused | Paused | — |
-| Developer can | Pay what you owe, cards, Payments | Payments list, cancel calls, Contact us | — |
+| Developer can | Pay and Reject (the charge waits), Pay what you owe, cards, Payments | Cancel call, End early, Stop the test, cards, Contact us (no Pay, Reject or Pay what you owe) | — |
 | Testers in the test can | Send, Let it go, Leave, chat, Rate | Send, Let it go, Leave, chat, Rate | Removed from all tests |
-| Waits until lifted | Charge, Dispute, calls, joins | Charge, Dispute, calls, joins | Pay for their work (share held) |
+| Waits until lifted | Charge, Dispute, calls, joins | Pay, Reject, Charge, Dispute, calls, joins | Pay for their work (share held) |
 | On lifting | Tests resume; testers told "resumed" | Tests resume; same | Re-invited where open with spots; others listed with "Suspended" and Ask to rejoin |
 
 - Calls starting within 3 days of a suspension are cancelled with no fault.

@@ -211,16 +211,20 @@ describe("(NEXT-UI 27) Payments: Waiting for your review", () => {
 });
 
 describe("(NEXT-UI 26) a suspended developer", () => {
-  it("can still Pay; everything else (Reject, invite, Edit, chat, next round, calls) is refused with the paused line", async () => {
+  it("cannot Pay or Reject (both wait until the suspension is lifted); everything else (invite, Edit, chat, next round, calls) is refused with the suspended line", async () => {
     const { dev, sub, sessionId, testId, tester } = await sent();
     await db.user.update({ where: { id: dev.user.id }, data: { suspendedAt: new Date() } });
-    const LINE = "Your account is paused: you can still pay for work testers sent and cancel booked calls.";
+    const LINE = "Your account is suspended: your tests are paused. You can still cancel calls, end a tester's work early or stop a test. Paying and reviewing work wait until the suspension is lifted.";
     expect((await payReq(dev.cookie, { action: "reject", kind: "submission", id: sub.id, amount: "0", reason: "Nothing usable here" })).body.error.message).toBe(LINE);
     expect((await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe(LINE);
     expect((await act(testId, "message", dev.cookie, { contractId: sessionId, body: "hi" })).body.error.message).toBe(LINE);
     expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [tester.user.id] })).body.error.message).toBe(LINE);
-    // Pay goes through.
-    expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
+    // Pay is refused too, and nothing is recorded: the piece still waits for review.
+    const p = await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
+    expect(p.status).toBe(403);
+    expect(p.body.error).toMatchObject({ code: "suspended", message: LINE, failed: "Your Pay on Harbor Run didn't go through" });
+    expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0);
+    expect(await db.payment.count({ where: { submissionId: sub.id } })).toBe(0);
     // A tester never reads "suspended".
     await db.user.update({ where: { id: tester.user.id }, data: { suspendedAt: new Date() } });
     expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), startsAt: new Date(Date.now() + 72 * 3_600_000).toISOString() })).body.error.message).not.toMatch(/suspend/i);

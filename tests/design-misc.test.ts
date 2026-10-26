@@ -47,17 +47,37 @@ describe("Pay and Reject while the account is not clear (owner, Oct 26)", () => 
     void testId;
   });
 
-  it("a suspended developer's Pay from Payments waits for the suspension to lift; Reject is refused (and names itself); lifting charges it", async () => {
+  it("a suspended developer can neither Pay nor Reject (each names itself, nothing is recorded); once lifted they can", async () => {
     const { dev, sub, tester } = await withWork();
     const a = await admin();
     await adm("suspend", a.cookie, { id: dev.user.id, note: "Spam" });
     expect((await pay(dev.cookie, { action: "reject", kind: "submission", id: sub.id, reason: "Not good enough" })).body.error.failed).toMatch(/^Your Reject on Harbor Run didn't go through$/);
     const r = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
-    expect(r.body.status).toBe("deferred");
-    expect((await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } })).status).toBe("deferred");
+    expect(r.status).toBe(403);
+    expect(r.body.error).toMatchObject({ code: "suspended", failed: "Your Pay on Harbor Run didn't go through" });
+    expect(await db.payment.count({ where: { submissionId: sub.id } })).toBe(0);
+    expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0);
     await adm("unsuspend", a.cookie, { id: dev.user.id });
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
     expect((await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } })).status).toBe("not_set_up");
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "paid $10.00 for your written answers" } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "You were paid for your written answers" } } })).toBe(1);
+  });
+
+  it("a suspended developer WITH a payment hold is still refused Pay and Reject; 'Pay what you owe' (hold only) works, and a suspension alone never offers it", async () => {
+    const { POST: owedPOST } = await import("@/app/api/payments/owed/route");
+    const owedReq = (cookie: string) => owedPOST(req("/api/payments/owed", { cookie, body: {} })).then(json);
+    const { dev, sub } = await withWork();
+    const a = await admin();
+    await adm("suspend", a.cookie, { id: dev.user.id, note: "Spam" });
+    // Suspension alone: no 'Pay what you owe'.
+    const alone = await owedReq(dev.cookie);
+    expect(alone.status).toBe(403);
+    expect(alone.body.error.code).toBe("suspended");
+    // Suspension and a hold: Pay / Reject still refused, 'Pay what you owe' goes through.
+    await startHold(dev.user.id, "unpaid");
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).body.error.code).toBe("suspended");
+    expect((await pay(dev.cookie, { action: "reject", kind: "submission", id: sub.id, reason: "No" })).body.error.code).toBe("suspended");
+    expect((await owedReq(dev.cookie)).status).toBe(200);
   });
 });
 
