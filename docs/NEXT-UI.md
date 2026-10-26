@@ -159,3 +159,9 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    - Blank = keep the pay unchanged ("The team kept the pay at $0.00 (rejected)."); range hint + red on blur per item 0.
 29. SUSPENDED TESTERS + REJOIN RULES per LEAN-SPEC NEWEST+14 (do with item 26 and update item 16's ask-to-rejoin rules).
 30. PAYOUT PROBLEMS banner + 3-day bell reminder for testers per NEWEST+14 - ONLY after everything else, if usage remains.
+31. NUMBER FORMAT (owner, Oct 26):
+   - Everywhere: money and counts use thousands separators ("$12,403.50", "1,240"); money you act on (Pay, Charge,
+     disputes, payments, receipts, owed) is always exact.
+   - BIG STAT TILES ONLY (dashboards, profiles): under 10,000 -> full with commas; 10,000-999,999 -> one decimal + "k"
+     ("$12.4k"); millions "M" ("$1.2M"); billions "B"; trillions "T"; 10^15 and up -> scientific "$1.2 × 10^15".
+     Drop a trailing ".0" ("$12k", "$1M"). No hover/tooltip. Percentages and days unchanged. One shared formatter + tests.
