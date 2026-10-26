@@ -4,7 +4,8 @@ import { displayName, fmtDateTime, fmtTime, money, pronouns, toCents } from "@/l
 import { checkCallMinutes, checkCancel } from "@/lib/rules";
 import { FOREVER_AHEAD, MAX_ROWS, occurrences, rowsOf, stepMs, toJson, type CallRow, type RowRepeat } from "@/lib/callRows";
 import type { Prisma } from "@prisma/client";
-import { PAUSED_FOR_TESTERS } from "@/lib/rules";
+import { PAUSED_FOR_TESTERS, testPaused } from "@/lib/rules";
+import { DEV_SUSPENDED } from "./users";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { devGate, recordEvent } from "./tests";
@@ -203,7 +204,7 @@ const refusalFor = (r: { status: string; updatedAt: Date; closedReason: string; 
 
 async function refusals(c: Ctx["c"], side: Side) {
   if (c.status !== "working") throw new HttpError(409, "closed", side === "tester" ? "Your session has ended." : `${displayName(c.tester)}'s session has ended.`);
-  if (c.test.developer.holdStartedAt) throw new HttpError(409, "paused", side === "tester" ? PAUSED_FOR_TESTERS : "Pay what you owe first.");
+  if (testPaused(c.test.developer, c.test)) throw new HttpError(409, "paused", side === "tester" ? PAUSED_FOR_TESTERS : c.test.developer.suspendedAt ? DEV_SUSPENDED : "Pay what you owe first.");
   // (Owner) "Closed" only means no NEW testers: testers already in carry on, so calls work. Only a stopped test refuses.
   if (c.test.status === "stopped") throw new HttpError(409, "closed", "This test was stopped.");
   if (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) throw new HttpError(409, "gone", "This time isn't available.");
@@ -239,7 +240,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
         const call = await bookAt(c.id, hit, match.minutes, c.liveRateCents, null, true);
         await db.callRequest.update({ where: { id: match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
         const line = `Booked: you both picked ${fmtDateTime(hit)}`;
-        await notify(c.tester.email, line, [line], `/app/sessions/${c.id}`);
+        await notify(c.tester.email, line, [line], `/app/sessions/${c.id}`, { about: c.test.developerId });
         return { booked: true, callId: call.id, message: line };
       }
     }
@@ -298,7 +299,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
       await db.callRequest.update({ where: { id: m.id }, data: { status: "booked", callId: call.id, decidedAt: new Date() } });
       await closeBatch(m.batchId, m.id);
       const line = `Booked: you both picked ${fmtDateTime(hit)}`;
-      await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#calls`);
+      await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#calls`, { about: c.testerId });
       return { booked: true, callId: call.id, message: line };
     }
   }
@@ -383,7 +384,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     if (side === "tester") await closeBatch(r.batchId, r.id);
     else if (r.batchId.startsWith("ask-")) await closeBatch(r.batchId.slice(4), r.id); // the rest of the developer's batch
     const what = row.repeat === "once" ? fmtDateTime(times[0]) : row.count ? `${row.count} ${unitOf(row.repeat)} calls from ${fmtDateTime(times[0])}` : `${unitOf(row.repeat)} calls from ${fmtDateTime(times[0])} (until cancelled)`;
-    await notify(other.email, `Booked: ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#calls` : `/app/sessions/${c.id}`);
+    await notify(other.email, `Booked: ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#calls` : `/app/sessions/${c.id}`, { about: user.id });
     return { booked: true, callId: first!.id, calls: times.length };
   }
   const status = action === "withdraw" ? "withdrawn" : "declined";
@@ -422,7 +423,7 @@ export async function cancelCallSet(user: U, contractId: string, body: Record<st
     await recordEvent(tx, c.testId, "cancelled", `${displayName(user)} cancelled the ${unit} calls from ${fmtDateTime(calls[0].startsAt)} (${calls.length} left)`, false, {}, contractId);
   });
   const line = `${displayName(user)} cancelled the remaining ${unit} calls (${calls.length}), starting ${fmtDateTime(calls[0].startsAt)}${reason ? `: ${reason}` : "."}`;
-  await notify(other.email, line, [line], side === "developer" ? `/app/sessions/${contractId}` : `/app/tests/${c.testId}#calls`);
+  await notify(other.email, line, [line], side === "developer" ? `/app/sessions/${contractId}` : `/app/tests/${c.testId}#calls`, { about: user.id });
   return { cancelled: calls.length };
 }
 
@@ -440,7 +441,7 @@ export async function topUpForeverSets(now = new Date()) {
       await db.callSet.update({ where: { id: set.id }, data: { status: "ended" } });
       continue;
     }
-    if (c.test.developer.holdStartedAt) continue;
+    if (testPaused(c.test.developer, c.test)) continue;
     let ahead = await db.call.count({ where: { setId: set.id, status: "booked", startsAt: { gt: now } } });
     let nextAt = set.nextAt;
     for (let guard = 0; ahead < FOREVER_AHEAD && guard < FOREVER_AHEAD * 2; guard++) {

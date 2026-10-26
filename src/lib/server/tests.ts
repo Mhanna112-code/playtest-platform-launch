@@ -2,6 +2,7 @@ import { devChanges, seenOf, tabOf, withRenamed } from "./live";
 import { qOptional } from "@/lib/questions";
 import { overLimitText } from "@/lib/capacity";
 import { LIMITS, criticalLine, isCritical } from "@/lib/limits";
+import { alertOf } from "@/lib/alerts";
 import { applyKeyChange, assignKeyAtJoin, checkTypedKeys, planKeyChange } from "./accessKeys";
 import { keyNeedLine, parseKeys } from "@/lib/keys";
 import { testerCapacity } from "./capacity";
@@ -10,7 +11,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, pronouns, toCents } from "@/lib/format";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import {
-  andList, openUntilShortened, changedTerms, checkAsk, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
+  andList, testPaused, openUntilShortened, changedTerms, checkAsk, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { gapsOf, gapsUnseen, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError } from "./http";
@@ -331,8 +332,9 @@ const FIELD_NAMES: Record<keyof Listing, string> = {
   liveMinutes: "call length", deadlineDays: "deadline", questions: "questions",
 };
 
-export async function openDraft(dev: U, testId: string) {
+export async function openDraft(dev: U, testId: string, body: Record<string, unknown> = {}) {
   const t = await ownTest(dev.id, testId);
+  await devGateIfSeen(testId, body);
   if (t.status !== "draft") throw new HttpError(409, "not_draft", t.status === "stopped" ? "This test was stopped." : "This test is already open.");
   return db.$transaction((tx) => recordEvent(tx, testId, "opened", "The test opened for testers", true, { status: "open" }));
 }
@@ -353,7 +355,7 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
   const t = await tx.test.findUniqueOrThrow({ where: { id: testId }, select: { developerId: true } });
   const changes = withRenamed([...(await devChanges(t.developerId, testId, seenAt, tabOf(body), tx)), ...extraChanges].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()), body);
   if (changes.length) {
-    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: changes.map((c) => ({ text: c.text, at: c.createdAt })), ...extra });
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: changes.map((c) => ({ text: c.text, at: c.createdAt, ...(alertOf(c.kind) ? { alert: alertOf(c.kind) } : {}) })), ...extra });
   }
 }
 
@@ -418,7 +420,9 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
   if (!ids.length) throw new HttpError(400, "none", "Tick at least one tester.");
   let cancelled: Awaited<ReturnType<typeof cancelCallsAhead>> = [];
   const ended = await db.$transaction(async (tx) => {
-    await lockTest(tx, testId);
+    const lockedTest = await lockTest(tx, testId);
+    // (Owner) After a stop, a stale press fails and names the stop.
+    if (lockedTest.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped." + (await staleNote(testId, body.seenAt)));
     const list = [];
     for (const id of ids) {
       const c = await tx.contract.findUnique({ where: { id }, include: { tester: true } });
@@ -439,7 +443,7 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
   });
   await tellCancelled(cancelled, "ended");
   for (const c of ended)
-    await notify(c.tester.email, `Your work on “${c.title}” was ended early`, [`${displayName(dev)} ended your work on “${c.title}”: “${reason}”`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`);
+    await notify(c.tester.email, `Your work on “${c.title}” was ended early`, [`${displayName(dev)} ended your work on “${c.title}”: “${reason}”`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { about: dev.id });
   await spotOpened(testId);
   return { ended: true, count: ended.length };
 }
@@ -503,10 +507,10 @@ export function needsLines(t: { devices: string[]; languages: string[] }, p: { d
  * asks); "anyway" goes ahead, but if something is missing now that the pop-up didn't show (`gapsShown`), it stops once more
  * with the list as it is now.
  */
-export function gapStop(t: { devices: string[]; languages: string[] }, profile: { devices: string[]; languages: string[] } | null, body: Record<string, unknown>, verb: "Join" | "Apply") {
+export function gapStop(t: { devices: string[]; languages: string[] }, profile: { devices: string[]; languages: string[] } | null, body: Record<string, unknown>, verb: "Join" | "Apply" | "Ask") {
   const gaps = gapsOf(t, profile);
   if (noGaps(gaps)) return;
-  const message = `${needsLines(t, profile).join("\n")}\n${verb} anyway?`;
+  const message = `${needsLines(t, profile).join("\n")}\n${verb === "Ask" ? "Ask to rejoin" : verb} anyway?`;
   if (body.anyway !== true) throw new HttpError(409, "needs", message, { gaps });
   const shown = readGaps(body.gapsShown);
   if (shown && gapsUnseen(gaps, shown)) throw new HttpError(409, "needs", message, { gaps, changed: true });
@@ -531,10 +535,9 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     if (old && old.status === "working") throw new HttpError(409, "already", "You've already joined this test.");
     // (NEWEST+5) A rating finishes the part for good: no rejoin ever.
     if (old && (await tx.rating.count({ where: { contractId: old.id } }))) throw new HttpError(409, "not_again", old.endKind === "rated" && old.status === "left" ? "You rated this test, so you can't join it again." : "You can't join this test again.");
-    if (old && old.status === "ended" && !(await tx.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } }))) throw new HttpError(409, "not_again", "You can't join this test again.");
+    if (old && old.status === "ended" && body.rejoinAccepted !== true && !(await tx.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } }))) throw new HttpError(409, "not_again", "You can't join this test again.");
     const dev = await tx.user.findUniqueOrThrow({ where: { id: t.developerId } });
-    if (dev.suspendedAt) throw new HttpError(409, "closed", "This test isn't taking new testers any more.");
-    if (dev.holdStartedAt) throw new HttpError(409, "paused", "This test is paused, so it isn't taking new testers right now.");
+    if (testPaused(dev, t)) throw new HttpError(409, "paused", "This test is paused, so it isn't taking new testers right now.");
     const testersIn = await tx.contract.count({ where: working(testId) });
     const r = joinCheck({ status: t.status, listingVersion: t.listingVersion, spots: t.spots, testersIn, openUntil: t.openUntil }, seen, body.confirmed === true);
     if (r.result === "refused") throw new HttpError(409, "refused", r.message);
@@ -563,7 +566,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     return { contract, dev, filled };
   });
   if (filled) await tellFull(filled);
-  await notify(dev.email, `${displayName(tester)} joined “${contract.title}”`, [`${displayName(tester)} joined your test “${contract.title}”.`, `Their deal: ${termsLine(contract)}.`], `/app/tests/${testId}`);
+  await notify(dev.email, `${displayName(tester)} joined “${contract.title}”`, [`${displayName(tester)} joined your test “${contract.title}”.`, `Their deal: ${termsLine(contract)}.`], `/app/tests/${testId}`, { about: tester.id });
   return contract;
 }
 
@@ -595,7 +598,7 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
     await recordEvent(tx, c.testId, "left", `${displayName(tester)} left the test`, true, {}, c.id);
     return c;
   });
-  await notify(c0.test.developer.email, `${displayName(tester)} left “${c.title}”`, [`${displayName(tester)} left your test “${c.title}”. Work they already sent still waits for your review.`], `/app/tests/${c.testId}`);
+  await notify(c0.test.developer.email, `${displayName(tester)} left “${c.title}”`, [`${displayName(tester)} left your test “${c.title}”. Work they already sent still waits for your review.`], `/app/tests/${c.testId}`, { about: tester.id });
   await spotOpened(c.testId);
   return { left: true };
 }
@@ -633,7 +636,7 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     return { sub, updated: !!existing };
   });
   await notify(tester.email, `Work sent: your written answers for “${c0.title}”`, [`Your written answers were ${updated ? "updated" : "sent"} to ${displayName(c0.test.developer)}.`], `/app/sessions/${c0.id}`);
-  await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} written answers for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} written answers${sub.late ? " (late)" : ""}. Review them and choose what to pay.`], `/app/tests/${c0.testId}`);
+  await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} written answers for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} written answers${sub.late ? " (late)" : ""}. Review them and choose what to pay.`], `/app/tests/${c0.testId}`, { about: tester.id });
   return sub;
 }
 

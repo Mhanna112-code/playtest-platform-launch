@@ -6,8 +6,9 @@ import { usePress } from "@/lib/usePress";
 import { PressButton } from "@/components/PressButton";
 import { UserPlus } from "lucide-react";
 import { bringInView } from "@/lib/markJump";
+import { LongList } from "@/components/LongList";
 
-type Tester = { id: string; name: string; rating?: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; detail?: string };
+type Tester = { id: string; name: string; rating?: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; detail?: string; together?: { id: string; title: string }[] };
 type Sent = { id: string; name: string; status: string };
 
 
@@ -31,7 +32,8 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
   const notInvited = useMemo(() => p.testers.filter((t) => !t.invited), [p.testers]);
   const passes = (t: Tester) => (!f.devices.length || t.devices.some((d) => f.devices.includes(d))) && (!f.languages.length || t.languages.some((l) => f.languages.includes(l)));
   const worked = notInvited.filter((t) => t.section === "worked");
-  const suggested = notInvited.filter((t) => t.section === "suggested" && passes(t));
+  // Suggested: the top 5 invitable newcomers after the device / language ticks (already ranked: meets, score, accepted parts, matches).
+  const suggested = notInvited.filter((t) => t.section === "other" && !t.grey && passes(t)).slice(0, 5);
   const found = q.trim().length >= 2 ? notInvited.filter((t) => passes(t) && t.name.toLowerCase().includes(q.trim().toLowerCase())) : [];
   // The fold: shut at first, open when the page comes back to it (#invite, e.g. after inviting).
   const [open, setOpen] = useState(false);
@@ -106,6 +108,13 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
       {t.was && !t.grey && <span className="badge max-w-full shrink-0 truncate whitespace-nowrap">{t.was}</span>}
       {t.tag && !t.grey && <span className="badge max-w-full shrink-0 truncate whitespace-nowrap border-amber-300/40 text-amber-200">{t.tag}</span>}
       <label htmlFor={`${key}-${t.id}`} className="shrink-0 cursor-pointer text-xs text-slate-500">{t.grey ?? t.detail}</label>
+      {/* "In tests with you": how many, and links to them. */}
+      {key === "w" && t.together && t.together.length > 0 && (
+        <details className="basis-full pl-6 text-xs text-slate-400">
+          <summary className="cursor-pointer">In {t.together.length} test{t.together.length === 1 ? "" : "s"} with you</summary>
+          <ul className="mt-1 space-y-0.5">{t.together.map((x) => <li key={x.id}><a href={`/app/tests/${x.id}`} target="_blank" rel="noopener">{x.title}</a></li>)}</ul>
+        </details>
+      )}
     </li>
   );
   const [none, setNone] = useState(false);
@@ -129,8 +138,8 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
       {p.sent.length > 0 && (
         <>
           <h3>Invited</h3>
-          {/* Only invites still waiting (joined ones are in Testers joined); a scroll box past about 5 rows, as in the full app. */}
-          <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
+          {/* Only invites still waiting (joined ones are in Testers joined): 3 lines, then Show N more in a scroll box. */}
+          <LongList shown={3} tall="max-h-48" className="space-y-1 text-sm">
             {p.sent.map((s) => (
               <li key={s.id} className="flex items-center gap-2">
                 <span className="mr-auto">{s.name} · {s.status}</span>
@@ -139,10 +148,10 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
                 )}
               </li>
             ))}
-          </ul>
+          </LongList>
         </>
       )}
-      <div className="max-h-80 space-y-2 overflow-y-auto text-sm">
+      <div className="max-h-72 space-y-2 overflow-y-auto text-sm" data-invite-lists="">
         <h3>People you&apos;ve worked with</h3>
         {worked.length ? <ul className="space-y-1.5">{worked.map((t) => row(t, "w"))}</ul> : <p className="note">Nobody yet.</p>}
         {(p.options.devices.length > 0 || p.options.languages.length > 0) && (

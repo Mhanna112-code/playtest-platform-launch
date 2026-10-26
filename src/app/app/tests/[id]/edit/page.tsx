@@ -5,6 +5,7 @@ import { asListing } from "@/lib/server/tests";
 import { TestForm } from "../../TestForm";
 import { testerCapacity } from "@/lib/server/capacity";
 import { LiveTop } from "@/components/LiveTop";
+import { AlertsMenu } from "@/components/AlertsMenu";
 import { keyBoxes } from "@/lib/server/accessKeys";
 
 export const metadata = { title: "Edit test · Playtest" };
@@ -20,7 +21,10 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
   return (
     <>
       <p><a href={`/app/tests/${id}`}>← Back to the test</a></p>
-      <h1 className="text-3xl font-bold tracking-tight text-white">Edit “{t.title}”</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-3xl font-bold tracking-tight text-white">Edit “{t.title}”</h1>
+        <AlertsMenu ignored={u.ignoredAlerts} />
+      </div>
       {t.status === "stopped" ? (
         <p className="err">This test was stopped.</p>
       ) : (

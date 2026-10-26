@@ -4,16 +4,16 @@ import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { devCancelCall, reportNoShow, setCallLength } from "@/lib/server/calls";
 import { cancelInvite, inviteGaps, inviteTesters } from "@/lib/server/invites";
 import { answerRequest, cancelCallSet, devRequestTime } from "@/lib/server/requests";
-import { apply, decideApplication, join, withdrawApplication } from "@/lib/server/joining";
+import { apply, askToRejoin, decideApplication, join, withdrawApplication } from "@/lib/server/joining";
 import { addDevSide } from "@/lib/server/payments";
 import { sendChat, sendMessage } from "@/lib/server/messages";
 import { asListing, editTest, endEarly, nextRound, openDraft, ownTest, stopTest } from "@/lib/server/tests";
 import { assignFreeKey, keyBoxes } from "@/lib/server/accessKeys";
 import { getUserFromRequest } from "@/lib/server/session";
-import { requireActive, requireConfirmed } from "@/lib/server/users";
+import { failedLine, requireActive, requireConfirmed } from "@/lib/server/users";
 
 // (NEWEST+8) Presses that need a confirmed email.
-const NEEDS_CONFIRMED = new Set(["edit", "invite", "request-time", "answer-request", "join", "apply", "application", "rate", "call-length"]);
+const NEEDS_CONFIRMED = new Set(["edit", "invite", "request-time", "answer-request", "join", "apply", "rejoin-ask", "application", "rate", "call-length"]);
 import { devRate } from "@/lib/server/ratings";
 import { logTestAction } from "@/lib/server/actionText";
 
@@ -35,9 +35,10 @@ export async function GET(req: Request, { params }: Ctx) {
 export async function POST(req: Request, { params }: Ctx) {
   return handle(async () => {
     const { id, action } = await params;
-    const u = await requireActive(req);
+    const u = await requireActive(req, { devOk: action === "cancel-call" || action === "cancel-set" });
     const body = await readJson(req);
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
+    await adminRefusal(req, u.id, id, action);
     const res0 = await run(u, id, action, body);
     const data = await res0.clone().json().catch(() => null);
     // A rename the page hadn't shown: the press went ahead; the note goes under the button.
@@ -45,6 +46,21 @@ export async function POST(req: Request, { params }: Ctx) {
     if (res.ok) await logTestAction(u.id, id, action, body, data);
     return res;
   });
+}
+
+/** The tester-side and read-only presses on this route: the team's pause or stop of the test never refuses them here. */
+const TESTER_SIDE = new Set(["join", "apply", "rejoin-ask", "withdraw-application", "my-gaps"]);
+
+/**
+ * (Design doc 6) The team paused the test: the developer can only stop it. The team stopped it: every press the developer made
+ * fails and they are sent back to the test, where a permanent banner says so and names the press that failed.
+ */
+async function adminRefusal(req: Request, userId: string, testId: string, action: string) {
+  if (TESTER_SIDE.has(action)) return;
+  const t = await db.test.findUnique({ where: { id: testId }, select: { developerId: true, adminPausedAt: true, adminStoppedAt: true } });
+  if (!t || t.developerId !== userId) return;
+  if (t.adminStoppedAt) throw new HttpError(409, "admin_stopped", "The team stopped this test.", { failed: await failedLine(req) });
+  if (t.adminPausedAt && action !== "stop") throw new HttpError(409, "admin_paused", "The team paused this test: you can only stop it.", { failed: await failedLine(req) });
 }
 
 async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, action: string, body: Record<string, unknown>) {
@@ -55,9 +71,9 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         return ok({ version: t.version, offered: (t as { offered?: number }).offered ?? 0, changed: (t as { changed?: string[] }).changed ?? [], notReinvited: (t as { notReinvited?: string[] }).notReinvited ?? [], resent: (t as { resent?: string[] }).resent ?? [], closedApps: (t as { closedApps?: string[] }).closedApps ?? [], spotClosed: (t as { spotClosed?: string[] }).spotClosed ?? [], spots: t.spots });
       }
       case "assign-key":
-        return ok(await assignFreeKey(u, id, String(body.contractId ?? "")));
+        return ok(await assignFreeKey(u, id, String(body.contractId ?? ""), body));
       case "open":
-        await openDraft(u, id);
+        await openDraft(u, id, body);
         return ok({ ok: true });
       case "stop":
         return ok(await stopTest(u, id, body));
@@ -102,6 +118,8 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
       }
       case "apply":
         return ok(await apply(u, id, body));
+      case "rejoin-ask":
+        return ok(await askToRejoin(u, id, body));
       case "withdraw-application":
         return ok(await withdrawApplication(u, id, body));
       case "application":

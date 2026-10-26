@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { Bell } from "lucide-react";
 import { db } from "@/lib/db";
 import { fmtDate } from "@/lib/format";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { sideLink } from "@/lib/sides";
 import { AlertSettings } from "./AlertSettings";
+import { BellList, type BellEntry } from "./BellList";
 
 export const metadata = { title: "Notifications · Playtest" };
 export const dynamic = "force-dynamic";
@@ -14,7 +14,22 @@ export const dynamic = "force-dynamic";
 export default async function Notifications() {
   const u = await requirePageUser();
   const items = await db.notification.findMany({ where: { userId: u.id }, orderBy: { createdAt: "desc" }, take: 200 });
-  await db.notification.updateMany({ where: { userId: u.id, readAt: null }, data: { readAt: new Date() } });
+  // (Design doc 9) Same-day lines about the same test stack into one entry; opening a stack marks its lines read, the rest are read by looking.
+  const titles = new Map((await db.test.findMany({ where: { id: { in: [...new Set(items.map((n) => n.testId).filter((x): x is string => !!x))] } }, select: { id: true, title: true } })).map((t) => [t.id, t.title]));
+  const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+  const groups = new Map<string, typeof items>();
+  for (const n of items) {
+    const k = n.testId ? `${n.testId}|${dayKey(n.createdAt)}` : `solo|${n.id}`;
+    groups.set(k, [...(groups.get(k) ?? []), n]);
+  }
+  const todayKey = dayKey(new Date());
+  const entries: BellEntry[] = [...groups.entries()].map(([key, g]) => ({
+    key,
+    title: g[0].testId ? titles.get(g[0].testId) : undefined,
+    day: dayKey(g[0].createdAt) === todayKey ? "today" : `on ${fmtDate(g[0].createdAt)}`,
+    lines: g.map((n) => ({ id: n.id, text: n.text, href: n.link ? sideLink(u, n.link) : "", read: !!n.readAt, ago: timeAgo(n.createdAt) })),
+  }));
+  await db.notification.updateMany({ where: { userId: u.id, readAt: null, id: { in: [...groups.values()].filter((g) => g.length === 1).map((g) => g[0].id) } }, data: { readAt: new Date() } });
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <AlertSettings emailPref={u.emailPref} />
@@ -24,21 +39,7 @@ export default async function Notifications() {
       {items.length === 0 ? (
         <p className="card py-10 text-center text-slate-400">Nothing yet. You&apos;ll hear here when testers join, send feedback, or get reviewed.</p>
       ) : (
-        <ul className="card divide-y divide-white/5 p-0">
-          {items.map((n) => (
-            <li key={n.id} className="px-4 py-3 hover:bg-white/[0.03]">
-              <div className="flex items-start gap-3">
-                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.readAt ? "bg-transparent" : "bg-indigo-400"}`} />
-                {n.link ? (
-                  <Link href={sideLink(u, n.link)} className={`flex-1 no-underline hover:underline ${n.readAt ? "text-slate-400" : "text-slate-100"}`}>{n.text}</Link>
-                ) : (
-                  <span className={`flex-1 ${n.readAt ? "text-slate-400" : "text-slate-100"}`}>{n.text}</span>
-                )}
-                <span className="shrink-0 text-xs text-slate-500">{timeAgo(n.createdAt)}</span>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <BellList entries={entries} />
       )}
     </div>
   );

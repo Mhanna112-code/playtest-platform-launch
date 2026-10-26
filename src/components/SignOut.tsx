@@ -1,6 +1,7 @@
 "use client";
 import { LogOut } from "lucide-react";
 import { api } from "@/lib/client";
+import { announceAuth } from "@/components/SessionWatch";
 
 /** The full app's log-out icon button. */
 export function SignOut() {
@@ -11,6 +12,7 @@ export function SignOut() {
       aria-label="Log out"
       onClick={async () => {
         await api("/api/auth/logout", {}).catch(() => null);
+        announceAuth("out");
         window.location.href = "/";
       }}
     >

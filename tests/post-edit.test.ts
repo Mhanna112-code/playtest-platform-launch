@@ -136,7 +136,7 @@ describe("Access keys (design doc 5)", () => {
     // Still broken: a free key is not handed out by itself.
     expect(await db.accessKey.count({ where: { testId, status: "free" } })).toBe(2);
     // 1 open spot + 2 free keys: one extra, so the developer can assign.
-    expect((await act(testId, "assign-key", dev.cookie, { contractId: a.sessionId })).status).toBe(200);
+    expect((await act(testId, "assign-key", dev.cookie, { contractId: a.sessionId, seenAt: seen(), confirmed: true })).status).toBe(200);
     expect((await db.accessKey.findFirstOrThrow({ where: { value: "K1", testId } })).status).toBe("retired");
     expect((await db.accessKey.findFirstOrThrow({ where: { contractId: a.sessionId, status: "inuse" } })).value).toBe("K2");
     expect(await db.notification.count({ where: { userId: a.tester.user.id, text: { contains: "new access key" } } })).toBe(1);
@@ -146,11 +146,11 @@ describe("Access keys (design doc 5)", () => {
     const { dev, testId } = await withKeys(["K1", "K2"], 2);
     const a = await joined(testId, "Ana Silva");
     await sact(a.sessionId, "key-broken", a.tester.cookie, { seenAt: seen() });
-    const r = await act(testId, "assign-key", dev.cookie, { contractId: a.sessionId });
+    const r = await act(testId, "assign-key", dev.cookie, { contractId: a.sessionId, seenAt: seen(), confirmed: true });
     expect(r.status).toBe(409);
     expect(r.body.error.message).toMatch(/Every free key is kept for the 1 open spot/);
     expect((await edit(testId, dev.cookie, {}, { keysAdd: ["K3"] })).status).toBe(200);
-    expect((await act(testId, "assign-key", dev.cookie, { contractId: a.sessionId })).status).toBe(200);
+    expect((await act(testId, "assign-key", dev.cookie, { contractId: a.sessionId, seenAt: seen(), confirmed: true })).status).toBe(200);
   });
 
   it("Free keys can't drop below the open spots; used, left and broken keys can't be added again", async () => {
@@ -162,6 +162,8 @@ describe("Access keys (design doc 5)", () => {
     await sact(a.sessionId, "leave", a.tester.cookie, { seenAt: seen(), confirmed: true });
     expect((await edit(testId, dev.cookie, {}, { keysAdd: ["K1"] })).body.error.errors[0]).toMatch(/can't be added again|already in use|given to a tester who left/);
     // They get it back on returning (it was never reported).
+    await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [a.tester.user.id], confirmed: true });
+    await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [a.tester.user.id], confirmed: true });
     const back = await act(testId, "join", a.tester.cookie, { listingVersion: (await db.test.findUniqueOrThrow({ where: { id: testId } })).listingVersion });
     expect(back.status).toBe(200);
     expect((await db.accessKey.findFirstOrThrow({ where: { contractId: a.sessionId, status: "inuse" } })).value).toBe("K1");

@@ -431,6 +431,10 @@ export function shiftForHold<T extends Date | null>(d: T, holdStartedAt: Date, l
 }
 
 export const PAUSED_FOR_TESTERS = "This test is paused. Payment for your work may be delayed.";
+/** (Design doc 8) Charge / Dispute wait while a test is paused; the tester is never told why (no "hold", "suspended" ...). */
+export const PAUSED_RIGHT_NOW = "This test is paused right now.";
+/** Is a developer's test paused for its testers (a payment hold, the developer's suspension, or an admin pause)? */
+export const testPaused = (dev: { holdStartedAt?: Date | null; suspendedAt?: Date | null }, test?: { adminPausedAt?: Date | null } | null) => !!(dev.holdStartedAt || dev.suspendedAt || test?.adminPausedAt);
 export const PAY_WAITS = "Pay what you owe first.";
 
 /** Open until can be moved only before it passes; once passed, it can't be extended. */
@@ -760,3 +764,25 @@ export const LENGTH_WAITS = "You can enter this once the hold is lifted.";
 /** The tester's deadline is a guide (never blocks). A call booked after it reads this on both sides. */
 export const bookedLateLabel = (name: string, dueAt: Date, fmt: (d: Date) => string) => `Booked after ${name}'s deadline (${fmt(dueAt)})`;
 export const isBookedLate = (bookedAt: Date, dueAt: Date) => bookedAt.getTime() > dueAt.getTime();
+
+// ---------- Ask to rejoin (design doc 7.3, 8) ----------
+
+/** "3 days 4 h", "5 h 10 min", "40 min": how long a returning tester had left. */
+export function leftText(ms: number) {
+  const mins = Math.max(0, Math.round(ms / 60_000));
+  const d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60), m = mins % 60;
+  if (d > 0) return h ? `${d} day${d === 1 ? "" : "s"} ${h} h` : `${d} day${d === 1 ? "" : "s"}`;
+  if (h > 0) return m ? `${h} h ${m} min` : `${h} h`;
+  return `${Math.max(m, 1)} min`;
+}
+
+/**
+ * May this tester ask to rejoin? They left, or the developer ended their work (or the team's suspension removed them), BEFORE their deadline
+ * passed; not after a stop, a block or a rating.
+ */
+export function canAskToRejoin(c: { status: string; endKind: string; endedAt: Date | null; dueAt: Date }, rated: boolean) {
+  if (rated) return false;
+  if (c.status !== "left" && c.status !== "ended") return false;
+  if (["rated", "stopped", "blocked"].includes(c.endKind)) return false;
+  return !!c.endedAt && c.endedAt.getTime() < c.dueAt.getTime();
+}

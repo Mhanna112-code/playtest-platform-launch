@@ -3,8 +3,10 @@ import { useEffect, useRef } from "react";
 import { ResendConfirm } from "@/components/ResendConfirm";
 import { markShownInBox } from "@/lib/live";
 import { bringInView, jumpTo } from "@/lib/markJump";
+import { LongList } from "@/components/LongList";
+import { QuickIgnore } from "@/components/QuickIgnore";
 
-export type Change = { text: string; at: string; kind?: string };
+export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean };
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
@@ -25,14 +27,16 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
       {changes && (
         <>
           <p className="font-medium">Since you opened this page:</p>
-          <ul className="my-1 list-disc pl-5">
-            {changes.map((c, i) => (
-              <li key={i}>
+          {/* (Design doc 2) The newest 3 lines, then "Show N more" opening a scroll box about 8 lines tall. */}
+          <LongList className="my-1 list-disc pl-5" tall="max-h-52">
+            {[...changes].map((c, i) => (
+              <li key={`${c.at}|${c.text}|${i}`}>
                 {c.text.startsWith("You also did this in another tab") ? `${c.text} at ${time(c.at)}` : `${c.text} · ${time(c.at)}`}
               </li>
             ))}
-          </ul>
+          </LongList>
           <p>{tail}</p>
+          <QuickIgnore alerts={[...new Set(changes.map((c) => c.alert).filter((x): x is string => !!x))]} />
         </>
       )}
       {error && (error.startsWith("Confirm your email first.") ? <p className="flex flex-wrap items-center gap-2">{error} <ResendConfirm label="Resend the email" /></p> : link ? (

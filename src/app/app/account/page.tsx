@@ -5,6 +5,7 @@ import { hasSide, sideFor } from "@/lib/sides";
 import { ResendConfirm } from "@/components/ResendConfirm";
 import { confirmSkipped } from "@/lib/server/users";
 import { SideButton } from "./SideButton";
+import { DeleteAccount } from "./DeleteAccount";
 
 export const metadata = { title: "Account · Playtest" };
 export const dynamic = "force-dynamic";
@@ -60,7 +61,7 @@ export default async function AccountPage() {
       <section className="card">
         <h2 className="mb-1 font-semibold text-white">Settings</h2>
         <ul className="divide-y divide-white/5">
-          {tester && link("/app/profile", UserRound, "Tester profile", "Devices, languages and bio, as developers see them")}
+          {tester && !u.suspendedAt && link("/app/profile", UserRound, "Tester profile", "Devices, languages and bio, as developers see them")}
           {dev && link("/app/profile", Building2, "Developer profile", "Your name, as testers see it on your tests")}
           {link("/app/payments", Banknote, "Payments", "What you've paid or been paid, and how payments are set up")}
           {link("/app/notifications", Bell, "Notifications and alerts", "How you're notified by email")}
@@ -70,6 +71,7 @@ export default async function AccountPage() {
           {link("/app/help", LifeBuoy, "Contact us", "Questions, problems, payments")}
         </ul>
       </section>
+      <DeleteAccount />
     </div>
   );
 }

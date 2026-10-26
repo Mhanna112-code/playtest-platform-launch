@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money, toCents } from "@/lib/format";
-import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, canDispute, checkDisputeDecision, delayedPayLine, owedPayLine, owedUntilFrom, checkPay, checkReject, STRIPE_MAX_CENTS, PAY_WAITS, testerShare } from "@/lib/rules";
+import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, canDispute, checkDisputeDecision, delayedPayLine, owedPayLine, owedUntilFrom, checkPay, checkReject, STRIPE_MAX_CENTS, PAUSED_RIGHT_NOW, testPaused, testerShare } from "@/lib/rules";
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
 import { isAdmin } from "./session";
@@ -41,7 +41,7 @@ async function loadPiece(tx: Prisma.TransactionClient, kind: string, id: string)
  * gate (test-wide, since the page loaded), then the amount rules and the "charged now" tick (Pay) or a reason (Reject).
  * Pay reserves the piece, charges once (idempotent by payKey) and records the payment; Reject charges nothing.
  */
-export async function review(dev: U & Parameters<typeof cardRefusal>[0], body: Record<string, unknown>) {
+export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { holdStartedAt?: Date | null; suspendedAt?: Date | null }, body: Record<string, unknown>) {
   const reject = body.action === "reject";
   const kind = String(body.kind ?? ""), id = String(body.id ?? "");
   const payKey = typeof body.payKey === "string" && /^[\w-]{8,80}$/.test(body.payKey) ? body.payKey : "";
@@ -66,8 +66,6 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0], body: R
       if (owedNow) throw new HttpError(409, "owed", `This ${money(already.amountCents)} is owed: pay it with “Pay what you owe” in Payments.`);
       throw new HttpError(409, "reviewed", already.rejected ? "You already rejected this." : `You already paid ${money(already.amountCents)} for this.`);
     }
-    if (c.tester.suspendedAt) throw new HttpError(409, "closed_account", `${name}'s account is closed for now, so they can't be paid.`);
-    if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", PAY_WAITS);
     // Form mistakes (red at the field) come BEFORE the stop-once: a second press would only fail on them.
     if (reject) {
       const r = checkReject(reason);
@@ -80,10 +78,13 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0], body: R
     }
     await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name });
     const rev = await tx.review.create({ data: { ...piece.where, contractId: c.id, amountCents: amountCents!, agreedCents: piece.listing, reason, payKey, rejected: reject } });
+    // (Design doc 2/11.4) During a payment hold (or a suspension, from the Payments list) Pay is still a decision: it is recorded, but the
+    // CHARGE waits until the account is clear. Reject takes effect at once.
+    const waits = !reject && (!!dev.holdStartedAt || !!dev.suspendedAt || (await devOnHold(dev.id)));
     const payment = reject
       ? null
       : await tx.payment.create({
-          data: { kind: kind === "call" ? "call" : "review", submissionId: piece.where.submissionId ?? null, callId: piece.where.callId ?? null, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amountCents!, feeCents: 0, testerCents: 0, status: "pending" },
+          data: { kind: kind === "call" ? "call" : "review", submissionId: piece.where.submissionId ?? null, callId: piece.where.callId ?? null, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amountCents!, feeCents: 0, testerCents: 0, status: waits && amountCents! > 0 ? "deferred" : "pending" },
         });
     if (reject) await recordEvent(tx, c.testId, "rejected", `You rejected ${name}'s ${piece.label}`, false, {}, c.id);
     return { rev, payment, c, piece, name };
@@ -94,6 +95,11 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0], body: R
     const canDisp = rev.agreedCents != null && rev.agreedCents > 0;
     await notify(c.tester.email, `Your ${piece.label} on “${c.title}” wasn't accepted`, [`${displayName(dev)} rejected your ${piece.label}: “${rev.reason}”`, canDisp ? "It's part of your contract, so you can dispute this once from your session page." : "It wasn't in your contract, so this is final."], `/app/sessions/${c.id}`);
     return { reviewId: rev.id, amountCents: 0, rejected: true, paidSoFarCents: await paidSoFar(c.id) };
+  }
+  if (payment!.status === "deferred") {
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `You paid ${name} ${money(rev.amountCents)} for the ${piece.label}`, false, {}, c.id));
+    await notify(c.tester.email, `You were paid for your ${piece.label} on “${c.title}”`, [`${displayName(dev)} paid ${money(rev.amountCents)} for your ${piece.label}: you get ${money(testerShare(rev.amountCents))}.`, ...(rev.reason ? [`Their note: “${rev.reason}”`] : []), "Payment may be delayed."], `/app/sessions/${c.id}`, { always: true, about: dev.id });
+    return { reviewId: rev.id, amountCents: rev.amountCents, status: "deferred", rejected: false, paidSoFarCents: await paidSoFar(c.id), later: "charged when your account is clear" };
   }
   let result;
   try {
@@ -132,7 +138,8 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0], body: R
     { always: true },
   );
   if (rev.amountCents > 0) await receipt(dev.email, `${name}'s ${piece.label}`, rev.amountCents, result.status, `/app/tests/${c.testId}`);
-  return { reviewId: rev.id, amountCents: rev.amountCents, status: result.status, rejected: false, paidSoFarCents: await paidSoFar(c.id) };
+  // A suspended tester is paid later (their share is held): said neutrally, never why.
+  return { reviewId: rev.id, amountCents: rev.amountCents, status: result.status, rejected: false, paidSoFarCents: await paidSoFar(c.id), ...(c.tester.suspendedAt && rev.amountCents > 0 ? { later: `${name} will receive it later` } : {}) };
 }
 
 /** Tester: dispute once, only for parts in the contract paid below the listing amount. */
@@ -143,6 +150,8 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== tester.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
   const where = kind === "call" ? { callId: id } : { submissionId: id };
+  // (Design doc 8) Disputes wait while the test is paused.
+  if (testPaused(c.test.developer, c.test)) throw new HttpError(409, "paused", `${PAUSED_RIGHT_NOW} You can dispute once it resumes.`);
   const review = await db.review.findFirst({ where: { ...where, contractId } });
   if (review && !(await db.dispute.findFirst({ where }))) await testerGate(tester.id, contractId, c.testId, body);
   if (!review) throw new HttpError(409, "not_paid", "This hasn't been paid yet.");
@@ -172,7 +181,10 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   if (!isAdmin(admin)) throw new HttpError(403, "not_admin", "Only admins can decide disputes.");
   const d = await db.dispute.findUnique({ where: { id: disputeId } });
   if (!d) throw new HttpError(404, "not_found", "That dispute doesn't exist.");
-  if (d.status !== "open") throw new HttpError(409, "decided", "This dispute was already decided.");
+  if (d.status !== "open") {
+    const by = d.decidedById ? await db.user.findUnique({ where: { id: d.decidedById } }) : null;
+    throw new HttpError(409, "decided", `This dispute was already decided${by ? ` by ${displayName(by)}` : ""}${d.decidedAt ? ` at ${fmtDateTime(d.decidedAt)}` : ""}.`);
+  }
   const { review, other } = await disputeBounds(d);
   // A blank box keeps the pay as it is.
   const blank = body.total === undefined || body.total === null || String(body.total).trim() === "";
@@ -184,8 +196,13 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   const note = typeof body.note === "string" ? body.note.trim().slice(0, 2000) : "";
   // Claim the dispute first so two admins can't charge twice.
   const claimed = await db.dispute.updateMany({ where: { id: d.id, status: "open" }, data: { status: "decided", decidedCents: decided!, decisionNote: note, decidedById: admin.id, decidedAt: new Date() } });
-  if (claimed.count !== 1) throw new HttpError(409, "decided", "This dispute was already decided.");
-  if (extra > 0 && c.test.developer.holdStartedAt) {
+  if (claimed.count !== 1) {
+    // Any admin, first decision wins: the second press says who and when.
+    const won = await db.dispute.findUnique({ where: { id: d.id } });
+    const by = won?.decidedById ? await db.user.findUnique({ where: { id: won.decidedById } }) : null;
+    throw new HttpError(409, "decided", `This dispute was already decided${by ? ` by ${displayName(by)}` : ""}${won?.decidedAt ? ` at ${fmtDateTime(won.decidedAt)}` : ""}.`);
+  }
+  if (extra > 0 && (c.test.developer.holdStartedAt || c.test.developer.suspendedAt)) {
     // Charged after the hold lifts (see liftHoldIfClear).
     await db.payment.create({ data: { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, amountCents: extra, feeCents: 0, testerCents: 0, status: "deferred" } });
   } else if (extra > 0) {
@@ -233,6 +250,6 @@ export async function waitingForReview(devId: string) {
   return db.test.findMany({
     where: { developerId: devId, contracts: { some: { OR: [{ submissions: { some: { review: null } } }, { calls: { some: held } }] } } },
     orderBy: { createdAt: "desc" },
-    include: { contracts: { include: { submissions: { where: { review: null } }, calls: { where: held } } } },
+    include: { contracts: { include: { tester: true, submissions: { where: { review: null } }, calls: { where: held } } } },
   });
 }

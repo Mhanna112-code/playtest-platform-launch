@@ -20,10 +20,19 @@ export async function inReach(recipientId: string, otherId: string) {
   return n > 0;
 }
 
+/** The test a bell line is about, from the page it links to (so same-day lines about one test can stack). */
+export async function testIdOfLink(path: string) {
+  let m = /^\/app\/(?:tests|find)\/([^/#?]+)/.exec(path);
+  if (m) return m[1];
+  m = /^\/app\/(?:sessions|chat)\/([^/#?]+)/.exec(path);
+  if (m) return (await db.contract.findUnique({ where: { id: m[1] }, select: { testId: true } }))?.testId ?? null;
+  return null;
+}
+
 export async function notify(to: string, subject: string, lines: string[], path: string, opts: { always?: boolean; about?: string } = {}) {
   const user = await db.user.findUnique({ where: { email: to }, select: { id: true, emailPref: true } });
   if (user && opts.about && !(await inReach(user.id, opts.about))) return;
-  if (user) await db.notification.create({ data: { userId: user.id, text: subject, link: path } });
+  if (user) await db.notification.create({ data: { userId: user.id, text: subject, link: path, testId: await testIdOfLink(path) } });
   const decision = emailDecision(user?.emailPref ?? "each", !!opts.always);
   if (decision !== "send") return;
   try {
@@ -36,7 +45,7 @@ export async function notify(to: string, subject: string, lines: string[], path:
 /** A bell notification only (no email), e.g. the Open until heads-ups. */
 export async function bell(userId: string, text: string, link: string, about?: string) {
   if (about && !(await inReach(userId, about))) return;
-  await db.notification.create({ data: { userId, text, link } });
+  await db.notification.create({ data: { userId, text, link, testId: await testIdOfLink(link) } });
 }
 
 /** Summary emails for people on daily / weekly / monthly: one email listing their new notifications. */

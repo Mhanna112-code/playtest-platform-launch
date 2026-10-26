@@ -26,6 +26,18 @@ model User {
   emailVerifiedAt DateTime?
   suspendedAt DateTime?
   suspendNote String    @default("")
+  /// (Design doc 11.4) The admin who suspended the account, and when it was lifted (the "Your account is active again" notice)
+  suspendedById String?
+  reinstatedAt  DateTime?
+  /// (Design doc 2, 10) A deleted account: when, by whom ("self" | "admin") and why. History stays; nothing else of it works.
+  deletedAt     DateTime?
+  deletedBy     String    @default("")
+  deleteReason  String    @default("")
+  /// (Design doc 9) A tester's payout failed ("Your bank couldn't receive a payout"): since when, and the last 3-day bell reminder
+  /// (Design doc 6) The Alerts menu: update types the developer chose NOT to be stopped for (see src/lib/alerts.ts)
+  ignoredAlerts     String[]  @default([])
+  payoutProblemAt   DateTime?
+  payoutRemindedAt  DateTime?
   createdAt   DateTime  @default(now())
 
   /// Stripe: developer's customer + saved card; tester's Connect account
@@ -107,6 +119,10 @@ model Test {
   ndaText     String   @default("")
   /// (Design doc 5) Saves that changed a critical field (instructions, link, languages, technology, parts, Open until) after the first tester joined; the limit is 3
   criticalChanges Int  @default(0)
+  /// (Design doc 6, 10) An admin paused this test (it behaves like a stop for the developer, who can only stop it) or stopped it, and the note
+  adminPausedAt   DateTime?
+  adminStoppedAt  DateTime?
+  adminNote       String   @default("")
   description String   @default("")
   buildUrl    String   @default("")
   /// The full app's categories (at least one)
@@ -507,6 +523,8 @@ model Notification {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   text      String
   link      String    @default("")
+  /// (Design doc 9) The test the line is about (same-day lines about one test stack into one entry)
+  testId    String?
   readAt    DateTime?
   /// Included in a daily summary email (users on "One daily summary")
   summarizedAt DateTime?
@@ -568,6 +586,8 @@ model Application {
   testId     String
   testerId   String
   note       String    @default("")
+  /// "apply" (Apply to join) | "rejoin" (a tester who left or was ended asks to come back; the developer accepts)
+  kind       String    @default("apply")
   /// The listing when they applied (to tell whether anything changed since)
   listing    Json
   /// (Design doc 7.3) When they accepted the test's NDA while applying

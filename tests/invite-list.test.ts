@@ -24,7 +24,7 @@ describe("invite list: greyed vs removed", () => {
     expect(of(inTest.tester.user.id)?.grey).toBe("Already in this test");
     expect(of(invited.user.id)?.grey).toMatch(/^Invited /);
     expect(of(invited.user.id)?.inviteId).toBeTruthy();
-    expect(of(suspended.user.id)?.grey).toBe("Can't be invited right now");
+    expect(of(suspended.user.id)?.grey).toBe("Can't join this test");
     expect(of(blocked.user.id)).toBeUndefined();
     expect(of(gone.user.id)).toBeUndefined();
   });
@@ -41,7 +41,7 @@ describe("invite list: greyed vs removed", () => {
     expect(r2.body.message).toBe("Ben Carter can't be invited right now.");
   });
 
-  it("Suggested: up to 5, meeting the needs first, then rating, then matches; testers already in show greyed", async () => {
+  it("Suggested (design doc 6): the top 5 invitable newcomers by meets, score, accepted parts, matches; testers already in show greyed", async () => {
     // A rare need (Steam Deck + Korean) so the ranking is visible among everyone in the test database.
     const { dev, testId } = await setup({ devices: ["Steam Deck"], languages: ["Korean"] });
     const people: Awaited<ReturnType<typeof makeUser>>[] = [];
@@ -53,8 +53,10 @@ describe("invite list: greyed vs removed", () => {
     // The best-rated one (5 stars, revealed).
     await db.rating.create({ data: { testId, contractId: "x-" + people[6].user.id, side: "developer", raterId: dev.user.id, rateeId: people[6].user.id, stars: 5, revealedAt: new Date() } });
     const list = await invitable(dev.user.id, testId);
-    const sug = list.filter((x) => x.section === "suggested");
+    const sug = list.filter((x) => x.section === "other" && !x.grey).slice(0, 5);
     expect(sug.length).toBe(5);
+    expect(sug[0].id).toBe(people[6].user.id); // the best score first
+    expect(sug.every((x) => x.meets)).toBe(true);
     expect(sug.every((x) => !x.gap)).toBe(true);
     expect(sug.some((x) => x.id === people[6].user.id)).toBe(true);
     // A tester already in this test still shows, greyed.
@@ -71,7 +73,7 @@ describe("invite list: greyed vs removed", () => {
     await db.testerProfile.update({ where: { userId: spanish.user.id }, data: { languages: ["Spanish"] } });
     const list = await invitable(dev.user.id, testId);
     expect(list.find((x) => x.id === past.tester.user.id)?.section).toBe("worked");
-    expect(["suggested", "other"]).toContain(list.find((x) => x.id === fits.user.id)?.section); // up to 5 suggested
+    expect(list.find((x) => x.id === fits.user.id)?.section).toBe("other"); // the page takes the top 5 of these as Suggested
     expect(list.find((x) => x.id === spanish.user.id)?.gap).toBe("English");
     const first = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [spanish.user.id] });
     expect(first.body.error.code).toBe("needs_confirm");

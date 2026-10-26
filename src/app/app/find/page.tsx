@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { CategoryBadges } from "@/components/Category";
 import { CategoryChips, CategoryTile, mainCategory, PartBadges } from "@/components/Ui";
-import { displayName, money } from "@/lib/format";
+import { displayName, fmtDate, money } from "@/lib/format";
 import { DEVICES } from "@/lib/options";
 import { ratingSummary } from "@/lib/server/ratings";
 import { termsLine, testerShare } from "@/lib/rules";
@@ -109,6 +109,7 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
                   <div className="min-w-0 flex-1 space-y-2">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
+                        {t.productName && <p className="kicker">{t.productName}</p>}
                         <p className="font-semibold text-white">{t.title}</p>
                         <p className="text-sm text-slate-400">by {displayName(t.developer)}{devRatings.get(t.developerId) && ` · ${devRatings.get(t.developerId)}`}</p>
                       </div>
@@ -124,6 +125,10 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
                       {t.devices.length > 0 && <span className="badge"><Monitor className="h-3.5 w-3.5" /> {t.devices.join(" · ")}</span>}
                       {t.languages.length > 0 && <span className="badge"><Languages className="h-3.5 w-3.5" /> {t.languages.join(" · ")}</span>}
                       <span className="badge"><CalendarClock className="h-3.5 w-3.5" /> {t.deadlineDays} day{t.deadlineDays === 1 ? "" : "s"} to finish</span>
+                      <span className="badge">{t.joinMode === "invite" ? "Invitation only" : t.joinMode === "apply" ? "Approved only" : "Anyone can join"}</span>
+                      {t.openUntil && <span className="badge">Open until {fmtDate(t.openUntil)}</span>}
+                      {t.mature && <span className="badge border-rose-300/40 text-rose-200">Mature (18+)</span>}
+                      {t.ndaText && <span className="badge">NDA</span>}
                       {invitedTo.has(t.id) && <span className="badge border-emerald-400/40 text-emerald-200">Invited</span>}
                     </div>
                     {t.contracts.some((c) => c.status === "left") && <p className="note">You left this test</p>}

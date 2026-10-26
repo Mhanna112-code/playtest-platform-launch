@@ -32,7 +32,19 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
   }
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    if (res.status === 401 && typeof window !== "undefined") window.location.href = "/login";
+    if (res.status === 401 && typeof window !== "undefined") window.location.href = data?.error?.code === "deleted" ? "/login?gone=1" : "/login";
+    // (Design doc 2) A press refused because the account is suspended: on to the dashboard top (or the profile, if that is where it was
+    // pressed), where a red box names the press that didn't go through.
+    // The team stopped (or paused) the test: back to the test, where its banner names the press that failed.
+    if ((data?.error?.code === "admin_stopped" || data?.error?.code === "admin_paused") && typeof window !== "undefined" && typeof data.error.failed === "string") {
+      const m = /\/api\/tests\/([^/]+)\//.exec(path);
+      if (m) window.location.href = `/app/tests/${m[1]}?failed=${encodeURIComponent(data.error.failed)}`;
+    }
+    if (data?.error?.code === "suspended" && typeof window !== "undefined" && typeof data.error.failed === "string") {
+      const here = window.location.pathname;
+      const to = here.startsWith("/app/profile") ? "/app/profile" : "/app";
+      window.location.href = `${to}?failed=${encodeURIComponent(data.error.failed)}`;
+    }
     const e = data?.error;
     throw new ApiError(res.status, e?.code ?? "server", e?.message ?? (res.status === 413 ? "That's too much to send at once. Try a smaller amount." : "Something went wrong. Try again in a moment."), e ?? {});
   }

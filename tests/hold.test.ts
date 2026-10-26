@@ -65,7 +65,11 @@ describe("payment hold", () => {
     // Sending still works; joining, booking, posting, Pay and Next round wait.
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).status).toBe(200);
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).body.error.message).toBe("Pay what you owe first.");
+    // (Owner) Pay is still a decision during a hold: recorded now, its CHARGE waits until the account is clear.
+    const waits = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
+    expect(waits.status).toBe(200);
+    expect(waits.body).toMatchObject({ status: "deferred", later: "charged when your account is clear" });
+    expect((await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } })).status).toBe("deferred");
     const ben = await makeUser({ tester: true });
     expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test is paused, so it isn't taking new testers right now.");
     expect((await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: listingBody() })))).body.error.message).toContain("Pay what you owe first.");
@@ -78,7 +82,8 @@ describe("payment hold", () => {
     const t1 = await db.test.findUniqueOrThrow({ where: { id: testId } });
     expect(Math.round((after.dueAt.getTime() - before.dueAt.getTime()) / DAY)).toBe(2);
     expect(Math.round((t1.openUntil!.getTime() - t0.openUntil!.getTime()) / DAY)).toBe(2);
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).status).toBe(200);
+    // Lifting the hold charged it.
+    expect((await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } })).status).toBe("not_set_up");
   });
 
   it("only booked calls whose time comes during the hold are cancelled; the tester reads only that the test is paused", async () => {

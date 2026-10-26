@@ -95,7 +95,6 @@ type EditProps = {
 };
 
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-const sameDay = (a: string, b: string) => a.slice(0, 10) === b.slice(0, 10);
 
 export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: EditProps; spotsLimit?: number }) {
   const [f, setF] = useState<F>(toForm(init));

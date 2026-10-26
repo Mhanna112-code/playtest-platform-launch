@@ -5,6 +5,7 @@ import { keyNeedLine, keyRefusal, KEY_MAX_LENGTH, parseKeys, repeatedKeys } from
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { logEvent } from "./live";
+import { devGate } from "./tests";
 
 type Tx = Prisma.TransactionClient | typeof db;
 
@@ -45,9 +46,11 @@ export async function brokenKeyTesters(testId: string) {
  * the test page) and presses "Assign a free key" on that tester's row. It gives them the next free key, only from the extras
  * (enough must remain for the open spots), and their broken key leaves "In use".
  */
-export async function assignFreeKey(dev: { id: string }, testId: string, contractId: string) {
+export async function assignFreeKey(dev: { id: string }, testId: string, contractId: string, body: Record<string, unknown> = {}) {
   const t = await db.test.findUnique({ where: { id: testId } });
   if (!t || t.developerId !== dev.id) throw new HttpError(404, "not_found", "That test doesn't exist or isn't yours.");
+  // Stop-once like every developer button (what changed since the page loaded).
+  await db.$transaction((tx) => devGate(tx, testId, body));
   const out = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
     const broken = await tx.accessKey.findFirst({ where: { testId, contractId, status: "broken", contract: { status: "working" } }, include: { contract: { include: { tester: true } } } });

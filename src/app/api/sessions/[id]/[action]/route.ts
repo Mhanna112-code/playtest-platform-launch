@@ -25,7 +25,7 @@ type Ctx = { params: Promise<{ id: string; action: string }> };
  * refusal, blue under the button (not a stop-once): Send, any call action, Switch / Keep, Request. (Charge / Let it go, Dispute, Rate,
  * Report a problem, chat and Leave keep their own rules.)
  */
-const FINAL_AFTER_END = new Set(["terms", "written", "recording-start", "recording-done", "recording-send", "request-time", "answer-request", "cancel-call", "cancel-set"]);
+const FINAL_AFTER_END = new Set(["terms", "written", "recording-start", "recording-done", "recording-send", "request-time", "answer-request", "cancel-call", "cancel-set", "key-broken"]);
 async function finalRefusal(userId: string, contractId: string, action: string) {
   if (!FINAL_AFTER_END.has(action)) return;
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });

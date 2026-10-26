@@ -1,7 +1,8 @@
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
 import {
-  ADMIN_DIGEST_DAYS, autoPayFor, chargeAmount, callCancelledLine, CHARGED_BY_TESTER, countdownDue, INVITE_REMIND_DAYS, choiceLine, failedLine, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, HOLD_ALERT_DAYS, owedUntilFrom, PAUSED_FOR_TESTERS, PAY_WAITS, shiftForHold,
+  ADMIN_DIGEST_DAYS, autoPayFor, chargeAmount, callCancelledLine, CHARGED_BY_TESTER, countdownDue, INVITE_REMIND_DAYS, choiceLine, failedLine, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, HOLD_ALERT_DAYS, owedUntilFrom, PAUSED_FOR_TESTERS, PAUSED_RIGHT_NOW, PAY_WAITS, shiftForHold, testPaused,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { bell, notify, sendSummaries } from "./notify";
@@ -60,6 +61,44 @@ export async function startHold(devId: string, reason: string) {
   return true;
 }
 
+/**
+ * A pause ended (a payment hold paid off, or a developer's suspension lifted): every working tester's deadline, Open until and the
+ * 14-day review clocks move on by its length, and each test says it is running again.
+ */
+export async function resumeTests(tx: Prisma.TransactionClient, devId: string, start: Date, now: Date) {
+  const tests = await tx.test.findMany({ where: { developerId: devId } });
+  for (const t of tests) {
+    if (t.openUntil && t.status !== "stopped") await tx.test.update({ where: { id: t.id }, data: { openUntil: shiftForHold(t.openUntil, start, now), notified3d: false, notified1d: false } });
+    const cs = await tx.contract.findMany({ where: { testId: t.id, status: "working" } });
+    for (const c of cs) await tx.contract.update({ where: { id: c.id }, data: { dueAt: shiftForHold(c.dueAt, start, now) } });
+    const subs = await tx.submission.findMany({ where: { contract: { testId: t.id }, review: null, payBy: { not: null } } });
+    for (const s of subs) {
+      const from = s.updatedAt > start ? s.updatedAt : start; // only the part of the pause after it was sent
+      await tx.submission.update({ where: { id: s.id }, data: { payBy: shiftForHold(s.payBy, from, now), choiceBy: shiftForHold(s.choiceBy, from, now) } });
+    }
+    if (t.status !== "stopped") await recordEvent(tx, t.id, "resumed", "Your tests are running again", false);
+  }
+}
+
+/**
+ * Payments that waited for the account to be clear (a Pay pressed during a hold, or from Payments during a suspension; an admin decision that
+ * raised pay) are charged now. The tester is told when each goes through.
+ */
+export async function chargeDeferred(devId: string) {
+  const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
+  for (const p of await db.payment.findMany({ where: { developerId: devId, status: "deferred" }, orderBy: { createdAt: "asc" } })) {
+    const tester = await db.user.findUniqueOrThrow({ where: { id: p.testerId } });
+    try {
+      const r = await charge(dev, tester, p.amountCents, `deferred-${p.id}`, "Playtest: charged now that the account is clear");
+      await db.payment.update({ where: { id: p.id }, data: { ...r } });
+      await receipt(dev.email, p.kind === "dispute" ? "a team decision (charged after the pause)" : "work you paid for during the pause", p.amountCents, r.status, p.contractId ? `/app/tests/${(await db.contract.findUnique({ where: { id: p.contractId }, select: { testId: true } }))?.testId}` : "/app/payments");
+      await tellArrived(p, tester.email, displayName(dev));
+    } catch {
+      await db.payment.update({ where: { id: p.id }, data: { status: "failed", owedUntil: owedUntilFrom(new Date()) } });
+    }
+  }
+}
+
 /** Lift the hold when nothing is owed and no chargeback is open; move every clock on by the length of the pause. */
 export async function liftHoldIfClear(devId: string) {
   const dev = await db.user.findUnique({ where: { id: devId } });
@@ -68,31 +107,10 @@ export async function liftHoldIfClear(devId: string) {
   if (await db.payment.count({ where: { developerId: devId, chargeback: "open" } })) return false;
   const start = dev.holdStartedAt, now = new Date();
   await db.$transaction(async (tx) => {
-    const tests = await tx.test.findMany({ where: { developerId: devId } });
-    for (const t of tests) {
-      if (t.openUntil && t.status !== "stopped") await tx.test.update({ where: { id: t.id }, data: { openUntil: shiftForHold(t.openUntil, start, now), notified3d: false, notified1d: false } });
-      const cs = await tx.contract.findMany({ where: { testId: t.id, status: "working" } });
-      for (const c of cs) await tx.contract.update({ where: { id: c.id }, data: { dueAt: shiftForHold(c.dueAt, start, now) } });
-      const subs = await tx.submission.findMany({ where: { contract: { testId: t.id }, review: null, payBy: { not: null } } });
-      for (const s of subs) {
-        const from = s.updatedAt > start ? s.updatedAt : start; // only the part of the pause after it was sent
-        await tx.submission.update({ where: { id: s.id }, data: { payBy: shiftForHold(s.payBy, from, now), choiceBy: shiftForHold(s.choiceBy, from, now) } });
-      }
-      if (t.status !== "stopped") await recordEvent(tx, t.id, "resumed", "Your tests are running again", false);
-    }
+    await resumeTests(tx, devId, start, now);
     await tx.user.update({ where: { id: devId }, data: { holdStartedAt: null, holdReason: "", holdAlertedAt: null } });
   });
-  // Admin decisions that charge the developer were waiting for the hold to lift: charge them now.
-  for (const p of await db.payment.findMany({ where: { developerId: devId, status: "deferred" } })) {
-    const tester = await db.user.findUniqueOrThrow({ where: { id: p.testerId } });
-    try {
-      const r = await charge(dev, tester, p.amountCents, `deferred-${p.id}`, "Playtest: team decision charged after the hold");
-      await db.payment.update({ where: { id: p.id }, data: { ...r } });
-      await receipt(dev.email, "a team decision (charged after the hold lifted)", p.amountCents, r.status, "/app/payments");
-    } catch {
-      await db.payment.update({ where: { id: p.id }, data: { status: "failed", owedUntil: owedUntilFrom(new Date()) } });
-    }
-  }
+  await chargeDeferred(devId);
   await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause."], "/app");
   const testers = await db.contract.findMany({ where: { status: "working", test: { developerId: devId } }, include: { tester: true } });
   for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`);
@@ -346,6 +364,11 @@ export async function runDaily(now = new Date()) {
   }
   // 8. (NEXT-UI 7) Forever sets of calls: the next ones are booked as each passes (4 ahead); ended sets are marked.
   await (await import("./requests")).topUpForeverSets(now);
+  // 9. (Design doc 11.4, 9, 10) A suspended developer's later calls; the payout-problem reminder every 3 days; the two-weekly reminder to review suspended accounts.
+  const rs = await import("./restrictions");
+  await rs.cancelLateSuspensionCalls(now);
+  await rs.payoutReminders(now);
+  await rs.suspendedAccountsReminder(now);
   return out;
 }
 
@@ -382,10 +405,11 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
     throw new HttpError(409, "done", s.review.rejected ? `${displayName(dev)} rejected this meanwhile.` : `${displayName(dev)} paid ${money(s.review.amountCents)} for this meanwhile.`);
   }
   if (!s.choiceOfferedAt) throw new HttpError(409, "not_yet", "You can choose once it has waited 14 days without a review.");
-  if (dev.holdStartedAt) throw new HttpError(409, "paused", "This test is paused: you can choose once it resumes.");
   await testerTermsGate(contractId, displayName(dev), body);
   const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;
   if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");
+  // (Design doc 8) While the test is paused Charge waits ("You can charge once it resumes"); Let it go still works.
+  if (choice === "charge" && testPaused(dev, c.test)) throw new HttpError(409, "paused", `${PAUSED_RIGHT_NOW} You can charge once it resumes.`);
   const paidForPart = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
   const cap = chargeAmount(s.agreedCents, s.askedCents, paidForPart);
   if (cap === 0) throw new HttpError(409, "paid_in_full", "This part is already paid in full.");

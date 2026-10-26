@@ -34,12 +34,12 @@ export function TestersJoined({ testId, spots, seats, gone, status, children }: 
   const shown = Math.min(spots, 12);
   const stopped = status === "stopped";
   return (
-    <section className="card space-y-3" id="testers-joined" aria-label="Testers joined">
-      <div className="flex items-center justify-between">
-        <h2 className="flex items-center gap-2 font-semibold text-white"><Users className="h-5 w-5 text-indigo-300" /> Testers</h2>
+    <details open className="card space-y-3" id="testers-joined" aria-label="Testers joined">
+      <summary className="fold-chevron flex cursor-pointer items-center justify-between">
+        <span className="flex items-center gap-2 font-semibold text-white"><Users className="h-5 w-5 text-indigo-300" /> <h2 className="inline">Testers</h2></span>
         <span className="text-sm text-slate-400">{joined} of {spots}</span>
-      </div>
-      <div className="flex flex-wrap items-center gap-1.5">
+      </summary>
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
         {Array.from({ length: shown }, (_, i) => (seats[i] ? <TesterAvatar key={seats[i].testerId} seat={seats[i]} /> : <span key={i} className="h-9 w-9 rounded-full border-2 border-dashed border-slate-600" />))}
         {spots > shown && <span className="text-sm text-slate-400">+{spots - shown} more</span>}
       </div>
@@ -63,6 +63,6 @@ export function TestersJoined({ testId, spots, seats, gone, status, children }: 
           {!stopped && <> · <Link href={`/app/tests/${testId}/edit#spots`} className="text-sky-300 hover:underline">Change in Edit</Link></>}
         </p>
       </div>
-    </section>
+    </details>
   );
 }

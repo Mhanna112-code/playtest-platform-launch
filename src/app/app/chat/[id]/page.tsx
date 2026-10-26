@@ -22,7 +22,8 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
   if (!c || (c.testerId !== u.id && c.test.developerId !== u.id)) notFound();
   const dev = c.test.developerId === u.id;
   const other = dev ? displayName(c.tester) : displayName(c.test.developer);
-  const blocked = (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) > 0;
+  const deleted = c.tester.deletedAt != null || c.test.developer.deletedAt != null;
+  const blocked = deleted || (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) > 0;
   const messages = await chatMessages(c.testId, c.testerId);
   await markChatRead(u.id, c.testId, c.testerId);
   return (

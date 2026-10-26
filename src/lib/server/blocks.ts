@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtTime } from "@/lib/format";
-import { joinCallRefusal } from "@/lib/rules";
+import { joinCallRefusal, testPaused } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { roomUrl } from "./calls";
@@ -64,7 +64,7 @@ export async function joinCall(user: { id: string }, callId: string) {
   if (!call || !c || !side) throw new HttpError(404, "not_found", "That call doesn't exist.");
   const refusal = joinCallRefusal(
     {
-      status: call.status, startsAt: call.startsAt, minutes: call.minutes, noShow: !!call.noShowBy, paused: !!c.test.developer.holdStartedAt,
+      status: call.status, startsAt: call.startsAt, minutes: call.minutes, noShow: !!call.noShowBy, paused: testPaused(c.test.developer, c.test),
       testStatus: c.test.status, contractStatus: c.status, blocked: await blockedEitherWay(c.testerId, c.test.developerId), side,
     },
     new Date(),

@@ -11,6 +11,7 @@ import { InvitePanel } from "./InvitePanel";
 import { invitable, inviteExpired } from "@/lib/server/invites";
 import { owedForBox, sweepHeldCalls } from "@/lib/server/holds";
 import { termsRowLines } from "@/lib/server/terms";
+import { rejoinAskLine } from "@/lib/server/joining";
 import { BlockButton } from "@/components/BlockButton";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, rateBlocker, ratingSummary } from "@/lib/server/ratings";
@@ -26,6 +27,7 @@ import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
 import { PayBox } from "./PayBox";
 import { TopPanel } from "./TopPanel";
+import { NeedsYou } from "./NeedsYou";
 import { KeysNotice } from "./KeysNotice";
 import { brokenKeyTesters } from "@/lib/server/accessKeys";
 import { SavedNote } from "@/components/SavedNote";
@@ -38,10 +40,10 @@ import { byQuestion } from "@/lib/byQuestion";
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
 
-export default async function TestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; offered?: string; skipped?: string; closed?: string; resent?: string; spotclosed?: string; spots?: string }> }) {
+export default async function TestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ failed?: string; saved?: string; offered?: string; skipped?: string; closed?: string; resent?: string; spotclosed?: string; spots?: string }> }) {
   await (await import("@/lib/server/calls")).sweepNobodyJoined();
   const { id } = await params;
-  const { saved, offered, skipped, closed, resent } = await searchParams;
+  const { saved, offered, skipped, closed, resent, failed } = await searchParams;
   const u = await requirePageUser();
   const seenAt = new Date().toISOString();
   const t = await db.test.findUnique({
@@ -60,6 +62,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   if (!t || t.developerId !== u.id) notFound();
   const next = await db.test.findFirst({ where: { previousId: id }, select: { id: true } });
   const brokenKeys = await brokenKeyTesters(id);
+  const keysEver = await db.accessKey.count({ where: { testId: id } });
+  const keysLeft = keysEver > 0 ? await db.accessKey.count({ where: { testId: id, status: "free" } }) : null;
   const working = t.contracts.filter((c) => c.status === "working");
   const paid = await db.payment.groupBy({ by: ["contractId"], where: { contractId: { in: t.contracts.map((c) => c.id) }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } });
   const paidSoFar = (id: string) => paid.find((p) => p.contractId === id)?._sum.amountCents ?? 0;
@@ -73,7 +77,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const appRatings = new Map(await Promise.all(appUsers.map(async (x) => [x.id, (await ratingSummary(x.id)).line] as const)));
   const apps = pendingApps.map((a) => {
     const x = appUsers.find((y) => y.id === a.testerId)!;
-    return { id: a.id, userId: x.id, name: displayName(x), note: a.note, profile: [...(x.profile?.devices ?? []), ...(x.profile?.languages ?? []), ...(appRatings.get(x.id) ? [appRatings.get(x.id)!] : [])].join(", ") };
+    const old = a.kind === "rejoin" ? t.contracts.find((c) => c.testerId === a.testerId) : undefined;
+    return { id: a.id, kind: a.kind, line: old ? rejoinAskLine(displayName(x), pronouns(x.pronoun), old) : undefined, userId: x.id, name: displayName(x), note: a.note, profile: [...(x.profile?.devices ?? []), ...(x.profile?.languages ?? []), ...(appRatings.get(x.id) ? [appRatings.get(x.id)!] : [])].join(", ") };
   });
   // (NEXT-UI 4) Chat is its own page per session: each tester's row links to it with an unread badge.
   const unread = new Map(await Promise.all(t.contracts.map(async (c) => [c.id, await unreadCount(u.id, t.id, c.testerId)] as const)));
@@ -150,11 +155,27 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   ]);
   const needsCount = pieces.length + apps.length + needsRequests.length + disputesWaiting.length;
   // History per tester: what happened with them (the test's events about them, what was paid or rejected, disputes), newest first.
+  // (Design doc 5 and 6) Deal history: the terms they joined on, every offer and what they chose, and their payments.
+  const offerRows = await db.termsOffer.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
   const events = await db.testEvent.findMany({ where: { testId: id, contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "desc" }, take: 500 });
   const historyOf = new Map(
     t.contracts.map((c) => {
       const items: { key: string; at: Date; text: string; detail?: React.ReactNode }[] = [];
       for (const e of events.filter((x) => x.contractId === c.id)) items.push({ key: `e-${e.id}`, at: e.createdAt, text: e.text.replace(/^You /, "You ") });
+      for (const o of offerRows.filter((x) => x.contractId === c.id)) {
+        items.push({
+          key: `o-${o.id}`, at: o.createdAt,
+          text: `You offered new terms (${o.diff}): ${o.status === "switched" ? `${displayName(c.tester)} switched` : o.status === "kept" ? `${displayName(c.tester)} kept their terms` : o.status === "open" ? "waiting for their answer" : "replaced by a newer offer"}${o.decidedAt && (o.status === "switched" || o.status === "kept") ? ` · ${fmtDateTime(o.decidedAt)}` : ""}`,
+          detail: (Array.isArray(o.fromQuestions) && JSON.stringify(o.fromQuestions) !== JSON.stringify(o.questions)) || o.fromNdaText !== o.ndaText ? (
+            <details className="ml-4 mt-1 text-xs text-slate-400"><summary className="cursor-pointer">What changed</summary>
+              {Array.isArray(o.fromQuestions) && JSON.stringify(o.fromQuestions) !== JSON.stringify(o.questions) && <p>Questions then: {(o.fromQuestions as string[]).map(qText).join(" · ") || "none"}; now: {((o.questions as string[]) ?? []).map(qText).join(" · ") || "none"}</p>}
+              {o.fromNdaText !== o.ndaText && <p className="whitespace-pre-wrap">NDA then: {o.fromNdaText || "none"}; now: {o.ndaText || "none"}</p>}
+            </details>
+          ) : undefined,
+        });
+      }
+      items.push({ key: `j-${c.id}`, at: c.joinedAt, text: `Joined on: ${termsLine(c)}${c.ndaAcceptedAt ? ` · NDA accepted ${fmtDate(c.ndaAcceptedAt)}` : ""}` });
+      for (const p of payments.filter((x) => x.contractId === c.id && (x.status === "failed" || x.settledAt))) items.push({ key: `p-${p.id}`, at: p.settledAt ?? p.createdAt, text: p.settledAt ? `Payment of ${money(p.amountCents)} went through after it had been declined` : `Payment of ${money(p.amountCents)} was declined: owed` });
       const pieceLine = (label: string, rev: { amountCents: number; rejected: boolean; reason: string; createdAt: Date }, id: string, dispute: { status: string; reason: string; decidedCents: number | null; decisionNote: string; devSide: string } | null, detail?: React.ReactNode) => {
         items.push({ key: `r-${id}`, at: rev.createdAt, text: rev.rejected ? `You rejected ${label}: “${rev.reason}”` : `You paid ${money(rev.amountCents)} for ${label}${rev.reason ? `: “${rev.reason}”` : ""}`, detail });
         if (dispute) items.push({ key: `d-${id}`, at: rev.createdAt, text: dispute.status === "open" ? `${displayName(c.tester)} disputed it: “${dispute.reason}”${dispute.devSide ? ` · your side: “${dispute.devSide}”` : ""}` : `Dispute decided: total ${money(dispute.decidedCents)}${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : ""}` });
@@ -178,10 +199,16 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   return (
     <>
       <AutoRefresh query={`test=${t.id}`} />
-      {u.suspendedAt && <p className="info" data-paused="">This test is paused while your account is paused.</p>}
       <TopPanel
         id={t.id}
         title={t.title}
+        productName={t.productName}
+        ignoredAlerts={u.ignoredAlerts}
+        mature={t.mature}
+        nda={!!t.ndaText}
+        keysLeft={keysLeft}
+        parts={{ written: t.writtenCents != null, recording: t.recordingCents != null, live: t.liveRateCents != null }}
+        paused={!!(u.holdStartedAt || t.adminPausedAt)}
         status={t.status}
         terms={termsLine(asListing(t))}
         openUntil={t.openUntil ? t.openUntil.toISOString() : null}
@@ -200,13 +227,22 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           ahead: c.calls.filter((x) => x.status === "booked" && x.startsAt > now).length,
         }))}
       />
+      {/* (Design doc 6) A stopped test: one short line saying what can still be done. */}
+      {t.status === "stopped" && <p className="note" data-stopped-line="">This test is stopped. You can still pay or reject work testers already sent, chat with them, rate testers, and read their answers.</p>}
+      {/* (Design doc 6) The team stopped or paused this test: a permanent banner at the top of the overview, naming any press that failed. */}
+      {(t.adminStoppedAt || t.adminPausedAt) && (
+        <section role="alert" data-admin-banner={t.adminStoppedAt ? "stopped" : "paused"} className="rounded-2xl border border-rose-400/50 bg-rose-500/10 p-4 text-sm text-rose-100">
+          <p className="font-semibold">{t.adminStoppedAt ? "The team stopped this test." : "The team paused this test: it behaves like a stop, and you can only stop it."}{t.adminNote ? ` ${t.adminNote}` : ""}</p>
+          {failed && <p className="mt-1">{failed}.</p>}
+          <p className="mt-1 text-rose-100/80">What testers sent still waits for you to pay or reject. If you think this is a mistake, use Contact us in Settings.</p>
+        </section>
+      )}
       {/* (Design doc 6) The order: overview, the live updates box, the yellow keys notice, then the panels. */}
       <LiveTop scope={`test:${t.id}`} seenAt={seenAt} />
       <KeysNotice testId={t.id} seenAt={seenAt} rows={brokenKeys.map((b) => ({ contractId: b.contractId, name: b.name, at: b.at.toISOString() }))} />
       {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay / Reject box for sent work lives here. */}
       {needsCount > 0 && (
-        <section id="needs-you" className="card scroll-mt-24 space-y-4 border-amber-300/30" aria-label="Needs you">
-          <h2 className="flex items-center gap-2 font-semibold text-white"><span className="h-2 w-2 rounded-full bg-amber-400" /> Needs you <span className="text-sm font-normal text-slate-400">{needsCount}</span></h2>
+        <NeedsYou count={needsCount}>
           <Applications testId={t.id} seenAt={seenAt} apps={apps} />
           <NeedsRequests testId={t.id} seenAt={seenAt} requests={needsRequests} />
           {disputesWaiting.map((d) => (
@@ -215,7 +251,14 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
             </div>
           ))}
-          {pieces.map((x) => (
+          {[...new Set(pieces.map((x) => x.c.id))].map((cid) => {
+            const mine = pieces.filter((x) => x.c.id === cid);
+            const who = displayName(mine[0].c.tester);
+            return (
+              <details key={cid} open className="rounded-xl border border-white/10 p-2" data-needs-person={who}>
+                <summary className="fold-chevron flex cursor-pointer items-center gap-2 text-sm font-medium text-white">{who} <span className="font-normal text-slate-400">· {mine.length} part{mine.length === 1 ? "" : "s"} to pay or reject</span></summary>
+                <div className="mt-2 space-y-3">
+          {mine.map((x) => (
             <div key={x.id} id={x.kind === "sub" ? `piece-${x.id}` : `call-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 scroll-mt-24">
               <p className="text-sm font-medium">
                 <a href={`/app/testers/${x.c.testerId}`}>{displayName(x.c.tester)}</a> · {x.kind === "sub" ? (x.s!.kind === "written" ? "Written answers" : "Recording") : "Live call"} · {x.kind === "sub" ? `sent ${fmtDateTime(x.s!.updatedAt)}` : `${fmtDateTime(x.x!.startsAt)} · ${x.x!.minutes} min booked`} · {(x.kind === "sub" ? x.s!.agreedCents : x.x!.rateCents) == null ? "Not in their contract" : "In their contract"}
@@ -256,7 +299,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               )}
             </div>
           ))}
-        </section>
+                </div>
+              </details>
+            );
+          })}
+        </NeedsYou>
       )}
 
       {/* (Owner) The full app's "Testers joined" right after the header: avatars with their hover cards (Block inside). */}
@@ -297,7 +344,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 <div className="flex flex-wrap items-baseline gap-2">
                   <h3 className="mr-auto"><a href={`/app/testers/${c.testerId}`}>{name}</a></h3>
                   <span className="badge">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
-                  {c.keepPrivate && <span className="badge">Keeps it private</span>}
+                  {c.ndaAcceptedAt && <span className="badge">NDA accepted {fmtDate(c.ndaAcceptedAt)}</span>}
                   <a href={`/app/chat/${c.id}`} className="btn-secondary relative px-3 py-1 text-xs no-underline hover:no-underline"><MessagesSquare className="h-3.5 w-3.5" /> Chat
                     {unreadN > 0 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950" aria-label={`${unreadN} unread`}>{unreadN}</span>}
                   </a>

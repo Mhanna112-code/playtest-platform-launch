@@ -71,7 +71,7 @@ describe("Charge / Let it go at day 14", () => {
     await cron();
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Reminder: Nora Lane didn't review" } } })).toBe(1);
     await startHold(dev.user.id, "unpaid");
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe("This test is paused: you can choose once it resumes.");
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe("This test is paused right now. You can charge once it resumes.");
     await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: null } });
     await db.submission.update({ where: { id: sub.id }, data: { choiceBy: new Date(Date.now() - 30 * 86_400_000) } });
     await cron();

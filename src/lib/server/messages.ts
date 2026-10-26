@@ -16,7 +16,9 @@ export async function chatAccess(userId: string, testId: string, testerId: strin
   if (!contract) throw new HttpError(404, "not_found", "That chat doesn't exist.");
   const blocked = (await db.block.count({ where: { OR: [{ blockerId: testerId, blockedId: test.developerId }, { blockerId: test.developerId, blockedId: testerId }] } })) > 0;
   const active = test.status !== "stopped" && contract.status === "working";
-  return { test, contract, blocked, active };
+  // (Design doc 2) A deleted account's chats are read-only.
+  const gone = (await db.user.count({ where: { id: { in: [testerId, test.developerId] }, deletedAt: { not: null } } })) > 0;
+  return { test, contract, blocked: blocked || gone, active };
 }
 
 /** Kept for the session page (by contract). */
@@ -39,7 +41,7 @@ export async function sendChat(user: { id: string; name: string; email: string }
   const from = displayName(user);
   const line = a.active ? `${from} · ${a.test.title}: ${firstWords(body)}` : `New message from ${from}`;
   const link = toDev ? `/app/tests/${testId}` : `/app/sessions/${a.contract.id}`;
-  await notify(recipient.email, line, [line, "", body], link);
+  await notify(recipient.email, line, [line, "", body], link, { about: user.id });
   return m;
 }
 

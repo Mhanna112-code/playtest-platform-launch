@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   return handle(async () => {
     const body = await readJson(req);
     // (NEXT-UI 26) A suspended developer may Pay (never Reject).
-    const u = await requireActive(req, { allowPay: body.action !== "reject" });
+    const u = await requireActive(req, { allowPay: body.action !== "reject", what: body.action === "reject" ? "Reject" : "Pay", piece: { kind: String(body.kind ?? ""), id: String(body.id ?? "") } });
     requireConfirmed(u);
     // A declined Pay is refused under Pay and is not a debt: nothing is logged or shown anywhere else.
     const r = await review(u, body);

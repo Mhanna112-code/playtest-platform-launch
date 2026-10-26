@@ -24,6 +24,7 @@ export async function GET(req: Request) {
     const now = new Date();
     const margin = new Date(now.getTime() - 5000);
     let changes;
+    let ignored: ReadonlySet<string> = new Set();
     if (kind === "session") {
       const c = await db.contract.findUnique({ where: { id } });
       if (!c || c.testerId !== u.id) throw new HttpError(404, "not_found", "That session doesn't exist.");
@@ -36,7 +37,8 @@ export async function GET(req: Request) {
       }
     } else if (kind === "test") {
       await ownTest(u.id, id);
-      changes = await devChanges(u.id, id, since, tab);
+      changes = await devChanges(u.id, id, since, tab, db, { all: true });
+      ignored = new Set(u.ignoredAlerts);
     } else if (kind === "listing") {
       changes = await joinPageChanges(u.id, id, since.toISOString(), tab);
     } else throw new HttpError(404, "not_found", "Nothing to watch here.");
@@ -44,6 +46,6 @@ export async function GET(req: Request) {
     const outages = await outageLines(since);
     const shown = changes.filter((c) => c.createdAt <= now);
     const seenTo = new Date(Math.max(margin.getTime(), ...shown.map((c) => c.createdAt.getTime())));
-    return ok({ changes: [...asLines(shown), ...outages].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()), now: seenTo.toISOString() });
+    return ok({ changes: [...asLines(shown, ignored), ...outages].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()), now: seenTo.toISOString() });
   });
 }

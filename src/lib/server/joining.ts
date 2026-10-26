@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { displayName, fmtTime } from "@/lib/format";
-import { MAX_ACTIVE_TESTS, termsDiff, termsLine, type TestEventLike } from "@/lib/rules";
+import { displayName, fmtDateTime, fmtTime, pronouns } from "@/lib/format";
+import { canAskToRejoin, leftText, MAX_ACTIVE_TESTS, termsDiff, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
@@ -30,21 +30,21 @@ const sameListingIgnoringMode = (a: unknown, b: unknown) => {
 };
 
 /** Shared final refusals for Join, Apply to join and Accept. */
-export async function joinRefusal(testerId: string, testId: string) {
+export async function joinRefusal(testerId: string, testId: string, opts: { rejoin?: boolean } = {}) {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
   if (t.status === "stopped") return "This test was stopped.";
   if (t.openUntil && t.openUntil < new Date()) return "This test isn't taking new testers any more.";
   if (t.status !== "open") return "This test isn't taking new testers any more.";
-  if (t.developer.holdStartedAt) return "This test is paused, so it isn't taking new testers right now.";
+  if (testPaused(t.developer, t)) return "This test is paused, so it isn't taking new testers right now.";
   const old = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId } } });
   if (old?.status === "working") return "You've already joined this test.";
   if (old && (await db.rating.count({ where: { contractId: old.id } }))) return old.status === "left" && old.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't join this test again.";
-  if (old?.status === "ended" && !(await db.invite.findFirst({ where: { testId, testerId, status: "sent" } }))) return "You can't join this test again.";
+  if (old?.status === "ended" && !opts.rejoin && !(await db.invite.findFirst({ where: { testId, testerId, status: "sent" } }))) return "You can't join this test again.";
   const testersIn = await db.contract.count({ where: { testId, status: "working" } });
   if (testersIn >= t.spots) return (await db.invite.findFirst({ where: { testId, testerId, status: "sent" } })) ? `${t.title} is full right now.` : "This test is full.";
   if (await db.block.count({ where: { blockerId: testerId, blockedId: t.developerId } })) return `You blocked ${displayName(t.developer)}: unblock them in Account → Blocked people to join.`;
   if (await db.block.count({ where: { blockerId: t.developerId, blockedId: testerId } })) return "This test isn't taking new testers right now.";
-  if ((await db.contract.count({ where: { testerId, status: "working" } })) >= MAX_ACTIVE_TESTS) return "You can't join more tests right now.";
+  if ((await db.contract.count({ where: { testerId, status: "working" } })) >= MAX_ACTIVE_TESTS) return TEST_LIMIT_LINE;
   return "";
 }
 
@@ -128,8 +128,12 @@ export async function join(tester: U, testId: string, body: Record<string, unkno
   if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
   const t = await db.test.findUnique({ where: { id: testId } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
-  const refusal = await joinRefusal(tester.id, testId);
+  const refusal = await joinRefusal(tester.id, testId, { rejoin: body.rejoinAccepted === true });
   if (refusal) throw new HttpError(409, "refused", refusal);
+  // (Design doc 7.3) Coming back is always an ask the developer accepts, unless they invited the tester back (or this is the accepted ask).
+  const gone = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } });
+  if (gone && gone.status !== "working" && body.rejoinAccepted !== true && !(await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } })))
+    throw new HttpError(409, "ask", "You left this test, so you ask to rejoin and the developer accepts.");
   await replacedInvite(tester.id, testId, body);
   await listingGate(tester.id, testId, body, "join");
   if (t.joinMode === "apply" && !(await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } })) && !(await db.application.findFirst({ where: { testId, testerId: tester.id, status: "pending", changedAt: { not: null } } }))) {
@@ -154,10 +158,13 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
   if (t.joinMode === "invite") throw new HttpError(409, "invite_only", "This test is invite only.");
   const note = typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
   const snap = listingSnapshot(t) as Prisma.InputJsonValue;
+  // (7.3) The NDA is accepted when applying; the developer's Accept joins them on it.
+  if (t.ndaText && body.ndaAccepted !== true) throw new HttpError(400, "nda", "Accept the NDA to apply.");
+  const ndaAcceptedAt = t.ndaText ? new Date() : null;
   await db.application.upsert({
     where: { testId_testerId: { testId, testerId: tester.id } },
-    update: { note, listing: snap, status: "pending", changedAt: null, decidedAt: null },
-    create: { testId, testerId: tester.id, note, listing: snap },
+    update: { note, listing: snap, status: "pending", changedAt: null, decidedAt: null, kind: "apply", ndaAcceptedAt },
+    create: { testId, testerId: tester.id, note, listing: snap, ndaAcceptedAt },
   });
   await db.$transaction((tx) => tx.testEvent.create({ data: { testId, kind: "applied", text: `${displayName(tester)} applied to join` } }));
   await notify(t.developer.email, `${displayName(tester)} applied to join “${t.title}”`, [`${displayName(tester)} applied to join “${t.title}”.`, ...(note ? [`Their note: “${note}”`] : []), "Accept or decline on the test page."], `/app/tests/${testId}`);
@@ -192,14 +199,22 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   await db.$transaction((tx) => devGate(tx, testId, body, {}, extra));
   if (body.action === "decline") {
     await db.application.update({ where: { id: a.id }, data: { status: "declined", decidedAt: new Date() } });
-    await notify(tester.email, `Your application to “${(await db.test.findUniqueOrThrow({ where: { id: testId } })).title}” wasn't accepted`, ["Thanks for applying. There are other tests to find."], "/app/find");
+    const title = (await db.test.findUniqueOrThrow({ where: { id: testId } })).title;
+    if (a.kind === "rejoin") await notify(tester.email, `Your ask to rejoin “${title}” wasn't accepted`, ["The developer didn't accept your ask to rejoin."], `/app/find/${testId}`);
+    else await notify(tester.email, `Your application to “${title}” wasn't accepted`, ["Thanks for applying. There are other tests to find."], "/app/find");
     return { declined: true };
   }
-  const refusal = await joinRefusal(tester.id, testId);
-  if (refusal) throw new HttpError(409, "refused", refusal.replace("You've already joined", `${name} already joined`).replace("You can't join more tests right now.", `${name} can't join more tests right now.`));
+  const isRejoin = a.kind === "rejoin";
+  const refusal = await joinRefusal(tester.id, testId, { rejoin: isRejoin });
+  if (refusal) throw new HttpError(409, "refused", refusal.replace("You've already joined", `${name} already joined`).replace(TEST_LIMIT_LINE, `${name} can't join more tests right now.`));
   const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
-  const c = await joinTest({ ...tester, isTester: true }, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true });
+  const c = await joinTest({ ...tester, isTester: true }, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true, rejoinAccepted: isRejoin, ndaAcceptedAt: a.ndaAcceptedAt?.toISOString(), ndaAccepted: !!a.ndaAcceptedAt });
   await db.application.update({ where: { id: a.id }, data: { status: "accepted", decidedAt: new Date() } });
+  if (isRejoin) {
+    const line = `You're back in ${t.title}: your deadline is ${fmtDateTime(c.dueAt)}.`;
+    await notify(tester.email, line, [line, `Your session is restored on the current listing: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { about: dev.id });
+    return { accepted: true, sessionId: c.id, line: `${name} rejoined: ${pronouns(tester.pronoun).poss} deadline is ${fmtDateTime(c.dueAt)}.` };
+  }
   await notify(tester.email, `You're in: ${t.title}`, [`You're in: ${t.title}. Your contract: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { always: false });
   return { accepted: true, sessionId: c.id };
 }
@@ -243,4 +258,71 @@ export async function closeApplicationsAfterEdit(testId: string, why: "listing" 
     await notify(tester.email, line, [line], `/app/find/${testId}`);
   }
   return names;
+}
+
+/** The line the developer reads about a rejoin ask: what the tester gets back if accepted. */
+export function rejoinAskLine(name: string, pron: { subj: string; poss: string }, c: { endedAt: Date | null; dueAt: Date }) {
+  const left = c.endedAt ? c.dueAt.getTime() - c.endedAt.getTime() : 0;
+  if (left <= 0) return `${name} asks to rejoin. ${pron.subj[0].toUpperCase()}${pron.subj.slice(1)} had no time left: ${pron.poss} deadline stays passed.`;
+  return `${name} asks to rejoin. If you accept, ${pron.subj === "they" ? "they get" : `${pron.subj} gets`} back the ${leftText(left)} ${pron.subj === "they" ? "they" : pron.subj} had left (deadline ${fmtDateTime(new Date(Date.now() + left))}).`;
+}
+
+/**
+ * (Design doc 7.3) Ask to rejoin: a tester who left, or whose work was ended (or who a suspension removed), before their deadline,
+ * asks to come back; the developer accepts and the session returns on the current listing with the time they had left. An invite
+ * and an ask in either order join them at once, unless a final refusal applies. Checks the 10-test limit, the NDA and the
+ * listing like Join.
+ */
+export async function askToRejoin(tester: U, testId: string, body: Record<string, unknown>) {
+  if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
+  const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true } });
+  if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
+  const old = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } });
+  const rated = old ? (await db.rating.count({ where: { contractId: old.id } })) > 0 : false;
+  if (!old || old.status === "working") throw new HttpError(409, "not_again", old ? "You've already joined this test." : "You haven't been in this test.");
+  if (!canAskToRejoin(old, rated)) throw new HttpError(409, "not_again", rated || old.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't ask to rejoin this test.");
+  const refusal = await joinRefusal(tester.id, testId, { rejoin: true });
+  if (refusal) throw new HttpError(409, "refused", refusal);
+  await listingGate(tester.id, testId, body, "ask");
+  if (t.ndaText && body.ndaAccepted !== true) throw new HttpError(400, "nda", "Accept the NDA to ask to rejoin.");
+  gapStop(t, await db.testerProfile.findUnique({ where: { userId: tester.id } }), body, "Ask");
+  const note = typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
+  const ndaAcceptedAt = t.ndaText ? new Date() : null;
+  const snap = listingSnapshot(t) as Prisma.InputJsonValue;
+  const invited = await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } });
+  await db.application.upsert({
+    where: { testId_testerId: { testId, testerId: tester.id } },
+    update: { note, listing: snap, status: "pending", changedAt: null, decidedAt: null, kind: "rejoin", ndaAcceptedAt },
+    create: { testId, testerId: tester.id, note, listing: snap, kind: "rejoin", ndaAcceptedAt },
+  });
+  if (invited) {
+    // The developer already invited them: the ask and the invite meet, and they are back at once.
+    const c = await matchInviteAndAsk(testId, tester.id);
+    if (c) return { joined: true, sessionId: c.id };
+  }
+  const name = displayName(tester);
+  await db.$transaction((tx) => tx.testEvent.create({ data: { testId, kind: "applied", text: `${name} asks to rejoin` } }));
+  const line = rejoinAskLine(name, pronouns(tester.pronoun), old);
+  await notify(t.developer.email, `${name} asks to rejoin “${t.title}”`, [line, ...(note ? [`Their note: “${note}”`] : [])], `/app/tests/${testId}#needs-you`, { about: tester.id });
+  return { asked: true };
+}
+
+/**
+ * (Design doc 6) A pending application or rejoin ask plus an invite from the developer, in either order, joins the tester at once
+ * (the developer chose them; no Join anyway pop-up), unless a final refusal applies. Both are told.
+ */
+export async function matchInviteAndAsk(testId: string, testerId: string) {
+  const app = await db.application.findFirst({ where: { testId, testerId, status: "pending" } });
+  const inv = await db.invite.findFirst({ where: { testId, testerId, status: "sent" } });
+  if (!app || !inv) return null;
+  const tester = await db.user.findUniqueOrThrow({ where: { id: testerId } });
+  const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
+  if (await joinRefusal(testerId, testId, { rejoin: true })) return null;
+  if (t.ndaText && !app.ndaAcceptedAt) return null; // they still have to accept the NDA themselves
+  const c = await joinTest(tester, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true, rejoinAccepted: true, ndaAccepted: !!app.ndaAcceptedAt, ndaAcceptedAt: app.ndaAcceptedAt?.toISOString() });
+  await db.application.update({ where: { id: app.id }, data: { status: "joined", decidedAt: new Date() } });
+  const back = app.kind === "rejoin";
+  await notify(tester.email, back ? `You're back in ${t.title}` : `You're in: ${t.title}`, [back ? `You're back in ${t.title}: your deadline is ${fmtDateTime(c.dueAt)}.` : `You're in: ${t.title}.`], `/app/sessions/${c.id}`, { about: t.developerId });
+  await notify(t.developer.email, `${displayName(tester)} ${back ? "rejoined" : "joined"} “${t.title}”`, [`${displayName(tester)} ${back ? "rejoined" : "joined"} (you'd invited ${pronouns(tester.pronoun).obj} and ${pronouns(tester.pronoun).subj === "they" ? "they'd" : `${pronouns(tester.pronoun).subj} had`} asked).`], `/app/tests/${testId}`, { about: testerId });
+  return c;
 }

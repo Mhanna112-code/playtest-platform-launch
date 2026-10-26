@@ -1,7 +1,8 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { SESSION_COOKIE, userForToken } from "./session";
+import { db } from "@/lib/db";
+import { hashToken, SESSION_COOKIE, userForToken } from "./session";
 
 /** The signed-in user for a server component, or null. */
 export async function getPageUser() {
@@ -11,6 +12,11 @@ export async function getPageUser() {
 
 export async function requirePageUser() {
   const u = await getPageUser();
-  if (!u) redirect("/login");
+  if (!u) {
+    // (Design doc 2) An account that was deleted meanwhile lands on the login page with a red notice.
+    const token = (await cookies()).get(SESSION_COOKIE)?.value;
+    const s = token ? await db.session.findUnique({ where: { tokenHash: hashToken(token) }, include: { user: { select: { deletedAt: true } } } }) : null;
+    redirect(s?.user.deletedAt ? "/login?gone=1" : "/login");
+  }
   return u;
 }

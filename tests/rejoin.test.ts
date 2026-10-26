@@ -82,8 +82,11 @@ describe("rejoining restores the session", () => {
     await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { writtenCents: "12.00", deadlineDays: 3 } });
     // They left with 5 days to go.
     await db.$executeRaw`UPDATE "Contract" SET "dueAt" = "endedAt" + interval '5 days' WHERE id = ${sessionId}`;
-    // Never "You've already joined" for someone who left.
-    const back = await act(testId, "join", tester.cookie, { listingVersion: await listingVersion(testId) });
+    // (Design doc 7.3) Coming back is an ask the developer accepts.
+    expect((await act(testId, "join", tester.cookie, { listingVersion: await listingVersion(testId) })).body.error.code).toBe("ask");
+    expect((await act(testId, "rejoin-ask", tester.cookie, { listingVersion: await listingVersion(testId), seenAt: seen(), confirmed: true, anyway: true })).body).toEqual({ asked: true });
+    const ask = await db.application.findFirstOrThrow({ where: { testId, testerId: tester.user.id, kind: "rejoin" } });
+    const back = await act(testId, "application", dev.cookie, { applicationId: ask.id, action: "accept", seenAt: seen(), confirmed: true });
     expect(back.status).toBe(200);
     expect(back.body.sessionId).toBe(sessionId);
     const c = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });
@@ -102,11 +105,13 @@ describe("rejoining restores the session", () => {
     expect((await act(testId, "join", tester.cookie, { listingVersion: await listingVersion(testId) })).body.error.message).toBe("You've already joined this test.");
   });
 
-  it("someone who left after their deadline stays past it (sends are late)", async () => {
-    const { testId } = await setup();
+  it("someone invited back who left after their deadline stays past it (sends are late); they can't ask", async () => {
+    const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "leave", tester.cookie, {});
     await db.$executeRaw`UPDATE "Contract" SET "dueAt" = "endedAt" - interval '2 days' WHERE id = ${sessionId}`;
+    expect((await act(testId, "rejoin-ask", tester.cookie, { listingVersion: await listingVersion(testId), seenAt: seen(), confirmed: true, anyway: true })).body.error.message).toBe("You can't ask to rejoin this test.");
+    await act(testId, "invite", dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [tester.user.id] });
     expect((await act(testId, "join", tester.cookie, { listingVersion: await listingVersion(testId) })).status).toBe(200);
     const c = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });
     expect(Math.round((c.dueAt.getTime() - Date.now()) / 86_400_000)).toBe(-2);
@@ -296,11 +301,11 @@ describe("when the test fills (correction 4) and no invite cap (correction 5)", 
     const { GET: liveGET } = await import("@/app/api/live/route");
     const sl = (await json(await liveGET(req(`/api/live?scope=session:${sessionId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: tester.cookie })))).body.changes.map((c: { text: string }) => c.text);
     expect(sl).toContain("Nora Lane paid $10.00 for your written answers");
-    // Join again (the listing's Join) stops once: paid, the terms as a plain line; then joins.
-    const j = await act(testId, "join", tester.cookie, { listingVersion: await listingVersion(testId), seenAt: pageLoaded });
+    // Ask to rejoin (the listing's button) stops once: paid, the terms as a plain line; then the ask goes through.
+    const j = await act(testId, "rejoin-ask", tester.cookie, { listingVersion: await listingVersion(testId), seenAt: pageLoaded });
     const lines = j.body.error.changes.map((c: { text: string }) => c.text);
     expect(lines).toEqual(expect.arrayContaining(["Nora Lane paid $10.00 for your written answers", "Nora Lane changed the terms: written $10 → $12"]));
     expect(j.body.error.top).toBeUndefined(); // no offer box, no scroll to the top
-    expect((await act(testId, "join", tester.cookie, { listingVersion: await listingVersion(testId), seenAt: pageLoaded, confirmed: true })).status).toBe(200);
+    expect((await act(testId, "rejoin-ask", tester.cookie, { listingVersion: await listingVersion(testId), seenAt: pageLoaded, confirmed: true, anyway: true })).body).toEqual({ asked: true });
   });
 });

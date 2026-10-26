@@ -29,7 +29,7 @@ export function LiveSection({ title, children, empty, show = true, id }: { title
   return (
     <section className="space-y-1.5" data-live-section={title} id={id}>
       <h3 className="text-sm font-semibold text-white">{title}</h3>
-      {show ? <ul className="divide-y divide-white/5">{children}</ul> : <p className="text-sm text-slate-400">{empty}</p>}
+      {show ? <ul className={`divide-y divide-white/5 ${title === LIVE_SECTIONS.past ? "max-h-72 overflow-y-auto pr-1" : ""}`} data-scroll={title === LIVE_SECTIONS.past ? "past-calls" : undefined}>{children}</ul> : <p className="text-sm text-slate-400">{empty}</p>}
     </section>
   );
 }

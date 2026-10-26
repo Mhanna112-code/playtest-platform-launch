@@ -12,6 +12,9 @@ import { ResendConfirm } from "@/components/ResendConfirm";
 import { confirmSkipped } from "@/lib/server/users";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { isAdmin } from "@/lib/server/session";
+import { redirect } from "next/navigation";
+import { closedForSuspended } from "@/lib/closedPages";
+import { SessionWatch } from "@/components/SessionWatch";
 
 // The full Playtest Platform's header (NEWEST+8): logo, the side's links with their icons, the bell, the account pill
 // and the log-out icon; the confirm-email strip under it; a wide main column.
@@ -21,6 +24,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const name = u.name.trim() || u.email;
   // (NEXT-UI 6) The side this tab shows: the page's own side (developer pages, tester pages), else the side used last.
   const path = (await headers()).get("x-path") ?? "";
+  // (Design doc 2) A suspended account is routed from the pages that are closed to it to the dashboard, which explains.
+  if (u.suspendedAt && closedForSuspended(path, u)) redirect("/app");
   const side = sideFor(u, path);
   // Following a link to a page of the other side remembers it as the side used last (what shared pages then show).
   const pageSide = hasBoth(u) ? sideForPath(path) : null;
@@ -76,13 +81,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <ResendConfirm />
         </div>
       )}
-      {u.suspendedAt && (
-        <p className="mx-auto mt-4 max-w-6xl px-4">
-          <span className="info block">{u.isDeveloper ? "Your account is paused. You can look around and pay for work testers sent. Contact support if you think this is a mistake." : "Your account is paused. You can look around, but actions are switched off. Contact support if you think this is a mistake."}</span>
+      {/* A suspended account's red box is at the top of the dashboard (and the profile); other open pages carry this one line. */}
+      {u.suspendedAt && !/^\/app\/?(\?.*)?$/.test(path) && !path.startsWith("/app/profile") && (
+        <p className="mx-auto mt-4 max-w-6xl px-4" data-suspended-strip="">
+          <span className="block rounded-xl border border-rose-400/50 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">Your account is suspended. To appeal, use <Link href="/app/help" className="underline">Contact us</Link> in Settings.</span>
         </p>
       )}
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">{children}</main>
       <FieldChecks />
+      <SessionWatch userId={u.id} name={name} suspended={!!u.suspendedAt} />
     </>
   );
 }

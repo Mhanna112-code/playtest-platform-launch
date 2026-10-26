@@ -35,7 +35,7 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
     return c;
   });
   const line = cancelLine(displayName(dev), call.startsAt, reason);
-  await notify(call.contract.tester.email, line, [line], `/app/sessions/${call.contractId}`);
+  await notify(call.contract.tester.email, line, [line], `/app/sessions/${call.contractId}`, { about: dev.id });
   return { cancelled: true };
 }
 
@@ -79,7 +79,7 @@ export async function testerCancelCall(tester: U, contractId: string, body: Reco
     return call;
   });
   const line = cancelLine(displayName(tester), call.startsAt, reason);
-  await notify(c0.test.developer.email, line, [line, "The time is open again for other testers."], `/app/tests/${c0.testId}#calls`);
+  await notify(c0.test.developer.email, line, [line, "The time is open again for other testers."], `/app/tests/${c0.testId}#calls`, { about: tester.id });
   return { cancelled: true };
 }
 

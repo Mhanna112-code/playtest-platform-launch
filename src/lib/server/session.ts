@@ -33,7 +33,7 @@ export function readCookie(header: string | null, name: string) {
 export async function userForToken(token: string | null | undefined) {
   if (!token) return null;
   const s = await db.session.findUnique({ where: { tokenHash: hashToken(token) }, include: { user: true } });
-  if (!s || s.expiresAt < new Date()) return null;
+  if (!s || s.expiresAt < new Date() || s.user.deletedAt) return null;
   return s.user;
 }
 
@@ -41,7 +41,13 @@ export const getUserFromRequest = (req: Request) => userForToken(readCookie(req.
 
 export async function requireUser(req: Request) {
   const u = await getUserFromRequest(req);
-  if (!u) throw new HttpError(401, "signed_out", "You're signed out. Sign in again to keep going.");
+  if (!u) {
+    // (Design doc 2) A deleted account's open pages are told so (they go to the login page with a red notice).
+    const token = readCookie(req.headers.get("cookie"), SESSION_COOKIE);
+    const s = token ? await db.session.findUnique({ where: { tokenHash: hashToken(token) }, include: { user: { select: { deletedAt: true } } } }) : null;
+    if (s?.user.deletedAt) throw new HttpError(401, "deleted", "This account no longer exists.");
+    throw new HttpError(401, "signed_out", "You're signed out. Sign in again to keep going.");
+  }
   return u;
 }
 

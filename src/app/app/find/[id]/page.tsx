@@ -16,6 +16,7 @@ import { BlockButton } from "@/components/BlockButton";
 import { gapsOf } from "@/lib/gaps";
 import { developerStats } from "@/lib/server/profileStats";
 import { sideLink } from "@/lib/sides";
+import { canAskToRejoin, leftText } from "@/lib/rules";
 import { heldBrokenKey } from "@/lib/server/accessKeys";
 
 export const metadata = { title: "Test · Playtest" };
@@ -45,6 +46,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   const devStats = await developerStats(t.developerId);
   const ratedHere = mine ? (await db.rating.count({ where: { contractId: mine.id } })) > 0 : false;
   const invite = await db.invite.findFirst({ where: { testId: t.id, testerId: u.id, status: "sent" } });
+  const canRejoin = !!mine && canAskToRejoin(mine, ratedHere);
   const seenAt = new Date().toISOString();
   const closed = t.status !== "open" || testersIn >= t.spots || (t.openUntil && t.openUntil < new Date());
   const dev = displayName(t.developer);
@@ -178,7 +180,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       </section>
 
       {ratedHere && <p className="info">{mine?.status === "left" && mine.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't join this test again."}</p>}
-      {mine && mine.status === "left" && !ratedHere && <p className="info">You left this test. Joining again restores your session: work you sent, payments and chat stay; new work is on the current listing.</p>}
+      {mine && mine.status !== "working" && !ratedHere && canRejoin && !invite && <p className="info">{mine.endKind === "suspended" ? "You were removed from this test." : mine.status === "left" ? "You left this test." : "Your work on this test ended."} Ask to rejoin: if {dev} accepts, your session comes back with everything in it (work you sent, payments and chat), on the current listing.</p>}
+      {mine && mine.status !== "working" && !ratedHere && !canRejoin && !invite && <p className="info">You can&apos;t ask to rejoin this test.</p>}
       {t.developerId === u.id ? (
         <div className="card flex flex-wrap items-center gap-3">
           <p className="flex-1 text-slate-200">This is your own test: this is how testers see it. You can&apos;t test it yourself.</p>
@@ -198,6 +201,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       {t.developerId === u.id || !u.isTester || closed || blocked || ratedHere ? null : (
         <div>
           <JoinBox
+            rejoin={canRejoin}
+            timeBack={mine && mine.endedAt ? leftText(mine.dueAt.getTime() - mine.endedAt.getTime()) : undefined}
             nda={t.ndaText}
             brokenKey={!!(await heldBrokenKey(t.id, u.id))}
             testId={t.id}
@@ -211,7 +216,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             spotsLeft={t.spots - testersIn}
             days={t.deadlineDays}
             dueIfNow={dueIfNow}
-            application={await db.application.findUnique({ where: { testId_testerId: { testId: t.id, testerId: u.id } } }).then((a) => (a ? { status: a.status, changed: !!a.changedAt } : null))}
+            application={await db.application.findUnique({ where: { testId_testerId: { testId: t.id, testerId: u.id } } }).then((a) => (a ? { status: a.status, changed: !!a.changedAt, kind: a.kind } : null))}
           />
         </div>
       )}

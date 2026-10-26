@@ -159,6 +159,7 @@ async function signIn(page, email) {
     await dev.waitForSelector("text=Your tests");
     await dev.goto("/app/tests/new");
     await dev.fill("#title", "Harbor Run: first 3 levels");
+    await dev.fill("#productName", "Harbor Run: first 3 levels");
     await dev.fill("#description", "Sail through the harbor and tell us where it gets confusing.");
     await dev.fill("#buildUrl", "https://example.com/harbor-run");
     await dev.fill("#questions", "What did you like?\nWhere did you get stuck?");
@@ -499,6 +500,7 @@ async function signIn(page, email) {
     await shot(dev, "hold-invite-refused-developer");
     await dev.goto("/app/tests/new");
     await dev.fill("#title", "Another game");
+    await dev.fill("#productName", "Another game");
     await dev.fill("#questions", "Anything?");
     await dev.click("text=Post the test");
     check("posting refused", await has(dev, "text=New tests can't be posted while payments are on hold."));
@@ -1413,6 +1415,7 @@ async function signIn(page, email) {
     await d.waitForSelector("text=Welcome back,");
     await d.goto("/app/tests/new");
     await d.fill("#title", "Mangrove");
+    await d.fill("#productName", "Mangrove");
     await d.fill("#description", "Paddle through the roots.");
     await d.fill("#buildUrl", "https://example.com/mangrove");
     await d.fill("#questions", "What did you see?\nAnything else?");
@@ -1430,6 +1433,7 @@ async function signIn(page, email) {
     await d.waitForSelector("text=Email confirmed");
     await d.goto("/app/tests/new");
     await d.fill("#title", "Mangrove");
+    await d.fill("#productName", "Mangrove");
     await d.fill("#description", "Paddle through the roots.");
     await d.fill("#buildUrl", "https://example.com/mangrove");
     await d.fill("#questions", "What did you see?\nAnything else?");
@@ -1652,6 +1656,7 @@ async function signIn(page, email) {
     await d.goto("/app/tests/new");
     check("the limit next to the spots field", await has(d, "text=Limit: 10 testers per test"));
     await d.fill("#title", "Coral Maze");
+    await d.fill("#productName", "Coral Maze");
     await d.fill("#description", "Find the way out.");
     await d.fill("#buildUrl", "https://example.com/coral");
     await d.fill("#questions", "Where did you get lost?");
@@ -1680,6 +1685,7 @@ async function signIn(page, email) {
     check("Categories: the full app's list as ticks", (await d.locator("fieldset:has(legend:text('Categories')) input[type=checkbox]").count()) === 12);
     await d.uncheck("fieldset:has(legend:text('Categories')) label:has-text('Productivity') input");
     await d.fill("#title", "Tidal Puzzle");
+    await d.fill("#productName", "Tidal Puzzle");
     await d.fill("#description", "Solve the tide pools.");
     await d.fill("#buildUrl", "https://example.com/tidal");
     await d.fill("#questions", "What did you like?\nAnything else?");
@@ -1965,6 +1971,7 @@ async function signIn(page, email) {
     await blurCheck(d, "#openUntil", "2020-01-01", new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10), "Post: Open until (past date)", "in the future");
     await d.fill("#spots", "11");
     await d.fill("#title", "Tidepool Range");
+    await d.fill("#productName", "Tidepool Range");
     await d.fill("#questions", "Anything?");
     await d.click("button:has-text('Post the test')");
     await d.waitForTimeout(500);
@@ -2037,6 +2044,7 @@ async function signIn(page, email) {
     await d.goto("/app/tests/new");
     check("three part cards with Required and Free", (await d.locator("input[aria-label$=': required']").count()) === 3 && (await d.locator("input[aria-label$=': free']").count()) === 3 && (await has(d, "text=Written report")) && (await has(d, "text=Recorded session")) && (await has(d, "text=Live session")));
     await d.fill("#title", "Rock Pool");
+    await d.fill("#productName", "Rock Pool");
     await d.fill("#questions", "What did you see?");
     await d.check("input[aria-label='Written report: required']");
     await d.check("input[aria-label='Include the recorded session']");

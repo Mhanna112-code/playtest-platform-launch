@@ -2,12 +2,13 @@
 import { useState } from "react";
 import { Err } from "@/components/Err";
 import { api, errOf } from "@/lib/client";
+import { announceAuth } from "@/components/SessionWatch";
 
 /**
  * A signed-out form (log in, sign up, forgot, reset): posts its fields as JSON; a form mistake shows red, a refusal
  * blue; on success it goes to `next` (or shows `done`).
  */
-export function AuthForm(p: { path: string; extra?: Record<string, string>; next?: string; done?: React.ReactNode; submit: string; busy: string; children: React.ReactNode; footer?: React.ReactNode }) {
+export function AuthForm(p: { announce?: "in"; path: string; extra?: Record<string, string>; next?: string; done?: React.ReactNode; submit: string; busy: string; children: React.ReactNode; footer?: React.ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [ok, setOk] = useState(false);
@@ -18,6 +19,7 @@ export function AuthForm(p: { path: string; extra?: Record<string, string>; next
     setErr("");
     try {
       await api(p.path, { ...fields, ...(p.extra ?? {}) });
+      if (p.announce) announceAuth("in");
       if (p.next) window.location.href = p.next;
       else {
         setOk(true);

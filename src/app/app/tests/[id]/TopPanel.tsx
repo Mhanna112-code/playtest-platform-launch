@@ -1,13 +1,13 @@
 "use client";
 import { useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
-import { api } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
-import { CalendarClock, Pencil, Play, Repeat } from "lucide-react";
-import { OpenUntilFold } from "./OpenUntilFold";
+import { CalendarClock, KeyRound, Pencil, Play, Repeat } from "lucide-react";
 import { checkFields } from "@/components/FieldChecks";
 import { CategoryBadges } from "@/components/Category";
+import { PartBadges, StatusPill } from "@/components/Ui";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { AlertsMenu } from "@/components/AlertsMenu";
 import { OctagonX } from "lucide-react";
 
 /** A working tester, for End early's rows and the Stop / End dialogs: what they sent, what is still to send, calls ahead. */
@@ -17,7 +17,7 @@ type Tester = { contractId: string; name: string; sent: string[]; toSend: string
  * The test page's top title panel: the developer's big buttons (Stop the test, End early, Next round).
  * Its stop-once box sits directly under this panel.
  */
-export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number }) {
+export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[] }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
   const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={error} /> : null);
   const [open, setOpen] = useState<"" | "end" | "next">("");
@@ -25,13 +25,12 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
   const [picked, setPicked] = useState<string[]>([]);
   const [noTick, setNoTick] = useState(false);
   const [reason, setReason] = useState("");
-  const [openErr, setOpenErr] = useState("");
+  const [openErr] = useState("");
   const stopped = p.status === "stopped";
   const ahead = p.working.reduce((n, w) => n + w.ahead, 0);
   const chosen = p.working.filter((w) => picked.includes(w.contractId));
   const chosenAhead = chosen.reduce((n, w) => n + w.ahead, 0);
   const allPicked = p.working.length > 0 && picked.length === p.working.length;
-  const STATUS: Record<string, string> = { open: "Open", closed: "Not taking new testers", stopped: "Stopped", draft: "Draft (testers can't see it yet)" };
 
   async function go(action: string, body: Record<string, unknown> = {}) {
     const r = await press<{ id?: string }>(`/api/tests/${p.id}/${action}`, body, action);
@@ -46,9 +45,14 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
       <section className="panel relative z-20 !space-y-5" aria-label="Test">
         <div className="flex flex-wrap items-start gap-4">
           <div className="min-w-[12rem] flex-1 space-y-2">
+            {p.productName && <p className="kicker">{p.productName}</p>}
             <h1 className="text-3xl font-bold tracking-tight text-white">{p.title}</h1>
             <div className="flex flex-wrap gap-2">
-              <span className={`badge ${p.status === "open" ? "border-emerald-400/40 text-emerald-200" : ""}`}>{STATUS[p.status]}</span>
+              {p.paused && p.status !== "stopped" ? <span className="badge border-amber-300/40 text-amber-200">Paused</span> : <StatusPill status={p.status} />}
+              {p.parts && <PartBadges written={p.parts.written} recording={p.parts.recording} live={p.parts.live} />}
+              {p.mature && <span className="badge border-rose-300/40 text-rose-200">Mature (18+)</span>}
+              {p.nda && <span className="badge">NDA</span>}
+              {p.keysLeft != null && <span className="badge"><KeyRound className="h-3.5 w-3.5" /> {p.keysLeft} key{p.keysLeft === 1 ? "" : "s"} left</span>}
               <CategoryBadges categories={p.categories ?? []} />
               {p.joinMode && (
                 <a href={`/app/tests/${p.id}/edit`} className={`badge no-underline hover:no-underline ${p.joinMode === "apply" ? "border-sky-300/40 text-sky-200" : ""}`} title="Change who can join in Edit">
@@ -62,6 +66,7 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
           {!stopped && (
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.id}/edit`}><Pencil className="h-4 w-4" /> Edit</a>
+              <AlertsMenu ignored={p.ignoredAlerts ?? []} />
               {p.nextRoundId ? (
                 <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.nextRoundId}`}><Repeat className="h-4 w-4" /> Go to the next round</a>
               ) : (
@@ -100,12 +105,14 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
           {p.status === "draft" && (
             <span className="flex flex-wrap items-center justify-end gap-3">
               <span className="text-xs text-slate-500">Hidden from new testers.</span>
-              <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => api(`/api/tests/${p.id}/open`, {}).then(() => window.location.reload()).catch((e) => setOpenErr((e as Error).message))}>
+              <button className="btn-secondary px-3 py-1.5 text-sm" disabled={busy} onClick={() => void go("open")}>
                 <Play className="h-4 w-4" /> Accept testers again
               </button>
+              {box("open")}
             </span>
           )}
-          {p.openUntil && <OpenUntilFold testId={p.id} version={p.version ?? 0} seenAt={p.seenAt} openUntil={p.openUntil} passed={new Date(p.openUntil).getTime() <= Date.now() || stopped} />}
+          {/* (Owner, Oct 26) Open until is shown here as a date only; it changes through Edit. */}
+          {p.openUntil && <p className="text-xs text-slate-400" data-open-until="">Open until {new Date(p.openUntil).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}{new Date(p.openUntil).getTime() <= Date.now() ? " (passed)" : ""}</p>}
         </div>
         {openErr && <p className="err">{openErr}</p>}
         {open === "end" && (

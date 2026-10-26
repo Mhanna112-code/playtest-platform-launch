@@ -6,13 +6,50 @@ import { requireUser } from "./session";
 export const SUSPENDED = "Your account is paused. Contact support if you think this is a mistake.";
 
 /** Signed in and not suspended: every action that changes something goes through this. */
-// (NEXT-UI 26) A suspended developer can sign in; on their test pages the ONLY actions allowed are Pay and, during a payment
-// hold, "Pay what you owe". Everything else is refused (blue) with this line. Testers never read "suspended".
-export const DEV_SUSPENDED = "Your account is paused: you can still pay for work testers sent.";
+// (Design doc 2, 11.4) A suspended developer: Pay (Payments), "Pay what you owe" and Cancel call are the only presses that go through;
+// everything else is refused (blue, final) and names the press that failed so the dashboard top can say so. A suspended tester:
+// every press is refused. Testers never read "suspended" about a developer.
+export const DEV_SUSPENDED = "Your account is paused: you can still pay for work testers sent and cancel booked calls.";
 
-export async function requireActive(req: Request, opts: { allowPay?: boolean } = {}) {
+const VERBS: Record<string, string> = {
+  edit: "Save", stop: "Stop", "end-early": "End early", "next-round": "Next round", invite: "Invite", "cancel-invite": "Cancel invite", "request-time": "Call request", "answer-request": "Answer",
+  application: "Answer", join: "Join", apply: "Apply", "rejoin-ask": "Ask to rejoin", message: "Message", written: "Send", "recording-start": "Send", "recording-send": "Send", "recording-done": "Send",
+  leave: "Leave", rate: "Rating", terms: "Switch or Keep", choose: "Charge", dispute: "Dispute", "dispute-side": "Dispute reply", "call-length": "Call length", "no-show": "Report", "cancel-call": "Cancel call",
+  "cancel-set": "Cancel calls", "assign-key": "Assign a key", "key-broken": "Report", open: "Open", review: "Pay",
+};
+
+/** "Your Pay on Harbor Run didn't go through": what the red box on the dashboard names. */
+export async function failedLine(req: Request, what?: string, piece?: { kind: string; id: string }) {
+  const path = new URL(req.url).pathname.split("/").filter(Boolean); // api, tests, <id>, <action>
+  let verb = what ?? "", title = "";
+  try {
+    if (path[1] === "tests" && path[2]) {
+      verb = verb || VERBS[path[3]] || "Save";
+      title = (await db.test.findUnique({ where: { id: path[2] }, select: { title: true } }))?.title ?? "";
+    } else if (path[1] === "tests") verb = verb || "Post";
+    else if (path[1] === "sessions" && path[2]) {
+      verb = verb || VERBS[path[3]] || "Save";
+      title = (await db.contract.findUnique({ where: { id: path[2] }, select: { title: true } }))?.title ?? "";
+    } else if (path[1] === "review") {
+      verb = verb || "Pay";
+      if (piece) {
+        const contractId = piece.kind === "call" ? (await db.call.findUnique({ where: { id: piece.id }, select: { contractId: true } }))?.contractId : (await db.submission.findUnique({ where: { id: piece.id }, select: { contractId: true } }))?.contractId;
+        title = contractId ? (await db.contract.findUnique({ where: { id: contractId }, select: { title: true } }))?.title ?? "" : "";
+      }
+    }
+    else verb = verb || "Save";
+  } catch {
+    // the name is a nicety
+  }
+  return `Your ${verb}${title ? ` on ${title}` : ""} didn't go through`;
+}
+
+export async function requireActive(req: Request, opts: { allowPay?: boolean; devOk?: boolean; what?: string; piece?: { kind: string; id: string } } = {}) {
   const u = await requireUser(req);
-  if (u.suspendedAt && !(opts.allowPay && u.isDeveloper)) throw new HttpError(403, "suspended", u.isDeveloper ? DEV_SUSPENDED : SUSPENDED);
+  const exempt = (opts.allowPay || opts.devOk) && u.isDeveloper;
+  if (u.suspendedAt && !exempt) {
+    throw new HttpError(403, "suspended", u.isDeveloper ? DEV_SUSPENDED : SUSPENDED, { failed: await failedLine(req, opts.what, opts.piece), suspended: true });
+  }
   return u;
 }
 

@@ -15,7 +15,7 @@ export default async function SignupPage() {
   if (await getPageUser()) redirect("/app");
   return (
     <AuthShell title="Create an account">
-      <AuthForm path="/api/auth/signup" next="/app" submit="Sign up" busy="Creating…" footer={<p className="text-sm text-slate-400">Already have an account? <Link href="/login" className="text-indigo-300 hover:underline">Log in</Link></p>}>
+      <AuthForm path="/api/auth/signup" next="/app" announce="in" submit="Sign up" busy="Creating…" footer={<p className="text-sm text-slate-400">Already have an account? <Link href="/login" className="text-indigo-300 hover:underline">Log in</Link></p>}>
         {googleConfigured() && (
           <>
             <a className="btn-ghost w-full" href="/api/auth/google/start">Continue with Google</a>

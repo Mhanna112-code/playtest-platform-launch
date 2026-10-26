@@ -65,6 +65,7 @@ export async function logIn(body: Record<string, unknown>) {
   const password = typeof body.password === "string" ? body.password : "";
   if (!password) throw field("Enter your password");
   const user = await db.user.findUnique({ where: { email } });
+  if (user?.deletedAt) throw field("This account no longer exists");
   if (user && !user.passwordHash) throw field("This account has no password yet. Use “Forgot your password?” to choose one.");
   if (!user || !(await verifyPassword(password, user.passwordHash))) throw field("Wrong email or password");
   await db.session.deleteMany({ where: { userId: user.id, expiresAt: { lt: new Date() } } });

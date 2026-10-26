@@ -6,6 +6,7 @@ import { PasswordForm } from "./PasswordForm";
 import { ratingSummary } from "@/lib/server/ratings";
 import { CapacityCard } from "@/components/ProfileTiles";
 import { sideFor } from "@/lib/sides";
+import { SuspendedBox } from "@/components/SuspendedBox";
 
 export const metadata = { title: "Profile · Playtest" };
 export const dynamic = "force-dynamic";
@@ -14,13 +15,15 @@ export const dynamic = "force-dynamic";
  * Your profile, for the side in use (the full app's /profile for testers and /dev/profile for developers): the form,
  * then your ratings; the agreed "Change your password" section stays here, styled like the other cards.
  */
-export default async function ProfilePage() {
+export default async function ProfilePage({ searchParams }: { searchParams: Promise<{ failed?: string }> }) {
   const u = await requirePageUser();
+  const { failed } = await searchParams;
   const side = sideFor(u, "/app/profile");
   const p = await db.testerProfile.findUnique({ where: { userId: u.id } });
   const rating = await ratingSummary(u.id);
   return (
     <div className="mx-auto max-w-2xl">
+      {u.suspendedAt && <div className="mb-4"><SuspendedBox failed={failed} developer={u.isDeveloper} tester={u.isTester} /></div>}
       {side === "developer" ? (
         <>
           <h1 className="mb-2 text-2xl font-semibold">Your developer profile</h1>

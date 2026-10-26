@@ -12,7 +12,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
  * Day 14 without a review: charge the developer (the lower of listing and asked, minus what's already been paid for this
  * part) or let it go. Charge needs its tick; Let it go asks once in place. (Never shown when the part is paid in full.)
  */
-export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenAt }: { sessionId: string; submissionId: string; line: string; devName: string; cents: number; seenAt: string }) {
+export function ChoiceBox({ paused = false, sessionId, submissionId, line, devName, cents, seenAt }: { paused?: boolean; sessionId: string; submissionId: string; line: string; devName: string; cents: number; seenAt: string }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
@@ -35,9 +35,10 @@ export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenA
   return (
     <div className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">
       <p>{line}.</p>
+      {paused && <p className="note">This test is paused right now. You can charge once it resumes; Let it go still works.</p>}
       {(
         <div className="flex flex-wrap items-center gap-2">
-          <label className="inline-flex items-center gap-1">
+          {!paused && <><label className="inline-flex items-center gap-1">
             $ <input className="input w-24" inputMode="decimal" aria-label="Amount to charge" data-min="0.5" data-max={String(cents / 100)} data-msg={`Charge from $0.50 up to ${money(cents)}.`} value={amount} onChange={(e) => { setAmount(e.target.value); setTicked(false); }} />
             <span className="note">(up to {money(cents)})</span>
           </label>
@@ -45,6 +46,7 @@ export function ChoiceBox({ sessionId, submissionId, line, devName, cents, seenA
             <input type="checkbox" checked={ticked} disabled={typed == null} onChange={(e) => setTicked(e.target.checked)} /> charge {devName} {typed == null ? "–" : money(typed)} now
           </label>
           <button className="btn" disabled={busy || !ticked || typed == null} onClick={(e) => checkFields(e.currentTarget.parentElement) && go("charge")}>{`Charge ${devName} ${typed == null ? "" : money(typed)}`}</button>
+          </>}
           <ConfirmButton className="btn-secondary" disabled={busy} title="Let it go?" confirmLabel="Let it go" onConfirm={() => go("letgo")}
             body={<p>This closes with nothing more paid.</p>}>
             Let it go

@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, money } from "@/lib/format";
 import { DEV_STOP_KINDS, delayedPayLine, type TestEventLike } from "@/lib/rules";
+import { alertOf } from "@/lib/alerts";
 
 type Tx = Prisma.TransactionClient;
 
@@ -34,10 +35,14 @@ export async function ownChanges(userId: string, testId: string, since: Date, ta
  * charges...) plus the developer's own actions in another tab. The developer's own events ("You paid ...") come only
  * through the action log, so the tab that did them never stops for them.
  */
-export async function devChanges(devId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db): Promise<TestEventLike[]> {
+export async function devChanges(devId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db, opts: { all?: boolean } = {}): Promise<TestEventLike[]> {
   const events = await tx.testEvent.findMany({ where: { testId, createdAt: { gt: since }, kind: { in: [...DEV_STOP_KINDS, "renamed"] } }, orderBy: { createdAt: "asc" }, take: 100 });
   const theirs = events.filter((e) => !e.text.startsWith("You "));
-  return [...theirs, ...(await devPaymentChanges(devId, testId, since, tx)), ...(await ownChanges(devId, testId, since, tab, tx))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const all = [...theirs, ...(await devPaymentChanges(devId, testId, since, tx)), ...(await ownChanges(devId, testId, since, tab, tx))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  // (Design doc 6) Update types the developer ignores in the Alerts menu no longer stop a press (the live box still lists them, greyed).
+  if (opts.all) return all;
+  const ignored = new Set((await tx.user.findUnique({ where: { id: devId }, select: { ignoredAlerts: true } }))?.ignoredAlerts ?? []);
+  return ignored.size ? all.filter((c) => { const a = alertOf(c.kind); return !a || !ignored.has(a); }) : all;
 }
 
 async function subKinds(ids: (string | null)[], tx: Tx | typeof db = db) {
@@ -132,4 +137,4 @@ export function withRenamed(changes: TestEventLike[], body: Record<string, unkno
   return [];
 }
 
-export const asLines = (changes: TestEventLike[]) => changes.map((e) => ({ text: e.text, at: e.createdAt, ...(e.kind === "info" || e.kind === "renamed" ? { kind: e.kind } : {}) }));
+export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: e.text, at: e.createdAt, ...(e.kind === "info" || e.kind === "renamed" ? { kind: e.kind } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));

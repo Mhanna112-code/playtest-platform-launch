@@ -22,6 +22,7 @@ const fakeStripe = {
       return { id: `pi_fake_${Date.now()}_${++fakeN}`, status: "succeeded", amount: p.amount };
     },
   },
+  refunds: { create: async () => ({ id: `re_fake_${++fakeN}` }) },
   webhooks: { constructEvent: (raw: string, sig: string) => { if (sig !== "fake") throw new Error("bad signature"); return JSON.parse(raw); } },
 } as unknown as Stripe;
 
@@ -38,7 +39,7 @@ export function getStripe(): Stripe {
   return new Stripe(key);
 }
 
-type Party = { id: string; email: string; stripeCustomerId: string | null; stripePaymentMethodId: string | null; stripeAccountId: string | null; payoutsReady: boolean };
+type Party = { id: string; email: string; stripeCustomerId: string | null; stripePaymentMethodId: string | null; stripeAccountId: string | null; payoutsReady: boolean; suspendedAt?: Date | null };
 
 /** Before charging: the developer needs a saved card (only when Stripe is on). */
 export function cardRefusal(dev: Party) {
@@ -54,9 +55,11 @@ export function cardRefusal(dev: Party) {
 export async function charge(dev: Party, tester: Party, amountCents: number, payKey: string, description: string) {
   const split = splitFee(amountCents);
   if (amountCents === 0) return { status: "charged", ...split, transferStatus: "none", stripePaymentIntentId: null };
-  if (!stripeOn()) return { status: "not_set_up", ...split, transferStatus: "none", stripePaymentIntentId: null };
+  // (Design doc 11.2) A suspended tester's pay is charged, but their share is HELD until reinstatement (the admin refunds or releases it if it is never lifted).
+  const held = !!tester.suspendedAt;
+  if (!stripeOn()) return { status: "not_set_up", ...split, transferStatus: held ? "held" : "none", stripePaymentIntentId: null };
   const stripe = getStripe();
-  const destination = tester.stripeAccountId && tester.payoutsReady ? tester.stripeAccountId : null;
+  const destination = !held && tester.stripeAccountId && tester.payoutsReady ? tester.stripeAccountId : null;
   try {
     const pi = await stripe.paymentIntents.create(
       {
@@ -73,7 +76,7 @@ export async function charge(dev: Party, tester: Party, amountCents: number, pay
       { idempotencyKey: `pay-${payKey}` },
     );
     if (pi.status !== "succeeded") throw new Error(`status ${pi.status}`);
-    return { status: "charged", ...split, transferStatus: destination ? "sent" : "waiting", stripePaymentIntentId: pi.id };
+    return { status: "charged", ...split, transferStatus: destination ? "sent" : held ? "held" : "waiting", stripePaymentIntentId: pi.id };
   } catch (e) {
     const msg = (e as { message?: string }).message ?? "unknown";
     console.error("[stripe] charge failed:", msg);
@@ -140,4 +143,12 @@ export async function refreshPayoutStatus(userId: string) {
   const ready = !!a.payouts_enabled && !!a.charges_enabled;
   await db.user.update({ where: { id: userId }, data: { payoutsReady: ready } });
   return ready;
+}
+
+/** Admin: a held share that will never be released goes back to the developer (the charge is refunded). */
+export async function refundPayment(paymentId: string) {
+  const p = await db.payment.findUniqueOrThrow({ where: { id: paymentId } });
+  if (p.transferStatus !== "held" && p.transferStatus !== "waiting") throw new HttpError(409, "not_held", "Only a share that hasn't been sent can be refunded.");
+  if (p.stripePaymentIntentId) await getStripe().refunds.create({ payment_intent: p.stripePaymentIntentId }, { idempotencyKey: `refund-${p.id}` });
+  return db.payment.update({ where: { id: p.id }, data: { status: "refunded", transferStatus: "refunded" } });
 }

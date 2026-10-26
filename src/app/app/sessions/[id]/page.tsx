@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, MessagesSquare, Users, XCircle } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
-import { callLengthText, callOutcome, joinedWords, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, callReference, cancelNeedsReason, canDispute, closesInLine, DELAYED_CALL_LINE, isLate, PAUSED_FOR_TESTERS, lateLabel, termsLine, testerShare } from "@/lib/rules";
+import { callLengthText, callOutcome, joinedWords, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, callReference, cancelNeedsReason, canDispute, closesInLine, DELAYED_CALL_LINE, isLate, PAUSED_FOR_TESTERS, lateLabel, termsLine, testPaused, testerShare, canAskToRejoin } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
@@ -59,6 +59,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const seenAt = now.toISOString();
   await sweepHeldCalls(c.test.developerId);
   const offer = await openOffer(c.id);
+  const invitedBack = c.status !== "working" && (await db.invite.count({ where: { testId: c.testId, testerId: u.id, status: "sent" } })) > 0;
   const key = c.status === "working" ? await keyOf(c.id) : null;
   // A key the developer gave after one was reported: shown as new on the session page.
   const freshKey = key && key.status === "inuse" && (await db.accessKey.count({ where: { contractId: c.id, status: "retired" } })) > 0;
@@ -76,7 +77,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const rateBlock = myRating ? "rated" : await rateBlocker(c.id, "tester");
   const rateWarn = await rateWarning(c.id);
   // Live calls: the request panel shows only when there's something to do or see.
-  const canRequestCall = !refusal && !blockedPair && !c.test.developer.holdStartedAt;
+  const paused = testPaused(c.test.developer, c.test);
+  const canRequestCall = !refusal && !blockedPair && !paused;
   const pendingReqs = await db.callRequest.findMany({ where: { contractId: c.id, status: "pending", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
   const unread = await unreadCount(u.id, c.testId, c.testerId);
   const blockedByMe = (await db.block.count({ where: { blockerId: u.id, blockedId: c.test.developerId } })) > 0;
@@ -126,7 +128,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         answers: written ? ((written.answers as string[]) ?? []) : [],
       } : null} />
       {refusal && <p className="info">{refusal}</p>}
-      {!refusal && c.test.developer.holdStartedAt && <p className="info">{PAUSED_FOR_TESTERS}</p>}
+      {!refusal && paused && <p className="info" data-paused="">{PAUSED_FOR_TESTERS}</p>}
       {!refusal && c.test.openUntil && c.test.openUntil > now && c.test.openUntil.getTime() - now.getTime() < 3 * 86_400_000 && (
         <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(c.title, c.test.openUntil, now)}</p>
       )}
@@ -137,6 +139,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
               <PersonHover name={dev} href={`/app/developers/${c.test.developerId}`} summary={[devRating || "No ratings yet"]} />
               {" "}· joined {fmtDate(c.joinedAt)}</p>
             <div className="mt-1 flex flex-wrap gap-2">
+              {c.test.status === "stopped" && <span className="badge border-sky-300/40 text-sky-200"><span className="h-2 w-2 rounded-sm bg-sky-300" /> Stopped</span>}
               <span className={`badge ${c.status === "working" ? "border-emerald-400/40 text-emerald-200" : ""}`}>{c.status === "working" ? "Working" : c.status === "left" ? "You left" : "Ended"}</span>
               {c.writtenCents != null && <span className="badge">Written answers</span>}
               {c.recordingCents != null && <span className="badge">Screen recording</span>}
@@ -177,6 +180,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
 
       </section>
 
+      {c.test.status === "stopped" && <p className="note" data-stopped-line="">This test is stopped. You can still charge or let go of unreviewed work after 14 days, dispute a decision, rate the developer, and chat.</p>}
       {myRating && !rated.testerRevealed && <p className="note">You rated {dev}.</p>}
       {myRating && rated.testerRevealed && <p className="note">You rated {dev}: {myRating.stars} ★{myRating.comment ? ` · “${myRating.comment}”` : ""}</p>}
       {rated.developer && <p className="note">{dev} rated you: {rated.developer.stars} ★{rated.developer.comment ? ` · “${rated.developer.comment}”` : ""}</p>}
@@ -190,11 +194,12 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           lines={rateWarn.lines}
         />
       )}
-      {c.status === "left" && c.endKind !== "rated" && !myRating && c.test.status === "open" && (
+      {/* (Design doc 8) Back in: an invite brings a Join here; otherwise an ask the developer accepts (before the deadline, never after a stop or a rating). */}
+      {c.status !== "working" && !myRating && c.test.status === "open" && (invitedBack || canAskToRejoin(c, false)) && (
         <section id="rejoin" className="card space-y-3 scroll-mt-24 border-emerald-400/30 text-sm">
-          <p className="font-semibold text-white">Join {c.title} again</p>
-          <p className="text-ink-300">You join on the current listing: your session comes back with everything in it (work you sent, payments and chat).</p>
-          <a className="btn" href={`/app/find/${c.testId}`}>Join again</a>
+          <p className="font-semibold text-white">{invitedBack ? `${dev} invited you back to ${c.title}` : `Ask to rejoin ${c.title}`}</p>
+          <p className="text-ink-300">{invitedBack ? "Join to get your session back, with everything in it (work you sent, payments and chat)." : `If ${dev} accepts, your session comes back with everything in it (work you sent, payments and chat) on the current listing, with the time you had left.`}</p>
+          <a className="btn" href={`/app/find/${c.testId}`}>{invitedBack ? "Join" : "Ask to rejoin"}</a>
         </section>
       )}
 
@@ -248,8 +253,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
               </p>
               <p className="text-slate-400">{cents == null ? "Not in your contract" : `In your contract · ${cents === 0 ? "free" : `${money(testerShare(cents))} for you`}`}{sub?.askedCents != null && ` · You asked ${money(sub.askedCents)}`}{` · Paid so far ${money(sub ? partPaid.get(sub.id) ?? 0 : 0)}`}</p>
               {sub && <p className="text-xs text-slate-500">{partLine(sub.agreedCents, sub.askedCents, partPaid.get(sub.id) ?? 0)}</p>}
-              {sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && !c.test.developer.holdStartedAt && chargeAmount(sub.agreedCents, sub.askedCents, partPaid.get(sub.id) ?? 0) > 0 && (
-                <ChoiceBox seenAt={seenAt} sessionId={c.id} submissionId={sub.id} devName={dev} cents={chargeAmount(sub.agreedCents, sub.askedCents, partPaid.get(sub.id) ?? 0)} line={choiceLine(dev, key, chargeAmount(sub.agreedCents, sub.askedCents, partPaid.get(sub.id) ?? 0))} />
+              {sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && chargeAmount(sub.agreedCents, sub.askedCents, partPaid.get(sub.id) ?? 0) > 0 && (
+                <ChoiceBox paused={paused} seenAt={seenAt} sessionId={c.id} submissionId={sub.id} devName={dev} cents={chargeAmount(sub.agreedCents, sub.askedCents, partPaid.get(sub.id) ?? 0)} line={choiceLine(dev, key, chargeAmount(sub.agreedCents, sub.askedCents, partPaid.get(sub.id) ?? 0))} />
               )}
               {sub && delayedSubs.has(sub.id) ? <p className="info">Payment for this part may be delayed.</p> : sub?.review && <TesterReview sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} />}
             </li>

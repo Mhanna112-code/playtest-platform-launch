@@ -13,7 +13,7 @@ import { noGaps, PROFILE_COVERS, type GapAsk, type Gaps } from "@/lib/gaps";
  * Join or Apply to join. Stops once (box under the button) if anything about the listing changed since the page loaded;
  * the second press goes ahead on the current listing. No offers or counter-offers here.
  */
-export function JoinBox(p: { nda?: string; brokenKey?: boolean; testId: string; seenAt: string; mode: string; invited: boolean; inviteId?: string | null; application: { status: string; changed: boolean } | null; missing: Gaps; needs: { devices: string[]; languages: string[] }; devName: string; spotsLeft: number; days: number; dueIfNow: string }) {
+export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; brokenKey?: boolean; testId: string; seenAt: string; mode: string; invited: boolean; inviteId?: string | null; application: { status: string; changed: boolean; kind?: string } | null; missing: Gaps; needs: { devices: string[]; languages: string[] }; devName: string; spotsLeft: number; days: number; dueIfNow: string }) {
   const router = useRouter();
   // (Design doc 7.3) The NDA is accepted before joining or applying; a returning tester says whether the key they had works again.
   const [nda, setNda] = useState(false);
@@ -35,11 +35,11 @@ export function JoinBox(p: { nda?: string; brokenKey?: boolean; testId: string; 
 
   // The pop-up's press: "Join anyway" / "Apply anyway", checked on the server against what the pop-up showed.
   async function sendFromPopup(shown: Gaps): Promise<PopupAnswer> {
-    const action = applying ? "apply" : "join";
+    const action = rejoining ? "rejoin-ask" : applying ? "apply" : "join";
     try {
       const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt: p.seenAt, confirmed, boxAt, anyway: true, gapsShown: shown, inviteId });
       if (r.sessionId) window.location.href = `/app/sessions/${r.sessionId}`;
-      else setDone("Application sent. You'll hear back when the developer answers.");
+      else setDone(rejoining ? "Sent. You'll hear back when the developer answers." : "Application sent. You'll hear back when the developer answers.");
       return { ok: true };
     } catch (e) {
       if (e instanceof ApiError && e.code === "stop_once") {
@@ -52,10 +52,10 @@ export function JoinBox(p: { nda?: string; brokenKey?: boolean; testId: string; 
     }
   }
   // Join / Apply with something missing: the pop-up asks first (never a refusal). Covered by now: a notice, no pop-up.
-  async function press(action: "join" | "apply") {
+  async function press(action: "join" | "apply" | "rejoin-ask") {
     setCovered(null);
     if (p.nda && !nda) {
-      setNdaErr("Accept the NDA to " + (action === "apply" ? "apply." : "join."));
+      setNdaErr("Accept the NDA to " + (action === "apply" ? "apply." : action === "rejoin-ask" ? "ask to rejoin." : "join."));
       document.getElementById("nda-accept")?.focus();
       return;
     }
@@ -64,21 +64,21 @@ export function JoinBox(p: { nda?: string; brokenKey?: boolean; testId: string; 
     const now = await api<{ gaps: Gaps }>(`/api/tests/${p.testId}/my-gaps`, {}).catch(() => null);
     setBusy(false);
     if (now && noGaps(now.gaps)) {
-      setCovered({ at: new Date().toISOString(), ask: action });
+      setCovered({ at: new Date().toISOString(), ask: action === "apply" ? "apply" : "join" });
       router.refresh();
       return;
     }
-    setAsking({ ask: action, gaps: now?.gaps ?? p.missing });
+    setAsking({ ask: action === "apply" ? "apply" : "join", gaps: now?.gaps ?? p.missing });
   }
 
-  async function go(action: "join" | "apply" | "withdraw-application", anyway = false) {
+  async function go(action: "join" | "apply" | "rejoin-ask" | "withdraw-application", anyway = false) {
     setBusy(true);
     setErr("");
     try {
       const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt: p.seenAt, confirmed, boxAt, anyway, inviteId });
       if (r.sessionId) window.location.href = `/app/sessions/${r.sessionId}`;
       else if (action === "withdraw-application") window.location.reload();
-      else setDone("Application sent. You'll hear back when the developer answers.");
+      else setDone(action === "rejoin-ask" ? "Sent. You'll hear back when the developer answers." : "Application sent. You'll hear back when the developer answers.");
     } catch (e) {
       const sb = stopBox(e);
       if (sb) {
@@ -110,14 +110,15 @@ export function JoinBox(p: { nda?: string; brokenKey?: boolean; testId: string; 
   if (p.application?.status === "pending")
     return (
       <div className="space-y-2">
-        <p className="info">You applied to join. You&apos;ll hear back when the developer answers.</p>
+        <p className="info">{p.application.kind === "rejoin" ? "You asked to rejoin. You'll hear back when the developer answers." : "You applied to join. You'll hear back when the developer answers."}</p>
         <button className="btn-ghost" disabled={busy} onClick={() => go("withdraw-application")}>Withdraw application</button>
         <ChangesBox changes={box?.changes ?? null} tail={box?.tail} />
         <Err text={err} />
       </div>
     );
   if (p.mode === "invite" && !p.invited) return <p className="note">This test is invite only.</p>;
-  const applying = p.mode === "apply" && !p.invited; // an invited tester just joins
+  const rejoining = !!p.rejoin && !p.invited; // coming back is an ask the developer accepts (an invited tester just joins)
+  const applying = !rejoining && p.mode === "apply" && !p.invited; // an invited tester just joins
   return (
     // The full app's join card (claim-form.tsx): the choices, the button with the spots left, and how long they'll have.
     <div className="card space-y-4">
@@ -136,15 +137,15 @@ export function JoinBox(p: { nda?: string; brokenKey?: boolean; testId: string; 
           <input type="checkbox" checked={keyWorks} onChange={(e) => setKeyWorks(e.target.checked)} /> The access key I had before works again (otherwise you get a new one)
         </label>
       )}
-      {applying && (
+      {(applying || rejoining) && (
         <div>
-          <label className="label" htmlFor="note">A note to the developer</label>
+          <label className="label" htmlFor="note">A note to the developer{rejoining ? " (optional)" : ""}</label>
           <textarea id="note" rows={2} className="input" value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
       )}
       <div className="flex flex-wrap items-center gap-3">
-        <button className="btn" disabled={busy || !!done} onClick={() => press(applying ? "apply" : "join")}><UserPlus className="h-4 w-4" /> {busy ? (applying ? "Sending…" : "Joining…") : applying ? "Apply to join" : "Join this test"}</button>
-        <span className="text-sm text-slate-400">{p.spotsLeft} spot{p.spotsLeft === 1 ? "" : "s"} left{applying && " · the developer approves each tester"}</span>
+        <button className="btn" disabled={busy || !!done} onClick={() => press(rejoining ? "rejoin-ask" : applying ? "apply" : "join")}><UserPlus className="h-4 w-4" /> {busy ? (applying || rejoining ? "Sending…" : "Joining…") : rejoining ? "Ask to rejoin" : applying ? "Apply to join" : "Join this test"}</button>
+        <span className="text-sm text-slate-400">{p.spotsLeft} spot{p.spotsLeft === 1 ? "" : "s"} left{(applying || rejoining) && " · the developer accepts"}</span>
       </div>
       {covered && (
         <p role="status" className="info"><JustUpdated at={covered.at} /> You now meet this test&apos;s needs. Press {covered.ask === "apply" ? "Apply" : "Join"} to {covered.ask === "apply" ? "apply" : "join"}.</p>
@@ -164,7 +165,11 @@ export function JoinBox(p: { nda?: string; brokenKey?: boolean; testId: string; 
       <ChangesBox changes={box?.changes ?? null} tail={box?.tail} />
       {done && <p className="ok">{done}</p>}
       <Err text={err} />
-      <p className="text-sm text-slate-300">You&apos;ll have {p.days} day{p.days === 1 ? "" : "s"}{applying ? " from when you're approved" : ""} (until {p.dueIfNow} if {applying ? "you're approved" : "you join"} now).</p>
+      {rejoining ? (
+        <p className="text-sm text-slate-300">If {p.devName} accepts, your session comes back on the current listing with the time you had left{p.timeBack ? `: ${p.timeBack}` : ""}.</p>
+      ) : (
+        <p className="text-sm text-slate-300">You&apos;ll have {p.days} day{p.days === 1 ? "" : "s"}{applying ? " from when you're approved" : ""} (until {p.dueIfNow} if {applying ? "you're approved" : "you join"} now).</p>
+      )}
     </div>
   );
 }

@@ -25,13 +25,13 @@ export function PayBox(p: { kind: "submission" | "call"; id: string; name: strin
   const below = p.listingCents != null && cents != null && cents < p.listingCents;
 
   async function go(action: "pay" | "reject") {
-    const r = await press<{ status?: string; amountCents: number; rejected: boolean; paidSoFarCents?: number }>("/api/review", {
+    const r = await press<{ status?: string; amountCents: number; rejected: boolean; paidSoFarCents?: number; later?: string }>("/api/review", {
       action, kind: p.kind, id: p.id, payKey, amount, reason, tickedCents: ticked ? cents : null,
     }, action);
     if (!r) return;
     await keep.clear();
     if (r.paidSoFarCents != null) setPaidSoFar(r.paidSoFarCents);
-    setDone(r.rejected ? "Rejected. Nothing was charged." : r.status === "not_set_up" ? `Recorded ${money(r.amountCents)}: payments aren't set up yet, so nothing was charged.` : `Paid ${money(r.amountCents)}.`);
+    setDone(r.rejected ? "Rejected. Nothing was charged." : r.status === "not_set_up" ? `Recorded ${money(r.amountCents)}: payments aren't set up yet, so nothing was charged.` : `Paid ${money(r.amountCents)}${r.later ? ` · ${r.later}` : ""}.`);
     setTimeout(() => window.location.reload(), 900);
   }
 

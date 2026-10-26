@@ -17,7 +17,7 @@ type U = { id: string; email: string; name: string; pronoun: string };
  */
 export async function invitable(devId: string, testId: string) {
   const [testers, inTest, invites, blocks, active, past] = await Promise.all([
-    db.user.findMany({ where: { isTester: true, id: { not: devId } }, include: { profile: true }, orderBy: { createdAt: "desc" }, take: 500 }),
+    db.user.findMany({ where: { isTester: true, deletedAt: null, id: { not: devId } }, include: { profile: true }, orderBy: { createdAt: "desc" }, take: 500 }),
     db.contract.findMany({ where: { testId, status: "working" }, select: { testerId: true } }),
     db.invite.findMany({ where: { testId, status: "sent" } }),
     db.block.findMany({ where: { OR: [{ blockerId: devId }, { blockedId: devId }] } }),
@@ -37,35 +37,53 @@ export async function invitable(devId: string, testId: string) {
     const g = grouped.find((x) => x.rateeId === id);
     return g ? `${(g._avg.stars ?? 0).toFixed(1)} ★ (${g._count._all} rating${g._count._all === 1 ? "" : "s"})` : "";
   };
-  // (NEWEST+8) Suggested: up to 5, not people you've worked with: meeting the test's needs first, then the highest
-  // rating, then the most matching devices and languages.
-  const avg = (id: string) => grouped.find((x) => x.rateeId === id)?._avg.stars ?? 0;
+  // (Design doc 6) The algorithm. A tester MEETS the test with one required device and one required language (where any are required).
+  // SCORE = (3 x the platform's average + their stars) / (3 + their ratings), so new testers start near the average.
+  // INVITABLE = not in the test, not invited, under 10 tests, not suspended; blocked or deleted testers never appear.
+  // Worked with: invitable first, then your rating of them, tests together, most recent. Suggested (top 5 of the others, after the
+  // device / language ticks): invitable newcomers by meets, score, accepted parts, matches. Find testers: invitable first, then meets and score.
+  const allRatings = await db.rating.aggregate({ where: { side: "developer", ...revealedRatingsWhere() }, _avg: { stars: true } });
+  const platformAvg = allRatings._avg.stars ?? 3;
+  const sums = await db.rating.groupBy({ by: ["rateeId"], where: { rateeId: { in: testers.map((t) => t.id) }, side: "developer", ...revealedRatingsWhere() }, _sum: { stars: true }, _count: { _all: true } });
+  const scoreOf = (id: string) => {
+    const g = sums.find((x) => x.rateeId === id);
+    return (3 * platformAvg + (g?._sum.stars ?? 0)) / (3 + (g?._count._all ?? 0));
+  };
+  const acceptedBy = new Map((await db.payment.groupBy({ by: ["testerId"], where: { testerId: { in: testers.map((t) => t.id) }, status: { in: ["charged", "not_set_up"] } }, _count: { _all: true } })).map((g) => [g.testerId, g._count._all]));
   const matches = (t: (typeof testers)[number]) => (t.profile?.devices ?? []).filter((d) => test.devices.includes(d)).length + (t.profile?.languages ?? []).filter((l) => test.languages.includes(l)).length;
-  const suggested = new Set(
-    testers
-      .filter((t) => !removed.has(t.id) && !workedWith.has(t.id))
-      .map((t) => ({ t, meets: needsGap(test, t.profile) ? 0 : 1, r: avg(t.id), m: matches(t) }))
-      .sort((a, b) => b.meets - a.meets || b.r - a.r || b.m - a.m)
-      .slice(0, 5)
-      .map((x) => x.t.id),
-  );
-  return testers
+  const myTests = await db.contract.findMany({ where: { test: { developerId: devId } }, select: { testerId: true, joinedAt: true, test: { select: { id: true, title: true } } }, orderBy: { joinedAt: "desc" } });
+  const together = (id: string) => {
+    const seen = new Map<string, string>();
+    for (const c of myTests) if (c.testerId === id && !seen.has(c.test.id)) seen.set(c.test.id, c.test.title);
+    return [...seen].map(([tid, title]) => ({ id: tid, title }));
+  };
+  const lastTogether = (id: string) => myTests.find((c) => c.testerId === id)?.joinedAt.getTime() ?? 0;
+  const rows = testers
     .filter((t) => !removed.has(t.id))
     .map((t) => {
       const inv = invites.find((i) => i.testerId === t.id);
       const n = active.find((a) => a.testerId === t.id)?._count._all ?? 0;
-      const grey = inTest.some((c) => c.testerId === t.id) ? "Already in this test" : inv ? `Invited ${fmt(inv.createdAt)}` : t.suspendedAt ? "Can't be invited right now" : n >= MAX_ACTIVE_TESTS ? "Can't join more tests right now" : null;
+      // Greyed rows: already in, invited, or "Can't join this test" (suspended, or in 10 tests).
+      const grey = inTest.some((c) => c.testerId === t.id) ? "Already in this test" : inv ? `Invited ${fmt(inv.createdAt)}` : t.suspendedAt || n >= MAX_ACTIVE_TESTS ? "Can't join this test" : null;
+      const mineAvg = mine.find((m) => m.rateeId === t.id)?._avg.stars ?? null;
       return {
         id: t.id, name: displayName(t), devices: t.profile?.devices ?? [], languages: t.profile?.languages ?? [], categories: t.profile?.categories ?? [],
         invited: !!inv, inviteId: inv?.id ?? null, grey, rating: ratingLine(t.id),
         // (NEXT-UI 14) Still tickable: a re-invite is how an ended tester can come back.
         was: ((s) => (s === "left" ? "Left this test" : s === "ended" ? "You ended their work" : ""))(past.find((c) => c.testerId === t.id)?.status),
         tag: doesntListTag(test, t.profile),
-        detail: withYouText(mine.find((m) => m.rateeId === t.id)?._avg.stars ?? null, withDev.filter((c) => c.testerId === t.id).length),
+        detail: withYouText(mineAvg, withDev.filter((c) => c.testerId === t.id).length),
         gap: missingNeed(test, t.profile),
-        section: workedWith.has(t.id) ? "worked" : suggested.has(t.id) ? "suggested" : "other",
+        section: workedWith.has(t.id) ? "worked" : "other",
+        meets: !needsGap(test, t.profile), score: scoreOf(t.id), accepted: acceptedBy.get(t.id) ?? 0, matches: matches(t),
+        together: together(t.id), mineAvg, last: lastTogether(t.id),
       };
     });
+  const byGrey = (a: (typeof rows)[number], b: (typeof rows)[number]) => Number(!!a.grey) - Number(!!b.grey);
+  return rows.sort((a, b) =>
+    byGrey(a, b) ||
+    (a.section === "worked" && b.section === "worked" ? (b.mineAvg ?? -1) - (a.mineAvg ?? -1) || b.together.length - a.together.length || b.last - a.last
+      : Number(b.meets) - Number(a.meets) || b.score - a.score || b.accepted - a.accepted || b.matches - a.matches));
 }
 
 /** What the test needs that this tester's profile doesn't list ("English"), or "". */
@@ -154,11 +172,14 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     if (invited.length) await recordEvent(tx, testId, "invited", `You invited ${andList(invited.map((i) => i.name))}`, false);
     return { t, invited, others };
   });
-  for (const i of result.invited) {
+  // (Design doc 6) An invite plus a pending application or rejoin ask joins the tester at once.
+  const matched: string[] = [];
+  for (const i of result.invited) if (await (await import("./joining")).matchInviteAndAsk(testId, i.id)) matched.push(i.id);
+  for (const i of result.invited.filter((x) => !matched.includes(x.id))) {
     await notify(i.email, `${displayName(dev)} invited you to “${result.t.title}”`, [`${displayName(dev)} invited you to test “${result.t.title}”.`, `What you get: ${termsLine(asListing(result.t), true)}.`, "Open it and press Join to join on these terms."], `/app/find/${testId}`);
   }
   const msg = [result.invited.length ? `Invited ${andList(result.invited.map((i) => i.name))}.` : "", ...result.others].filter(Boolean).join(" ") || "Everyone you ticked was already invited or joined.";
-  return { message: msg, invited: result.invited.map((i) => i.id) };
+  return { message: msg, invited: result.invited.map((i) => i.id), joined: matched };
 }
 
 export async function cancelInvite(dev: U, testId: string, body: Record<string, unknown>) {

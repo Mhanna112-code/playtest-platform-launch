@@ -1,11 +1,13 @@
 import { Banknote, CreditCard, ShieldCheck } from "lucide-react";
 import { db } from "@/lib/db";
-import { fmtDateTime, money } from "@/lib/format";
+import { displayName, fmtDateTime, money } from "@/lib/format";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { stripeOn } from "@/lib/server/stripe";
 import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
 import { sideFor } from "@/lib/sides";
+import { PayoutBanner } from "@/components/PayoutBanner";
+import { PayBox } from "../tests/[id]/PayBox";
 import { waitingForReview } from "@/lib/server/payments";
 import { testerShare } from "@/lib/rules";
 
@@ -45,6 +47,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <h1 className="text-3xl font-bold tracking-tight text-white">Payments</h1>
+      {tester && u.payoutProblemAt && <PayoutBanner />}
       {!on && <p className="info">{MESSAGES.off}</p>}
       {dev && (await owedForBox(u.id).then((o) => (u.holdStartedAt || o.length ? <OwedBox onHold={!!u.holdStartedAt} owed={o} /> : null)))}
       {q.error && q.error !== "off" && <p className="err">{MESSAGES[q.error]}</p>}
@@ -67,9 +70,18 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                 {waitingTests.map((t) => {
                   const n = t.contracts.reduce((a, c) => a + c.submissions.length + c.calls.length, 0);
                   return (
-                    <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                      <span className="text-slate-200">{t.title} <span className="text-slate-400">· {n} part{n === 1 ? "" : "s"} to pay or reject</span></span>
-                      <a href={`/app/tests/${t.id}#needs-you`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline">Pay</a>
+                    <li key={t.id} className="space-y-2 py-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-slate-200">{t.title} <span className="text-slate-400">· {n} part{n === 1 ? "" : "s"} to pay or reject</span></span>
+                        {/* A suspended developer can't open test pages: they pay right here. */}
+                        {!u.suspendedAt && <a href={`/app/tests/${t.id}#needs-you`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline">Pay</a>}
+                      </div>
+                      {u.suspendedAt && t.contracts.flatMap((c) => c.submissions.map((s) => (
+                        <details key={s.id} className="rounded-xl border border-white/10 p-2" open>
+                          <summary className="cursor-pointer text-sm text-white">{displayName(c.tester)} · {s.kind === "recording" ? "Recording" : "Written answers"} · sent {fmtDateTime(s.updatedAt)}</summary>
+                          <PayBox kind="submission" id={s.id} name={displayName(c.tester)} seenAt={new Date().toISOString()} paidSoFarCents={0} askedCents={s.askedCents} listingCents={s.agreedCents} listingText={`${money(s.agreedCents)} for ${s.kind === "recording" ? "a recording" : "written answers"}`} />
+                        </details>
+                      )))}
                     </li>
                   );
                 })}
@@ -143,7 +155,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
               {paidIn.map((p) => (
                 <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                   <span className="text-slate-200">You get {money(p.testerCents)}</span>
-                  <span className="text-slate-400">{fmtDateTime(p.createdAt)}{p.status === "not_set_up" || p.transferStatus === "waiting" ? " · delayed until your payout account is ready" : ""}</span>
+                  <span className="text-slate-400">{fmtDateTime(p.createdAt)}{p.transferStatus === "held" ? " · yours once your account is active again" : p.status === "not_set_up" || p.transferStatus === "waiting" ? " · delayed until your payout account is ready" : ""}</span>
                 </li>
               ))}
               {paidIn.length === 0 && <li className="py-2 text-slate-500">Nothing yet.</li>}

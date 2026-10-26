@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import type { Change } from "@/components/ChangesBox";
 import { announce, clearShown, setShown, wasShownInBox } from "@/lib/live";
+import { LongList } from "@/components/LongList";
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const key = (c: Change) => `${c.at}|${c.text}`;
@@ -73,9 +74,11 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt }: { scope: strin
   if (!show.length) return null;
   return (
     <div ref={box} className="info flex items-start gap-3" role="status" aria-live="polite" data-live-top>
-      <ul className="mr-auto space-y-0.5">
+      {/* (Design doc 2) The newest 3 lines, then "Show N more" opening a scroll box about 8 lines tall. */}
+      <div className="mr-auto min-w-0">
+      <LongList className="space-y-0.5" tall="max-h-52">
         {show.map((l) => (
-          <li key={key(l)}>
+          <li key={key(l)} className={l.ignored ? "text-sky-100/50" : ""} title={l.ignored ? "You turned these stops off in Alerts" : undefined}>
             <b>Updated · {time(l.at)}:</b> {l.text}
             {l.kind === "info" && seeIt && (
               <>
@@ -85,7 +88,8 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt }: { scope: strin
             )}
           </li>
         ))}
-      </ul>
+      </LongList>
+      </div>
       <button className="btn-ghost text-xs" onClick={() => setHiddenUpTo(new Date(show[0].at).toISOString())}>Dismiss</button>
     </div>
   );
