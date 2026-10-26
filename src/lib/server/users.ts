@@ -6,9 +6,13 @@ import { requireUser } from "./session";
 export const SUSPENDED = "Your account is paused. Contact support if you think this is a mistake.";
 
 /** Signed in and not suspended: every action that changes something goes through this. */
-export async function requireActive(req: Request) {
+// (NEXT-UI 26) A suspended developer can sign in; on their test pages the ONLY actions allowed are Pay and, during a payment
+// hold, "Pay what you owe". Everything else is refused (blue) with this line. Testers never read "suspended".
+export const DEV_SUSPENDED = "Your account is paused: you can still pay for work testers sent.";
+
+export async function requireActive(req: Request, opts: { allowPay?: boolean } = {}) {
   const u = await requireUser(req);
-  if (u.suspendedAt) throw new HttpError(403, "suspended", SUSPENDED);
+  if (u.suspendedAt && !(opts.allowPay && u.isDeveloper)) throw new HttpError(403, "suspended", u.isDeveloper ? DEV_SUSPENDED : SUSPENDED);
   return u;
 }
 

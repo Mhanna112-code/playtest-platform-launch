@@ -226,3 +226,13 @@ export async function addDevSide(dev: U, testId: string, body: Record<string, un
   await db.dispute.update({ where: { id: d.id }, data: { devSide: text, devSideAt: new Date() } });
   return { ok: true };
 }
+
+/** (NEXT-UI 27) A developer's tests with sent work or held calls still to be paid or rejected (the Payments page's "Waiting for your review"). */
+export async function waitingForReview(devId: string) {
+  const held = { review: null, status: "booked", startsAt: { lte: new Date() } };
+  return db.test.findMany({
+    where: { developerId: devId, contracts: { some: { OR: [{ submissions: { some: { review: null } } }, { calls: { some: held } }] } } },
+    orderBy: { createdAt: "desc" },
+    include: { contracts: { include: { submissions: { where: { review: null } }, calls: { where: held } } } },
+  });
+}

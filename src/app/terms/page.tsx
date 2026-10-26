@@ -57,6 +57,7 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
     title: "6. Conduct",
     points: [
       "Be respectful. No harassment, spam, fake or copied work, or leaking builds.",
+      "No graphic content: no sexual content involving minors, no illegal content and no real-world gore. Other graphic content must be marked Mature (18+) on the test, with a note saying why.",
       "Keep payments on the platform: deals arranged outside it aren't covered by reviews, disputes or payouts.",
       "Either side of a test can block the other, or report a problem with a call (no-show or late) to the team. We may remove content and suspend accounts that break these rules.",
     ],

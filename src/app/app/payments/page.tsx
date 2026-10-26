@@ -6,6 +6,7 @@ import { stripeOn } from "@/lib/server/stripe";
 import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
 import { sideFor } from "@/lib/sides";
+import { waitingForReview } from "@/lib/server/payments";
 import { testerShare } from "@/lib/rules";
 
 export const metadata = { title: "Payments · Playtest" };
@@ -32,6 +33,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         include: { test: { include: { developer: true } }, submissions: { include: { review: true, dispute: true } }, calls: { include: { review: true, dispute: true } } },
       })
     : [];
+  // (NEXT-UI 27) A developer's "Waiting for your review": every test with sent work or held calls still to be paid / rejected.
+  const waitingTests = dev ? await waitingForReview(u.id) : [];
   const owed = tester ? await db.payment.findMany({ where: { testerId: u.id, status: "failed", settledAt: null, owedUntil: { not: null } }, select: { submissionId: true, callId: true } }) : [];
   const owedKeys = new Set(owed.map((p) => p.submissionId ?? p.callId));
   const [paidOut, paidIn] = await Promise.all([
@@ -56,6 +59,22 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <p className="text-sm text-slate-300">{u.stripePaymentMethodId ? "A card is saved." : "No card yet."} You&apos;re charged only when you press Pay, for exactly the amount you tick.</p>
             {on && <a className="btn no-underline hover:no-underline" href="/api/payments/card"><CreditCard className="h-4 w-4" /> {u.stripePaymentMethodId ? "Change card" : "Add a card"}</a>}
             <p className="flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck className="h-3.5 w-3.5" /> Card details are entered on Stripe&apos;s page and never reach this site.</p>
+          </section>
+          <section className="card space-y-3" id="waiting-review" aria-label="Waiting for your review">
+            <h2 className="font-semibold text-white">Waiting for your review</h2>
+            {waitingTests.length === 0 ? <p className="text-sm text-slate-500">Nothing waits for your review.</p> : (
+              <ul className="divide-y divide-white/5 text-sm">
+                {waitingTests.map((t) => {
+                  const n = t.contracts.reduce((a, c) => a + c.submissions.length + c.calls.length, 0);
+                  return (
+                    <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                      <span className="text-slate-200">{t.title} <span className="text-slate-400">· {n} part{n === 1 ? "" : "s"} to pay or reject</span></span>
+                      <a href={`/app/tests/${t.id}#needs-you`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline">Pay</a>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </section>
           <section className="card space-y-3">
             <div className="flex items-center justify-between">

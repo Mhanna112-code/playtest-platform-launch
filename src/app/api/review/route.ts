@@ -8,9 +8,10 @@ import { db } from "@/lib/db";
 // Pay or Reject one piece of sent work or a held call.
 export async function POST(req: Request) {
   return handle(async () => {
-    const u = await requireActive(req);
-    requireConfirmed(u);
     const body = await readJson(req);
+    // (NEXT-UI 26) A suspended developer may Pay (never Reject).
+    const u = await requireActive(req, { allowPay: body.action !== "reject" });
+    requireConfirmed(u);
     // A declined Pay is refused under Pay and is not a debt: nothing is logged or shown anywhere else.
     const r = await review(u, body);
     await logReview(u.id, body, r);

@@ -68,22 +68,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </nav>
       </header>
-      {!u.emailVerifiedAt && (
+      {/* (Design doc 2) The "Email confirmation is off for testing." strip is gone: with the testing switch on, nothing shows. */}
+      {!u.emailVerifiedAt && !confirmSkipped() && (
         <div className="flex flex-wrap items-center justify-center gap-2 border-b border-sky-300/20 bg-sky-300/10 px-4 py-2 text-sm text-sky-100">
           <MailCheck className="h-4 w-4 text-sky-300" />
-          {confirmSkipped() ? (
-            <span>Email confirmation is off for testing.</span>
-          ) : (
-            <>
-              <span>Confirm your email: we sent a link to <strong>{u.email}</strong>. You can still look around, but posting and joining tests require you to confirm.</span>
-              <ResendConfirm />
-            </>
-          )}
+          <span>Confirm your email: we sent a link to <strong>{u.email}</strong>. You can still look around, but posting and joining tests require you to confirm.</span>
+          <ResendConfirm />
         </div>
       )}
       {u.suspendedAt && (
         <p className="mx-auto mt-4 max-w-6xl px-4">
-          <span className="info block">Your account is paused. You can look around, but actions are switched off. Contact support if you think this is a mistake.</span>
+          <span className="info block">{u.isDeveloper ? "Your account is paused. You can look around and pay for work testers sent. Contact support if you think this is a mistake." : "Your account is paused. You can look around, but actions are switched off. Contact support if you think this is a mistake."}</span>
         </p>
       )}
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">{children}</main>

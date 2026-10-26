@@ -17,7 +17,7 @@ export function SideButton({ side, add, children }: { side: "developer" | "teste
           setErr("");
           try {
             await api("/api/account/side", { side, add });
-            window.location.href = add && side === "tester" ? "/app/profile?welcome=tester" : add ? "/app/account" : "/app";
+            window.location.href = add && side === "tester" ? "/app/profile" : add ? "/app/account" : "/app";
           } catch (e) {
             setErr(errOf(e));
             setBusy(false);

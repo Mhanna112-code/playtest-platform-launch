@@ -14,19 +14,13 @@ export const dynamic = "force-dynamic";
  * Your profile, for the side in use (the full app's /profile for testers and /dev/profile for developers): the form,
  * then your ratings; the agreed "Change your password" section stays here, styled like the other cards.
  */
-export default async function ProfilePage({ searchParams }: { searchParams: Promise<{ welcome?: string }> }) {
+export default async function ProfilePage() {
   const u = await requirePageUser();
-  const { welcome } = await searchParams;
   const side = sideFor(u, "/app/profile");
   const p = await db.testerProfile.findUnique({ where: { userId: u.id } });
   const rating = await ratingSummary(u.id);
   return (
     <div className="mx-auto max-w-2xl">
-      {welcome === "tester" && (
-        <p className="card mb-4 border-volt-300/30 text-sm text-slate-200">
-          Testing is now on for your account, alongside posting tests. Fill in your tester profile so you&apos;re matched with tests; switch to the developer side from the header any time.
-        </p>
-      )}
       {side === "developer" ? (
         <>
           <h1 className="mb-2 text-2xl font-semibold">Your developer profile</h1>

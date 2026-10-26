@@ -6,7 +6,7 @@ import { POST as reviewPOST } from "@/app/api/review/route";
 import { POST as adminPOST } from "@/app/api/admin/[action]/route";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
-import { joined, sact, seen, setup } from "./fixtures";
+import { act, joined, sact, seen, setup } from "./fixtures";
 
 const later = () => new Promise((r) => setTimeout(r, 5));
 const payReq = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), seenAt: seen(), ...body } })).then(json);
@@ -194,5 +194,35 @@ describe("admin decides disputes", () => {
     expect(kept.body).toEqual({ extraCents: 0 });
     expect((await db.dispute.findUniqueOrThrow({ where: { id: d.id } })).decidedCents).toBe(0);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "dispute" } } })).toBeGreaterThan(0);
+  });
+});
+
+describe("(NEXT-UI 27) Payments: Waiting for your review", () => {
+  it("lists the developer's tests with unreviewed parts, and drops them once paid", async () => {
+    const { waitingForReview } = await import("@/lib/server/payments");
+    const { dev, sub, testId } = await sent();
+    const before = await waitingForReview(dev.user.id);
+    expect(before.map((t) => t.id)).toEqual([testId]);
+    expect(before[0].contracts[0].submissions.map((x) => x.id)).toEqual([sub.id]);
+    await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
+    expect(await waitingForReview(dev.user.id)).toEqual([]);
+  });
+});
+
+describe("(NEXT-UI 26) a suspended developer", () => {
+  it("can still Pay; everything else (Reject, invite, Edit, chat, next round, calls) is refused with the paused line", async () => {
+    const { dev, sub, sessionId, testId, tester } = await sent();
+    await db.user.update({ where: { id: dev.user.id }, data: { suspendedAt: new Date() } });
+    const LINE = "Your account is paused: you can still pay for work testers sent.";
+    expect((await payReq(dev.cookie, { action: "reject", kind: "submission", id: sub.id, amount: "0", reason: "Nothing usable here" })).body.error.message).toBe(LINE);
+    expect((await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe(LINE);
+    expect((await act(testId, "message", dev.cookie, { contractId: sessionId, body: "hi" })).body.error.message).toBe(LINE);
+    expect((await act(testId, "end-early", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], reason: "We have enough" })).body.error.message).toBe(LINE);
+    expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [tester.user.id] })).body.error.message).toBe(LINE);
+    // Pay goes through.
+    expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
+    // A tester never reads "suspended".
+    await db.user.update({ where: { id: tester.user.id }, data: { suspendedAt: new Date() } });
+    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), startsAt: new Date(Date.now() + 72 * 3_600_000).toISOString() })).body.error.message).not.toMatch(/suspend/i);
   });
 });
