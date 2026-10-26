@@ -430,7 +430,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
           </div>
           <div>
             {text("openUntil", "Open until (recruitment cutoff; blank = no end)", { type: "date", cls: "max-w-[12rem]", hint: need ? `${needLabel} or later for a ${dl}-day deadline; up to a year ahead` : "from tomorrow, up to a year ahead", attrs: { min: minOpen, max: yearOut, "data-msg": dlLine || "Open until must be a date in the future.", "data-max-msg": "Open until can be at most a year ahead." } })}
-            {showOn("openUntil") && redLine(ouLine || dlLine)}
+            {showOn("openUntil") && redLine(ouLine)}
           </div>
         </div>
         {edit && edit.testersIn > 0 && <p className="note">{edit.testersIn} tester{edit.testersIn === 1 ? " is" : "s are"} in: spots can&apos;t go below that.</p>}

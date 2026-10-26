@@ -11,7 +11,7 @@ import { joined, sact, seen, setup } from "./fixtures";
 
 const cron = () => cronGET(new Request("http://localhost:3400/api/cron/daily", { headers: { authorization: "Bearer cron-test" } })).then((r) => r.json());
 const pay = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), seenAt: seen(), ...body } })).then(json);
-const later = () => new Promise((r) => setTimeout(r, 5));
+const later = () => new Promise((r) => setTimeout(r, 30));
 afterEach(() => setStripeForTests(null));
 
 async function waiting14(ask?: string) {

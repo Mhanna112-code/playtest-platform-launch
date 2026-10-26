@@ -5,7 +5,7 @@ import { invitable } from "@/lib/server/invites";
 import { makeUser, req } from "./helpers";
 import { act, joined, seen, setup } from "./fixtures";
 
-const later = () => new Promise((r) => setTimeout(r, 5));
+const later = () => new Promise((r) => setTimeout(r, 30));
 
 describe("invite list: greyed vs removed", () => {
   it("greys in-test, invited, suspended and 10-test testers; removes blocked and non-testers", async () => {

@@ -8,7 +8,7 @@ import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
 import { act, joined, sact, seen, setup } from "./fixtures";
 
-const later = () => new Promise((r) => setTimeout(r, 5));
+const later = () => new Promise((r) => setTimeout(r, 30));
 const payReq = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), seenAt: seen(), ...body } })).then(json);
 const admin = (action: string, cookie: string, body: Record<string, unknown>) => adminPOST(req(`/api/admin/${action}`, { cookie, body }), { params: Promise.resolve({ action }) }).then(json);
 
@@ -154,6 +154,7 @@ describe("Stripe (test mode, faked)", () => {
     await db.test.update({ where: { id: tb.contract.testId }, data: { developerId: a.dev.user.id } });
     expect((await payReq(a.dev.cookie, { kind: "submission", id: a.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(402);
     expect((await db.user.findUniqueOrThrow({ where: { id: a.dev.user.id } })).holdStartedAt).toBeNull();
+    await new Promise((r) => setTimeout(r, 40)); // the declined payment is older than the next press's page time
     expect((await payReq(a.dev.cookie, { kind: "submission", id: b.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(402);
     expect((await db.user.findUniqueOrThrow({ where: { id: a.dev.user.id } })).holdStartedAt).not.toBeNull();
   });
@@ -217,7 +218,6 @@ describe("(NEXT-UI 26) a suspended developer", () => {
     expect((await payReq(dev.cookie, { action: "reject", kind: "submission", id: sub.id, amount: "0", reason: "Nothing usable here" })).body.error.message).toBe(LINE);
     expect((await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe(LINE);
     expect((await act(testId, "message", dev.cookie, { contractId: sessionId, body: "hi" })).body.error.message).toBe(LINE);
-    expect((await act(testId, "end-early", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], reason: "We have enough" })).body.error.message).toBe(LINE);
     expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [tester.user.id] })).body.error.message).toBe(LINE);
     // Pay goes through.
     expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);

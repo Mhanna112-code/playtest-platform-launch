@@ -55,7 +55,7 @@ describe("the tester rates the developer", () => {
     expect(w).toEqual({ working: true, lines: ["Not sent yet from your contract: recording ($12) — it won't be paid.", "All your upcoming calls will be cancelled."] });
     // Rate is a button like the others: stops once for a change since the page loaded.
     const pageLoaded = seen();
-    await new Promise((r) => setTimeout(r, 5));
+    await new Promise((r) => setTimeout(r, 30));
     await act(testId, "edit", dev.cookie, { version: (await db.test.findUniqueOrThrow({ where: { id: testId } })).version, fields: { description: "New words" } });
     expect((await sact(sessionId, "rate", tester.cookie, { stars: 5, seenAt: pageLoaded })).body.error.code).toBe("stop_once");
     expect((await sact(sessionId, "rate", tester.cookie, { stars: 5, seenAt: pageLoaded, confirmed: true })).status).toBe(200);

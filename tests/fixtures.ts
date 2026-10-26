@@ -15,8 +15,11 @@ export async function setup(over: Record<string, unknown> = {}) {
   const dev = await makeUser({ dev: true, name: "Nora Lane", pronoun: "she" });
   const r = await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: listingBody(over) })));
   expect(r.status).toBe(200);
+  await settle();
   return { dev, testId: r.body.id as string };
 }
+// Windows' clock can lag by ~15 ms: let a step finish clearly before the test notes the page-load time (the stop-once rules compare the two).
+export const settle = () => new Promise((r) => setTimeout(r, 25));
 export const act = (id: string, action: string, cookie: string, body: Record<string, unknown> = {}) =>
   testAction(req(`/api/tests/${id}/${action}`, { cookie, body }), { params: Promise.resolve({ id, action }) }).then(json);
 export const sact = (id: string, action: string, cookie: string, body: Record<string, unknown> = {}) =>
@@ -27,6 +30,7 @@ export async function joined(testId: string, name = "Ana Silva", pronoun = "she"
   const test = await db.test.findUniqueOrThrow({ where: { id: testId } });
   const r = await act(testId, "join", t.cookie, { listingVersion: test.listingVersion });
   expect(r.status).toBe(200);
+  await settle();
   return { tester: t, sessionId: r.body.sessionId as string };
 }
 export const seen = () => new Date().toISOString();

@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import * as R from "@/lib/rules";
 import { act, joined, sact, seen, setup } from "./fixtures";
 
-const later = () => new Promise((r) => setTimeout(r, 5));
+const later = () => new Promise((r) => setTimeout(r, 30));
 const edit = async (testId: string, cookie: string, fields: Record<string, unknown>) => {
   const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
   return act(testId, "edit", cookie, { version: v, fields, confirmed: true });

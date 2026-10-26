@@ -7,7 +7,7 @@ import { POST as reviewPOST } from "@/app/api/review/route";
 import { json, req } from "./helpers";
 import { act, atHours, joined, sact, seen, setup } from "./fixtures";
 
-const later = () => new Promise((r) => setTimeout(r, 5));
+const later = () => new Promise((r) => setTimeout(r, 30));
 const pay = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), seenAt: seen(), confirmed: true, ...body } })).then(json);
 
 describe("the tester's one set of stop-once reasons", () => {

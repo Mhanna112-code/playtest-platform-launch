@@ -188,3 +188,33 @@ describe("the Alerts menu (design doc 6)", () => {
     expect(stop2.body.error.code).toBe("stop_once");
   });
 });
+
+describe("chat after a block (owner, Oct 26)", () => {
+  it("either side blocking closes the chat for both: the next send is refused with 'This chat is closed.'; earlier messages stay", async () => {
+    const { dev, testId, sessionId, tester } = await withWork();
+    await sact(sessionId, "message", tester.cookie, { body: "Before the block" });
+    const { POST: blocksPOST } = await import("@/app/api/blocks/route");
+    expect((await json(await blocksPOST(req("/api/blocks", { cookie: dev.cookie, body: { userId: tester.user.id } })))).status).toBe(200);
+    const fromTester = await sact(sessionId, "message", tester.cookie, { body: "After the block" });
+    expect(fromTester.status).toBe(409);
+    expect(fromTester.body.error).toMatchObject({ code: "closed", message: "This chat is closed." });
+    const fromDev = await act(testId, "message", dev.cookie, { contractId: sessionId, body: "Hello?" });
+    expect(fromDev.body.error).toMatchObject({ code: "closed", message: "This chat is closed." });
+    expect(await db.message.count({ where: { contractId: sessionId } })).toBe(1);
+  });
+});
+
+describe("a suspended developer's test page (owner, Oct 26)", () => {
+  it("only Cancel call, End early and Stop the test go through; everything else is refused and names the press", async () => {
+    const { dev, testId, sessionId } = await withWork();
+    const a = await admin();
+    await adm("suspend", a.cookie, { id: dev.user.id, note: "Spam" });
+    for (const [action, body] of [["edit", { version: 1, fields: { title: "x" } }], ["next-round", {}], ["invite", { testerIds: [sessionId] }], ["rate", { contractId: sessionId, stars: 4 }]] as const) {
+      const r = await act(testId, action, dev.cookie, { seenAt: seen(), confirmed: true, ...body });
+      expect(r.body.error.code, action).toBe("suspended");
+      expect(r.body.error.failed, action).toMatch(/^Your .+ on Harbor Run didn't go through$/);
+    }
+    expect((await act(testId, "end-early", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], reason: "We have what we need" })).status).toBe(200);
+    expect((await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+  });
+});

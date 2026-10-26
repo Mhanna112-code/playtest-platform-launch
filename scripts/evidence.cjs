@@ -1706,7 +1706,8 @@ async function signIn(page, email) {
     check("posted with two categories", sql(`select array_to_string(categories, ',') from "Test" where id = '${T}'`) === "Game,Education");
     check("header: category badges", (await has(d, "section[aria-label='Test'] >> text=Game")) && (await has(d, "section[aria-label='Test'] >> text=Education")));
     check("header: no Live calls button", (await d.locator("section[aria-label='Test'] a:has-text('Live calls')").count()) === 0);
-    check("header: Open until fold at the bottom right", await has(d, "#open-until >> text=Change"));
+    // (Design doc, owner Oct 26) Open until is a date only in the overview; it changes through Edit.
+    check("header: Open until shown as a date at the bottom right", await has(d, "[data-open-until]"));
     sql(`update "User" set "stripeCustomerId" = 'cus_fake32_${TS}', "stripePaymentMethodId" = 'pm_card_visa' where email = '${DEV32}'`);
     // Two testers answer; one is paid.
     const onboard = async (pg, email, name) => {
@@ -2003,9 +2004,7 @@ async function signIn(page, email) {
     await d.goto(`/app/tests/${T}`);
     await blurCheck(d, "#calls input[type=datetime-local]", "2020-01-01T10:00", (() => { const x = new Date(Date.now() + 3 * 86400000); return new Date(x.getTime() - x.getTimezoneOffset() * 60000).toISOString().slice(0, 16); })(), "Developer call request: time (past)", "Pick a time in the future.");
     await blurCheck(d, "#calls input[aria-label='Length in minutes']", "5", "45", "Developer call request: length", "10 to 180 minutes");
-    // Open until (the header fold).
-    await d.click("#open-until > summary");
-    await blurCheck(d, "#open-until input[type=date]", "2020-01-01", new Date(Date.now() + 25 * 86400000).toISOString().slice(0, 10), "Header: Open until (past date)", "in the future");
+    // (Open until no longer has a fold in the overview: its past-date check is Edit's, above.)
     // End early reason.
     await d.click("section[aria-label='Test'] button:has-text('End early')");
     await blurCheck(d, "#reason", "ab", "Not needed any more.", "End early: reason (5+ characters)", "Say why");

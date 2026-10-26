@@ -2,7 +2,7 @@
 import { Err } from "@/components/Err";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, errOf } from "@/lib/client";
+import { api, ApiError, errOf } from "@/lib/client";
 import { NotSentTag, useKept } from "@/lib/useKept";
 
 type Msg = { id: string; mine: boolean; who: string; body: string; at: string };
@@ -19,6 +19,8 @@ export function Chat({ path, extra = {}, messages, other, title, closed, keepKey
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  // (Owner, Oct 26) A block (or a deleted account) while the page is open: the next send is refused with "This chat is closed." under Send and the box goes away.
+  const [shut, setShut] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
   const count = useRef(0);
   // (NEXT-UI 10) The message typed and not sent is kept on the server (back after a reload / another device, "Not sent yet").
@@ -52,9 +54,9 @@ export function Chat({ path, extra = {}, messages, other, title, closed, keepKey
         ))}
         <div ref={bottom} />
       </div>
-      {closed ? (
+      {closed && !shut ? (
         <p className="border-t border-white/10 px-5 py-3 text-sm text-slate-400">This chat is closed.</p>
-      ) : (
+      ) : shut ? null : (
         <form
           className="flex items-end gap-2 border-t border-white/10 px-4 py-3"
           onSubmit={async (e) => {
@@ -67,6 +69,7 @@ export function Chat({ path, extra = {}, messages, other, title, closed, keepKey
               await keep.clear();
               router.refresh();
             } catch (e2) {
+              if (e2 instanceof ApiError && e2.code === "closed") setShut(true);
               setErr(errOf(e2));
             } finally {
               setBusy(false);

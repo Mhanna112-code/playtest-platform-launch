@@ -48,7 +48,7 @@ describe("applications close on a listing change", () => {
     await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { spots: 4 } });
     expect((await db.application.findFirstOrThrow({ where: { testId, testerId: ana.user.id } })).status).toBe("pending");
     const pageLoaded = seen();
-    await new Promise((r) => setTimeout(r, 5));
+    await new Promise((r) => setTimeout(r, 30));
     const saved = await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { description: "New words" }, tab: "tab-1" });
     expect(saved.body.closedApps).toEqual(["Ana Silva"]);
     const appA = await db.application.findFirstOrThrow({ where: { testId, testerId: ana.user.id } });
@@ -144,7 +144,7 @@ describe("owner corrections 2 and 3", () => {
     await act(testId, "apply", ben.cookie, { note: "Hi" });
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const pageLoaded = seen();
-    await new Promise((r) => setTimeout(r, 5));
+    await new Promise((r) => setTimeout(r, 30));
     await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { title: "Harbor Run 2", openUntil: "" } });
     expect((await db.application.findFirstOrThrow({ where: { testId, testerId: ben.user.id } })).status).toBe("pending");
     // The tester's top box has the line; a press goes through with the note.
@@ -173,7 +173,7 @@ describe("owner corrections 2 and 3", () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const pageLoaded = seen();
-    await new Promise((r) => setTimeout(r, 5));
+    await new Promise((r) => setTimeout(r, 30));
     await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { description: "Other words" } });
     const r = await sact(sessionId, "leave", tester.cookie, { seenAt: pageLoaded });
     expect(r.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane changed the description"]);
@@ -186,7 +186,7 @@ describe("owner corrections 2 and 3", () => {
     const dee = await makeUser({ tester: true, name: "Dee Moss" });
     await act(testId, "invite", dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [dee.user.id] });
     const pageLoaded = seen();
-    await new Promise((r) => setTimeout(r, 5));
+    await new Promise((r) => setTimeout(r, 30));
     const r = await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { joinMode: "invite" }, tab: "tab-1" });
     expect(r.body.closedApps).toEqual(["Ana Silva"]);
     expect(await db.invite.count({ where: { testId, testerId: dee.user.id, status: "sent" } })).toBe(1);
@@ -218,7 +218,7 @@ describe("when the test fills (correction 4) and no invite cap (correction 5)", 
     // Invites never hold spots: two open invites on a 1-spot test.
     expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [dee.user.id, eve.user.id] })).body.message).toBe("Invited Dee Moss and Eve Ray.");
     const pageLoaded = seen();
-    await new Promise((r) => setTimeout(r, 5));
+    await new Promise((r) => setTimeout(r, 30));
     const appA = await db.application.findFirstOrThrow({ where: { testId, testerId: ana.user.id } });
     expect((await act(testId, "application", dev.cookie, { applicationId: appA.id, action: "accept", seenAt: seen(), confirmed: true })).status).toBe(200);
     expect(await db.application.count({ where: { testId, status: "closed", closedReason: "full" } })).toBe(1);
@@ -293,7 +293,7 @@ describe("when the test fills (correction 4) and no invite cap (correction 5)", 
     const found = await findTests(tester.user as never);
     expect(found.some((t) => t.id === testId && t.contracts.some((c) => c.status === "left"))).toBe(true);
     const pageLoaded = seen();
-    await new Promise((r) => setTimeout(r, 5));
+    await new Promise((r) => setTimeout(r, 30));
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { writtenCents: "12.00" } });

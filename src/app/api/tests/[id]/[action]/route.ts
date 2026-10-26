@@ -19,6 +19,9 @@ import { logTestAction } from "@/lib/server/actionText";
 
 type Ctx = { params: Promise<{ id: string; action: string }> };
 
+/** (Owner, Oct 26) A suspended developer's test page: only Cancel call, End early and Stop the test work. */
+const SUSPENDED_OK = new Set(["cancel-call", "cancel-set", "end-early", "stop"]);
+
 /** (Design doc 5) The Edit page's live view of the test: its listing and version, and the In use / Free access keys. */
 export async function GET(req: Request, { params }: Ctx) {
   return handle(async () => {
@@ -35,7 +38,7 @@ export async function GET(req: Request, { params }: Ctx) {
 export async function POST(req: Request, { params }: Ctx) {
   return handle(async () => {
     const { id, action } = await params;
-    const u = await requireActive(req, { devOk: action === "cancel-call" || action === "cancel-set" });
+    const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action) });
     const body = await readJson(req);
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
     await adminRefusal(req, u.id, id, action);

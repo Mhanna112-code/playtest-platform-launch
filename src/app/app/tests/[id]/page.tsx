@@ -62,6 +62,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   if (!t || t.developerId !== u.id) notFound();
   const next = await db.test.findFirst({ where: { previousId: id }, select: { id: true } });
   const brokenKeys = await brokenKeyTesters(id);
+  // (Owner, Oct 26) A suspended developer sees only Cancel call, End early and Stop the test here; every other button is hidden.
+  const restricted = !!u.suspendedAt;
   const keysEver = await db.accessKey.count({ where: { testId: id } });
   const keysLeft = keysEver > 0 ? await db.accessKey.count({ where: { testId: id, status: "free" } }) : null;
   const working = t.contracts.filter((c) => c.status === "working");
@@ -204,6 +206,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         title={t.title}
         productName={t.productName}
         ignoredAlerts={u.ignoredAlerts}
+        restricted={restricted}
         mature={t.mature}
         nda={!!t.ndaText}
         keysLeft={keysLeft}
@@ -239,9 +242,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       )}
       {/* (Design doc 6) The order: overview, the live updates box, the yellow keys notice, then the panels. */}
       <LiveTop scope={`test:${t.id}`} seenAt={seenAt} />
-      <KeysNotice testId={t.id} seenAt={seenAt} rows={brokenKeys.map((b) => ({ contractId: b.contractId, name: b.name, at: b.at.toISOString() }))} />
+      <KeysNotice testId={t.id} seenAt={seenAt} rows={restricted ? [] : brokenKeys.map((b) => ({ contractId: b.contractId, name: b.name, at: b.at.toISOString() }))} />
       {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay / Reject box for sent work lives here. */}
-      {needsCount > 0 && (
+      {needsCount > 0 && !restricted && (
         <NeedsYou count={needsCount}>
           <Applications testId={t.id} seenAt={seenAt} apps={apps} />
           <NeedsRequests testId={t.id} seenAt={seenAt} requests={needsRequests} />
@@ -319,9 +322,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             (await ratingSummary(c.testerId)).line || "No ratings yet",
             `Accepted parts: ${(await testerStats(c.testerId)).accepted.value} ${(await testerStats(c.testerId)).accepted.hint}`,
           ].filter(Boolean),
-          block: blockedIds.has(c.testerId) ? <span className="text-xs text-slate-400">You blocked {displayName(c.tester)}.</span> : <BlockButton seenAt={seenAt} testId={t.id} userId={c.testerId} name={displayName(c.tester)} effect="Their session ends now (work they sent stays payable), calls between you are cancelled, and chat closes." />,
+          block: restricted ? null : blockedIds.has(c.testerId) ? <span className="text-xs text-slate-400">You blocked {displayName(c.tester)}.</span> : <BlockButton seenAt={seenAt} testId={t.id} userId={c.testerId} name={displayName(c.tester)} effect="Their session ends now (work they sent stays payable), calls between you are cancelled, and chat closes." />,
         })))}
-        gone={t.contracts.filter((c) => c.status !== "working").map((c) => ({ contractId: c.id, name: displayName(c.tester), how: c.status === "left" ? (c.endKind === "rated" ? "rated and finished" : "left") : "work ended", at: c.endedAt }))}
+        gone={t.contracts.filter((c) => c.status !== "working").map((c) => ({ contractId: c.id, name: displayName(c.tester), how: c.endKind === "stopped" ? "Stopped" : c.endKind === "suspended" || c.endKind === "deleted" ? "Removed" : c.endKind === "rated" ? "Left" : c.status === "left" ? "Left" : "Ended early", at: c.endedAt }))}
       >
       {/* (NEXT-UI 21) TESTERS JOINED, one row per tester: parts sent (Required / Not required), paid per part and in total, the call summary, and a History fold. No Pay boxes here. */}
       {t.contracts.length > 0 && (
@@ -345,9 +348,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   <h3 className="mr-auto"><a href={`/app/testers/${c.testerId}`}>{name}</a></h3>
                   <span className="badge">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
                   {c.ndaAcceptedAt && <span className="badge">NDA accepted {fmtDate(c.ndaAcceptedAt)}</span>}
-                  <a href={`/app/chat/${c.id}`} className="btn-secondary relative px-3 py-1 text-xs no-underline hover:no-underline"><MessagesSquare className="h-3.5 w-3.5" /> Chat
+                  {!restricted && <a href={`/app/chat/${c.id}`} className="btn-secondary relative px-3 py-1 text-xs no-underline hover:no-underline"><MessagesSquare className="h-3.5 w-3.5" /> Chat
                     {unreadN > 0 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950" aria-label={`${unreadN} unread`}>{unreadN}</span>}
-                  </a>
+                  </a>}
                 </div>
                 <p className="note">Their contract: {termsLine(c)} · joined {fmtDate(c.joinedAt)}</p>
                 <ul className="space-y-1 text-sm" data-parts-sent="">
@@ -379,7 +382,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       <p className="note">{name} rated you: you&apos;ll see it after you rate {pronouns(c.tester.pronoun).obj} (or on {fmtDate(ri.revealOn!)}).</p>
                     )}
                     {ri.developer && <p className="note">You rated {name}: {ri.developer.stars} ★</p>}
-                    {ri.blocker === "" && (
+                    {ri.blocker === "" && !restricted && (
                       <RateBox path={`/api/tests/${t.id}/rate`} body={{ contractId: c.id }} seenAt={seenAt} name={name} working={false} headline={`Your rating of ${name} is final. Both ratings show once you rate.`} lines={[]} />
                     )}
                   </>
@@ -408,9 +411,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       <DevCallPanel
         testId={t.id}
         seenAt={seenAt}
-        canRequest={t.status !== "stopped" && t.status !== "draft" && !u.holdStartedAt}
-        noRequestReason={t.status === "stopped" ? "This test was stopped, so no calls can be requested or booked." : u.holdStartedAt ? "Your tests are paused until you pay what you owe: calls wait meanwhile." : ""}
-        testers={devTesters}
+        canRequest={t.status !== "stopped" && t.status !== "draft" && !u.holdStartedAt && !restricted}
+        noRequestReason={t.status === "stopped" ? "This test was stopped, so no calls can be requested or booked." : restricted ? "Your account is suspended: you can only cancel booked calls here." : u.holdStartedAt ? "Your tests are paused until you pay what you owe: calls wait meanwhile." : ""}
+        testers={restricted ? devTesters.map((x) => ({ ...x, requests: [] })) : devTesters}
         past={t.contracts
           .flatMap((c) => c.calls.filter((x) => x.status === "cancelled" || x.review).map((x) => ({
             id: x.id, who: displayName(c.tester), when: x.startsAt.toISOString(), minutes: x.minutes, logged: x.actualMinutes, cancelled: x.status === "cancelled",
@@ -419,7 +422,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           })))
           .sort((a, b) => b.when.localeCompare(a.when))}
       />
-      {t.status !== "stopped" && (
+      {t.status !== "stopped" && !restricted && (
         <InvitePanel
           testId={t.id}
           seenAt={seenAt}

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { compact } from "@/lib/format";
 import { CHARGED_BY_TESTER, LET_GO_BY_TESTER } from "@/lib/rules";
 import { ratingSummary } from "./ratings";
 
@@ -85,5 +86,5 @@ export async function testerStats(testerId: string, now = new Date()) {
       }
     }
   }
-  return { accepted: { value: String(accepted), hint: `of ${sent} sent · ${sessions.size} session${sessions.size === 1 ? "" : "s"} with accepted work` } };
+  return { accepted: { value: compact(accepted), hint: `of ${sent} sent · ${sessions.size} session${sessions.size === 1 ? "" : "s"} with accepted work` } };
 }

@@ -4,7 +4,7 @@ import { startHold } from "@/lib/server/holds";
 import { act, joined, sact, seen, setup } from "./fixtures";
 
 const at = (h: number) => { const d = new Date(Date.now() + h * 3_600_000); d.setSeconds(0, 0); return d.toISOString(); };
-const later = () => new Promise((r) => setTimeout(r, 5));
+const later = () => new Promise((r) => setTimeout(r, 30));
 
 describe("call requests on both sides", () => {
   it("tester requests; developer accepts → booked", async () => {

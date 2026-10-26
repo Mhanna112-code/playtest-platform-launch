@@ -15,7 +15,7 @@ import { act, atHours, joined, sact, seen, setup } from "./fixtures";
 
 // (Owner, Oct 22, NEWEST+3) Every button stops once, including for your own actions in another tab.
 
-const later = () => new Promise((r) => setTimeout(r, 5));
+const later = () => new Promise((r) => setTimeout(r, 30));
 afterEach(() => setStripeForTests(null));
 const pay = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), seenAt: seen(), confirmed: true, ...body } })).then(json);
 const texts = (r: { body: { error: { changes: { text: string }[] } } }) => r.body.error.changes.map((c) => c.text);

@@ -4,7 +4,7 @@ import { POST as testsPOST } from "@/app/api/tests/route";
 import { json, makeUser, req } from "./helpers";
 import { act, joined, listingBody, sact, seen, setup } from "./fixtures";
 
-const later = () => new Promise((r) => setTimeout(r, 5));
+const later = () => new Promise((r) => setTimeout(r, 30));
 
 describe("post and edit", () => {
   it("only developers post; listing errors are plain sentences", async () => {

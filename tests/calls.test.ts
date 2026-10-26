@@ -5,7 +5,7 @@ import { POST as reviewPOST } from "@/app/api/review/route";
 import { json, req } from "./helpers";
 import { act, atHours, bookCall, joined, sact, seen, setup } from "./fixtures";
 
-const later = () => new Promise((r) => setTimeout(r, 5));
+const later = () => new Promise((r) => setTimeout(r, 30));
 
 describe("calls are always requests", () => {
   it("the developer's request books on the tester's Accept at the contract rate; the top panel stops once for it", async () => {

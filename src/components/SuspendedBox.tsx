@@ -13,8 +13,9 @@ export function SuspendedBox({ failed, developer, tester }: { failed?: string; d
       <ul className="mt-2 list-disc space-y-1 pl-5 text-rose-100/90">
         {developer && (
           <>
-            <li>All your tests are paused. Your testers are still in them, but nothing can happen on them: the only things you can do are cancel booked calls (below) and pay for work testers already sent (Payments).</li>
-            <li>You can&apos;t open test pages, post a test or read messages.</li>
+            <li>All your tests are paused. Your testers are still in them, but nothing can happen on them.</li>
+            <li>You can still cancel calls, end a tester&apos;s work early, stop a test, and pay for work already sent from Payments (the charge waits until the suspension is lifted).</li>
+            <li>You can&apos;t post a test, read messages or use the other buttons on your test pages.</li>
             <li>When the suspension is lifted your tests unpause and carry on as normal.</li>
           </>
         )}

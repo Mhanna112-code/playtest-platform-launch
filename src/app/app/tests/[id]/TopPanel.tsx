@@ -17,7 +17,7 @@ type Tester = { contractId: string; name: string; sent: string[]; toSend: string
  * The test page's top title panel: the developer's big buttons (Stop the test, End early, Next round).
  * Its stop-once box sits directly under this panel.
  */
-export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[] }) {
+export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
   const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={error} /> : null);
   const [open, setOpen] = useState<"" | "end" | "next">("");
@@ -65,9 +65,9 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
           {/* The full app's header: the buttons at the top right (Edit, Next round, End early, Stop the test). */}
           {!stopped && (
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-              <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.id}/edit`}><Pencil className="h-4 w-4" /> Edit</a>
-              <AlertsMenu ignored={p.ignoredAlerts ?? []} />
-              {p.nextRoundId ? (
+              {!p.restricted && <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.id}/edit`}><Pencil className="h-4 w-4" /> Edit</a>}
+              {!p.restricted && <AlertsMenu ignored={p.ignoredAlerts ?? []} />}
+              {p.restricted ? null : p.nextRoundId ? (
                 <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.nextRoundId}`}><Repeat className="h-4 w-4" /> Go to the next round</a>
               ) : (
                 <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(open === "next" ? "" : "next")}><Repeat className="h-4 w-4" /> Next round</button>
@@ -102,7 +102,7 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
         <div className="flex flex-wrap items-start justify-end gap-x-4 gap-y-1 text-right">
           <p className="text-xs text-slate-400">{p.terms} · {p.spotsLine}</p>
           {/* A draft (a next round not opened yet): the full app's "Accept testers again" row. */}
-          {p.status === "draft" && (
+          {p.status === "draft" && !p.restricted && (
             <span className="flex flex-wrap items-center justify-end gap-3">
               <span className="text-xs text-slate-500">Hidden from new testers.</span>
               <button className="btn-secondary px-3 py-1.5 text-sm" disabled={busy} onClick={() => void go("open")}>

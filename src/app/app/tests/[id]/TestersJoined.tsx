@@ -49,7 +49,7 @@ export function TestersJoined({ testId, spots, seats, gone, status, children }: 
           <summary className="cursor-pointer">No longer working ({gone.length})</summary>
           <ul className="mt-1.5 space-y-0.5 pl-4">
             {gone.map((g) => (
-              <li key={g.contractId}><a href={`#tester-${g.contractId}`} className="text-sky-300 hover:underline">{g.name}</a> · {g.how}{g.at && <> · {fmtDate(g.at)}</>}</li>
+              <li key={g.contractId}><a href={`#tester-${g.contractId}`} className="text-sky-300 hover:underline">{g.name}</a> <span className="badge ml-1" data-gone-tag={g.how}>{g.how}</span>{g.at && <> · {fmtDate(g.at)}</>}</li>
             ))}
           </ul>
         </details>

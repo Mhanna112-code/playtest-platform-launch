@@ -49,6 +49,15 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
     <div className="space-y-8">
       {/* (Design doc 2) A suspended account lands here: the red box at the very top names the press that failed. */}
       {u.suspendedAt && <SuspendedBox failed={failed} developer={u.isDeveloper && side === "developer"} tester={u.isTester && side === "tester"} />}
+      {/* The other boxes that can sit at the very top: a payment hold (developer), the account active again (for 3 days after a suspension). */}
+      {side === "developer" && u.holdStartedAt && !u.suspendedAt && (
+        <section className="info" role="status" data-hold-box="">
+          <b>Your tests are paused until you pay what you owe.</b> Testers can still send work; no new testers, invites or calls. <Link href="/app/payments">Pay what you owe in Payments</Link>.
+        </section>
+      )}
+      {!u.suspendedAt && u.reinstatedAt && now.getTime() - u.reinstatedAt.getTime() < 3 * DAY && (
+        <p className="ok rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2" role="status" data-reinstated-box="">Your account is active again · {fmtDateTime(u.reinstatedAt)}</p>
+      )}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm text-slate-400">Welcome back,</p>
@@ -152,12 +161,12 @@ async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: 
                 <>
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-volt-300 to-sky-300 text-sm font-semibold text-ink-950">{initial(r.who)}</span>
                   <p className="min-w-0 flex-1 text-slate-300"><span className="font-medium text-white">{r.who}</span> {r.text}</p>
-                  <span className="flex items-center gap-1 text-sm text-indigo-300">{suspended ? "Payments" : r.cta} <ArrowRight className="h-4 w-4" /></span>
+                  <span className="flex items-center gap-1 text-sm text-indigo-300">{suspended && /^s-|^c-/.test(r.key) ? "Payments" : r.cta} <ArrowRight className="h-4 w-4" /></span>
                 </>
               );
               return (
                 <li key={r.key}>
-                  <Link href={suspended ? "/app/payments#waiting-review" : r.href} className="card card-hover flex items-center gap-3 p-4 no-underline hover:no-underline">{inner}</Link>
+                  <Link href={suspended && /^s-|^c-/.test(r.key) ? "/app/payments#waiting-review" : r.href} className="card card-hover flex items-center gap-3 p-4 no-underline hover:no-underline">{inner}</Link>
                 </li>
               );
             })}
@@ -193,12 +202,12 @@ async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: 
               return (
                 <li key={t.id}>
                   {/* The whole card opens the test (its title's link stretches over it); a suspended developer's cards don't open. */}
-                  <div className={`card relative block h-full space-y-4 ${suspended ? "" : "card-hover"}`} data-test-card={t.status === "stopped" ? "stopped" : paused ? "paused" : t.status}>
+                  <div className="card card-hover relative block h-full space-y-4" data-test-card={t.status === "stopped" ? "stopped" : paused ? "paused" : t.status}>
                     <div className="flex items-start gap-3">
                       <CategoryTile category={mainCategory(t.categories)} />
                       <div className="min-w-0 space-y-2">
                         {t.productName && <p className="kicker">{t.productName}</p>}
-                        <p>{suspended ? title : <Link href={`/app/tests/${t.id}`} className={`${CARD_LINK} no-underline hover:no-underline`}>{title}</Link>}</p>
+                        <p><Link href={`/app/tests/${t.id}`} className={`${CARD_LINK} no-underline hover:no-underline`}>{title}</Link></p>
                         <div className="flex flex-wrap gap-2">
                           {t.status === "stopped" ? <StatusPill status="stopped" /> : paused ? <span className="badge border-amber-300/40 text-amber-200"><span className="h-2 w-2 rounded-full bg-amber-300" /> Paused{why ? `: ${why}` : ""}</span> : <StatusPill status={t.status} />}
                           {owedTests.has(t.id) && <span className="badge border-rose-300/40 text-rose-200">Payment failed</span>}

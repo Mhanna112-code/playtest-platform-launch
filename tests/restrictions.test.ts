@@ -18,7 +18,7 @@ const admin = async () => {
 };
 const adm = (action: string, cookie: string, body: Record<string, unknown>) => adminPOST(req(`/api/admin/${action}`, { cookie, body }), { params: Promise.resolve({ action }) }).then(json);
 const pay = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), seenAt: seen(), ...body } })).then(json);
-const later = () => new Promise((r) => setTimeout(r, 5));
+const later = () => new Promise((r) => setTimeout(r, 30));
 async function withWork() {
   const s = await setup();
   const j = await joined(s.testId);
@@ -77,8 +77,8 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "is running again" } } })).toBe(1);
   });
 
-  it("the closed pages: test pages, Post and Messages for a developer; Find, the profile editor and Messages for a tester", () => {
-    expect(closedForSuspended("/app/tests/abc", { isDeveloper: true, isTester: false })).toBe(true);
+  it("the closed pages: Post and Messages for a developer; Find, the profile editor and Messages for a tester", () => {
+    expect(closedForSuspended("/app/tests/abc", { isDeveloper: true, isTester: false })).toBe(false); // they may open test pages (only Cancel call, End early and Stop work there)
     expect(closedForSuspended("/app/tests/new", { isDeveloper: true, isTester: false })).toBe(true);
     expect(closedForSuspended("/app/messages", { isDeveloper: true, isTester: false })).toBe(true);
     expect(closedForSuspended("/app", { isDeveloper: true, isTester: false })).toBe(false);
