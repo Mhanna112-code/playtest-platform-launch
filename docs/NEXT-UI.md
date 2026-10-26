@@ -92,7 +92,19 @@ add nothing the owner didn't ask for; list any non-exact pattern for approval.
    src/lib/sample-nda.ts); testers must accept it to join/apply/accept an invite/rejoin (the full app's accept step);
    acceptance time stored on the contract and shown to both sides. Replaces lean's optional "keep it private" tick and
    its badge. NDA text is part of the terms (a change = terms change: offer / closes applications).
-19. ACCESS KEYS like the full app (owner, Oct 23): Edit/Post "Access keys" (one per line); each joining tester gets the
+19. ACCESS KEYS - OWNER'S RULES (Oct 26, these win):
+   - Two boxes: "In use" (read-only) and "Free" (add or remove keys, as long as free keys >= open spots).
+   - Free keys go to NEW testers first; current testers waiting for a key get one only from extras (enough must remain
+     for the open spots).
+   - Testers can report a key as broken. A broken key shows greyed and crossed out in In use; when the developer adds
+     extras or one is assigned automatically, the broken one disappears from In use.
+   - A tester with a broken key who LEAVES: their key disappears from In use, but can reappear if, when rejoining, they
+     confirm the key still works.
+   - Red field mistakes as on Post (e.g. a required field left blank, or Free keys below open spots: "Add 1 more key:
+     3 open spots, 2 free keys") are checked FIRST. If a stop-once reason ALSO applies, show BOTH: red at the field and
+     the blue box under Save listing what changed (e.g. "Ana Silva left · 3:10 PM: her spot needs a key"). While any
+     red mistake remains, a second press never saves.
+   Original note: ACCESS KEYS like the full app (owner, Oct 23): Edit/Post "Access keys" (one per line); each joining tester gets the
    next unused key, shown on their session page; "N keys left" badge; every open spot needs an unused key (Save/Post
    refused red otherwise, wording from src/lib/key-needs.ts); a tester who left and comes back gets their key back;
    "This key doesn't work" report and the developer's replacement flow as in the full app. Port its rules
