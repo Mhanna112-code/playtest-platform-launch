@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
 import {
-  ADMIN_DIGEST_DAYS, autoPayFor, chargeAmount, callCancelledLine, CHARGED_BY_TESTER, countdownDue, INVITE_REMIND_DAYS, choiceLine, failedLine, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, HOLD_ALERT_DAYS, owedUntilFrom, PAUSED_FOR_TESTERS, PAUSED_RIGHT_NOW, PAY_WAITS, shiftForHold, testPaused,
+  ADMIN_DIGEST_DAYS, autoPayFor, chargeAmount, callCancelledLine, CHARGED_BY_TESTER, countdownDue, INVITE_REMIND_DAYS, choiceLine, failedLine, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, owedUntilFrom, PAUSED_FOR_TESTERS, PAUSED_RIGHT_NOW, PAY_WAITS, shiftForHold, testPaused,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { bell, notify, sendSummaries } from "./notify";
@@ -13,6 +13,7 @@ import { receipt } from "./payments";
 import { testerTermsGate } from "./terms";
 import { recordEvent } from "./tests";
 import { logEvent } from "./live";
+import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
 
 // Payment hold (owner rule): starts when a failed charge isn't paid within 3 days, or when a chargeback opens.
 // While on hold all the developer's tests are paused; paying everything owed (and the admin resolving chargebacks)
@@ -57,7 +58,11 @@ export async function startHold(devId: string, reason: string) {
     }
     await db.$transaction((tx) => recordEvent(tx, t.id, "paused", "Your tests are paused until you pay what you owe", false));
   }
-  await notify(dev.email, "Your tests are paused", ["Your tests are paused until you pay what you owe: no new testers, invites or calls, and Pay waits.", "Testers can still send work. Pay what you owe in Payments to resume at once."], "/app/payments");
+  if (reason === "chargeback") {
+    await notify(dev.email, "Your tests are paused after a chargeback", ["Your bank reversed a payment, so your tests are paused: no new testers, invites or calls, and Pay waits.", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval. Open Payments to see which steps remain.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments");
+    return true;
+  }
+  await notify(dev.email, "Your tests are paused", ["Your tests are paused until you pay what you owe: no new testers, invites or calls, and Pay waits.", "Testers can still send work. Pay what you owe in Payments to resume at once.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments");
   return true;
 }
 
@@ -99,16 +104,21 @@ export async function chargeDeferred(devId: string) {
   }
 }
 
-/** Lift the hold when nothing is owed and no chargeback is open; move every clock on by the length of the pause. */
+/**
+ * Lift the hold when nothing is owed and no chargeback is open; move every clock on by the length of the pause.
+ * (Owner, Oct 26) A CHARGEBACK hold is a hold with extra steps: paying what is owed never lifts it alone. It also needs a card re-verified with
+ * 3D Secure after the chargeback and the admin's approval (which also closes the chargeback).
+ */
 export async function liftHoldIfClear(devId: string) {
   const dev = await db.user.findUnique({ where: { id: devId } });
   if (!dev?.holdStartedAt) return false;
   if ((await owed(devId)).length) return false;
   if (await db.payment.count({ where: { developerId: devId, chargeback: "open" } })) return false;
+  if (dev.holdReason === "chargeback" && (!dev.chargebackCardVerifiedAt || !dev.chargebackApprovedAt)) return false;
   const start = dev.holdStartedAt, now = new Date();
   await db.$transaction(async (tx) => {
     await resumeTests(tx, devId, start, now);
-    await tx.user.update({ where: { id: devId }, data: { holdStartedAt: null, holdReason: "", holdAlertedAt: null } });
+    await tx.user.update({ where: { id: devId }, data: { holdStartedAt: null, holdReason: "", holdAlertedAt: null, chargebackCardVerifiedAt: null, chargebackApprovedAt: null } });
   });
   await chargeDeferred(devId);
   await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause."], "/app");
@@ -152,7 +162,7 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
       stillFailing.push(`${lines.find((l) => l.id === p.id)?.text ?? money(p.amountCents)} (${String(why).replace(/\.$/, "")})`);
     }
   }
-  // Chargebacks can't be retried here: the admin resolves them (Mark resolved). The hold lifts only when all are paid.
+  // Chargebacks can't be retried here. The hold lifts only when all are paid; a chargeback hold also needs the card check and the admin's approval.
   const lifted = await liftHoldIfClear(dev.id);
   return { paid: list.length - stillFailing.length, stillFailing, lifted };
 }
@@ -174,7 +184,7 @@ export async function owedLines(devId: string) {
     const sub = p.submissionId ? await db.submission.findUnique({ where: { id: p.submissionId } }) : null;
     const what = `${c ? displayName(c.tester) + "'s " : ""}${p.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers"}`;
     out.push(p.chargeback === "open"
-      ? { id: p.id, retry: false, amountCents: p.amountCents, until: null as string | null, text: `${what} ${money(p.amountCents)} · reversed by your bank (the team resolves it)` }
+      ? { id: p.id, retry: false, amountCents: p.amountCents, until: null as string | null, text: `${what} ${money(p.amountCents)} · reversed by your bank` }
       : { id: p.id, retry: true, amountCents: p.amountCents, until: p.owedUntil!.toISOString(), text: failedLine(what, p.amountCents, p.createdAt) });
   }
   return out;
@@ -198,43 +208,21 @@ export async function chargebackOpened(paymentIntentId: string) {
   const p = await db.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId } });
   if (!p || p.chargeback === "open") return false;
   await db.payment.update({ where: { id: p.id }, data: { chargeback: "open", chargebackAt: new Date() } });
+  // A chargeback is a hold with extra steps: a hold that is already on becomes a chargeback hold, and any earlier card check or approval no longer counts.
+  await db.user.updateMany({ where: { id: p.developerId, holdStartedAt: { not: null } }, data: { holdReason: "chargeback", chargebackCardVerifiedAt: null, chargebackApprovedAt: null } });
   const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } }) : null;
   if (c) {
     const what = p.kind === "call" ? `${displayName(c.tester)}'s live call` : p.submissionId ? `${displayName(c.tester)}'s ${(await db.submission.findUnique({ where: { id: p.submissionId } }))?.kind === "recording" ? "recording" : "written answers"}` : displayName(c.tester);
     await db.$transaction((tx) => recordEvent(tx, c.testId, "chargeback", `Your bank reversed your ${money(p.amountCents)} payment for ${what}`, false, {}, c.id));
   }
   await startHold(p.developerId, "chargeback");
+  await db.user.update({ where: { id: p.developerId }, data: { chargebackCardVerifiedAt: null, chargebackApprovedAt: null } });
   return true;
 }
 
-export async function resolveChargeback(paymentId: string) {
-  const p = await db.payment.findUnique({ where: { id: paymentId } });
-  if (!p || p.chargeback !== "open") throw new HttpError(409, "not_open", "That chargeback isn't open.");
-  await db.payment.update({ where: { id: p.id }, data: { chargeback: "resolved" } });
-  const pc = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId } }) : null;
-  if (pc) await logEvent(pc.testId, "chargeback", `The team resolved the bank reversal of your ${money(p.amountCents)} payment`, pc.id);
-  await liftHoldIfClear(p.developerId);
-  return { ok: true };
-}
-
-/** Admin: after 30 days on hold, close the developer's tests; testers are told the test ended. */
-export async function closeHeldTests(devId: string) {
-  const tests = await db.test.findMany({ where: { developerId: devId, status: { not: "stopped" } } });
-  for (const t of tests) {
-    const cs = await db.contract.findMany({ where: { testId: t.id, status: "working" }, include: { tester: true } });
-    await db.$transaction(async (tx) => {
-      await tx.contract.updateMany({ where: { testId: t.id, status: "working" }, data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The test was closed." } });
-      await tx.invite.updateMany({ where: { testId: t.id, status: "sent" }, data: { status: "cancelled" } });
-      await recordEvent(tx, t.id, "admin", "The test was closed by the team", true, { status: "stopped", stoppedAt: new Date() });
-    });
-    for (const c of cs) await notify(c.tester.email, `“${c.title}” ended`, [`“${c.title}” ended. Work you already sent stays on record.`], `/app/sessions/${c.id}`);
-  }
-  return { closed: tests.length };
-}
-
-/** The daily job: auto-pay after 14 days, owed charges → hold, 30-day hold alerts, Open until heads-ups. */
+/** The daily job: auto-pay after 14 days, owed charges → hold, closing tests paused for 7 days, Open until heads-ups. */
 export async function runDaily(now = new Date()) {
-  const out = { autoPaid: 0, holds: 0, alerts: 0, headsUps: 0, choices: 0, retried: 0 };
+  const out = { autoPaid: 0, holds: 0, alerts: 0, headsUps: 0, choices: 0, retried: 0, closed: 0 };
   await (await import("./calls")).sweepNobodyJoined(now);
   // 0. Retry every owed payment once a day (before the cut-off and during holds). Chargebacks are never retried.
   const retry = await db.payment.findMany({ where: { status: "failed", owedUntil: { not: null }, settledAt: null, OR: [{ retriedAt: null }, { retriedAt: { lt: new Date(now.getTime() - 23 * 3_600_000) } }] } });
@@ -327,6 +315,8 @@ export async function runDaily(now = new Date()) {
   await sendSummaries(now);
   // Calls whose time came during a hold.
   for (const u of await db.user.findMany({ where: { holdStartedAt: { not: null } }, select: { id: true } })) await sweepHeldCalls(u.id);
+  // 3c. (Owner, Oct 26) Paused tests close after 7 days, whatever the cause (the admin can extend a test's date or close it sooner).
+  out.closed = await (await import("./pauseClosure")).closePausedTests(now);
   // 4. Open until heads-ups, 3 days and 1 day before (developer and working testers).
   const closing = await db.test.findMany({ where: { status: { in: ["open", "closed"] }, openUntil: { gt: now } }, include: { developer: true, contracts: { where: { status: "working" }, include: { tester: true } } } });
   for (const t of closing) {
@@ -384,8 +374,8 @@ export async function adminCases(now = new Date(), forDigest = false) {
   return [
     ...disputes.map((d) => ({ kind: "dispute", text: `Dispute: “${d.reason}”`, link: "/admin#disputes" })),
     ...noShows.map((c) => ({ kind: "no-show", text: `No-show report on “${c.contract.title}” (${fmtDateTime(c.startsAt)}), by the ${c.noShowBy}`, link: "/admin#no-shows" })),
-    ...chargebacks.map((p) => ({ kind: "chargeback", text: `Open chargeback: ${money(p.amountCents)}`, link: "/admin#holds" })),
-    ...holds.map((u) => ({ kind: "hold", text: u.holdStartedAt! < new Date(now.getTime() - HOLD_ALERT_DAYS * 86_400_000) ? `${u.email} on a payment hold since ${fmtDate(u.holdStartedAt!)} (30 days): close their tests` : `${u.email} on a payment hold since ${fmtDate(u.holdStartedAt!)}`, link: "/admin#holds" })),
+    ...chargebacks.map((p) => ({ kind: "chargeback", text: `Open chargeback: ${money(p.amountCents)}`, link: "/admin#chargebacks" })),
+    ...holds.map((u) => ({ kind: "hold", text: `${u.email} on a ${u.holdReason === "chargeback" ? "chargeback" : "payment"} hold since ${fmtDate(u.holdStartedAt!)}`, link: "/admin#holds" })),
     ...payouts.map((p) => ({ kind: "payout", text: p.transferStatus === "waiting" ? `Payout waiting for a payout account: ${money(p.testerCents)}` : `Failed charge still owed: ${money(p.amountCents)}`, link: "/admin#payouts" })),
   ];
 }

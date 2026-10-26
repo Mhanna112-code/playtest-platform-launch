@@ -25,6 +25,9 @@ import { rowsOf, toJson } from "@/lib/callRows";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
+import { ChargebackSteps } from "@/components/ChargebackSteps";
+import { chargebackSteps } from "@/lib/server/chargeback";
+import { pauseClosesAt, pauseCountdownLine } from "@/lib/pause";
 import { PayBox } from "./PayBox";
 import { TopPanel } from "./TopPanel";
 import { NeedsYou } from "./NeedsYou";
@@ -90,6 +93,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const expired = inviteExpired(t);
   const soon = t.openUntil && t.openUntil > new Date() && t.openUntil.getTime() - Date.now() < 3 * 86_400_000;
   const now = new Date();
+  // (Owner, Oct 26) A paused test closes after 7 days: the countdown; a chargeback hold's steps.
+  const closing = pauseClosesAt(u, t);
+  const cbSteps = await chargebackSteps(u.id);
   const lateOf = (c: { dueAt: Date; tester: { name: string; email: string } }, x: { createdAt: Date }) => (isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(c.tester), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined);
   const partPaid = (id: string) => payments.filter((p) => (p.submissionId === id || p.callId === id) && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
   const payments = await db.payment.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
@@ -230,6 +236,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           ahead: c.calls.filter((x) => x.status === "booked" && x.startsAt > now).length,
         }))}
       />
+      {closing && (
+        <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100" data-pause-countdown="" role="status">
+          <b>This test is paused.</b> {pauseCountdownLine(closing.at, closing.causes)}.{closing.extended ? " The team moved this date." : ""}
+        </p>
+      )}
+      {t.pauseClosedAt && <p role="alert" className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100" data-pause-closed="">{t.pauseClosedReason}</p>}
       {/* (Design doc 6) A stopped test: one short line saying what can still be done. */}
       {t.status === "stopped" && <p className="note" data-stopped-line="">This test is stopped. You can still pay or reject work testers already sent, chat with them, rate testers, and read their answers.</p>}
       {/* (Design doc 6) The team stopped or paused this test: a permanent banner at the top of the overview, naming any press that failed. */}
@@ -324,7 +336,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           ].filter(Boolean),
           block: restricted ? null : blockedIds.has(c.testerId) ? <span className="text-xs text-slate-400">You blocked {displayName(c.tester)}.</span> : <BlockButton seenAt={seenAt} testId={t.id} userId={c.testerId} name={displayName(c.tester)} effect="Their session ends now (work they sent stays payable), calls between you are cancelled, and chat closes." />,
         })))}
-        gone={t.contracts.filter((c) => c.status !== "working").map((c) => ({ contractId: c.id, name: displayName(c.tester), how: c.endKind === "stopped" ? "Stopped" : c.endKind === "suspended" || c.endKind === "deleted" ? "Removed" : c.endKind === "rated" ? "Left" : c.status === "left" ? "Left" : "Ended early", at: c.endedAt }))}
+        gone={t.contracts.filter((c) => c.status !== "working").map((c) => ({ contractId: c.id, name: displayName(c.tester), how: c.endKind === "stopped" || c.endKind === "closed" ? "Stopped" : c.endKind === "suspended" || c.endKind === "deleted" ? "Removed" : c.endKind === "rated" ? "Left" : c.status === "left" ? "Left" : "Ended early", at: c.endedAt }))}
       >
       {/* (NEXT-UI 21) TESTERS JOINED, one row per tester: parts sent (Required / Not required), paid per part and in total, the call summary, and a History fold. No Pay boxes here. */}
       {t.contracts.length > 0 && (
@@ -406,7 +418,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         </RowsBox>
       )}
       </TestersJoined>
-      {(u.holdStartedAt || (owedList.length > 0 && !u.suspendedAt)) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} />}
+      {cbSteps && <ChargebackSteps steps={cbSteps} />}
+      {(u.holdStartedAt || (owedList.length > 0 && !u.suspendedAt)) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} chargeback={!!cbSteps} />}
       {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date())}</p>}
       <DevCallPanel
         testId={t.id}

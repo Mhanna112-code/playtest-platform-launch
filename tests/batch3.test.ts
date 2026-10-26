@@ -170,9 +170,14 @@ describe("call length and payment problems on a call", () => {
     await chargebackOpened(p.stripePaymentIntentId!);
     expect(await db.testEvent.count({ where: { testId, kind: "chargeback", text: "Your bank reversed your $15.00 payment for Ana Silva's live call" } })).toBe(1);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
-    const { payOwed, resolveChargeback } = await import("@/lib/server/holds");
+    const { payOwed } = await import("@/lib/server/holds");
     expect(await payOwed(dev.user)).toEqual({ paid: 0, stillFailing: [], lifted: false }); // chargebacks can't be retried
-    await resolveChargeback(p.id);
+    // A chargeback hold is a hold with extra steps: a verified card and the admin's approval lift it (paying alone never does).
+    const { startCardVerification, approveChargebackHold } = await import("@/lib/server/chargeback");
+    await expect(approveChargebackHold(dev.user.id)).rejects.toMatchObject({ code: "steps_missing" });
+    setStripeForTests(null); // no Stripe here (dev): the card check is simulated
+    await startCardVerification(dev.user);
+    expect((await approveChargebackHold(dev.user.id)).lifted).toBe(true);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();
   });
 });

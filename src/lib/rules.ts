@@ -369,6 +369,7 @@ export function endedLine(c: { status: string; endKind: string; endedAt: Date | 
   if (c.status !== "ended" || !c.endedAt) return "";
   if (c.endKind === "blocked") return `Your session on ${c.title ?? "this test"} ended.`; // neutral: a block is never revealed
   if (c.endKind === "stopped") return `${devName} stopped the test on ${fmt(c.endedAt)}. Work you sent is still reviewed.`;
+  if (c.endKind === "closed") return `This test ended on ${fmt(c.endedAt)}. Work you sent is still reviewed.`; // neutral: a pause closure never says why
   if (c.endKind === "rated") return `${devName} finished your part in ${c.title ?? "this test"}. Work you sent is still reviewed.`;
   return `${devName} ended your session early on ${fmt(c.endedAt)}. Work you sent is still reviewed.`;
 }
@@ -416,7 +417,6 @@ export function joinCheck(t: JoinState, seenListingVersion: number, confirmed: b
 
 export const REVIEW_DAYS = 14; // unpaid sent work is paid automatically after this
 export const OWED_DAYS = 3; // a failed charge unpaid this long starts a payment hold
-export const HOLD_ALERT_DAYS = 30; // the admin is alerted to close the tests
 const DAY = 86_400_000;
 
 /** What gets paid automatically after 14 days: the listing amount (older rule; see autoPayFor). */
@@ -791,6 +791,6 @@ export function leftText(ms: number) {
 export function canAskToRejoin(c: { status: string; endKind: string; endedAt: Date | null; dueAt: Date }, rated: boolean) {
   if (rated) return false;
   if (c.status !== "left" && c.status !== "ended") return false;
-  if (["rated", "stopped", "blocked"].includes(c.endKind)) return false;
+  if (["rated", "stopped", "closed", "blocked"].includes(c.endKind)) return false;
   return !!c.endedAt && c.endedAt.getTime() < c.dueAt.getTime();
 }

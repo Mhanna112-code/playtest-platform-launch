@@ -20,6 +20,9 @@ import { UpcomingCalls } from "./UpcomingCalls";
 import { LongList } from "@/components/LongList";
 import { rejoinAskLine } from "@/lib/server/joining";
 import { pronouns } from "@/lib/format";
+import { ChargebackSteps } from "@/components/ChargebackSteps";
+import { chargebackSteps } from "@/lib/server/chargeback";
+import { PAUSE_CLOSE_DAYS, pauseClosesAt, pauseCountdownLine } from "@/lib/pause";
 
 export const metadata = { title: "Home · Playtest" };
 export const dynamic = "force-dynamic";
@@ -45,16 +48,22 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
     );
   const now = new Date();
   const side = sideFor(u, "/app");
+  const cbSteps = side === "developer" && u.holdStartedAt && !u.suspendedAt ? await chargebackSteps(u.id) : null;
   return (
     <div className="space-y-8">
       {/* (Design doc 2) A suspended account lands here: the red box at the very top names the press that failed. */}
       {u.suspendedAt && <SuspendedBox failed={failed} developer={u.isDeveloper && side === "developer"} tester={u.isTester && side === "tester"} />}
       {/* The other boxes that can sit at the very top: a payment hold (developer), the account active again (for 3 days after a suspension). */}
-      {side === "developer" && u.holdStartedAt && !u.suspendedAt && (
+      {side === "developer" && u.holdStartedAt && !u.suspendedAt && (cbSteps ? (
+        <>
+          <ChargebackSteps steps={cbSteps} />
+          <p className="note" data-hold-box="">A paused test closes after {PAUSE_CLOSE_DAYS} days; each one below shows its date. <Link href="/app/payments">Open Payments</Link>.</p>
+        </>
+      ) : (
         <section className="info" role="status" data-hold-box="">
-          <b>Your tests are paused until you pay what you owe.</b> Testers can still send work; no new testers, invites or calls. <Link href="/app/payments">Pay what you owe in Payments</Link>.
+          <b>Your tests are paused until you pay what you owe.</b> Testers can still send work; no new testers, invites or calls. A paused test closes after {PAUSE_CLOSE_DAYS} days; each one below shows its date. <Link href="/app/payments">Pay what you owe in Payments</Link>.
         </section>
-      )}
+      ))}
       {!u.suspendedAt && u.reinstatedAt && now.getTime() - u.reinstatedAt.getTime() < 3 * DAY && (
         <p className="ok rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2" role="status" data-reinstated-box="">Your account is active again · {fmtDateTime(u.reinstatedAt)}</p>
       )}
@@ -198,6 +207,7 @@ async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: 
               const waiting = t.contracts.filter((c) => c.submissions.some((s) => !s.review) && !c.submissions.some((s) => s.review && !s.review.rejected)).length;
               const messages = t.contracts.reduce((n, c) => n + (unread.get(c.id) ?? 0), 0);
               const paused = !!(user.holdStartedAt || user.suspendedAt || t.adminPausedAt);
+              const closing = t.status === "stopped" ? null : pauseClosesAt(user, t);
               const why = user.suspendedAt ? "account suspended" : user.holdStartedAt ? "payment hold" : t.adminPausedAt ? "paused by the team" : "";
               const nInvited = invitesBy.get(t.id) ?? 0, nApps = appsBy.get(t.id) ?? 0;
               const title = <span className="text-lg font-semibold text-white">{t.title}</span>;
@@ -216,6 +226,8 @@ async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: 
                           {t.mature && <span className="badge border-rose-300/40 text-rose-200">Mature (18+)</span>}
                           {t.ndaText && <span className="badge"><FileSignature className="h-3.5 w-3.5" /> NDA</span>}
                         </div>
+                        {closing && <p className="text-xs text-amber-200" data-pause-countdown="">{pauseCountdownLine(closing.at, closing.causes)}</p>}
+                        {t.pauseClosedAt && <p className="text-xs text-rose-200" data-pause-closed="">Closed after {PAUSE_CLOSE_DAYS} days paused</p>}
                         {/* Tags describing the terms. */}
                         <div className="flex flex-wrap gap-2">
                           <PartBadges written={t.writtenCents != null} recording={t.recordingCents != null} live={t.liveRateCents != null} />
@@ -507,7 +519,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                     <summary className="flex cursor-pointer flex-wrap items-center gap-3">
                       <span className="min-w-0 flex-1 font-medium text-white">
                         {c.title}
-                        <span className="block text-sm font-normal text-slate-400">{c.endKind === "stopped" ? `The test was stopped (${fmtDate(c.endedAt ?? c.joinedAt)}): what you sent is still reviewed and paid.` : c.status === "left" ? `You left this test (${fmtDate(c.endedAt ?? c.joinedAt)}): what you sent is still reviewed and paid.` : `Ended (${fmtDate(c.endedAt ?? c.joinedAt)}): what you sent is still reviewed and paid.`}</span>
+                        <span className="block text-sm font-normal text-slate-400">{c.endKind === "stopped" ? `The test was stopped (${fmtDate(c.endedAt ?? c.joinedAt)}): what you sent is still reviewed and paid.` : c.endKind === "closed" ? `The test ended (${fmtDate(c.endedAt ?? c.joinedAt)}): what you sent is still reviewed and paid.` : c.status === "left" ? `You left this test (${fmtDate(c.endedAt ?? c.joinedAt)}): what you sent is still reviewed and paid.` : `Ended (${fmtDate(c.endedAt ?? c.joinedAt)}): what you sent is still reviewed and paid.`}</span>
                       </span>
                       <span className="flex flex-wrap gap-1.5 text-xs"><PartBadges written={c.writtenCents != null} recording={c.recordingCents != null} live={c.liveRateCents != null} /></span>
                       {rejected && <span className="badge text-rose-300"><XCircle className="h-3.5 w-3.5" /> Not accepted</span>}

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { api, errOf } from "@/lib/client";
 
 /** A small admin action: optional text/amount inputs, one button, the result or refusal in plain words. */
-export function AdminButton({ action, id, label, fields = [], danger }: { action: string; id: string; label: string; fields?: { name: string; label: string; ph?: string }[]; danger?: boolean }) {
+export function AdminButton({ action, id, label, fields = [], danger, disabled }: { action: string; id: string; label: string; fields?: { name: string; label: string; ph?: string }[]; danger?: boolean; disabled?: boolean }) {
   const [v, setV] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -14,7 +14,7 @@ export function AdminButton({ action, id, label, fields = [], danger }: { action
       ))}
       <button
         className={danger ? "btn-danger" : "btn-ghost"}
-        disabled={busy}
+        disabled={busy || disabled}
         onClick={async () => {
           setBusy(true);
           setMsg(null);

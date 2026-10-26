@@ -9,6 +9,9 @@ import { AdminButton } from "./AdminButton";
 import { PreviewButton } from "./PreviewButton";
 import { DisputeDecision } from "./DisputeDecision";
 import { adminCases } from "@/lib/server/holds";
+import { chargebackHolds } from "@/lib/server/chargeback";
+import { pausedTestsForAdmin } from "@/lib/server/pauseClosure";
+import { pauseCountdownLine, type PauseCause } from "@/lib/pause";
 import { StatTile } from "@/components/StatTile";
 import { BadgeDollarSign, FlaskConical, Inbox, ListChecks, Users, Wallet } from "lucide-react";
 
@@ -47,7 +50,9 @@ export default async function AdminPage() {
     reportedOn.set(accused, (reportedOn.get(accused) ?? 0) + 1);
   }
   const cases = await adminCases();
-  const chargebacks = await db.payment.findMany({ where: { chargeback: "open" } });
+  const cbHolds = await chargebackHolds();
+  const paused = await pausedTestsForAdmin();
+  const causeWords: Record<PauseCause, string> = { hold: "payment hold", chargeback: "chargeback hold", suspension: "suspended", team: "paused by the team" };
   // The full app's admin tiles: people, parts awaiting review, what was charged, the platform's share, what testers are owed.
   const charged = await db.payment.aggregate({ where: { status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true, feeCents: true }, _count: { _all: true } });
   const toReview = (await db.submission.count({ where: { review: null } })) + (await db.call.count({ where: { review: null, status: "booked", startsAt: { lte: new Date() } } }));
@@ -110,18 +115,48 @@ export default async function AdminPage() {
         })}
       </section>
 
-      <section className="card space-y-3">
-        <h2 id="holds" className="scroll-mt-24 text-lg font-semibold text-white">Payment holds and chargebacks</h2>
-        {held.length === 0 && chargebacks.length === 0 && <p className="note">None.</p>}
-        {held.map((x) => (
-          <p key={x.id} className="text-sm">
-            {x.email} · on hold since {fmtDateTime(x.holdStartedAt!)} ({x.holdReason}){x.holdAlertedAt ? " · 30 days: close their tests" : ""}{" "}
-            <AdminButton action="close-held" id={x.id} label="Close their tests" danger />
-          </p>
+      <section className="card space-y-3" id="paused-tests">
+        <h2 className="text-lg font-semibold text-white">Paused tests ({paused.length})</h2>
+        <p className="note">A paused test closes by itself after 7 days, whatever the cause (a payment hold, a chargeback hold, a suspension or a team pause). Extend moves its date later; Close now closes it like a Stop. Testers read only that the test ended; the developer is told why.</p>
+        {paused.length === 0 && <p className="note">None.</p>}
+        {paused.map(({ test: t, info, dev }) => (
+          <div key={t.id} className="space-y-1 border-t border-white/[0.06] pt-2 text-sm" data-paused-test={t.id}>
+            <p>
+              “{t.title}” · {dev} ({t.developer.email}) · {info.causes.map((c) => causeWords[c]).join(" + ")} since {fmtDateTime(info.since)}
+            </p>
+            <p data-closure-date="">
+              <b>{pauseCountdownLine(info.at, info.causes)}</b> ({fmtDateTime(info.at)}){info.extended ? " · extended by the team" : ""}
+            </p>
+            <p className="flex flex-wrap items-center gap-2">
+              <AdminButton action="extend-pause" id={t.id} label="Extend" fields={[{ name: "days", label: "Days to add", ph: "Days (7)" }]} />
+              <AdminButton action="close-paused" id={t.id} label="Close now" danger />
+            </p>
+          </div>
         ))}
-        {chargebacks.map((p) => (
-          <p key={p.id} className="text-sm">
-            Chargeback open: {money(p.amountCents)} · {byId.get(p.developerId)?.email} · {p.stripePaymentIntentId} <AdminButton action="resolve-chargeback" id={p.id} label="Mark resolved" />
+      </section>
+
+      <section className="card space-y-3" id="chargebacks">
+        <h2 className="text-lg font-semibold text-white">Chargeback holds ({cbHolds.length})</h2>
+        <p className="note">After a chargeback the developer verifies a card with 3D Secure and pays what they owe; paying alone never lifts the hold. Approve once both are done.</p>
+        {cbHolds.length === 0 && <p className="note">None.</p>}
+        {cbHolds.map(({ dev, steps, chargebacks }) => (
+          <div key={dev.id} className="space-y-1 border-t border-white/[0.06] pt-2 text-sm" data-chargeback-hold={dev.id}>
+            <p>{dev.email} · on hold since {fmtDateTime(dev.holdStartedAt!)}</p>
+            {chargebacks.map((p) => <p key={p.id} className="text-slate-400">Chargeback open: {money(p.amountCents)} · {p.stripePaymentIntentId}</p>)}
+            <p data-chargeback-steps="">
+              Chargeback hold: card verified <b>{steps.cardVerified ? "✓" : "✗"}</b>, owed paid <b>{steps.owedPaid ? "✓" : "✗"}</b>{!steps.owedPaid ? ` (${money(steps.owedCents)} owed)` : ""}{" "}
+              <AdminButton action="approve-chargeback" id={dev.id} label="Approve" disabled={!steps.cardVerified || !steps.owedPaid} />
+            </p>
+          </div>
+        ))}
+      </section>
+
+      <section className="card space-y-3">
+        <h2 id="holds" className="scroll-mt-24 text-lg font-semibold text-white">Payment holds</h2>
+        {held.filter((x) => x.holdReason !== "chargeback").length === 0 && <p className="note">None.</p>}
+        {held.filter((x) => x.holdReason !== "chargeback").map((x) => (
+          <p key={x.id} className="text-sm">
+            {x.email} · on hold since {fmtDateTime(x.holdStartedAt!)} ({x.holdReason}). Their tests close after 7 days paused (see Paused tests).
           </p>
         ))}
       </section>
@@ -199,6 +234,7 @@ export default async function AdminPage() {
           {tests.map((t) => (
             <li key={t.id} className="space-y-1 py-2 text-slate-300">
               <p>{fmtDateTime(t.createdAt)} · “{t.title}” · {t.adminStoppedAt ? "stopped by the team" : t.adminPausedAt ? "paused by the team" : t.status} · {displayName(t.developer)} · {t._count.contracts} joined{t.criticalChanges > 0 ? ` · ${t.criticalChanges} critical change${t.criticalChanges === 1 ? "" : "s"}` : ""}</p>
+              {t.pauseClosedAt && <p className="text-xs text-rose-300">Closed after 7 days paused: {t.pauseClosedReason}</p>}
               {t.status !== "stopped" && (
                 <p className="flex flex-wrap items-center gap-2">
                   {t.adminPausedAt ? <AdminButton action="unpause-test" id={t.id} label="Lift the pause" /> : <AdminButton action="pause-test" id={t.id} label="Pause" fields={[{ name: "note", label: "Why" }]} />}

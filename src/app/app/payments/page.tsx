@@ -5,6 +5,8 @@ import { requirePageUser } from "@/lib/server/page-auth";
 import { stripeOn } from "@/lib/server/stripe";
 import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
+import { ChargebackSteps } from "@/components/ChargebackSteps";
+import { chargebackSteps } from "@/lib/server/chargeback";
 import { sideFor } from "@/lib/sides";
 import { PayoutBanner } from "@/components/PayoutBanner";
 import { waitingForReview } from "@/lib/server/payments";
@@ -17,6 +19,7 @@ const MESSAGES: Record<string, string> = {
   off: "Payments aren't set up in this environment yet: Pay presses are recorded as “payments not set up” and nothing is charged.",
   card: "We couldn't save the card. Try again.",
   payout: "We couldn't open the payout setup. Try again.",
+  verify: "We couldn't verify the card. Try again or use another card.",
 };
 
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; pending?: string }> }) {
@@ -26,6 +29,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   // (NEXT-UI 6 / 15) Each side has its own payments page, as in the full app (Billing / Payments): the side in use.
   const side = sideFor(u, "/app/payments");
   const dev = side === "developer", tester = side === "tester";
+  const cbSteps = dev ? await chargebackSteps(u.id) : null;
   // The tester's "Everything you sent": each part by test, newest first, with where its money is.
   const sent = tester
     ? await db.contract.findMany({
@@ -48,8 +52,10 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       <h1 className="text-3xl font-bold tracking-tight text-white">Payments</h1>
       {tester && u.payoutProblemAt && <PayoutBanner />}
       {!on && <p className="info">{MESSAGES.off}</p>}
-      {dev && (await owedForBox(u.id).then((o) => (u.holdStartedAt || (o.length && !u.suspendedAt) ? <OwedBox onHold={!!u.holdStartedAt} owed={o} /> : null)))}
+      {cbSteps && <ChargebackSteps steps={cbSteps} />}
+      {dev && (await owedForBox(u.id).then((o) => (u.holdStartedAt || (o.length && !u.suspendedAt) ? <OwedBox onHold={!!u.holdStartedAt} owed={o} chargeback={!!cbSteps} /> : null)))}
       {q.error && q.error !== "off" && <p className="err">{MESSAGES[q.error]}</p>}
+      {q.saved === "verified" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card verified.</p>}
       {q.saved === "card" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card saved.</p>}
       {q.saved === "payout" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Your payout account is connected.</p>}
       {q.pending === "payout" && <p className="info">Stripe still needs a few details before you can be paid. Continue setup below.</p>}

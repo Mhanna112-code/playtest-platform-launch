@@ -31,9 +31,9 @@ export async function GET(req: Request) {
       // The offer of new terms has its own box right below this one: the live box lists every change except the contract's.
       changes = (await testerChanges(u.id, c.id, c.testId, since, tab)).filter((x) => x.kind !== "terms");
       // The test was stopped, or this tester's work was ended: a line in the live box (a final refusal for later presses, never a stop-once reason).
-      if (c.status === "ended" && c.endedAt && c.endedAt > since && (c.endKind === "stopped" || c.endKind === "early")) {
+      if (c.status === "ended" && c.endedAt && c.endedAt > since && (c.endKind === "stopped" || c.endKind === "closed" || c.endKind === "early")) {
         const dev = displayName((await db.user.findUniqueOrThrow({ where: { id: (await db.test.findUniqueOrThrow({ where: { id: c.testId } })).developerId } })));
-        changes.push({ kind: "ended", text: c.endKind === "stopped" ? `${dev} stopped the test` : `${dev} ended your work`, createdAt: c.endedAt });
+        changes.push({ kind: "ended", text: c.endKind === "stopped" ? `${dev} stopped the test` : c.endKind === "closed" ? "This test ended" : `${dev} ended your work`, createdAt: c.endedAt });
       }
     } else if (kind === "test") {
       await ownTest(u.id, id);

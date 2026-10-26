@@ -48,8 +48,12 @@ model User {
   /// Payment hold: set while the developer owes money (a failed charge unpaid after 3 days, or a chargeback)
   holdStartedAt DateTime?
   holdReason    String    @default("")
-  /// When the admin was alerted about a 30-day hold
+  /// No longer used (the 30-day admin alert was replaced by closing paused tests after 7 days); kept so the running app's client still matches
   holdAlertedAt DateTime?
+  /// (Owner, Oct 26) A chargeback hold lifts only after: a card re-verified with 3D Secure (chargebackCardVerifiedAt), what is owed paid,
+  /// and the admin's approval (chargebackApprovedAt). Both are cleared when the hold lifts or a new chargeback opens.
+  chargebackCardVerifiedAt DateTime?
+  chargebackApprovedAt     DateTime?
   /// Email settings: "each" (default) | "daily" | "weekly" | "monthly" | "off".
   /// Sign-in links and payment receipts always send; the bell keeps everything.
   emailPref     String    @default("each")
@@ -123,6 +127,12 @@ model Test {
   adminPausedAt   DateTime?
   adminStoppedAt  DateTime?
   adminNote       String   @default("")
+  /// (Owner, Oct 26) A paused test closes after 7 days (whatever the cause). The admin can move that date (valid only if set during the
+  /// current pause: pauseCloseSetAt >= the pause's start); pauseClosedAt/Reason record a closure caused by the pause.
+  pauseCloseAt      DateTime?
+  pauseCloseSetAt   DateTime?
+  pauseClosedAt     DateTime?
+  pauseClosedReason String   @default("")
   description String   @default("")
   buildUrl    String   @default("")
   /// The full app's categories (at least one)

@@ -7,6 +7,7 @@ import { POST as testsPOST } from "@/app/api/tests/route";
 import { POST as webhookPOST } from "@/app/api/stripe/webhook/route";
 import { GET as cronGET } from "@/app/api/cron/daily/route";
 import { POST as owedPOST } from "@/app/api/payments/owed/route";
+import { POST as verifyPOST } from "@/app/api/payments/verify-card/route";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { startHold } from "@/lib/server/holds";
 import { json, makeUser, req } from "./helpers";
@@ -108,7 +109,7 @@ describe("payment hold", () => {
 });
 
 describe("chargebacks (Stripe dispute webhook)", () => {
-  it("adds a developer stop-once reason and starts the hold; the admin resolving it lifts the hold", async () => {
+  it("adds a developer stop-once reason and starts the hold; the card check and the admin's approval lift it", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -129,7 +130,12 @@ describe("chargebacks (Stripe dispute webhook)", () => {
     await db.user.update({ where: { id: owner.user.id }, data: { isAdmin: true } });
     const p = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } });
     const { POST: adminPOST } = await import("@/app/api/admin/[action]/route");
-    expect((await adminPOST(req("/api/admin/resolve-chargeback", { cookie: owner.cookie, body: { id: p.id } }), { params: Promise.resolve({ action: "resolve-chargeback" }) })).status).toBe(200);
+    void p;
+    const approve = () => adminPOST(req("/api/admin/approve-chargeback", { cookie: owner.cookie, body: { id: dev.user.id } }), { params: Promise.resolve({ action: "approve-chargeback" }) }).then(json);
+    expect((await approve()).body.error.code).toBe("steps_missing"); // the card isn't verified yet
+    setStripeForTests(null); // no Stripe here (dev): the card check is simulated
+    expect((await verifyPOST(req("/api/payments/verify-card", { cookie: dev.cookie, body: {} }))).status).toBe(200); // simulated without Stripe
+    expect((await approve()).status).toBe(200);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();
   });
 });

@@ -558,7 +558,7 @@ and look, but this version deliberately drops most of its complexity.
   - Invites: first invite bell + email, then a bell reminder every 3 days until the tester joins, presses "No thanks",
     or the invite expires.
   - Admin (owner, latest): a DAILY email only when there are new disputes or new chargebacks (these have deadlines);
-    everything else (failed payments, holds, holds over 30 days, no-show reports once, failed payouts) goes in ONE
+    everything else (failed payments, holds, no-show reports once, failed payouts) goes in ONE
     digest email every 3 days. The admin page always shows the full list.
   - "Pay what you owe first." refusal under Pay/Reject includes a link "Pay what you owe ↑" that jumps to the hold box
     at the top of the page.
@@ -617,7 +617,7 @@ and look, but this version deliberately drops most of its complexity.
   anywhere. Sent work stays payable after leaving. Tester hold line: "This test is paused. Payment for your work may
   be delayed."
 - **Admin daily digest:** once a day ONE email to the owner/admins listing every case that needs them (disputes,
-  flagged extra work, no-show reports, open chargebacks, holds at 30 days, failed payouts), each with a link. The admin
+  flagged extra work, no-show reports, open chargebacks, failed payouts), each with a link. The admin
   page shows the same list. No per-event admin emails.
 - **Heads-up notices** (Open until in 3 days / 1 day) are in-app bell notifications only, not emailed.
 - **Email settings** (per user, in Settings): "Email me each update" (default) / "One daily summary" / "Don't
@@ -668,7 +668,7 @@ and look, but this version deliberately drops most of its complexity.
   until, shift by the length of the pause.
 - Testers read only: "This test is paused. Payment for your work may be delayed." They may leave with no mark. Chat
   keeps working.
-- After 30 days on hold the admin is alerted to close the tests; testers are told the test ended.
+- (Owner, Oct 26; replaces the 30-day admin alert) A paused test closes after 7 days whatever the cause; see the design doc 11.1. Testers are told the test ended; the developer is told why.
 - Review time limit: if sent work isn't paid or rejected within 14 days, the listing amount is paid automatically
   (extra work: $0, which the tester can flag to the admin). The clock pauses during a hold.
 

@@ -60,11 +60,14 @@ refused with a plain sentence if it can't happen any more.
 - Payment hold (`src/lib/server/holds.ts`): starts when a failed charge isn't paid within 3 days, or when a chargeback
   opens (Stripe webhook `charge.dispute.created` at `/api/stripe/webhook`, secret `STRIPE_WEBHOOK_SECRET`). All the
   developer's tests pause; sending still works; Pay/Reject, posting, joining, invites, Next round and bookings wait;
-  calls in the hold are cancelled. "Pay what you owe" (or the admin resolving the chargeback) lifts it, and deadlines,
-  Open until and the 14-day review clocks move on by the pause.
+  calls in the hold are cancelled. "Pay what you owe" lifts a plain hold, and deadlines, Open until and the 14-day review
+  clocks move on by the pause. A chargeback hold has extra steps (`src/lib/server/chargeback.ts`): a card re-verified with
+  3D Secure (a Stripe SetupIntent requesting 3DS; simulated without Stripe; set `STRIPE_PUBLISHABLE_KEY` for Stripe's card
+  form), what is owed paid, and the admin's Approve. A test paused for 7 days (any cause) is closed by the daily job
+  (`src/lib/server/pauseClosure.ts`); the admin can Extend or Close now.
 - Daily job `GET /api/cron/daily` with `Authorization: Bearer $CRON_SECRET` (`vercel.json` schedules it): pays sent
   work unreviewed for 14 days (listing amount; extra work $0, which the tester can flag), starts holds for charges owed
-  over 3 days, alerts admins after 30 days on hold, and sends the Open until heads-ups 3 days and 1 day before.
+  over 3 days, closes tests paused for 7 days, and sends the Open until heads-ups 3 days and 1 day before.
 
 ## Deploying
 
