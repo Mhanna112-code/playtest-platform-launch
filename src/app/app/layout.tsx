@@ -46,7 +46,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   );
   return (
     <>
-      <header className="sticky top-0 z-20 border-b border-white/[0.07] bg-ink-950/75 backdrop-blur-xl">
+      <header data-app-shell className="sticky top-0 z-20 border-b border-white/[0.07] bg-ink-950/75 backdrop-blur-xl">
         <nav className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-2 gap-y-2 px-4 py-3">
           <Brand />
           <div className="ml-4 flex flex-wrap items-center gap-1">

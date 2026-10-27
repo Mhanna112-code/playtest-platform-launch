@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { Brand } from "@/components/Brand";
 import { getPageUser } from "@/lib/server/page-auth";
+import { ShellWatch } from "@/components/ShellWatch";
 // Fonts are bundled with the site (no requests to font hosts), as on the full Playtest Platform.
 import "@fontsource-variable/bricolage-grotesque";
 import "@fontsource-variable/inter";
@@ -17,6 +18,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en">
       <body className="flex min-h-screen flex-col">
         <div className="flex-1">{children}</div>
+        <ShellWatch />
         <footer className="mt-16 border-t border-white/[0.06]">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-slate-500">
             <div className="flex items-center gap-3">
