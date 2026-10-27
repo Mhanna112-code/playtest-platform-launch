@@ -357,7 +357,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
     return (
       <li key={c.id} className="card flex flex-wrap items-center gap-3 p-4" data-removed={c.id}>
         <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[12rem] flex-1">
           <p className="truncate font-semibold text-white" title={c.title}>{c.title} <span className="badge ml-1 border-rose-300/40 text-rose-200" data-suspended-label="">Suspended</span> {pausedTest(c.test) && <PausedTag />}</p>
           <p className="text-sm text-slate-400">You were removed from this test. {suspended ? "It comes back to you when your account is active again." : invited ? "You're invited back." : ""}</p>
         </div>
@@ -372,7 +372,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
     <li key={c.id}>
       <Link href={`/app/find/${c.testId}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-rejoin={c.id}>
         <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[12rem] flex-1">
           <p className="truncate font-semibold text-white" title={c.title}>{c.title} {pausedTest(c.test) && <PausedTag />}</p>
           <p className="text-sm text-slate-400">{c.status === "left" ? `You left this test (${fmtDate(c.endedAt ?? c.joinedAt)}).` : `Your work ended (${fmtDate(c.endedAt ?? c.joinedAt)}).`} Your deadline is {fmtDate(c.dueAt)}.</p>
         </div>
@@ -408,7 +408,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             {chargeable.map(({ c, parts }) => (
               <li key={c.id}>
                 <Link href={`/app/sessions/${c.id}#part-${parts[0].kind}`} className="card card-hover flex flex-wrap items-center gap-3 border-amber-400/30 p-4 no-underline hover:no-underline">
-                  <p className="min-w-0 flex-1 truncate font-medium text-white" title={`${c.title} · ${plural(parts.length, "part")}`}>{c.title} · {plural(parts.length, "part")} {pausedTest(c.test) && <PausedTag />}</p>
+                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={`${c.title} · ${plural(parts.length, "part")}`}>{c.title} · {plural(parts.length, "part")} {pausedTest(c.test) && <PausedTag />}</p>
                   <span className="btn px-3 py-1.5 text-sm">Charge or let it go <ArrowRight className="h-4 w-4" /></span>
                 </Link>
               </li>
@@ -427,8 +427,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               <li key={a.key}>
                 <Link href={a.href} className="card card-hover flex flex-wrap items-center gap-3 border-sky-300/40 p-4 no-underline hover:no-underline">
                   <CategoryTile category={mainCategory(a.c.test.categories)} size="h-10 w-10" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-white" title={a.c.title}>{a.c.title} {pausedTest(a.c.test) && <PausedTag />}</p>
+                  <div className="min-w-[12rem] flex-1">
+                    <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="truncate" title={a.c.title}>{a.c.title}</span> {pausedTest(a.c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
                     <p className="text-sm text-slate-400">{a.text}</p>
                   </div>
                   <span className="btn px-3 py-1.5 text-sm">{a.cta} <ArrowRight className="h-4 w-4" /></span>
@@ -441,8 +441,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               return (
                 <li key={`${c.id}-${p.key}`} className="card flex flex-wrap items-center gap-3 p-4" data-todo-part={`${c.id}:${p.key}`}>
                   <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-white" title={`${c.title} · ${p.name}`}>{c.title} · {p.name} {pausedTest(c.test) && <PausedTag />}</p>
+                  <div className="min-w-[12rem] flex-1">
+                    <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="truncate" title={`${c.title} · ${p.name}`}>{c.title} · {p.name}</span> {pausedTest(c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
                     <div className="mt-1 flex flex-wrap gap-2">
                       <span className="badge"><CalendarClock className="h-3.5 w-3.5" /> Due {fmtDate(c.dueAt)}{due ? ` · ${due}` : ""}</span>
                       {messages > 0 && <span className="badge border-fuchsia-300/40 text-fuchsia-200"><MessagesSquare className="h-3.5 w-3.5" /> {plural(messages, "unread message")}</span>}
@@ -464,7 +464,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             {apps.map((a) => (
               <li key={a.id}>
                 <Link href={`/app/find/${a.testId}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">
-                  <p className="min-w-0 flex-1 truncate font-medium text-white" title={appTests.get(a.testId)?.title ?? "A test"}>{appTests.get(a.testId)?.title ?? "A test"} {appTests.get(a.testId) && pausedTest(appTests.get(a.testId)!) && <PausedTag />}</p>
+                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={appTests.get(a.testId)?.title ?? "A test"}>{appTests.get(a.testId)?.title ?? "A test"} {appTests.get(a.testId) && pausedTest(appTests.get(a.testId)!) && <PausedTag />}</p>
                   <span className="badge text-amber-300"><Clock className="h-3.5 w-3.5" /> {a.kind === "rejoin" ? "Ask to rejoin waiting" : "Application waiting"}</span>
                 </Link>
               </li>
@@ -472,7 +472,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             {waiting.map(({ c, s }) => (
               <li key={s.id}>
                 <Link href={`/app/sessions/${c.id}#parts`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">
-                  <p className="min-w-0 flex-1 truncate font-medium text-white" title={c.title}>{c.title} {pausedTest(c.test) && <PausedTag />}</p>
+                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={c.title}>{c.title} {pausedTest(c.test) && <PausedTag />}</p>
                   <span className="badge text-amber-300"><Clock className="h-3.5 w-3.5" /> {s.kind === "recording" ? "Screen recording" : "Written answers"} sent: waiting for review</span>
                 </Link>
               </li>
@@ -534,14 +534,14 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             <ul className="grid gap-3 md:grid-cols-2">
               {more.map((t) => (
                 <li key={t.id}>
-                  <Link href={`/app/find/${t.id}`} className="card card-hover flex items-center gap-3 p-4 no-underline hover:no-underline">
+                  <Link href={`/app/find/${t.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">
                     <CategoryTile category={mainCategory(t.categories)} size="h-10 w-10" />
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-[12rem] flex-1">
                       {t.productName && <p className="kicker truncate" title={t.productName}>{t.productName}</p>}
                       <p className="truncate font-semibold text-white" title={t.title}>{t.title}</p>
                       <div className="mt-1 flex flex-wrap gap-2"><PartBadges written={t.writtenCents != null} recording={t.recordingCents != null} live={t.liveRateCents != null} /><CategoryBadges categories={t.categories} /></div>
                     </div>
-                    <div className="text-right">
+                    <div className="ml-auto text-right">
                       <p className="text-sm font-semibold text-emerald-300">{pays(asListing(t))}</p>
                       <p className="text-xs text-slate-500">{plural(t.spots - t._count.contracts, "spot")} left</p>
                     </div>
