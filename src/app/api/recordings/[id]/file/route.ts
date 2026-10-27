@@ -11,7 +11,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (r2On()) return Response.redirect(viewUrl(r.id, r.storageKey), 302);
   try {
     const { stream, size } = await readLocal(r.storageKey);
-    return new Response(stream, { headers: { "content-type": r.contentType, "content-length": String(size), "cache-control": "private, no-store" } });
+    // (Batch 11) Attachments are only the allowed types; never sniffed, and a zip downloads.
+    const disposition = `${r.contentType.includes("zip") ? "attachment" : "inline"}; filename="${r.filename.replace(/"/g, "")}"`;
+    return new Response(stream, { headers: { "content-type": r.contentType, "content-length": String(size), "cache-control": "private, no-store", "x-content-type-options": "nosniff", "content-disposition": disposition } });
   } catch {
     return new Response("Not found", { status: 404 });
   }

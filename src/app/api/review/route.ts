@@ -14,6 +14,8 @@ export async function POST(req: Request) {
     const u = await requireActive(req, { devSide: true, what: body.action === "reject" ? "Reject" : "Pay", piece: { kind: String(body.kind ?? ""), id: String(body.id ?? "") } });
     // A declined Pay is refused under Pay and is not a debt: nothing is logged or shown anywhere else.
     const r = await review(u, body);
+    // (Batch 11) The bank wants the developer to confirm: the page shows its pop-up, then /api/payments/confirm finishes it.
+    if ("requiresAction" in r) return ok(r);
     await logReview(u.id, body, r);
     const piece = body.kind === "call" ? await db.call.findUnique({ where: { id: String(body.id) } }) : await db.submission.findUnique({ where: { id: String(body.id) } });
     if (piece) await maybePromptRating(piece.contractId);

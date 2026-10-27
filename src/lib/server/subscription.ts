@@ -2,7 +2,7 @@ import type Stripe from "stripe";
 import { db } from "@/lib/db";
 import { HttpError } from "./http";
 import { notify } from "./notify";
-import { chargePlatform, getStripe, stripeOn } from "./stripe";
+import { chargePlatform, getStripe, stripeOn, type NeedsAction } from "./stripe";
 import { receipt } from "./payments";
 import { recordEvent } from "./tests";
 import {
@@ -23,7 +23,6 @@ import {
 
 const DAY = 86_400_000;
 type Dev = { id: string; email: string; name: string };
-const FREE_KEY = "free-until";
 const TOLD = (days: number) => `free-told-${days}`;
 
 /** Stripe Billing only with a real key (the tests' stand-in and the local fake only do one-off charges). */
@@ -31,8 +30,12 @@ const billingOn = () => !!process.env.STRIPE_SECRET_KEY?.trim() && stripeOn();
 const appState = async (key: string) => (await db.appState.findUnique({ where: { key } }))?.value ?? null;
 const setState = (key: string, value: string) => db.appState.upsert({ where: { key }, update: { value }, create: { key, value } });
 
+/**
+ * (Owner, Oct 29, batch 11) Free during launch comes from the server configuration: FREE_UNTIL (an ISO date). Unset (as now): free with no end. There is no admin
+ * setting any more; the daily job sends the 30-day and 7-day notices for the configured date (set it at least 30 days ahead).
+ */
 export async function launchState(now = new Date()): Promise<Launch> {
-  return launchFrom(await appState(FREE_KEY), now);
+  return launchFrom(process.env.FREE_UNTIL?.trim() || null, now);
 }
 
 type SubRow = Parameters<typeof subscribed>[0] & { id: string; holdStartedAt?: Date | null; suspendedAt?: Date | null };
@@ -91,21 +94,41 @@ export async function subscribe(dev: Dev, now = new Date()) {
   if (billingOn()) {
     const stripe = getStripe();
     try {
+      // (Batch 11) On-session: when the bank wants the developer to confirm the first payment, the page shows its pop-up (default_incomplete keeps it waiting).
       const s = await stripe.subscriptions.create({
-        customer: u.stripeCustomerId!, default_payment_method: u.stripePaymentMethodId!, payment_behavior: "error_if_incomplete", metadata: { userId: u.id },
+        customer: u.stripeCustomerId!, default_payment_method: u.stripePaymentMethodId!, payment_behavior: "default_incomplete", metadata: { userId: u.id },
         items: [{ price_data: { currency: "usd", product: await stripeProduct(stripe), unit_amount: SUBSCRIPTION_CENTS, recurring: { interval: "month" } } }],
+        expand: ["latest_invoice.payment_intent"],
         ...(startsCharging > now ? { trial_end: Math.floor(startsCharging.getTime() / 1000) } : {}),
       }, { idempotencyKey: `sub-${u.id}-${now.toISOString().slice(0, 10)}` });
       id = s.id;
+      const pi = (s.latest_invoice as unknown as { payment_intent?: { id: string; status: string; client_secret: string } } | null)?.payment_intent;
+      if (s.status === "incomplete" && pi?.status === "requires_action") {
+        const row = await db.payment.create({ data: { kind: "subscription", developerId: u.id, testerId: u.id, amountCents: SUBSCRIPTION_CENTS, feeCents: SUBSCRIPTION_CENTS, testerCents: 0, transferStatus: "none", status: "needs_action", note: `sub:${s.id}` } });
+        return (await import("./confirm")).pressAction(row.id, { status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret });
+      }
+      if (s.status === "incomplete") {
+        await stripe.subscriptions.cancel(s.id).catch(() => null);
+        throw new Error("incomplete");
+      }
     } catch (e) {
       throw new HttpError(402, "card_failed", "Your card was declined, so you're not subscribed. Update your card and try again.", { stripe: (e as Error).message });
     }
   } else if (startsCharging <= now) {
-    // (Section 4) A declined subscription payment never starts a hold.
-    const r = await chargePlatform(u, SUBSCRIPTION_CENTS, `sub-${u.id}-${now.toISOString().slice(0, 10)}`, `Playtest subscription (${SUBSCRIPTION_PRICE})`).catch(() => null);
+    // (Section 4) A declined subscription payment never starts a hold. (Batch 11) The developer's own press: on-session, so the bank may ask them to confirm.
+    const r = await chargePlatform(u, SUBSCRIPTION_CENTS, `sub-${u.id}-${now.toISOString().slice(0, 10)}`, `Playtest subscription (${SUBSCRIPTION_PRICE})`, "press").catch(() => null);
     if (!r) throw new HttpError(402, "card_failed", "Your card was declined, so you're not subscribed. Update your card and try again.");
+    if (r.status === "requires_action") {
+      const row = await db.payment.create({ data: { kind: "subscription", developerId: u.id, testerId: u.id, amountCents: SUBSCRIPTION_CENTS, feeCents: SUBSCRIPTION_CENTS, testerCents: 0, transferStatus: "none", status: "needs_action", note: "sub:manual" } });
+      return (await import("./confirm")).pressAction(row.id, r as NeedsAction);
+    }
     await recordCharge(u, r);
   }
+  return activate(u, now, id, startsCharging);
+}
+
+/** The subscription starts (after the first payment, or straight away during a free launch). */
+async function activate(u: Dev, now: Date, id: string, startsCharging: Date) {
   const renews = startsCharging > now ? startsCharging : periodEnd(now, now);
   await db.user.update({
     where: { id: u.id },
@@ -113,6 +136,21 @@ export async function subscribe(dev: Dev, now = new Date()) {
   });
   await tell(u, startsCharging > now ? `You're subscribed (${SUBSCRIPTION_PRICE}): the first charge is on ${fmtSubDay(startsCharging)}` : `You're subscribed (${SUBSCRIPTION_PRICE}), renewing ${fmtSubDay(renews)}`);
   return { subscribed: true, renewsAt: renews };
+}
+
+/**
+ * (Owner, Oct 29, batch 11) The bank confirmed a subscription payment: a Subscribe press (needs_action: the subscription starts now) or a renewal made while away
+ * (needs_confirmation: it renews). Called from /api/payments/confirm.
+ */
+export async function subscriptionConfirmed(paymentId: string, now = new Date()) {
+  const p = await db.payment.findUniqueOrThrow({ where: { id: paymentId } });
+  const u = await userOf(p.developerId);
+  const first = p.status === "needs_action";
+  await db.payment.update({ where: { id: p.id }, data: { status: "charged", settledAt: now, actionPi: null, actionBy: null, stripePaymentIntentId: p.actionPi } });
+  await receipt(u.email, `your subscription (${SUBSCRIPTION_PRICE})`, p.amountCents, "charged", "/app/payments#subscription");
+  if (first) return activate(u, now, p.note.startsWith("sub:") && p.note !== "sub:manual" ? p.note.slice(4) : "manual", now);
+  await renewed(u.id, now);
+  return { subscribed: true };
 }
 
 /** Cancel any time (also during a hold or suspension: Payments stays open). It lasts until the end of the paid month; no refunds. */
@@ -215,7 +253,14 @@ export async function renewSubscriptions(now = new Date()) {
       ended++;
       continue;
     }
+    // (Batch 11) A renewal the bank wants confirmed waits (3 days) instead of being charged again.
+    if (await db.payment.count({ where: { developerId: u.id, kind: "subscription", status: "needs_confirmation" } })) continue;
     const r = await chargePlatform(u, SUBSCRIPTION_CENTS, `subrenew-${u.id}-${now.toISOString().slice(0, 10)}`, `Playtest subscription (${SUBSCRIPTION_PRICE})`).catch(() => null);
+    if (r?.status === "requires_action") {
+      const row = await db.payment.create({ data: { kind: "subscription", developerId: u.id, testerId: u.id, amountCents: SUBSCRIPTION_CENTS, feeCents: SUBSCRIPTION_CENTS, testerCents: 0, transferStatus: "none", status: "needs_confirmation" } });
+      await (await import("./confirm")).awayAction(row.id, r as NeedsAction);
+      continue;
+    }
     if (r) {
       await recordCharge(u, r);
       await renewed(u.id, now);
@@ -241,6 +286,13 @@ export async function subscriptionWebhook(type: string, o: Record<string, unknow
     const end = lines?.[0]?.period?.end;
     await renewed(u.id, now, end ? new Date(end * 1000) : null);
   } else if (type === "invoice.payment_failed") await renewalFailed(u.id, now);
+  else if (type === "invoice.payment_action_required" && typeof o.payment_intent === "string") {
+    // (Batch 11) A renewal the bank wants the developer to confirm: it waits 3 days for their Confirm in Payments, then lapses.
+    if (!(await db.payment.count({ where: { actionPi: o.payment_intent } }))) {
+      const row = await db.payment.create({ data: { kind: "subscription", developerId: u.id, testerId: u.id, amountCents: typeof o.amount_due === "number" ? o.amount_due : SUBSCRIPTION_CENTS, feeCents: 0, testerCents: 0, transferStatus: "none", status: "needs_confirmation" } });
+      await (await import("./confirm")).awayAction(row.id, { status: "requires_action", stripePaymentIntentId: o.payment_intent, clientSecret: "" });
+    }
+  }
   else if (type === "customer.subscription.deleted") {
     if (u.subscriptionStatus === "past_due") await lapse(u.id, now);
     else await endSubscription(u.id, "cancelled", now);
@@ -257,31 +309,7 @@ async function tellAllDevs(line: string) {
   await db.notification.createMany({ data: ids.map((userId) => ({ userId, text: line, link: "/app/payments#subscription", mustEmail: true, own: false, groupKey: "payhold", payment: true })) });
   return ids.length;
 }
-const freeLine = (until: Date, moved: boolean) => `Free during launch ends soon: the extras need a ${SUBSCRIPTION_PRICE} subscription ${moved ? "now " : ""}from ${fmtSubDay(until)}.`;
-export const FREE_CLEARED_LINE = "The extras stay free for now.";
-
-/** Admin: "Free for everyone until <date>" (blank clears it: free with no end). A date must be at least 30 days away. */
-export async function setFreeUntil(value: string, now = new Date()) {
-  const before = await appState(FREE_KEY);
-  const told = await appState(TOLD(30));
-  if (!value.trim()) {
-    await setState(FREE_KEY, "");
-    if (told) await tellAllDevs(FREE_CLEARED_LINE);
-    await db.appState.deleteMany({ where: { key: { in: FREE_NOTICE_DAYS.map(TOLD) } } });
-    return { until: null };
-  }
-  const d = new Date(value);
-  if (isNaN(d.getTime())) throw new HttpError(400, "bad_date", "Enter the date like 2026-12-31.");
-  if (d.getTime() < now.getTime() + 30 * DAY - 3_600_000) throw new HttpError(400, "too_soon", "Pick a date at least 30 days away.");
-  await setState(FREE_KEY, d.toISOString());
-  // (Section 8 item 6) Moved after a notice went out: a new notice "...now from <date>" (the 30-day minimum still applies).
-  if (told && before && new Date(before).getTime() !== d.getTime()) {
-    await tellAllDevs(freeLine(d, true));
-    await setState(TOLD(30), d.toISOString());
-    await db.appState.deleteMany({ where: { key: TOLD(7) } });
-  }
-  return { until: d };
-}
+const freeLine = (until: Date) => `Free during launch ends soon: the extras need a ${SUBSCRIPTION_PRICE} subscription from ${fmtSubDay(until)}.`;
 
 /** The daily job: the 30-day and 7-day notices before free-during-launch ends (sent even with email Off), and the end itself (like a lapse: a stop-once line). */
 export async function freeLaunchNotices(now = new Date()) {
@@ -295,8 +323,7 @@ export async function freeLaunchNotices(now = new Date()) {
       const key = TOLD(days);
       const was = await appState(key);
       if (was === launch.until.toISOString()) continue;
-      const moved = days === 7 ? false : !!was;
-      await tellAllDevs(freeLine(launch.until, moved));
+      await tellAllDevs(freeLine(launch.until));
       await setState(key, launch.until.toISOString());
       sent++;
       break; // one notice a day: the nearer mark next time

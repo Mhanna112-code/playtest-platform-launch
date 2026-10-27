@@ -24,7 +24,7 @@ import { rejoinAskLine } from "@/lib/server/joining";
 import { pronouns } from "@/lib/format";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PAUSE_CLOSE_DAYS, pauseReasons } from "@/lib/pause";
-import { HOLD_APPROVAL_AFTER } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, testerPayable } from "@/lib/rules";
 
 export const metadata = { title: "Home · Playtest" };
 export const dynamic = "force-dynamic";
@@ -114,8 +114,8 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
   for (const t of allTests)
     for (const c of t.contracts) {
       const who = displayName(c.tester);
-      // (Owner, Oct 28) A tester who deleted their account: their unpaid work can no longer be paid, charged or disputed, so it isn't waiting for review.
-      if (c.tester.deletedAt) continue;
+      // (Owner, Oct 29, batch 11) A tester who deleted their account: their sent work still waits for review when their payout account was connected.
+      if (!testerPayable(c.tester)) continue;
       for (const s of c.submissions.filter((x) => !x.review)) items.push({ key: `s-${s.id}`, at: s.sentAt, href: `/app/tests/${t.id}#piece-${s.id}`, who, text: <>sent their {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white">{t.title}</b></>, cta: "Review" });
       for (const x of c.calls.filter((y) => y.status === "booked" && y.startsAt <= now && !y.review)) items.push({ key: `c-${x.id}`, at: x.startsAt, href: `/app/tests/${t.id}#call-${x.id}`, who, text: <>held a live call for <b className="text-white">{t.title}</b>: enter its length and pay</>, cta: "Review" });
       for (const s of c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide)) items.push({ key: `d-${s.id}`, at: s.dispute!.createdAt, href: `/app/tests/${t.id}#item-dispute-${s.dispute!.id}`, who, text: <>disputed what you paid on <b className="text-white">{t.title}</b>: add your side</>, cta: "Answer" });

@@ -25,13 +25,14 @@ import { rowsOf, toJson } from "@/lib/callRows";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
-import { HOLD_APPROVAL_AFTER, NOT_LISTED, callListed } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, NOT_LISTED, callListed, deletedNoPayoutsLine, testerPayable } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
 import { AnswersBox } from "@/components/AnswersBox";
+import { Formatted } from "@/components/Formatted";
+import { AttachmentList } from "@/components/AttachmentList";
 import { pieceOf, pieceRoom } from "@/lib/server/payments";
-import { ExtraPay } from "./ExtraPay";
 import { TopPanel } from "./TopPanel";
 import { NeedsYou } from "./NeedsYou";
 import { KeysNotice } from "./KeysNotice";
@@ -110,7 +111,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const rooms = new Map(await Promise.all(pieceKeys.map(async (k) => {
     const piece = (await pieceOf(k))!;
     const r = await pieceRoom(piece);
-    return [k.submissionId ?? k.callId!, { room: r.aboveBaseCents, listed: r.listed }] as const;
+    return [k.submissionId ?? k.callId!, { room: r.roomCents, listed: r.listed, pool: r.callPoolRoomCents }] as const;
   })));
   const lateOf = (c: { dueAt: Date; tester: { name: string; email: string } }, x: { createdAt: Date }) => (isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(c.tester), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined);
   const partPaid = (id: string) => payments.filter((p) => (p.submissionId === id || p.callId === id) && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
@@ -165,8 +166,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   );
   // (NEXT-UI 21) Needs you: sent work and held calls waiting for Pay / Reject, the testers' call requests, disputes waiting for the developer's side.
   const pieces = t.contracts
-    // (Owner, Oct 28) A tester who deleted their account: their unpaid work can no longer be paid, charged or disputed.
-    .filter((c) => !c.tester.deletedAt)
+    // (Owner, Oct 29, batch 11) A tester who deleted their account: their sent work stays here when their payout account was connected; without one it leaves (their row says why).
+    .filter((c) => testerPayable(c.tester))
     .flatMap((c) => [
       ...c.submissions.filter((x) => !x.review).map((x) => ({ kind: "sub" as const, id: x.id, c, s: x, x: null, at: x.sentAt })),
       ...c.calls.filter((x) => x.status === "booked" && x.startsAt <= now && !x.review).map((x) => ({ kind: "call" as const, id: x.id, c, s: null, x, at: x.startsAt })),
@@ -261,24 +262,18 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               {x.kind === "sub" ? (
                 <>
                   {/* (Owner, Oct 29, batch 10) One piece's answers in their own scroll box (about 16 lines) when longer; the Pay box below stays outside it. */}
-                  {(x.s!.kind === "written" || x.s!.notes) && (
-                    <AnswersBox>
-                      {x.s!.kind === "written" && writtenQuestions(x.c).map((q, i) => (
-                        <div key={i} className="text-sm">
-                          <p className="font-medium text-ink-200">{qText(q)}{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</p>
-                          <p className="whitespace-pre-wrap break-words">{(x.s!.answers as string[])[i]}</p>
-                        </div>
-                      ))}
-                      {x.s!.notes && <p className="whitespace-pre-wrap break-words text-sm">Notes: {x.s!.notes}</p>}
-                    </AnswersBox>
-                  )}
-                  {x.s!.recordings.filter((r) => r.uploadedAt).map((r) => (
-                    <div key={r.id} className="text-sm">
-                      <video controls preload="metadata" className="max-h-72 w-full rounded bg-black" src={`/api/recordings/${r.id}/file`} />
-                      <a href={`/api/recordings/${r.id}/file`} target="_blank" rel="noreferrer">{r.filename}</a>
-                    </div>
-                  ))}
-                  <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} partPaidCents={partPaid(x.s!.id)}
+                  {/* (Batch 11) Formatted answers, and the piece's files and recordings, inside the same scroll box. */}
+                  <AnswersBox>
+                    {x.s!.kind === "written" && writtenQuestions(x.c).map((q, i) => (
+                      <div key={i} className="text-sm">
+                        <p className="font-medium text-ink-200">{qText(q)}{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</p>
+                        <Formatted text={(x.s!.answers as string[])[i] ?? ""} />
+                      </div>
+                    ))}
+                    {x.s!.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><Formatted text={x.s!.notes} /></div>}
+                    <AttachmentList items={x.s!.recordings.filter((r) => r.uploadedAt)} />
+                  </AnswersBox>
+                  <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} partPaidCents={partPaid(x.s!.id)} roomCents={rooms.get(x.s!.id)?.room}
                     note={x.s!.agreedCents != null && chargeOpensAt(x.s!, t, x.c, now) && !x.s!.choiceOfferedAt ? choiceNoteLine(fmtDate(chargeOpensAt(x.s!, t, x.c, now)!).replace(/, \d{4}$/, ""), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
                     listingCents={x.s!.agreedCents} listingText={`${money(x.s!.agreedCents)} for ${x.s!.kind === "written" ? "written answers" : "a recording"}`} />
                 </>
@@ -291,7 +286,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     measured={x.x!.devJoinedAt && x.x!.testerJoinedAt ? defaultCallMinutes(x.x!.startsAt, x.x!.minutes, x.x!.devJoinedAt, x.x!.testerJoinedAt) : null}
                     max={Math.floor(x.x!.minutes * 1.5)} closesAt={new Date(x.x!.startsAt.getTime() + CALL_CLOSE_MS).toISOString()} closed={callClosed(x.x!.startsAt, now)}
                   />
-                  <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} partPaidCents={partPaid(x.x!.id)}
+                  <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} partPaidCents={partPaid(x.x!.id)} roomCents={rooms.get(x.x!.id)?.room} callPoolRoomCents={rooms.get(x.x!.id)?.pool ?? null}
                     minutes={x.x!.actualMinutes ?? x.x!.minutes} rateCents={x.x!.rateCents}
                     listingCents={callReference(x.x!.rateCents, x.x!.actualMinutes ?? x.x!.minutes, x.c.liveRateCents).cents}
                     listingText={callReference(x.x!.rateCents, x.x!.actualMinutes ?? x.x!.minutes, x.c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
@@ -357,8 +352,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       <span className={`badge ${r.required ? "border-amber-300/40 text-amber-200" : ""}`}>{r.required ? "Required" : "Not required"}</span>
                       <span className={r.sub ? "text-emerald-200" : "text-slate-400"}>{r.sub ? `Sent ${fmtDate(r.sub.sentAt)}` : "Not sent yet"}</span>
                       {r.sub && <span className="text-slate-300">· paid {money(partPaid(r.sub.id))} of {r.sub.agreedCents != null ? money(r.sub.agreedCents) : `(${NOT_LISTED.toLowerCase()})`}</span>}
-                      {/* (Owner, Oct 27) Extra pay sits next to each SENT part (unsent parts have none). */}
-                      {r.sub && !restricted && <ExtraPay testId={t.id} contractId={c.id} submissionId={r.sub.id} name={name} seenAt={seenAt} roomCents={rooms.get(r.sub.id)?.room ?? 0} listed={rooms.get(r.sub.id)?.listed ?? true} paidCents={partPaid(r.sub.id)} owes={owesNow} />}
+                      {/* (Owner, Oct 29, batch 11 section 6 / batch 12 section 3) A paid piece keeps its Pay box as "Pay more" until its cap is reached. */}
+                      {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
+                        <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} partPaidCents={partPaid(r.sub.id)}
+                          roomCents={rooms.get(r.sub.id)?.room} listingCents={r.sub.agreedCents} listingText={`${money(r.sub.agreedCents)} for ${r.name === "Recording" ? "a recording" : "written answers"}`} />
+                      )}
                     </li>
                   ))}
                   {c.liveRateCents != null && (
@@ -369,17 +367,24 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       <span className="text-slate-300">· paid {money(callPaid)}</span>
                     </li>
                   )}
-                  {/* (Batch 9) Extra pay on each call that took place, listed or not (its own per-piece cap). */}
+                  {/* (Batch 9) Each call that took place, listed or not; (batch 11 / 12) once paid, "Pay more" until its cap (an unlisted call: $200/h, and the tester's $1000 for unlisted calls). */}
                   {!restricted && c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).map((x) => (
                     <li key={x.id} className="flex flex-wrap items-center gap-2" data-held-call={x.id}>
                       <b className="text-white">Call on {fmtDateTime(x.startsAt)}</b>
                       <span className="text-slate-300">· {x.rateCents == null ? NOT_LISTED : "In their contract"} · paid {money(partPaid(x.id))}</span>
-                      <ExtraPay testId={t.id} contractId={c.id} callId={x.id} name={name} seenAt={seenAt} roomCents={rooms.get(x.id)?.room ?? 0} listed={rooms.get(x.id)?.listed ?? true} paidCents={partPaid(x.id)} owes={owesNow} />
+                      {x.review && !x.review.rejected && (rooms.get(x.id)?.room ?? 0) > 0 && (
+                        <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} partPaidCents={partPaid(x.id)}
+                          roomCents={rooms.get(x.id)?.room} callPoolRoomCents={rooms.get(x.id)?.pool ?? null} minutes={x.actualMinutes ?? x.minutes} rateCents={x.rateCents}
+                          listingCents={callReference(x.rateCents, x.actualMinutes ?? x.minutes, c.liveRateCents).cents}
+                          listingText={callReference(x.rateCents, x.actualMinutes ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
+                      )}
                     </li>
                   ))}
                 </ul>
                 <p className="text-sm"><b>Paid in all:</b> {money(paidSoFar(c.id))}{(bookedAhead || held || cancelledN) ? ` · Calls: ${[bookedAhead ? `${bookedAhead} booked ahead` : "", held ? `${held} held` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}` : ""}</p>
                 {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}
+                {/* (Batch 11, DEFAULT) A tester who deleted their account with no payout account: their unreviewed work left Needs you. */}
+                {!testerPayable(c.tester) && (c.submissions.some((x) => !x.review) || c.calls.some((x) => x.status === "booked" && x.startsAt <= now && !x.review)) && <p className="note" data-deleted-no-payouts="">{deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null }))}</p>}
                 {ri?.avg && <p className="note">{name}: {ri.avg}</p>}
                 {ri?.tester && (
                   <>

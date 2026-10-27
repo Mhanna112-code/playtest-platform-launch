@@ -344,11 +344,13 @@ describe("T) extra pay beside each sent part, (batch 9) capped per piece at 100%
   it("pays above the listing for a sent part (80/20, a bell that does not stack); 'up to $Y' is the room left; the server refuses more", async () => {
     const { dev, tester, testId, sessionId, sub } = await sentAt(20_000);
     expect((await roomOf(sub.id)).aboveBaseCents).toBe(20_000); // 100% of the $200 listing
+    // (Batch 11 section 6) Pay more goes on a paid piece: pay the listing first.
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "200.00", tickedCents: 20_000 })).status).toBe(200);
     const r = await extra(dev.cookie, testId, { contractId: sessionId, submissionId: sub.id, amount: "150.00" });
     expect(r.status).toBe(200);
     const p = await db.payment.findFirstOrThrow({ where: { contractId: sessionId, kind: "extra" } });
     expect(p).toMatchObject({ amountCents: 15_000, feeCents: 3000, testerCents: 12_000, submissionId: sub.id });
-    const bell = (await lines(tester.user.id)).find((l) => /paid you \$150\.00 extra for Harbor Run$/.test(l.text))!;
+    const bell = (await lines(tester.user.id)).find((l) => /paid you \$150\.00 more for your written answers on “Harbor Run”$/.test(l.text))!;
     expect(bell).toMatchObject({ own: false, groupKey: "textra", payment: true }); // (Owner, Oct 27) "<dev> paid you $X extra" lines stack across tests, one entry a day
     expect((await roomOf(sub.id)).aboveBaseCents).toBe(5000);
     const over = await extra(dev.cookie, testId, { contractId: sessionId, submissionId: sub.id, amount: "60.00" });
@@ -364,9 +366,10 @@ describe("T) extra pay beside each sent part, (batch 9) capped per piece at 100%
     // Pay $110 for a $100 part: $10 above the listing.
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "110.00", tickedCents: 11_000 })).status).toBe(200);
     expect((await roomOf(sub.id)).aboveBaseCents).toBe(9000);
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("r.sub && !restricted && <ExtraPay");
-    expect(src("app/app/tests/[id]/ExtraPay.tsx")).toContain("up to {money(roomCents)}");
-    expect(src("app/app/tests/[id]/ExtraPay.tsx")).toContain("Paid so far for this part:");
+    // (Batch 11 section 6) The same Pay box, as "Pay more" on a paid piece.
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("r.sub && r.sub.review && !r.sub.review.rejected && !restricted");
+    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain("up to {money(p.roomCents)}");
+    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain("Paid so far for this part:");
     // Pay above the cap is refused.
     const two = await sentAt(10_000, "Ben Carter");
     const tooMuch = await pay(two.dev.cookie, { kind: "submission", id: two.sub.id, amount: "250.00", tickedCents: 25_000, over200: true });
@@ -482,6 +485,7 @@ describe("the final list of emails that ignore Off, and each notification emaile
     const names = [...hits].sort();
     // (Owner, Oct 27) holds.ts: the hold starting (payment, chargeback), a payment hold turning into a chargeback hold, and "running again". The owed reminder is gone.
     // (Batch 10) holds.ts also: "Your payment went through. Your tests stay paused while your account is suspended." in place of "running again".
-    expect(names).toEqual(["holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
+    // (Batch 11) confirm.ts: "Your bank wants you to confirm a $X payment. Confirm it in Payments by <date>." (sent even with email Off).
+    expect(names).toEqual(["confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
   });
 });

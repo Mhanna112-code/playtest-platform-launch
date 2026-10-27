@@ -70,6 +70,9 @@ model User {
   holdCount      Int       @default(0)
   holdApprovedAt DateTime?
   holdApprovedById String?
+  /// (Batch 11) Automatic retries of what is owed during this hold: how many were tried (at most 7 a hold) and when the last one ran
+  holdRetries    Int       @default(0)
+  holdRetryAt    DateTime?
   /// No longer used (the 30-day admin alert was replaced by closing paused tests after 7 days); kept so the running app's client still matches
   holdAlertedAt DateTime?
   /// (Owner, Oct 26) A chargeback hold lifts only after: a card re-verified with 3D Secure (chargebackCardVerifiedAt), what is owed paid,
@@ -334,6 +337,8 @@ model Recording {
   contentType  String
   /// Set once the upload finished
   uploadedAt   DateTime?
+  /// (Batch 11) Which part it belongs to: "recording" (the Recording part) or "written" (an attachment on the written part: a file, or a screen recording)
+  part         String      @default("recording")
   createdAt    DateTime    @default(now())
 }
 
@@ -397,6 +402,10 @@ model Payment {
   failure      String   @default("")
   /// (Batch 9) The developer's optional note to the tester (extra pay; a Pay's note is the review's reason)
   note         String   @default("")
+  /// (Batch 11) The bank wants the cardholder to confirm this payment: the Stripe PaymentIntent to confirm, and by when (status "needs_confirmation" for a charge made
+  /// while the developer wasn't there; "needs_action" while a press's confirmation pop-up is open; an owed payment keeps its status)
+  actionPi     String?
+  actionBy     DateTime?
   createdAt    DateTime @default(now())
 
   @@index([developerId])

@@ -52,8 +52,6 @@ export async function POST(req: Request, { params }: Ctx) {
         await refundPayment(id);
         return ok({ ok: true });
       // (Owner, Oct 28, batch 8) "Free for everyone until <date>" (blank clears it).
-      case "set-free-until":
-        return ok(await (await import("@/lib/server/subscription")).setFreeUntil(String(body.date ?? "")));
       case "allow-critical-changes":
       {
         // (Owner, Oct 28 afternoon) Per field: each locked field gets its 3 changes back; the other fields keep their counts.

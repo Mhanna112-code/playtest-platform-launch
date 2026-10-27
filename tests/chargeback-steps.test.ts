@@ -41,12 +41,13 @@ describe("a chargeback is a hold with extra steps", () => {
     expect(await holdOf(dev.user.id)).toMatchObject({ holdReason: "chargeback" });
     let steps = (await chargebackSteps(dev.user.id))!;
     // (Owner, Oct 27) The chargeback adds its amount to what is owed.
-    expect(steps).toMatchObject({ cardVerified: false, owedPaid: false, owedCents: 800, approved: false });
-    expect(stepsLine(steps.remaining)).toBe("Still to do: verify a card with 3D Secure, then pay what you owe ($8.00), then wait for the team's approval.");
+    // (Batch 11) With the $15 chargeback fee.
+    expect(steps).toMatchObject({ cardVerified: false, owedPaid: false, owedCents: 2300, approved: false });
+    expect(stepsLine(steps.remaining)).toBe("Still to do: verify a card with 3D Secure, then pay what you owe ($23.00), then wait for the team's approval.");
     // Something owed on top: a failed payment. Paying it does not lift the hold.
     await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 900, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + 86_400_000) } });
     steps = (await chargebackSteps(dev.user.id))!;
-    expect(stepsLine(steps.remaining)).toBe("Still to do: verify a card with 3D Secure, then pay what you owe ($17.00), then wait for the team's approval.");
+    expect(stepsLine(steps.remaining)).toBe("Still to do: verify a card with 3D Secure, then pay what you owe ($32.00), then wait for the team's approval.");
     const paid = await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })));
     expect(paid.status).toBe(200);
     expect(paid.body.lifted).toBe(false);
@@ -64,12 +65,12 @@ describe("a chargeback is a hold with extra steps", () => {
     // Neither step done.
     let list = await chargebackHolds();
     let row = list.find((x) => x.dev.id === dev.user.id)!;
-    expect(row.steps).toMatchObject({ cardVerified: false, owedPaid: false, owedCents: 1300 }); // the failed $5.00 plus the reversed $8.00
+    expect(row.steps).toMatchObject({ cardVerified: false, owedPaid: false, owedCents: 2800 }); // the failed $5.00 plus the reversed $8.00 and its $15 fee (batch 11)
     expect(row.chargebacks.map((p) => p.id)).toEqual([paid.id]);
-    expect((await approve(a.cookie, dev.user.id)).body.error).toMatchObject({ code: "steps_missing", message: "Not yet: the card isn't verified and $13.00 is still owed." });
+    expect((await approve(a.cookie, dev.user.id)).body.error).toMatchObject({ code: "steps_missing", message: "Not yet: the card isn't verified and $28.00 is still owed." });
     // The card is verified (simulated without Stripe): still owed.
     expect((await json(await verifyPOST(req("/api/payments/verify-card", { cookie: dev.cookie, body: {} })))).body).toEqual({ simulated: true, verified: true });
-    expect((await approve(a.cookie, dev.user.id)).body.error.message).toBe("Not yet: $13.00 is still owed.");
+    expect((await approve(a.cookie, dev.user.id)).body.error.message).toBe("Not yet: $28.00 is still owed.");
     // Pay what is owed (the failed payment and the reversed one): still on hold (no approval yet).
     expect((await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })))).body).toMatchObject({ paid: 2, stillFailing: [] });
     expect((await db.payment.findUniqueOrThrow({ where: { id: owedRow.id } })).settledAt).not.toBeNull();

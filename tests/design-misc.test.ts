@@ -43,7 +43,7 @@ describe("Pay and Reject while the account is not clear (owner, Oct 26)", () => 
     expect(paid.body.error).toMatchObject({ code: "held", failed: "Your Pay on Harbor Run didn't go through" });
     expect(await db.review.count({ where: { contractId: sessionId } })).toBe(0);
     expect(await db.payment.count({ where: { contractId: sessionId } })).toBe(0);
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "You were paid" } } })).toBe(0);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "paid you" } } })).toBe(0);
   });
 
   it("a suspended developer can neither Pay nor Reject (each names itself, nothing is recorded); once lifted they can", async () => {
@@ -59,7 +59,7 @@ describe("Pay and Reject while the account is not clear (owner, Oct 26)", () => 
     await adm("unsuspend", a.cookie, { id: dev.user.id });
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
     expect((await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } })).status).toBe("not_set_up");
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "You were paid for your written answers" } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "paid you $10.00 for your written answers" } } })).toBe(1);
   });
 
   it("a suspended developer WITH a payment hold is still refused Pay and Reject; 'Pay what you owe' (hold only) works, and a suspension alone never offers it", async () => {

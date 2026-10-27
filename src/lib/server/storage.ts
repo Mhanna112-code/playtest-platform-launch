@@ -10,6 +10,11 @@ import { HttpError } from "./http";
 
 export const MAX_RECORDING_BYTES = 500 * 1024 * 1024;
 export const MAX_RECORDINGS = 5;
+/** (Owner, Oct 29, batch 11) Files attached to a written part: at most 5, 25 MB each (images, PDF, plain text, zip). Recordings attached to it count as recordings. */
+export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+export const MAX_ATTACHMENTS = 5;
+export const ATTACHMENT_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "text/plain", "application/zip", "application/x-zip-compressed"];
+export const isVideo = (contentType: string) => contentType.startsWith("video/");
 
 const r2 = () => {
   const e = process.env;
@@ -49,7 +54,7 @@ export const uploadTarget = (recordingId: string, key: string) => (r2() ? presig
 export const viewUrl = (recordingId: string, key: string) => (r2() ? presign("GET", key) : `/api/recordings/${recordingId}/file`);
 
 /** Local disk only: stream the request body to the file, refusing anything over the limit. */
-export async function saveLocal(key: string, body: ReadableStream<Uint8Array> | null, limit: number) {
+export async function saveLocal(key: string, body: ReadableStream<Uint8Array> | null, limit: number, tooLarge = "Recordings can be at most 500 MB.") {
   if (!body) throw new HttpError(400, "empty", "That file is empty.");
   const file = path.join(uploadDir(), key);
   if (!file.startsWith(uploadDir())) throw new HttpError(400, "bad_key", "Bad file name.");
@@ -57,7 +62,7 @@ export async function saveLocal(key: string, body: ReadableStream<Uint8Array> | 
   let size = 0;
   const counted = Readable.fromWeb(body as never).on("data", (chunk: Buffer) => {
     size += chunk.length;
-    if (size > limit) counted.destroy(new HttpError(413, "too_large", "Recordings can be at most 500 MB."));
+    if (size > limit) counted.destroy(new HttpError(413, "too_large", tooLarge));
   });
   try {
     await pipeline(counted, createWriteStream(file));

@@ -5,6 +5,7 @@ import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { api, ApiError, errOf } from "@/lib/client";
 import { mergeChanges } from "@/lib/live";
 import { money } from "@/lib/format";
+import { confirmWithBank, type BankAction } from "@/lib/bankConfirm";
 
 type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string };
 
@@ -14,12 +15,13 @@ type Line = { id: string; retry: boolean; amountCents: number; until: string | n
  * (Owner, Oct 29, batch 10) The page polls (AutoRefresh): the amount and the lines follow `owed` live, and the page drops the box when nothing is owed. A press
  * still checks what was last confirmed (the page load or the last stop box), so a press after a change stops once with the new lines.
  */
-export function OwedBox({ onHold, owed, chargeback = false, review = false }: { onHold: boolean; owed: Line[]; chargeback?: boolean; review?: boolean }) {
+export function OwedBox({ onHold, owed, chargeback = false, review = false, retryLine = "" }: { onHold: boolean; owed: Line[]; chargeback?: boolean; review?: boolean; /** (Batch 11) "Last try: ... · next try: ..." of the automatic retries */ retryLine?: string }) {
   const [err, setErr] = useState("");
   const [failing, setFailing] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [changes, setChanges] = useState<Change[] | null>(null);
   const [done, setDone] = useState("");
+  const [bankNote, setBankNote] = useState("");
   const retry = owed.filter((o) => o.retry);
   const seenTotal = retry.reduce((s, o) => s + o.amountCents, 0);
   // What the page / the stop box showed last: every press (the second too) is checked against it.
@@ -34,6 +36,7 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false }: { 
       ) : (
         <p><b>A payment failed.</b> Pay {money(seenTotal)} to keep your tests running.</p>
       )}
+      {retryLine && <p className="text-xs" data-retry-line="">{retryLine}</p>}
       {onHold && review && <p data-hold-review="">After you pay what you owe, the team will review your account before your tests resume.</p>}
       {owed.length > 0 && (
         <ul className="list-disc pl-5">
@@ -48,8 +51,18 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false }: { 
           setErr("");
           setFailing([]);
           try {
-            const r = await api<{ stillFailing: string[]; lifted: boolean }>("/api/payments/owed", { seenTotalCents: total, seenIds: shownIds, confirmed: changes != null });
+            const r = await api<{ stillFailing: string[]; lifted: boolean; confirm?: BankAction[] }>("/api/payments/owed", { seenTotalCents: total, seenIds: shownIds, confirmed: changes != null });
             setChanges(null);
+            // (Batch 11) Payments the bank wants confirmed: one pop-up each; any it refused stay owed (nothing was charged for them).
+            let refused = "";
+            for (const a of r.confirm ?? []) {
+              try { await confirmWithBank(a); } catch (e) { refused = (e as Error).message; }
+            }
+            if (refused) {
+              setBankNote(refused);
+              setBusy(false);
+              return;
+            }
             if (r.stillFailing.length) {
               setFailing(r.stillFailing);
               setBusy(false);
@@ -74,6 +87,7 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false }: { 
         Pay what you owe ({money(changes ? total : seenTotal)})
       </button>}
       <ChangesBox changes={changes} />
+      {bankNote && <p className="info" data-bank-not-confirmed="">{bankNote}</p>}
       {done && <p className="ok">{done}</p>}
       {failing.length > 0 && (
         <p className="err">

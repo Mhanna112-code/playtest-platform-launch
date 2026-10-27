@@ -4,6 +4,8 @@ import { checkFields } from "@/components/FieldChecks";
 import { useState } from "react";
 import { api, errOf } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
+import { uploadToSession } from "@/lib/upload";
+import { ScreenRecorder } from "@/components/ScreenRecorder";
 import { ChangesBox } from "@/components/ChangesBox";
 
 type Rec = { id: string; filename: string; size: number; uploaded: boolean };
@@ -24,17 +26,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
     if (file.size > 500 * 1024 * 1024) return setErr("Recordings can be at most 500 MB.");
     setBusy(true);
     try {
-      const { recordingId, uploadUrl } = await api<{ recordingId: string; uploadUrl: string }>(`/api/sessions/${sessionId}/recording-start`, { filename: file.name, size: file.size, contentType: file.type || "video/mp4" });
-      await new Promise<void>((resolve, reject) => {
-        const x = new XMLHttpRequest();
-        x.open("PUT", uploadUrl);
-        x.setRequestHeader("content-type", file.type || "video/mp4");
-        x.upload.onprogress = (e) => e.lengthComputable && setProgress(Math.round((e.loaded / e.total) * 100));
-        x.onload = () => (x.status < 300 ? resolve() : reject(new Error("The upload didn't finish. Try again.")));
-        x.onerror = () => reject(new Error("The upload stopped. Check your connection and try again."));
-        x.send(file);
-      });
-      await api(`/api/sessions/${sessionId}/recording-done`, { recordingId });
+      await uploadToSession(sessionId, file, file.name, "recording", setProgress);
       window.location.reload();
     } catch (e) {
       setErr(errOf(e));
@@ -55,10 +47,14 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
         </ul>
       )}
       {canSend && recordings.length < 5 && (
-        <label className="block text-sm">
-          <span className="label">Add a recording (video, up to 500 MB; 5 at most)</span>
-          <input type="file" accept="video/*" disabled={busy} onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
-        </label>
+        <>
+          {/* (Batch 11) Record in the page, or upload a file. */}
+          <ScreenRecorder sessionId={sessionId} part="recording" />
+          <label className="block text-sm">
+            <span className="label">Or upload a recording (video, up to 500 MB; 5 at most)</span>
+            <input type="file" accept="video/*" disabled={busy} onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+          </label>
+        </>
       )}
       {progress != null && <p className="note">Uploading… {progress}%</p>}
       {canSend && sendable && uploaded.length > 0 && (

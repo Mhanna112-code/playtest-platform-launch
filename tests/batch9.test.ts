@@ -56,7 +56,8 @@ describe("batch 9 item 1 and 6: the caps", () => {
 
   it("an unlisted written piece: Pay at most $1000, then extra pay at most $1000 more (a total of $2000)", async () => {
     const { dev, testId, sessionId, sub } = await sentWork(null);
-    const over = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "1000.01", tickedCents: 100_001, over200: true });
+    // (Batch 11 section 6) One Pay box: up to the max plus 100% of it.
+    const over = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "2000.01", tickedCents: 200_001, over200: true });
     expect(over.body.error.message).toBe("This is more than you can pay above the max (up to $1,000).");
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "1000.00", tickedCents: 100_000, over200: true })).status).toBe(200);
     expect((await extra(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "1000.01", tickedCents: 100_001, over200: true })).body.error.message).toBe("This is more than you can pay above the max (up to $1,000).");
@@ -65,12 +66,12 @@ describe("batch 9 item 1 and 6: the caps", () => {
 
   it("an unlisted call: at most $200/h for the logged minutes, then the same again as extra pay", async () => {
     const { dev, testId, sessionId, call } = await heldCall(false);
+    // (Batch 12 section 2) An unlisted call: $200/h for its logged minutes and nothing above.
     const over = await pay(dev.cookie, { kind: "call", id: call.id, amount: "100.01", tickedCents: 10_001 });
-    expect(over.body.error.message).toBe("This is more than you can pay above the max (up to $100).");
+    expect(over.body.error.message).toBe("This is more than you can pay for this call (up to $100 more for unlisted calls).");
     expect((await pay(dev.cookie, { kind: "call", id: call.id, rate: "201.00", amount: "100.00", tickedCents: 10_000 })).body.error.message).toBe("A call that isn't listed can be paid at most $200 an hour.");
     expect((await pay(dev.cookie, { kind: "call", id: call.id, rate: "200.00", amount: "100.00", tickedCents: 10_000 })).status).toBe(200);
-    expect((await extra(testId, dev.cookie, { contractId: sessionId, callId: call.id, amount: "100.01", tickedCents: 10_001 })).body.error.message).toBe("This is more than you can pay above the max (up to $100).");
-    expect((await extra(testId, dev.cookie, { contractId: sessionId, callId: call.id, amount: "100.00", tickedCents: 10_000 })).status).toBe(200);
+    expect((await extra(testId, dev.cookie, { contractId: sessionId, callId: call.id, amount: "0.50", tickedCents: 50 })).body.error.message).toBe("This is more than you can pay for this call (up to $0 more for unlisted calls).");
   });
 
   it("a listed piece: what is paid above the listing (Pay plus extra pays) is at most 100% of the listing", async () => {
@@ -83,8 +84,8 @@ describe("batch 9 item 1 and 6: the caps", () => {
     const c = await heldCall(true, "50.00");
     await pay(c.dev.cookie, { kind: "call", id: c.call.id, amount: "25.00", tickedCents: 2500 });
     expect((await extra(c.testId, c.dev.cookie, { contractId: c.sessionId, callId: c.call.id, amount: "25.01", tickedCents: 2501 })).body.error.message).toBe("This is more than you can pay above the listing (up to $25).");
-    expect(src("app/app/tests/[id]/ExtraPay.tsx")).toContain('above the {listed ? "listing" : "max"}');
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("callId={x.id}");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("<PayBox more={{ testId: t.id, contractId: c.id }}");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain('kind="call" id={x.id}');
   });
 });
 
@@ -98,7 +99,7 @@ describe("batch 9 item 2: an unlisted part has only Pay", () => {
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid $0 for your written answers on “Harbor Run”: “Thanks, not needed after all”" } })).toBe(1);
     const d = await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question fully" });
     expect(d.status).toBe(200); // (Batch 10) every reviewed part can be disputed, unlisted ones too
-    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('{listed && <button className="btn-danger"');
+    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('{listed && !more && <button className="btn-danger"');
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("{dev} paid $0 for this");
   });
 
@@ -121,12 +122,12 @@ describe("batch 9 item 3: an optional note on every Pay", () => {
     const { dev, tester, testId, sessionId, sub } = await sentWork("10.00");
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400 })).body.error.message).toContain("Say why");
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, reason: "Great detail" })).status).toBe(200);
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: "You were paid for your written answers on “Harbor Run”: “Great detail”" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $10.00 for your written answers on “Harbor Run”: “Great detail”" } })).toBe(1);
     expect((await extra(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "2.00", tickedCents: 200, note: "For the bug list" })).status).toBe(200);
     expect(await db.payment.findFirstOrThrow({ where: { submissionId: sub.id, kind: "extra" } })).toMatchObject({ note: "For the bug list" });
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $2.00 extra for Harbor Run: “For the bug list”" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $2.00 more for your written answers on “Harbor Run”: “For the bug list”" } })).toBe(1);
     expect(src("app/app/tests/[id]/PayBox.tsx")).toContain("Note to {p.name}");
-    expect(src("app/app/tests/[id]/ExtraPay.tsx")).toContain("Note to ${name} (optional)");
+    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('{more ? " (optional)"');
     expect(src("app/app/sessions/[id]/page.tsx")).toContain('data-extra-line=""');
   });
 });
@@ -136,7 +137,7 @@ describe("batch 9 item 4: a rate on a call's Pay", () => {
     const { dev, tester, call } = await heldCall(true);
     expect((await pay(dev.cookie, { kind: "call", id: call.id, rate: "40.00", amount: "20.00", tickedCents: 2000 })).status).toBe(200);
     expect(await db.review.findFirstOrThrow({ where: { callId: call.id } })).toMatchObject({ amountCents: 2000, rateCents: 4000 });
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "You were paid for your live call" } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Nora Lane paid you $20.00 for your live call" } } })).toBe(1);
     const box = src("app/app/tests/[id]/PayBox.tsx");
     expect(box).toContain("Rate ($/h)");
     expect(box).toContain("setAmount(r == null ? \"\" : (Math.round((r * minutes) / 60) / 100).toFixed(2));");
@@ -157,7 +158,7 @@ describe("batch 9 item 5: the ticks on every Pay", () => {
     expect(R.payTicks(25_000, 25_000, true)).toEqual({ ok: true });
     expect(R.checkExtraPay(1000, null)).toMatchObject({ ok: false });
     expect(R.checkExtraPay(1000, 1000)).toEqual({ ok: true });
-    for (const f of ["app/app/tests/[id]/PayBox.tsx", "app/app/tests/[id]/ExtraPay.tsx"]) {
+    for (const f of ["app/app/tests/[id]/PayBox.tsx"]) {
       expect(src(f), f).toContain("PAY_TICK_LINE(cents)");
       expect(src(f), f).toContain("OVER_PAY_TICK_LINE");
       expect(src(f), f).not.toContain("charged now: {");

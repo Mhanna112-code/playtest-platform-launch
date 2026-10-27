@@ -2,14 +2,14 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money, toCents } from "@/lib/format";
-import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, canDispute, checkDisputeDecision, disputeLimitText, delayedPayLine, declinedHoldLine, checkPay, checkReject, checkExtraPay, extraCapCents, overListingLine, overMaxLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, PAY_WAITS, testerShare } from "@/lib/rules";
+import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, canDispute, checkDisputeDecision, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkReject, checkExtraPay, extraCapCents, overListingLine, overMaxLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, NO_LISTING_CALLS_TOTAL_CENTS, overCallsLine, PAY_WAITS, testerShare } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify } from "./notify";
 import { blockedEitherWay } from "./blocks";
 import { labelled, reportedOver3 } from "./reports";
 import { partAnchor } from "@/lib/links";
 import { isAdmin } from "./session";
-import { cardRefusal, charge } from "./stripe";
+import { cardRefusal, charge, type NeedsAction } from "./stripe";
 import { devGate, devGateIfSeen, devOwes, recordEvent } from "./tests";
 import { logEvent } from "./live";
 import { testerGate } from "./testerGate";
@@ -70,8 +70,9 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     const c = piece.contract;
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
     const name = displayName(c.tester);
-    // (Owner, Oct 28) A tester who deleted their account: work of theirs that isn't paid yet can no longer be paid, charged or disputed (final).
-    if (c.tester.deletedAt && !(await tx.review.findFirst({ where: piece.where }))) throw new HttpError(409, "gone", "This tester deleted their account, so this work can't be paid or rejected any more.");
+    // (Owner, Oct 29, batch 11) A tester who deleted their account: their sent work is still reviewed when their payout account was connected; without one (DEFAULT)
+    // nothing can reach them, so it can't be paid (final).
+    if (!testerPayable(c.tester) && !(await tx.review.findFirst({ where: piece.where }))) throw new HttpError(409, "gone", deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null })));
     const already = await tx.review.findFirst({ where: piece.where });
     if (already) {
       if (already.reason === CHARGED_BY_TESTER) throw new HttpError(409, "reviewed", `${name} already charged ${money(already.amountCents)} for this.`);
@@ -94,12 +95,9 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
         if (rateCents < 0) throw new HttpError(400, "bad_rate", "Enter a rate like 30.00.");
         if (piece.listing == null && rateCents > NO_LISTING_CALL_RATE_CAP_CENTS) throw new HttpError(400, "over_cap", "A call that isn't listed can be paid at most $200 an hour.");
       }
-      // (Batch 9 section 6) Caps per piece: listed, what is paid above the listing (this Pay's excess plus the extra pays on it) is at most 100% of the listing and never
-      // more than the max; unlisted, the Pay itself is at most the max ($1000, or $200/h × the logged minutes for a call).
-      const room = await pieceRoom(piece, tx);
-      if (piece.listing != null && amountCents! > piece.listing) {
-        if (amountCents! - piece.listing > room.aboveBaseCents) throw new HttpError(400, "over_cap", overListingLine(room.aboveBaseCents));
-      } else if (piece.listing == null && amountCents! > room.maxCents) throw new HttpError(400, "over_cap", overMaxLine(room.maxCents));
+      // (Batch 9 section 6; batch 11 section 6: one Pay box, an amount above the base counts as extra pay; batch 12 section 2: the unlisted call caps) Caps per piece.
+      const room = await pieceRoom({ ...piece, contractId: c.id }, tx);
+      if (amountCents! > room.roomCents) throw new HttpError(400, "over_cap", overRoomLine(piece, room));
       const card = amountCents! > 0 ? cardRefusal(dev) : "";
       if (card) throw new HttpError(409, "no_card", card);
     }
@@ -122,7 +120,8 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
   }
   let result;
   try {
-    result = await charge(dev, c.tester, rev.amountCents, payKey, `Playtest: ${piece.label} on “${c.title}”`);
+    // (Owner, Oct 29, batch 11) The developer's own press: on-session, so the bank may ask them to confirm in the page.
+    result = await charge(dev, c.tester, rev.amountCents, payKey, `Playtest: ${piece.label} on “${c.title}”`, "press");
   } catch (e) {
     if (!(e instanceof HttpError && e.code === "card_failed")) {
       // Not a card decline (nothing was tried): free the piece so the developer can press Pay again.
@@ -136,14 +135,29 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     await bell(c.testerId, delayedPayLine(displayName(dev), piece.label, rev.amountCents), `/app/sessions/${c.id}#${partAnchor(piece.label)}`, undefined, { payment: true, group: "tdelayed" });
     throw new HttpError(402, "card_failed", declinedHoldLine(name, rev.amountCents, piece.label), { held: true, failed: `Your Pay on ${c.title} was declined` });
   }
+  // (Batch 11) The bank wants the developer to confirm: the piece stays locked while its pop-up is open (batch 12 section 5), nothing is charged yet.
+  if (result.status === "requires_action") return (await import("./confirm")).pressAction(payment!.id, result as NeedsAction & Record<string, unknown>);
+  return finishReviewPay(payment!.id, result);
+}
+
+/** (Batch 11) A Pay went through (at once, or once the bank confirmed it): the payment is recorded, the tester told, the receipt sent. */
+export async function finishReviewPay(paymentId: string, result: { status: string; feeCents?: number; testerCents?: number; transferStatus?: string; stripePaymentIntentId: string | null }) {
+  const p = await db.payment.findUniqueOrThrow({ where: { id: paymentId } });
+  const rev = await db.review.findFirstOrThrow({ where: p.submissionId ? { submissionId: p.submissionId } : { callId: p.callId! } });
+  const c = await db.contract.findUniqueOrThrow({ where: { id: p.contractId! }, include: { tester: true, test: { include: { developer: true } } } });
+  const dev = c.test.developer;
+  const name = displayName(c.tester);
+  const piece = { label: p.callId ? "live call" : (await db.submission.findUnique({ where: { id: p.submissionId! } }))?.kind === "recording" ? "recording" : "written answers" };
+  const data = { status: result.status, stripePaymentIntentId: result.stripePaymentIntentId, ...(result.feeCents != null ? { feeCents: result.feeCents, testerCents: result.testerCents, transferStatus: result.transferStatus } : {}), actionPi: null, actionBy: null };
   await db.$transaction(async (tx) => {
-    await tx.payment.update({ where: { id: payment!.id }, data: result });
+    await tx.payment.update({ where: { id: p.id }, data });
     await recordEvent(tx, c.testId, "paid", `You paid ${name} ${money(rev.amountCents)} for the ${piece.label}`, false, {}, c.id);
   });
   // (Batch 9) The note rides in the bell line too; $0 reads "<dev> paid $0 for this".
   await notify(
     c.tester.email,
-    `${rev.amountCents === 0 ? `${displayName(dev)} paid $0 for your ${piece.label} on “${c.title}”` : `You were paid for your ${piece.label} on “${c.title}”`}${rev.reason ? `: “${rev.reason}”` : ""}`,
+    // (Batch 11 section 6) "<dev> paid you $X" for the first payment ("<dev> paid you $X more" for a Pay more).
+    `${rev.amountCents === 0 ? `${displayName(dev)} paid $0 for your ${piece.label} on “${c.title}”` : `${displayName(dev)} paid you ${money(rev.amountCents)} for your ${piece.label} on “${c.title}”`}${rev.reason ? `: “${rev.reason}”` : ""}`,
     [
       rev.amountCents === 0 ? `${displayName(dev)} paid $0 for this.` : `${displayName(dev)} paid ${money(rev.amountCents)}${rev.rateCents != null ? ` (${money(rev.rateCents)}/h)` : ""} for your ${piece.label}: you get ${money(testerShare(rev.amountCents))}.`,
       ...(rev.reason ? [`Their note: “${rev.reason}”`] : []),
@@ -194,7 +208,9 @@ export async function disputeBounds(d: { submissionId: string | null; callId: st
     const piece = await pieceOf(d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId });
     const cap = piece ? pieceMaxCents(piece.kind, piece.minutes) : 0;
     const other = Math.max(0, (paid._sum.amountCents ?? 0) - review.amountCents);
-    return { review, listing: cap, unlisted: true, other, min: review.amountCents, max: Math.max(review.amountCents, cap - other) };
+    // (Batch 12 section 2) An unlisted call also stays within what is left of the tester's $1000 for unlisted calls.
+    const pool = piece?.kind === "call" ? review.amountCents + Math.max(0, NO_LISTING_CALLS_TOTAL_CENTS - (await unlistedCallsPaid(piece.contractId))) : Infinity;
+    return { review, listing: cap, unlisted: true, other, min: review.amountCents, max: Math.max(review.amountCents, Math.min(cap - other, pool)) };
   }
   const other = d.submissionId ? Math.max(0, (paid._sum.amountCents ?? 0) - review.amountCents) : 0;
   const listing = review.agreedCents;
@@ -239,6 +255,13 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
     let result;
     try {
       result = await charge(c.test.developer, c.tester, extra, `dispute-${d.id}`, `Playtest: dispute decision on “${c.title}”`);
+      if (result.status === "requires_action") {
+        // (Batch 11) The developer's bank wants them to confirm: it waits 3 days for their Confirm in Payments (the tester reads "Payment may be delayed").
+        const row = await db.payment.create({ data: { ...owedRow, status: "needs_confirmation" } });
+        await (await import("./confirm")).awayAction(row.id, result as NeedsAction);
+        result = undefined;
+        delayed = true;
+      }
     } catch (e) {
       if (!(e instanceof HttpError && e.code === "card_failed")) {
         await db.dispute.update({ where: { id: d.id }, data: { status: "open", decidedCents: null, decidedAt: null } });
@@ -286,26 +309,53 @@ export async function waitingForReview(devId: string) {
   const held = { review: null, status: "booked", startsAt: { lte: new Date() } };
   return db.test.findMany({
     // (Owner, Oct 28) Not a deleted tester's work: it can no longer be paid.
-    where: { developerId: devId, contracts: { some: { tester: { deletedAt: null }, OR: [{ submissions: { some: { review: null } } }, { calls: { some: held } }] } } },
+    where: { developerId: devId, contracts: { some: { tester: PAYABLE_TESTER, OR: [{ submissions: { some: { review: null } } }, { calls: { some: held } }] } } },
     orderBy: { createdAt: "desc" },
-    include: { contracts: { where: { tester: { deletedAt: null } }, include: { tester: true, submissions: { where: { review: null } }, calls: { where: held } } } },
+    include: { contracts: { where: { tester: PAYABLE_TESTER }, include: { tester: true, submissions: { where: { review: null } }, calls: { where: held } } } },
   });
 }
 
 type PieceKey = { submissionId?: string | null; callId?: string | null };
+const COUNTED = ["charged", "not_set_up", "deferred", "pending", "owed", "needs_action", "needs_confirmation"];
+/** (Batch 12 section 2) What one tester's UNLISTED calls on this contract were paid in all (Pay, Pay more and dispute raises). */
+export async function unlistedCallsPaid(contractId: string, tx: Prisma.TransactionClient = db) {
+  const ids = (await tx.call.findMany({ where: { contractId, rateCents: null }, select: { id: true } })).map((c) => c.id);
+  if (!ids.length) return 0;
+  return (await tx.payment.aggregate({ where: { callId: { in: ids }, kind: { not: "chargeback" }, status: { in: COUNTED } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
+}
 /**
- * (Owner, Oct 28 night, batch 9 section 6) What can still be paid on ONE piece. Listed: `aboveBaseCents` is what may still be paid above the listing (this piece's Pay above
- * it plus its extra pays count; at most 100% of the listing, never more than the max). Unlisted: the Pay is at most `maxCents`, and `aboveBaseCents` is what extra pay may
- * still add (100% of the max). Calls use the logged minutes.
+ * What can still be paid on ONE piece, with ONE Pay box (owner, Oct 29: batch 11 section 6 merged Extra pay into Pay; batch 12 section 2 the call caps).
+ *   - Listed: the listing plus up to 100% of it above (never more than the max: $1000, or $200/h × the logged minutes for a call).
+ *   - Unlisted written answers or recording: the max ($1000) plus 100% of it ($2000 in all).
+ *   - Unlisted call: at most $200/h × its logged minutes, nothing above; and all of the tester's unlisted calls on the test together at most $1000.
+ * `roomCents`: the most the next payment (the first Pay or a "Pay more") can be. `aboveRoomCents`: what is still left above the base (the listing, or the max), for the
+ * blocked line. `callPoolRoomCents`: for an unlisted call, what is left of the tester's $1000 for unlisted calls (else null).
  */
-export async function pieceRoom(piece: { where: PieceKey; listing: number | null; kind: "submission" | "call"; minutes: number }, tx: Prisma.TransactionClient = db) {
+export async function pieceRoom(piece: { where: PieceKey; listing: number | null; kind: "submission" | "call"; minutes: number; contractId?: string }, tx: Prisma.TransactionClient = db) {
   const key = piece.where.submissionId ? { submissionId: piece.where.submissionId } : { callId: piece.where.callId! };
   const maxCents = pieceMaxCents(piece.kind, piece.minutes);
-  const cap = extraCapCents(piece.listing, maxCents);
+  const unlistedCall = piece.listing == null && piece.kind === "call";
+  const cap = unlistedCall ? 0 : extraCapCents(piece.listing, maxCents);
+  const base = piece.listing ?? maxCents;
   const rev = await tx.review.findFirst({ where: { ...key, rejected: false }, select: { amountCents: true } });
-  const extras = (await tx.payment.aggregate({ where: { ...key, kind: "extra", status: { in: ["charged", "not_set_up", "deferred", "pending", "owed"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
-  const payAbove = piece.listing != null && rev ? Math.max(0, rev.amountCents - piece.listing) : 0;
-  return { listed: piece.listing != null, maxCents, capCents: cap, usedCents: payAbove + extras, aboveBaseCents: Math.max(0, cap - payAbove - extras) };
+  const extras = (await tx.payment.aggregate({ where: { ...key, kind: "extra", status: { in: COUNTED } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
+  const paidCents = (rev?.amountCents ?? 0) + extras;
+  const totalCapCents = base + cap;
+  const aboveRoomCents = Math.max(0, cap - Math.max(0, paidCents - base));
+  let roomCents = Math.max(0, totalCapCents - paidCents);
+  let callPoolRoomCents: number | null = null;
+  if (unlistedCall) {
+    const contractId = piece.contractId ?? (await tx.call.findUnique({ where: { id: key.callId! }, select: { contractId: true } }))?.contractId ?? "";
+    callPoolRoomCents = Math.max(0, NO_LISTING_CALLS_TOTAL_CENTS - (await unlistedCallsPaid(contractId, tx)));
+    roomCents = Math.min(roomCents, callPoolRoomCents);
+  }
+  return { listed: piece.listing != null, maxCents, capCents: cap, paidCents, totalCapCents, roomCents, aboveRoomCents, callPoolRoomCents, aboveBaseCents: aboveRoomCents };
+}
+/** The blocked line for a payment over a piece's room (batch 9's wording; batch 12: unlisted calls name what is left of the tester's $1000). */
+export function overRoomLine(piece: { listing: number | null; kind: "submission" | "call" }, room: Awaited<ReturnType<typeof pieceRoom>>) {
+  if (piece.listing != null) return overListingLine(room.aboveRoomCents);
+  if (piece.kind === "call") return overCallsLine(room.roomCents);
+  return overMaxLine(room.aboveRoomCents);
 }
 
 /** The piece behind an Extra pay or a page's "up to $Y": a sent part or a held call. */
@@ -331,18 +381,21 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   const piece = await pieceOf(body.callId ? { callId: String(body.callId) } : { submissionId: String(body.submissionId ?? "") });
   if (!piece || piece.contractId !== c.id) throw new HttpError(404, "not_found", "Choose a part they sent.");
   if (piece.kind === "call" && ("status" in piece && (piece.status === "cancelled" || (piece.startsAt && piece.startsAt > new Date())))) throw new HttpError(409, "not_held", "Extra pay goes on a call that took place.");
+  // (Batch 11 section 6) "Pay more" is the same Pay box after a piece is paid: it needs that first payment (a rejected piece has none).
+  const paidReview = await db.review.findFirst({ where: piece.where });
+  if (!paidReview || paidReview.rejected) throw new HttpError(409, "not_paid", "Pay this part first: Pay more is for a part you've already paid.");
   // (Owner, Oct 27) Unavailable during ANY payment hold, chargeback hold or suspension (the route refuses first; this is the backstop).
   const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { suspendedAt: true } });
   if (devNow.suspendedAt) throw new HttpError(403, "suspended", "Your account is suspended: extra pay waits until it is lifted.");
   await (await import("./holds")).devHoldRefusal(dev.id, "pay");
-  if ((await blockedEitherWay(dev.id, c.testerId)) || c.tester.deletedAt) throw new HttpError(409, "unavailable", "This payment isn't available.");
+  if ((await blockedEitherWay(dev.id, c.testerId)) || !testerPayable(c.tester)) throw new HttpError(409, "unavailable", "This payment isn't available.");
   const amount = toCents(body.amount);
   const check = checkExtraPay(amount, typeof body.tickedCents === "number" ? body.tickedCents : null, body.over200 === true || body.understood === true);
   if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
   const note = typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
   // (Batch 9 section 6) Per piece: listed, 100% of the listing at most (never more than the max); unlisted, 100% of the max on top of the Pay.
-  const room = (await pieceRoom(piece)).aboveBaseCents;
-  if (amount! > room) throw new HttpError(400, "over_cap", piece.listing != null ? overListingLine(room) : overMaxLine(room));
+  const room = await pieceRoom(piece);
+  if (amount! > room.roomCents) throw new HttpError(400, "over_cap", overRoomLine(piece, room));
   const card = cardRefusal(dev);
   if (card) throw new HttpError(409, "no_card", card);
   await db.$transaction((tx) => devGate(tx, testId, body));
@@ -350,22 +403,37 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   const name = displayName(c.tester);
   const label = piece.label;
   const at = piece.kind === "call" ? { callId: piece.where.callId! } : { submissionId: piece.where.submissionId! };
+  // (Batch 11) The row exists before the charge (pending), so a payment the bank wants confirmed counts toward the piece's cap while it waits.
+  const row = await db.payment.create({ data: { kind: "extra", contractId: c.id, ...at, note, developerId: dev.id, testerId: c.testerId, amountCents: amount!, feeCents: 0, testerCents: 0, status: "pending" } });
   let result;
   try {
-    result = await charge(dev, c.tester, amount!, `extra-${payKey}`, `Playtest: extra pay for ${name} on “${c.test.title}”`);
+    result = await charge(dev, c.tester, amount!, `extra-${payKey}`, `Playtest: extra pay for ${name} on “${c.test.title}”`, "press");
   } catch (e) {
-    if (!(e instanceof HttpError && e.code === "card_failed")) throw e;
+    if (!(e instanceof HttpError && e.code === "card_failed")) {
+      await db.payment.update({ where: { id: row.id }, data: { status: "cancelled", failure: (e as Error).message } });
+      throw e;
+    }
     // (Owner, Oct 27) A declined extra pay starts the payment hold at once, like any declined payment.
-    const failed = await db.payment.create({ data: { kind: "extra", contractId: c.id, ...at, note, developerId: dev.id, testerId: c.testerId, amountCents: amount!, feeCents: 0, testerCents: 0, status: "failed", failure: (e as Error).message, owedUntil: new Date() } });
-    await (await import("./holds")).declinedPayment(dev.id, failed.id, amount!, `extra pay for ${name}`);
+    await db.payment.update({ where: { id: row.id }, data: { failure: (e as Error).message } });
+    await (await import("./holds")).declinedPayment(dev.id, row.id, amount!, `extra pay for ${name}`);
     throw new HttpError(402, "card_failed", `Your card was declined, so ${name} wasn't paid ${money(amount)} extra yet. Your tests are paused until you pay what you owe: open Payments.`, { held: true, failed: `Your extra pay on ${c.test.title} was declined` });
   }
+  if (result.status === "requires_action") return (await import("./confirm")).pressAction(row.id, result as NeedsAction & Record<string, unknown>);
+  return finishExtraPay(row.id, result);
+}
+
+/** (Batch 11) A Pay more went through (at once, or once the bank confirmed it). */
+export async function finishExtraPay(paymentId: string, result: { status: string; feeCents?: number; testerCents?: number; transferStatus?: string; stripePaymentIntentId: string | null }) {
+  const p = await db.payment.findUniqueOrThrow({ where: { id: paymentId } });
+  const c = await db.contract.findUniqueOrThrow({ where: { id: p.contractId! }, include: { tester: true, test: { include: { developer: true } } } });
+  const dev = c.test.developer, name = displayName(c.tester), amount = p.amountCents;
+  const label = p.callId ? "live call" : (await db.submission.findUnique({ where: { id: p.submissionId! } }))?.kind === "recording" ? "recording" : "written answers";
   await db.$transaction(async (tx) => {
-    await tx.payment.create({ data: { kind: "extra", contractId: c.id, ...at, note, developerId: dev.id, testerId: c.testerId, ...result, amountCents: amount! } });
-    await recordEvent(tx, testId, "paid", `You paid ${name} ${money(amount)} extra for the ${label}`, false, {}, c.id);
+    await tx.payment.update({ where: { id: p.id }, data: { status: result.status, stripePaymentIntentId: result.stripePaymentIntentId, ...(result.feeCents != null ? { feeCents: result.feeCents, testerCents: result.testerCents, transferStatus: result.transferStatus } : {}), actionPi: null, actionBy: null } });
+    await recordEvent(tx, c.testId, "paid", `You paid ${name} ${money(amount)} extra for the ${label}`, false, {}, c.id);
   });
-  const line = `${displayName(dev)} paid you ${money(amount)} extra for ${c.test.title}${note ? `: “${note}”` : ""}`;
-  await notify(c.tester.email, line, [line + `. You get ${money(testerShare(amount!))}.`, ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : [])], `/app/sessions/${c.id}#${piece.kind === "call" ? "part-live" : `part-${label === "recording" ? "recording" : "written"}`}`, { payment: true, group: "textra", about: dev.id });
-  await receipt(dev.email, `an extra payment to ${name}`, amount!, result.status, `/app/tests/${testId}#tester-${c.id}`);
+  const line = `${displayName(dev)} paid you ${money(amount)} more for your ${label} on “${c.test.title}”${p.note ? `: “${p.note}”` : ""}`;
+  await notify(c.tester.email, line, [line + `. You get ${money(testerShare(amount))}.`, ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : [])], `/app/sessions/${c.id}#${p.callId ? "part-live" : `part-${label === "recording" ? "recording" : "written"}`}`, { payment: true, group: "textra", about: dev.id });
+  await receipt(dev.email, `an extra payment to ${name}`, amount, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
   return { paid: true, amountCents: amount, status: result.status };
 }

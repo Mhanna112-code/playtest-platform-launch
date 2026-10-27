@@ -66,9 +66,9 @@ describe("email settings and the bell", () => {
     await db.user.update({ where: { id: tester.user.id }, data: { emailPref: "none" } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     // (Owner, Oct 27) The tester's "You were paid…" follows the setting like any payment line: On = the end-of-day payment email, Off = nothing.
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "You were paid" }, payment: true } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "paid you $10.00" }, payment: true } })).toBe(1);
     await cron();
-    expect(await db.outboxEmail.count({ where: { to: tester.user.email, text: { contains: "You were paid" } } })).toBe(0);
+    expect(await db.outboxEmail.count({ where: { to: tester.user.email, text: { contains: "paid you $10.00" } } })).toBe(0);
     await db.user.update({ where: { id: dev.user.id }, data: { emailPref: "daily" } });
     await cron();
     const summary = await db.outboxEmail.findFirstOrThrow({ where: { to: dev.user.email, subject: { startsWith: "Your Playtest summary" } } });
@@ -172,7 +172,7 @@ describe("call length and payment problems on a call", () => {
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
     const { payOwed } = await import("@/lib/server/holds");
     // (Owner, Oct 27) The reversed $15.00 is owed again: "Pay what you owe" charges it on the card (paying alone never lifts a chargeback hold).
-    expect(await payOwed(dev.user)).toEqual({ paid: 1, stillFailing: [], lifted: false });
+    expect(await payOwed(dev.user)).toEqual({ paid: 1, stillFailing: [], lifted: false, confirm: [] });
     // A chargeback hold is a hold with extra steps: a verified card and the admin's approval lift it (paying alone never does).
     const { startCardVerification, approveChargebackHold } = await import("@/lib/server/chargeback");
     await expect(approveChargebackHold(dev.user.id)).rejects.toMatchObject({ code: "steps_missing" });

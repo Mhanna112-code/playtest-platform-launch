@@ -32,7 +32,7 @@ describe("the one Pay box", () => {
     expect(r.body).toMatchObject({ amountCents: 1000, status: "not_set_up", paidSoFarCents: 1000 });
     const p = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } });
     expect(p).toMatchObject({ amountCents: 1000, feeCents: 200, testerCents: 800, status: "not_set_up", contractId: sessionId });
-    expect(await db.notification.count({ where: { text: { contains: "You were paid" }, payment: true } })).toBeGreaterThan(0);
+    expect(await db.notification.count({ where: { text: { contains: "paid you $10.00" }, payment: true } })).toBeGreaterThan(0);
   });
 
   it("refuses without the tick naming the amount (batch 9), or below the listing without a reason", async () => {
@@ -122,7 +122,9 @@ describe("Stripe (test mode, faked)", () => {
     const r = await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     expect(r.body.status).toBe("charged");
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ amount: 1000, currency: "usd", off_session: true, confirm: true, application_fee_amount: 200, transfer_data: { destination: expect.stringMatching(/^acct_/) } });
+    // (Batch 11) The developer's own press is on-session (the bank may ask them to confirm in the page).
+    expect(calls[0]).not.toHaveProperty("off_session");
+    expect(calls[0]).toMatchObject({ amount: 1000, currency: "usd", payment_method_types: ["card"], confirm: true, application_fee_amount: 200, transfer_data: { destination: expect.stringMatching(/^acct_/) } });
     expect(await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } })).toMatchObject({ status: "charged", transferStatus: "sent", stripePaymentIntentId: "pi_1" });
   });
 

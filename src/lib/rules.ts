@@ -1,6 +1,7 @@
 // The shared rules: pure functions used by the server (and shown on pages). Every money rule, the stop-once rule,
 // the Edit version check, the join check and contract snapshots live here so they are tested in one place.
 
+import type { Prisma } from "@prisma/client";
 import { money } from "./format";
 import { LIMITS } from "./limits";
 
@@ -329,6 +330,8 @@ export const DEV_STOP_KINDS = [
   "applied", "terms", "dispute", "invite", "admin", "info", "full",
   // (Batch 8) "Your subscription ended." (or the free launch ended): a page open at that moment stops once.
   "subscription",
+  // (Batch 11) A payments-kind line on the developer's own pages ("Your bank's chargeback of $X was reversed: ..."); Alerts can ignore it under Payments.
+  "payment",
 ] as const;
 
 /**
@@ -365,6 +368,7 @@ export const renamedNote = (title: string, at: string) => `Done. Also: the test 
 export const TESTER_EVENT_KINDS = ["info", "renamed", "full", "spot_open"] as const;
 /** Every other recorded event kind, and why a tester never sees it as such (or sees it another way). */
 export const TESTER_EXEMPT_KINDS: Record<string, string> = {
+  payment: "the developer's own payments (batch 11: a chargeback reversed in their favour) are never shown to testers",
   joined: "another tester's activity is never shown to a tester",
   left: "another tester's activity (their own Leave is reason E)",
   sent: "the tester's own work (reason E from another tab)",
@@ -490,7 +494,9 @@ export const PAUSE_DEFAULTS = {
 /** (Design doc 8) The tester is never told why a test is paused (no "hold", "suspended" ...). */
 export const PAUSED_RIGHT_NOW = "This test is paused right now.";
 /** What a tester can do on a paused test's session page right now (batch 10: the banner lists only these), and what comes back when it resumes. */
-export type PausedCan = { drafts: boolean; charge: boolean; dispute: boolean; rate: boolean; leave: boolean; cancelCalls: boolean; send: boolean; requestCalls: boolean; chat: boolean };
+export type PausedCan = { drafts: boolean; charge: boolean; dispute: boolean; rate: boolean; leave: boolean; cancelCalls: boolean; send: boolean; requestCalls: boolean; chat: boolean; /** (Batch 11) the tester has a deadline and it moves with the pause */ deadline?: boolean };
+/** (Owner, Oct 29, batch 11) The banner's deadline line, when the tester has a deadline and PAUSE_DEFAULTS.shiftDeadlines is on. */
+export const PAUSED_DEADLINE_LINE = "Your deadline is paused too: it moves later by however long the pause lasts.";
 const listAnd = (xs: string[], oxford: boolean) => (xs.length <= 1 ? xs.join("") : xs.length === 2 ? `${xs[0]} and ${xs[1]}` : `${xs.slice(0, -1).join(", ")}${oxford ? "," : ""} and ${xs[xs.length - 1]}`);
 /**
  * (Owner, Oct 29, batch 10) The blue banner at the top of a paused test's session page (never "hold", "suspended", "failed" or "chargeback"), built from what is actually
@@ -502,7 +508,7 @@ export function pausedForTesters(can: PausedCan) {
   const now = [can.drafts && "save drafts of your parts", can.charge && "charge or let go of work left unreviewed", can.dispute && "dispute", can.rate && "rate", can.leave && "leave the test", can.cancelCalls && "cancel booked calls"].filter((x): x is string => !!x);
   const back = [can.send && "sending work", can.requestCalls && "requesting calls", can.chat && "chat"].filter((x): x is string => !!x);
   const backLine = back.length ? ` ${listAnd(back, false).replace(/^./, (c) => c.toUpperCase())} ${back.length === 1 ? "comes" : "come"} back when it resumes.` : "";
-  return `${PAUSED_RIGHT_NOW}${now.length ? ` For now you can ${listAnd(now, true)}.` : ""}${backLine}`;
+  return `${PAUSED_RIGHT_NOW}${now.length ? ` For now you can ${listAnd(now, true)}.` : ""}${backLine}${can.deadline && PAUSE_DEFAULTS.shiftDeadlines ? ` ${PAUSED_DEADLINE_LINE}` : ""}`;
 }
 /** The full banner (everything available). */
 export const PAUSED_FOR_TESTERS = pausedForTesters({ drafts: true, charge: true, dispute: true, rate: true, leave: true, cancelCalls: true, send: true, requestCalls: true, chat: true });
@@ -528,10 +534,49 @@ export function pauseShiftMs(start: Date, now: Date, others: (Date | null | unde
   return Math.max(0, until - start.getTime());
 }
 export const PAY_WAITS = "Pay what you owe first.";
+/** (Owner, Oct 29, batch 11) A charge made while the developer wasn't there waits this long for their bank confirmation, then counts as declined. */
+export const CONFIRM_DAYS = 3;
+/** (Batch 12 section 5) A press's confirmation pop-up locks the piece for at most this long. */
+export const PRESS_ACTION_MS = 15 * 60_000;
+export const bankConfirmLine = (cents: number, by: Date) => `Your bank wants you to confirm a ${money(cents)} payment. Confirm it in Payments by ${by.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}.`;
+export const BANK_NOT_CONFIRMED = "Your bank didn't confirm the payment, so nothing was charged.";
+export const PIECE_LOCKED = "A payment for this is being confirmed right now.";
+/** (Owner, Oct 29, batch 11 section 4) Automatic retries of what is owed during a hold: once a day, at most this many a hold. */
+export const HOLD_RETRY_MAX = 7;
+export const retriedLine = (cents: number) => `We charged your card ${money(cents)} for what you owed.`;
+/** Payments' line about the automatic retries. */
+export function retryStatusLine(u: { holdRetries: number; holdRetryAt: Date | null }, fmt: (d: Date) => string) {
+  if (u.holdRetries >= HOLD_RETRY_MAX) return "No more automatic tries: press Pay what you owe.";
+  if (!u.holdRetryAt) return "";
+  return `Last try: ${fmt(u.holdRetryAt)} · next try: ${fmt(new Date(u.holdRetryAt.getTime() + 86_400_000))}`;
+}
+/** (Owner, Oct 29, batch 11) A written part (all its answers and notes together) is at most this many characters. */
+export const WRITTEN_MAX_CHARS = 10_000;
+export const writtenLength = (texts: string[]) => texts.reduce((a, t) => a + (t ?? "").length, 0);
+export function checkWrittenLength(texts: string[]): Check {
+  const n = writtenLength(texts);
+  return n > WRITTEN_MAX_CHARS ? no(`Your written answers can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters in all (now ${n.toLocaleString("en-US")}).`) : yes;
+}
+/**
+ * (Owner, Oct 29, batch 11) A tester who deleted their account: work they sent is still reviewed when their payout account was connected (Pay reaches their Stripe
+ * account). DEFAULT: without one nothing can reach them, so it leaves Needs you with deletedNoPayoutsLine.
+ */
+export const testerPayable = (t: { deletedAt: Date | null; stripeAccountId: string | null; payoutsReady: boolean }) => !t.deletedAt || (!!t.stripeAccountId && t.payoutsReady);
+/** The same rule as a Prisma filter on a tester. */
+export const PAYABLE_TESTER: Prisma.UserWhereInput = { OR: [{ deletedAt: null }, { stripeAccountId: { not: null }, payoutsReady: true }] };
+export const deletedNoPayoutsLine = (name: string) => `${name} deleted their account before setting up payouts, so this can't be paid.`;
 /** (Owner, Oct 29, batch 10) A hold lifted (paid, or a chargeback hold cleared) while an admin suspension is still on: bell and email, sent even with email Off. */
 /** (Owner, Oct 29, batch 10) The platform won a chargeback: the developer's bell and email, and (when they had already paid it back) the receipt line for the refund. */
 export const chargebackWonLine = (cents: number) => `Your bank's chargeback of ${money(cents)} was reversed in your favour.`;
 export const chargebackRefundLine = (cents: number) => `Refund: your bank's chargeback of ${money(cents)} was reversed`;
+/** (Owner, Oct 29, batch 11) Each chargeback adds this fee to what the developer owes, on top of the reversed amount. */
+export const CHARGEBACK_FEE_CENTS = 1500;
+const wholeMoney = (cents: number) => money(cents).replace(/\.00$/, "");
+/** The Payments line of an open chargeback: "Your bank reversed a $X payment: $X + $15 chargeback fee." */
+export const chargebackOwedLine = (cents: number) => `Your bank reversed a ${wholeMoney(cents)} payment: ${wholeMoney(cents)} + ${wholeMoney(CHARGEBACK_FEE_CENTS)} chargeback fee`;
+/** (Batch 11) The stop-once line on the developer's test page and Edit when the platform won a chargeback (a payments-kind line). */
+export const chargebackReversedLine = (cents: number, backCents: number, refunded: boolean) =>
+  `Your bank's chargeback of ${money(cents)} was reversed: ${money(backCents)} ${refunded ? "refunded to your card" : "taken off what you owe"}.`;
 export const STILL_SUSPENDED_LINE = "Your payment went through. Your tests stay paused while your account is suspended.";
 /** (Owner, Oct 27) What a tester reads while the developer owes a declined payment: Dispute and Charge wait (never "failed"). */
 export const OWED_FOR_TESTERS = "Payment from this developer is delayed right now. You can try again once it's sorted.";
@@ -931,6 +976,10 @@ export const EXTRA_PAY_CAP_PERCENT = 100;
 /** (Batch 9 section 1) A part with no listed price: written answers or a recording at most $1000 per piece; a call at most $200 an hour for the minutes logged. */
 export const NO_LISTING_WORK_CAP_CENTS = 100_000;
 export const NO_LISTING_CALL_RATE_CAP_CENTS = 20_000;
+/** (Owner, Oct 29, batch 12 section 2) All of one tester's unlisted calls on a test together: at most $1000 (an unlisted call has no extra on top of its $200/h). */
+export const NO_LISTING_CALLS_TOTAL_CENTS = 100_000;
+/** The blocked line for an unlisted call over its room. */
+export const overCallsLine = (roomCents: number) => `This is more than you can pay for this call (up to ${money(roomCents).replace(/\.00$/, "")} more for unlisted calls).`;
 /** A piece's max: $1000 for written answers or a recording; $200/h × the logged minutes for a call. */
 export const pieceMaxCents = (kind: "submission" | "call", minutes = 0) => (kind === "call" ? Math.round((NO_LISTING_CALL_RATE_CAP_CENTS * minutes) / 60) : NO_LISTING_WORK_CAP_CENTS);
 /** How much may be paid above the base on one piece in all (listed: the percent of the listing, at most the max; unlisted: the percent of the max). */

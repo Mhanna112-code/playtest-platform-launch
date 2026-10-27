@@ -284,7 +284,7 @@ describe("batch 5 item 6: deleting an account", () => {
     expect(text).toContain("Pay already sent to your Stripe account stays there. Your Stripe account is separate from Playtest: you can still sign in to Stripe and withdraw it.");
     expect(text).toContain("$8.00 is waiting for your payout setup. Finish it before deleting, or it can't reach you.");
     expect(text).toContain("2 delayed payments ($16.00) still reach your Stripe account when the developer pays, if you finish your payout setup before deleting.");
-    expect(text).toContain("1 part you sent isn't paid yet (up to $8.00). After deleting, they can't be paid, charged or disputed.");
+    expect(text).toContain("1 part you sent isn't paid yet (up to $8.00). Work you already sent can still be paid by the developer, to your Stripe account if it's set up. After deleting, you can't charge for it or dispute it.");
     expect(text).toContain("You leave every test you're in. Calls ahead are cancelled, and your invites and applications are cancelled. Open disputes are withdrawn.");
     expect(text).toContain("Your chats close. The ratings you gave and got stay.");
     expect(text).toContain("You can't sign in again, and this can't be undone.");
@@ -306,12 +306,13 @@ describe("batch 5 item 6: deleting an account", () => {
     expect((await db.dispute.findFirstOrThrow({ where: { testerId: tester.user.id } })).status).toBe("withdrawn");
     const r = await pay(dev.cookie, { kind: "submission", id: rec.id, amount: "10.00", tickedCents: 1000 });
     expect(r.status).toBe(409);
-    expect(r.body.error).toMatchObject({ code: "gone", message: "This tester deleted their account, so this work can't be paid or rejected any more." });
+    // (Batch 11, DEFAULT) No payout account was connected: nothing can reach them.
+    expect(r.body.error).toMatchObject({ code: "gone", message: "Ana Silva deleted their account before setting up payouts, so this can't be paid." });
     await runDaily(new Date());
     expect((await db.submission.findUniqueOrThrow({ where: { id: rec.id } })).choiceOfferedAt).toBeNull();
     expect(await devDeleteBlockers(dev.user.id)).toEqual([]); // nothing of theirs blocks the developer
-    expect(src("app/app/page.tsx")).toContain("if (c.tester.deletedAt) continue;");
-    expect(src("app/app/tests/[id]/page.tsx")).toContain(".filter((c) => !c.tester.deletedAt)");
+    expect(src("app/app/page.tsx")).toContain("if (!testerPayable(c.tester)) continue;");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain(".filter((c) => testerPayable(c.tester))");
   });
 
   it("a delayed payment still reaches a deleted tester's Stripe account when the developer pays what they owe", async () => {

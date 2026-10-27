@@ -83,8 +83,8 @@ export async function devPaymentChanges(devId: string, testId: string, since: Da
     else if (p.status === "failed" && p.createdAt > since) out.push({ kind: "payment", text: `Payment failed on ${title}: ${who}${next}`, createdAt: p.createdAt });
   }
   // Chargebacks opened / resolved on the developer's OTHER tests (this test's come as its own events).
-  const others = await tx.testEvent.findMany({ where: { kind: "chargeback", createdAt: { gt: since }, testId: { not: testId }, test: { developerId: devId } }, include: { test: { select: { title: true } } }, take: 50 });
-  for (const e of others) out.push({ kind: "chargeback", text: `On ${e.test.title}: ${e.text[0].toLowerCase()}${e.text.slice(1)}`, createdAt: e.createdAt });
+  const others = await tx.testEvent.findMany({ where: { kind: { in: ["chargeback", "payment"] }, createdAt: { gt: since }, testId: { not: testId }, test: { developerId: devId } }, include: { test: { select: { title: true } } }, take: 50 });
+  for (const e of others) out.push({ kind: e.kind, text: `On ${e.test.title}: ${e.text[0].toLowerCase()}${e.text.slice(1)}`, createdAt: e.createdAt });
   return out;
 }
 

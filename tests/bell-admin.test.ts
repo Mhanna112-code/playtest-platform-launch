@@ -137,7 +137,7 @@ describe("every bell line opens the exact place", () => {
     expect(await testerLine(/^Work sent: your written answers/)).toBe(`/app/sessions/${sessionId}#part-written`);
     // Pay → the tester's line opens the written part.
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    expect(await testerLine(/^You were paid for your written answers/)).toBe(`/app/sessions/${sessionId}#part-written`);
+    expect(await testerLine(/paid you \$10\.00 for your written answers/)).toBe(`/app/sessions/${sessionId}#part-written`);
     // A booked call opens the call on both sides.
     const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 60);
     expect(await devLine(/^Booked:/)).toBe(`/app/tests/${testId}#call-${call.id}`);

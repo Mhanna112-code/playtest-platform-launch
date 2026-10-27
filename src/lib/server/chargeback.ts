@@ -95,6 +95,8 @@ export async function finishCardVerification(userId: string, setupIntentId: stri
   if (!pm) throw new HttpError(400, "no_card", "The card wasn't saved. Try again.");
   if (user.stripeCustomerId) await stripe.customers.update(user.stripeCustomerId, { invoice_settings: { default_payment_method: pm } });
   await db.user.update({ where: { id: userId }, data: { stripePaymentMethodId: pm, chargebackCardVerifiedAt: new Date() } });
+  // (Batch 11 section 4) The verified card is a new card: what is owed is retried on it at once.
+  await (await import("./holds")).retryOwed(userId, new Date(), "card").catch((e) => console.error("[retry] card verified:", (e as Error).message));
   return { verified: true };
 }
 

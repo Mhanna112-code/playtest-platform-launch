@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, pronouns, toCents } from "@/lib/format";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import {
-  andList, testPaused, testerPaused, PAUSED_SEND, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
+  andList, testPaused, testerPaused, PAUSED_SEND, WRITTEN_MAX_CHARS, checkWrittenLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { gapsOf, gapsUnseen, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError } from "./http";
@@ -676,10 +676,13 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
 export async function sendWritten(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
   const qs = writtenQuestions(c0);
-  const answers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim().slice(0, 10_000) : "")) : [];
+  const answers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim().slice(0, WRITTEN_MAX_CHARS + 1) : "")) : [];
   // Only the required questions need an answer ("not required" ones may stay empty).
   if (answers.length !== qs.length || qs.some((q, i) => !qOptional(q) && !answers[i])) throw new HttpError(400, "bad_answers", "Answer every required question before sending.");
-  const notes = str(body.notes, 10_000);
+  const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, WRITTEN_MAX_CHARS + 1) : "";
+  // (Owner, Oct 29, batch 11) At most 10,000 characters for the whole written part (all its answers and notes together).
+  const long = checkWrittenLength([...answers, notes]);
+  if (!long.ok) throw new HttpError(400, "too_long", long.message);
   // (Owner, Oct 28 afternoon) No sending while the test is paused (the typed answers stay kept as a draft).
   if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", PAUSED_SEND);
   await testerTermsGate(contractId, displayName(c0.test.developer), body);
@@ -696,6 +699,8 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     const sub = existing
       ? await tx.submission.update({ where: { id: existing.id }, data })
       : await tx.submission.create({ data: { contractId, kind: "written", agreedCents: c.writtenCents, ...data } });
+    // (Batch 11) Files and recordings attached to the written part go with it.
+    await tx.recording.updateMany({ where: { contractId, part: "written", uploadedAt: { not: null } }, data: { submissionId: sub.id } });
     await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} written answers`, false, {}, c.id);
     return { sub, updated: !!existing };
   });

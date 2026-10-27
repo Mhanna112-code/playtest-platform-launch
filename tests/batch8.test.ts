@@ -10,7 +10,7 @@ import { POST as adminPOST } from "@/app/api/admin/[action]/route";
 import * as S from "@/lib/subscription";
 import { chargebackOpened, liftHoldIfClear, owed, payOwed, startHold } from "@/lib/server/holds";
 import { deleteAccount, reinstateAccount } from "@/lib/server/restrictions";
-import { freeLaunchNotices, hasPerks, LAPSED_LINE, launchState, renewSubscriptions, setFreeUntil, subscriptionWebhook } from "@/lib/server/subscription";
+import { freeLaunchNotices, hasPerks, LAPSED_LINE, launchState, renewSubscriptions, subscriptionWebhook } from "@/lib/server/subscription";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
 import { act, listingBody, seen, settle } from "./fixtures";
@@ -22,13 +22,15 @@ const DAY = 86_400_000;
 const KEYS = ["free-until", "free-told-30", "free-told-7", "free-ended"];
 afterEach(async () => {
   setStripeForTests(null);
-  // The free-during-launch setting is shared by every test file: always leave it as it was (no row: free with no end).
+  // (Batch 11) Free during launch comes from FREE_UNTIL: always leave it unset (free with no end), and the notice marks cleared.
+  delete process.env.FREE_UNTIL;
   await db.appState.deleteMany({ where: { key: { in: KEYS } } });
   // Nobody made here keeps a running subscription for later runs' daily jobs.
   await db.user.updateMany({ where: { email: { endsWith: "@test.playtest.test" }, subscriptionStatus: { in: ["active", "past_due"] } }, data: { subscriptionStatus: "ended", subscriptionEndReason: "cancelled" } });
 });
 /** Free during launch is over (the perks need a subscription). */
-const freeOver = () => db.appState.upsert({ where: { key: "free-until" }, update: { value: new Date(Date.now() - DAY).toISOString() }, create: { key: "free-until", value: new Date(Date.now() - DAY).toISOString() } });
+const freeOver = async () => { process.env.FREE_UNTIL = new Date(Date.now() - DAY).toISOString(); };
+const setFreeUntil = (iso: string) => { process.env.FREE_UNTIL = iso; };
 const sub = (cookie: string, action: string) => subPOST(req("/api/payments/subscription", { cookie, body: { action } })).then(json);
 const post = (cookie: string, over: Record<string, unknown> = {}) => testsPOST(req("/api/tests", { cookie, body: listingBody(over) })).then(json);
 const adm = (action: string, cookie: string, body: Record<string, unknown>) => adminPOST(req(`/api/admin/${action}`, { cookie, body }), { params: Promise.resolve({ action }) }).then(json);
@@ -289,17 +291,19 @@ describe("batch 8 item 5: holds, suspensions, deletion", () => {
 });
 
 describe("batch 8 item 6: free during launch", () => {
-  it("no date: free with no end (everyone has the perks; nothing to subscribe to); a date must be 30+ days away", async () => {
+  it("no date: free with no end (everyone has the perks; nothing to subscribe to); (batch 11) the date comes from FREE_UNTIL, not an admin setting", async () => {
     expect(await launchState()).toEqual({ free: true, until: null });
     const dev = await makeUser({ dev: true });
     expect(await hasPerks(await userOf(dev.user.id))).toBe(true);
     expect((await post(dev.cookie)).status).toBe(200);
     expect((await post(dev.cookie)).status).toBe(200);
     expect((await sub(dev.cookie, "subscribe")).body.error.message).toBe("Everything is free during launch: there's nothing to subscribe to yet.");
-    await expect(setFreeUntil(new Date(Date.now() + 10 * DAY).toISOString())).rejects.toThrow("Pick a date at least 30 days away.");
+    expect(src("lib/server/subscription.ts")).toContain("process.env.FREE_UNTIL");
+    expect(src("lib/server/subscription.ts")).not.toContain("export async function setFreeUntil");
+    expect(fs.readFileSync(path.resolve(__dirname, "../.env.example"), "utf8")).toContain("FREE_UNTIL=");
   });
 
-  it("the 30-day and 7-day notices (sent even with email Off); moving the date after a notice sends '...now from'; clearing it: 'The extras stay free for now.'", async () => {
+  it("the 30-day and 7-day notices for the configured date (sent even with email Off), each once", async () => {
     const dev = await makeUser({ dev: true });
     const until = new Date(Date.now() + 40 * DAY);
     await setFreeUntil(until.toISOString());
@@ -310,11 +314,8 @@ describe("batch 8 item 6: free during launch", () => {
     expect(n.mustEmail).toBe(true);
     expect(await freeLaunchNotices(new Date(Date.now() + 12 * DAY))).toBe(0); // once
     expect(await freeLaunchNotices(new Date(Date.now() + 34 * DAY))).toBe(1); // 7 days before
-    const later = new Date(Date.now() + 60 * DAY);
-    await setFreeUntil(later.toISOString());
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: `Free during launch ends soon: the extras need a $7/month subscription now from ${S.fmtSubDay(later)}.` } })).toBe(1);
-    await setFreeUntil("");
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: "The extras stay free for now." } })).toBe(1);
+    expect(await freeLaunchNotices(new Date(Date.now() + 35 * DAY))).toBe(0);
+    delete process.env.FREE_UNTIL;
     expect(await launchState()).toEqual({ free: true, until: null });
   });
 
@@ -334,7 +335,7 @@ describe("batch 8 item 6: free during launch", () => {
     const t = await post(free.cookie);
     const loaded = seen();
     await settle();
-    await db.appState.update({ where: { key: "free-until" }, data: { value: new Date(Date.now() - 1000).toISOString() } });
+    setFreeUntil(new Date(Date.now() - 1000).toISOString());
     await freeLaunchNotices();
     expect((await act(t.body.id, "stop", free.cookie, { seenAt: loaded })).body.error.changes.map((c: { text: string }) => c.text)).toContain("Free during launch ended: the extras need a subscription now.");
     expect((await post(free.cookie)).body.error.message).toBe(S.SECOND_TEST_LINE);
@@ -342,7 +343,7 @@ describe("batch 8 item 6: free during launch", () => {
 });
 
 describe("batch 8 item 7: admin", () => {
-  it("each user row shows the subscription state; the settings hold the free-until date", async () => {
+  it("each user row shows the subscription state; (batch 11) the settings only show the configured free-until date", async () => {
     const now = new Date();
     const base = { subscriptionRenewsAt: new Date("2026-12-01T00:00:00Z"), subscriptionCanceling: false };
     expect(S.adminSubLine({ subscriptionStatus: "none", subscriptionRenewsAt: null, subscriptionCanceling: false }, now)).toBe("free plan");
@@ -353,10 +354,10 @@ describe("batch 8 item 7: admin", () => {
     expect(src("lib/server/adminLists.ts")).toContain("adminSubLine(x)");
     const a = await makeUser({ name: "Admin" });
     await db.user.update({ where: { id: a.user.id }, data: { isAdmin: true } });
-    expect((await adm("set-free-until", a.cookie, { id: "free-until", date: new Date(Date.now() + 5 * DAY).toISOString().slice(0, 10) })).body.error.message).toBe("Pick a date at least 30 days away.");
-    expect((await adm("set-free-until", a.cookie, { id: "free-until", date: new Date(Date.now() + 45 * DAY).toISOString().slice(0, 10) })).status).toBe(200);
-    expect((await launchState()).until).not.toBeNull();
-    expect(src("app/admin/page.tsx")).toContain('action="set-free-until"');
+    expect((await adm("set-free-until", a.cookie, { id: "free-until", date: new Date(Date.now() + 45 * DAY).toISOString().slice(0, 10) })).status).not.toBe(200);
+    expect((await launchState()).until).toBeNull();
+    expect(src("app/admin/page.tsx")).not.toContain('action="set-free-until"');
+    expect(src("app/admin/page.tsx")).toContain("Set by FREE_UNTIL in the server configuration");
   });
 
   it("testers never see any of it: a subscription payment is not the tester side's income", async () => {

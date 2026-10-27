@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, money } from "@/lib/format";
-import { NO_LISTING_WORK_CAP_CENTS, callReference, pieceMaxCents, testerShare } from "@/lib/rules";
+import { NO_LISTING_WORK_CAP_CENTS, PAYABLE_TESTER, callReference, pieceMaxCents, testerShare } from "@/lib/rules";
 
 // (Owner, Oct 28) Deleting an account: what the confirm pop-up tells a tester (with their real numbers), and what blocks a developer.
 
@@ -17,7 +17,7 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 export async function devDeleteBlockers(userId: string, now = new Date()): Promise<DeleteBlocker[]> {
   const u = await db.user.findUnique({ where: { id: userId }, select: { isDeveloper: true, holdStartedAt: true, holdReason: true } });
   if (!u?.isDeveloper) return [];
-  const live = { tester: { deletedAt: null } };
+  const live = { tester: PAYABLE_TESTER }; // (batch 11) a deleted tester's sent work is still payable when their payout account was connected
   const [subs, calls, disputes] = await Promise.all([
     db.submission.findMany({ where: { review: null, contract: { ...live, test: { developerId: userId } } }, select: { contract: { select: { testId: true, test: { select: { title: true } } } } } }),
     db.call.findMany({ where: { review: null, status: "booked", startsAt: { lte: now }, contract: { ...live, test: { developerId: userId } } }, select: { contract: { select: { testId: true, test: { select: { title: true } } } } } }),
@@ -78,6 +78,9 @@ export async function testerDeleteFacts(userId: string, now = new Date()): Promi
   };
 }
 
+/** (Owner, Oct 29, batch 11) What happens to work already sent. */
+export const SENT_WORK_AFTER_DELETE = "Work you already sent can still be paid by the developer, to your Stripe account if it's set up. After deleting, you can't charge for it or dispute it.";
+
 /** The pop-up's lines, in order (the "Set up payouts" link sits after the waiting line). */
 export function testerDeleteLines(f: TesterDeleteFacts) {
   const lines: { key: string; text: string }[] = [
@@ -85,7 +88,7 @@ export function testerDeleteLines(f: TesterDeleteFacts) {
   ];
   if (f.waitingCents > 0) lines.push({ key: "waiting", text: `${money(f.waitingCents)} is waiting for your payout setup. Finish it before deleting, or it can't reach you.` });
   if (f.delayedN > 0) lines.push({ key: "delayed", text: `${plural(f.delayedN, "delayed payment")} (${money(f.delayedCents)}) still ${f.delayedN === 1 ? "reaches" : "reach"} your Stripe account when the developer pays, ${f.payoutsReady ? "because your payout setup is finished" : "if you finish your payout setup before deleting"}.` });
-  if (f.unpaidN > 0) lines.push({ key: "unpaid", text: `${f.unpaidN} ${f.unpaidN === 1 ? "part you sent isn't" : "parts you sent aren't"} paid yet (up to ${money(f.unpaidCents)}). After deleting, they can't be paid, charged or disputed.` });
+  if (f.unpaidN > 0) lines.push({ key: "unpaid", text: `${f.unpaidN} ${f.unpaidN === 1 ? "part you sent isn't" : "parts you sent aren't"} paid yet (up to ${money(f.unpaidCents)}). ${SENT_WORK_AFTER_DELETE}` });
   lines.push({ key: "leave", text: "You leave every test you're in. Calls ahead are cancelled, and your invites and applications are cancelled. Open disputes are withdrawn." });
   lines.push({ key: "chats", text: "Your chats close. The ratings you gave and got stay." });
   lines.push({ key: "final", text: "You can't sign in again, and this can't be undone." });

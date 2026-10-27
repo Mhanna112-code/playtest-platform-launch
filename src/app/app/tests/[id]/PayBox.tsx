@@ -4,6 +4,7 @@ import { checkFields } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
 import { money, toCents } from "@/lib/format";
 import { usePress } from "@/lib/usePress";
+import { confirmWithBank, needsBank } from "@/lib/bankConfirm";
 import { NOT_LISTED, NO_LISTING_CALL_RATE_CAP_CENTS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PAY_TICK_LINE, PAY_WAITS } from "@/lib/rules";
 import { NotSentTag, useKept } from "@/lib/useKept";
 
@@ -16,11 +17,15 @@ import { NotSentTag, useKept } from "@/lib/useKept";
  *   - A call's box has "Rate ($/h)": typing a rate fills the amount with rate × the logged minutes; typing an amount clears the rate. A listed call's rate starts at the
  *     contract rate; an unlisted one's starts empty and is at most $200/h.
  *   - Every amount above $0 needs the tick that names it, and over $200 also "I confirm this payment is over $200." A changed amount unticks both.
+ * (Owner, Oct 29, batch 11 section 6) There is ONE Pay box per piece and no separate Extra pay: an amount above the listing counts as extra pay (within the per-piece caps;
+ * `roomCents` is the most it can be now). After the piece is paid, the tester row keeps the same box as "Pay more" (`more`: no Reject, no rate, the amount starts empty)
+ * until the cap is reached. (Batch 12 section 2) An unlisted call's box shows what is left of the tester's $1000 for unlisted calls.
  */
-export function PayBox(p: { kind: "submission" | "call"; id: string; name: string; listingCents: number | null; listingText: string; paidSoFarCents: number; seenAt: string; partPaidCents?: number; note?: string; owes?: boolean; minutes?: number; rateCents?: number | null }) {
+export function PayBox(p: { kind: "submission" | "call"; id: string; name: string; listingCents: number | null; listingText: string; paidSoFarCents: number; seenAt: string; partPaidCents?: number; note?: string; owes?: boolean; minutes?: number; rateCents?: number | null; roomCents?: number; callPoolRoomCents?: number | null; more?: { testId: string; contractId: string } }) {
   const listed = p.listingCents != null;
-  const isCall = p.kind === "call";
-  const start = p.listingCents;
+  const more = p.more;
+  const isCall = p.kind === "call" && !more;
+  const start = more ? null : p.listingCents;
   const [amount, setAmount] = useState(start == null ? "" : (start / 100).toFixed(2));
   const [rate, setRate] = useState(isCall && listed && p.rateCents != null ? (p.rateCents / 100).toFixed(2) : "");
   const [reason, setReason] = useState("");
@@ -29,8 +34,9 @@ export function PayBox(p: { kind: "submission" | "call"; id: string; name: strin
   const [paidSoFar, setPaidSoFar] = useState(p.paidSoFarCents);
   const { press, changes, error, busy, at } = usePress(p.seenAt, (d) => typeof d.paidSoFarCents === "number" && setPaidSoFar(d.paidSoFarCents));
   const [done, setDone] = useState("");
+  const [bankErr, setBankErr] = useState("");
   // (NEXT-UI 10) The note typed and not sent is kept on the server ("Not sent yet").
-  const keep = useKept(`reject:${p.kind}:${p.id}`, { reason }, reason === "", (v) => setReason(v.reason ?? ""));
+  const keep = useKept(`${more ? "more" : "reject"}:${p.kind}:${p.id}`, { reason }, reason === "", (v) => setReason(v.reason ?? ""));
   const payKey = useMemo(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()), []);
   const cents = toCents(amount);
   const below = listed && cents != null && cents < p.listingCents!;
@@ -47,21 +53,34 @@ export function PayBox(p: { kind: "submission" | "call"; id: string; name: strin
   const tickOk = cents === 0 || (ticked && (!over || over200));
 
   async function go(action: "pay" | "reject") {
-    const r = await press<{ status?: string; amountCents: number; rejected: boolean; paidSoFarCents?: number; later?: string }>("/api/review", {
-      action, kind: p.kind, id: p.id, payKey, amount, reason, ...(isCall && rate ? { rate } : {}), tickedCents: ticked ? cents : null, over200: over && over200,
-    }, action);
+    const r = more
+      ? await press<{ status?: string; amountCents: number; rejected: boolean; paidSoFarCents?: number; later?: string }>(`/api/tests/${more.testId}/pay-extra`, {
+        contractId: more.contractId, ...(p.kind === "call" ? { callId: p.id } : { submissionId: p.id }), amount, note: reason, payKey, tickedCents: ticked ? cents : null, over200: over && over200,
+      }, action)
+      : await press<{ status?: string; amountCents: number; rejected: boolean; paidSoFarCents?: number; later?: string }>("/api/review", {
+        action, kind: p.kind, id: p.id, payKey, amount, reason, ...(isCall && rate ? { rate } : {}), tickedCents: ticked ? cents : null, over200: over && over200,
+      }, action);
     if (!r) return;
+    // (Batch 11) The bank wants to confirm: its pop-up, then the payment goes through, or nothing was charged (the blue notice under the button).
+    let res: typeof r = r;
+    if (needsBank(r)) {
+      setBankErr("");
+      try { res = await confirmWithBank<typeof r>(r); } catch (e) { setBankErr((e as Error).message); return; }
+    }
+    const r2 = res;
     await keep.clear();
-    if (r.paidSoFarCents != null) setPaidSoFar(r.paidSoFarCents);
-    setDone(r.rejected ? "Rejected. Nothing was charged." : r.status === "not_set_up" ? `Recorded ${money(r.amountCents)}: payments aren't set up yet, so nothing was charged.` : `Paid ${money(r.amountCents)}${r.later ? ` · ${r.later}` : ""}.`);
+    if (r2.paidSoFarCents != null) setPaidSoFar(r2.paidSoFarCents);
+    setDone(r2.rejected ? "Rejected. Nothing was charged." : r2.status === "not_set_up" ? `Recorded ${money(r2.amountCents)}: payments aren't set up yet, so nothing was charged.` : `Paid ${money(r2.amountCents)}${r2.later ? ` · ${r2.later}` : ""}.`);
     setTimeout(() => window.location.reload(), 900);
   }
 
   return (
-    <div className="space-y-3 border-t border-white/10 pt-4" data-pay-box={listed ? "listed" : "unlisted"}>
+    <div className={`space-y-3 ${more ? "w-full rounded-lg border border-white/10 p-3" : "border-t border-white/10 pt-4"}`} data-pay-box={listed ? "listed" : "unlisted"} data-pay-more={more ? p.id : undefined}>
       <p className="text-sm">
+        {more && <b className="text-white">Pay more · </b>}
         <b>{listed ? `Listing: ${p.listingText}` : NOT_LISTED}</b>
         {" "}· Paid so far for this part: {money(p.partPaidCents ?? 0)} · You&apos;ve paid {p.name} {money(paidSoFar)} so far on this test.
+        {p.roomCents != null && <span className="text-slate-400" data-pay-room=""> · up to {money(p.roomCents)}{p.callPoolRoomCents != null ? ` (up to ${money(p.callPoolRoomCents)} more for unlisted calls)` : ""}</span>}
       </p>
       <div className="flex flex-wrap items-end gap-2">
         {isCall && (
@@ -78,7 +97,7 @@ export function PayBox(p: { kind: "submission" | "call"; id: string; name: strin
         </div>
       </div>
       <div className="min-w-[14rem]">
-        <label className={`label ${below ? "req" : ""}`} htmlFor={`why-${p.id}`}>Note to {p.name}{below ? ` · needed to pay less than the listing's ${money(p.listingCents)}` : listed ? " (optional; needed to reject)" : " (optional)"}</label>
+        <label className={`label ${below && !more ? "req" : ""}`} htmlFor={`why-${p.id}`}>Note to {p.name}{more ? " (optional)" : below ? ` · needed to pay less than the listing's ${money(p.listingCents)}` : listed ? " (optional; needed to reject)" : " (optional)"}</label>
         <input id={`why-${p.id}`} className="input" maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={listed ? "What it's missing, or a thank-you" : "A thank-you, or what the pay is for"} />
         {keep.restored && <NotSentTag />}
       </div>
@@ -93,16 +112,17 @@ export function PayBox(p: { kind: "submission" | "call"; id: string; name: strin
             <input type="checkbox" className="mt-1" checked={over200} onChange={(e) => setOver200(e.target.checked)} /> {OVER_PAY_TICK_LINE}
           </label>
         )}
-        <button className="btn" disabled={busy || cents == null || !tickOk || !!p.owes} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go("pay")}>Pay</button>
-        {listed && <button className="btn-danger" disabled={busy} onClick={() => go("reject")}>Reject</button>}
+        <button className="btn" disabled={busy || cents == null || !tickOk || !!p.owes || (!!more && cents === 0)} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go("pay")}>{more ? "Pay more" : "Pay"}</button>
+        {listed && !more && <button className="btn-danger" disabled={busy} onClick={() => go("reject")}>Reject</button>}
         {p.owes && <span className="text-xs text-amber-200" data-owes-note="">{PAY_WAITS} <a href="#owed">Pay what you owe ↑</a></span>}
         <span className="text-xs text-slate-500">at least $0.50 (or 0)</span>
       </div>
       {(at === "pay" || at === "reject") && <ChangesBox changes={changes} error={error} />}
-      <p className="note">
+      {bankErr && <p className="info" data-bank-not-confirmed="">{bankErr}</p>}
+      {!more && <p className="note">
         {/* (Batch 10) Every reviewed part can be disputed once, listed or not. */}
         {listed ? `Reject charges nothing. ${p.name} can dispute your decision once.` : `This part isn't listed: pay any amount, $0 included (it closes this row). It can't be rejected; ${p.name} can dispute the amount once.`}
-      </p>
+      </p>}
       {p.note && <p className="note">{p.note}</p>}
       {error === "Pay what you owe first." && <a className="text-sm" href="#owed">Pay what you owe ↑</a>}
       {done && <p className="ok">{done}</p>}

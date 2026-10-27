@@ -83,26 +83,24 @@ describe("Charge / Let it go at day 14", () => {
   });
 });
 
-describe("no daily retry of owed payments (owner, Oct 27)", () => {
-  it("the daily job never retries a failed payment: it is paid with Pay what you owe, which also repays an open chargeback and tells both sides", async () => {
+describe("(batch 11 section 4) the daily retries of what is owed during a hold", () => {
+  it("the daily job retries what is owed on the saved card (the failed payment, and an open chargeback with its fee) and tells both sides", async () => {
     const { dev, sessionId, tester } = await waiting14();
-    await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
+    const cus = "cus_" + randomUUID();
+    await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: cus, stripePaymentMethodId: "pm_x" } });
     const p = await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 900, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + 2 * 86_400_000) } });
     await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 700, feeCents: 140, testerCents: 560, status: "charged", chargeback: "open", stripePaymentIntentId: "pi_" + randomUUID() } });
     await startHold(dev.user.id, "unpaid");
     let calls = 0;
-    setStripeForTests({ paymentIntents: { create: async () => { calls++; return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
+    setStripeForTests({ paymentIntents: { create: async (x: { customer?: string }) => { if (x.customer === cus) calls++; return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
     await cron();
-    expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "failed", retriedAt: null });
-    expect(calls).toBe(0);
-    const { payOwed } = await import("@/lib/server/holds");
-    expect(await payOwed(dev.user)).toMatchObject({ paid: 2, stillFailing: [] });
     expect(calls).toBe(2);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: "We charged your card $31.00 for what you owed." } })).toBe(1);
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "charged" });
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Receipt: you paid $9.00" }, payment: true } })).toBe(1);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { endsWith: "paid $9.00 for your written answers" }, groupKey: "tarrived" } })).toBe(1);
     // The chargeback is repaid too (to the platform: the tester keeps their share), but the hold stays on until the admin resolves it.
-    expect(await db.payment.findFirstOrThrow({ where: { developerId: dev.user.id, kind: "chargeback" } })).toMatchObject({ amountCents: 700, testerCents: 0, status: "charged" });
+    expect(await db.payment.findFirstOrThrow({ where: { developerId: dev.user.id, kind: "chargeback" } })).toMatchObject({ amountCents: 2200, testerCents: 0, status: "charged" });
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
   });
 });

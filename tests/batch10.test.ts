@@ -154,7 +154,7 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
     expect(page).toContain("chat={!meOff && !chatPaused ?");
     expect(src("app/app/chat/[id]/page.tsx")).toContain("closed={blocked || paused}");
     const actions = src("app/app/sessions/[id]/SessionActions.tsx");
-    expect(actions).toContain("{canSend && <button className=\"btn\" disabled={busy}>");
+    expect(actions).toContain("{canSend && <button className=\"btn\" disabled={busy || length > WRITTEN_MAX_CHARS}>");
     expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).toContain("{canSend && sendable && uploaded.length > 0 && (");
     // Testers' dashboard rows keep the "Paused" tag.
     expect(src("app/app/page.tsx")).toContain("{c.title} {pausedTest(c.test) && <PausedTag />}");
@@ -191,7 +191,7 @@ describe("batch 10 item 3: long written answers scroll on the developer's side",
     expect(open).toBeGreaterThan(0);
     // The question labels are inside; the Pay box comes after the box closes.
     expect(page.slice(open, close)).toContain("{qText(q)}");
-    expect(page.slice(open, close)).toContain("Notes: {x.s!.notes}");
+    expect(page.slice(open, close)).toContain("<Formatted text={x.s!.notes} />");
     expect(page.slice(open, close)).not.toContain("<PayBox");
     expect(page.indexOf('<PayBox owes={owesNow} key={x.s!.id} kind="submission"')).toBeGreaterThan(close);
   });

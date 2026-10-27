@@ -184,7 +184,7 @@ describe("C) stacking changes", () => {
     await settle();
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    const paid = (await lines(tester.user.id)).find((l) => /^You were paid for your written answers/.test(l.text))!;
+    const paid = (await lines(tester.user.id)).find((l) => /^Nora Lane paid you \$10\.00 for your written answers/.test(l.text))!;
     expect(paid).toMatchObject({ own: false, groupKey: "tpaid", payment: true }); // (Owner, Oct 27) "Paid" lines stack across tests, one entry a day
     await db.user.update({ where: { id: tester.user.id }, data: { stripeAccountId: "acct_" + randomUUID() } });
     const acct = (await db.user.findUniqueOrThrow({ where: { id: tester.user.id } })).stripeAccountId!;

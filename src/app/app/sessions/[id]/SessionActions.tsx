@@ -1,13 +1,44 @@
 "use client";
 import { Err } from "@/components/Err";
 import { checkFields } from "@/components/FieldChecks";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api, errOf } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { NotSentTag, useKept } from "@/lib/useKept";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { qOptional, qText } from "@/lib/questions";
 import { ChangesBox } from "@/components/ChangesBox";
+import { WRITTEN_MAX_CHARS, writtenLength } from "@/lib/rules";
+import { wrapSelection } from "@/lib/markdown";
+
+/** (Owner, Oct 29, batch 11) Bold, Italic and Code block for a written answer (stored as Markdown; the developer sees it formatted). */
+function FormatBar({ target, onChange }: { target: React.RefObject<HTMLTextAreaElement | null>; onChange: (v: string) => void }) {
+  const apply = (kind: "bold" | "italic" | "code") => {
+    const el = target.current;
+    if (!el) return;
+    const r = wrapSelection(el.value, el.selectionStart, el.selectionEnd, kind);
+    onChange(r.value);
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(r.start, r.end); });
+  };
+  return (
+    <span className="flex gap-1" role="toolbar" aria-label="Formatting" data-format-bar="">
+      <button type="button" className="btn-ghost px-2 py-0.5 text-xs font-bold" title="Bold" onClick={() => apply("bold")}>B</button>
+      <button type="button" className="btn-ghost px-2 py-0.5 text-xs italic" title="Italic" onClick={() => apply("italic")}>I</button>
+      <button type="button" className="btn-ghost px-2 py-0.5 font-mono text-xs" title="Code block" onClick={() => apply("code")}>{"</>"}</button>
+    </span>
+  );
+}
+
+/** One answer box with its formatting toolbar. */
+function AnswerBox({ id, value, onChange, rows = 3 }: { id: string; value: string; onChange: (v: string) => void; rows?: number }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  return (
+    <div className="space-y-1">
+      <FormatBar target={ref} onChange={onChange} />
+      <textarea ref={ref} id={id} rows={rows} className="input" value={value} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
 
 /**
  * Written answers: one box per question in the tester's contract. Can be updated until it's paid. `canSend` false (batch 10: the test is paused): the boxes stay and what is
@@ -29,9 +60,11 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     setNotes(v.notes ?? initialNotes);
   });
 
+  const length = writtenLength([...answers, notes]);
   async function send(e: React.FormEvent) {
     e.preventDefault();
     if (!canSend) return;
+    if (length > WRITTEN_MAX_CHARS) return setMsg({ ok: false, text: `Your written answers can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters in all (now ${length.toLocaleString("en-US")}).` });
     setBusy(true);
     setMsg(null);
     try {
@@ -50,14 +83,16 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       {questions.map((q, i) => (
         <div key={i}>
           <label className={`label ${qOptional(q) ? "" : "req"}`} htmlFor={`a${i}`}>{qText(q)}{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</label>
-          <textarea id={`a${i}`} rows={3} className="input" value={answers[i]} onChange={(e) => setAnswers(answers.map((a, j) => (j === i ? e.target.value : a)))} />
+          <AnswerBox id={`a${i}`} value={answers[i]} onChange={(v) => setAnswers((all) => all.map((a, j) => (j === i ? v : a)))} />
         </div>
       ))}
       <div>
         <label className="label" htmlFor="notes">Anything else (bugs, ideas)</label>
-        <textarea id="notes" rows={2} className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <AnswerBox id="notes" rows={2} value={notes} onChange={setNotes} />
       </div>
-      <span>{canSend && <button className="btn" disabled={busy}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && <NotSentTag />}</span>
+      {/* (Batch 11) At most 10,000 characters for the whole written part, counted live. */}
+      <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
+      <span>{canSend && <button className="btn" disabled={busy || length > WRITTEN_MAX_CHARS}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && <NotSentTag />}</span>
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
       <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {msg && (msg.ok ? <p className="ok">{msg.text}</p> : <Err text={msg.text} />)}

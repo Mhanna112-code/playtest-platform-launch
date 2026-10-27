@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     return new Response("Bad signature", { status: 400 });
   }
   // (Batch 8) Stripe Billing: renewals, declined renewals and the end of a developer subscription.
-  if (event.type === "invoice.paid" || event.type === "invoice.payment_failed" || event.type === "customer.subscription.deleted") await (await import("@/lib/server/subscription")).subscriptionWebhook(event.type, event.data.object);
+  if (event.type === "invoice.paid" || event.type === "invoice.payment_failed" || event.type === "invoice.payment_action_required" || event.type === "customer.subscription.deleted") await (await import("@/lib/server/subscription")).subscriptionWebhook(event.type, event.data.object);
   if (event.type === "charge.dispute.created") {
     const pi = event.data.object.payment_intent;
     if (typeof pi === "string") await chargebackOpened(pi);

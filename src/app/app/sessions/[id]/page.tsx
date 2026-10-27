@@ -28,6 +28,9 @@ import { contractRatings, rateBlocker, rateWarning, ratingSummary } from "@/lib/
 import { openOffer } from "@/lib/server/terms";
 import { keyOf } from "@/lib/server/accessKeys";
 import { KeyBox } from "./KeyBox";
+import { WrittenAttachments } from "./WrittenAttachments";
+import { Formatted } from "@/components/Formatted";
+import { AttachmentList } from "@/components/AttachmentList";
 
 export const metadata = { title: "Your session · Playtest" };
 export const dynamic = "force-dynamic";
@@ -66,14 +69,18 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const offers = await db.termsOffer.findMany({ where: { contractId: c.id }, orderBy: { createdAt: "asc" } });
   const blockedPair = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: u.id }] } })) > 0;
   const partPaid = new Map((await db.payment.groupBy({ by: ["submissionId", "callId"], where: { contractId: c.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } })).map((g) => [g.submissionId ?? g.callId ?? "", g._sum.amountCents ?? 0]));
-  const delayedSubs = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", settledAt: null, owedUntil: { not: null }, submissionId: { not: null }, kind: { not: "dispute" } }, select: { submissionId: true } })).map((p) => p.submissionId!));
+  // (Batch 11) A charge waiting for the developer's bank confirmation reads "Payment may be delayed" too.
+  const delayedSubs = new Set((await db.payment.findMany({ where: { contractId: c.id, submissionId: { not: null }, kind: { not: "dispute" }, OR: [{ status: "failed", settledAt: null, owedUntil: { not: null } }, { status: "needs_confirmation" }] }, select: { submissionId: true } })).map((p) => p.submissionId!));
+  // (Batch 11 / 12 section 5) A Pay whose bank confirmation is still open isn't a payment yet: the part still reads "Under review".
+  const confirming = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "needs_action", kind: { in: ["review", "call"] } }, select: { submissionId: true, callId: true } })).map((p) => p.submissionId ?? p.callId ?? ""));
+  for (const x of [...c.submissions, ...c.calls]) if (confirming.has(x.id)) (x as { review: unknown }).review = null;
   // (Owner, Oct 28 afternoon) A Charge pressed (or a dispute decided for them) while the developer was on a hold: added to what the developer owes, paid when they pay it.
-  const owedRows = await db.payment.findMany({ where: { contractId: c.id, OR: [{ status: "owed" }, { status: "failed", settledAt: null, owedUntil: { not: null }, kind: "dispute" }] }, select: { submissionId: true, callId: true, kind: true, amountCents: true } });
+  const owedRows = await db.payment.findMany({ where: { contractId: c.id, OR: [{ status: "owed" }, { status: "failed", settledAt: null, owedUntil: { not: null }, kind: "dispute" }, { status: "needs_confirmation", kind: "dispute" }] }, select: { submissionId: true, callId: true, kind: true, amountCents: true } });
   const chargedOwed = new Map(owedRows.filter((p) => p.kind === "review" && p.submissionId).map((p) => [p.submissionId!, p.amountCents]));
   // (Batch 9) Extra pays, with the developer's notes.
   const extraRows = await db.payment.findMany({ where: { contractId: c.id, kind: "extra", status: { in: ["charged", "not_set_up"] } }, select: { submissionId: true, callId: true, amountCents: true, note: true, createdAt: true }, orderBy: { createdAt: "asc" } });
   const disputeOwed = new Set(owedRows.filter((p) => p.kind === "dispute").map((p) => p.submissionId ?? p.callId ?? ""));
-  const owedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", settledAt: null, owedUntil: { not: null }, callId: { not: null } }, select: { callId: true } })).map((p) => p.callId!));
+  const owedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, callId: { not: null }, kind: { not: "dispute" }, OR: [{ status: "failed", settledAt: null, owedUntil: { not: null } }, { status: "needs_confirmation" }] }, select: { callId: true } })).map((p) => p.callId!));
   const failedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", callId: { not: null } }, select: { callId: true } })).map((p) => p.callId!));
   const cancelledText = (x: { status: string; cancelledBy: string | null }) => (x.status !== "cancelled" ? "" : x.cancelledBy === "tester" ? "you cancelled it" : `cancelled by ${x.cancelledBy === "developer" ? dev : "the site"}`);
   // (NEWEST+5) Rating the developer.
@@ -137,6 +144,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
     send: !refusal && !meOff && unpaidPart,
     requestCalls: !refusal && !meOff && !blockedPair && c.test.status !== "stopped",
     chat: chatPaused && !meOff && !blockedPair,
+    deadline: c.status === "working", // (batch 11) a working tester's deadline moves with the pause
   }) : "";
   // The full app's session page: one centred column; the header card (title, by, badges, Chat, Open the product), then a
   // card per part.
@@ -353,7 +361,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           canSend={!refusal && !recording?.review && !meOff && draftsShown}
           sendable={!rulesPaused}
           sentBefore={!!recording}
-          recordings={c.recordings.map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, uploaded: !!r.uploadedAt }))}
+          recordings={c.recordings.filter((r) => r.part === "recording").map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, uploaded: !!r.uploadedAt }))}
         />
       </section>
 
@@ -366,15 +374,20 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             {writtenQuestions(c).map((q, i) => (
               <div key={i} className="text-sm">
                 <p className="font-medium text-ink-200">{qText(q)}{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</p>
-                <p className="whitespace-pre-wrap">{(written.answers as string[])[i]}</p>
+                <Formatted text={(written.answers as string[])[i] ?? ""} />
               </div>
             ))}
-            {written.notes && <p className="whitespace-pre-wrap text-sm">Notes: {written.notes}</p>}
+            {written.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><Formatted text={written.notes} /></div>}
+            <AttachmentList items={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && r.submissionId === written.id)} />
           </div>
         ) : refusal || meOff || !draftsShown ? (
           !written ? <p className="note">Nothing sent.</p> : null
         ) : (
-          <WrittenForm canSend={!rulesPaused} seenAt={seenAt} sessionId={c.id} questions={writtenQuestions(c)} initial={(written?.answers as string[]) ?? []} initialNotes={written?.notes ?? ""} update={!!written} />
+          <>
+            <WrittenForm canSend={!rulesPaused} seenAt={seenAt} sessionId={c.id} questions={writtenQuestions(c)} initial={(written?.answers as string[]) ?? []} initialNotes={written?.notes ?? ""} update={!!written} />
+            {/* (Batch 11) Files and recordings attached to the written part (drafts: they can be added while the test is paused). */}
+            <WrittenAttachments sessionId={c.id} canAdd items={c.recordings.filter((r) => r.part === "written").map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, uploaded: !!r.uploadedAt, video: r.contentType.startsWith("video/"), sent: !!r.submissionId }))} />
+          </>
         )}
       </section>
 

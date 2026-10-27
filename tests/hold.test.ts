@@ -140,11 +140,11 @@ describe("chargebacks (Stripe dispute webhook)", () => {
     expect((await approve()).body.error.code).toBe("steps_missing"); // the card isn't verified yet
     setStripeForTests(null); // no Stripe here (dev): the card check is simulated
     expect((await verifyPOST(req("/api/payments/verify-card", { cookie: dev.cookie, body: {} }))).status).toBe(200); // simulated without Stripe
-    // (Owner, Oct 27) The reversed $8.00 is owed again: Approve waits for it to be paid with "Pay what you owe".
-    expect((await approve()).body.error.message).toBe("Not yet: $8.00 is still owed.");
+    // (Owner, Oct 27) The reversed $8.00 is owed again (batch 11: with the $15 fee): Approve waits for it to be paid with "Pay what you owe".
+    expect((await approve()).body.error.message).toBe("Not yet: $23.00 is still owed.");
     const paid = await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })));
     expect(paid.body).toMatchObject({ paid: 1, stillFailing: [] });
-    expect(await db.payment.findFirstOrThrow({ where: { repaysId: p.id } })).toMatchObject({ kind: "chargeback", amountCents: 800, testerCents: 0, status: "not_set_up" });
+    expect(await db.payment.findFirstOrThrow({ where: { repaysId: p.id } })).toMatchObject({ kind: "chargeback", amountCents: 2300, testerCents: 0, status: "not_set_up" }); // (batch 11) with the $15 fee
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull(); // paying alone never lifts a chargeback hold
     expect((await approve()).status).toBe(200);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();

@@ -103,7 +103,7 @@ describe("batch 6 item 1: calls without a Live call part are allowed again", () 
     await sact(sessionId, "answer-request", tester.cookie, { requestId: q.id, action: "accept", seenAt: seen(), confirmed: true });
     const call = await db.call.findFirstOrThrow({ where: { contractId: sessionId } });
     await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 20 * DAY) } });
-    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('const start = p.listingCents;');
+    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('const start = more ? null : p.listingCents;');
     expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('useState(start == null ? "" :');
     // Charge / Let it go never opens for it, however long it waits.
     await cron();
@@ -111,7 +111,7 @@ describe("batch 6 item 1: calls without a Live call part are allowed again", () 
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "charge" } } })).toBe(0);
     const over = await pay(dev.cookie, { kind: "call", id: call.id, amount: "150.00", tickedCents: 15000, confirmed: true });
     expect(over.status).toBe(400);
-    expect(over.body.error.message).toBe(R.overMaxLine(10_000)); // 30 minutes at $200/h
+    expect(over.body.error.message).toBe(R.overCallsLine(10_000)); // 30 minutes at $200/h (batch 12 section 2: nothing above it for an unlisted call)
     expect((await pay(dev.cookie, { kind: "call", id: call.id, amount: "100.00", tickedCents: 10000, confirmed: true })).status).toBe(200);
   });
 });

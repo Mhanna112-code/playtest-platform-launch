@@ -6,7 +6,9 @@ import { stripeOn } from "@/lib/server/stripe";
 import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { HOLD_APPROVAL_AFTER } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, retryStatusLine } from "@/lib/rules";
+import { waitingConfirmation } from "@/lib/server/confirm";
+import { ConfirmList } from "./ConfirmList";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { sideFor } from "@/lib/sides";
@@ -64,8 +66,13 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         const review = !!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER);
         if (!u.holdStartedAt) return null;
         if (!o.length) return review ? <p className="info" data-hold-review-paid="">You&apos;ve paid what you owe. The team will review your account before your tests resume.</p> : null;
-        return <OwedBox onHold={!!u.holdStartedAt} owed={o} chargeback={!!cbSteps} review={review} />;
+        return <OwedBox onHold={!!u.holdStartedAt} owed={o} chargeback={!!cbSteps} review={review} retryLine={retryStatusLine(u, fmtDateTime)} />;
       }))}
+      {/* (Batch 11) Payments the developer's bank wants confirmed (made while they weren't here). */}
+      {dev && await (async () => {
+        const waiting = await waitingConfirmation(u.id);
+        return <ConfirmList items={waiting.map((p) => ({ id: p.id, text: `${p.kind === "subscription" ? "Your subscription" : p.kind === "dispute" ? "A team decision" : p.kind === "chargeback" ? "A payment your bank had reversed" : "A payment"} ${money(p.amountCents)} · confirm by ${fmtDateTime(p.actionBy!)}` }))} />;
+      })()}
       {q.error && q.error !== "off" && <p className="err">{MESSAGES[q.error]}</p>}
       {q.saved === "verified" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card verified.</p>}
       {q.saved === "card" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card saved.</p>}
