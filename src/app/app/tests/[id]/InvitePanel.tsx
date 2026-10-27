@@ -110,9 +110,9 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
   const row = (t: Tester, key: string) => (
     <li key={key + t.id} data-invite-row={t.id} className={`flex flex-wrap items-center gap-2 ${t.grey ? "text-slate-500" : "text-slate-300"}`}>
       <input type="checkbox" id={`${key}-${t.id}`} aria-label={t.name} disabled={!!t.grey} checked={!t.grey && ticked.includes(t.id)} onChange={(e) => { setNone(false); setTicked(e.target.checked ? [...ticked, t.id] : ticked.filter((x) => x !== t.id)); }} />
-      <span className="min-w-0 flex-1 truncate"><a href={`/app/testers/${t.id}`} target="_blank" rel="noopener" className="text-inherit underline-offset-2 hover:underline">{t.name}</a></span>
-      {t.was && !t.grey && <span className="badge max-w-full shrink-0 truncate whitespace-nowrap">{t.was}</span>}
-      {t.tag && !t.grey && <span className="badge max-w-full shrink-0 truncate whitespace-nowrap border-amber-300/40 text-amber-200">{t.tag}</span>}
+      <span className="min-w-[8rem] flex-1 truncate" title={t.name}><a href={`/app/testers/${t.id}`} target="_blank" rel="noopener" className="text-inherit underline-offset-2 hover:underline">{t.name}</a></span>
+      {t.was && !t.grey && <span className="badge max-w-[14rem] shrink truncate whitespace-nowrap" title={t.was}>{t.was}</span>}
+      {t.tag && !t.grey && <span className="badge max-w-[14rem] shrink truncate whitespace-nowrap border-amber-300/40 text-amber-200" title={t.tag}>{t.tag}</span>}
       <label htmlFor={`${key}-${t.id}`} className="shrink-0 cursor-pointer text-xs text-slate-500">{t.grey ?? t.detail}</label>
       {/* "In tests with you": how many, and links to them. */}
       {key === "w" && t.together && t.together.length > 0 && (
@@ -157,19 +157,20 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
           </LongList>
         </>
       )}
+      {/* (Owner, Oct 27) The filters and the search stay outside the scroll box, so they never scroll away. */}
+      {(p.options.devices.length > 0 || p.options.languages.length > 0) && (
+        <div className="grid gap-3 sm:grid-cols-2" data-invite-filters="">
+          {ticks("devices", "Devices", p.options.devices)}
+          {ticks("languages", "Languages", p.options.languages)}
+        </div>
+      )}
+      <input className="input max-w-xs" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find testers" />
       <div className="max-h-72 space-y-2 overflow-y-auto text-sm" data-invite-lists="">
         <h3>People you&apos;ve worked with</h3>
         {worked.length ? <ul className="space-y-1.5">{worked.map((t) => row(t, "w"))}</ul> : <p className="note">Nobody yet.</p>}
-        {(p.options.devices.length > 0 || p.options.languages.length > 0) && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {ticks("devices", "Devices", p.options.devices)}
-            {ticks("languages", "Languages", p.options.languages)}
-          </div>
-        )}
         <h3>Suggested</h3>
         {suggested.length ? <ul className="space-y-1.5">{suggested.map((t) => row(t, "s"))}</ul> : <p className="note">No suggestions right now.</p>}
         <h3>Find testers</h3>
-        <input className="input max-w-xs" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find testers" />
         {found.length > 0 && <ul className="space-y-1.5">{found.map((t) => row(t, "f"))}</ul>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -181,7 +182,8 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
       {at !== "anyway" && <ChangesBox changes={changes} error={error} />}
       {confirm && (
         <div className="info space-y-2" data-invite-anyway="">
-          {confirm.map((l) => <p key={l}>{l}</p>)}
+          {/* The unmet needs: 3 lines, then "Show N more" opening a scroll box about 8 lines tall. */}
+          <LongList as="div" shown={3} tall="max-h-52" className="space-y-1">{confirm.map((l) => <p key={l}>{l}</p>)}</LongList>
           <LiveNotices open={!!confirm} />
           <div className="flex gap-2">
             <button className="btn" disabled={busy} onClick={() => invite(true)}>Invite anyway</button>

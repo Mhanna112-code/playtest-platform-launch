@@ -36,7 +36,7 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
             spotsLimit={(await testerCapacity(u.id)).limit}
           />
           {/* (Design doc 5) Live updates from every page's rules show in a blue box under the Save button. */}
-          <LiveTop scope={`test:${id}`} seenAt={seenAt} />
+          <LiveTop scope={`test:${id}`} seenAt={seenAt} contractLink={{ testId: id }} />
         </>
       )}
     </>

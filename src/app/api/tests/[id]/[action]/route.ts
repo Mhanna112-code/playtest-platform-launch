@@ -13,8 +13,8 @@ import { getUserFromRequest } from "@/lib/server/session";
 import { failedLine, requireActive, requireConfirmed } from "@/lib/server/users";
 import { RESTRICTED_OK_ACTIONS } from "@/lib/restricted";
 
-// (NEWEST+8) Presses that need a confirmed email.
-const NEEDS_CONFIRMED = new Set(["pay-extra", "edit", "invite", "request-time", "answer-request", "join", "apply", "rejoin-ask", "application", "rate", "call-length"]);
+// (Owner, Oct 27) Email confirmation is needed only for Post a test (its own route), Join (which is also accepting an invite) and Apply. A blocked press is a blue notice under the button with Resend the link.
+const NEEDS_CONFIRMED = new Set(["join", "apply"]);
 import { devRate } from "@/lib/server/ratings";
 import { logTestAction } from "@/lib/server/actionText";
 

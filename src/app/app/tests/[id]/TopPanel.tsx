@@ -117,7 +117,7 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
         {openErr && <p className="err">{openErr}</p>}
         {open === "end" && (
           <div className="space-y-3 rounded-lg border border-white/10 p-3 text-sm" data-end-early="">
-            <fieldset className="space-y-1.5" aria-label="Testers still working">
+            <fieldset className="max-h-56 space-y-1.5 overflow-y-auto pr-1" aria-label="Testers still working">
               <label className="flex items-center gap-2 text-slate-300"><input type="checkbox" checked={allPicked} onChange={(e) => { setNoTick(false); setPicked(e.target.checked ? p.working.map((w) => w.contractId) : []); }} /> All ({p.working.length})</label>
               {p.working.map((w) => (
                 <label key={w.contractId} className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-slate-200">

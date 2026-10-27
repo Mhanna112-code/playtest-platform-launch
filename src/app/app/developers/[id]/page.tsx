@@ -10,6 +10,9 @@ import { BlockButton } from "@/components/BlockButton";
 import { ReportButton } from "@/components/ReportButton";
 import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
 import { isAdmin } from "@/lib/server/session";
+import { devRestricted } from "@/lib/restricted";
+import { sideFor } from "@/lib/sides";
+import { testPaused } from "@/lib/rules";
 
 
 export const metadata = { title: "Developer · Playtest" };
@@ -26,7 +29,9 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
   if (!p || !p.isDeveloper) notFound();
   const mine = viewer.id === p.id;
   if (!mine && !isAdmin(viewer) && (await db.block.count({ where: { OR: [{ blockerId: viewer.id, blockedId: p.id }, { blockerId: p.id, blockedId: viewer.id }] } }))) notFound();
-  const open = await db.test.findMany({ where: { developerId: p.id, status: "open" }, orderBy: { createdAt: "desc" }, include: { contracts: { where: { status: "working" }, select: { id: true } } } });
+  // (Owner, Oct 27) Paused tests (a hold, a suspension or the team's pause) are not listed for other people; a suspended tester can't open any, and a restricted developer's own pages are closed.
+  const devOff = mine && p.isDeveloper && devRestricted(viewer, sideFor(viewer, "/app/developers"));
+  const open = (await db.test.findMany({ where: { developerId: p.id, status: "open", ...(mine ? {} : { adminPausedAt: null }) }, orderBy: { createdAt: "desc" }, include: { contracts: { where: { status: "working" }, select: { id: true } } } })).filter((t) => mine || !testPaused(p, t));
   const name = displayName(p);
   const reportedRow = !mine ? await db.report.findUnique({ where: { reporterId_reportedId: { reporterId: viewer.id, reportedId: p.id } } }) : null;
   const reportedOn = reportedRow ? fmtDate(reportedRow.createdAt) : null;
@@ -41,7 +46,7 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
               <span className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Posting tests since {fmtDate(p.createdAt)}</span>
             </p>
           </div>
-          {mine && <Link href="/app/profile" className="btn-secondary px-3 py-1.5 text-sm">Edit profile</Link>}
+          {mine && !devOff && !viewer.suspendedAt && <Link href="/app/profile" className="btn-secondary px-3 py-1.5 text-sm">Edit profile</Link>}
         </div>
         {mine && <p className="text-xs text-slate-500">This is how testers see your profile.</p>}
       </section>
@@ -52,14 +57,14 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
           <ul className="space-y-2">
             {open.map((t) => (
               <li key={t.id}>
-                <Link href={mine ? `/app/tests/${t.id}` : `/app/find/${t.id}`} className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100 no-underline hover:bg-white/[0.04] hover:no-underline">
+                {(devOff || (!mine && viewer.suspendedAt)) ? <div className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100"><span className="min-w-0 flex-1"><span className="block truncate font-medium text-white" title={t.title}>{t.title}</span></span></div> : <Link href={mine ? `/app/tests/${t.id}` : `/app/find/${t.id}`} className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100 no-underline hover:bg-white/[0.04] hover:no-underline">
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium text-white">{t.title}</span>
                     <span className="flex items-start gap-1.5 text-xs text-slate-400">
                       <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0" /> <span>{termsLine(t, !mine)} · {Math.max(0, t.spots - t.contracts.length)} of {t.spots} spots left</span>
                     </span>
                   </span>
-                </Link>
+                </Link>}
               </li>
             ))}
           </ul>
@@ -67,7 +72,7 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
       </section>
       {isAdmin(viewer) && !mine && <AdminPersonBoxes userId={p.id} adminId={viewer.id} developer={p.isDeveloper} tester={p.isTester} />}
       {/* Block the developer, as in the full app: a small link at the bottom of their profile (testers only). */}
-      {viewer.isTester && !mine && !(await db.block.count({ where: { blockerId: viewer.id, blockedId: p.id } })) && (
+      {viewer.isTester && !mine && !viewer.suspendedAt && !(await db.block.count({ where: { blockerId: viewer.id, blockedId: p.id } })) && (
         <div className="space-y-2 text-right text-xs text-slate-500">
           <ReportButton userId={p.id} name={name} reportedOn={reportedOn} />
           <BlockButton plain userId={p.id} name={name} effect="You won't see their tests or profile any more, and they can't invite you." />

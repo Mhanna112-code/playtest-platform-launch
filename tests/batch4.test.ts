@@ -1,0 +1,380 @@
+import fs from "node:fs";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { afterEach, describe, expect, it } from "vitest";
+import type Stripe from "stripe";
+import { db } from "@/lib/db";
+import { POST as reviewPOST } from "@/app/api/review/route";
+import { POST as helpPOST } from "@/app/api/help/route";
+import { POST as profilePOST } from "@/app/api/profile/route";
+import { POST as testsPOST } from "@/app/api/tests/route";
+import { POST as blocksPOST } from "@/app/api/blocks/route";
+import { POST as chatOpenPOST } from "@/app/api/chat/open/route";
+import { POST as joinCallPOST } from "@/app/api/calls/[id]/join/route";
+import { POST as adminPOST } from "@/app/api/admin/[action]/route";
+import { GET as cronGET } from "@/app/api/cron/daily/route";
+import { setStripeForTests } from "@/lib/server/stripe";
+import { devRestricted, restrictionKey, restrictionOf } from "@/lib/restricted";
+import { changesLeftLine, LIMITS } from "@/lib/limits";
+import { notify, bell, sendSummaries } from "@/lib/server/notify";
+import { chargebackOpened, owed, startHold } from "@/lib/server/holds";
+import { findTests } from "@/lib/server/tests";
+import { suspendedAccountsReminder } from "@/lib/server/restrictions";
+import { ratingReminders } from "@/lib/server/ratings";
+import { json, makeUser, req } from "./helpers";
+import { act, bookCall, joined, listingBody, sact, seen, settle, setup } from "./fixtures";
+
+const DAY = 86_400_000;
+const src = (f: string) => fs.readFileSync(path.resolve(__dirname, "../src", f), "utf8");
+const cron = () => cronGET(new Request("http://localhost:3400/api/cron/daily", { headers: { authorization: "Bearer cron-test" } })).then((r) => r.json());
+const pay = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), seenAt: seen(), confirmed: true, ...body } })).then(json);
+const aact = (cookie: string, action: string, body: Record<string, unknown>) => adminPOST(req(`/api/admin/${action}`, { cookie, body }), { params: Promise.resolve({ action }) }).then(json);
+const admin = async () => {
+  const a = await makeUser({ email: `admin-${randomUUID()}@playtest.test` });
+  await db.user.update({ where: { id: a.user.id }, data: { isAdmin: true } });
+  return a;
+};
+const lines = (userId: string) => db.notification.findMany({ where: { userId }, orderBy: { createdAt: "asc" } });
+afterEach(() => setStripeForTests(null));
+
+async function sentWork(over: Record<string, unknown> = {}) {
+  const s = await setup(over);
+  const j = await joined(s.testId);
+  const n = ((await db.contract.findUniqueOrThrow({ where: { id: j.sessionId } })).questions as string[]).length || 1;
+  await sact(j.sessionId, "written", j.tester.cookie, { answers: Array(n).fill("answer") });
+  await settle();
+  const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
+  return { ...s, ...j, sub };
+}
+
+describe("A3) a payment hold, a chargeback hold and a suspension are one state", () => {
+  it("restrictionOf / devRestricted / restrictionKey", () => {
+    expect(restrictionOf({})).toBeNull();
+    expect(restrictionOf({ suspendedAt: new Date(), holdStartedAt: new Date() })).toBe("suspended");
+    expect(restrictionOf({ holdStartedAt: new Date(), holdReason: "chargeback" })).toBe("chargeback");
+    expect(restrictionOf({ holdStartedAt: new Date(), holdReason: "unpaid" })).toBe("hold");
+    const both = { isDeveloper: true, isTester: true, holdStartedAt: new Date(), side: "tester" };
+    expect(devRestricted(both, "tester")).toBe(false);
+    expect(devRestricted(both, "developer")).toBe(true);
+    expect(devRestricted({ ...both, suspendedAt: new Date() }, "tester")).toBe(true); // a suspension restricts the whole account
+    expect(restrictionKey({ isDeveloper: true, isTester: false, holdStartedAt: new Date(), holdReason: "chargeback" })).toBe("c");
+    expect(restrictionKey({ isDeveloper: true, isTester: false, suspendedAt: new Date(), holdStartedAt: new Date() })).toBe("sh");
+    expect(restrictionKey({ isDeveloper: true, isTester: false })).toBe("");
+  });
+
+  it("every developer press is refused for a held or suspended developer except Cancel call (which works from the dashboard); each names itself", async () => {
+    for (const how of ["hold", "suspended"] as const) {
+      const { dev, testId, sessionId, tester } = await sentWork();
+      const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 24 * 6);
+      if (how === "hold") await startHold(dev.user.id, "unpaid");
+      else await db.user.update({ where: { id: dev.user.id }, data: { suspendedAt: new Date() } });
+      const code = how === "hold" ? "held" : "suspended";
+      for (const [action, body] of [["edit", { version: 1, fields: { title: "x" } }], ["stop", {}], ["end-early", { contractIds: [sessionId], reason: "Enough said" }], ["next-round", {}], ["invite", { testerIds: [tester.user.id] }], ["pay-extra", { contractId: sessionId, amount: "2.00" }], ["call-length", { callId: call.id, minutes: 20 }], ["message", { contractId: sessionId, body: "hi" }]] as const) {
+        const r = await act(testId, action, dev.cookie, { seenAt: seen(), confirmed: true, ...body });
+        expect(r.status, `${how} ${action}`).toBe(403);
+        expect(r.body.error.code, `${how} ${action}`).toBe(code);
+        expect(r.body.error.failed, `${how} ${action}`).toMatch(/didn't go through$/);
+      }
+      expect((await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: listingBody() })))).body.error.code).toBe(code);
+      expect((await json(await profilePOST(req("/api/profile", { cookie: dev.cookie, body: { name: "New", isDeveloper: true } })))).body.error.code).toBe(code);
+      // The one press that works.
+      expect((await act(testId, "cancel-call", dev.cookie, { callId: call.id, seenAt: seen(), confirmed: true })).status).toBe(200);
+      expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).status).toBe("cancelled");
+    }
+  });
+
+  it("the blue box, the closed pages and the strip: sources", () => {
+    const box = src("components/RestrictedBox.tsx");
+    expect(box).toContain('className="info space-y-2"'); // blue, not red
+    expect(box).toContain("Pay what you owe");
+    expect(box).toContain('target="_blank"'); // opens Payments in a new tab
+    expect(box).toContain("Contact us");
+    expect(box).toContain("tests resume as normal");
+    expect(box).toContain("LongList"); // 3 lines, then Show N more
+    expect(src("components/SessionWatch.tsx")).toContain('window.location.href = "/app"');
+    expect(src("components/SessionWatch.tsx")).toContain("window.scrollTo({ top: 0 })");
+    expect(src("lib/client.ts")).toContain("`/app?failed=");
+    const layout = src("app/app/layout.tsx");
+    expect(layout).toContain("Email confirmation is off for testing.");
+    expect(layout).toContain("confirmSkipped()");
+    expect(layout).toContain("hideMessages");
+    expect(src("app/app/page.tsx")).toContain('<RestrictedBox');
+    expect(src("app/app/page.tsx")).not.toContain("border-rose-400/50");
+  });
+});
+
+describe("A1, A2) declined payments and chargebacks", () => {
+  it("a chargeback during a payment hold turns it into a chargeback hold (count unchanged); every further chargeback adds to what is owed", async () => {
+    const { dev, sessionId, sub, tester } = await sentWork();
+    await startHold(dev.user.id, "unpaid");
+    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdCount).toBe(1);
+    const mk = async (cents: number) => {
+      const pi = "pi_" + randomUUID();
+      await db.payment.create({ data: { kind: "review", submissionId: sub.id, contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: cents, feeCents: 0, testerCents: 0, status: "charged", stripePaymentIntentId: pi } });
+      return pi;
+    };
+    await chargebackOpened(await mk(800));
+    const u1 = await db.user.findUniqueOrThrow({ where: { id: dev.user.id } });
+    expect(u1).toMatchObject({ holdReason: "chargeback", holdCount: 1 });
+    expect((await lines(dev.user.id)).find((l) => /now a chargeback hold/.test(l.text))).toMatchObject({ mustEmail: true, groupKey: "payhold" });
+    expect((await owed(dev.user.id)).reduce((a, p) => a + p.amountCents, 0)).toBe(800);
+    await chargebackOpened(await mk(500));
+    expect((await owed(dev.user.id)).reduce((a, p) => a + p.amountCents, 0)).toBe(1300);
+    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdCount).toBe(1);
+  });
+
+  it("the 4th hold still needs an admin's Approve (the count is unchanged by chargebacks)", async () => {
+    const { dev } = await setup();
+    await db.user.update({ where: { id: dev.user.id }, data: { holdCount: 3 } });
+    await startHold(dev.user.id, "unpaid");
+    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdCount).toBe(4);
+    const { payOwed } = await import("@/lib/server/holds");
+    expect((await payOwed(dev.user)).lifted).toBe(false);
+  });
+});
+
+describe("A8) the extra-pay cap", () => {
+  it("a part with no listed price can be paid at most $100 in total; it does not count toward the 100%", async () => {
+    const { dev, testId, sessionId, sub } = await sentWork({ writtenCents: null, questions: [] });
+    expect(sub.agreedCents).toBeNull();
+    const over = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "150.00", tickedCents: 15_000, understood: true });
+    expect(over.status).toBe(400);
+    expect(over.body.error.message).toBe("This is more than you can pay above the listing (up to $100).");
+    // $60 now, then at most $40 more as extra pay.
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "60.00", tickedCents: 6000 })).status).toBe(200);
+    const tooMuch = await act(testId, "pay-extra", dev.cookie, { seenAt: seen(), contractId: sessionId, submissionId: sub.id, amount: "50.00", payKey: randomUUID() });
+    expect(tooMuch.body.error.message).toBe("This is more than you can pay above the listing (up to $40).");
+    expect((await act(testId, "pay-extra", dev.cookie, { seenAt: seen(), contractId: sessionId, submissionId: sub.id, amount: "40.00", payKey: randomUUID() })).status).toBe(200);
+    const { overListingRoom } = await import("@/lib/server/payments");
+    expect((await overListingRoom(sessionId)).usedCents).toBe(0);
+  });
+});
+
+describe("E2, E3) stacking by kind and reminders in the summary email", () => {
+  it("Weekly / Monthly emails show only the newest copy of each reminder; Daily lists them all; each line is emailed once", async () => {
+    const wk = await makeUser({ dev: true });
+    const dy = await makeUser({ dev: true });
+    await db.user.update({ where: { id: wk.user.id }, data: { emailPref: "weekly", lastSummaryAt: new Date(Date.now() - 8 * DAY) } });
+    await db.user.update({ where: { id: dy.user.id }, data: { emailPref: "daily", lastSummaryAt: new Date(Date.now() - 2 * DAY) } });
+    for (const u of [wk, dy]) {
+      await bell(u.user.id, "Harbor Run is paused and closes on Nov 3 unless you pay what you owe", "/app", undefined, { reminder: "paused:t1" });
+      await db.notification.updateMany({ where: { userId: u.user.id }, data: { createdAt: new Date(Date.now() - 2 * DAY) } });
+      await bell(u.user.id, "Harbor Run is paused and closes on Nov 3 unless you pay what you owe (newest)", "/app", undefined, { reminder: "paused:t1" });
+      await bell(u.user.id, "A plain line", "/app");
+    }
+    await sendSummaries();
+    const text = async (u: { user: { email: string } }) => (await db.outboxEmail.findMany({ where: { to: u.user.email } })).map((m) => m.text).join("\n");
+    const w = await text(wk), d = await text(dy);
+    expect(w).toContain("(newest)");
+    expect(w.match(/is paused and closes/g)).toHaveLength(1);
+    expect(w).toContain("A plain line");
+    expect(d.match(/is paused and closes/g)).toHaveLength(2);
+    expect((await db.notification.findMany({ where: { userId: wk.user.id, summarizedAt: null } })).length).toBe(0); // the older copy is marked done, not emailed later
+    await sendSummaries();
+    expect((await db.outboxEmail.findMany({ where: { to: wk.user.email } })).length).toBe(1); // once only
+  });
+
+  it("the stacking kinds are groups across tests, not per-test entries", async () => {
+    const { dev } = await setup();
+    await notify(dev.user.email, "Dispute on one", ["x"], "/app", { group: "disputefiled" });
+    await notify(dev.user.email, "Dispute on two", ["x"], "/app", { group: "disputefiled" });
+    const l = await lines(dev.user.id);
+    const { bellKey } = await import("@/lib/bell");
+    expect(new Set(l.map(bellKey)).size).toBe(1);
+    const bellSrc = src("lib/bell.ts");
+    for (const g of ["payhold", "admindecision", "disputefiled", "disputedecided", "pausedreminder", "tpaid", "trejected", "tdelayed", "tarrived", "textra", "tstopped", "suspendedreview"]) expect(bellSrc).toContain(`${g}:`);
+    expect(bellSrc).not.toContain("owed:");
+  });
+
+  it("the suspended-accounts review is daily and skips deleted admins", async () => {
+    const gone = await admin();
+    const live = await admin();
+    await db.user.update({ where: { id: gone.user.id }, data: { deletedAt: new Date() } });
+    const t = await makeUser({ tester: true });
+    await db.user.update({ where: { id: t.user.id }, data: { suspendedAt: new Date() } });
+    await db.appState.deleteMany({ where: { key: "suspended-reminder" } });
+    await suspendedAccountsReminder();
+    expect((await lines(live.user.id)).some((l) => /suspended accounts? to review$/.test(l.text) && l.groupKey === "suspendedreview")).toBe(true);
+    expect((await lines(gone.user.id)).length).toBe(0);
+  });
+
+  it("Open until heads-ups wait while the test is paused", async () => {
+    const { dev, testId } = await setup();
+    const { tester } = await joined(testId);
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } });
+    await startHold(dev.user.id, "unpaid");
+    await cron();
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "closes on" } } })).toBe(0);
+    await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: null, holdReason: "" } });
+    await cron();
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "closes on" } } })).toBe(1);
+  });
+});
+
+describe("E4) email confirmation only for Post, Join, Apply and accepting an invite", () => {
+  it("an unconfirmed developer can edit, invite and pay; Post a test and Join say so with the email", async () => {
+    const dev = await makeUser({ dev: true, unconfirmed: true });
+    const posted = await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: listingBody() })));
+    expect(posted.status).toBe(409);
+    expect(posted.body.error.message).toBe(`Confirm your email first. We sent a link to ${dev.user.email}.`);
+    await db.user.update({ where: { id: dev.user.id }, data: { emailVerifiedAt: new Date() } });
+    const t = await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: listingBody() })));
+    await db.user.update({ where: { id: dev.user.id }, data: { emailVerifiedAt: null } });
+    const edit = await act(t.body.id, "edit", dev.cookie, { version: 1, fields: { title: "Renamed" } });
+    expect(edit.status).toBe(200);
+    const tester = await makeUser({ tester: true, unconfirmed: true });
+    const join = await act(t.body.id, "join", tester.cookie, { listingVersion: 2 });
+    expect(join.status).toBe(409);
+    expect(join.body.error.message).toBe(`Confirm your email first. We sent a link to ${tester.user.email}.`);
+    expect(src("components/Err.tsx")).toContain("Resend the link");
+    // Sending work needs no confirmation.
+    await db.user.update({ where: { id: tester.user.id }, data: { emailVerifiedAt: new Date() } });
+    const j = await act(t.body.id, "join", tester.cookie, { listingVersion: 2 });
+    await db.user.update({ where: { id: tester.user.id }, data: { emailVerifiedAt: null } });
+    expect((await sact(j.body.sessionId, "written", tester.cookie, { answers: ["a", "b"] })).status).toBe(200);
+  });
+});
+
+describe("E5, E6, E7) names, Contact us, data requests", () => {
+  it("Contact us works for suspended and held accounts and is limited to 5 a day (a blue 409 on the 6th)", async () => {
+    const t = await makeUser({ tester: true });
+    const d = await makeUser({ dev: true });
+    await db.user.update({ where: { id: t.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: d.user.id }, data: { holdStartedAt: new Date(), holdReason: "unpaid" } });
+    const send = (cookie: string) => helpPOST(req("/api/help", { cookie, body: { topic: "My account", message: "Please look at my account, thanks" } })).then(json);
+    for (let i = 0; i < 5; i++) expect((await send(t.cookie)).status).toBe(200);
+    const sixth = await send(t.cookie);
+    expect(sixth.status).toBe(409);
+    expect(sixth.body.error.message).toBe("You've sent 5 messages today. We'll reply by email.");
+    expect((await send(d.cookie)).status).toBe(200); // the limit is per account
+    await db.contactMessage.updateMany({ where: { userId: t.user.id }, data: { createdAt: new Date(Date.now() - 25 * 3_600_000) } });
+    expect((await send(t.cookie)).status).toBe(200);
+    expect(LIMITS.contactPerDay).toBe(5);
+  });
+
+  it("data requests go through Contact us: a topic, and no data-request item in Settings", () => {
+    expect(src("lib/helpTopics.ts")).toContain("A request about my data");
+    expect(src("app/app/account/page.tsx")).not.toMatch(/download my data|data request|export your data/i);
+  });
+
+  it("Unblock works for a held account and not for a suspended one", async () => {
+    const a = await makeUser({ dev: true });
+    const b = await makeUser({ tester: true });
+    await db.block.create({ data: { blockerId: a.user.id, blockedId: b.user.id } });
+    await db.user.update({ where: { id: a.user.id }, data: { holdStartedAt: new Date(), holdReason: "unpaid" } });
+    expect((await json(await blocksPOST(req("/api/blocks", { cookie: a.cookie, body: { userId: b.user.id } })))).body.error.code).toBe("held"); // Block waits
+    expect((await json(await blocksPOST(req("/api/blocks", { cookie: a.cookie, body: { userId: b.user.id, action: "unblock" } })))).status).toBe(200);
+    await db.block.create({ data: { blockerId: a.user.id, blockedId: b.user.id } });
+    await db.user.update({ where: { id: a.user.id }, data: { suspendedAt: new Date() } });
+    expect((await json(await blocksPOST(req("/api/blocks", { cookie: a.cookie, body: { userId: b.user.id, action: "unblock" } })))).body.error.code).toBe("suspended");
+  });
+});
+
+describe("B3) Join call", () => {
+  it("a press after a cancellation reads 'This call was cancelled' with the reason; the status reports it for the live check", async () => {
+    const { dev, testId, sessionId, tester } = await sentWork();
+    const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 24 * 6);
+    await db.call.update({ where: { id: call.id }, data: { status: "cancelled", cancelledBy: "developer", cancelNote: "Something came up" } });
+    const r = await json(await joinCallPOST(req(`/api/calls/${call.id}/join`, { cookie: tester.cookie, body: {} }), { params: Promise.resolve({ id: call.id }) }));
+    expect(r.status).toBe(409);
+    expect(r.body.error.message).toBe("This call was cancelled: Something came up.");
+    expect(src("components/JoinCall.tsx")).toContain("setGone(true)");
+  });
+});
+
+describe("C) Edit: 3 significant changes", () => {
+  it("the NDA, questions, part prices and the link count; one Save is one change; the line reads 'Changes left: 2 of 3'", async () => {
+    expect(changesLeftLine(1)).toBe("Changes left: 2 of 3");
+    expect(changesLeftLine(3)).toBe("Changes left: 0 of 3");
+    const { dev, testId } = await setup();
+    await joined(testId);
+    const ver = async () => (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
+    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { ndaText: "Secret", writtenCents: "11.00", questions: ["A?"] } })).status).toBe(200);
+    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalChanges).toBe(1); // many fields, one change
+    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { liveRateCents: "40.00" } })).status).toBe(200);
+    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { buildUrl: "https://example.com/z" } })).status).toBe(200);
+    const fourth = await act(testId, "edit", dev.cookie, { version: await ver(), fields: { ndaText: "Another" } });
+    expect(fourth.status).toBe(400);
+    expect(fourth.body.error.critical).toEqual(["ndaText"]);
+    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { languages: ["English"], devices: ["Windows PC"] } })).status).toBe(200); // not significant
+    const form = src("app/app/tests/TestForm.tsx");
+    expect(form).toContain("changesLeftLine");
+    expect(form).toContain("disabled={limitReached}");
+  });
+});
+
+describe("D) testers", () => {
+  it("paused tests are not in Find tests (a hold, a suspension or the team's pause)", async () => {
+    const a = await setup();
+    const b = await setup();
+    const c = await setup();
+    const tester = await makeUser({ tester: true });
+    const ids = async () => (await findTests(tester.user)).map((t) => t.id);
+    expect(await ids()).toEqual(expect.arrayContaining([a.testId, b.testId, c.testId]));
+    await db.user.update({ where: { id: a.dev.user.id }, data: { holdStartedAt: new Date(), holdReason: "unpaid" } });
+    await db.user.update({ where: { id: b.dev.user.id }, data: { suspendedAt: new Date() } });
+    await db.test.update({ where: { id: c.testId }, data: { adminPausedAt: new Date() } });
+    const now = await ids();
+    for (const x of [a, b, c]) expect(now).not.toContain(x.testId);
+    expect(src("app/app/find/[id]/page.tsx")).toContain("This test isn&apos;t available right now.");
+  });
+
+  it("Dismiss removes a 'Suspended' card after a reinstatement; re-invites include invite-only tests", async () => {
+    const a = await admin();
+    const inviteOnly = await setup({ joinMode: "invite" });
+    const t = await makeUser({ tester: true, name: "Ana Silva" });
+    await act(inviteOnly.testId, "invite", inviteOnly.dev.cookie, { seenAt: seen(), testerIds: [t.user.id] });
+    const j = await act(inviteOnly.testId, "join", t.cookie, { listingVersion: 1 });
+    expect(j.status).toBe(200);
+    expect((await aact(a.cookie, "suspend", { id: t.user.id, note: "Testing" })).status).toBe(200);
+    expect((await aact(a.cookie, "unsuspend", { id: t.user.id })).status).toBe(200);
+    expect(await db.invite.count({ where: { testId: inviteOnly.testId, testerId: t.user.id, status: "sent" } })).toBe(1);
+    const sid = j.body.sessionId as string;
+    expect((await sact(sid, "dismiss-removed", t.cookie, {})).status).toBe(200);
+    expect((await db.contract.findUniqueOrThrow({ where: { id: sid } })).removedDismissedAt).not.toBeNull();
+    const dash = src("app/app/page.tsx");
+    for (const w of ["Tests you were removed from", "Tests you left", "Send work", "Charge or cancel", "Needs review", "data-paused-tag"]) expect(dash, w).toContain(w);
+  });
+
+  it("rating reminders: every 3 days after a stop or close, for 2 weeks only", async () => {
+    const { dev, testId, sessionId, tester, sub } = await sentWork();
+    await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
+    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await db.contract.update({ where: { id: sessionId }, data: { ratePromptedAt: new Date(Date.now() - 4 * DAY) } });
+    await db.test.update({ where: { id: testId }, data: { stoppedAt: new Date(Date.now() - 4 * DAY) } });
+    await ratingReminders(new Date());
+    expect((await lines(tester.user.id)).some((l) => l.reminderKey === `rate:${sessionId}`)).toBe(true);
+    await db.notification.deleteMany({ where: { userId: tester.user.id, text: { startsWith: "Reminder: rate" } } });
+    await ratingReminders(new Date(Date.now() + 12 * DAY)); // 16 days after the stop: past the 2 weeks
+    expect(await db.notification.count({ where: { userId: tester.user.id, reminderKey: `rate:${sessionId}` } })).toBe(0);
+  });
+
+  it("'Chat with <name>' works both ways and is refused with the same words when a side is suspended or held", async () => {
+    const { dev, sessionId, tester } = await sentWork();
+    const open = (cookie: string) => chatOpenPOST(req("/api/chat/open", { cookie, body: { contractId: sessionId } })).then(json);
+    expect((await open(dev.cookie)).status).toBe(200);
+    expect((await open(tester.cookie)).status).toBe(200);
+    await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: new Date(), holdReason: "unpaid" } });
+    expect((await open(dev.cookie)).body.error.message).toBe("Unable to chat with this tester.");
+    expect((await open(tester.cookie)).body.error.message).toBe("Unable to chat with this developer.");
+    expect(src("components/PersonHover.tsx")).toContain("chat?: ReactNode");
+    expect(src("app/app/tests/[id]/TestersJoined.tsx")).toContain("seat.chat");
+  });
+
+  it("the developer's tester row shows the agreed scope only: no History fold; a Switch / Keep is a live line with 'See their contract'", () => {
+    const page = src("app/app/tests/[id]/page.tsx");
+    expect(page).not.toContain('data-history=""');
+    expect(page).toContain('contractLink="scroll"');
+    expect(src("app/app/tests/[id]/edit/page.tsx")).toContain("contractLink={{ testId: id }}");
+    expect(src("components/LiveTop.tsx")).toContain("See their contract");
+  });
+
+  it("accepting an application sends the developer no second 'joined' line", async () => {
+    const { dev, testId } = await setup({ joinMode: "apply" });
+    const t = await makeUser({ tester: true, name: "Dee Moss" });
+    await act(testId, "apply", t.cookie, { note: "Hi" });
+    const app = await db.application.findFirstOrThrow({ where: { testId } });
+    expect((await act(testId, "application", dev.cookie, { applicationId: app.id, action: "accept", seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await lines(dev.user.id)).map((l) => l.text)).toEqual(["Dee Moss applied to join “Harbor Run”"]);
+  });
+});

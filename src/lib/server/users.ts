@@ -71,14 +71,13 @@ export const confirmSkipped = () => process.env.SKIP_EMAIL_CONFIRM === "1" && pr
 
 /** (NEWEST+8) The refusal for an unconfirmed email (blue, under the button, with a Resend link). */
 export const CONFIRM_FIRST = "Confirm your email first.";
+export const confirmFirstLine = (email: string) => `${CONFIRM_FIRST} We sent a link to ${email}.`;
 /**
- * (NEWEST+8) Email confirmation is required before posting a test, Edit Save, joining / applying / accepting an invite,
- * sending work, requesting / accepting calls, paying, charging, inviting and rating. Browsing, profile, chat and
- * sign-out still work.
+ * (Owner, Oct 27) Email confirmation is required only before posting a test, joining, applying and accepting an invite; everything else works unconfirmed.
  */
-export function requireConfirmed(u: { emailVerifiedAt: Date | null }) {
+export function requireConfirmed(u: { emailVerifiedAt: Date | null; email?: string }) {
   if (confirmSkipped()) return;
-  if (!u.emailVerifiedAt) throw new HttpError(409, "confirm_email", CONFIRM_FIRST);
+  if (!u.emailVerifiedAt) throw new HttpError(409, "confirm_email", u.email ? confirmFirstLine(u.email) : CONFIRM_FIRST);
 }
 
 const pick = (v: unknown, allowed: string[]) => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && allowed.includes(x)))] : []);

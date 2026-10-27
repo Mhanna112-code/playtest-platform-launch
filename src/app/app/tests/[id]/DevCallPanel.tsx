@@ -72,7 +72,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
       {!canRequest && noRequestReason && <p className="note" data-no-request="">{noRequestReason}</p>}
       {canRequest && testers.length === 0 && <p className="note">Nobody is working on this test right now, so there is nobody to request a call with.</p>}
       {canRequest && testers.length > 0 && (
-        <fieldset className="space-y-1 text-sm">
+        <fieldset className="max-h-48 space-y-1 overflow-y-auto pr-1 text-sm">
           <label className="block font-medium"><input type="checkbox" checked={all} onChange={() => setTicked(all ? [] : testers.map((t) => t.contractId))} /> Select all ({testers.length})</label>
           {testers.map((t) => (
             <label key={t.contractId} className="block">
@@ -99,6 +99,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
         </div>
       )}
       {shown.length === 0 && <p className="note">No calls or requests yet.</p>}
+      <div className="max-h-[36rem] space-y-2 overflow-y-auto pr-1" data-testers-calls="">
       {shown.map((t) => (
         <div key={t.contractId} className="space-y-1 rounded-lg border border-white/10 p-3 text-sm">
           <h3>{t.name}</h3>
@@ -147,6 +148,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           </ul>
         </div>
       ))}
+      </div>
     </section>
     {/* Past calls (the full app's PastRow): when · who · length · who joined · outcome badges, and the room timeline. */}
     <LiveSection title={LIVE_SECTIONS.past} show={past.length > 0}>

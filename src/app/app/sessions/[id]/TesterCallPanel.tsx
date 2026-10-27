@@ -21,7 +21,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  * Cancel) and Past calls (over or cancelled). Cancel and Report a problem stop once for call changes since the page
  * loaded (box under the button).
  */
-export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mine[]; sets?: TesterSet[]; refusal: string; lateNote?: string; devName: string }) {
+export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mine[]; sets?: TesterSet[]; refusal: string; lateNote?: string; devName: string; noReport?: boolean }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
   const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={error} /></div> : null);
   async function go(action: string, body: Record<string, unknown>, key = action) {
@@ -50,7 +50,7 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
       {!m.cancelled && m.joinable && <JoinCall callId={m.id} />}
       {!m.cancelled && !m.ended && <a href={`/api/calls/${m.id}/ics`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline"><CalendarPlus className="h-3.5 w-3.5" /> Add to calendar</a>}
       {!m.cancelled && !m.started && <CancelMenu needsReason={!m.canCancel} busy={busy} other={p.devName} onCancel={(why) => go("cancel-call", { callId: m.id, reason: why }, "cancel-" + m.id)} />}
-      {!m.cancelled && m.started && <ReportProblem path={`/api/sessions/${p.sessionId}/no-show`} callId={m.id} otherName={p.devName} seenAt={p.seenAt} reported={m.report ?? null} />}
+      {!m.cancelled && m.started && !p.noReport && <ReportProblem path={`/api/sessions/${p.sessionId}/no-show`} callId={m.id} otherName={p.devName} seenAt={p.seenAt} reported={m.report ?? null} />}
       {m.started && !m.cancelled && m.lengthText && (
         <div className="w-full space-y-1 border-t border-white/10 pt-2">
           <p className="text-xs font-medium text-white">How long was the call?</p>

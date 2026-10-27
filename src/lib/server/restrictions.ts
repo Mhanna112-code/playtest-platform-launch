@@ -3,7 +3,7 @@ import { PAYOUT_LINE } from "@/lib/payout";
 import { displayName } from "@/lib/format";
 import { callCancelledLine } from "@/lib/rules";
 import { HttpError } from "./http";
-import { bell, notify } from "./notify";
+import { adminUsers, bell, notify } from "./notify";
 import { cancelCallsAhead, recordEvent, spotOpened, tellCancelled } from "./tests";
 import { closeRequests } from "./requests";
 import { chargeDeferred, resumeTests } from "./holds";
@@ -184,15 +184,13 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
   return { ok: true };
 }
 
-/** A reminder every day to the admins to review suspended accounts: one line covering all of them (the daily job). */
+/** (Owner, Oct 26-27) A reminder every DAY to the admins to review suspended accounts: one line covering all of them (the daily job). Deleted admins get nothing. */
 export async function suspendedAccountsReminder(now = new Date()) {
   const state = await db.appState.findUnique({ where: { key: "suspended-reminder" } });
-  if (state && now.getTime() - new Date(state.value).getTime() < DAY - 3_600_000) return 0; // (Owner, Oct 26) daily, one line for all suspended accounts
+  if (state && now.getTime() - new Date(state.value).getTime() < DAY - 3_600_000) return 0; // daily, one line for all suspended accounts
   const people = await db.user.findMany({ where: { suspendedAt: { not: null }, deletedAt: null }, select: { email: true, name: true, suspendedAt: true } });
   if (!people.length) return 0;
-  const admins = (process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
-  const admin = await db.user.findMany({ where: { OR: [{ isAdmin: true }, { email: { in: admins } }] }, select: { id: true } });
-  for (const a of admin) await bell(a.id, `${people.length} suspended account${people.length === 1 ? "" : "s"} to review`, "/admin#users", undefined, { group: "suspendedreview", reminder: "suspended-review" });
+  for (const a of await adminUsers()) await bell(a.id, `${people.length} suspended account${people.length === 1 ? "" : "s"} to review`, "/admin#users", undefined, { group: "suspendedreview", reminder: "suspended-review" });
   await db.appState.upsert({ where: { key: "suspended-reminder" }, update: { value: now.toISOString() }, create: { key: "suspended-reminder", value: now.toISOString() } });
   return people.length;
 }

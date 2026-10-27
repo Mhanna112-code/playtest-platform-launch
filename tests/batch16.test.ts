@@ -60,7 +60,7 @@ describe("A) Chat with <name> on the hover card and the profile", () => {
 
   it("the button is on the hover card and the profile (hidden with no shared test), in the full app's button look", () => {
     expect(src("components/Ui.tsx")).toMatch(/data-tester-card[\s\S]*ChatWithButton/);
-    expect(src("app/app/page.tsx")).toMatch(/contractId: c\.id/);
+    expect(src("app/app/page.tsx")).toMatch(/contractId: restricted \? undefined : c\.id/);
     expect(src("app/app/testers/[id]/page.tsx")).toMatch(/shared && <ChatWithButton/);
     expect(src("components/ChatWithButton.tsx")).toMatch(/btn-secondary[\s\S]*MessagesSquare[\s\S]*Chat with/);
   });
@@ -347,9 +347,9 @@ describe("L, M) live notices in pop-ups, and the design doc's Pop-ups list", () 
 
   it("the design doc lists every pop-up in section 2", () => {
     const doc = fs.readFileSync(path.resolve(__dirname, "../docs/DESIGN-DOC.md"), "utf8");
-    const i = doc.indexOf("**Pop-ups");
+    const i = doc.indexOf("### Pop-ups");
     expect(i).toBeGreaterThan(0);
-    const block = doc.slice(i, doc.indexOf("**Drafts, numbers, links**"));
+    const block = doc.slice(i, doc.indexOf("### Drafts, numbers"));
     for (const name of ["Stop", "End early", "Invite anyway", "Block", "Join anyway", "Leave", "Let it go", "Rate and finish", "Delete account"]) expect(block, name).toContain(name);
   });
 });

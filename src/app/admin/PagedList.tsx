@@ -95,7 +95,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
           {u.state === "deleted" ? (
             <p className="text-xs text-rose-300">{u.stateLine}</p>
           ) : u.state === "suspended" ? (
-            <p className="flex flex-wrap items-center gap-2"><b>{u.stateLine.split(" ")[0]}</b> {u.stateLine.slice(u.stateLine.indexOf(" ") + 1)} <AdminButton action="unsuspend" id={u.id} label="Lift the suspension" /></p>
+            <p className="flex flex-wrap items-center gap-2"><b>{u.stateLine.split(" ")[0]}</b> <span className="line-clamp-2 max-w-full break-words" title={u.stateLine}>{u.stateLine.slice(u.stateLine.indexOf(" ") + 1)}</span> <AdminButton action="unsuspend" id={u.id} label="Lift the suspension" /></p>
           ) : (
             <p className="flex flex-wrap items-center gap-2">
               <PreviewButton id={u.id} />

@@ -5,6 +5,8 @@ import { ProfileForm } from "./ProfileForm";
 import { ratingSummary } from "@/lib/server/ratings";
 import { CapacityCard } from "@/components/ProfileTiles";
 import { sideFor } from "@/lib/sides";
+import { ClampText } from "@/components/ClampText";
+import { LongList } from "@/components/LongList";
 
 export const metadata = { title: "Profile · Playtest" };
 export const dynamic = "force-dynamic";
@@ -40,7 +42,7 @@ export default async function ProfilePage() {
         <section className="card space-y-2" aria-label="Your ratings">
           <h2 className="font-semibold text-white">Your ratings</h2>
           {rating.line ? <p className="text-slate-200">{rating.line}</p> : <p className="text-sm text-slate-400">No ratings yet.</p>}
-          {rating.comments.length > 0 && <ul className="list-disc pl-5 text-sm text-slate-300">{rating.comments.map((c, i) => <li key={i}>“{c}”</li>)}</ul>}
+          {rating.comments.length > 0 && <LongList shown={3} tall="max-h-52" className="list-disc pl-5 text-sm text-slate-300">{rating.comments.map((c, i) => <li key={i}><ClampText text={`“${c}”`} /></li>)}</LongList>}
         </section>
       </div>
     </div>

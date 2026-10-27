@@ -6,7 +6,7 @@ import { bringInView, jumpTo } from "@/lib/markJump";
 import { LongList } from "@/components/LongList";
 import { QuickIgnore } from "@/components/QuickIgnore";
 
-export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean };
+export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string };
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
@@ -41,7 +41,7 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
           <QuickIgnore alerts={[...new Set(changes.map((c) => c.alert).filter((x): x is string => !!x))]} />
         </>
       )}
-      {error && (error.startsWith("Confirm your email first.") ? <p className="flex flex-wrap items-center gap-2">{error} <ResendConfirm label="Resend the email" /></p> : link ? (
+      {error && (error.startsWith("Confirm your email first.") ? <p className="flex flex-wrap items-center gap-2">{error} <ResendConfirm label="Resend the link" /></p> : link ? (
         // The refusal names something on this page (the other side's waiting request): the text links to it.
         <p><a href={`#${link}`} onClick={(e) => { e.preventDefault(); jumpTo(link); }}>{error}</a></p>
       ) : <p>{error}</p>)}

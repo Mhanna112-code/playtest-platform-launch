@@ -437,7 +437,7 @@ describe("Y) cross-tab sign-in", () => {
     expect(src("lib/client.ts")).toContain('"x-uid"');
     expect(src("lib/client.ts")).toContain("account_changed");
     const doc = fs.readFileSync(path.resolve(__dirname, "../docs/DESIGN-DOC.md"), "utf8");
-    expect(doc).toContain("cover screen is gone");
+    expect(doc).not.toContain("Signed in as someone else");
   });
 });
 

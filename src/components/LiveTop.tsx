@@ -13,7 +13,7 @@ const key = (c: Change) => `${c.at}|${c.text}`;
  * (new terms, payments, call changes, listing edits, your own actions in another tab), newest first, as the page's
  * 20-second refresh picks them up. Shown changes count as seen: the page's buttons then send a later "seen" marker.
  */
-export function LiveTop({ scope, seenAt, every = 20_000, seeIt }: { scope: string; seenAt: string; every?: number; seeIt?: string }) {
+export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: { scope: string; seenAt: string; every?: number; seeIt?: string; contractLink?: "scroll" | { testId: string } }) {
   const [lines, setLines] = useState<Change[]>([]);
   const [hiddenUpTo, setHiddenUpTo] = useState("");
   const known = useRef(new Set<string>());
@@ -80,6 +80,17 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt }: { scope: strin
         {show.map((l) => (
           <li key={key(l)} className={l.ignored ? "text-sky-100/50" : ""} title={l.ignored ? "You turned these stops off in Alerts" : undefined}>
             <b>Updated · {time(l.at)}:</b> {l.text}
+            {/* (Owner, Oct 27) A tester switched to or kept after new terms: "See their contract" scrolls to their row on the test page; on Edit it opens the test page at that row in a new tab. */}
+            {l.kind === "terms" && l.contract && contractLink && (
+              <>
+                {" "}
+                {contractLink === "scroll" ? (
+                  <a href={`#tester-${l.contract}`} onClick={() => setTimeout(() => (document.querySelector("#testers-joined") as HTMLDetailsElement | null)?.setAttribute("open", ""), 0)}>See their contract</a>
+                ) : (
+                  <a href={`/app/tests/${contractLink.testId}#tester-${l.contract}`} target="_blank" rel="noreferrer">See their contract</a>
+                )}
+              </>
+            )}
             {l.kind === "info" && seeIt && (
               <>
                 {" "}

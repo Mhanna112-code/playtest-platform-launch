@@ -88,12 +88,17 @@ export async function sendSummaries(now = new Date()) {
     const due = !off && summaryDue(u.emailPref, u.lastSummaryAt, now);
     const only = off ? { mustEmail: true } : due ? {} : { OR: [{ payment: true }, { mustEmail: true }] };
     if (!off && !due && u.emailPref === "daily") continue; // (a daily person is not due again yet)
-    const items = await db.notification.findMany({ where: { userId: u.id, summarizedAt: null, ...only }, orderBy: { createdAt: "asc" }, take: 200 });
-    if (!items.length) continue;
+    const all = await db.notification.findMany({ where: { userId: u.id, summarizedAt: null, ...only }, orderBy: { createdAt: "asc" }, take: 200 });
+    if (!all.length) continue;
+    // (Owner, Oct 27) Reminders go in the summary email too, each line once. A Weekly or Monthly email shows only the newest copy of each reminder (the older copies are marked done).
+    const newest = new Map<string, string>();
+    if (due && (u.emailPref === "weekly" || u.emailPref === "monthly")) for (const n of all) if (n.reminderKey) newest.set(n.reminderKey, n.id);
+    const items = all.filter((n) => !n.reminderKey || !newest.has(n.reminderKey) || newest.get(n.reminderKey) === n.id);
+    const dropped = all.filter((n) => !items.includes(n)).map((n) => n.id);
     try {
       const subject = due ? `Your Playtest summary: ${items.length} update${items.length === 1 ? "" : "s"}` : off ? `Your Playtest account updates: ${items.length}` : `Your Playtest payment updates: ${items.length}`;
       await sendEmail({ to: u.email, subject, text: [...items.map(line), "", "Playtest"].join("\n") });
-      await db.notification.updateMany({ where: { id: { in: items.map((n) => n.id) } }, data: { summarizedAt: now } });
+      await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped] } }, data: { summarizedAt: now } });
       if (due) await db.user.update({ where: { id: u.id }, data: { lastSummaryAt: now } });
     } catch (e) {
       console.error("[email] summary failed:", (e as Error).message);

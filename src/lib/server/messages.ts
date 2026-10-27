@@ -27,11 +27,16 @@ export const CHAT_UNABLE = "Unable to chat with this tester.";
  * (Owner, Oct 26) "Chat with <name>" on a tester's hover card and profile (developer side): opens the same per-test chat as the Testers panel's Chat button.
  * Where a block exists either way, or the chat would otherwise be refused (a suspended or deleted account), the press says only "Unable to chat with this tester."
  */
-export async function openTesterChat(dev: { id: string; suspendedAt?: Date | null }, body: Record<string, unknown>) {
-  const c = await db.contract.findUnique({ where: { id: String(body.contractId ?? "") }, include: { test: true, tester: true } });
-  if (!c || c.test.developerId !== dev.id) throw new HttpError(404, "not_found", "That chat doesn't exist.");
-  const a = await chatAccess(dev.id, c.testId, c.testerId).catch(() => null);
-  if (!a || a.blocked || dev.suspendedAt || c.tester.suspendedAt) throw new HttpError(409, "unable", CHAT_UNABLE);
+export const CHAT_UNABLE_DEV = "Unable to chat with this developer.";
+export async function openTesterChat(who: { id: string; suspendedAt?: Date | null; holdStartedAt?: Date | null }, body: Record<string, unknown>) {
+  const c = await db.contract.findUnique({ where: { id: String(body.contractId ?? "") }, include: { test: { include: { developer: true } }, tester: true } });
+  if (!c || (c.test.developerId !== who.id && c.testerId !== who.id)) throw new HttpError(404, "not_found", "That chat doesn't exist.");
+  const a = await chatAccess(who.id, c.testId, c.testerId).catch(() => null);
+  // (Owner, Oct 27) "Chat with <name>" is on every hover card, both ways: the developer's on the Testers panel / dashboard seats, the tester's on the developer's name. It is refused (and hidden)
+  // while the viewer is suspended or held, and when the other side is suspended or a block exists, with the same words as before.
+  if (c.testerId === who.id) {
+    if (!a || a.blocked || who.suspendedAt || c.test.developer.suspendedAt || c.test.developer.holdStartedAt) throw new HttpError(409, "unable", CHAT_UNABLE_DEV);
+  } else if (!a || a.blocked || who.suspendedAt || who.holdStartedAt || c.tester.suspendedAt) throw new HttpError(409, "unable", CHAT_UNABLE);
   return { href: `/app/chat/${c.id}` };
 }
 

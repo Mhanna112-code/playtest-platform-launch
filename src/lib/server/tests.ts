@@ -485,7 +485,7 @@ export async function nextRound(dev: U, testId: string, body: Record<string, unk
 export async function findTests(tester: U) {
   const tests = await db.test.findMany({
     where: {
-      status: "open", developerId: { notIn: [tester.id, ...(await blockPartners(tester.id))] }, developer: { suspendedAt: null },
+      status: "open", adminPausedAt: null, developerId: { notIn: [tester.id, ...(await blockPartners(tester.id))] }, developer: { suspendedAt: null, holdStartedAt: null },
       // Not joined, or LEFT (they can come back: not after rating, not if the developer ended them).
       contracts: { none: { testerId: tester.id, OR: [{ status: { not: "left" } }, { endKind: "rated" }] } },
       OR: [{ joinMode: { not: "invite" } }, { invites: { some: { testerId: tester.id, status: "sent" } } }],
@@ -573,7 +573,8 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     return { contract, dev, filled };
   });
   if (filled) await tellFull(filled);
-  await notify(dev.email, `${displayName(tester)} joined “${contract.title}”`, [`${displayName(tester)} joined your test “${contract.title}”.`, `Their deal: ${termsLine(contract)}.`], `/app/tests/${testId}#tester-${contract.id}`, { about: tester.id });
+  // (Owner, Oct 27) The developer who accepted an application made it happen themselves: no second "joined" line for it (the "applied" line was the notice).
+  if (body.acceptedByDeveloper !== true) await notify(dev.email, `${displayName(tester)} joined “${contract.title}”`, [`${displayName(tester)} joined your test “${contract.title}”.`, `Their deal: ${termsLine(contract)}.`], `/app/tests/${testId}#tester-${contract.id}`, { about: tester.id });
   return contract;
 }
 

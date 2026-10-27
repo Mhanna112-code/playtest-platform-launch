@@ -10,7 +10,7 @@ import { Choices } from "@/components/Choices";
 import { api, ApiError, isFieldError } from "@/lib/client";
 import { NotSentTag, useKept } from "@/lib/useKept";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
-import { LIMITS, criticalLine, isCritical } from "@/lib/limits";
+import { LIMITS, changesLeftLine, criticalLine, isCritical } from "@/lib/limits";
 import { keyNeedLine, parseKeys } from "@/lib/keys";
 import { HIGH_PART_CENTS, HIGH_PART_TICK, openUntilNeeded, type Listing } from "@/lib/rules";
 import { toCents } from "@/lib/format";
@@ -153,6 +153,10 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
   const lockedKey = (k: keyof F) => locked && changedKeys.includes(k) && API_FIELDS[k].some(isCritical);
   const partsLocked = (["written", "writtenPrice", "writtenRequired", "recording", "recordingPrice", "recordingRequired", "live", "liveRate", "liveRequired"] as (keyof F)[]).some(lockedKey);
   const lockLine = locked ? criticalLine(critNow, edit!.criticalUsed) : "";
+  // (Owner, Oct 27) Once a tester has joined, Saves that change part prices, parts, questions, steps, the build link or the NDA are limited to 3 (one Save counts once). "Changes left: 2 of 3"
+  // sits near Save; after the 3rd those fields are locked, with a note, and the rest stay editable.
+  const limited = !!edit && edit.everJoined;
+  const limitReached = limited && edit!.criticalUsed >= LIMITS.criticalChanges;
 
   // (4/11.5) The deadline must leave 3 days inside Open until, counted from when the test opened.
   const dl = Number(f.deadlineDays);
@@ -318,11 +322,11 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
         {text("title", "Name of this test", { req: true, ph: "First 3 levels", max: LIMITS.testName, attrs: { "data-required-msg": "Give the test a title." } })}
         <div>
           <label className="label req" htmlFor="description">What should testers do?</label>
-          <textarea id="description" rows={4} className={"input" + (bad("description") ? " field-bad" : "")} value={f.description} maxLength={LIMITS.whatToDo} data-required="" data-required-msg="Say what testers should do." onBlur={() => leave("description")} onChange={(e) => set({ description: e.target.value })} />
+          <textarea id="description" rows={4} disabled={limitReached} className={"input" + (bad("description") ? " field-bad" : "")} value={f.description} maxLength={LIMITS.whatToDo} data-required="" data-required-msg="Say what testers should do." onBlur={() => leave("description")} onChange={(e) => set({ description: e.target.value })} />
           <p className="mt-1 text-right text-xs text-slate-500" aria-hidden>{f.description.length}/{LIMITS.whatToDo.toLocaleString("en-US")}</p>
           {note("description")}
         </div>
-        {text("buildUrl", "Link to the product or build", { ph: "https://…" })}
+        {text("buildUrl", "Link to the product or build", { ph: "https://…", attrs: limitReached ? { disabled: "true" } : {} })}
         {/* The full app's Categories: a row of tick boxes, at least one. */}
         <fieldset className={"space-y-2 " + (bad("categories") ? "rounded-xl p-2 ring-1 ring-rose-400" : "")}>
           <legend className="label req">Categories</legend>
@@ -365,7 +369,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
         <p className="note">Every term is fixed in each tester&apos;s contract when they join. Edits change the listing for new testers only.</p>
         {/* The full app's Parts and prices: one card per part (tick, title, what it is, Required, price, Free). Required is
             a label only (NEWEST+10): part of the terms, it blocks nothing. */}
-        <fieldset className={"space-y-2 " + (partsLocked ? "rounded-xl p-2 ring-1 ring-rose-400" : "")}>
+        <fieldset disabled={limitReached} className={"space-y-2 " + (partsLocked ? "rounded-xl p-2 ring-1 ring-rose-400" : "")}>
           <legend className="label req">Parts and prices</legend>
           {PARTS.map((part) => {
             const on = f[part.on] as boolean;
@@ -413,14 +417,14 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
         {f.written && (
           <div className={lockedKey("questions") ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}>
             <label className="label req" htmlFor="questions">Your questions (one per line)</label>
-            <textarea id="questions" rows={4} className="input" value={f.questions} onChange={(e) => set({ questions: e.target.value })} placeholder={"What did you like?\nWhere did you get stuck?"} />
+            <textarea id="questions" rows={4} disabled={limitReached} className="input" value={f.questions} onChange={(e) => set({ questions: e.target.value })} placeholder={"What did you like?\nWhere did you get stuck?"} />
             {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).length > 0 && (
               <ul className="mt-2 space-y-1">
                 {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (
                   <li key={q} className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm">
                     <span className="min-w-0 break-words text-ink-200">{q}</span>
                     <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-ink-300">
-                      <input type="checkbox" checked={f.optionalQs.includes(q)} onChange={(e) => set({ optionalQs: e.target.checked ? [...f.optionalQs, q] : f.optionalQs.filter((x) => x !== q) })} /> Not required
+                      <input type="checkbox" disabled={limitReached} checked={f.optionalQs.includes(q)} onChange={(e) => set({ optionalQs: e.target.checked ? [...f.optionalQs, q] : f.optionalQs.filter((x) => x !== q) })} /> Not required
                     </label>
                   </li>
                 ))}
@@ -463,7 +467,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
         <h2>Optional</h2>
         <div>
           <label className="label" htmlFor="ndaText">NDA (testers must accept it before joining)</label>
-          <textarea id="ndaText" rows={4} className="input" maxLength={LIMITS.nda} value={f.ndaText} onChange={(e) => set({ ndaText: e.target.value })} placeholder="Leave empty for no NDA. Testers accept this text before they join; changing it later is a new offer they accept." />
+          <textarea id="ndaText" rows={4} disabled={limitReached} className="input" maxLength={LIMITS.nda} value={f.ndaText} onChange={(e) => set({ ndaText: e.target.value })} placeholder="Leave empty for no NDA. Testers accept this text before they join; changing it later is a new offer they accept." />
           {note("ndaText")}
         </div>
         {edit ? (
@@ -485,6 +489,8 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
           <button className="btn" disabled={busy || nothingChanged} aria-disabled={nothingChanged} title={nothingChanged ? "Nothing has changed yet" : undefined}>{busy ? "Saving…" : edit ? "Save" : "Post the test"}</button>
           {keep.restored && <NotSentTag />}
         </div>
+        {limited && <p className="note" data-changes-left="">{changesLeftLine(edit!.criticalUsed)} <span className="text-slate-500">(saves that change the steps, build link, NDA, questions, parts or part prices)</span></p>}
+        {limitReached && <p className="info" data-critical-locked="">You&apos;ve changed the steps, build link, NDA, questions, parts or part prices {LIMITS.criticalChanges} times since testers joined, so those fields are locked. Contact us in Settings to change them again. Everything else stays editable.</p>}
         {saved && <p className="ok">{saved}</p>}
         {lockLine && pressed && <p className="err-field" role="alert" data-critical-limit="">{lockLine}</p>}
         <Err text={refusal} />

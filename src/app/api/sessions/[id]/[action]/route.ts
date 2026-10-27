@@ -13,8 +13,8 @@ import { PAUSED_RIGHT_NOW, testerRefusal } from "@/lib/rules";
 import { leaveTest, sendWritten } from "@/lib/server/tests";
 import { requireActive, requireConfirmed } from "@/lib/server/users";
 
-// (NEWEST+8) Presses that need a confirmed email.
-const NEEDS_CONFIRMED = new Set(["written", "recording-start", "recording-send", "request-time", "answer-request", "choose", "rate"]);
+// (Owner, Oct 27) No press on a session needs a confirmed email any more (only Post a test, Join, Apply and accepting an invite do).
+const NEEDS_CONFIRMED = new Set<string>();
 import { maybePromptRating, testerRate } from "@/lib/server/ratings";
 import { logTesterAction } from "@/lib/server/actionText";
 
@@ -38,7 +38,7 @@ async function finalRefusal(userId: string, contractId: string, action: string) 
  * (Owner, Oct 27) While the developer is SUSPENDED by the team their tests are paused and testers can only cancel booked calls (and rate: a suspended person's tests can still be
  * rated by the other side). Under a payment or chargeback hold testers keep sending work as before (the other pauses are in each rule). Testers read only "paused".
  */
-const PAUSED_OK = new Set(["cancel-call", "cancel-set", "rate"]);
+const PAUSED_OK = new Set(["cancel-call", "cancel-set", "rate", "dismiss-removed"]);
 async function suspendedDevRefusal(userId: string, contractId: string, action: string) {
   if (PAUSED_OK.has(action)) return;
   const c = await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true, test: { select: { developer: { select: { suspendedAt: true } } } } } });
@@ -69,6 +69,13 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
     switch (action) {
       case "leave":
         return ok(await leaveTest(u, id, body));
+      case "dismiss-removed": {
+        // (Owner, Oct 27) After a reinstatement the "Suspended" card stays on the dashboard until the tester rejoins or dismisses it.
+        const c = await db.contract.findUnique({ where: { id } });
+        if (!c || c.testerId !== u.id || c.endKind !== "suspended") throw new HttpError(404, "not_found", "That card isn't there any more.");
+        await db.contract.update({ where: { id }, data: { removedDismissedAt: new Date() } });
+        return ok({ dismissed: true });
+      }
       case "key-broken":
         return ok(await reportKeyBroken(u, id));
       case "rate":

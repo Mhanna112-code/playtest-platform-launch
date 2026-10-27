@@ -11,7 +11,6 @@ export const GROUP_TITLES: Record<string, string> = {
   payout: "Payout",
   disputes: "New disputes",
   team: "The team acted on your tests",
-  owed: "Payment due",
   // (Owner, Oct 27) Lines of the SAME KIND stack across tests, one entry per kind per day.
   payhold: "Payments and holds",
   admindecision: "The team decided",

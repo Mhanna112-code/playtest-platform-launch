@@ -110,8 +110,8 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         {t.productName && <p className="kicker">{t.productName}</p>}
-                        <p className="font-semibold text-white">{t.title}</p>
-                        <p className="text-sm text-slate-400">by {displayName(t.developer)}{devRatings.get(t.developerId) && ` · ${devRatings.get(t.developerId)}`}</p>
+                        <p className="truncate font-semibold text-white" title={t.title}>{t.title}</p>
+                        <p className="truncate text-sm text-slate-400">by {displayName(t.developer)}{devRatings.get(t.developerId) && ` · ${devRatings.get(t.developerId)}`}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-lg font-bold text-emerald-300">{fromText(t)}</p>
@@ -122,8 +122,8 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
                     <div className="flex flex-wrap gap-2">
                       <CategoryBadges categories={t.categories} />
                       <PartBadges written={t.writtenCents != null} recording={t.recordingCents != null} live={t.liveRateCents != null} />
-                      {t.devices.length > 0 && <span className="badge"><Monitor className="h-3.5 w-3.5" /> {t.devices.join(" · ")}</span>}
-                      {t.languages.length > 0 && <span className="badge"><Languages className="h-3.5 w-3.5" /> {t.languages.join(" · ")}</span>}
+                      {t.devices.length > 0 && <span className="badge" title={t.devices.join(" · ")}><Monitor className="h-3.5 w-3.5" /> {t.devices.slice(0, 3).join(" · ")}{t.devices.length > 3 ? ` +${t.devices.length - 3} more` : ""}</span>}
+                      {t.languages.length > 0 && <span className="badge" title={t.languages.join(" · ")}><Languages className="h-3.5 w-3.5" /> {t.languages.slice(0, 3).join(" · ")}{t.languages.length > 3 ? ` +${t.languages.length - 3} more` : ""}</span>}
                       <span className="badge"><CalendarClock className="h-3.5 w-3.5" /> {t.deadlineDays} day{t.deadlineDays === 1 ? "" : "s"} to finish</span>
                       <span className="badge">{t.joinMode === "invite" ? "Invitation only" : t.joinMode === "apply" ? "Approved only" : "Anyone can join"}</span>
                       {t.openUntil && <span className="badge">Open until {fmtDate(t.openUntil)}</span>}
@@ -132,7 +132,8 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
                       {invitedTo.has(t.id) && <span className="badge border-emerald-400/40 text-emerald-200">Invited</span>}
                     </div>
                     {t.contracts.some((c) => c.status === "left") && <p className="note">You left this test</p>}
-                    {gaps.map((g) => <p key={g} className="text-sm text-amber-300">{g}</p>)}
+                    {gaps.slice(0, 3).map((g) => <p key={g} className="text-sm text-amber-300" title={g}>{g}</p>)}
+                    {gaps.length > 3 && <p className="text-sm text-amber-300">+{gaps.length - 3} more</p>}
                   </div>
                 </Link>
               </li>

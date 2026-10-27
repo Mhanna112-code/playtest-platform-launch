@@ -8,6 +8,8 @@ import { TesterTiles } from "@/components/ProfileTiles";
 import { ChatWithButton } from "@/components/ChatWithButton";
 import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
 import { isAdmin } from "@/lib/server/session";
+import { devRestricted } from "@/lib/restricted";
+import { sideFor } from "@/lib/sides";
 
 import { BlockButton } from "@/components/BlockButton";
 import { ReportButton } from "@/components/ReportButton";
@@ -26,12 +28,14 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
   const p = await db.user.findUnique({ where: { id }, include: { profile: true } });
   if (!p || !p.isTester) notFound();
   const mine = viewer.id === p.id;
+  // (Owner, Oct 27) A suspended or held developer can read this page, but Chat with, Report, Block and Edit profile are hidden.
+  const off = viewer.isDeveloper && devRestricted(viewer, sideFor(viewer, "/app/testers"));
   if (!mine && !isAdmin(viewer) && !viewer.isDeveloper) notFound();
   if (!mine && !isAdmin(viewer) && (await db.block.count({ where: { OR: [{ blockerId: viewer.id, blockedId: p.id }, { blockerId: p.id, blockedId: viewer.id }] } }))) notFound();
   const name = displayName(p);
   const pr = p.profile;
   // (Owner, Oct 26) "Chat with <name>" for a developer: the chat of the most recent test they share; hidden when they share none.
-  const shared = !mine && viewer.isDeveloper ? await db.contract.findFirst({ where: { testerId: p.id, test: { developerId: viewer.id } }, orderBy: { joinedAt: "desc" }, select: { id: true } }) : null;
+  const shared = !mine && viewer.isDeveloper && !off ? await db.contract.findFirst({ where: { testerId: p.id, test: { developerId: viewer.id } }, orderBy: { joinedAt: "desc" }, select: { id: true } }) : null;
   const reportedRow = !mine ? await db.report.findUnique({ where: { reporterId_reportedId: { reporterId: viewer.id, reportedId: p.id } } }) : null;
   const reportedOn = reportedRow ? fmtDate(reportedRow.createdAt) : null;
   return (
@@ -43,13 +47,13 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
           <p className="flex flex-wrap items-center gap-2 text-sm text-slate-400"><CalendarDays className="h-4 w-4" /> Tester since {fmtDate(p.createdAt)}</p>
           {mine && <p className="text-xs text-slate-500">This is how developers see your profile.</p>}
         </div>
-        {mine && <Link href="/app/profile" className="btn-secondary px-3 py-1.5 text-sm">Edit profile</Link>}
+        {mine && !off && !viewer.suspendedAt && <Link href="/app/profile" className="btn-secondary px-3 py-1.5 text-sm">Edit profile</Link>}
         {shared && <ChatWithButton contractId={shared.id} name={name} />}
       </section>
       <TesterTiles userId={p.id} />
       <section className="card space-y-3">
         <h2 className="font-semibold text-white">About</h2>
-        <p className="text-sm text-slate-300">{pr?.bio || <span className="text-slate-500">No bio yet.</span>}</p>
+        <p className="whitespace-pre-wrap break-words text-sm text-slate-300">{pr?.bio || <span className="text-slate-500">No bio yet.</span>}</p>
         <div className="flex flex-wrap gap-2">
           {(pr?.categories ?? []).map((c) => <span key={c} className="badge">{c}</span>)}
           {(pr?.devices ?? []).map((d) => <span key={d} className="badge"><Monitor className="h-3.5 w-3.5" /> {d}</span>)}
@@ -59,7 +63,7 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
       </section>
       {isAdmin(viewer) && !mine && <AdminPersonBoxes userId={p.id} adminId={viewer.id} developer={p.isDeveloper} tester={p.isTester} />}
       {/* (Owner, Oct 27) Block and Report live only on profiles: here, on the developer side. */}
-      {viewer.isDeveloper && !mine && (
+      {viewer.isDeveloper && !mine && !off && (
         <div className="space-y-2 text-right text-xs text-slate-500">
           <ReportButton userId={p.id} name={name} reportedOn={reportedOn} />
           <BlockButton plain userId={p.id} name={name} effect="Your sessions with them end now (work they sent stays payable), calls between you are cancelled, and chat closes." />

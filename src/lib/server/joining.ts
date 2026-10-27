@@ -208,7 +208,7 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   const refusal = await joinRefusal(tester.id, testId, { rejoin: isRejoin });
   if (refusal) throw new HttpError(409, "refused", refusal.replace("You've already joined", `${name} already joined`).replace(TEST_LIMIT_LINE, `${name} can't join more tests right now.`));
   const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
-  const c = await joinTest({ ...tester, isTester: true }, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true, rejoinAccepted: isRejoin, ndaAcceptedAt: a.ndaAcceptedAt?.toISOString(), ndaAccepted: !!a.ndaAcceptedAt });
+  const c = await joinTest({ ...tester, isTester: true }, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true, acceptedByDeveloper: true, rejoinAccepted: isRejoin, ndaAcceptedAt: a.ndaAcceptedAt?.toISOString(), ndaAccepted: !!a.ndaAcceptedAt });
   await db.application.update({ where: { id: a.id }, data: { status: "accepted", decidedAt: new Date() } });
   if (isRejoin) {
     const line = `You're back in ${t.title}: your deadline is ${fmtDateTime(c.dueAt)}.`;

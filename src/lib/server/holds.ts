@@ -337,7 +337,7 @@ export async function runDaily(now = new Date()) {
   await pc.pausedReminders(now); // (Owner, Oct 27) the developer's daily "<test> is paused and closes on <date> unless ..." (replaces the paused / day-before lines)
   out.closed = await pc.closePausedTests(now);
   // 4. Open until heads-ups, 3 days and 1 day before (developer and working testers).
-  const closing = await db.test.findMany({ where: { status: { in: ["open", "closed"] }, openUntil: { gt: now } }, include: { developer: true, contracts: { where: { status: "working" }, include: { tester: true } } } });
+  const closing = await db.test.findMany({ where: { status: { in: ["open", "closed"] }, openUntil: { gt: now }, ...PAUSE_FREE }, include: { developer: true, contracts: { where: { status: "working" }, include: { tester: true } } } });
   for (const t of closing) {
     const m = countdownDue(t.openUntil, now, t.notifiedMarks, t.createdAt);
     if (!m) continue;

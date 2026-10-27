@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { api } from "@/lib/client";
+import { LongList } from "@/components/LongList";
 
 export type BellLine = { id: string; text: string; href: string; read: boolean; ago: string };
 export type BellEntry = { key: string; title?: string; day?: string; lines: BellLine[] };
@@ -49,7 +50,8 @@ export function BellList({ entries }: { entries: BellEntry[] }) {
               {e.lines.some((l) => !isRead(l)) && <span className="rounded-full bg-indigo-500 px-2 py-0.5 text-xs text-white">{e.lines.filter((l) => !isRead(l)).length}</span>}
               <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition ${open[e.key] ? "rotate-180" : ""}`} />
             </button>
-            {open[e.key] && <ul className="mt-2 space-y-2 border-l border-white/10 pl-3">{e.lines.map((l) => <li key={l.id}>{line(l)}</li>)}</ul>}
+            {/* An opened stack shows 3 lines, then "Show N more" opening a scroll box. */}
+            {open[e.key] && <LongList shown={3} tall="max-h-72" className="mt-2 space-y-2 border-l border-white/10 pl-3">{e.lines.map((l) => <li key={l.id}>{line(l)}</li>)}</LongList>}
           </li>
         ),
       )}

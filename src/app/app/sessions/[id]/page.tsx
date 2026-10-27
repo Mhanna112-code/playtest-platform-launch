@@ -4,7 +4,7 @@ import { OWED_FOR_TESTERS } from "@/lib/rules";
 import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, MessagesSquare, Users, XCircle } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
-import { callLengthText, callOutcome, joinedWords, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, callReference, cancelNeedsReason, canDispute, closesInLine, DELAYED_CALL_LINE, isLate, PAUSED_FOR_TESTERS, lateLabel, termsLine, testPaused, testerShare, canAskToRejoin, leftText } from "@/lib/rules";
+import { callLengthText, callOutcome, joinedWords, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, callReference, cancelNeedsReason, canDispute, closesInLine, DELAYED_CALL_LINE, isLate, PAUSED_FOR_TESTERS, PAUSED_RIGHT_NOW, lateLabel, termsLine, testPaused, testerShare, canAskToRejoin, leftText } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
@@ -21,6 +21,7 @@ import { rateLabel } from "@/lib/server/requests";
 import { rowsOf, toJson } from "@/lib/callRows";
 import { unreadCount } from "@/lib/server/messages";
 import { PersonHover } from "@/components/PersonHover";
+import { ChatWithButton } from "@/components/ChatWithButton";
 import { LiveTop } from "@/components/LiveTop";
 import { qOptional, qText } from "@/lib/questions";
 import { RateBox } from "@/components/RateBox";
@@ -77,6 +78,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const rateWarn = await rateWarning(c.id);
   // Live calls: the request panel shows only when there's something to do or see.
   const paused = testPaused(c.test.developer, c.test);
+  // (Owner, Oct 27) Under the team's suspension of the developer testers can only cancel booked calls (and rate); a suspended tester sees a read-only page. Testers read only "paused".
+  const devSusp = !!c.test.developer.suspendedAt;
+  const meOff = !!u.suspendedAt;
   // (Owner, Oct 27) While the developer owes a declined payment, the tester's Dispute and Charge buttons are disabled (the wording stays "delayed").
   const devOwesNow = await devOwes(c.test.developerId);
   const canRequestCall = !refusal && !blockedPair && !paused;
@@ -123,12 +127,12 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       </div>
       {key && <KeyBox sessionId={c.id} seenAt={seenAt} value={key.value} broken={key.status === "broken"} fresh={!!freshKey} />}
       <LiveTop scope={`session:${c.id}`} seenAt={seenAt} seeIt="#listing" />
-      <TesterTop sessionId={c.id} seenAt={seenAt} devName={dev} offer={offer && !refusal ? {
+      <TesterTop sessionId={c.id} seenAt={seenAt} devName={dev} offer={offer && !refusal && !devSusp ? {
         id: offer.id, diff: offer.diff, ndaText: offer.ndaText, fromNdaText: c.ndaText, questions: ((offer.questions as string[]) ?? []).map(qText), fromQuestions: ((c.questions as string[]) ?? []).map(qText),
         answers: written ? ((written.answers as string[]) ?? []) : [],
       } : null} />
       {refusal && <p className="info">{refusal}</p>}
-      {!refusal && paused && <p className="info" data-paused="">{PAUSED_FOR_TESTERS}</p>}
+      {!refusal && paused && <p className="info" data-paused="">{devSusp ? `${PAUSED_RIGHT_NOW} You can only cancel booked calls for now.` : PAUSED_FOR_TESTERS}</p>}
       {!refusal && c.test.openUntil && c.test.openUntil > now && c.test.openUntil.getTime() - now.getTime() < 3 * 86_400_000 && (
         <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(c.title, c.test.openUntil, now)}</p>
       )}
@@ -136,7 +140,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         <div className="flex flex-wrap items-start gap-4">
           <div className="min-w-[12rem] flex-1">
             <p className="text-sm text-slate-400">by{" "}
-              <PersonHover name={dev} href={`/app/developers/${c.test.developerId}`} summary={[devRating || "No ratings yet"]} />
+              <PersonHover name={dev} href={`/app/developers/${c.test.developerId}`} summary={[devRating || "No ratings yet"]} chat={!meOff && !devSusp && !paused ? <ChatWithButton contractId={c.id} name={dev} /> : undefined} />
               {" "}· joined {fmtDate(c.joinedAt)}</p>
             <div className="mt-1 flex flex-wrap gap-2">
               {c.test.status === "stopped" && <span className="badge border-sky-300/40 text-sky-200"><span className="h-2 w-2 rounded-sm bg-sky-300" /> Stopped</span>}
@@ -148,9 +152,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
               {c.test.mature && <span className="badge border-rose-300/40 text-rose-200" title={c.test.matureWhy}>Mature (18+)</span>}
             </div>
           </div>
-          <a href={`/app/chat/${c.id}`} className="btn-secondary relative min-w-0 max-w-full no-underline hover:no-underline"><MessagesSquare className="h-4 w-4 shrink-0" /> <span className="truncate">Chat with {dev}</span>
+          {!meOff && !devSusp && <a href={`/app/chat/${c.id}`} className="btn-secondary relative min-w-0 max-w-full no-underline hover:no-underline"><MessagesSquare className="h-4 w-4 shrink-0" /> <span className="truncate">Chat with {dev}</span>
             {unread > 0 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950" aria-label={`${unread} unread`}>{unread}</span>}
-          </a>
+          </a>}
         </div>
         {c.description && <p className="whitespace-pre-wrap text-slate-300">{c.description}</p>}
         <p className="text-sm text-slate-400">Due {fmtDate(c.dueAt)}{c.status === "working" && c.dueAt > now && c.dueAt.getTime() - now.getTime() < 24 * 3_600_000 ? ` · ${leftText(c.dueAt.getTime() - now.getTime())} left` : ""}{isLate(c.dueAt, now) && !refusal ? ": your deadline has passed, late work is still accepted and marked late." : ""}</p>
@@ -184,7 +188,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       {myRating && !rated.testerRevealed && <p className="note">You rated {dev}.</p>}
       {myRating && rated.testerRevealed && <p className="note">You rated {dev}: {myRating.stars} ★{myRating.comment ? ` · “${myRating.comment}”` : ""}</p>}
       {rated.developer && <p className="note">{dev} rated you: {rated.developer.stars} ★{rated.developer.comment ? ` · “${rated.developer.comment}”` : ""}</p>}
-      {rateBlock === "" && (
+      {rateBlock === "" && !meOff && (
         <RateBox
           path={`/api/sessions/${c.id}/rate`}
           seenAt={seenAt}
@@ -195,7 +199,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         />
       )}
       {/* (Design doc 8) Back in: an invite brings a Join here; otherwise an ask the developer accepts (before the deadline, never after a stop or a rating). */}
-      {c.status !== "working" && !myRating && c.test.status === "open" && (invitedBack || canAskToRejoin(c, false)) && (
+      {c.status !== "working" && !myRating && !meOff && c.test.status === "open" && (invitedBack || canAskToRejoin(c, false)) && (
         <section id="rejoin" className="card space-y-3 scroll-mt-24 border-emerald-400/30 text-sm">
           <p className="font-semibold text-white">{invitedBack ? `${dev} invited you back to ${c.title}` : `Ask to rejoin ${c.title}`}</p>
           <p className="text-ink-300">{invitedBack ? "Join to get your session back, with everything in it (work you sent, payments and chat)." : `If ${dev} accepts, your session comes back with everything in it (work you sent, payments and chat) on the current listing, with the time you had left.`}</p>
@@ -253,10 +257,10 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
               </p>
               <p className="text-slate-400">{cents == null ? "Not in your contract" : `In your contract · ${cents === 0 ? "free" : `${money(testerShare(cents))} for you`}`}{` · Paid so far ${money(sub ? partPaid.get(sub.id) ?? 0 : 0)}`}</p>
               {sub && <p className="text-xs text-slate-500">{partLine(sub.agreedCents, partPaid.get(sub.id) ?? 0)}</p>}
-              {sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0 && (
+              {sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && !meOff && !devSusp && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0 && (
                 <ChoiceBox devOwes={devOwesNow} paused={paused} seenAt={seenAt} sessionId={c.id} submissionId={sub.id} devName={dev} cents={chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0)} line={choiceLine(dev, key, chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0))} />
               )}
-              {sub && delayedSubs.has(sub.id) ? <p className="info">Payment for this part may be delayed.</p> : sub?.review && <TesterReview devOwes={devOwesNow} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} />}
+              {sub && delayedSubs.has(sub.id) ? <p className="info">Payment for this part may be delayed.</p> : sub?.review && <TesterReview off={meOff || devSusp} devOwes={devOwesNow} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} />}
             </li>
           ))}
           <li id="part-live" data-part="live" className="scroll-mt-24 space-y-1.5 rounded-xl border border-white/[0.08] p-3 text-sm">
@@ -275,7 +279,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             {c.calls.filter((x) => x.review).map((x) => (
               <div key={x.id} className="space-y-2">
                 <p className="text-slate-300">Live call on {fmtDateTime(x.startsAt)}</p>
-                {owedCalls.has(x.id) ? <p className="info">{DELAYED_CALL_LINE}</p> : <TesterReview devOwes={devOwesNow} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} />}
+                {owedCalls.has(x.id) ? <p className="info">{DELAYED_CALL_LINE}</p> : <TesterReview off={meOff || devSusp} devOwes={devOwesNow} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} />}
               </div>
             ))}
           </li>
@@ -293,6 +297,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             devName={dev}
             mine={mineCalls}
             sets={mineSets}
+            noReport={meOff}
             lateNote={now > c.dueAt ? `Your deadline was ${fmtDate(c.dueAt).replace(/, \d{4}$/, "")} (a guide, not a limit): a call you book now reads “${bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, ""))}”.` : undefined}
           />
           {(canRequestCall || pendingReqs.length > 0) && (
@@ -318,7 +323,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         <RecordingUpload
           seenAt={seenAt}
           sessionId={c.id}
-          canSend={!refusal && !recording?.review}
+          canSend={!refusal && !recording?.review && !devSusp && !meOff}
           sentBefore={!!recording}
           recordings={c.recordings.map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, uploaded: !!r.uploadedAt }))}
         />
@@ -334,15 +339,15 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
               <p className="whitespace-pre-wrap">{(written.answers as string[])[i]}</p>
             </div>
           ))
-        ) : refusal ? (
-          !written && <p className="note">Nothing sent.</p>
+        ) : refusal || devSusp || meOff ? (
+          !written ? <p className="note">Nothing sent.</p> : null
         ) : (
           <WrittenForm seenAt={seenAt} sessionId={c.id} questions={writtenQuestions(c)} initial={(written?.answers as string[]) ?? []} initialNotes={written?.notes ?? ""} update={!!written} />
         )}
       </section>
 
       {/* (NEXT-UI 4) Leaving, in its own card as in the full app. */}
-      {c.status === "working" && (
+      {c.status === "working" && !devSusp && !meOff && (
         <section className="card space-y-3 text-sm" id="leave">
           <h2 className="font-semibold text-white">Can&apos;t finish?</h2>
           <p className="text-slate-400">You can leave this test: what you sent is still reviewed and paid as usual, the parts you haven&apos;t sent close with no pay, and calls ahead are cancelled. You can join again later while the test is open: your session comes back.</p>
@@ -358,7 +363,7 @@ type Rev = { amountCents: number; agreedCents: number | null; rejected: boolean;
 type Disp = { status: string; decidedCents: number | null; decisionNote: string; devSide: string } | null;
 
 /** What the developer did with a piece, as the tester reads it (they see what they get; never holds or chargebacks). */
-function TesterReview({ sessionId, kind, id, review, dispute, devOwes: owes = false }: { devOwes?: boolean; sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
+function TesterReview({ sessionId, kind, id, review, dispute, devOwes: owes = false, off = false }: { off?: boolean; devOwes?: boolean; sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
   const may = canDispute(review.amountCents, review.agreedCents, !!dispute).ok;
   return (
     <div className="space-y-2 rounded-lg bg-white/[0.03] p-3 text-sm">
@@ -373,7 +378,7 @@ function TesterReview({ sessionId, kind, id, review, dispute, devOwes: owes = fa
       {review.agreedCents == null && <p className="note">This wasn&apos;t in your contract, so the developer&apos;s amount is final.</p>}
       {dispute && <p>{dispute.status === "open" ? "You disputed this: waiting for the team." : `The team decided: ${money(dispute.decidedCents)} in all${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : ""}.`}</p>}
       {dispute?.devSide && <p>The developer&apos;s side: “{dispute.devSide}”</p>}
-      {may && <DisputeForm disabledNote={owes ? OWED_FOR_TESTERS : ""} sessionId={sessionId} kind={kind} id={id} seenAt={new Date().toISOString()} />}
+      {may && !off && <DisputeForm disabledNote={owes ? OWED_FOR_TESTERS : ""} sessionId={sessionId} kind={kind} id={id} seenAt={new Date().toISOString()} />}
     </div>
   );
 }

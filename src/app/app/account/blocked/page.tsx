@@ -32,7 +32,8 @@ export default async function BlockedPage() {
                   <span className="block truncate font-medium text-white">{x ? displayName(x) : "Someone"}</span>
                   <span className="text-xs text-slate-500">Blocked {fmtDate(b.createdAt)}</span>
                 </span>
-                <UnblockButton userId={b.blockedId} />
+                {/* (Owner, Oct 27) Unblock works for a held account; a suspended one reads the list only. */}
+                {!u.suspendedAt && <UnblockButton userId={b.blockedId} />}
               </li>
             );
           })}

@@ -36,6 +36,8 @@ import { KeysNotice } from "./KeysNotice";
 import { brokenKeyTesters } from "@/lib/server/accessKeys";
 import { SavedNote } from "@/components/SavedNote";
 import { TestersJoined } from "./TestersJoined";
+import { ChatWithButton } from "@/components/ChatWithButton";
+import { ClampText } from "@/components/ClampText";
 import { RowsBox } from "./RowsBox";
 import { testerStats } from "@/lib/server/profileStats";
 import { ByQuestion } from "./ByQuestion";
@@ -164,48 +166,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     ...c.calls.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), what: `the call on ${fmtDateTime(x.startsAt)}`, reason: x.dispute!.reason })),
   ]);
   const needsCount = pieces.length + apps.length + needsRequests.length + disputesWaiting.length;
-  // History per tester: what happened with them (the test's events about them, what was paid or rejected, disputes), newest first.
-  // (Design doc 5 and 6) Deal history: the terms they joined on, every offer and what they chose, and their payments.
-  const offerRows = await db.termsOffer.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
-  const events = await db.testEvent.findMany({ where: { testId: id, contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "desc" }, take: 500 });
-  const historyOf = new Map(
-    t.contracts.map((c) => {
-      const items: { key: string; at: Date; text: string; detail?: React.ReactNode }[] = [];
-      for (const e of events.filter((x) => x.contractId === c.id)) items.push({ key: `e-${e.id}`, at: e.createdAt, text: e.text.replace(/^You /, "You ") });
-      for (const o of offerRows.filter((x) => x.contractId === c.id)) {
-        items.push({
-          key: `o-${o.id}`, at: o.createdAt,
-          text: `You offered new terms (${o.diff}): ${o.status === "switched" ? `${displayName(c.tester)} switched` : o.status === "kept" ? `${displayName(c.tester)} kept their terms` : o.status === "open" ? "waiting for their answer" : "replaced by a newer offer"}${o.decidedAt && (o.status === "switched" || o.status === "kept") ? ` · ${fmtDateTime(o.decidedAt)}` : ""}`,
-          detail: (Array.isArray(o.fromQuestions) && JSON.stringify(o.fromQuestions) !== JSON.stringify(o.questions)) || o.fromNdaText !== o.ndaText ? (
-            <details className="ml-4 mt-1 text-xs text-slate-400"><summary className="cursor-pointer">What changed</summary>
-              {Array.isArray(o.fromQuestions) && JSON.stringify(o.fromQuestions) !== JSON.stringify(o.questions) && <p>Questions then: {(o.fromQuestions as string[]).map(qText).join(" · ") || "none"}; now: {((o.questions as string[]) ?? []).map(qText).join(" · ") || "none"}</p>}
-              {o.fromNdaText !== o.ndaText && <p className="whitespace-pre-wrap">NDA then: {o.fromNdaText || "none"}; now: {o.ndaText || "none"}</p>}
-            </details>
-          ) : undefined,
-        });
-      }
-      items.push({ key: `j-${c.id}`, at: c.joinedAt, text: `Joined on: ${termsLine(c)}${c.ndaAcceptedAt ? ` · NDA accepted ${fmtDate(c.ndaAcceptedAt)}` : ""}` });
-      for (const p of payments.filter((x) => x.contractId === c.id && (x.status === "failed" || x.settledAt))) items.push({ key: `p-${p.id}`, at: p.settledAt ?? p.createdAt, text: p.settledAt ? `Payment of ${money(p.amountCents)} went through after it had been declined` : `Payment of ${money(p.amountCents)} was declined: owed` });
-      const pieceLine = (label: string, rev: { amountCents: number; rejected: boolean; reason: string; createdAt: Date }, id: string, dispute: { status: string; reason: string; decidedCents: number | null; decisionNote: string; devSide: string } | null, detail?: React.ReactNode) => {
-        items.push({ key: `r-${id}`, at: rev.createdAt, text: rev.rejected ? `You rejected ${label}: “${rev.reason}”` : `You paid ${money(rev.amountCents)} for ${label}${rev.reason ? `: “${rev.reason}”` : ""}`, detail });
-        if (dispute) items.push({ key: `d-${id}`, at: rev.createdAt, text: dispute.status === "open" ? `${displayName(c.tester)} disputed it: “${dispute.reason}”${dispute.devSide ? ` · your side: “${dispute.devSide}”` : ""}` : `Dispute decided: total ${money(dispute.decidedCents)}${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : ""}` });
-      };
-      for (const x of c.submissions) {
-        const label = x.kind === "written" ? "the written answers" : "the recording";
-        const detail = (
-          <details className="ml-4 mt-1 text-xs text-slate-400">
-            <summary className="cursor-pointer">What they sent</summary>
-            {x.kind === "written" ? writtenQuestions(c).map((q, i) => <p key={i} className="whitespace-pre-wrap"><b>{qText(q)}</b> {(x.answers as string[])[i]}</p>) : x.recordings.filter((r) => r.uploadedAt).map((r) => <a key={r.id} className="block" href={`/api/recordings/${r.id}/file`} target="_blank" rel="noreferrer">{r.filename}</a>)}
-            {x.notes && <p className="whitespace-pre-wrap">Notes: {x.notes}</p>}
-          </details>
-        );
-        if (x.review) pieceLine(label, x.review, x.id, x.dispute, detail);
-      }
-      for (const x of c.calls) if (x.review) pieceLine(`the call on ${fmtDateTime(x.startsAt)}`, x.review, x.id, x.dispute);
-      items.sort((a, b) => b.at.getTime() - a.at.getTime());
-      return [c.id, items] as const;
-    }),
-  );
   return (
     <>
       <AutoRefresh query={`test=${t.id}`} />
@@ -244,13 +204,14 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {/* (Design doc 6) The team stopped or paused this test: a permanent banner at the top of the overview, naming any press that failed. */}
       {(t.adminStoppedAt || t.adminPausedAt) && (
         <section role="alert" data-admin-banner={t.adminStoppedAt ? "stopped" : "paused"} className="rounded-2xl border border-rose-400/50 bg-rose-500/10 p-4 text-sm text-rose-100">
-          <p className="font-semibold">{t.adminStoppedAt ? "The team stopped this test." : "The team paused this test: it behaves like a stop, and you can only stop it."}{t.adminNote ? ` ${t.adminNote}` : ""}</p>
+          <p className="font-semibold">{t.adminStoppedAt ? "The team stopped this test." : "The team paused this test: it behaves like a stop, and you can only stop it."}</p>
+          {t.adminNote && <ClampText text={t.adminNote} />}
           {failed && <p className="mt-1">{failed}.</p>}
           <p className="mt-1 text-rose-100/80">What testers sent still waits for you to pay or reject. If you think this is a mistake, use Contact us in Settings.</p>
         </section>
       )}
       {/* (Design doc 6) The order: overview, the live updates box, the yellow keys notice, then the panels. */}
-      <LiveTop scope={`test:${t.id}`} seenAt={seenAt} />
+      <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" />
       <KeysNotice testId={t.id} seenAt={seenAt} rows={restricted ? [] : brokenKeys.map((b) => ({ contractId: b.contractId, name: b.name, at: b.at.toISOString() }))} />
       {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay / Reject box for sent work lives here. */}
       {needsCount > 0 && !restricted && (
@@ -259,7 +220,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           <NeedsRequests testId={t.id} seenAt={seenAt} requests={needsRequests} />
           {disputesWaiting.map((d) => (
             <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
-              <p className="text-slate-300"><b className="text-white">{d.name}</b> disputed what you paid for {d.what}: “{d.reason}” · waiting for the team.</p>
+              <p className="text-slate-300"><b className="text-white">{d.name}</b> disputed what you paid for {d.what} · waiting for the team:</p>
+              <ClampText text={`“${d.reason}”`} className="text-slate-300" />
               <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
             </div>
           ))}
@@ -332,10 +294,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             `Accepted parts: ${(await testerStats(c.testerId)).accepted.value} ${(await testerStats(c.testerId)).accepted.hint}`,
           ].filter(Boolean),
           block: null, // (Owner, Oct 27) Block and Report live only on profiles
+          chat: <ChatWithButton contractId={c.id} name={displayName(c.tester)} />, // (Owner, Oct 27) "Chat with <name>" on every hover card
         })))}
         gone={t.contracts.filter((c) => c.status !== "working").map((c) => ({ contractId: c.id, name: displayName(c.tester), how: c.endKind === "stopped" || c.endKind === "closed" ? "Stopped" : c.endKind === "suspended" || c.endKind === "deleted" ? "Removed" : c.endKind === "rated" ? "Left" : c.status === "left" ? "Left" : "Ended early", at: c.endedAt }))}
       >
-      {/* (NEXT-UI 21) TESTERS JOINED, one row per tester: parts sent (Required / Not required), paid per part and in total, the call summary, and a History fold. No Pay boxes here. */}
+      {/* (NEXT-UI 21; owner, Oct 27) TESTERS JOINED, one row per tester: parts sent (Required / Not required), paid per part and in total, the call summary and the agreed scope (their current contract only: no history fold for developers). No Pay boxes here. */}
       {t.contracts.length > 0 && (
         <RowsBox many={t.contracts.length > 6}>
           {t.contracts.map((c) => {
@@ -346,7 +309,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             const bookedAhead = c.calls.filter((x) => x.status === "booked" && x.startsAt > now).length;
             const held = c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).length;
             const cancelledN = c.calls.filter((x) => x.status === "cancelled").length;
-            const history = historyOf.get(c.id) ?? [];
             const partRows = [
               { name: "Written answers", on: c.writtenCents != null, required: c.writtenRequired, sub: c.submissions.find((s) => s.kind === "written"), cents: c.writtenCents },
               { name: "Recording", on: c.recordingCents != null, required: c.recordingRequired, sub: c.submissions.find((s) => s.kind === "recording"), cents: c.recordingCents },
@@ -399,18 +361,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   </>
                 )}
                 {blockedIds.has(c.testerId) && <p className="note">You blocked {name}. Unblock in Account → Blocked people.</p>}
-                <details className="text-sm" data-history="">
-                  <summary className="cursor-pointer">History ({history.length})</summary>
-                  <ul className="mt-2 space-y-1.5 border-l border-white/10 pl-3">
-                    {history.length === 0 && <li className="text-slate-500">Nothing yet.</li>}
-                    {history.map((h) => (
-                      <li key={h.key} className="text-slate-300">
-                        <span className="text-xs text-slate-500">{fmtDateTime(h.at)}</span> · {h.text}
-                        {h.detail}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
               </div>
             );
           })}

@@ -14,6 +14,8 @@ export default async function MessagesPage() {
   const contracts = await db.contract.findMany({
     where: { OR: [{ testerId: u.id }, { test: { developerId: u.id } }] },
     include: { test: { include: { developer: true } }, tester: true },
+    orderBy: { joinedAt: "desc" },
+    take: 100, // (Owner, Oct 27) the newest 100 conversations
   });
   const convos = await Promise.all(contracts.map(async (c) => {
     const last = await db.message.findFirst({ where: { testId: c.testId, testerId: c.testerId }, orderBy: { createdAt: "desc" }, include: { sender: true } });
@@ -31,7 +33,7 @@ export default async function MessagesPage() {
             <li key={c.id}>
               <Link href={`/app/chat/${c.id}`} className="card card-hover flex items-center gap-3 p-4 no-underline hover:no-underline">
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-white">{other} <span className="text-sm font-normal text-slate-400">· {c.title}</span></p>
+                  <p className="truncate font-medium text-white" title={`${other} · ${c.title}`}>{other} <span className="text-sm font-normal text-slate-400">· {c.title}</span></p>
                   <p className="truncate text-sm text-slate-400">{last ? `${last.senderId === u.id ? "You" : displayName(last.sender)}: ${last.body}` : "No messages yet."}</p>
                 </div>
                 {unread > 0 && <span className="rounded-full bg-fuchsia-500 px-2 py-0.5 text-xs text-white">{unread}</span>}

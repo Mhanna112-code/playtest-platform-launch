@@ -78,7 +78,7 @@ describe("sign up, confirm, log in, reset", () => {
     const { listingBody } = await import("./fixtures");
     const { user, cookie } = await makeUser({ dev: true, unconfirmed: true });
     const r = await json(await testsPOST(req("/api/tests", { cookie, body: listingBody() })));
-    expect(r).toMatchObject({ status: 409, body: { error: { code: "confirm_email", message: "Confirm your email first." } } });
+    expect(r).toMatchObject({ status: 409, body: { error: { code: "confirm_email", message: `Confirm your email first. We sent a link to ${user.email}.` } } });
     expect((await profilePOST(req("/api/profile", { cookie, body: { name: "Nora", isDeveloper: true } }))).status).toBe(200);
     await db.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } });
     expect((await testsPOST(req("/api/tests", { cookie, body: listingBody() }))).status).toBe(200);

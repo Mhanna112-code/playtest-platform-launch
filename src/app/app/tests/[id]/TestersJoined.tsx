@@ -2,13 +2,15 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Users } from "lucide-react";
 import { fmtDate } from "@/lib/format";
+import { PlusMore } from "@/components/PlusMore";
+import { LongList } from "@/components/LongList";
 
 // The full app's "Testers joined" card (dev test page, right after the header): the Seats avatar row (one circle per
 // spot; each tester's circle has a hover / tap card with their profile summary, a link to the profile and Block at its
 // bottom), "N spots still open" / "All spots are filled", "N of M spots taken · Change in Edit", and "No longer
 // working (N)".
 
-export type Seat = { testerId: string; name: string; summary: string[]; block: ReactNode };
+export type Seat = { testerId: string; name: string; summary: string[]; block: ReactNode; chat?: ReactNode };
 export type Gone = { contractId: string; name: string; how: string; at: Date | null };
 
 function TesterAvatar({ seat }: { seat: Seat }) {
@@ -21,8 +23,10 @@ function TesterAvatar({ seat }: { seat: Seat }) {
       <span role="tooltip"
         className="invisible absolute left-0 top-full z-40 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/15 bg-slate-900 p-4 text-sm opacity-0 shadow-2xl transition before:absolute before:inset-x-0 before:-top-2 before:h-2 before:content-[''] group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
         <span className="block font-semibold text-white">{seat.name}</span>
-        {seat.summary.map((l) => <span key={l} className="block text-slate-300">{l}</span>)}
+        {/* Devices and languages: 3, then "+N more". */}
+        {seat.summary.map((l, i) => <span key={l} className="block text-slate-300">{i === 0 && l.includes(", ") ? <PlusMore items={l.split(", ")} /> : l}</span>)}
         <Link href={`/app/testers/${seat.testerId}`} className="mt-1 block text-sky-300 hover:underline">See their profile</Link>
+        {seat.chat && <span className="mt-3 block border-t border-white/10 pt-2">{seat.chat}</span>}
         {seat.block && <span className="mt-3 block border-t border-white/10 pt-2">{seat.block}</span>}
       </span>
     </span>
@@ -47,11 +51,11 @@ export function TestersJoined({ testId, spots, seats, gone, status, children }: 
       {gone.length > 0 && (
         <details className="text-sm text-slate-400">
           <summary className="cursor-pointer">No longer working ({gone.length})</summary>
-          <ul className="mt-1.5 space-y-0.5 pl-4">
+          <LongList shown={5} tall="max-h-56" className="mt-1.5 space-y-0.5 pl-4">
             {gone.map((g) => (
-              <li key={g.contractId}><a href={`#tester-${g.contractId}`} className="text-sky-300 hover:underline">{g.name}</a> <span className="badge ml-1" data-gone-tag={g.how}>{g.how}</span>{g.at && <> · {fmtDate(g.at)}</>}</li>
+              <li key={g.contractId}><a href={`#tester-${g.contractId}`} className="text-sky-300 hover:underline"><span className="inline-block max-w-[16rem] truncate align-bottom" title={g.name}>{g.name}</span></a> <span className="badge ml-1" data-gone-tag={g.how}>{g.how}</span>{g.at && <> · {fmtDate(g.at)}</>}</li>
             ))}
-          </ul>
+          </LongList>
         </details>
       )}
       <div className="flex flex-wrap items-center justify-between gap-2">

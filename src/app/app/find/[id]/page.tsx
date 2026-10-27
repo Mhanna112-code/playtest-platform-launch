@@ -4,7 +4,7 @@ import { CategoryBadges } from "@/components/Category";
 import { CategoryTile, mainCategory, PartBadges } from "@/components/Ui";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, money } from "@/lib/format";
-import { termsLine, testerShare } from "@/lib/rules";
+import { termsLine, testerShare, testPaused } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, needsLines } from "@/lib/server/tests";
 import { JoinBox } from "./JoinBox";
@@ -14,6 +14,8 @@ import { LiveTop } from "@/components/LiveTop";
 import { qOptional, qText } from "@/lib/questions";
 import { ratingSummary } from "@/lib/server/ratings";
 import { NoThanksButton } from "./NoThanksButton";
+import { ClampText } from "@/components/ClampText";
+import { LongList } from "@/components/LongList";
 import { gapsOf } from "@/lib/gaps";
 import { developerStats } from "@/lib/server/profileStats";
 import { sideLink } from "@/lib/sides";
@@ -49,7 +51,19 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   const invite = await db.invite.findFirst({ where: { testId: t.id, testerId: u.id, status: "sent" } });
   const canRejoin = !!mine && canAskToRejoin(mine, ratedHere);
   const seenAt = new Date().toISOString();
-  const closed = t.status !== "open" || testersIn >= t.spots || (t.openUntil && t.openUntil < new Date());
+  // (Owner, Oct 27) A paused test (a hold, a suspension or the team's pause) is not listed and not joinable. Someone who joined, was invited or applied still sees it (with a Paused tag);
+  // anyone else opening the link reads "This test isn't available right now."
+  const paused = testPaused(t.developer, t);
+  const involved = !!mine || !!invite || t.developerId === u.id || (await db.application.count({ where: { testId: id, testerId: u.id } })) > 0 || (await db.invite.count({ where: { testId: id, testerId: u.id } })) > 0;
+  if (paused && !involved && !isAdmin(u)) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-6">
+        <p><a href="/app/find">← All tests</a></p>
+        <p className="card note" data-unavailable="">This test isn&apos;t available right now.</p>
+      </div>
+    );
+  }
+  const closed = paused || t.status !== "open" || testersIn >= t.spots || (t.openUntil && t.openUntil < new Date());
   const dev = displayName(t.developer);
   const dueIfNow = fmtDate(new Date(Date.now() + t.deadlineDays * 86_400_000));
   const parts = [
@@ -98,7 +112,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         {devRating.comments.length > 0 && (
           <details className="text-sm">
             <summary className="cursor-pointer">What testers said</summary>
-            <ul className="list-disc pl-5">{devRating.comments.map((cm, i) => <li key={i}>“{cm}”</li>)}</ul>
+            <LongList shown={3} tall="max-h-52" className="list-disc pl-5">{devRating.comments.map((cm, i) => <li key={i}><ClampText text={`“${cm}”`} /></li>)}</LongList>
           </details>
         )}
       </section>
@@ -195,6 +209,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         <p className="card note">This test isn&apos;t taking new testers right now.</p>
       ) : closed && invite && t.status === "open" && testersIn >= t.spots ? (
         <p className="info">{t.title} is full right now. Your invite stays open; we&apos;ll tell you when a spot opens.</p>
+      ) : paused ? (
+        <p className="info" data-paused="">This test is paused right now, so it isn&apos;t taking new testers.</p>
       ) : closed ? (
         <p className="err">{t.status === "stopped" ? "This test was stopped." : testersIn >= t.spots ? "This test is full." : "This test isn't taking new testers any more."}</p>
       ) : (

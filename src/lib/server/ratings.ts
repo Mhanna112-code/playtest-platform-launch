@@ -17,6 +17,8 @@ import { cancelCallsAhead, devGate, lockTest, ownContract, ownTest, recordEvent,
 export type Side = "tester" | "developer";
 const DAY = 86_400_000;
 export const WINDOW_DAYS = 14;
+/** (Owner, Oct 27) Rating reminders after a stop or close: every 3 days, for 2 weeks only. */
+export const REMINDER_WEEKS = 2;
 
 /** Is this rating visible (to the other side, on profiles, in averages)? */
 export const isRevealed = (r: { side: string; revealedAt: Date | null; createdAt: Date }, now = new Date()) =>
@@ -142,8 +144,9 @@ export async function devRate(dev: { id: string; name: string; email: string }, 
 
 
 /**
- * (Owner, Oct 26) Rating prompts: while the test is open they stack with that test's other same-day lines. Once the test is closed (stopped) each is its
- * own line, with a reminder every 3 days until the person has rated or the window ends (the developer's window is 14 days from the tester's rating).
+ * (Owner, Oct 26-27) Rating prompts: while the test is open they stack with that test's other same-day lines. Once the test is closed (stopped) each is its
+ * own line, with a reminder every 3 days until the person has rated or 2 weeks have passed (the tester's from the later of the stop / close and the first prompt; the developer's
+ * from the tester's rating). The Rate button itself has no end date (DEFAULT: change it in rateBlocker).
  */
 export async function ratingReminders(now = new Date()) {
   const every = 3 * DAY - 3_600_000;
@@ -157,9 +160,11 @@ export async function ratingReminders(now = new Date()) {
   const rated = new Set((await db.rating.findMany({ where: { contractId: { in: prompted.map((c) => c.id) }, side: "tester" }, select: { contractId: true } })).map((r) => r.contractId));
   for (const c of prompted) {
     if (rated.has(c.id) || testPaused(c.test.developer, c.test)) continue;
+    const from = new Date(Math.max(c.ratePromptedAt!.getTime(), c.test.stoppedAt?.getTime() ?? 0));
+    if (now.getTime() > from.getTime() + REMINDER_WEEKS * 7 * DAY) continue; // 2 weeks only
     if (now.getTime() - (await sinceLast(c.testerId, c.testId, c.ratePromptedAt!)).getTime() < every) continue;
     if ((await rateBlocker(c.id, "tester")) !== "") continue;
-    await bell(c.testerId, `Reminder: rate ${displayName(c.test.developer)} on “${c.title}”`, `/app/sessions/${c.id}#rate`, undefined, { own: true });
+    await bell(c.testerId, `Reminder: rate ${displayName(c.test.developer)} on “${c.title}”`, `/app/sessions/${c.id}#rate`, undefined, { own: true, reminder: `rate:${c.id}` });
     n++;
   }
   // Developer: the tester rated; every 3 days until they rate back or the 14 days end.
@@ -171,7 +176,7 @@ export async function ratingReminders(now = new Date()) {
     if (!c || c.test.status !== "stopped" || testPaused(c.test.developer, c.test)) continue;
     if (now.getTime() - (await sinceLast(c.test.developerId, c.testId, r.createdAt)).getTime() < every) continue;
     if ((await rateBlocker(c.id, "developer", now)) !== "") continue;
-    await bell(c.test.developerId, `Reminder: rate ${displayName(c.tester)} for “${c.title}” (until ${new Date(r.createdAt.getTime() + WINDOW_DAYS * DAY).toLocaleDateString("en-US", { month: "short", day: "numeric" })})`, `/app/tests/${c.testId}#tester-${c.id}`, undefined, { own: true });
+    await bell(c.test.developerId, `Reminder: rate ${displayName(c.tester)} for “${c.title}” (until ${new Date(r.createdAt.getTime() + WINDOW_DAYS * DAY).toLocaleDateString("en-US", { month: "short", day: "numeric" })})`, `/app/tests/${c.testId}#tester-${c.id}`, undefined, { own: true, reminder: `rate-dev:${c.id}` });
     n++;
   }
   return n;

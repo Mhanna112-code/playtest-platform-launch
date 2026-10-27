@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
  * The full app's name with a hover / tap card (its HoverBlock / DeveloperName): their summary lines, a link to the
  * profile and, at the bottom, Block. The same card the developer's Seats avatars use.
  */
-export function PersonHover(p: { name: string; href: string; summary: string[]; block?: ReactNode; className?: string }) {
+export function PersonHover(p: { name: string; href: string; summary: string[]; block?: ReactNode; chat?: ReactNode; className?: string }) {
   return (
     <span className="group relative inline-block">
       <Link href={p.href} className={`${p.className ?? "text-slate-200"} underline-offset-2 hover:underline focus:outline-none focus-visible:underline`}>{p.name}</Link>
@@ -14,6 +14,7 @@ export function PersonHover(p: { name: string; href: string; summary: string[]; 
         <span className="block font-semibold text-white">{p.name}</span>
         {p.summary.map((l) => <span key={l} className="block text-slate-300">{l}</span>)}
         <Link href={p.href} className="mt-1 block text-sky-300 hover:underline">See their profile</Link>
+        {p.chat && <span className="mt-3 block border-t border-white/10 pt-2">{p.chat}</span>}
         {p.block && <span className="mt-3 block border-t border-white/10 pt-2">{p.block}</span>}
       </span>
     </span>
