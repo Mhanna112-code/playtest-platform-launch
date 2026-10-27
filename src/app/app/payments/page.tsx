@@ -5,6 +5,7 @@ import { requirePageUser } from "@/lib/server/page-auth";
 import { stripeOn } from "@/lib/server/stripe";
 import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { HOLD_APPROVAL_AFTER } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
@@ -45,7 +46,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const owed = tester ? await db.payment.findMany({ where: { testerId: u.id, OR: [{ status: "failed", settledAt: null, owedUntil: { not: null } }, { status: "owed" }] }, select: { submissionId: true, callId: true } }) : [];
   const owedKeys = new Set(owed.map((p) => p.submissionId ?? p.callId));
   const [paidOut, paidIn] = await Promise.all([
-    dev ? db.payment.findMany({ where: { developerId: u.id, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "desc" }, take: 500 }) : [],
+    // (Batch 10) A repaid chargeback refunded after the platform won it stays in the list, marked refunded (not in the total).
+    dev ? db.payment.findMany({ where: { developerId: u.id, OR: [{ status: { in: ["charged", "not_set_up"] } }, { status: "refunded", kind: "chargeback" }] }, orderBy: { createdAt: "desc" }, take: 500 }) : [],
     tester ? db.payment.findMany({ where: { testerId: u.id, kind: { not: "subscription" }, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "desc" }, take: 500 }) : [],
   ]);
   // The full app's billing / payouts pages: one column of cards, each with its icon heading; lists as rows.
@@ -56,7 +58,14 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       {!on && <p className="info">{MESSAGES.off}</p>}
       {cbSteps && <ChargebackSteps steps={cbSteps} />}
       {/* (Owner, Oct 27) "Pay what you owe" shows only during a hold (a declined payment starts one at once). Pay and Reject left this page: the dashboard has the Needs review box. */}
-      {dev && (await owedForBox(u.id).then((o) => (u.holdStartedAt ? <OwedBox onHold={!!u.holdStartedAt} owed={o} chargeback={!!cbSteps} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} /> : null)))}
+      {/* (Owner, Oct 29, batch 10) The box updates live (about every 20 s) and disappears when nothing is owed. */}
+      {dev && <AutoRefresh query="owed=1" />}
+      {dev && (await owedForBox(u.id).then((o) => {
+        const review = !!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER);
+        if (!u.holdStartedAt) return null;
+        if (!o.length) return review ? <p className="info" data-hold-review-paid="">You&apos;ve paid what you owe. The team will review your account before your tests resume.</p> : null;
+        return <OwedBox onHold={!!u.holdStartedAt} owed={o} chargeback={!!cbSteps} review={review} />;
+      }))}
       {q.error && q.error !== "off" && <p className="err">{MESSAGES[q.error]}</p>}
       {q.saved === "verified" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card verified.</p>}
       {q.saved === "card" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card saved.</p>}
@@ -84,14 +93,14 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
           <section className="card space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-white">What you&apos;ve paid</h2>
-              <span className="text-sm text-slate-400">Total {money(paidOut.reduce((a, p) => a + p.amountCents, 0))}</span>
+              <span className="text-sm text-slate-400">Total {money(paidOut.filter((p) => p.status !== "refunded").reduce((a, p) => a + p.amountCents, 0))}</span>
             </div>
             {/* Newest first: 8 rows, then "Show N more" opening a scroll box (the long-list rule). */}
             <LongList shown={8} tall="max-h-96" className="divide-y divide-white/5 text-sm">
               {paidOut.map((p) => (
                 <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                   <span className="text-slate-200">{p.kind === "call" ? "Live call" : p.kind === "dispute" ? "Dispute decision" : p.kind === "extra" ? "Extra pay" : p.kind === "chargeback" ? "A reversed payment, paid again" : p.kind === "subscription" ? "Subscription" : "Sent work"}</span>
-                  <span className="text-slate-400">{fmtDateTime(p.createdAt)} · {money(p.amountCents)}{p.status === "not_set_up" ? " · recorded (payments not set up)" : ""}</span>
+                  <span className="text-slate-400">{fmtDateTime(p.createdAt)} · {money(p.amountCents)}{p.status === "not_set_up" ? " · recorded (payments not set up)" : p.status === "refunded" ? " · refunded (your bank's chargeback was reversed)" : ""}</span>
                 </li>
               ))}
               {paidOut.length === 0 && <li className="py-2 text-slate-500">Nothing yet.</li>}
@@ -104,7 +113,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         <>
           <section id="sent" className="card scroll-mt-24 space-y-3">
             <h2 className="font-semibold text-white">Everything you sent</h2>
-            <p className="text-xs text-slate-500">Each part you sent, by test, newest first, and where its money is now. A rejected or partly paid part can be disputed once, on its session page.</p>
+            <p className="text-xs text-slate-500">Each part you sent, by test, newest first, and where its money is now. Any part the developer paid or rejected can be disputed once, on its session page.</p>
             {sent.every((c) => c.submissions.length + c.calls.filter((x) => x.review).length === 0) && <p className="text-sm text-slate-500">Nothing sent yet.</p>}
             <LongList as="div" shown={5} tall="max-h-[28rem]" className="space-y-3">
             {sent.filter((c) => c.submissions.length + c.calls.filter((x) => x.review).length > 0).map((c) => (

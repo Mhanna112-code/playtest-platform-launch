@@ -1,8 +1,8 @@
-import { chargebackOpened } from "@/lib/server/holds";
+import { chargebackOpened, chargebackWon } from "@/lib/server/holds";
 import { fakeOn, getStripe } from "@/lib/server/stripe";
 import { payoutFixed, payoutProblem } from "@/lib/server/restrictions";
 
-// Stripe webhook: a dispute (the developer's bank reversing a payment) opens a chargeback and a payment hold.
+// Stripe webhook: a dispute (the developer's bank reversing a payment) opens a chargeback and a payment hold; a dispute the platform won closes it (batch 10).
 export async function POST(req: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim() || (fakeOn() ? "fake" : "");
   if (!secret) return new Response("Webhooks aren't set up", { status: 503 });
@@ -18,6 +18,11 @@ export async function POST(req: Request) {
   if (event.type === "charge.dispute.created") {
     const pi = event.data.object.payment_intent;
     if (typeof pi === "string") await chargebackOpened(pi);
+  }
+  // (Owner, Oct 29, batch 10) A chargeback the platform won: its amount leaves what the developer owes (refunded if they already paid it).
+  if (event.type === "charge.dispute.closed" && event.data.object.status === "won") {
+    const pi = event.data.object.payment_intent;
+    if (typeof pi === "string") await chargebackWon(pi);
   }
   // (Design doc 9) A payout that fails, or a payout account that needs attention: the tester is told (banner + a bell every 3 days).
   const account = event.account ?? (typeof event.data.object.id === "string" && event.type === "account.updated" ? (event.data.object.id as string) : "");

@@ -11,6 +11,8 @@ type Line = { id: string; retry: boolean; amountCents: number; until: string | n
 /**
  * (Owner, Oct 27) Failed payments (each listed) and reversed payments (a chargeback adds its amount); one button pays them all. It stops once if the total
  * changed since the page loaded; the second press pays at once, with the result right under the button.
+ * (Owner, Oct 29, batch 10) The page polls (AutoRefresh): the amount and the lines follow `owed` live, and the page drops the box when nothing is owed. A press
+ * still checks what was last confirmed (the page load or the last stop box), so a press after a change stops once with the new lines.
  */
 export function OwedBox({ onHold, owed, chargeback = false, review = false }: { onHold: boolean; owed: Line[]; chargeback?: boolean; review?: boolean }) {
   const [err, setErr] = useState("");
@@ -56,7 +58,11 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false }: { 
               setTimeout(() => window.location.reload(), 1500);
             }
           } catch (e) {
-            if (e instanceof ApiError && e.code === "stop_once") {
+            if (e instanceof ApiError && e.code === "nothing_owed") {
+              // Paid meanwhile (another tab): nothing is charged; the page reloads without the box.
+              setErr(errOf(e));
+              setTimeout(() => window.location.reload(), 1500);
+            } else if (e instanceof ApiError && e.code === "stop_once") {
               setChanges((c) => (c ? mergeChanges(c, e.data.changes as Change[]) : (e.data.changes as Change[])));
               if (typeof e.data.totalCents === "number") setTotal(e.data.totalCents);
               if (Array.isArray(e.data.ids)) setShownIds(e.data.ids as string[]);
@@ -65,7 +71,7 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false }: { 
           }
         }}
       >
-        Pay what you owe ({money(total)})
+        Pay what you owe ({money(changes ? total : seenTotal)})
       </button>}
       <ChangesBox changes={changes} />
       {done && <p className="ok">{done}</p>}

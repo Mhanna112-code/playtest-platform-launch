@@ -49,7 +49,7 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
   {
     title: "5. Disputes",
     points: [
-      "A tester can dispute a rejection or a payment below the listing amount once. Our team decides against the listing and can read the work, the reason and the chat. A decision can only raise the pay, up to the listing amount.",
+      "A tester can dispute the developer's decision on any part they sent, once: a rejection or a payment of any amount, including $0 and parts that weren't listed. Our team decides and can read the work, the reason and the chat. A decision can only raise the pay: up to the listing amount, or for a part that wasn't listed up to $1,000 a piece ($200 an hour for a call), minus what was already paid.",
       "A bank reversing a card payment (a chargeback) pauses the developer's tests until it is resolved and what is owed is paid.",
     ],
   },

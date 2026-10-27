@@ -78,23 +78,34 @@ export function listingAmount(c: { writtenCents: number | null; recordingCents: 
   return c.liveRateCents == null ? null : callCharge(c.liveRateCents, bookedMinutes);
 }
 
-/** Disputes: only parts in the contract paid below the listing amount; once per part. Outside the contract, the amount is final. */
-export function canDispute(paidCents: number, listingCents: number | null, alreadyDisputed: boolean): Check {
-  if (listingCents == null) return no("This wasn't in your contract, so the developer's amount is final.");
+/**
+ * (Owner, Oct 29, batch 10) Every part the developer reviewed can be disputed, once: a Pay (any amount, $0 included) or a Reject on a listed part, and a Pay (any amount,
+ * $0 included) on an unlisted part. The tester's own Charge or Let it go isn't the developer's decision, so it can't be disputed. (`paidCents` and `listingCents` are kept for
+ * the callers' signatures: no amount refuses a dispute any more.)
+ */
+export function canDispute(paidCents: number, listingCents: number | null, alreadyDisputed: boolean, testerChose = false): Check {
+  void paidCents;
+  void listingCents;
+  if (testerChose) return no(TESTER_CHOSE_LINE);
   if (alreadyDisputed) return no("You already disputed this payment. A part can be disputed once.");
-  if (paidCents >= listingCents) return no("This part was paid the listing amount or more, so there's nothing to dispute.");
   return yes;
 }
+/** (Batch 10) A dispute pressed on a part the tester settled themselves (their Charge or Let it go). */
+export const TESTER_CHOSE_LINE = "You settled this part yourself (Charge or Let it go), so there's no developer decision to dispute.";
+/** (Batch 10) What an admin's decision can reach, for the dispute form's note: the listing, or the unlisted max for this piece. */
+export const disputeLimitText = (listingCents: number | null, kind: "submission" | "call") =>
+  listingCents != null ? "up to the listing amount" : kind === "call" ? `up to ${money(NO_LISTING_CALL_RATE_CAP_CENTS).replace(/\.00$/, "")} an hour for the logged minutes` : `up to ${money(NO_LISTING_WORK_CAP_CENTS).replace(/\.00$/, "")} for this piece`;
 
 /**
  * An admin's decision can only raise pay. (Owner, item 28) MIN = what this piece was paid; MAX = the part's listing minus what
  * was already paid for that part on OTHER pieces (the same rule as the Charge cap). Returns the extra to charge.
  */
-export function checkDisputeDecision(decidedCents: number | null, paidCents: number, listingCents: number, otherPaidCents = 0): Check & { extraCents?: number } {
+export function checkDisputeDecision(decidedCents: number | null, paidCents: number, listingCents: number, otherPaidCents = 0, unlisted = false): Check & { extraCents?: number } {
   if (decidedCents == null || !Number.isInteger(decidedCents)) return no("Enter the total pay, like 7.50.");
   if (decidedCents < paidCents) return no(`A decision can only raise pay: at least the ${money(paidCents)} paid for this piece.`);
   const max = Math.max(paidCents, listingCents - otherPaidCents);
-  if (decidedCents > max) return no(`At most ${money(max)}: the listing's ${money(listingCents)}${otherPaidCents > 0 ? ` minus the ${money(otherPaidCents)} already paid for this part` : ""}.`);
+  // (Batch 10) An unlisted part: `listingCents` is its max ($1000 for a written or recording piece, $200/h × the logged minutes for a call), minus what was already paid on it.
+  if (decidedCents > max) return no(`At most ${money(max)}: ${unlisted ? `the max of ${money(listingCents)} for a part that isn't listed` : `the listing's ${money(listingCents)}`}${otherPaidCents > 0 ? ` minus the ${money(otherPaidCents)} already paid for this part` : ""}.`);
   const extra = decidedCents - paidCents;
   if (extra > 0 && extra < MIN_CHARGE_CENTS) return no(`The extra would be under the smallest card charge (${money(MIN_CHARGE_CENTS)}). Keep the pay as it is or raise it by at least ${money(MIN_CHARGE_CENTS)}.`);
   return { ok: true, extraCents: extra };
@@ -476,10 +487,25 @@ export const PAUSE_DEFAULTS = {
   shiftDeadlines: true,
 } as const;
 
-/** The session page's paused notice: what still works (never why: no "hold", "suspended" ...). */
-export const PAUSED_FOR_TESTERS = `This test is paused right now. You can't send work${PAUSE_DEFAULTS.chatClosed ? " or chat" : ""} until it resumes${PAUSE_DEFAULTS.draftsEditable ? ", but you can keep writing and saving drafts" : ""}. You can still charge or let go of unreviewed work, dispute a payment, rate, leave the test and cancel booked calls. Payment for your work may be delayed.`;
 /** (Design doc 8) The tester is never told why a test is paused (no "hold", "suspended" ...). */
 export const PAUSED_RIGHT_NOW = "This test is paused right now.";
+/** What a tester can do on a paused test's session page right now (batch 10: the banner lists only these), and what comes back when it resumes. */
+export type PausedCan = { drafts: boolean; charge: boolean; dispute: boolean; rate: boolean; leave: boolean; cancelCalls: boolean; send: boolean; requestCalls: boolean; chat: boolean };
+const listAnd = (xs: string[], oxford: boolean) => (xs.length <= 1 ? xs.join("") : xs.length === 2 ? `${xs[0]} and ${xs[1]}` : `${xs.slice(0, -1).join(", ")}${oxford ? "," : ""} and ${xs[xs.length - 1]}`);
+/**
+ * (Owner, Oct 29, batch 10) The blue banner at the top of a paused test's session page (never "hold", "suspended", "failed" or "chargeback"), built from what is actually
+ * available, so it never offers a button that isn't there. With everything available:
+ * "This test is paused right now. For now you can save drafts of your parts, charge or let go of work left unreviewed, dispute, rate, leave the test, and cancel booked calls.
+ * Sending work, requesting calls and chat come back when it resumes."
+ */
+export function pausedForTesters(can: PausedCan) {
+  const now = [can.drafts && "save drafts of your parts", can.charge && "charge or let go of work left unreviewed", can.dispute && "dispute", can.rate && "rate", can.leave && "leave the test", can.cancelCalls && "cancel booked calls"].filter((x): x is string => !!x);
+  const back = [can.send && "sending work", can.requestCalls && "requesting calls", can.chat && "chat"].filter((x): x is string => !!x);
+  const backLine = back.length ? ` ${listAnd(back, false).replace(/^./, (c) => c.toUpperCase())} ${back.length === 1 ? "comes" : "come"} back when it resumes.` : "";
+  return `${PAUSED_RIGHT_NOW}${now.length ? ` For now you can ${listAnd(now, true)}.` : ""}${backLine}`;
+}
+/** The full banner (everything available). */
+export const PAUSED_FOR_TESTERS = pausedForTesters({ drafts: true, charge: true, dispute: true, rate: true, leave: true, cancelCalls: true, send: true, requestCalls: true, chat: true });
 /** (Owner, Oct 28 afternoon) Send (written answers, recordings) while the test is paused. */
 export const PAUSED_SEND = `${PAUSED_RIGHT_NOW} You can send this once it resumes.`;
 /** (Owner, Oct 28 afternoon, DEFAULT) Chat while the test is paused. */
@@ -502,6 +528,11 @@ export function pauseShiftMs(start: Date, now: Date, others: (Date | null | unde
   return Math.max(0, until - start.getTime());
 }
 export const PAY_WAITS = "Pay what you owe first.";
+/** (Owner, Oct 29, batch 10) A hold lifted (paid, or a chargeback hold cleared) while an admin suspension is still on: bell and email, sent even with email Off. */
+/** (Owner, Oct 29, batch 10) The platform won a chargeback: the developer's bell and email, and (when they had already paid it back) the receipt line for the refund. */
+export const chargebackWonLine = (cents: number) => `Your bank's chargeback of ${money(cents)} was reversed in your favour.`;
+export const chargebackRefundLine = (cents: number) => `Refund: your bank's chargeback of ${money(cents)} was reversed`;
+export const STILL_SUSPENDED_LINE = "Your payment went through. Your tests stay paused while your account is suspended.";
 /** (Owner, Oct 27) What a tester reads while the developer owes a declined payment: Dispute and Charge wait (never "failed"). */
 export const OWED_FOR_TESTERS = "Payment from this developer is delayed right now. You can try again once it's sorted.";
 

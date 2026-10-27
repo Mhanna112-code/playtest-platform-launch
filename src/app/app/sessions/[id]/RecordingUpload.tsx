@@ -9,7 +9,7 @@ import { ChangesBox } from "@/components/ChangesBox";
 type Rec = { id: string; filename: string; size: number; uploaded: boolean };
 
 /** Upload up to 5 screen recordings (500 MB each), then send them. Can be sent again with new ones until paid. */
-export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, seenAt }: { sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean; seenAt: string }) {
+export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, seenAt, sendable = true }: { sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean; seenAt: string; /** (Batch 10) false while the test is paused: uploads (drafts) still work, Send is hidden */ sendable?: boolean }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
@@ -61,7 +61,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
         </label>
       )}
       {progress != null && <p className="note">Uploading… {progress}%</p>}
-      {canSend && uploaded.length > 0 && (
+      {canSend && sendable && uploaded.length > 0 && (
         <button
           className="btn"
           disabled={busy}

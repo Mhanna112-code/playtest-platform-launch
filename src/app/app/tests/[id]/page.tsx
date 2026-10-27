@@ -29,6 +29,7 @@ import { HOLD_APPROVAL_AFTER, NOT_LISTED, callListed } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
+import { AnswersBox } from "@/components/AnswersBox";
 import { pieceOf, pieceRoom } from "@/lib/server/payments";
 import { ExtraPay } from "./ExtraPay";
 import { TopPanel } from "./TopPanel";
@@ -259,13 +260,18 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               </p>
               {x.kind === "sub" ? (
                 <>
-                  {x.s!.kind === "written" && writtenQuestions(x.c).map((q, i) => (
-                    <div key={i} className="text-sm">
-                      <p className="font-medium text-ink-200">{qText(q)}{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</p>
-                      <p className="whitespace-pre-wrap">{(x.s!.answers as string[])[i]}</p>
-                    </div>
-                  ))}
-                  {x.s!.notes && <p className="whitespace-pre-wrap text-sm">Notes: {x.s!.notes}</p>}
+                  {/* (Owner, Oct 29, batch 10) One piece's answers in their own scroll box (about 16 lines) when longer; the Pay box below stays outside it. */}
+                  {(x.s!.kind === "written" || x.s!.notes) && (
+                    <AnswersBox>
+                      {x.s!.kind === "written" && writtenQuestions(x.c).map((q, i) => (
+                        <div key={i} className="text-sm">
+                          <p className="font-medium text-ink-200">{qText(q)}{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</p>
+                          <p className="whitespace-pre-wrap break-words">{(x.s!.answers as string[])[i]}</p>
+                        </div>
+                      ))}
+                      {x.s!.notes && <p className="whitespace-pre-wrap break-words text-sm">Notes: {x.s!.notes}</p>}
+                    </AnswersBox>
+                  )}
                   {x.s!.recordings.filter((r) => r.uploadedAt).map((r) => (
                     <div key={r.id} className="text-sm">
                       <video controls preload="metadata" className="max-h-72 w-full rounded bg-black" src={`/api/recordings/${r.id}/file`} />

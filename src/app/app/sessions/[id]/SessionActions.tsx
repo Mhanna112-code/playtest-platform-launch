@@ -9,8 +9,11 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { qOptional, qText } from "@/lib/questions";
 import { ChangesBox } from "@/components/ChangesBox";
 
-/** Written answers: one box per question in the tester's contract. Can be updated until it's paid. */
-export function WrittenForm({ sessionId, questions, initial, initialNotes, update, seenAt }: { sessionId: string; questions: string[]; initial: string[]; initialNotes: string; update: boolean; seenAt: string }) {
+/**
+ * Written answers: one box per question in the tester's contract. Can be updated until it's paid. `canSend` false (batch 10: the test is paused): the boxes stay and what is
+ * typed is kept as a draft, but Send is hidden until the test resumes.
+ */
+export function WrittenForm({ sessionId, questions, initial, initialNotes, update, seenAt, canSend = true }: { sessionId: string; questions: string[]; initial: string[]; initialNotes: string; update: boolean; seenAt: string; canSend?: boolean }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
@@ -28,6 +31,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
+    if (!canSend) return;
     setBusy(true);
     setMsg(null);
     try {
@@ -53,7 +57,8 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
         <label className="label" htmlFor="notes">Anything else (bugs, ideas)</label>
         <textarea id="notes" rows={2} className="input" value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
-      <span><button className="btn" disabled={busy}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>{keep.restored && <NotSentTag />}</span>
+      <span>{canSend && <button className="btn" disabled={busy}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && <NotSentTag />}</span>
+      {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
       <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {msg && (msg.ok ? <p className="ok">{msg.text}</p> : <Err text={msg.text} />)}
     </form>
@@ -92,8 +97,8 @@ export function LeaveButton({ sessionId, seenAt, title }: { sessionId: string; s
   );
 }
 
-/** Dispute once: only for a part in the contract paid below the listing amount. */
-export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "" }: { disabledNote?: string; sessionId: string; kind: "submission" | "call"; id: string; seenAt?: string }) {
+/** Dispute once, on any part the developer reviewed (batch 10). `limit`: how far a decision can raise the pay ("up to the listing amount", or the unlisted max). */
+export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", limit = "up to the listing amount" }: { disabledNote?: string; sessionId: string; kind: "submission" | "call"; id: string; seenAt?: string; limit?: string }) {
   const [box, setBox] = useStopBox();
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
@@ -109,7 +114,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "" }: 
       <label className="label req" htmlFor={`d-${id}`}>Why should the pay be higher? (the team and the developer read it)</label>
       <textarea id={`d-${id}`} rows={3} className="input" maxLength={2000} data-min-chars="10" data-msg="Say why you think the pay should be higher (at least a sentence)." value={reason} onChange={(e) => setReason(e.target.value)} />
       <p className="text-xs text-slate-500">10–2,000 characters</p>
-      <p className="note">You can dispute this once. Our team decides; a decision can only raise the pay, up to the listing amount.</p>
+      <p className="note">You can dispute this once. Our team decides; a decision can only raise the pay, {limit}.</p>
       <button
         className="btn"
         disabled={busy || !!disabledNote}

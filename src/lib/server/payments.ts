@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money, toCents } from "@/lib/format";
-import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, canDispute, checkDisputeDecision, delayedPayLine, declinedHoldLine, checkPay, checkReject, STRIPE_MAX_CENTS, checkExtraPay, extraCapCents, overListingLine, overMaxLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, PAY_WAITS, testerShare } from "@/lib/rules";
+import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, canDispute, checkDisputeDecision, disputeLimitText, delayedPayLine, declinedHoldLine, checkPay, checkReject, checkExtraPay, extraCapCents, overListingLine, overMaxLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, PAY_WAITS, testerShare } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify } from "./notify";
 import { blockedEitherWay } from "./blocks";
@@ -116,8 +116,8 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
 
   const { rev, payment, c, piece, name } = reserved;
   if (reject) {
-    const canDisp = rev.agreedCents != null && rev.agreedCents > 0;
-    await notify(c.tester.email, `Your ${piece.label} on “${c.title}” wasn't accepted`, [`${displayName(dev)} rejected your ${piece.label}: “${rev.reason}”`, canDisp ? "It's part of your contract, so you can dispute this once from your session page." : "It wasn't in your contract, so this is final."], `/app/sessions/${c.id}#${partAnchor(piece.label)}`, { payment: true, group: "trejected" });
+    // (Batch 10) Every reviewed part can be disputed once (only listed parts can be rejected).
+    await notify(c.tester.email, `Your ${piece.label} on “${c.title}” wasn't accepted`, [`${displayName(dev)} rejected your ${piece.label}: “${rev.reason}”`, "You can dispute this once from your session page."], `/app/sessions/${c.id}#${partAnchor(piece.label)}`, { payment: true, group: "trejected" });
     return { reviewId: rev.id, amountCents: 0, rejected: true, paidSoFarCents: await paidSoFar(c.id) };
   }
   let result;
@@ -157,7 +157,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
   return { reviewId: rev.id, amountCents: rev.amountCents, status: result.status, rejected: false, paidSoFarCents: await paidSoFar(c.id), ...(c.tester.suspendedAt && rev.amountCents > 0 ? { later: `${name} will receive it later` } : {}) };
 }
 
-/** Tester: dispute once, only for parts in the contract paid below the listing amount. */
+/** Tester: dispute once, on any part the developer reviewed (batch 10: listed or not, any amount, $0 included, or a Reject). */
 export async function openDispute(tester: U, contractId: string, body: Record<string, unknown>) {
   const kind = String(body.kind ?? ""), id = String(body.id ?? "");
   const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 2000) : "";
@@ -170,11 +170,11 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   if (review && !(await db.dispute.findFirst({ where }))) await testerGate(tester.id, contractId, c.testId, body);
   if (!review) throw new HttpError(409, "not_paid", "This hasn't been paid yet.");
   const existing = await db.dispute.findFirst({ where });
-  const ok = canDispute(review.amountCents, review.agreedCents, !!existing);
+  const ok = canDispute(review.amountCents, review.agreedCents, !!existing, review.reason === CHARGED_BY_TESTER || review.reason === LET_GO_BY_TESTER);
   if (!ok.ok) throw new HttpError(409, "no_dispute", ok.message);
   const d = await db.dispute.create({ data: { ...where, contractId, testerId: tester.id, reason } });
   await logEvent(c.testId, "dispute", `${displayName(tester)} disputed the pay for their ${kind === "call" ? "live call" : (await db.submission.findUnique({ where: { id } }))?.kind === "recording" ? "recording" : "written answers"}`, contractId);
-  await notify(c.test.developer.email, `${displayName(tester)} disputed a payment on “${c.title}”`, [`${displayName(tester)} thinks the pay should be higher: “${reason}”`, "Our team decides. A decision can only raise the pay, up to the listing amount."], `/app/tests/${c.testId}#item-dispute-${d.id}`, { group: "disputefiled" });
+  await notify(c.test.developer.email, `${displayName(tester)} disputed a payment on “${c.title}”`, [`${displayName(tester)} thinks the pay should be higher: “${reason}”`, `Our team decides. A decision can only raise the pay, ${disputeLimitText(review.agreedCents, kind === "call" ? "call" : "submission")}.`], `/app/tests/${c.testId}#item-dispute-${d.id}`, { group: "disputefiled" });
   // (Owner, Oct 26) Admins are told too: new-dispute lines on the same day stack into one line across tests, linking to the disputes.
   const flagged = await reportedOver3([tester.id, c.test.developerId]);
   for (const a of await adminUsers()) await bell(a.id, `Dispute on “${c.title}”: ${labelled(displayName(tester), flagged.has(tester.id))} says the pay should be higher (${labelled(displayName(c.test.developer), flagged.has(c.test.developerId))})`, "/admin#disputes", undefined, { group: "disputes" });
@@ -184,13 +184,21 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
 /**
  * (Item 28) What an admin may decide for a dispute: MIN = what this piece was paid; MAX = the part's listing minus what was
  * already paid for that part on OTHER pieces (payments on the same work that are not this review's).
+ * (Owner, Oct 29, batch 10) An unlisted part: MAX = the unlisted cap ($1000 for a written or recording piece, $200/h × the logged minutes for a call) minus what was already
+ * paid on it besides this Pay (its extra pays). `listing` is then that cap and `unlisted` is true.
  */
 export async function disputeBounds(d: { submissionId: string | null; callId: string | null }) {
   const review = await db.review.findFirstOrThrow({ where: d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! } });
   const paid = await db.payment.aggregate({ where: { ...(d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! }), kind: { not: "dispute" }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } });
+  if (review.agreedCents == null) {
+    const piece = await pieceOf(d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId });
+    const cap = piece ? pieceMaxCents(piece.kind, piece.minutes) : 0;
+    const other = Math.max(0, (paid._sum.amountCents ?? 0) - review.amountCents);
+    return { review, listing: cap, unlisted: true, other, min: review.amountCents, max: Math.max(review.amountCents, cap - other) };
+  }
   const other = d.submissionId ? Math.max(0, (paid._sum.amountCents ?? 0) - review.amountCents) : 0;
-  const listing = review.agreedCents ?? STRIPE_MAX_CENTS;
-  return { review, listing, other, min: review.amountCents, max: Math.max(review.amountCents, listing - other) };
+  const listing = review.agreedCents;
+  return { review, listing, unlisted: false, other, min: review.amountCents, max: Math.max(review.amountCents, listing - other) };
 }
 
 /** Admin: decide a dispute. The total can only go up (to at most the listing minus what the part was already paid on other pieces); blank keeps the pay; the extra is charged. */
@@ -202,11 +210,11 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
     const by = d.decidedById ? await db.user.findUnique({ where: { id: d.decidedById } }) : null;
     throw new HttpError(409, "decided", `This dispute was already decided${by ? ` by ${displayName(by)}` : ""}${d.decidedAt ? ` at ${fmtDateTime(d.decidedAt)}` : ""}.`);
   }
-  const { review, other } = await disputeBounds(d);
+  const { review, other, listing, unlisted } = await disputeBounds(d);
   // A blank box keeps the pay as it is.
   const blank = body.total === undefined || body.total === null || String(body.total).trim() === "";
   const decided = blank ? review.amountCents : toCents(body.total);
-  const check = checkDisputeDecision(decided, review.amountCents, review.agreedCents ?? STRIPE_MAX_CENTS, other);
+  const check = checkDisputeDecision(decided, review.amountCents, listing, other, unlisted);
   if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
   const extra = check.extraCents!;
   const c = await db.contract.findUniqueOrThrow({ where: { id: d.contractId }, include: { tester: true, test: { include: { developer: true } } } });

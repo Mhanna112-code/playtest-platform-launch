@@ -128,7 +128,9 @@ describe("A1, A2) declined payments and chargebacks", () => {
     await startHold(dev.user.id, "unpaid");
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdCount).toBe(4);
     const { payOwed } = await import("@/lib/server/holds");
-    expect((await payOwed(dev.user)).lifted).toBe(false);
+    // (Batch 10) Nothing is owed: the press is refused and the hold stays (it waits for Approve).
+    await expect(payOwed(dev.user)).rejects.toMatchObject({ code: "nothing_owed" });
+    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
   });
 });
 

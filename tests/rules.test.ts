@@ -62,9 +62,9 @@ describe("the one Pay box", () => {
 describe("disputes", () => {
   it("only contract parts paid below the listing amount, once", () => {
     expect(canDispute(500, 1000, false).ok).toBe(true);
-    expect(canDispute(1000, 1000, false).ok).toBe(false);
+    expect(canDispute(1000, 1000, false).ok).toBe(true); // (batch 10) any amount
     expect(canDispute(500, 1000, true)).toMatchObject({ ok: false, message: expect.stringContaining("once") });
-    expect(canDispute(0, null, false)).toMatchObject({ ok: false, message: expect.stringContaining("final") });
+    expect(canDispute(0, null, false).ok).toBe(true); // (batch 10) unlisted parts too
   });
   it("an admin can only raise pay, up to the listing amount", () => {
     expect(checkDisputeDecision(400, 500, 1000).ok).toBe(false);

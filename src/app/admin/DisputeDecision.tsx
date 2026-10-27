@@ -7,7 +7,7 @@ const dollars = (c: number) => `$${(c / 100).toFixed(2)}`;
 
 /**
  * The admin's decision on a dispute: the total pay for THIS piece, between what it was paid (min) and the part's listing minus
- * what was already paid for that part on other pieces (max). Blank keeps the pay as it is. Range hint next to the box,
+ * what was already paid for that part on other pieces (max; batch 10: for an unlisted part, its max of $1000 or $200/h × the logged minutes, minus what was already paid). Blank keeps the pay as it is. Range hint next to the box,
  * red at the box when it is left with an amount outside it.
  */
 export function DisputeDecision({ id, minCents, maxCents }: { id: string; minCents: number; maxCents: number }) {

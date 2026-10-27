@@ -385,10 +385,10 @@ model Payment {
   owedUntil    DateTime?
   /// The daily job retries owed payments once a day
   retriedAt    DateTime?
-  /// The "1 day before the cut-off" notice was sent
+  /// (Batch 10) When a "Pay what you owe" press claimed this payment (status "paying"); a claim older than 10 minutes can be taken again
   warnedAt     DateTime?
   settledAt    DateTime?
-  /// Bank reversal (Stripe dispute): "" | "open" | "resolved"
+  /// Bank reversal (Stripe dispute): "" | "open" | "resolved" | "won" (batch 10: the platform won it, so it is no longer owed)
   chargeback   String   @default("")
   chargebackAt DateTime?
   stripeChargeId String?

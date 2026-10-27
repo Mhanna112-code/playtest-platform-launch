@@ -42,12 +42,12 @@ describe("the one Pay box", () => {
     expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400, reason: "Only half answered" })).status).toBe(200);
   });
 
-  it("extra work: any amount, no reason; disputes are refused (final)", async () => {
+  it("extra work: any amount, no reason; (batch 10) it can be disputed", async () => {
     const { dev, sub, sessionId, tester } = await sent({ writtenCents: null, questions: [] });
     expect(sub.agreedCents).toBeNull();
     expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "3.00", tickedCents: 300 })).status).toBe(200);
     const d = await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I think it was worth more" });
-    expect(d.body.error.message).toContain("final");
+    expect(d.status).toBe(200);
   });
 
   it("one charge per press: the same press again never pays twice", async () => {

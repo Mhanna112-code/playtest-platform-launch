@@ -248,9 +248,10 @@ describe("R, W) the 4th payment hold needs an admin's Approve (in the Lifts box)
     expect((await db.user.findUniqueOrThrow({ where: { id: third.user.id } })).holdCount).toBe(3);
     expect((await payOwed(third.user)).lifted).toBe(true);
     const fourth = await onHold(4);
-    expect((await payOwed(fourth.user)).lifted).toBe(false);
+    // (Batch 10) Nothing is owed, so the press is refused (nothing charged); the hold waits for Approve and the admins are told.
+    await expect(payOwed(fourth.user)).rejects.toMatchObject({ code: "nothing_owed" });
     expect((await db.user.findUniqueOrThrow({ where: { id: fourth.user.id } })).holdStartedAt).not.toBeNull();
-    await payOwed(fourth.user); // the line is told once
+    await expect(payOwed(fourth.user)).rejects.toMatchObject({ code: "nothing_owed" }); // the line is told once
     const told = (await lines(a.user.id)).filter((l) => l.text.startsWith("Hold lift waiting:") && l.text.includes("More than 3 holds") && l.text.includes(fourth.user.name));
     expect(told.length).toBeGreaterThanOrEqual(1);
     expect(told[0]).toMatchObject({ groupKey: "disputes", own: false, link: `/admin#lift-${fourth.user.id}` });
@@ -480,6 +481,7 @@ describe("the final list of emails that ignore Off, and each notification emaile
     }
     const names = [...hits].sort();
     // (Owner, Oct 27) holds.ts: the hold starting (payment, chargeback), a payment hold turning into a chargeback hold, and "running again". The owed reminder is gone.
-    expect(names).toEqual(["holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
+    // (Batch 10) holds.ts also: "Your payment went through. Your tests stay paused while your account is suspended." in place of "running again".
+    expect(names).toEqual(["holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
   });
 });

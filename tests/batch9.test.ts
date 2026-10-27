@@ -89,7 +89,7 @@ describe("batch 9 item 1 and 6: the caps", () => {
 });
 
 describe("batch 9 item 2: an unlisted part has only Pay", () => {
-  it("no Reject; $0 closes the row with no tick and reads '<dev> paid $0 for this' plus the note; no dispute", async () => {
+  it("no Reject; $0 closes the row with no tick and reads '<dev> paid $0 for this' plus the note; (batch 10) it can be disputed", async () => {
     const { dev, tester, sessionId, sub } = await sentWork(null);
     const rej = await pay(dev.cookie, { kind: "submission", id: sub.id, action: "reject", reason: "Not what I asked" });
     expect(rej.body.error.message).toBe("A part that isn't listed can't be rejected: pay $0 to close it.");
@@ -97,7 +97,7 @@ describe("batch 9 item 2: an unlisted part has only Pay", () => {
     expect(await db.review.findFirstOrThrow({ where: { submissionId: sub.id } })).toMatchObject({ amountCents: 0, rejected: false, reason: "Thanks, not needed after all" });
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid $0 for your written answers on “Harbor Run”: “Thanks, not needed after all”" } })).toBe(1);
     const d = await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question fully" });
-    expect(d.body.error.message).toBe("This wasn't in your contract, so the developer's amount is final.");
+    expect(d.status).toBe(200); // (Batch 10) every reviewed part can be disputed, unlisted ones too
     expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('{listed && <button className="btn-danger"');
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("{dev} paid $0 for this");
   });

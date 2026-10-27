@@ -100,7 +100,8 @@ export function PayBox(p: { kind: "submission" | "call"; id: string; name: strin
       </div>
       {(at === "pay" || at === "reject") && <ChangesBox changes={changes} error={error} />}
       <p className="note">
-        {listed ? `Reject charges nothing.${p.listingCents! > 0 ? ` It's in ${p.name}'s contract, so they can dispute it once.` : ""}` : "This part isn't listed: pay any amount, $0 included (it closes this row). It can't be rejected or disputed."}
+        {/* (Batch 10) Every reviewed part can be disputed once, listed or not. */}
+        {listed ? `Reject charges nothing. ${p.name} can dispute your decision once.` : `This part isn't listed: pay any amount, $0 included (it closes this row). It can't be rejected; ${p.name} can dispute the amount once.`}
       </p>
       {p.note && <p className="note">{p.note}</p>}
       {error === "Pay what you owe first." && <a className="text-sm" href="#owed">Pay what you owe ↑</a>}

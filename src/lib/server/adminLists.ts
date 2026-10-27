@@ -3,7 +3,7 @@ import { displayName, fmtDateTime, money } from "@/lib/format";
 import { pauseCountdownLine } from "@/lib/pause";
 import { chargebackHolds } from "./chargeback";
 import { disputeBounds } from "./payments";
-import { termsLine } from "@/lib/rules";
+import { NOT_LISTED, termsLine } from "@/lib/rules";
 import { CRITICAL_FIELDS, CRITICAL_KEYS, countsOf, lockedFields } from "@/lib/limits";
 import { adminSubLine } from "@/lib/subscription";
 import { pausedTestsForAdmin } from "./pauseClosure";
@@ -77,19 +77,21 @@ export async function disputeRow(d: Awaited<ReturnType<typeof db.dispute.findMan
   const r = await db.review.findFirst({ where: d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId ?? "none" } });
   const what = call ? `Live call (${fmtDateTime(call.startsAt)})` : `${sub?.kind === "recording" ? "Recording" : "Written answers"} (sent ${sub ? fmtDateTime(sub.sentAt) : ""})`;
   const flagged = await reportedOver3([d.testerId, c?.test.developerId ?? ""]);
-  let min = 0, max = 0, partSoFar = "";
+  let min = 0, max = 0, partSoFar = "", base = r?.agreedCents == null ? NOT_LISTED : `Listing ${money(r.agreedCents)}`;
   if (d.status === "open" && r) {
     const b = await disputeBounds(d);
     min = b.min;
     max = b.max;
     partSoFar = ` · Paid for this part so far ${money(b.other + r.amountCents)}`;
+    // (Batch 10) An unlisted part: the admin's range goes up to its max minus what was already paid.
+    if (b.unlisted) base = `${NOT_LISTED} (max ${money(b.listing)})`;
   }
   return {
     id: d.id,
     at: d.createdAt.toISOString(),
     type: "dispute" as const,
     head: `${c ? labelled(displayName(c.tester), flagged.has(c.testerId)) : "?"} vs ${c ? labelled(displayName(c.test.developer), flagged.has(c.test.developerId)) : "?"} · ${c?.title ?? ""} · ${what}`,
-    money: `Listing ${money(r?.agreedCents)} · Paid for this piece ${money(r?.amountCents)}${r?.rejected ? " (rejected)" : ""}${partSoFar}`,
+    money: `${base} · Paid for this piece ${money(r?.amountCents)}${r?.rejected ? " (rejected)" : ""}${partSoFar}`,
     said: `Tester: “${d.reason}”${r?.reason ? ` · Developer's note when ${r.rejected ? "rejecting" : "paying"}: “${r.reason}”` : ""}${d.devSide ? ` · Developer's side: “${d.devSide}”` : ""}`,
     open: d.status === "open",
     decided: d.status === "open" ? "" : `Decided ${d.decidedAt ? fmtDateTime(d.decidedAt) : ""}: ${money(d.decidedCents)} in all${d.decisionNote ? ` · “${d.decisionNote}”` : ""}`,

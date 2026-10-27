@@ -2,14 +2,14 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
 import {
-  HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, chargedDelayedLine, countdownDue, INVITE_REMIND_DAYS, choiceLine, failedLine, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, UNLISTED_REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs,
+  HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, chargedDelayedLine, countdownDue, INVITE_REMIND_DAYS, choiceLine, failedLine, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, UNLISTED_REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, chargebackRefundLine, chargebackWonLine,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, sendSummaries } from "./notify";
 import { appUrl } from "./auth";
 import { accountEvent, labelled, reportedOver3 } from "./reports";
 import { sendEmail } from "./email";
-import { charge, chargePlatform } from "./stripe";
+import { charge, chargePlatform, getStripe } from "./stripe";
 import { receipt } from "./payments";
 import { testerTermsGate } from "./terms";
 import { recordEvent } from "./tests";
@@ -48,7 +48,8 @@ export async function testerHoldRefusal(devId: string) {
  * "Pay what you owe" (charged again on the card) before the team's Approve.
  */
 export async function owed(devId: string) {
-  const failed = await db.payment.findMany({ where: { developerId: devId, OR: [{ status: "failed", owedUntil: { not: null }, settledAt: null }, { status: "owed" }] }, orderBy: { createdAt: "asc" } });
+  // (Batch 10) "paying": claimed by a "Pay what you owe" press that is charging it right now (still owed until it goes through, so a hold can't lift under it).
+  const failed = await db.payment.findMany({ where: { developerId: devId, OR: [{ status: "failed", owedUntil: { not: null }, settledAt: null }, { status: "owed" }, { status: PAYING }] }, orderBy: { createdAt: "asc" } });
   const reversed = await db.payment.findMany({ where: { developerId: devId, chargeback: "open" }, orderBy: { createdAt: "asc" } });
   const repaid = reversed.length ? new Set((await db.payment.findMany({ where: { repaysId: { in: reversed.map((p) => p.id) }, status: { in: ["charged", "not_set_up"] } }, select: { repaysId: true } })).map((p) => p.repaysId)) : new Set<string | null>();
   return [...failed, ...reversed.filter((p) => !repaid.has(p.id))].sort((x, y) => x.createdAt.getTime() - y.createdAt.getTime());
@@ -185,7 +186,9 @@ export async function liftHoldIfClear(devId: string) {
   // (Batch 8) The subscription's paid days left resume (unless a suspension is still on).
   await (await import("./subscription")).resumeBilling(devId, now);
   await chargeDeferred(devId);
-  await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause."], "/app", { always: true, payment: true, group: "payhold" });
+  // (Owner, Oct 29, batch 10) "Your tests are running again" only when nothing pauses them any more: with an admin suspension still on, the payment line instead (both ignore Off).
+  if (dev.suspendedAt) await notify(dev.email, STILL_SUSPENDED_LINE, [STILL_SUSPENDED_LINE], "/app", { always: true, payment: true, group: "payhold" });
+  else await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause."], "/app", { always: true, payment: true, group: "payhold" });
   const testers = await db.contract.findMany({ where: { status: "working", testId: { in: running } }, include: { tester: true } });
   for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { group: "paused" });
   return true;
@@ -226,6 +229,12 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
   const u = await db.user.findUniqueOrThrow({ where: { id: dev.id } });
   const list = await owed(dev.id);
   const total = list.reduce((a, p) => a + p.amountCents, 0);
+  // (Owner, Oct 29, batch 10) Paid meanwhile (another tab, or a won chargeback): nothing is charged, ever twice.
+  // (A hold left with nothing owed still lifts here, charging nothing.)
+  if (!list.length) {
+    if (await liftHoldIfClear(dev.id)) return { paid: 0, stillFailing: [] as string[], lifted: true };
+    throw new HttpError(409, "nothing_owed", NOTHING_OWED);
+  }
   const seen = typeof body.seenTotalCents === "number" ? body.seenTotalCents : null;
   const lines = await owedLines(dev.id);
   const seenIds = Array.isArray(body.seenIds) ? (body.seenIds as unknown[]).map(String) : [];
@@ -233,35 +242,70 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
   // anything is new it stops again with just the new line(s).
   const nowIds = lines.filter((l) => l.retry).map((l) => l.id);
   if (seen != null && (seen !== total || (Array.isArray(body.seenIds) && (seenIds.length !== nowIds.length || nowIds.some((i) => !seenIds.includes(i)))))) {
-    const fresh = lines.filter((l) => l.retry && !seenIds.includes(l.id)).map((l) => l.text.replace(/ · card declined .*$/, ""));
+    const freshLines = lines.filter((l) => l.retry && !seenIds.includes(l.id));
+    const fresh = freshLines.map((l) => l.text.replace(/ · card declined .*$/, ""));
+    // (Batch 10) A tester's Charge or a chargeback added meanwhile isn't a failed payment: it reads "Added to what you owe meanwhile".
     const text = fresh.length
-      ? `Another payment failed meanwhile: ${fresh.join(", ")}. New total ${money(total)}. Press again to pay ${money(total)}.`
+      ? `${freshLines.every((l) => l.source === "failed") ? "Another payment failed meanwhile" : "Added to what you owe meanwhile"}: ${fresh.join(", ")}. New total ${money(total)}. Press again to pay ${money(total)}.`
       : `What you owe changed: now ${money(total)}. Press again to pay ${money(total)}.`;
     throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text, at: new Date() }], totalCents: total, ids: nowIds });
   }
   const stillFailing: string[] = [];
+  let paid = 0;
   for (const p of list) {
     const tester = await db.user.findUniqueOrThrow({ where: { id: p.testerId } });
-    try {
-      if (p.chargeback === "open") {
-        // (Owner, Oct 27) A reversed payment is owed again: the same amount is charged on the card (to the platform: the tester already got their share). The team's Approve closes the chargeback.
-        const r = await chargePlatform(u, p.amountCents, `cbowed-${p.id}`, "Playtest: a payment reversed by your bank, charged again");
-        await db.payment.create({ data: { kind: "chargeback", repaysId: p.id, contractId: p.contractId, developerId: u.id, testerId: p.testerId, amountCents: p.amountCents, feeCents: p.amountCents, testerCents: 0, transferStatus: "none", ...r, settledAt: new Date() } });
+    if (p.chargeback === "open") {
+      // (Owner, Oct 27) A reversed payment is owed again: the same amount is charged on the card (to the platform: the tester already got their share). The team's Approve closes the chargeback.
+      // (Batch 10) Claimed first (a "paying" repay row, made under a lock on the reversed payment), so a press from another tab never charges it twice.
+      const claim = await claimChargebackRepay(p, u.id);
+      if (!claim) continue;
+      try {
+        const r = await chargePlatform(u, p.amountCents, `cbowed-${p.id}-${claim.id}`, "Playtest: a payment reversed by your bank, charged again");
+        await db.payment.update({ where: { id: claim.id }, data: { ...r, settledAt: new Date() } });
         await receipt(u.email, "a payment your bank had reversed", p.amountCents, r.status, "/app/payments");
-        continue;
+        paid++;
+      } catch (e) {
+        await db.payment.delete({ where: { id: claim.id } });
+        const why = (e as HttpError).data?.stripe ?? (e as Error).message;
+        stillFailing.push(`${lines.find((l) => l.id === p.id)?.text ?? money(p.amountCents)} (${String(why).replace(/\.$/, "")})`);
       }
-      const r = await charge(u, tester, p.amountCents, `owed-${p.id}-${Date.now()}`, p.status === "owed" ? "Playtest: added to what you owe while your tests were paused" : "Playtest: amount owed");
-      await db.payment.update({ where: { id: p.id }, data: { ...r, settledAt: new Date(), failure: "" } });
+      continue;
+    }
+    // (Batch 10) Claim the owed payment (failed or owed -> paying) so a press from another tab never charges it twice; a claim older than 10 minutes (a press that never
+    // finished) can be taken again.
+    const before = p.status === PAYING ? (p.warnedAt && p.warnedAt.getTime() < Date.now() - 10 * 60_000 ? { status: PAYING, warnedAt: p.warnedAt } : null) : { status: p.status };
+    const was = p.status === PAYING ? (p.owedUntil ? "failed" : "owed") : p.status;
+    if (!before || (await db.payment.updateMany({ where: { id: p.id, settledAt: null, ...before }, data: { status: PAYING, warnedAt: new Date() } })).count !== 1) continue;
+    try {
+      const r = await charge(u, tester, p.amountCents, `owed-${p.id}-${Date.now()}`, was === "owed" ? "Playtest: added to what you owe while your tests were paused" : "Playtest: amount owed");
+      await db.payment.update({ where: { id: p.id }, data: { ...r, settledAt: new Date(), failure: "", warnedAt: null } });
       await receipt(u.email, "an amount you owed", p.amountCents, r.status, "/app/payments");
       await tellArrived(p, tester.email, displayName(u));
+      paid++;
     } catch (e) {
       const why = (e as HttpError).data?.stripe ?? (e as Error).message;
+      await db.payment.update({ where: { id: p.id }, data: { status: was, warnedAt: null } });
       stillFailing.push(`${lines.find((l) => l.id === p.id)?.text ?? money(p.amountCents)} (${String(why).replace(/\.$/, "")})`);
     }
   }
   // The hold lifts only when all are paid; a chargeback hold also needs the card check and the admin's approval.
   const lifted = await liftHoldIfClear(dev.id);
-  return { paid: list.length - stillFailing.length, stillFailing, lifted };
+  return { paid, stillFailing, lifted };
+}
+
+/** (Batch 10) An owed payment a "Pay what you owe" press is charging right now. */
+const PAYING = "paying";
+/** (Batch 10) "Pay what you owe" pressed when nothing is owed any more (paid in another tab meanwhile). */
+export const NOTHING_OWED = "There's nothing to pay: what you owed is already paid.";
+
+/** (Batch 10) Claim the repay of one reversed payment: one "paying" repay row at a time, made under a row lock; null when it is paid or being paid already. */
+async function claimChargebackRepay(p: { id: string; contractId: string | null; testerId: string; amountCents: number }, devId: string) {
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Payment" WHERE id = ${p.id} FOR UPDATE`;
+    const busy = await tx.payment.findFirst({ where: { repaysId: p.id, status: { in: ["charged", "not_set_up", PAYING] } } });
+    if (busy) return null;
+    return tx.payment.create({ data: { kind: "chargeback", repaysId: p.id, contractId: p.contractId, developerId: devId, testerId: p.testerId, amountCents: p.amountCents, feeCents: p.amountCents, testerCents: 0, transferStatus: "none", status: PAYING } });
+  });
 }
 
 /** The tester's one notice when a delayed payment goes through: the normal paid line. */
@@ -280,12 +324,13 @@ export async function owedLines(devId: string) {
     const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } }) : null;
     const sub = p.submissionId ? await db.submission.findUnique({ where: { id: p.submissionId } }) : null;
     const what = `${c ? displayName(c.tester) + "'s " : ""}${p.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers"}`;
+    // `source` (batch 10): what put it on the list, for the stop-once wording.
     out.push(p.chargeback === "open"
-      ? { id: p.id, retry: true, amountCents: p.amountCents, until: null as string | null, text: `${what} ${money(p.amountCents)} · reversed by your bank` }
-      : p.status === "owed"
+      ? { id: p.id, retry: true, amountCents: p.amountCents, until: null as string | null, source: "chargeback" as const, text: `${what} ${money(p.amountCents)} · reversed by your bank` }
+      : p.status === "owed" || (p.status === PAYING && !p.owedUntil)
         // (Owner, Oct 28 afternoon) Added while the tests were paused: never tried on the card yet.
-        ? { id: p.id, retry: true, amountCents: p.amountCents, until: null as string | null, text: `${what} ${money(p.amountCents)} · ${p.kind === "dispute" ? "the team's dispute decision" : "charged by the tester"} while your tests were paused` }
-        : { id: p.id, retry: true, amountCents: p.amountCents, until: null as string | null, text: failedLine(what, p.amountCents, p.createdAt) });
+        ? { id: p.id, retry: true, amountCents: p.amountCents, until: null as string | null, source: "owed" as const, text: `${what} ${money(p.amountCents)} · ${p.kind === "dispute" ? "the team's dispute decision" : "charged by the tester"} while your tests were paused` }
+        : { id: p.id, retry: true, amountCents: p.amountCents, until: null as string | null, source: "failed" as const, text: failedLine(what, p.amountCents, p.createdAt) });
   }
   return out;
 }
@@ -317,6 +362,35 @@ export async function chargebackOpened(paymentIntentId: string) {
     else await bell(p.developerId, line, "/app/payments#chargeback-steps", undefined, { payment: true, group: "payhold" });
   }
   await db.user.update({ where: { id: p.developerId }, data: { chargebackCardVerifiedAt: null, chargebackApprovedAt: null } });
+  return true;
+}
+
+/**
+ * (Owner, Oct 29, batch 10) Stripe's `charge.dispute.closed` with status `won`: the platform won the chargeback, and Stripe returns the money and the fee. That chargeback's
+ * amount leaves what the developer owes. If they already paid it (the repay charge), that amount is refunded to their card, with a receipt line. When no chargeback is left
+ * open, a chargeback hold becomes a plain payment hold: it lifts as usual once nothing is owed (from the 4th hold on, an admin's Approve is still needed). The developer gets a
+ * bell and an email. Returns false when the payment is unknown or the win was already handled.
+ */
+export async function chargebackWon(paymentIntentId: string) {
+  const p = await db.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId } });
+  if (!p || (p.chargeback !== "open" && p.chargeback !== "resolved")) return false;
+  const dev = await db.user.findUniqueOrThrow({ where: { id: p.developerId } });
+  // Already paid back with "Pay what you owe": refund that charge to their card. Refunds come first (idempotent at Stripe), so a webhook retried after a failed refund still refunds.
+  for (const r of await db.payment.findMany({ where: { repaysId: p.id, status: { in: ["charged", "not_set_up"] } } })) {
+    if (r.stripePaymentIntentId) await getStripe().refunds.create({ payment_intent: r.stripePaymentIntentId }, { idempotencyKey: `cbwon-${r.id}` });
+    if ((await db.payment.updateMany({ where: { id: r.id, status: r.status }, data: { status: "refunded" } })).count !== 1) continue;
+    const line = chargebackRefundLine(r.amountCents);
+    await notify(dev.email, line, [line + ".", r.stripePaymentIntentId ? "Refunded to your saved card." : "Payments aren't set up yet, so this was recorded and nothing was refunded."], "/app/payments", { payment: true });
+  }
+  const claimed = await db.payment.updateMany({ where: { id: p.id, chargeback: p.chargeback }, data: { chargeback: "won" } });
+  if (claimed.count !== 1) return false;
+  const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId } }) : null;
+  if (c) await (await import("./live")).logEvent(c.testId, "chargeback", chargebackWonLine(p.amountCents), c.id);
+  await notify(dev.email, chargebackWonLine(p.amountCents), [chargebackWonLine(p.amountCents)], "/app/payments", { payment: true, group: "payhold" });
+  // No chargeback left open: the hold is a payment hold again (it lifts once nothing is owed; the 4th hold on still needs the admin's Approve).
+  if (dev.holdStartedAt && dev.holdReason === "chargeback" && !(await db.payment.count({ where: { developerId: dev.id, chargeback: "open" } })))
+    await db.user.update({ where: { id: dev.id }, data: { holdReason: "unpaid", chargebackCardVerifiedAt: null, chargebackApprovedAt: null } });
+  await liftHoldIfClear(dev.id);
   return true;
 }
 

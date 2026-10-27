@@ -39,22 +39,30 @@ export async function adminDailyEmails(now = new Date()) {
   for (const c of await chargebackHolds()) if (c.steps.cardVerified && c.steps.owedPaid && !c.steps.approved) shared.push(`Chargeback hold waiting for your Approve: ${c.dev.email} ${url("/admin#chargebacks")}`);
   for (const c of noShows) shared.push(`Call report on “${c.contract.title}” by the ${c.noShowBy}: “${c.noShowNote}” ${url("/admin#no-shows")}`);
 
+  // (Batch 10) The per-admin lists are read in a few queries for all admins at once (the daily job's run time no longer grows with each admin's own queries).
+  const ids = admins.map((a) => a.id);
+  const states = new Map((await db.appState.findMany({ where: { key: { in: ids.map((id) => `adminDaily:${id}`) } } })).map((x) => [x.key, x.value]));
+  const suspended = await db.user.findMany({ where: { suspendedById: { in: ids }, suspendedAt: { not: null }, deletedAt: null } });
+  const suspendedTests = await db.test.findMany({ where: { developerId: { in: suspended.map((u) => u.id) }, status: { in: ["open", "closed"] } }, include: { developer: true } });
+  const pausedByAdmins = await db.test.findMany({ where: { adminPausedById: { in: ids }, adminPausedAt: { not: null }, status: { in: ["open", "closed"] } }, include: { developer: true } });
+  const done: string[] = [];
+
   for (const a of admins) {
     const key = `adminDaily:${a.id}`;
-    const state = await db.appState.findUnique({ where: { key } });
-    const since = state ? new Date(state.value) : new Date(now.getTime() - DAY);
+    const state = states.get(key);
+    const since = state ? new Date(state) : new Date(now.getTime() - DAY);
     const items: string[] = [...openDisputes.filter((d) => d.createdAt > since).map(disputeLine), ...shared];
 
     // The accounts THIS admin suspended that still have paused tests.
-    for (const u of await db.user.findMany({ where: { suspendedById: a.id, suspendedAt: { not: null }, deletedAt: null } })) {
-      const tests = await db.test.findMany({ where: { developerId: u.id, status: { in: ["open", "closed"] } }, include: { developer: true } });
+    for (const u of suspended.filter((x) => x.suspendedById === a.id)) {
+      const tests = suspendedTests.filter((t) => t.developerId === u.id);
       const paused = tests.map((t) => ({ t, info: pauseClosesAt(t.developer, t) })).filter((x) => x.info);
       if (!paused.length) continue;
       items.push(`You suspended ${displayName(u)} (${u.email}) on ${fmtDateTime(u.suspendedAt!)}: ${url(`/app/${u.isDeveloper ? "developers" : "testers"}/${u.id}`)}`);
       for (const { t, info } of paused) items.push(`   paused test “${t.title}”: ${pauseCountdownLine(info!.at, info!.causes)} (${fmtDateTime(info!.at)}) ${url(`/app/find/${t.id}`)}`);
     }
     // The tests THIS admin paused that are still paused.
-    for (const t of await db.test.findMany({ where: { adminPausedById: a.id, adminPausedAt: { not: null }, status: { in: ["open", "closed"] } }, include: { developer: true } })) {
+    for (const t of pausedByAdmins.filter((x) => x.adminPausedById === a.id)) {
       const info = pauseClosesAt(t.developer, t);
       if (info) items.push(`You paused “${t.title}” on ${fmtDateTime(t.adminPausedAt!)}: ${pauseCountdownLine(info.at, info.causes)} (${fmtDateTime(info.at)}) ${url(`/app/find/${t.id}`)}`);
     }
@@ -66,8 +74,9 @@ export async function adminDailyEmails(now = new Date()) {
         console.error("[email] admin daily:", (e as Error).message);
       }
     }
-    await db.appState.upsert({ where: { key }, update: { value: now.toISOString() }, create: { key, value: now.toISOString() } });
+    done.push(key);
   }
+  await db.$transaction(done.map((key) => db.appState.upsert({ where: { key }, update: { value: now.toISOString() }, create: { key, value: now.toISOString() } })));
   if (noShows.length) await db.call.updateMany({ where: { id: { in: noShows.map((c) => c.id) } }, data: { noShowDigestedAt: now } });
   return sent;
 }

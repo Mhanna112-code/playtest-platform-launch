@@ -187,12 +187,13 @@ describe("batch 6 item 3: the 3-change limit is per field", () => {
 
 describe("batch 6 item 4: a paused test, what testers can do", () => {
   it("the paused notice says what still works (never why); the DEFAULTs live in one place", () => {
-    expect(R.PAUSED_FOR_TESTERS).toContain("You can't send work or chat until it resumes, but you can keep writing and saving drafts.");
-    expect(R.PAUSED_FOR_TESTERS).toContain("charge or let go of unreviewed work, dispute a payment, rate, leave the test and cancel booked calls");
+    // (Batch 10) The banner's wording: what works now, and what comes back when it resumes.
+    expect(R.PAUSED_FOR_TESTERS).toContain("For now you can save drafts of your parts, charge or let go of work left unreviewed, dispute, rate, leave the test, and cancel booked calls.");
+    expect(R.PAUSED_FOR_TESTERS).toContain("Sending work, requesting calls and chat come back when it resumes.");
     expect(R.PAUSED_FOR_TESTERS).not.toMatch(/hold|suspend|fail|chargeback/i);
     expect(R.PAUSE_DEFAULTS).toEqual({ draftsEditable: true, chatClosed: true, teamPauseSameRules: true, shiftDeadlines: true });
     expect(R.testerPaused({}, { adminPausedAt: new Date() })).toBe(true);
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("{PAUSED_FOR_TESTERS}");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("{pausedBanner}");
   });
 
   for (const kind of ["hold", "chargeback", "suspension", "team"] as const) {
