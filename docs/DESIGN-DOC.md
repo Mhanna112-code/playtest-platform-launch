@@ -1207,7 +1207,6 @@ Open questions about these rules are in QA and open questions.
 - Developer deletion: the owner suggested keeping open Charge rows and never opening Charge for work still under review. The app now refuses deletion until that work is paid or rejected instead. Confirm.
 - When a developer pays off a hold while their suspension continues, do they get "Your tests are running again", though their tests stay paused? (Rules, When account states change or combine.)
 - The team pauses a test that is already paused by its developer's hold: which closing date applies (the hold's 7 days or the team pause's), and which reason does the card show?
-- Disputes on unlisted parts: BATCH-9 says a dispute about one can only be about the amount, but the guide refuses disputes on work outside the contract ("This wasn't in your contract, so the developer's amount is final."). Can an unlisted part be disputed?
 
 **Earlier questions**
 
