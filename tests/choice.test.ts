@@ -20,6 +20,8 @@ async function waiting14() {
   await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] });
   const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
   await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000) } });
+  // (Owner, Oct 26) Charge opens only when 14 days have passed AND the test's Open until has passed.
+  await db.test.update({ where: { id: s.testId }, data: { openUntil: new Date(Date.now() - 1000) } });
   return { ...s, ...j, sub };
 }
 
@@ -29,7 +31,8 @@ describe("Charge / Let it go at day 14", () => {
     await cron();
     const line = "Nora Lane didn't review your written answers in 14 days: charge $10.00 or let it go";
     expect(await db.notification.count({ where: { userId: tester.user.id, text: line } })).toBe(1);
-    expect(await db.outboxEmail.count({ where: { to: tester.user.email, subject: line } })).toBe(1);
+    // (Owner, Oct 26) One email lists everything new: the daily job's summary carries the line.
+    expect((await db.outboxEmail.findFirstOrThrow({ where: { to: tester.user.email, subject: { startsWith: "Your Playtest summary" } } })).text).toContain(line);
     expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe("Tick “charge Nora Lane $10.00 now” to charge.");
     const r = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000 });
     expect(r.body).toMatchObject({ choice: "charge", amountCents: 1000 });

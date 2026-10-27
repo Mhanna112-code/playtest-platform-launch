@@ -3,12 +3,13 @@ import { displayName, fmtDateTime, money } from "@/lib/format";
 import { pauseCountdownLine } from "@/lib/pause";
 import { chargebackHolds } from "./chargeback";
 import { disputeBounds } from "./payments";
+import { termsLine } from "@/lib/rules";
 import { pausedTestsForAdmin } from "./pauseClosure";
 
-// (Owner, Oct 26) The admin dashboard's lists. Every long list shows 20, then "Load more" (keyset by date: newest first; the two lists ordered by
+// (Owner, Oct 26) The admin dashboard's lists. Every long list is a page of 25 with Previous / Next (keyset by date: newest first; the lists ordered by
 // closure date go soonest first). Rows are plain, already-formatted view models so the same loaders serve the page and /api/admin/more.
 
-export const PAGE = 20;
+export const PAGE = 25;
 export type Page<T> = { rows: T[]; next: string | null; total: number };
 
 export type DisputeVM = { id: string; at: string; head: string; money: string; said: string; open: boolean; decided: string; min: number; max: number };
@@ -19,8 +20,8 @@ export type TextVM = { id: string; at: string; text: string };
 export type PausedVM = { id: string; at: string; text: string; closure: string; extended: boolean };
 export type ChargebackVM = { id: string; at: string; email: string; since: string; chargebacks: string[]; cardVerified: boolean; owedPaid: boolean; owedLine: string };
 
-export type Kind = "disputes" | "decided" | "mine" | "users" | "tests" | "noshows" | "payments" | "waitlist" | "paused" | "chargebacks";
-export const KINDS: Kind[] = ["disputes", "decided", "mine", "users", "tests", "noshows", "payments", "waitlist", "paused", "chargebacks"];
+export type Kind = "disputes" | "decided" | "mine" | "users" | "tests" | "noshows" | "payments" | "waitlist" | "paused" | "chargebacks" | "history";
+export const KINDS: Kind[] = ["disputes", "decided", "mine", "users", "tests", "noshows", "payments", "waitlist", "paused", "chargebacks", "history"];
 
 const cur = (at: Date, id: string) => `${at.toISOString()}|${id}`;
 function parse(cursor: string | null) {
@@ -233,7 +234,7 @@ async function chargebacks(cursor: string | null): Promise<Page<ChargebackVM & {
 }
 
 /** One page of one list. `adminId` is the admin looking (for "mine"). */
-export async function adminPage(kind: Kind, adminId: string, cursor: string | null): Promise<Page<unknown>> {
+export async function adminPage(kind: Kind, adminId: string, cursor: string | null, arg = ""): Promise<Page<unknown>> {
   const p: Page<unknown> = await (async () => {
     switch (kind) {
       case "disputes": return disputes("open", cursor);
@@ -246,7 +247,58 @@ export async function adminPage(kind: Kind, adminId: string, cursor: string | nu
       case "waitlist": return waitlist(cursor);
       case "paused": return paused(cursor);
       case "chargebacks": return chargebacks(cursor);
+      case "history": return history(arg, cursor);
     }
   })();
   return { ...p, rows: p.rows.map((r) => { const { date, ...rest } = r as Record<string, unknown>; void date; return rest; }) };
+}
+
+// ---------- A test's history (owner, Oct 26) ----------
+
+/**
+ * One test's full timeline across all testers, newest first (the admin's "History" view): the test's event records (joins, leaves, sends, pays,
+ * rejects, changes, calls, admin actions), plus what the event records don't show: the invites, the terms each tester joined on, the offers, the calls,
+ * the disputes, the payments, and which admin paused, stopped, closed or suspended. Developers see nothing new: this is for the admin only.
+ */
+async function history(testId: string, cursor: string | null): Promise<Page<TextVM & { date: Date }>> {
+  const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true } });
+  if (!t) return { rows: [], next: null, total: 0 };
+  const [events, contracts, invites, offers, calls] = await Promise.all([
+    db.testEvent.findMany({ where: { testId }, orderBy: { createdAt: "desc" }, take: 3000 }),
+    db.contract.findMany({ where: { testId }, include: { tester: true } }),
+    db.invite.findMany({ where: { testId } }),
+    db.termsOffer.findMany({ where: { testId } }),
+    db.call.findMany({ where: { contract: { testId } } }),
+  ]);
+  const ids = contracts.map((c) => c.id);
+  const payments = await db.payment.findMany({ where: { contractId: { in: ids } } });
+  const disputes = await db.dispute.findMany({ where: { contractId: { in: ids } } });
+  const people = new Map((await db.user.findMany({ where: { id: { in: [...invites.map((i) => i.testerId), ...[t.adminPausedById, t.adminStoppedById, t.developer.suspendedById, ...disputes.map((d) => d.decidedById)].filter((x): x is string => !!x)] } }, select: { id: true, email: true, name: true } })).map((u) => [u.id, u]));
+  const who = (id: string | null | undefined) => (id ? people.get(id)?.email ?? "an admin" : "an admin");
+  const byContract = new Map(contracts.map((c) => [c.id, displayName(c.tester)]));
+  const of = (cid: string | null) => (cid ? byContract.get(cid) ?? "a tester" : "");
+  const rows: (TextVM & { date: Date })[] = [];
+  const add = (src: string, id: string, date: Date | null | undefined, text: string) => date && rows.push({ id: `${src}-${id}`, date, at: date.toISOString(), text: `${fmtDateTime(date)} · ${text}` });
+  for (const e of events) add("event", e.id, e.createdAt, `${e.text}${e.contractId ? ` (${of(e.contractId)})` : ""}`);
+  for (const c of contracts) add("contract", c.id, c.joinedAt, `${displayName(c.tester)} joined on: ${termsLine(c)}`);
+  for (const i of invites) add("invite", i.id, i.createdAt, `Invited ${people.get(i.testerId)?.email ?? "a tester"} (${i.status})`);
+  for (const o of offers) {
+    add("offer", o.id, o.createdAt, `New terms offered to ${of(o.contractId)}: ${o.diff}`);
+    if (o.decidedAt) add("offer-decided", o.id, o.decidedAt, `${of(o.contractId)} ${o.status === "switched" ? "switched to" : o.status === "kept" ? "kept their terms instead of" : "did not take"} the new terms`);
+  }
+  for (const k of calls) {
+    add("call", k.id, k.createdAt, `Call booked with ${of(k.contractId)} for ${fmtDateTime(k.startsAt)}`);
+    if (k.status === "cancelled") add("call-cancelled", k.id, k.cancelledAt, `Call with ${of(k.contractId)} on ${fmtDateTime(k.startsAt)} cancelled by ${k.cancelledBy || "someone"}`);
+  }
+  for (const d of disputes) {
+    add("dispute", d.id, d.createdAt, `${of(d.contractId)} disputed a payment: “${d.reason}”`);
+    if (d.decidedAt) add("dispute-decided", d.id, d.decidedAt, `Dispute by ${of(d.contractId)} decided by ${who(d.decidedById)}: ${money(d.decidedCents)} in all`);
+  }
+  for (const p of payments) add("payment", p.id, p.createdAt, `Payment (${p.kind}) of ${money(p.amountCents)} to ${of(p.contractId)}: ${p.status}${p.chargeback === "open" ? " · chargeback open" : ""}`);
+  add("admin-paused", t.id, t.adminPausedAt, `Paused by ${who(t.adminPausedById)}${t.adminNote ? `: ${t.adminNote}` : ""}`);
+  add("admin-stopped", t.id, t.adminStoppedAt, `Stopped by ${who(t.adminStoppedById)}${t.adminNote ? `: ${t.adminNote}` : ""}`);
+  if (t.pauseClosedAt) add("pause-closed", t.id, t.pauseClosedAt, `Closed after being paused${t.adminStoppedById ? ` (by ${who(t.adminStoppedById)})` : " (by the daily job)"}: ${t.pauseClosedReason}`);
+  add("dev-suspended", t.id, t.developer.suspendedAt, `Its developer was suspended by ${who(t.developer.suspendedById)}`);
+  rows.sort((a, b) => b.date.getTime() - a.date.getTime() || (a.id < b.id ? 1 : -1));
+  return slice(rows, (r) => r.date, cursor);
 }

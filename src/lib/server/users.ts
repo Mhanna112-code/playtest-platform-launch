@@ -16,7 +16,7 @@ const VERBS: Record<string, string> = {
   edit: "Save", stop: "Stop", "end-early": "End early", "next-round": "Next round", invite: "Invite", "cancel-invite": "Cancel invite", "request-time": "Call request", "answer-request": "Answer",
   application: "Answer", join: "Join", apply: "Apply", "rejoin-ask": "Ask to rejoin", message: "Message", written: "Send", "recording-start": "Send", "recording-send": "Send", "recording-done": "Send",
   leave: "Leave", rate: "Rating", terms: "Switch or Keep", choose: "Charge", dispute: "Dispute", "dispute-side": "Dispute reply", "call-length": "Call length", "no-show": "Report", "cancel-call": "Cancel call",
-  "cancel-set": "Cancel calls", "assign-key": "Assign a key", "key-broken": "Report", open: "Open", review: "Pay",
+  "cancel-set": "Cancel calls", "assign-key": "Assign a key", "pay-extra": "Pay", "key-broken": "Report", open: "Open", review: "Pay",
 };
 
 /** "Your Pay on Harbor Run didn't go through": what the red box on the dashboard names. */
@@ -84,7 +84,7 @@ export async function saveProfile(userId: string, body: Record<string, unknown>)
   if (isTester && devices.length === 0) throw new HttpError(400, "bad_devices", "Pick at least one device you play on.");
   if (isTester && languages.length === 0) throw new HttpError(400, "bad_languages", "Pick at least one language you can test in.");
   const bio = str(body.bio, 1000);
-  const emailPref = ["each", "daily", "weekly", "monthly", "off"].includes(body.emailPref as string) ? (body.emailPref as string) : undefined;
+  const emailPref = ["daily", "weekly", "monthly", "off"].includes(body.emailPref as string) ? (body.emailPref as string) : undefined;
   return db.$transaction(async (tx) => {
     const user = await tx.user.update({ where: { id: userId }, data: { name, pronoun, isDeveloper, isTester, ...(emailPref ? { emailPref } : {}) } });
     if (isTester) await tx.testerProfile.upsert({ where: { userId }, update: { devices, categories, languages, bio }, create: { userId, devices, categories, languages, bio } });

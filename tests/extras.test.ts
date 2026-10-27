@@ -53,8 +53,12 @@ describe("emails for key events", () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
-    const subjects = (await db.outboxEmail.findMany({ where: { to: dev.user.email } })).map((m) => m.subject);
-    expect(subjects).toEqual(expect.arrayContaining(["Ana Silva joined “Harbor Run”", "Ana Silva sent written answers for “Harbor Run”"]));
+    // (Owner, Oct 26) One email lists everything new (the summary), not one email per update.
+    await (await import("@/lib/server/notify")).sendSummaries();
+    const mails = await db.outboxEmail.findMany({ where: { to: dev.user.email } });
+    expect(mails.length).toBe(1);
+    expect(mails[0].text).toContain("Ana Silva joined “Harbor Run”");
+    expect(mails[0].text).toContain("Ana Silva sent written answers for “Harbor Run”");
   });
 });
 

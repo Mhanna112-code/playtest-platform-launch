@@ -100,9 +100,9 @@ describe("payment hold", () => {
     const { sweepHeldCalls } = await import("@/lib/server/holds");
     await sweepHeldCalls(dev.user.id);
     expect(await db.call.findFirstOrThrow({ where: { contractId: sessionId } })).toMatchObject({ status: "cancelled", cancelledBy: "system" });
-    const mail = await db.outboxEmail.findFirstOrThrow({ where: { to: tester.user.email, subject: { contains: "was cancelled" } } });
-    expect(mail.text).toContain("This test is paused. Payment for your work may be delayed.");
-    expect(mail.text).not.toMatch(/hold|chargeback|suspend/i);
+    const line = await db.notification.findFirstOrThrow({ where: { userId: tester.user.id, text: { contains: "was cancelled" } } });
+    expect(line.text).toContain("because the test is paused");
+    expect(line.text).not.toMatch(/hold|chargeback|suspend/i);
     expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), startsAt: new Date(Date.now() + 3 * DAY).toISOString(), confirmed: true })).body.error.message).toBe("This test is paused. Payment for your work may be delayed.");
     expect((await sact(sessionId, "leave", tester.cookie)).status).toBe(200); // may leave any time
   });
@@ -151,6 +151,7 @@ describe("daily job", () => {
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000) } });
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } }); // Charge opens only after Open until (Owner, Oct 26)
     await startHold(dev.user.id, "unpaid");
     await cron();
     expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0); // clock paused
@@ -176,6 +177,7 @@ describe("daily job", () => {
     const zs = await db.submission.findFirstOrThrow({ where: { contractId: m.sessionId } });
     expect(zs.askedCents).toBeNull();
     await db.submission.update({ where: { id: zs.id }, data: { payBy: new Date(Date.now() - 1000) } });
+    await db.test.update({ where: { id: z.testId }, data: { openUntil: new Date(Date.now() - 1000) } });
     await cron();
     expect((await sact(m.sessionId, "choose", m.tester.cookie, { submissionId: zs.id, choice: "charge", tickedCents: 1000 })).body).toMatchObject({ amountCents: 1000 });
   });

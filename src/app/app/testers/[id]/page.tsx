@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDate } from "@/lib/format";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { TesterTiles } from "@/components/ProfileTiles";
+import { ChatWithButton } from "@/components/ChatWithButton";
 
 export const metadata = { title: "Tester · Playtest" };
 export const dynamic = "force-dynamic";
@@ -24,6 +25,8 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
   if (!mine && !viewer.isAdmin && (await db.block.count({ where: { OR: [{ blockerId: viewer.id, blockedId: p.id }, { blockerId: p.id, blockedId: viewer.id }] } }))) notFound();
   const name = displayName(p);
   const pr = p.profile;
+  // (Owner, Oct 26) "Chat with <name>" for a developer: the chat of the most recent test they share; hidden when they share none.
+  const shared = !mine && viewer.isDeveloper ? await db.contract.findFirst({ where: { testerId: p.id, test: { developerId: viewer.id } }, orderBy: { joinedAt: "desc" }, select: { id: true } }) : null;
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <section className="card flex flex-wrap items-center gap-4">
@@ -34,6 +37,7 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
           {mine && <p className="text-xs text-slate-500">This is how developers see your profile.</p>}
         </div>
         {mine && <Link href="/app/profile" className="btn-secondary px-3 py-1.5 text-sm">Edit profile</Link>}
+        {shared && <ChatWithButton contractId={shared.id} name={name} />}
       </section>
       <TesterTiles userId={p.id} />
       <section className="card space-y-3">

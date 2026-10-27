@@ -30,39 +30,80 @@ describe("notification schedule", () => {
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Work sent: your written answers for “Harbor Run”" } })).toBe(1);
   });
 
-  it("the developer is told 1 week / 3 days / 1 day before day 14, then daily after it", async () => {
+  it("the developer is told ONCE, 1 day before Charge would open, then daily after it opens (14 days AND Open until)", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     const n = (t: string) => db.notification.count({ where: { userId: dev.user.id, text: { contains: t } } });
-    await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() + 2 * DAY) } });
+    // The old 1-week and 3-day reminders are gone: 5 days before, nothing.
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 5 * DAY) } });
+    await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() + 5 * DAY) } });
     await cron();
-    await cron();
-    expect(await n("review Ana Silva's written answers within 3 days")).toBe(1);
+    expect(await n("review Ana Silva's written answers")).toBe(0);
+    // 12 hours before it would open: ONE reminder (never twice).
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 12 * 3_600_000) } });
     await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000) } });
-    await cron(); // day 14: offer to the tester + first daily reminder to the developer
+    await cron();
+    await cron();
+    expect(await n("review Ana Silva's written answers by tomorrow")).toBe(1);
+    expect((await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, text: { contains: "by tomorrow" } } })).groupKey).toBe("unreviewed");
+    // 14 days have passed but Open until has not: Charge has not opened (no offer to the tester, no daily reminder).
+    expect(await n("waited over 14 days")).toBe(0);
+    expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).toBeNull();
+    // Open until passes: it opens, and the developer is reminded daily.
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } });
+    await cron(); // opens: offer to the tester + first daily reminder to the developer
     await cron(); // same day: not again
     expect(await n("waited over 14 days")).toBe(1);
+    expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).not.toBeNull();
     await db.submission.update({ where: { id: sub.id }, data: { devRemindedAt: new Date(Date.now() - DAY) } });
     await cron();
     expect(await n("waited over 14 days")).toBe(2);
   });
 
-  it("invites: a bell every 3 days until the tester joins or says No thanks", async () => {
+  it("with no Open until, Charge opens when the test stops (or the tester's work ends), 14 days after sending", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000) } });
+    await cron();
+    expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).toBeNull(); // the test is still running
+    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await cron();
+    expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).not.toBeNull();
+    // The tester's own work ending (they left) opens it too.
+    const two = await setup();
+    const j = await joined(two.testId, "Ben Carter", "he");
+    await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] });
+    const s2 = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
+    await db.submission.update({ where: { id: s2.id }, data: { payBy: new Date(Date.now() - 1000) } });
+    await cron();
+    expect((await db.submission.findUniqueOrThrow({ where: { id: s2.id } })).choiceOfferedAt).toBeNull();
+    expect((await sact(j.sessionId, "leave", j.tester.cookie)).status).toBe(200);
+    await cron();
+    expect((await db.submission.findUniqueOrThrow({ where: { id: s2.id } })).choiceOfferedAt).not.toBeNull();
+  });
+
+  it("invites: a bell DAILY until the tester joins or says No thanks (one stacked line across tests)", async () => {
     const { dev, testId } = await setup();
     const t = await makeUser({ tester: true, name: "Dee Moss" });
     await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [t.user.id] });
     const inv = await db.invite.findFirstOrThrow({ where: { testId, testerId: t.user.id } });
-    await db.invite.update({ where: { id: inv.id }, data: { createdAt: new Date(Date.now() - 4 * DAY) } });
+    await db.invite.update({ where: { id: inv.id }, data: { createdAt: new Date(Date.now() - 2 * DAY) } });
     await cron();
     await cron();
     const n = () => db.notification.count({ where: { userId: t.user.id, text: { startsWith: "Reminder: Nora Lane invited you" } } });
     expect(await n()).toBe(1);
+    expect((await db.notification.findFirstOrThrow({ where: { userId: t.user.id, text: { startsWith: "Reminder: Nora Lane invited you" } } })).groupKey).toBe("invites");
+    await db.invite.update({ where: { id: inv.id }, data: { remindedAt: new Date(Date.now() - DAY) } });
+    await cron();
+    expect(await n()).toBe(2); // the next day: again
     expect((await json(await invitePOST(req(`/api/invites/${inv.id}`, { cookie: t.cookie, body: {} }), { params: Promise.resolve({ id: inv.id }) }))).status).toBe(200);
     await db.invite.update({ where: { id: inv.id }, data: { remindedAt: new Date(Date.now() - 4 * DAY) } });
     await cron();
-    expect(await n()).toBe(1); // declined: no more reminders
+    expect(await n()).toBe(2); // declined: no more reminders
   });
 
   it("admin digest every 3 days; each no-show appears in a digest once", async () => {

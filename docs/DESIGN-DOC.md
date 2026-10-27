@@ -98,6 +98,17 @@ These rules hold on every signed-in page; page sections only add what's specific
 - Blue: a recoverable change, or a press that didn't go through because something changed; shown directly under the pressed button, which scrolls just enough into view.
 - Red: a form mistake at the field (checked when the field loses focus and on submit), or an account restriction (suspended, deleted, appeal needed).
 - Yellow: an attention list (e.g. broken access keys). Green: a confirmation.
+
+**Pop-ups** [Owner, Oct 26]
+
+- Developer:
+  - Stop ("Are you sure you want to stop…") and End early ("End their work now"): a confirm dialog. While it is open, live blue notices appear inside it as changes arrive (the 3 newest in the "Just updated" style, then "Show N more"). Confirming with changes not yet seen stops once and shows the blue notice.
+  - Invite anyway: an inline box under Invite (not a dialog). Same live notices inside it; its stop-once shows inside the box.
+  - Block: a confirm dialog; stops once; no live notices yet.
+- Tester:
+  - Join anyway ("What this test needs"): checks the profile and the test again while open, showing "Just updated"; pressing stops once when what is needed changed.
+  - Leave, Let it go, Rate and finish, Block: confirm dialogs; stop once; no live notices yet.
+- Both: Delete account (a confirm dialog, no stop-once) and the "Signed in as someone else" screen (a full-page notice when another account signs in in another tab; no live notices).
 - A failed press never shows success; it explains why, keeps typed data, and updates the page to the real state.
 
 **Live updates and stops**
@@ -292,6 +303,11 @@ The central place to run one test: what changed, what needs action, who is in it
 - approved / reject excerpt only on notification bell \[update\]
 - &#91;SUGGEST\] Excerpt decisions reach the tester only as a bell line; the developer's Needs you item disappears once decided.
 
+**Chat from a tester's hover card and profile; extra pay** [Owner, Oct 26]
+
+- "Chat with <name>" sits on the tester's hover card (the avatars on the dashboard) and on their profile (developer side). It opens the same per-test chat as the Testers panel's Chat button (on a profile: the chat of the most recent test they share). If a block exists either way, or the chat would otherwise be refused, the press shows a blue notice "Unable to chat with this tester." (no reason given). The button is hidden where there is no shared test.
+- Each tester's row in the Testers panel (current and past testers) has a **Pay** button with an amount box. It pays that tester directly, outside any part: the same 80/20 split and charge path; the tester gets a bell "<developer> paid you $X extra for <test>" (a payment line that does not stack); it shows in the developer's Payments history and the tester's payouts. Over $200 a tick box appears: "I understand this payment can't be refunded and is charged now."; Pay is refused until it is ticked (red at the tick). There is no cap other than Stripe's limit for now (one constant, awaiting the owner). Same refusals as Pay: hidden and refused while suspended; "Pay what you owe first." during a hold; refused when blocked either way. The stop-once rules apply.
+
 ## 7. Tester dashboard, Find tests and the join page
 
 Testers see what to do next, find relevant tests, and join on clear terms.
@@ -383,6 +399,9 @@ Pages both sides use, each with its own behavior.
 - Tester bell lines: invites and reminders (every 3 days, with No thanks), paid / rejected / delayed, new-terms offers, call booked or cancelled, rating available, dispute decisions, test paused or resumed.
 - Call requests are not bell lines. Same-day lines about the same test stack into one expandable entry, EXCEPT these, which always arrive as their own line: admin decisions (disputes, suspensions, reinstatement, pause extensions), a test being stopped, payment failures and holds starting, a hold or pause being lifted, and a chargeback. For admins, dispute lines about the same test stack per day. [Owner, Oct 26]
 - Every bell line opens the exact place. Developer: the test page at the item (a Needs you row, a tester row or a call). Tester: the session page at the part (written answers, recording, live call) or the call. Admin: the dispute row or the account. [Owner, Oct 26]
+- Reminders (bell) [Owner, Oct 26]: developer, unreviewed contract work: one reminder 1 day before Charge would open, then daily once it has opened, until paid, rejected, charged or let go (all of a day's stack into one line across parts and tests). Developer on a payment hold: one line a day, "Your tests are paused until you pay what you owe" (link /app/payments#owed), its own line; a declined retry the same day is merged into it. Developer with applications or rejoin asks waiting: a line a day, stacked with that test's other same-day lines. Tester invitations: a reminder daily until answered, all of a day's stacking into one line across tests. Tester Charge or Let it go: reminders every 3 days, all Charge lines of a day stacking into one line across tests. Rating prompts: while the test is open they stack with that test's same-day lines; once it is closed each is its own line, with a reminder every 3 days until rated or the window ends. Admins: one line a day for all suspended accounts. Every reminder tied to a test waits while that test is paused and restarts when it resumes.
+- Stacking changes [Owner, Oct 26]: a tester's payment lines (paid, rejected, delayed, delayed payment arrived) do not stack; their test paused / resumed lines of one day stack across tests; payout-problem lines stack into one a day; admins' new-dispute lines of one day stack into one line across tests (link #disputes). The team paused, stopped or closed your test (including a pause closure): the developer's lines stack into one line a day across all tests (their emails stay always-send).
+- Email [Owner, Oct 26]: Off, or On with Daily / Weekly / Monthly (the per-update option is gone; those people moved to Daily). Every email is ONE email listing everything since the last one. With email On, payment lines (failures, holds, retries, paid, rejected, delayed, payouts, chargebacks) also go out in an end-of-day email even on Weekly or Monthly, holding only those lines; the rest wait for the normal email. Admins' chargeback emails go out at once whatever their setting. The always-send emails stay as they are for now (account paused, the team pausing / stopping / closing a test, email confirmation, password reset, receipts); the owner is deciding the final list.
 
 **Payments**
 
@@ -400,10 +419,11 @@ Admins see every account (deleted too), act on suspensions, tests and disputes, 
 - **Accounts:** profile and status; test history (live, stopped, paused); reports; suspensions with reason, time and admin; disputes; ratings; payments and balances; work submitted, reviewed and paid; participation including testers who left; deletion status and reason (owner- or admin-deleted).
 - **Suspensions and tests:** suspend and lift with a recorded reason; pause, unpause and close tests; preview a suspension's effects; held tester shares (refund or release).
 - **Paused tests:** every paused test (any cause) with its closure date and countdown, **Extend** (days) and **Close now**. **Chargeback holds:** each developer with "card verified ✓/✗, owed paid ✓/✗" and **Approve**. The suspension and dispute tools stay as they are. [Owner, Oct 26]
-- **Dashboard layout** (like the developer and tester dashboards): open disputes first (newest first, in a scroll box), then the tests this admin paused or stopped or whose developer this admin suspended (newest first, in a scroll box, each linking to the test), then the paused tests with Extend and Close now, the chargeback holds with Approve, accounts and reports. Long lists show 20, then a Load more button (keyset by date, newest first). [Owner, Oct 26]
+- **Dashboard layout** (like the developer and tester dashboards), top to bottom [Owner, Oct 26]: open disputes (newest first, in a scroll box); chargeback holds (their own section, with Approve); the tests this admin paused or stopped or whose developer this admin suspended (newest first, in a scroll box, each linking to the test); paused tests with Extend and Close now; then the rest (accounts, reports ...). Long lists are shown in pages of 25 with Previous and Next under each (keyset by date) and "1–25 of N"; pressing one replaces only that list's rows, with no page reload.
+- **Test history:** each test row has a History view (also open in the ?test=ID area): that test's full timeline across all testers, newest first, in pages of 25: joins, leaves, sends, pays, rejects, changes, invites, calls, disputes, admin actions (with which admin acted), the terms each tester joined on and offers, and payments. Developers see nothing new.
 - **Reports:** reason and status per account; accounts with more than three reports are flagged when a new one arrives; a report count is never proof by itself.
 - **Disputes:** see submissions, payments and terms; the decision row shows listing, paid for this piece, paid for this part so far and the allowed range (from what was paid to listing minus what was paid on other pieces); blank keeps the pay; decisions and reasons are recorded and both sides told.
-- **Notifications:** Contact us emails the admin group; one daily email for new disputes and chargebacks, a 3-day digest for the rest; a reminder every two weeks to review suspended accounts; muting is post-launch.
+- **Notifications:** Contact us emails the admin group; a chargeback emails the admins at once; one daily email for new disputes, a 3-day digest for the rest; a daily bell line reviewing all suspended accounts; muting is post-launch.
 - **Admin accounts:** proper authentication; a suspended admin is blocked from login and sessions and sees how to appeal.
 
 ## 11. Rules the pages rely on
@@ -415,7 +435,7 @@ The lifecycle, money, rating and restriction rules referenced above, plus every 
 - States: Open (join, submit, review), Paused (admin or account restriction; no new commitments; records kept), Closed (developer stop, admin, deletion, or long pause; history stays), Draft (an unpublished next round).
 - A tester's deadline starts at joining; existing testers keep theirs when the default changes; it's a guide (late work is labelled "Sent late").
 - Open until is the recruitment cutoff; it can only be extended, before it passes.
-- Unreviewed contract work: after 14 days the tester may Charge or Let it go; reminders every 3 days; nothing is charged automatically.
+- Unreviewed contract work [Owner, Oct 26]: a contract part sent and left unreviewed can be Charged / Let go only once BOTH 14 days have passed since it was sent AND the test's Open until has passed. With no Open until, the second is met when the test stops or closes, or the tester's work ends (they left, their deadline passed, or their work was ended early). The tester's reminder is every 3 days after it opens; the developer's is one reminder 1 day before it would open, then daily. Outage and hold time shifts still apply. Rating uses the same opening point; nothing is charged automatically.
 - Paused tests: **a paused test closes automatically after 7 days, whatever the cause** (a payment hold, a chargeback hold, the developer's suspension or the team's pause); the pause counts from the earliest cause still in force. The daily job closes it and closing works like Stop: testers' work ends (what they sent is still reviewed and paid), calls ahead are cancelled, requests, invites and applications close. Testers are told neutrally that the test ended (never why); the developer is told why (the test page, the bell and an email). The admin can extend a test's closure date (a number of days, valid for the current pause only) or close it sooner (Close now). This replaces the old 30-day admin alert. [Owner, Oct 26]
 - The pause is told by bell: one line when a test is paused ("Harbor Run is paused and closes on Nov 2 unless your account is cleared") and one a day before it closes. The admin's Paused tests list shows each date with Extend and Close now. Testers only ever see "This test is paused". [Owner, Oct 26]
 - Open Question: Which rule should be authoritative? Finalize the relationship between the individual deadline, the three-day buffer, the two-day late-joiner extension, and the maximum recruitment period before implementation.

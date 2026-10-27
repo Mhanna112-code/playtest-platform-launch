@@ -42,8 +42,8 @@ describe("Pay and Reject while the account is not clear (owner, Oct 26)", () => 
     const paid = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     expect(paid.body).toMatchObject({ status: "deferred", later: "charged when your account is clear" });
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "You were paid for your written answers" } } })).toBe(1);
-    const mail = await db.outboxEmail.findFirstOrThrow({ where: { subject: { contains: "You were paid for your written answers" } }, orderBy: { createdAt: "desc" } });
-    expect(mail.text).toContain("Payment may be delayed.");
+    // (Owner, Oct 26) A tester's payment line is its own line (it does not stack) and also goes out in the end-of-day payment email.
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "You were paid for your written answers" }, own: true, payment: true } })).toBe(1);
     void testId;
   });
 

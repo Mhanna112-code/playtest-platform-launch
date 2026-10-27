@@ -2,12 +2,13 @@ import { db } from "@/lib/db";
 import { displayName, money, pronouns } from "@/lib/format";
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
+import { chargeIsOpen, testPaused } from "@/lib/rules";
 import { testerGate } from "./testerGate";
 import { cancelCallsAhead, devGate, lockTest, ownContract, ownTest, recordEvent, spotOpened } from "./tests";
 
 // (Owner, Oct 22, NEWEST+5) Ratings.
 // TESTER rates the developer once (1) at least one part was sent or one call took place, (2) every sent part / call is
-// decided or past the 14-day point, (3) there's no open dispute in this test. Rating finishes their part like Leave (no
+// decided or past the point where Charge / Let it go opens (14 days and the test's Open until), (3) there's no open dispute in this test. Rating finishes their part like Leave (no
 // rejoin ever); Charge / Let it go and Dispute stay. The "Rate …" prompt is sent once.
 // DEVELOPER rates a tester only after that tester rated them (no open dispute), within 14 days of the tester's rating.
 // BLIND REVEAL: the tester's rating stays hidden (from the developer, profiles and averages) until the developer rates
@@ -25,12 +26,12 @@ const revealedWhere = (now = new Date()) => ({ OR: [{ revealedAt: { not: null } 
 /** Why the tester can't rate yet ("" = available; "rated" = done). */
 export async function rateBlocker(contractId: string, side: Side, now = new Date()) {
   if (side === "developer") return devRateBlocker(contractId, now);
-  const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { submissions: { include: { review: true } }, calls: { include: { review: true } } } });
+  const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: true, submissions: { include: { review: true } }, calls: { include: { review: true } } } });
   if (await db.rating.findUnique({ where: { contractId_side: { contractId, side: "tester" } } })) return "rated";
   const done = c.calls.filter((x) => x.status === "booked" && x.startsAt <= now);
   if (!c.submissions.length && !done.length) return "Rating opens once some work was sent or a call took place.";
-  const waiting = c.submissions.some((s) => !s.review && !s.choiceOfferedAt && !(s.payBy && s.payBy < now)) || done.some((x) => !x.review && x.startsAt.getTime() + 14 * DAY > now.getTime());
-  if (waiting) return "Rating opens once the developer has reviewed everything you sent (or 14 days have passed).";
+  const waiting = c.submissions.some((s) => !s.review && !s.choiceOfferedAt && !chargeIsOpen(s, c.test, c, now)) || done.some((x) => !x.review && x.startsAt.getTime() + 14 * DAY > now.getTime());
+  if (waiting) return "Rating opens once the developer has reviewed everything you sent (or Charge / Let it go has opened for it).";
   if (await db.dispute.count({ where: { contractId, status: "open" } })) return "Rating opens once the team has decided the open dispute.";
   return "";
 }
@@ -68,7 +69,7 @@ export async function maybePromptRating(contractId: string) {
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { tester: true, test: { include: { developer: true } } } });
   if (!c || c.ratePromptedAt || (await rateBlocker(c.id, "tester"))) return;
   await db.contract.update({ where: { id: c.id }, data: { ratePromptedAt: new Date() } });
-  await notify(c.tester.email, `Rate ${displayName(c.test.developer)} on “${c.title}”`, [`You can now rate ${displayName(c.test.developer)} for “${c.title}”.`], `/app/sessions/${c.id}#rate`);
+  await notify(c.tester.email, `Rate ${displayName(c.test.developer)} on “${c.title}”`, [`You can now rate ${displayName(c.test.developer)} for “${c.title}”.`], `/app/sessions/${c.id}#rate`, { own: c.test.status === "stopped" });
 }
 
 /** The tester's in-page warning lines (what rating will end): contract parts not sent yet, and one calls line. */
@@ -114,7 +115,7 @@ export async function testerRate(tester: { id: string; name: string; email: stri
     }
     await recordEvent(tx, c.testId, "left", `${displayName(tester)} finished ${c0.title} and rated you`, true, {}, c.id);
   });
-  await bell(c0.test.developerId, `${displayName(tester)} finished ${c0.title}. You can rate ${pronouns(tester.pronoun).obj} for ${WINDOW_DAYS} days.`, `/app/tests/${c0.testId}#tester-${c0.id}`);
+  await bell(c0.test.developerId, `${displayName(tester)} finished ${c0.title}. You can rate ${pronouns(tester.pronoun).obj} for ${WINDOW_DAYS} days.`, `/app/tests/${c0.testId}#tester-${c0.id}`, undefined, { own: c0.test.status === "stopped" });
   await spotOpened(c0.testId);
   return { rated: true };
 }
@@ -139,3 +140,39 @@ export async function devRate(dev: { id: string; name: string; email: string }, 
   return { rated: true };
 }
 
+
+/**
+ * (Owner, Oct 26) Rating prompts: while the test is open they stack with that test's other same-day lines. Once the test is closed (stopped) each is its
+ * own line, with a reminder every 3 days until the person has rated or the window ends (the developer's window is 14 days from the tester's rating).
+ */
+export async function ratingReminders(now = new Date()) {
+  const every = 3 * DAY - 3_600_000;
+  let n = 0;
+  const sinceLast = async (userId: string, testId: string, fallback: Date) => {
+    const last = await db.notification.findFirst({ where: { userId, testId, text: { startsWith: "Reminder: rate " } }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
+    return last && last.createdAt > fallback ? last.createdAt : fallback;
+  };
+  // Tester: prompted once, then every 3 days until they rate.
+  const prompted = await db.contract.findMany({ where: { test: { status: "stopped" }, ratePromptedAt: { not: null, lt: new Date(now.getTime() - every) } }, orderBy: { ratePromptedAt: "desc" }, take: 500, include: { test: { include: { developer: true } } } });
+  const rated = new Set((await db.rating.findMany({ where: { contractId: { in: prompted.map((c) => c.id) }, side: "tester" }, select: { contractId: true } })).map((r) => r.contractId));
+  for (const c of prompted) {
+    if (rated.has(c.id) || testPaused(c.test.developer, c.test)) continue;
+    if (now.getTime() - (await sinceLast(c.testerId, c.testId, c.ratePromptedAt!)).getTime() < every) continue;
+    if ((await rateBlocker(c.id, "tester")) !== "") continue;
+    await bell(c.testerId, `Reminder: rate ${displayName(c.test.developer)} on “${c.title}”`, `/app/sessions/${c.id}#rate`, undefined, { own: true });
+    n++;
+  }
+  // Developer: the tester rated; every 3 days until they rate back or the 14 days end.
+  const theirs = await db.rating.findMany({ where: { side: "tester", createdAt: { gt: new Date(now.getTime() - WINDOW_DAYS * DAY), lt: new Date(now.getTime() - every) } }, take: 500 });
+  const back = new Set((await db.rating.findMany({ where: { contractId: { in: theirs.map((r) => r.contractId) }, side: "developer" }, select: { contractId: true } })).map((r) => r.contractId));
+  for (const r of theirs) {
+    if (back.has(r.contractId)) continue;
+    const c = await db.contract.findUnique({ where: { id: r.contractId }, include: { tester: true, test: { include: { developer: true } } } });
+    if (!c || c.test.status !== "stopped" || testPaused(c.test.developer, c.test)) continue;
+    if (now.getTime() - (await sinceLast(c.test.developerId, c.testId, r.createdAt)).getTime() < every) continue;
+    if ((await rateBlocker(c.id, "developer", now)) !== "") continue;
+    await bell(c.test.developerId, `Reminder: rate ${displayName(c.tester)} for “${c.title}” (until ${new Date(r.createdAt.getTime() + WINDOW_DAYS * DAY).toLocaleDateString("en-US", { month: "short", day: "numeric" })})`, `/app/tests/${c.testId}#tester-${c.id}`, undefined, { own: true });
+    n++;
+  }
+  return n;
+}

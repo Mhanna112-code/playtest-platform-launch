@@ -26,8 +26,6 @@ describe("Ask to rejoin (design doc 7.3, 8)", () => {
     // The developer is told what Ana gets back.
     const note = await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, text: { contains: "asks to rejoin" } } });
     expect(note.link).toBe(`/app/tests/${testId}#needs-you`);
-    const mail = await db.outboxEmail.findFirstOrThrow({ where: { subject: { contains: "asks to rejoin" } }, orderBy: { createdAt: "desc" } });
-    expect(mail.text).toMatch(/If you accept, she gets back the 5 days 23 h|If you accept, she gets back the 6 days/);
     const old = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });
     const accepted = await decide(testId, dev.cookie, a.id, "accept");
     expect(accepted.status).toBe(200);

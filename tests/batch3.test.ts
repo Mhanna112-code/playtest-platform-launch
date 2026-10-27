@@ -39,7 +39,8 @@ describe("latest batch rules", () => {
     expect(R.checkActualMinutes(25, 30).ok).toBe(true);
     expect(R.checkActualMinutes(91, 30).ok).toBe(false);
     expect(R.declinedLine("Ana Silva", 1667, "live call")).toBe("Your card was declined, so Ana Silva wasn't paid $16.67 for the call. Update your card in Payments, then press Pay again.");
-    expect(R.emailDecision("each", false)).toBe("send");
+    expect(R.emailDecision("each", false)).toBe("summary"); // (Owner, Oct 26) no per-update emails any more: a leftover "each" counts as daily
+    expect(R.emailDecision("off", false)).toBe("skip");
     expect(R.emailDecision("daily", false)).toBe("summary");
     expect(R.emailDecision("none", false)).toBe("skip");
     expect(R.emailDecision("none", true)).toBe("send"); // receipts always

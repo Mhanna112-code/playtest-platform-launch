@@ -19,8 +19,9 @@ const later = () => new Promise((r) => setTimeout(r, 30));
 afterEach(() => setStripeForTests(null));
 const pay = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), seenAt: seen(), confirmed: true, ...body } })).then(json);
 const texts = (r: { body: { error: { changes: { text: string }[] } } }) => r.body.error.changes.map((c) => c.text);
+// The database clock can run a few ms ahead of the test process on Windows: the live route only lists changes up to its own "now", so wait a beat first.
 const live = (cookie: string, scope: string, since: string, tab = "") =>
-  liveGET(req(`/api/live?scope=${encodeURIComponent(scope)}&since=${encodeURIComponent(since)}`, { cookie, headers: tab ? { "x-tab": tab } : {} })).then(json);
+  later().then(() => liveGET(req(`/api/live?scope=${encodeURIComponent(scope)}&since=${encodeURIComponent(since)}`, { cookie, headers: tab ? { "x-tab": tab } : {} }))).then(json);
 
 describe("reason E: your own actions in another tab", () => {
   it("tester: written answers sent in tab 1 stop Leave once in tab 2; the same tab never stops for itself", async () => {

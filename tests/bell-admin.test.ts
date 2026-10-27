@@ -51,8 +51,8 @@ describe("bell stacking: same-day lines about one test stack, except the lines t
     for (const text of ["Your tests are paused", "Your tests are running again"]) expect(after.find((l) => l.text === text)?.own, text).toBe(true);
     const tl = await lines(tester.user.id);
     expect(tl.find((l) => l.text.endsWith("was stopped"))?.own).toBe(true);
-    expect(tl.find((l) => l.text.endsWith("is running again"))?.own).toBe(true);
-    expect(tl.filter((l) => l.own).length).toBeGreaterThanOrEqual(2);
+    // (Owner, Oct 26) A tester's paused / resumed lines stack per day across tests (a group), they are not their own line.
+    expect(tl.find((l) => l.text.endsWith("is running again"))).toMatchObject({ own: false, groupKey: "paused" });
   });
 
   it("admin decisions arrive on their own: suspension, reinstatement, the team pausing or stopping a test, a pause moved later, a dispute decided", async () => {
@@ -72,29 +72,31 @@ describe("bell stacking: same-day lines about one test stack, except the lines t
     expect((await aact(a.cookie, "suspend", { id: dev.user.id, note: "Testing" })).status).toBe(200);
     expect((await aact(a.cookie, "unsuspend", { id: dev.user.id })).status).toBe(200);
     const dl = await lines(dev.user.id);
-    for (const re of [/was decided$/, /^The team paused/, /will close later$/, /^The team lifted the pause/, /^The team stopped/, /^Your account is paused$/, /^Your account is active again$/])
+    for (const re of [/was decided$/, /will close later$/, /^The team lifted the pause/, /^Your account is paused$/, /^Your account is active again$/])
       expect(dl.find((l) => re.test(l.text))?.own, String(re)).toBe(true);
+    // (Owner, Oct 26) The team pausing or stopping your test stacks into one line a day across all your tests (their emails stay always-send).
+    for (const re of [/^The team paused/, /^The team stopped/]) expect(dl.find((l) => re.test(l.text)), String(re)).toMatchObject({ own: false, groupKey: "team" });
+    expect(dl.filter((l) => l.groupKey === "team").map(bellKey).filter((k, i, a) => a.indexOf(k) === i).length).toBe(1);
     expect((await lines(tester.user.id)).find((l) => /dispute on .* was decided$/.test(l.text))?.own).toBe(true);
   });
 
-  it("admins get dispute lines that stack per day per test, linking to the dispute row", async () => {
+  it("admins get ONE new-dispute line a day across different tests, linking to #disputes", async () => {
     const a = await admin();
-    const { dev, testId } = await setup();
-    const one = await joined(testId, "Ana Silva");
-    const two = await joined(testId, "Ben Carter");
     const disputes: string[] = [];
-    for (const j of [one, two]) {
+    for (const name of ["Ana Silva", "Ben Carter"]) {
+      const { dev, testId } = await setup();
+      const j = await joined(testId, name);
       await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] });
       const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
       expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400, reason: "Only half answered" })).status).toBe(200);
       expect((await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: sub.id, reason: "I answered everything properly", seenAt: seen(), confirmed: true })).status).toBe(200);
       disputes.push((await db.dispute.findFirstOrThrow({ where: { submissionId: sub.id } })).id);
     }
-    const mine = (await lines(a.user.id)).filter((l) => l.testId === testId);
+    const mine = (await lines(a.user.id)).filter((l) => l.groupKey === "disputes");
     expect(mine.length).toBe(2);
-    expect(mine.every((l) => !l.own)).toBe(true); // so the bell stacks them
-    expect(new Set(mine.map(bellKey)).size).toBe(1);
-    expect(mine.map((l) => l.link).sort()).toEqual(disputes.map((id) => `/admin?dispute=${id}#dispute-${id}`).sort());
+    expect(mine.every((l) => !l.own && l.link === "/admin#disputes")).toBe(true);
+    expect(new Set(mine.map(bellKey)).size).toBe(1); // one stacked line
+    expect(disputes.length).toBe(2);
   });
 });
 

@@ -76,7 +76,7 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
                 End early
               </button>
               {/* Stop the test: the full app's "Are you sure?" pop-up first; the stop-once box shows right under it. */}
-              <ConfirmButton className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy} title={`Are you sure you want to stop “${p.title}”?`} confirmLabel="Stop the test"
+              <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy} title={`Are you sure you want to stop “${p.title}”?`} confirmLabel="Stop the test"
                 body={(
                   <div className="space-y-2">
                     <p>{p.working.length ? <>The work of <strong className="text-white">{p.working.length === 1 ? "1 tester" : `${p.working.length} testers`}</strong> ends now.</> : "Nobody is working on it right now."}</p>
@@ -136,7 +136,7 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
             </div>
             <p className="note">Their work ends now. What they already sent still waits for you to pay; calls ahead are cancelled.</p>
             <div>
-              <ConfirmButton className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy} confirmLabel="End their work now"
+              <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy} confirmLabel="End their work now"
                 title={`End the work of ${chosen.length === 1 ? chosen[0].name : `${chosen.length} testers`} now?`}
                 before={() => {
                   if (!picked.length) { setNoTick(true); return false; }

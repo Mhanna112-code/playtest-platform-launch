@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { FileText, Radio, Video } from "lucide-react";
 import { CategoryIcon, CATEGORY_STYLE } from "@/components/Category";
+import { ChatWithButton } from "@/components/ChatWithButton";
 
 // The full app's small cards parts (components/ui.tsx and category.tsx there), on lean's data.
 
@@ -46,17 +47,26 @@ export function StatusPill({ status }: { status: string }) {
 }
 
 /** One circle per spot: a tester's initial (linking to their profile), or a dashed empty seat. */
-export function Seats({ total, people }: { total: number; people: { id: string; name: string }[] }) {
+export function Seats({ total, people }: { total: number; people: { id: string; name: string; contractId?: string }[] }) {
   const shown = Math.min(total, 12);
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {Array.from({ length: shown }, (_, i) => {
         const p = people[i];
         return p ? (
-          <Link key={p.id} href={`/app/testers/${p.id}`} title={p.name} aria-label={`${p.name}: profile`}
-            className="relative z-10 flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-volt-300 to-sky-300 text-sm font-semibold text-ink-950 no-underline ring-2 ring-slate-950 hover:no-underline hover:ring-sky-300">
-            {p.name.trim().charAt(0).toUpperCase()}
-          </Link>
+          // (Owner, Oct 26) The tester's hover card: their name, a link to the profile and "Chat with <name>" (the same per-test chat as the Testers panel's Chat button).
+          <span key={p.id} className="group relative z-10 inline-block">
+            <Link href={`/app/testers/${p.id}`} aria-label={`${p.name}: profile`}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-volt-300 to-sky-300 text-sm font-semibold text-ink-950 no-underline ring-2 ring-slate-950 hover:no-underline hover:ring-sky-300">
+              {p.name.trim().charAt(0).toUpperCase()}
+            </Link>
+            <span role="tooltip" data-tester-card={p.id}
+              className="invisible absolute left-0 top-full z-40 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/15 bg-slate-900 p-4 text-sm opacity-0 shadow-2xl transition before:absolute before:inset-x-0 before:-top-2 before:h-2 before:content-[''] group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
+              <span className="block font-semibold text-white">{p.name}</span>
+              <Link href={`/app/testers/${p.id}`} className="mt-1 block text-sky-300 hover:underline">See their profile</Link>
+              {p.contractId && <span className="mt-3 block border-t border-white/10 pt-2"><ChatWithButton contractId={p.contractId} name={p.name} /></span>}
+            </span>
+          </span>
         ) : (
           <span key={i} className="h-9 w-9 rounded-full border-2 border-dashed border-slate-600" />
         );

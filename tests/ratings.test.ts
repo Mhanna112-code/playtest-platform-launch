@@ -16,7 +16,7 @@ describe("the tester rates the developer", () => {
     const { tester, sessionId } = await joined(testId);
     expect((await sact(sessionId, "rate", tester.cookie, { stars: 5 })).body.error.message).toBe("Rating opens once some work was sent or a call took place.");
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
-    expect((await sact(sessionId, "rate", tester.cookie, { stars: 5 })).body.error.message).toBe("Rating opens once the developer has reviewed everything you sent (or 14 days have passed).");
+    expect((await sact(sessionId, "rate", tester.cookie, { stars: 5 })).body.error.message).toBe("Rating opens once the developer has reviewed everything you sent (or Charge / Let it go has opened for it).");
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Rate Nora Lane" } } })).toBe(1);
@@ -29,7 +29,7 @@ describe("the tester rates the developer", () => {
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Rate Nora Lane" } } })).toBe(1);
   });
 
-  it("an open dispute holds rating back; the 14-day point counts as decided", async () => {
+  it("an open dispute holds rating back; the point where Charge opens (14 days and Open until) counts as decided", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -41,6 +41,9 @@ describe("the tester rates the developer", () => {
     const b = await joined(testId, "Ben Carter", "he");
     await sact(b.sessionId, "written", b.tester.cookie, { answers: ["a", "b"] });
     await db.submission.updateMany({ where: { contractId: b.sessionId }, data: { payBy: new Date(Date.now() - 60_000) } });
+    // 14 days alone is not enough: Charge also needs the test's Open until to have passed.
+    expect((await sact(b.sessionId, "rate", b.tester.cookie, { stars: 2 })).body.error.message).toContain("Rating opens once the developer has reviewed everything");
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 60_000) } });
     expect((await sact(b.sessionId, "rate", b.tester.cookie, { stars: 2 })).status).toBe(200);
   });
 

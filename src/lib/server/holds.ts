@@ -2,10 +2,10 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
 import {
-  ADMIN_DIGEST_DAYS, autoPayFor, chargeAmount, callCancelledLine, CHARGED_BY_TESTER, countdownDue, INVITE_REMIND_DAYS, choiceLine, failedLine, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, owedUntilFrom, PAUSED_FOR_TESTERS, PAUSED_RIGHT_NOW, PAY_WAITS, shiftForHold, testPaused,
+  ADMIN_DIGEST_DAYS, autoPayFor, chargeAmount, callCancelledLine, CHARGED_BY_TESTER, countdownDue, INVITE_REMIND_DAYS, choiceLine, failedLine, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, owedUntilFrom, PAUSED_FOR_TESTERS, PAUSED_RIGHT_NOW, PAY_WAITS, shiftForHold, testPaused,
 } from "@/lib/rules";
 import { HttpError } from "./http";
-import { bell, notify, sendSummaries } from "./notify";
+import { adminUsers, bell, notify, sendSummaries } from "./notify";
 import { appUrl } from "./auth";
 import { sendEmail } from "./email";
 import { charge } from "./stripe";
@@ -18,6 +18,9 @@ import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
 // While on hold all the developer's tests are paused; paying everything owed (and the admin resolving chargebacks)
 // lifts it, and every working tester's deadline, Open until and the 14-day review clock move on by the pause.
 
+/** A test that is not paused (no payment hold, no suspension, no team pause): reminders tied to a test wait while it is paused and restart when it resumes. */
+const PAUSE_FREE = { adminPausedAt: null, developer: { holdStartedAt: null, suspendedAt: null } } as const;
+const DAY_MS = 86_400_000;
 const admins = () => (process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
 
 export async function onHold(devId: string) {
@@ -59,10 +62,10 @@ export async function startHold(devId: string, reason: string) {
   }
   await (await import("./pauseClosure")).bellPausedTests(devId);
   if (reason === "chargeback") {
-    await notify(dev.email, "Your tests are paused after a chargeback", ["Your bank reversed a payment, so your tests are paused: no new testers, invites or calls, and Pay waits.", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval. Open Payments to see which steps remain.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#chargeback-steps", { own: true });
+    await notify(dev.email, "Your tests are paused after a chargeback", ["Your bank reversed a payment, so your tests are paused: no new testers, invites or calls, and Pay waits.", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval. Open Payments to see which steps remain.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#chargeback-steps", { payment: true });
     return true;
   }
-  await notify(dev.email, "Your tests are paused", ["Your tests are paused until you pay what you owe: no new testers, invites or calls, and Pay waits.", "Testers can still send work. Pay what you owe in Payments to resume at once.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#owed", { own: true });
+  await notify(dev.email, "Your tests are paused", ["Your tests are paused until you pay what you owe: no new testers, invites or calls, and Pay waits.", "Testers can still send work. Pay what you owe in Payments to resume at once.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#owed", { payment: true });
   return true;
 }
 
@@ -121,9 +124,9 @@ export async function liftHoldIfClear(devId: string) {
     await tx.user.update({ where: { id: devId }, data: { holdStartedAt: null, holdReason: "", holdAlertedAt: null, chargebackCardVerifiedAt: null, chargebackApprovedAt: null } });
   });
   await chargeDeferred(devId);
-  await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause."], "/app", { own: true });
+  await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause."], "/app", { payment: true });
   const testers = await db.contract.findMany({ where: { status: "working", test: { developerId: devId } }, include: { tester: true } });
-  for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { own: true });
+  for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { group: "paused" });
   return true;
 }
 
@@ -172,7 +175,7 @@ async function tellArrived(p: { contractId: string | null; submissionId: string 
   const sub = p.submissionId ? await db.submission.findUnique({ where: { id: p.submissionId } }) : null;
   const label = p.kind === "dispute" ? "dispute" : p.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers";
   const line = `${devName} paid ${money(p.amountCents)} for your ${label}`;
-  await notify(email, line, [line + "."], p.contractId ? `/app/sessions/${p.contractId}#${p.callId ? "part-live" : sub?.kind === "recording" ? "part-recording" : "part-written"}` : "/app/payments");
+  await notify(email, line, [line + "."], p.contractId ? `/app/sessions/${p.contractId}#${p.callId ? "part-live" : sub?.kind === "recording" ? "part-recording" : "part-written"}` : "/app/payments", { payment: true });
 }
 
 /** One line per failed payment ("Ana Silva's written answers $8.00 · card declined Oct 20"), plus open chargebacks. */
@@ -217,7 +220,10 @@ export async function chargebackOpened(paymentIntentId: string) {
   }
   const started = await startHold(p.developerId, "chargeback");
   // (Owner, Oct 26) A chargeback always arrives as its own bell line (startHold's own notice covers a new hold).
-  if (!started) await bell(p.developerId, `Your bank reversed a ${money(p.amountCents)} payment${c ? ` for ${displayName(c.tester)}` : ""}: your account is on a chargeback hold`, "/app/payments#chargeback-steps", undefined, { own: true });
+  // (Owner, Oct 26) A chargeback email goes to every admin at once, whatever their email setting.
+  const to = new Set([...admins(), ...(await adminUsers()).map((a) => a.email)]);
+  for (const a of to) await sendEmail({ to: a, subject: `Playtest: new chargeback of ${money(p.amountCents)}`, text: [`A developer's bank reversed a ${money(p.amountCents)} payment (${p.stripePaymentIntentId ?? "no payment id"}). The developer's account is on a chargeback hold.`, `${appUrl()}/admin#chargebacks`, "", "Playtest"].join("\n") }).catch((e) => console.error("[email] chargeback:", e.message));
+  if (!started) await bell(p.developerId, `Your bank reversed a ${money(p.amountCents)} payment${c ? ` for ${displayName(c.tester)}` : ""}: your account is on a chargeback hold`, "/app/payments#chargeback-steps", undefined, { payment: true });
   await db.user.update({ where: { id: p.developerId }, data: { chargebackCardVerifiedAt: null, chargebackApprovedAt: null } });
   return true;
 }
@@ -226,6 +232,7 @@ export async function chargebackOpened(paymentIntentId: string) {
 export async function runDaily(now = new Date()) {
   const out = { autoPaid: 0, holds: 0, alerts: 0, headsUps: 0, choices: 0, retried: 0, closed: 0 };
   await (await import("./calls")).sweepNobodyJoined(now);
+  const declined = new Map<string, number[]>(); // today's declined retries of developers on a hold: merged into their one hold line
   // 0. Retry every owed payment once a day (before the cut-off and during holds). Chargebacks are never retried.
   const retry = await db.payment.findMany({ where: { status: "failed", owedUntil: { not: null }, settledAt: null, OR: [{ retriedAt: null }, { retriedAt: { lt: new Date(now.getTime() - 23 * 3_600_000) } }] } });
   for (const p of retry) {
@@ -240,12 +247,13 @@ export async function runDaily(now = new Date()) {
       out.retried++;
     } catch {
       await db.payment.update({ where: { id: p.id }, data: { retriedAt: now } });
-      await bell(d.id, `Today's retry of ${money(p.amountCents)} you owe was declined. Pay what you owe in Payments.`, "/app/payments#owed", undefined, { own: true });
+      if (d.holdStartedAt) declined.set(d.id, [...(declined.get(d.id) ?? []), p.amountCents]);
+      else await bell(d.id, `Today's retry of ${money(p.amountCents)} you owe was declined. Pay what you owe in Payments.`, "/app/payments#owed", undefined, { payment: true });
     }
   }
   // 1. Sent work not paid or rejected within 14 days: the listing amount is paid automatically (clock paused in holds).
   const due = await db.submission.findMany({
-    where: { review: null, payBy: { lt: now }, contract: { test: { developer: { holdStartedAt: null } } } },
+    where: { review: null, payBy: { lt: now }, contract: { test: PAUSE_FREE } },
     include: { contract: { include: { tester: true, test: { include: { developer: true } } } } },
     orderBy: { payBy: "asc" },
     take: 1000,
@@ -254,9 +262,11 @@ export async function runDaily(now = new Date()) {
     const c = s.contract, dev = c.test.developer;
     const auto = autoPayFor(s.agreedCents);
     if (auto == null) continue; // outside the contract: its own reminder every 3 days (below)
-    // After day 14: the developer is reminded daily until it's paid, rejected, charged or let go.
+    // (Owner, Oct 26) Charge / Let it go opens only when 14 days have passed AND the test's Open until has passed (or, with none, the test or the tester's work ended).
+    if (!chargeIsOpen(s, c.test, c, now)) continue;
+    // Once it opens: the developer is reminded daily until it's paid, rejected, charged or let go.
     if (!s.devRemindedAt || now.getTime() - s.devRemindedAt.getTime() >= 23 * 3_600_000) {
-      await bell(dev.id, `“${c.title}”: ${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} waited over 14 days: pay or reject it (${displayName(c.tester)} can now charge or let it go).`, `/app/tests/${c.testId}#piece-${s.id}`);
+      await bell(dev.id, `“${c.title}”: ${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} waited over 14 days: pay or reject it (${displayName(c.tester)} can now charge or let it go).`, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed" });
       await db.submission.update({ where: { id: s.id }, data: { devRemindedAt: now } });
     }
     // Contract price already paid in full for this part: no Charge / Let it go, no day-14 notice, no reminders.
@@ -266,7 +276,7 @@ export async function runDaily(now = new Date()) {
       const by = new Date(now.getTime() + REVIEW_DAYS * 86_400_000);
       await db.submission.update({ where: { id: s.id }, data: { choiceOfferedAt: now, choiceBy: by, remindedAt: now } });
       const line = choiceLine(displayName(dev), s.kind, auto);
-      await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#part-${s.kind}`);
+      await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#part-${s.kind}`, { group: "charge" });
       await db.$transaction((tx) => recordEvent(tx, c.testId, "choice", `${displayName(c.tester)} can now charge or let go of their ${s.kind === "recording" ? "recording" : "written answers"}`, false, {}, c.id));
       await (await import("./ratings")).maybePromptRating(c.id);
       out.choices++;
@@ -275,7 +285,7 @@ export async function runDaily(now = new Date()) {
     {
       if (!s.remindedAt || now.getTime() - s.remindedAt.getTime() >= REMIND_DAYS * 86_400_000 - 3_600_000) {
         const line = choiceLine(displayName(dev), s.kind, auto);
-        await notify(c.tester.email, `Reminder: ${line}`, [line], `/app/sessions/${c.id}#part-${s.kind}`);
+        await notify(c.tester.email, `Reminder: ${line}`, [line], `/app/sessions/${c.id}#part-${s.kind}`, { group: "charge" });
         await db.submission.update({ where: { id: s.id }, data: { remindedAt: now } });
       }
       continue;
@@ -285,7 +295,7 @@ export async function runDaily(now = new Date()) {
   const soon = await db.payment.findMany({ where: { status: "failed", settledAt: null, warnedAt: null, owedUntil: { gt: now, lt: new Date(now.getTime() + 86_400_000) } } });
   for (const p of soon) {
     const d = await db.user.findUniqueOrThrow({ where: { id: p.developerId } });
-    await notify(d.email, `Pay ${money(p.amountCents)} by ${fmtDateTime(p.owedUntil!)} or your tests are paused`, ["A payment you owe is still unpaid. Pay what you owe in Payments to keep your tests running."], "/app/payments#owed", { own: true });
+    await notify(d.email, `Pay ${money(p.amountCents)} by ${fmtDateTime(p.owedUntil!)} or your tests are paused`, ["A payment you owe is still unpaid. Pay what you owe in Payments to keep your tests running."], "/app/payments#owed", { payment: true });
     await db.payment.update({ where: { id: p.id }, data: { warnedAt: now } });
   }
   // 2. Failed charges not paid within 3 days start a hold.
@@ -299,7 +309,7 @@ export async function runDaily(now = new Date()) {
     db.payment.findMany({ where: { chargeback: "open", chargebackAt: { gt: since } } }),
   ]);
   if (newDisputes.length + newChargebacks.length) {
-    const lines = [...newDisputes.map((d) => `• New dispute: “${d.reason}” ${appUrl()}/admin#disputes`), ...newChargebacks.map((p) => `• New chargeback: ${money(p.amountCents)} ${appUrl()}/admin#holds`)];
+    const lines = [...newDisputes.map((d) => `• New dispute: “${d.reason}” ${appUrl()}/admin#disputes`), ];
     for (const a of admins()) await sendEmail({ to: a, subject: `Playtest: ${lines.length} new dispute${lines.length === 1 ? "" : "s"} or chargeback${lines.length === 1 ? "" : "s"}`, text: [...lines, "", "Playtest"].join("\n") }).catch((e) => console.error("[email] admin daily:", e.message));
   }
   await db.appState.upsert({ where: { key: "adminDailyAt" }, update: { value: now.toISOString() }, create: { key: "adminDailyAt", value: now.toISOString() } });
@@ -314,7 +324,6 @@ export async function runDaily(now = new Date()) {
     for (const a of admins()) await sendEmail({ to: a, subject: `Playtest admin digest: ${cases.length} case${cases.length === 1 ? "" : "s"}`, text }).catch((e) => console.error("[email] digest:", e.message));
     out.alerts = cases.length;
   }
-  await sendSummaries(now);
   // Calls whose time came during a hold.
   for (const u of await db.user.findMany({ where: { holdStartedAt: { not: null } }, select: { id: true } })) await sweepHeldCalls(u.id);
   // 3c. (Owner, Oct 26) Paused tests close after 7 days, whatever the cause (the admin can extend a test's date or close it sooner).
@@ -333,27 +342,28 @@ export async function runDaily(now = new Date()) {
     await db.test.update({ where: { id: t.id }, data: { notifiedMarks: { push: m.mark }, ...(m.mark === "1d" ? { notified1d: true, notified3d: true } : m.mark === "3d" ? { notified3d: true } : {}) } });
     out.headsUps++;
   }
-  // 5. The developer's unreviewed contract work: 1 week / 3 days / 1 day before day 14 (bell).
-  const upcoming = await db.submission.findMany({ where: { review: null, agreedCents: { not: null }, payBy: { gt: now }, contract: { test: { developer: { holdStartedAt: null } } } }, include: { contract: { include: { tester: true, test: true } } }, orderBy: { payBy: "asc" }, take: 2000 });
+  // 5. (Owner, Oct 26) The developer's unreviewed contract work: ONE reminder 1 day before Charge would open (the daily ones once it has opened are in 1 above).
+  const upcoming = await db.submission.findMany({ where: { review: null, choiceOfferedAt: null, agreedCents: { not: null }, payBy: { not: null }, contract: { test: PAUSE_FREE } }, include: { contract: { include: { tester: true, test: true } } }, orderBy: { payBy: "asc" }, take: 2000 });
   for (const s of upcoming) {
-    const m = countdownDue(s.payBy, now, s.devMarks, s.updatedAt);
-    if (!m) continue;
+    const opens = chargeOpensAt(s, s.contract.test, s.contract, now);
+    if (s.devMarks.includes("1d") || !opens || opens.getTime() <= now.getTime() || opens.getTime() - now.getTime() > DAY_MS) continue;
     const name = displayName(s.contract.tester);
-    await bell(s.contract.test.developerId, `“${s.contract.title}”: review ${name}'s ${s.kind === "recording" ? "recording" : "written answers"} ${m.label === "tomorrow" ? "by tomorrow" : m.label.replace("in ", "within ")} (after that ${name} can charge or let it go).`, `/app/tests/${s.contract.testId}#piece-${s.id}`);
-    await db.submission.update({ where: { id: s.id }, data: { devMarks: { push: m.mark } } });
+    await bell(s.contract.test.developerId, `“${s.contract.title}”: review ${name}'s ${s.kind === "recording" ? "recording" : "written answers"} by tomorrow (after that ${name} can charge or let it go).`, `/app/tests/${s.contract.testId}#piece-${s.id}`, undefined, { group: "unreviewed" });
+    await db.submission.update({ where: { id: s.id }, data: { devMarks: { push: "1d" } } });
   }
   // 6. Work outside the contract: no deadline, a bell to the developer every 3 days.
-  const outside = await db.submission.findMany({ where: { review: null, agreedCents: null, updatedAt: { lt: new Date(now.getTime() - REMIND_DAYS * 86_400_000 + 3_600_000) }, OR: [{ remindedAt: null }, { remindedAt: { lt: new Date(now.getTime() - REMIND_DAYS * 86_400_000 + 3_600_000) } }], contract: { test: { developer: { holdStartedAt: null } } } }, include: { contract: { include: { tester: true } } }, take: 500 });
+  const outside = await db.submission.findMany({ where: { review: null, agreedCents: null, updatedAt: { lt: new Date(now.getTime() - REMIND_DAYS * 86_400_000 + 3_600_000) }, OR: [{ remindedAt: null }, { remindedAt: { lt: new Date(now.getTime() - REMIND_DAYS * 86_400_000 + 3_600_000) } }], contract: { test: PAUSE_FREE } }, include: { contract: { include: { tester: true } } }, take: 500 });
   for (const s of outside) {
     await bell((await db.test.findUniqueOrThrow({ where: { id: s.contract.testId } })).developerId, `“${s.contract.title}”: ${displayName(s.contract.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} still waits for you to pay or reject.`, `/app/tests/${s.contract.testId}#piece-${s.id}`);
     await db.submission.update({ where: { id: s.id }, data: { remindedAt: now } });
   }
-  // 7. Invites: a bell reminder every 3 days until the tester joins, says "No thanks", or the invite expires.
+  // 7. (Owner, Oct 26) Invites: a bell reminder DAILY until the tester joins, says "No thanks", or the invite expires (all of a day's stack into one line across tests).
   const invites = await db.invite.findMany({ where: { status: "sent", createdAt: { lt: new Date(now.getTime() - INVITE_REMIND_DAYS * 86_400_000 + 3_600_000) }, OR: [{ remindedAt: null }, { remindedAt: { lt: new Date(now.getTime() - INVITE_REMIND_DAYS * 86_400_000 + 3_600_000) } }] }, include: { test: { include: { developer: true } } }, take: 500 });
   for (const i of invites) {
     const testersIn = await db.contract.count({ where: { testId: i.testId, status: "working" } });
     if (i.test.status !== "open" || testersIn >= i.test.spots || (i.test.openUntil && i.test.openUntil < now)) continue; // expired
-    await bell(i.testerId, `Reminder: ${displayName(i.test.developer)} invited you to “${i.test.title}”.`, `/app/find/${i.testId}`);
+    if (i.test.adminPausedAt || i.test.developer.holdStartedAt || i.test.developer.suspendedAt) continue; // paused: the reminders wait
+    await bell(i.testerId, `Reminder: ${displayName(i.test.developer)} invited you to “${i.test.title}”.`, `/app/find/${i.testId}`, undefined, { group: "invites" });
     await db.invite.update({ where: { id: i.id }, data: { remindedAt: now } });
   }
   // 8. (NEXT-UI 7) Forever sets of calls: the next ones are booked as each passes (4 ahead); ended sets are marked.
@@ -363,6 +373,10 @@ export async function runDaily(now = new Date()) {
   await rs.cancelLateSuspensionCalls(now);
   await rs.payoutReminders(now);
   await rs.suspendedAccountsReminder(now);
+  // 10. (Owner, Oct 26) The reminders that need their own rules, then the emails last (one email lists everything new; payment lines also go out end of day).
+  await dailyReminders(now, declined);
+  await (await import("./ratings")).ratingReminders(now);
+  await sendSummaries(now);
   return out;
 }
 
@@ -398,7 +412,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
     if (s.review.reason === CHARGED_BY_TESTER || s.review.reason === LET_GO_BY_TESTER) throw new HttpError(409, "done", "You already chose for this.");
     throw new HttpError(409, "done", s.review.rejected ? `${displayName(dev)} rejected this meanwhile.` : `${displayName(dev)} paid ${money(s.review.amountCents)} for this meanwhile.`);
   }
-  if (!s.choiceOfferedAt) throw new HttpError(409, "not_yet", "You can choose once it has waited 14 days without a review.");
+  if (!s.choiceOfferedAt) throw new HttpError(409, "not_yet", "You can choose once 14 days have passed since you sent it and the test's Open until has passed (with no Open until: once the test or your work has ended).");
   await testerTermsGate(contractId, displayName(dev), body);
   const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;
   if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");
@@ -431,12 +445,42 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
     status = "failed";
     const now = new Date();
     await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "failed", failure: (e as Error).message, owedUntil: owedUntilFrom(now) } });
-    await notify(c.tester.email, `Payment for your work on “${c.title}” may be delayed`, ["Payment for your work may be delayed."], `/app/sessions/${c.id}#part-${s.kind}`, { own: true });
+    await notify(c.tester.email, `Payment for your work on “${c.title}” may be delayed`, ["Payment for your work may be delayed."], `/app/sessions/${c.id}#part-${s.kind}`, { payment: true });
     // A second failed payment while one is still owed starts the hold at once.
     const stillOwed = await db.payment.count({ where: { developerId: dev.id, status: "failed", settledAt: null, owedUntil: { not: null } } });
     if (stillOwed >= 2) await startHold(dev.id, "unpaid");
-    await notify(dev.email, "A payment failed: pay within 3 days", [`${displayName(tester)} charged ${money(amount)} for their ${label} on “${c.title}”, and your card was declined.`, `Pay it by ${fmtDateTime(owedUntilFrom(now))} or your tests are paused.`], "/app/payments#owed", { own: true });
+    await notify(dev.email, "A payment failed: pay within 3 days", [`${displayName(tester)} charged ${money(amount)} for their ${label} on “${c.title}”, and your card was declined.`, `Pay it by ${fmtDateTime(owedUntilFrom(now))} or your tests are paused.`], "/app/payments#owed", { payment: true });
   }
   await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their ${label}`, false, {}, c.id));
   return { choice, amountCents: amount, status };
+}
+
+/**
+ * (Owner, Oct 26) Daily bell reminders:
+ *  - a developer on a payment hold: ONE line a day, "Your tests are paused until you pay what you owe" (its own line, link /payments#owed); today's declined
+ *    retry is merged into it, so there is only one hold line a day;
+ *  - a developer with applications / rejoin asks waiting for an answer: a line a day per test (stacks with that test's other same-day lines; waits while the test is paused).
+ */
+async function dailyReminders(now: Date, declined: Map<string, number[]>) {
+  const since = new Date(now.getTime() - 20 * 3_600_000);
+  // Holds: one line a day (batched: the hold's own notice or today's reminder already counts).
+  const onHold = (await db.user.findMany({ where: { holdStartedAt: { not: null }, deletedAt: null }, select: { id: true }, take: 5000 })).map((u) => u.id);
+  const had = new Set((await db.notification.findMany({ where: { userId: { in: onHold }, text: { startsWith: "Your tests are paused" }, createdAt: { gt: since } }, select: { userId: true }, distinct: ["userId"] })).map((n) => n.userId));
+  await db.notification.createMany({
+    data: onHold.filter((id) => !had.has(id)).map((id) => {
+      const d = declined.get(id);
+      return { userId: id, text: `Your tests are paused until you pay what you owe${d ? `. Today's retry of ${money(d.reduce((a, c) => a + c, 0))} was declined` : ""}`, link: "/app/payments#owed", own: true, payment: true };
+    }),
+  });
+  // Applications / rejoin asks waiting for an answer: a line a day per open, unpaused test.
+  const waiting = await db.application.groupBy({ by: ["testId"], where: { status: "pending" }, _count: { _all: true } });
+  const tests = await db.test.findMany({ where: { id: { in: waiting.map((w) => w.testId) }, status: "open", ...PAUSE_FREE }, select: { id: true, title: true, developerId: true } });
+  const told = new Set((await db.notification.findMany({ where: { userId: { in: tests.map((t) => t.developerId) }, testId: { in: tests.map((t) => t.id) }, text: { endsWith: "for your answer" }, createdAt: { gt: since } }, select: { testId: true }, distinct: ["testId"] })).map((n) => n.testId));
+  const count = new Map(waiting.map((w) => [w.testId, w._count._all]));
+  await db.notification.createMany({
+    data: tests.filter((t) => !told.has(t.id)).map((t) => {
+      const n = count.get(t.id)!;
+      return { userId: t.developerId, testId: t.id, text: `“${t.title}”: ${n} ${n === 1 ? "application or rejoin ask waits" : "applications and rejoin asks wait"} for your answer`, link: `/app/tests/${t.id}#needs-you` };
+    }),
+  });
 }

@@ -64,6 +64,7 @@ describe("applications close on a listing change", () => {
     expect(stop.body.error.changes.map((c: { text: string }) => c.text)).toContain("You changed the listing in another tab: closed Ana Silva's application");
     // Ana's join page: the line, and she can apply again on the current listing.
     const { GET: liveGET } = await import("@/app/api/live/route");
+    await new Promise((r) => setTimeout(r, 30)); // the database clock can run a few ms ahead: the live route lists changes only up to its own now
     const al = (await json(await liveGET(req(`/api/live?scope=listing:${testId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: ana.cookie })))).body.changes.map((c: { text: string }) => c.text);
     expect(al).toContain("Nora Lane changed the listing: your application was closed");
     expect((await act(testId, "apply", ana.cookie, { note: "Again" })).body).toEqual({ applied: true });
@@ -149,6 +150,7 @@ describe("owner corrections 2 and 3", () => {
     expect((await db.application.findFirstOrThrow({ where: { testId, testerId: ben.user.id } })).status).toBe("pending");
     // The tester's top box has the line; a press goes through with the note.
     const { GET: liveGET } = await import("@/app/api/live/route");
+    await new Promise((r) => setTimeout(r, 30)); // the database clock can run a few ms ahead: the live route lists changes only up to its own now
     const l = (await json(await liveGET(req(`/api/live?scope=session:${sessionId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: tester.cookie })))).body.changes.map((c: { text: string }) => c.text);
     expect(l).toEqual(["Nora Lane renamed the test to Harbor Run 2"]);
     const go = await sact(sessionId, "request-time", tester.cookie, { startsAt: new Date(Date.now() + 50 * 3_600_000).toISOString(), seenAt: pageLoaded });
@@ -198,6 +200,7 @@ describe("owner corrections 2 and 3", () => {
     const stop = await act(testId, "stop", dev.cookie, { seenAt: pageLoaded, tab: "tab-2" });
     expect(stop.body.error.changes.map((c: { text: string }) => c.text)).toContain("You changed the listing in another tab: closed Ana Silva's application");
     const { GET: liveGET } = await import("@/app/api/live/route");
+    await new Promise((r) => setTimeout(r, 30)); // the database clock can run a few ms ahead: the live route lists changes only up to its own now
     const al = (await json(await liveGET(req(`/api/live?scope=listing:${testId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: ana.cookie })))).body.changes.map((c: { text: string }) => c.text);
     expect(al).toContain("Nora Lane made the test invite only: your application was closed");
     const ben = await makeUser({ tester: true, name: "Ben Carter" });
@@ -233,6 +236,7 @@ describe("when the test fills (correction 4) and no invite cap (correction 5)", 
     // Dee's Accept (Join) while full: refused; her join page says so.
     expect((await act(testId, "join", dee.cookie, { listingVersion: await listingVersion(testId) })).body.error.message).toBe("Harbor Run is full right now.");
     const { GET: liveGET } = await import("@/app/api/live/route");
+    await new Promise((r) => setTimeout(r, 30)); // the database clock can run a few ms ahead: the live route lists changes only up to its own now
     const dl = (await json(await liveGET(req(`/api/live?scope=listing:${testId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: dee.cookie })))).body.changes.map((c: { text: string }) => c.text);
     expect(dl).toContain("Harbor Run is full right now. Your invite stays open; we'll tell you when a spot opens.");
     // The developer raises spots: a spot opened, both invited testers are told; Ben (closed) isn't; Dee joins.
@@ -299,6 +303,7 @@ describe("when the test fills (correction 4) and no invite cap (correction 5)", 
     await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { writtenCents: "12.00" } });
     // The old session page's top box still shows the payment.
     const { GET: liveGET } = await import("@/app/api/live/route");
+    await new Promise((r) => setTimeout(r, 30)); // the database clock can run a few ms ahead: the live route lists changes only up to its own now
     const sl = (await json(await liveGET(req(`/api/live?scope=session:${sessionId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: tester.cookie })))).body.changes.map((c: { text: string }) => c.text);
     expect(sl).toContain("Nora Lane paid $10.00 for your written answers");
     // Ask to rejoin (the listing's button) stops once: paid, the terms as a plain line; then the ask goes through.

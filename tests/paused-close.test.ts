@@ -66,8 +66,7 @@ describe("the daily job closes paused tests", () => {
     expect(await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).toMatchObject({ status: "ended", endKind: "closed" });
     expect(await db.call.findFirstOrThrow({ where: { contractId: sessionId } })).toMatchObject({ status: "cancelled" });
     // The tester: neutral (no hold / pause / suspend / chargeback words). The developer: the reason.
-    const mail = await db.outboxEmail.findFirstOrThrow({ where: { to: tester.user.email, subject: { endsWith: "ended" } } });
-    expect(mail.text).toContain("ended. Work you already sent is still reviewed and paid.");
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: "“Harbor Run” ended", own: true } })).toBe(1);
     for (const m of await db.outboxEmail.findMany({ where: { to: tester.user.email, createdAt: { gt: ago(1) } } })) expect(m.text + m.subject).not.toMatch(/hold|chargeback|suspend|paused for/i);
     const devMail = await db.outboxEmail.findFirstOrThrow({ where: { to: dev.user.email, subject: { endsWith: "was closed" } } });
     expect(devMail.text).toContain("stayed paused for 7 days: your payments were on hold");

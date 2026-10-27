@@ -96,7 +96,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <ul className="divide-y divide-white/5 text-sm">
               {paidOut.map((p) => (
                 <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                  <span className="text-slate-200">{p.kind === "call" ? "Live call" : p.kind === "dispute" ? "Dispute decision" : "Sent work"}</span>
+                  <span className="text-slate-200">{p.kind === "call" ? "Live call" : p.kind === "dispute" ? "Dispute decision" : p.kind === "extra" ? "Extra pay" : "Sent work"}</span>
                   <span className="text-slate-400">{fmtDateTime(p.createdAt)} · {money(p.amountCents)}{p.status === "not_set_up" ? " · recorded (payments not set up)" : ""}</span>
                 </li>
               ))}
@@ -154,7 +154,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <ul className="divide-y divide-white/5 text-sm">
               {paidIn.map((p) => (
                 <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                  <span className="text-slate-200">You get {money(p.testerCents)}</span>
+                  <span className="text-slate-200">You get {money(p.testerCents)}{p.kind === "extra" ? " · extra pay" : ""}</span>
                   <span className="text-slate-400">{fmtDateTime(p.createdAt)}{p.transferStatus === "held" ? " · yours once your account is active again" : p.status === "not_set_up" || p.transferStatus === "waiting" ? " · delayed until your payout account is ready" : ""}</span>
                 </li>
               ))}

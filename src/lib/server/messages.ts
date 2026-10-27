@@ -21,6 +21,20 @@ export async function chatAccess(userId: string, testId: string, testerId: strin
   return { test, contract, blocked: blocked || gone, active };
 }
 
+export const CHAT_UNABLE = "Unable to chat with this tester.";
+
+/**
+ * (Owner, Oct 26) "Chat with <name>" on a tester's hover card and profile (developer side): opens the same per-test chat as the Testers panel's Chat button.
+ * Where a block exists either way, or the chat would otherwise be refused (a suspended or deleted account), the press says only "Unable to chat with this tester."
+ */
+export async function openTesterChat(dev: { id: string; suspendedAt?: Date | null }, body: Record<string, unknown>) {
+  const c = await db.contract.findUnique({ where: { id: String(body.contractId ?? "") }, include: { test: true, tester: true } });
+  if (!c || c.test.developerId !== dev.id) throw new HttpError(404, "not_found", "That chat doesn't exist.");
+  const a = await chatAccess(dev.id, c.testId, c.testerId).catch(() => null);
+  if (!a || a.blocked || dev.suspendedAt || c.tester.suspendedAt) throw new HttpError(409, "unable", CHAT_UNABLE);
+  return { href: `/app/chat/${c.id}` };
+}
+
 /** Kept for the session page (by contract). */
 export async function chatFor(userId: string, contractId: string) {
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: true } });

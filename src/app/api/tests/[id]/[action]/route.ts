@@ -5,7 +5,7 @@ import { devCancelCall, reportNoShow, setCallLength } from "@/lib/server/calls";
 import { cancelInvite, inviteGaps, inviteTesters } from "@/lib/server/invites";
 import { answerRequest, cancelCallSet, devRequestTime } from "@/lib/server/requests";
 import { apply, askToRejoin, decideApplication, join, withdrawApplication } from "@/lib/server/joining";
-import { addDevSide } from "@/lib/server/payments";
+import { addDevSide, payExtra } from "@/lib/server/payments";
 import { sendChat, sendMessage } from "@/lib/server/messages";
 import { asListing, editTest, endEarly, nextRound, openDraft, ownTest, stopTest } from "@/lib/server/tests";
 import { assignFreeKey, keyBoxes } from "@/lib/server/accessKeys";
@@ -13,7 +13,7 @@ import { getUserFromRequest } from "@/lib/server/session";
 import { failedLine, requireActive, requireConfirmed } from "@/lib/server/users";
 
 // (NEWEST+8) Presses that need a confirmed email.
-const NEEDS_CONFIRMED = new Set(["edit", "invite", "request-time", "answer-request", "join", "apply", "rejoin-ask", "application", "rate", "call-length"]);
+const NEEDS_CONFIRMED = new Set(["pay-extra", "edit", "invite", "request-time", "answer-request", "join", "apply", "rejoin-ask", "application", "rate", "call-length"]);
 import { devRate } from "@/lib/server/ratings";
 import { logTestAction } from "@/lib/server/actionText";
 
@@ -94,6 +94,8 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         return ok(await setCallLength(u, id, body));
       case "no-show":
         return ok(await reportNoShow(u, String(body.callId ?? ""), body));
+      case "pay-extra":
+        return ok(await payExtra(u, id, body));
       case "dispute-side":
         return ok(await addDevSide(u, id, body));
       case "invite":

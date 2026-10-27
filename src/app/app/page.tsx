@@ -242,7 +242,7 @@ async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: 
                     <div className="grid items-end gap-3 sm:grid-cols-2">
                       <div className="space-y-1.5">
                         <p className="text-xs uppercase tracking-wide text-slate-500">Testers · {num(inIt.length)} of {num(t.spots)}</p>
-                        <Seats total={t.spots} people={inIt.map((c) => ({ id: c.testerId, name: displayName(c.tester) }))} />
+                        <Seats total={t.spots} people={inIt.map((c) => ({ id: c.testerId, name: displayName(c.tester), contractId: c.id }))} />
                       </div>
                       <div className="space-y-1.5">
                         <p className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-500">
@@ -308,7 +308,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const waiting = contracts.flatMap((c) => c.submissions.filter((s) => !s.review).map((s) => ({ c, s })));
   const pendingCents = waiting.reduce((n, { s }) => n + (s.agreedCents != null ? testerShare(s.agreedCents) : 0), 0);
   const todo = working.filter((c) => toSend(c).length > 0);
-  // "Charge or cancel": parts past 14 days unreviewed, by test.
+  // "Charge or cancel": unreviewed parts where Charge has opened (14 days and the test's Open until), by test.
   const paidFor = (sid: string) => payments.filter((p) => p.submissionId === sid && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
   const chargeable = contracts
     .map((c) => ({ c, parts: c.submissions.filter((s) => !s.review && s.choiceOfferedAt && chargeAmount(s.agreedCents, paidFor(s.id)) > 0) }))
@@ -351,7 +351,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       {chargeable.length > 0 && (
         <section className="space-y-3" id="charge-or-cancel">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-white"><Banknote className="h-5 w-5 text-amber-300" /> Charge or cancel <span className="text-sm font-normal text-slate-400">{num(chargeable.length)}</span></h2>
-          <p className="note">Parts the developer hasn&apos;t reviewed in 14 days: charge for them, or let them go.</p>
+          <p className="note">Parts the developer hasn&apos;t reviewed once 14 days have passed since you sent them and the test&apos;s Open until has passed: charge for them, or let them go.</p>
           <ul className={`space-y-2 ${chargeable.length > 3 ? "max-h-64 overflow-y-auto pr-1" : ""}`} data-charge-list={chargeable.length > 3 ? "scroll" : "plain"}>
             {chargeable.map(({ c, parts }) => (
               <li key={c.id}>

@@ -54,9 +54,9 @@ model User {
   /// and the admin's approval (chargebackApprovedAt). Both are cleared when the hold lifts or a new chargeback opens.
   chargebackCardVerifiedAt DateTime?
   chargebackApprovedAt     DateTime?
-  /// Email settings: "each" (default) | "daily" | "weekly" | "monthly" | "off".
-  /// Sign-in links and payment receipts always send; the bell keeps everything.
-  emailPref     String    @default("each")
+  /// Email settings (Owner, Oct 26): "off", or on with "daily" (default) | "weekly" | "monthly". One email lists every notification since the last one;
+  /// payment lines also go out in an end-of-day email for weekly / monthly. The always-send emails (account paused ...) ignore it. The bell keeps everything.
+  emailPref     String    @default("daily")
   /// Last summary email (daily / weekly / monthly settings)
   lastSummaryAt DateTime?
   /// (NEWEST+9) The most testers per test this developer has earned so far (it never shrinks; see src/lib/capacity.ts)
@@ -541,6 +541,10 @@ model Notification {
   /// (Owner, Oct 26) Always its own line in the bell (never stacked): admin decisions, a test stopped, payment failures and holds starting,
   /// a hold or pause lifted, a chargeback
   own       Boolean   @default(false)
+  /// (Owner, Oct 26) Lines with the same group stack together on one day even across tests ("invites", "charge", "unreviewed", "paused", "payout", "disputes")
+  groupKey  String?
+  /// (Owner, Oct 26) Payment-related (failures, holds, retries, paid, rejected, delayed, payouts, chargebacks): also emailed in the end-of-day email
+  payment   Boolean   @default(false)
   readAt    DateTime?
   /// Included in a daily summary email (users on "One daily summary")
   summarizedAt DateTime?

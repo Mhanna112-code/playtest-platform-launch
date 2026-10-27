@@ -536,11 +536,11 @@ export const owedPayLine = (name: string, cents: number, label: string, by: stri
   `Your card was declined, so ${name} wasn't paid ${money(cents)} for the ${label === "live call" ? "call" : label} yet. It's now owed: we'll retry tomorrow, or pay it in Payments by ${by} to avoid a pause.`;
 export const DELAYED_CALL_LINE = "Payment for this call may be delayed.";
 
-/** Email settings: each update / one daily summary / none. Sign-in links and payment receipts always send. */
+/** Email settings (Owner, Oct 26): Off, or On with Daily / Weekly / Monthly (one email lists everything since the last). The always-send emails ignore it. */
 export function emailDecision(pref: string, always: boolean): "send" | "summary" | "skip" {
-  if (always || pref === "each" || !pref) return "send";
+  if (always) return "send";
   if (pref === "off" || pref === "none") return "skip";
-  return "summary"; // daily / weekly / monthly
+  return "summary"; // daily / weekly / monthly (a leftover "each" counts as daily)
 }
 
 // ---------- Newest owner rules (Oct 22): asked amounts, cancelling, summaries, heads-up line ----------
@@ -600,6 +600,21 @@ export function checkDevSide(text: string, already: boolean): Check {
 /** Day 14 on an unreviewed contract part: the tester chooses. */
 export const choiceLine = (devName: string, kind: string, cents: number) =>
   `${devName} didn't review your ${kind === "recording" ? "recording" : "written answers"} in 14 days: charge ${money(cents)} or let it go`;
+/**
+ * (Owner, Oct 26) When Charge / Let it go opens for a contract part sent and left unreviewed: only once BOTH (1) 14 days have passed since it was sent (payBy, which
+ * outages and pauses move on) and (2) the test's Open until has passed. With no Open until, (2) is met when the test stops or closes, or the tester's work ends
+ * (they left, their deadline passed, or their work was ended early). Returns when it opens (null while that is not known yet).
+ */
+export function chargeOpensAt(s: { payBy: Date | null }, test: { openUntil: Date | null; status: string }, contract: { status: string; dueAt: Date }, now = new Date()): Date | null {
+  if (!s.payBy) return null;
+  if (test.openUntil) return new Date(Math.max(s.payBy.getTime(), test.openUntil.getTime()));
+  const over = test.status === "stopped" || test.status === "closed" || contract.status !== "working" || contract.dueAt.getTime() < now.getTime();
+  return over ? s.payBy : null;
+}
+export const chargeIsOpen = (...a: Parameters<typeof chargeOpensAt>) => {
+  const at = chargeOpensAt(...a);
+  return !!at && at.getTime() <= (a[3] ?? new Date()).getTime();
+};
 export const CHARGED_BY_TESTER = "Charged by the tester after 14 days without a review.";
 export const LET_GO_BY_TESTER = "Let go by the tester: nothing charged.";
 export const CHARGED_AUTOMATICALLY = "Charged automatically: no choice within 14 more days.";
@@ -633,7 +648,7 @@ export function countdownDue(deadline: Date | null, now: Date, sent: string[], s
 }
 
 export const ADMIN_DIGEST_DAYS = 3;
-export const INVITE_REMIND_DAYS = 3;
+export const INVITE_REMIND_DAYS = 1; // (Owner, Oct 26) invite reminders are daily
 
 /** "Charge": the listing minus what's already been paid for that part (0 = only "Close it"). */
 export const chargeAmount = (listingCents: number | null, paidCents: number) => (listingCents == null ? 0 : Math.max(0, listingCents - paidCents));
@@ -771,4 +786,19 @@ export function canAskToRejoin(c: { status: string; endKind: string; endedAt: Da
   if (c.status !== "left" && c.status !== "ended") return false;
   if (["rated", "stopped", "closed", "blocked"].includes(c.endKind)) return false;
   return !!c.endedAt && c.endedAt.getTime() < c.dueAt.getTime();
+}
+
+// ---------- Extra pay from the Testers panel (owner, Oct 26) ----------
+
+/** Over this amount the developer must tick that the payment can't be refunded and is charged now. */
+export const EXTRA_PAY_TICK_CENTS = 20_000;
+/** The most one extra payment can be. For now only Stripe's own limit; the owner is deciding a cap, so it lives here and nowhere else. */
+export const EXTRA_PAY_MAX_CENTS = STRIPE_MAX_CENTS;
+export const EXTRA_PAY_TICK_LINE = "I understand this payment can't be refunded and is charged now.";
+export function checkExtraPay(amountCents: number | null, understood: boolean): Check {
+  if (amountCents == null || !Number.isInteger(amountCents) || amountCents <= 0) return no("Enter an amount like 7.50.");
+  if (amountCents > EXTRA_PAY_MAX_CENTS) return amountCents > STRIPE_MAX_CENTS ? no(STRIPE_MAX_LINE) : no(`The most you can pay at once is ${money(EXTRA_PAY_MAX_CENTS)}.`);
+  if (amountCents < MIN_CHARGE_CENTS) return no(`The smallest card charge is ${money(MIN_CHARGE_CENTS)}.`);
+  if (amountCents > EXTRA_PAY_TICK_CENTS && !understood) return no(`Tick “${EXTRA_PAY_TICK_LINE}” to pay.`);
+  return yes;
 }

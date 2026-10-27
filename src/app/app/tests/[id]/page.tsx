@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, pronouns } from "@/lib/format";
-import { CALL_CLOSE_MS, callClosed, callOutcome, joinedWords, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, defaultCallMinutes, choiceNoteLine, closesInLine, lateLabel, termsLine } from "@/lib/rules";
+import { chargeOpensAt, CALL_CLOSE_MS, callClosed, callOutcome, joinedWords, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, defaultCallMinutes, choiceNoteLine, closesInLine, lateLabel, termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
 import { unreadCount } from "@/lib/server/messages";
@@ -28,6 +28,7 @@ import { OwedBox } from "@/components/OwedBox";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
+import { ExtraPay } from "./ExtraPay";
 import { TopPanel } from "./TopPanel";
 import { NeedsYou } from "./NeedsYou";
 import { KeysNotice } from "./KeysNotice";
@@ -288,7 +289,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     </div>
                   ))}
                   <PayBox key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} partPaidCents={partPaid(x.s!.id)}
-                    note={x.s!.agreedCents != null && x.s!.payBy && !x.s!.choiceOfferedAt ? choiceNoteLine(fmtDate(x.s!.payBy).replace(/, \d{4}$/, ""), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
+                    note={x.s!.agreedCents != null && chargeOpensAt(x.s!, t, x.c, now) && !x.s!.choiceOfferedAt ? choiceNoteLine(fmtDate(chargeOpensAt(x.s!, t, x.c, now)!).replace(/, \d{4}$/, ""), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
                     listingCents={x.s!.agreedCents} listingText={`${money(x.s!.agreedCents)} for ${x.s!.kind === "written" ? "written answers" : "a recording"}`} />
                 </>
               ) : (
@@ -353,6 +354,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   <h3 className="mr-auto"><a href={`/app/testers/${c.testerId}`}>{name}</a></h3>
                   <span className="badge">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
                   {c.ndaAcceptedAt && <span className="badge">NDA accepted {fmtDate(c.ndaAcceptedAt)}</span>}
+                  {!restricted && <ExtraPay testId={t.id} contractId={c.id} name={name} seenAt={seenAt} />}
                   {!restricted && <a href={`/app/chat/${c.id}`} className="btn-secondary relative px-3 py-1 text-xs no-underline hover:no-underline"><MessagesSquare className="h-3.5 w-3.5" /> Chat
                     {unreadN > 0 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950" aria-label={`${unreadN} unread`}>{unreadN}</span>}
                   </a>}

@@ -1,13 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, errOf } from "@/lib/client";
 import type { ChargebackVM, DisputeVM, Kind, MineVM, Page, PausedVM, TestVM, TextVM, UserVM } from "@/lib/server/adminLists";
 import { AdminButton } from "./AdminButton";
 import { DisputeDecision } from "./DisputeDecision";
 import { PreviewButton } from "./PreviewButton";
 
-// (Owner, Oct 26) A long admin list: the first 20, then a "Load more" button that fetches the next 20 (keyset by date). Each row keeps its
-// anchor (dispute-ID, user-ID, test-ID) so a bell line or a link can open the exact row.
 
 type AnyRow = DisputeVM | MineVM | UserVM | TestVM | TextVM | PausedVM | ChargebackVM;
 
@@ -62,6 +60,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
         <li id={`test-${t.id}`} className="scroll-mt-24 space-y-1 py-2 text-slate-300" data-test-row={t.id}>
           <p>{t.line}</p>
           {t.closedLine && <p className="text-xs text-rose-300">{t.closedLine}</p>}
+          <HistoryToggle testId={t.id} />
           {!t.stopped && (
             <p className="flex flex-wrap items-center gap-2">
               {t.adminPaused ? <AdminButton action="unpause-test" id={t.id} label="Lift the pause" /> : <AdminButton action="pause-test" id={t.id} label="Pause" fields={[{ name: "note", label: "Why" }]} />}
@@ -105,25 +104,54 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
   }
 }
 
-const LIST_KINDS = new Set<Kind>(["users", "tests", "payments", "waitlist"]);
+const LIST_KINDS = new Set<Kind>(["users", "tests", "payments", "waitlist", "history"]);
 
-export function PagedList({ kind, initial, empty = "None.", scroll = false }: { kind: Kind; initial: Page<AnyRow>; empty?: string; scroll?: boolean }) {
-  const [rows, setRows] = useState<AnyRow[]>(initial.rows);
-  const [next, setNext] = useState<string | null>(initial.next);
+/** (Owner, Oct 26) A test's full history, newest first, opened on demand (the ?test=ID area shows it open). */
+function HistoryToggle({ testId }: { testId: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div data-history-toggle={testId}>
+      <button className="btn-ghost" onClick={() => setOpen((o) => !o)} aria-expanded={open}>{open ? "Hide history" : "History"}</button>
+      {open && <div className="mt-2"><PagedList kind="history" arg={testId} initial={null} empty="Nothing recorded yet." /></div>}
+    </div>
+  );
+}
+const PAGE = 25; // (Owner, Oct 26) pages of 25 (the server's PAGE)
+
+/**
+ * (Owner, Oct 26) A long admin list in pages of 25 with Previous / Next under it and "1–25 of N". Pressing one fetches that page and replaces ONLY this list's
+ * rows (no page reload); the pages are keyset by date. Each row keeps its anchor (dispute-ID, user-ID, test-ID) so a bell line or a link can open the exact row.
+ */
+export function PagedList({ kind, initial, empty = "None.", scroll = false, arg = "" }: { kind: Kind; initial: Page<AnyRow> | null; empty?: string; scroll?: boolean; arg?: string }) {
+  const [rows, setRows] = useState<AnyRow[]>(initial?.rows ?? []);
+  const [total, setTotal] = useState(initial?.total ?? 0);
+  // The cursor that fetched each page seen so far (page 1 = none) and the page now shown: Previous goes back to an earlier cursor, Next uses the page's own.
+  const [cursors, setCursors] = useState<(string | null)[]>([null]);
+  const [idx, setIdx] = useState(0);
+  const [next, setNext] = useState<string | null>(initial?.next ?? null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const more = async () => {
+  const go = async (to: number, cursor: string | null, trail: (string | null)[]) => {
     setBusy(true);
     setErr("");
     try {
-      const r = await api<Page<AnyRow>>(`/api/admin/more?kind=${kind}&after=${encodeURIComponent(next ?? "")}`);
-      setRows((x) => [...x, ...r.rows.filter((n) => !x.some((o) => o.id === n.id))]);
+      const r = await api<Page<AnyRow>>(`/api/admin/more?kind=${kind}&after=${encodeURIComponent(cursor ?? "")}${arg ? `&arg=${encodeURIComponent(arg)}` : ""}`);
+      setRows(r.rows);
+      setTotal(r.total);
       setNext(r.next);
+      setCursors(trail);
+      setIdx(to);
     } catch (e) {
       setErr(errOf(e));
     }
     setBusy(false);
   };
+  // Opened without rows (a lazy list): fetch its first page.
+  useEffect(() => {
+    if (!initial) void go(0, null, [null]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const start = idx * PAGE;
   const body = rows.map((r) => <Row key={r.id} kind={kind} row={r} />);
   return (
     <div className="space-y-2" data-paged={kind}>
@@ -133,7 +161,13 @@ export function PagedList({ kind, initial, empty = "None.", scroll = false }: { 
           {LIST_KINDS.has(kind) ? <ul className="divide-y divide-white/5 text-sm">{body}</ul> : body}
         </div>
       )}
-      {next && <button className="btn-ghost" disabled={busy} onClick={more} data-load-more={kind}>{busy ? "Loading…" : "Load more"}</button>}
+      {(idx > 0 || next) && (
+        <div className="flex flex-wrap items-center gap-3" data-pager={kind}>
+          <button className="btn-ghost" disabled={busy || idx === 0} onClick={() => go(idx - 1, cursors[idx - 1], cursors.slice(0, idx))} data-prev={kind}>Previous</button>
+          <span className="text-sm text-slate-400" data-range={kind}>{rows.length ? `${start + 1}–${start + rows.length} of ${total}` : `0 of ${total}`}</span>
+          <button className="btn-ghost" disabled={busy || !next} onClick={() => go(idx + 1, next, [...cursors.slice(0, idx + 1), next])} data-next={kind}>Next</button>
+        </div>
+      )}
       {err && <p className="err">{err}</p>}
     </div>
   );

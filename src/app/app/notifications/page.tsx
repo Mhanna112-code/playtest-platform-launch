@@ -5,7 +5,7 @@ import { requirePageUser } from "@/lib/server/page-auth";
 import { sideLink } from "@/lib/sides";
 import { AlertSettings } from "./AlertSettings";
 import { BellList, type BellEntry } from "./BellList";
-import { bellKey, dayKey } from "@/lib/bell";
+import { GROUP_TITLES, bellKey, dayKey } from "@/lib/bell";
 
 export const metadata = { title: "Notifications · Playtest" };
 export const dynamic = "force-dynamic";
@@ -25,7 +25,7 @@ export default async function Notifications() {
   const todayKey = dayKey(new Date());
   const entries: BellEntry[] = [...groups.entries()].map(([key, g]) => ({
     key,
-    title: g[0].testId ? titles.get(g[0].testId) : undefined,
+    title: g[0].groupKey ? GROUP_TITLES[g[0].groupKey] : g[0].testId ? titles.get(g[0].testId) : undefined,
     day: dayKey(g[0].createdAt) === todayKey ? "today" : `on ${fmtDate(g[0].createdAt)}`,
     lines: g.map((n) => ({ id: n.id, text: n.text, href: n.link ? sideLink(u, n.link) : "", read: !!n.readAt, ago: timeAgo(n.createdAt) })),
   }));

@@ -132,7 +132,7 @@ export async function reinstateAccount(userId: string) {
     await db.$transaction((tx) => resumeTests(tx, userId, start, now));
     if (!u.holdStartedAt) await chargeDeferred(userId);
     const testers = await db.contract.findMany({ where: { status: "working", test: { developerId: userId } }, include: { tester: true } });
-    for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: userId, own: true });
+    for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: userId, group: "paused" });
   }
   if (u.isTester) {
     await reinviteAfterSuspension(u);
@@ -175,10 +175,10 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
   return { ok: true };
 }
 
-/** A reminder every two weeks to the admins to review suspended accounts (the daily job). */
+/** A reminder every day to the admins to review suspended accounts: one line covering all of them (the daily job). */
 export async function suspendedAccountsReminder(now = new Date()) {
   const state = await db.appState.findUnique({ where: { key: "suspended-reminder" } });
-  if (state && now.getTime() - new Date(state.value).getTime() < 14 * DAY) return 0;
+  if (state && now.getTime() - new Date(state.value).getTime() < DAY - 3_600_000) return 0; // (Owner, Oct 26) daily, one line for all suspended accounts
   const people = await db.user.findMany({ where: { suspendedAt: { not: null }, deletedAt: null }, select: { email: true, name: true, suspendedAt: true } });
   if (!people.length) return 0;
   const admins = (process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -200,7 +200,7 @@ export async function pauseTest(adminId: string, testId: string, note: string) {
   await closeRequests({ contractIds: (await db.contract.findMany({ where: { testId }, select: { id: true } })).map((c) => c.id) }, "the test is paused");
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
   await (await import("./pauseClosure")).bellPausedTests(dev.id);
-  await notify(dev.email, `The team paused “${t.title}”`, [`The team paused “${t.title}”${note ? `: ${note}` : "."} You can only stop it for now.`, "Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, own: true });
+  await notify(dev.email, `The team paused “${t.title}”`, [`The team paused “${t.title}”${note ? `: ${note}` : "."} You can only stop it for now.`, "Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
   return { ok: true };
 }
 
@@ -215,7 +215,7 @@ export async function unpauseTest(testId: string) {
     await recordEvent(tx, testId, "resumed", "The team lifted the pause on this test", true);
   });
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
-  await notify(dev.email, `The team lifted the pause on “${t.title}”`, [`The team lifted the pause on “${t.title}”: it is running again.`], `/app/tests/${testId}`, { always: true, own: true });
+  await notify(dev.email, `The team lifted the pause on “${t.title}”`, [`The team lifted the pause on “${t.title}”: it is running again.`], `/app/tests/${testId}`, { own: true });
   return { ok: true };
 }
 
@@ -236,7 +236,7 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
   });
   await tellCancelled(cancelled, "stopped");
   for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { own: true });
-  await notify(t.developer.email, `The team stopped “${t.title}”`, [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay or reject. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, own: true });
+  await notify(t.developer.email, `The team stopped “${t.title}”`, [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay or reject. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
   return { ok: true };
 }
 
@@ -273,7 +273,7 @@ export async function payoutProblem(accountId: string, now = new Date()) {
   if (!u) return false;
   if (!u.payoutProblemAt) {
     await db.user.update({ where: { id: u.id }, data: { payoutProblemAt: now, payoutRemindedAt: now } });
-    await bell(u.id, PAYOUT_LINE, "/app/payments#payout");
+    await bell(u.id, PAYOUT_LINE, "/app/payments#payout", undefined, { payment: true, group: "payout" });
   }
   return true;
 }
@@ -287,7 +287,7 @@ export async function payoutFixed(accountId: string) {
 export async function payoutReminders(now = new Date()) {
   const due = await db.user.findMany({ where: { payoutProblemAt: { not: null }, OR: [{ payoutRemindedAt: null }, { payoutRemindedAt: { lt: new Date(now.getTime() - REMIND_DAYS * DAY + 3_600_000) } }] } });
   for (const u of due) {
-    await bell(u.id, PAYOUT_LINE, "/app/payments#payout");
+    await bell(u.id, PAYOUT_LINE, "/app/payments#payout", undefined, { payment: true, group: "payout" });
     await db.user.update({ where: { id: u.id }, data: { payoutRemindedAt: now } });
   }
   return due.length;

@@ -72,6 +72,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             </p>
           )}
           {focusTest && <PagedList kind="tests" initial={{ rows: [focusTest], next: null, total: 1 }} />}
+          {focusTest && (
+            <div className="space-y-1" data-focus-history="">
+              <h3 className="font-semibold text-white">History of this test</h3>
+              <PagedList kind="history" arg={focusTest.id} initial={rows(await adminPage("history", u.id, null, focusTest.id))} empty="Nothing recorded yet." />
+            </div>
+          )}
         </section>
       )}
 
@@ -81,10 +87,22 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <PagedList kind="disputes" initial={rows(disputes)} empty="No open disputes." scroll />
       </section>
 
+      <section className="card scroll-mt-24 space-y-3" id="chargebacks">
+        <h2 className="text-lg font-semibold text-white">Chargeback holds ({chargebacks.total})</h2>
+        <p className="note">After a chargeback the developer verifies a card with 3D Secure and pays what they owe; paying alone never lifts the hold. Approve once both are done.</p>
+        <PagedList kind="chargebacks" initial={rows(chargebacks)} />
+      </section>
+
       <section className="card scroll-mt-24 space-y-3" id="mine">
         <h2 className="text-lg font-semibold text-white">Your actions ({mine.total})</h2>
         <p className="note">Tests you paused or stopped, or whose developer you suspended. Newest first.</p>
         <PagedList kind="mine" initial={rows(mine)} empty="You haven't paused, stopped or suspended anything." scroll />
+      </section>
+
+      <section className="card scroll-mt-24 space-y-3" id="paused-tests">
+        <h2 className="text-lg font-semibold text-white">Paused tests ({paused.total})</h2>
+        <p className="note">A paused test closes by itself after 7 days, whatever the cause (a payment hold, a chargeback hold, a suspension or a team pause). Soonest first. Extend moves its date later; Close now closes it like a Stop. Testers read only that the test ended; the developer is told why.</p>
+        <PagedList kind="paused" initial={rows(paused)} />
       </section>
 
       <section className="card space-y-3">
@@ -95,18 +113,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             {cases.map((c, i) => <li key={i}><a href={c.link}>{c.text}</a></li>)}
           </ul>
         )}
-      </section>
-
-      <section className="card scroll-mt-24 space-y-3" id="paused-tests">
-        <h2 className="text-lg font-semibold text-white">Paused tests ({paused.total})</h2>
-        <p className="note">A paused test closes by itself after 7 days, whatever the cause (a payment hold, a chargeback hold, a suspension or a team pause). Soonest first. Extend moves its date later; Close now closes it like a Stop. Testers read only that the test ended; the developer is told why.</p>
-        <PagedList kind="paused" initial={rows(paused)} />
-      </section>
-
-      <section className="card scroll-mt-24 space-y-3" id="chargebacks">
-        <h2 className="text-lg font-semibold text-white">Chargeback holds ({chargebacks.total})</h2>
-        <p className="note">After a chargeback the developer verifies a card with 3D Secure and pays what they owe; paying alone never lifts the hold. Approve once both are done.</p>
-        <PagedList kind="chargebacks" initial={rows(chargebacks)} />
       </section>
 
       <section className="card space-y-3">

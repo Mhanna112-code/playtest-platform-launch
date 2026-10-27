@@ -7,6 +7,7 @@ import { PressButton } from "@/components/PressButton";
 import { UserPlus } from "lucide-react";
 import { bringInView } from "@/lib/markJump";
 import { LongList } from "@/components/LongList";
+import { LiveNotices } from "@/components/LiveNotices";
 
 type Tester = { id: string; name: string; rating?: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; detail?: string; together?: { id: string; title: string }[] };
 type Sent = { id: string; name: string; status: string };
@@ -176,6 +177,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
       {confirm && (
         <div className="info space-y-2" data-invite-anyway="">
           {confirm.map((l) => <p key={l}>{l}</p>)}
+          <LiveNotices open={!!confirm} />
           <div className="flex gap-2">
             <button className="btn" disabled={busy} onClick={() => invite(true)}>Invite anyway</button>
             <button className="btn-ghost" onClick={() => setConfirm(null)}>Cancel</button>

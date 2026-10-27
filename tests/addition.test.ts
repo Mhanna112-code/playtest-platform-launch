@@ -7,7 +7,7 @@ import { GET as cronGET } from "@/app/api/cron/daily/route";
 import * as R from "@/lib/rules";
 import { paidLines } from "@/lib/server/paid";
 import { json, makeUser, req } from "./helpers";
-import { act, joined, sact, seen, setup } from "./fixtures";
+import { act, joined, sact, seen, settle, setup } from "./fixtures";
 
 const pay = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), seenAt: seen(), ...body } })).then(json);
 const pulse = (cookie: string, q: string) => pulseGET(req(`/api/pulse?${q}`, { cookie })).then(json);
@@ -18,6 +18,7 @@ async function sent() {
   const j = await joined(s.testId);
   await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] });
   const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
+  await settle(); // let the send settle before a press measures "since the page loaded"
   return { ...s, ...j, sub };
 }
 
