@@ -1,10 +1,11 @@
 "use client";
+import type { ReactNode } from "react";
 
 /** A row of tick boxes for picking several options. */
-export function Choices({ options, value, onChange, label, required }: { options: string[]; value: string[]; onChange: (v: string[]) => void; label: string; required?: boolean }) {
+export function Choices({ options, value, onChange, label, required, aside }: { options: string[]; value: string[]; onChange: (v: string[]) => void; label: string; required?: boolean; /** Shown next to the label (e.g. Edit's "Changes left: 2 of 3"). */ aside?: ReactNode }) {
   return (
     <fieldset>
-      <legend className={"label" + (required ? " req" : "")}>{label}</legend>
+      <legend className={"label" + (required ? " req" : "")}>{label}{aside}</legend>
       <div className="flex flex-wrap gap-2">
         {options.map((o) => {
           const on = value.includes(o);

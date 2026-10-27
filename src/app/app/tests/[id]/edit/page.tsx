@@ -1,3 +1,4 @@
+import { countsOf } from "@/lib/limits";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireOpenDevPage } from "@/lib/server/page-auth";
@@ -34,7 +35,7 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
           <p className="note">Edit changes the listing for new testers only. Testers already in keep the contract they joined on.</p>
           <TestForm
             init={asListing(t)}
-            edit={{ id, version: t.version, testersIn, draft: t.status === "draft", seenAt, keys: await keyBoxes(id), criticalUsed: t.criticalChanges, everJoined: (await db.contract.count({ where: { testId: id } })) > 0, openedAt: t.createdAt.toISOString() }}
+            edit={{ id, version: t.version, testersIn, draft: t.status === "draft", seenAt, keys: await keyBoxes(id), criticalCounts: countsOf(t.criticalCounts), everJoined: (await db.contract.count({ where: { testId: id } })) > 0, openedAt: t.createdAt.toISOString() }}
             spotsLimit={(await testerCapacity(u.id)).limit}
           />
           {/* (Design doc 5) Live updates from every page's rules show in a blue box under the Save button. */}

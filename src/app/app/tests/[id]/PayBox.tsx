@@ -4,7 +4,7 @@ import { checkFields } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
 import { money, toCents } from "@/lib/format";
 import { usePress } from "@/lib/usePress";
-import { PAY_TICK_CENTS, PAY_TICK_LINE, PAY_WAITS } from "@/lib/rules";
+import { PAY_TICK_CENTS, PAY_TICK_LINE, PAY_WAITS, unlistedCallLine } from "@/lib/rules";
 import { NotSentTag, useKept } from "@/lib/useKept";
 
 /**
@@ -12,7 +12,8 @@ import { NotSentTag, useKept } from "@/lib/useKept";
  * "Not in the listing") and what this tester has been paid so far on the test. Its stop-once box sits directly under it.
  */
 export function PayBox(p: { kind: "submission" | "call"; id: string; name: string; listingCents: number | null; listingText: string; paidSoFarCents: number; seenAt: string; partPaidCents?: number; note?: string; owes?: boolean }) {
-  const start = p.listingCents; // always the listing (or the call's agreed rate × length); the developer may pay more
+  // Always the listing (or the call's agreed rate × length); the developer may pay more. (Owner, Oct 28 afternoon) A part with no listing (a call that isn't a listed part) starts empty.
+  const start = p.listingCents;
   const [amount, setAmount] = useState(start == null ? "" : (start / 100).toFixed(2));
   const [reason, setReason] = useState("");
   const [ticked, setTicked] = useState(false);
@@ -42,7 +43,7 @@ export function PayBox(p: { kind: "submission" | "call"; id: string; name: strin
   return (
     <div className="space-y-3 border-t border-white/10 pt-4">
       <p className="text-sm">
-        <b>{p.listingCents == null ? "Not in their contract" : `Listing: ${p.listingText}`}</b>
+        <b>{p.listingCents == null ? (p.kind === "call" ? unlistedCallLine("developer") : "Not in their contract") : `Listing: ${p.listingText}`}</b>
         {" "}· Paid so far for this part: {money(p.partPaidCents ?? 0)} · You&apos;ve paid {p.name} {money(paidSoFar)} so far on this test.
       </p>
       <div className="flex flex-wrap items-end gap-2">

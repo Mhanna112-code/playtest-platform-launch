@@ -14,7 +14,7 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: 
  * The chat page's conversation, as the full app's: one card (the other person's name and the test in its header), the
  * messages with a day line between days (yours on the right in the brand colour), and the message box at the bottom.
  */
-export function Chat({ path, extra = {}, messages, other, title, closed, keepKey }: { path: string; extra?: Record<string, unknown>; messages: Msg[]; other: string; title: string; closed?: boolean; keepKey: string }) {
+export function Chat({ path, extra = {}, messages, other, title, closed, closedNote, keepKey }: { path: string; extra?: Record<string, unknown>; messages: Msg[]; other: string; title: string; closed?: boolean; /** Replaces "This chat is closed." (e.g. "Chat is paused while the test is paused.") */ closedNote?: string; keepKey: string }) {
   const router = useRouter();
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
@@ -55,7 +55,7 @@ export function Chat({ path, extra = {}, messages, other, title, closed, keepKey
         <div ref={bottom} />
       </div>
       {closed && !shut ? (
-        <p className="border-t border-white/10 px-5 py-3 text-sm text-slate-400">This chat is closed.</p>
+        <p className="border-t border-white/10 px-5 py-3 text-sm text-slate-400" data-chat-closed="">{closedNote || "This chat is closed."}</p>
       ) : shut ? null : (
         <form
           className="flex items-end gap-2 border-t border-white/10 px-4 py-3"

@@ -68,14 +68,14 @@ describe("Charge / Let it go at day 14", () => {
     expect(testId).toBeTruthy();
   });
 
-  it("reminders every 3 days and never an automatic charge; during a hold the choice waits", async () => {
+  it("reminders every 3 days and never an automatic charge; (batch 6) during a hold a Charge is added to what is owed", async () => {
     const { tester, sessionId, sub, dev } = await waiting14();
     await cron();
     await db.submission.update({ where: { id: sub.id }, data: { remindedAt: new Date(Date.now() - 3 * 86_400_000) } });
     await cron();
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Reminder: Nora Lane didn't review" } } })).toBe(1);
     await startHold(dev.user.id, "unpaid");
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe("This test is paused right now. You can charge once it resumes.");
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe("Tick “charge Nora Lane $10.00 now” to charge.");
     await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: null } });
     await db.submission.update({ where: { id: sub.id }, data: { choiceBy: new Date(Date.now() - 30 * 86_400_000) } });
     await cron();
@@ -117,19 +117,18 @@ describe("charge amount and a second failure", () => {
     expect(R.chargeAmount(null, 0)).toBe(0); // not in the contract
   });
 
-  it("while a failed payment is owed, the tester's Charge waits ('delayed', never 'failed') and the developer's Pay waits", async () => {
+  it("(batch 6) while a failed payment is owed, the tester's Charge still goes through (a decline: 'delayed', never 'failed'), and the developer's Pay waits", async () => {
     const { tester, sessionId, sub, dev } = await waiting14();
     await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
     await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 500, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + 2 * 86_400_000) } });
     setStripeForTests({ paymentIntents: { create: async () => { throw new Error("declined"); } } } as unknown as Stripe); // the daily retry is declined too
     await cron();
     const c = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000 });
-    expect(c.status).toBe(409);
-    expect(c.body.error.message).toBe("Payment from this developer is delayed right now. You can try again once it's sorted.");
-    expect(c.body.error.message).not.toMatch(/failed/i);
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.message).toBe("Pay what you owe first.");
-    // Let it go still works, and Reject still works for the developer.
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "letgo" })).status).toBe(200);
+    expect(c.status).toBe(200);
+    expect(c.body.status).toBe("failed"); // declined: owed, and the hold starts
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "may be delayed" } } })).toBeGreaterThan(0);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "failed" } } })).toBe(0);
+    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
   });
 
   it("paid in full: no day-14 choice, notice or reminders; the developer can still Pay or Reject", async () => {

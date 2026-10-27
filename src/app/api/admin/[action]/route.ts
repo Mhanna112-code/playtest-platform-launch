@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { countsOf, lockedFields } from "@/lib/limits";
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { decideDispute } from "@/lib/server/payments";
 import { isAdmin, requireUser } from "@/lib/server/session";
@@ -51,7 +52,13 @@ export async function POST(req: Request, { params }: Ctx) {
         await refundPayment(id);
         return ok({ ok: true });
       case "allow-critical-changes":
-        await db.test.update({ where: { id }, data: { criticalChanges: 0 } });
+      {
+        // (Owner, Oct 28 afternoon) Per field: each locked field gets its 3 changes back; the other fields keep their counts.
+        const t = await db.test.findUniqueOrThrow({ where: { id } });
+        const counts = countsOf(t.criticalCounts);
+        for (const f of lockedFields(counts)) counts[f] = 0;
+        await db.test.update({ where: { id }, data: { criticalCounts: counts } });
+      }
         return ok({ ok: true });
       // (Owner, Oct 26) A chargeback hold needs the admin's approval (id = the developer) once the card is verified and what is owed is paid.
       case "approve-hold":

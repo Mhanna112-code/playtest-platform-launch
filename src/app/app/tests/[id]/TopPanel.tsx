@@ -17,7 +17,7 @@ type Tester = { contractId: string; name: string; sent: string[]; toSend: string
  * The test page's top title panel: the developer's big buttons (Stop the test, End early, Next round).
  * Its stop-once box sits directly under this panel.
  */
-export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean }) {
+export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
   const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={error} didntGo={k === "stop" || k === "end-early"} /> : null);
   const [open, setOpen] = useState<"" | "end" | "next">("");
@@ -48,7 +48,7 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
             {p.productName && <p className="kicker">{p.productName}</p>}
             <h1 className="text-3xl font-bold tracking-tight text-white">{p.title}</h1>
             <div className="flex flex-wrap gap-2">
-              {p.paused && p.status !== "stopped" ? <span className="badge border-amber-300/40 text-amber-200">Paused</span> : <StatusPill status={p.status} />}
+              {p.paused && p.status !== "stopped" ? <span className="badge border-amber-300/40 text-amber-200">Paused</span> : <StatusPill status={p.status} full={p.full} />}
               {p.parts && <PartBadges written={p.parts.written} recording={p.parts.recording} live={p.parts.live} />}
               {p.mature && <span className="badge border-rose-300/40 text-rose-200">Mature (18+)</span>}
               {p.nda && <span className="badge">NDA</span>}

@@ -97,7 +97,7 @@ export async function devPaymentChanges(devId: string, testId: string, since: Da
 export async function testerPaymentChanges(testerId: string, contractId: string, since: Date): Promise<TestEventLike[]> {
   const me = await db.contract.findUniqueOrThrow({ where: { id: contractId }, select: { test: { select: { developerId: true, developer: true } } } });
   const [pays, disputes] = await Promise.all([
-    db.payment.findMany({ where: { testerId, developerId: me.test.developerId, contractId: { not: null }, OR: [{ status: "failed", owedUntil: { not: null }, createdAt: { gt: since } }, { status: "deferred", createdAt: { gt: since } }, { settledAt: { gt: since } }] }, orderBy: { createdAt: "asc" }, take: 50 }),
+    db.payment.findMany({ where: { testerId, developerId: me.test.developerId, contractId: { not: null }, OR: [{ status: "failed", owedUntil: { not: null }, createdAt: { gt: since } }, { status: { in: ["deferred", "owed"] }, createdAt: { gt: since } }, { settledAt: { gt: since } }] }, orderBy: { createdAt: "asc" }, take: 50 }),
     db.dispute.findMany({ where: { contractId, decidedAt: { gt: since } } }),
   ]);
   const titles = new Map((await db.contract.findMany({ where: { id: { in: pays.map((p) => p.contractId!) } }, select: { id: true, title: true } })).map((c) => [c.id, c.title]));
@@ -108,7 +108,7 @@ export async function testerPaymentChanges(testerId: string, contractId: string,
     const label = pieceLabel(p, kinds) === "dispute decision" ? "dispute" : pieceLabel(p, kinds);
     const title = p.contractId === contractId ? "" : titles.get(p.contractId!) ?? "";
     // When a delayed payment goes through: the normal paid line (on another session: naming the test).
-    const late = (p.status === "deferred" || !!p.owedUntil) && p.createdAt > since;
+    const late = (p.status === "deferred" || p.status === "owed" || !!p.owedUntil) && p.createdAt > since;
     if (late) out.push({ kind: "payment", text: delayedPayLine(dev, label, p.amountCents, title), createdAt: p.createdAt });
     if (p.settledAt && p.settledAt > since) out.push({ kind: "paid", text: `${dev} paid ${money(p.amountCents)} for your ${label}${title ? ` on ${title}` : ""}`, createdAt: p.settledAt });
   }

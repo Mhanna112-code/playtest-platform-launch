@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { countsOf } from "@/lib/limits";
 import { gapsOf } from "@/lib/gaps";
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { devCancelCall, reportNoShow, setCallLength } from "@/lib/server/calls";
@@ -31,7 +32,7 @@ export async function GET(req: Request, { params }: Ctx) {
     if (!u) throw new HttpError(401, "signed_out", "You're signed out. Sign in again to keep going.");
     if (action !== "listing") throw new HttpError(404, "not_found", "That doesn't exist.");
     const t = await ownTest(u.id, id);
-    return ok({ version: t.version, listing: asListing(t), keys: await keyBoxes(id), at: new Date().toISOString(), criticalChanges: t.criticalChanges, everJoined: (await db.contract.count({ where: { testId: id } })) > 0 });
+    return ok({ version: t.version, listing: asListing(t), keys: await keyBoxes(id), at: new Date().toISOString(), criticalCounts: countsOf(t.criticalCounts), everJoined: (await db.contract.count({ where: { testId: id } })) > 0 });
   });
 }
 

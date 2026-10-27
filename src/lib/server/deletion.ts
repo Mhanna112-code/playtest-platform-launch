@@ -56,13 +56,13 @@ export async function testerDeleteFacts(userId: string, now = new Date()): Promi
   const u = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { payoutsReady: true } });
   const [waiting, delayed, subs, calls, disputes] = await Promise.all([
     db.payment.aggregate({ where: { testerId: userId, status: "charged", transferStatus: "waiting" }, _sum: { testerCents: true } }),
-    db.payment.findMany({ where: { testerId: userId, OR: [{ status: "failed", owedUntil: { not: null }, settledAt: null }, { status: "deferred" }] }, select: { amountCents: true } }),
+    db.payment.findMany({ where: { testerId: userId, OR: [{ status: "failed", owedUntil: { not: null }, settledAt: null }, { status: { in: ["deferred", "owed"] } }] }, select: { amountCents: true } }),
     db.submission.findMany({ where: { review: null, contract: { testerId: userId } }, select: { id: true, agreedCents: true } }),
     db.call.findMany({ where: { review: null, status: "booked", startsAt: { lte: now }, contract: { testerId: userId } }, select: { id: true, rateCents: true, minutes: true, actualMinutes: true } }),
     db.dispute.findMany({ where: { testerId: userId, status: "open" }, select: { submissionId: true, callId: true, submission: { select: { agreedCents: true } }, call: { select: { rateCents: true, minutes: true, actualMinutes: true } } } }),
   ]);
   const paidFor = async (where: { submissionId?: string | null; callId?: string | null }) =>
-    (await db.payment.aggregate({ where: { ...(where.submissionId ? { submissionId: where.submissionId } : { callId: where.callId! }), status: { in: ["charged", "not_set_up", "deferred"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
+    (await db.payment.aggregate({ where: { ...(where.submissionId ? { submissionId: where.submissionId } : { callId: where.callId! }), status: { in: ["charged", "not_set_up", "deferred", "owed"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
   let unpaid = 0;
   for (const s of subs) unpaid += s.agreedCents ?? NO_LISTING_CAP_CENTS;
   for (const c of calls) unpaid += callReference(c.rateCents, c.actualMinutes ?? c.minutes).cents ?? NO_LISTING_CAP_CENTS;

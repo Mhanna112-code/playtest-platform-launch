@@ -4,6 +4,7 @@ import { pauseCountdownLine } from "@/lib/pause";
 import { chargebackHolds } from "./chargeback";
 import { disputeBounds } from "./payments";
 import { termsLine } from "@/lib/rules";
+import { CRITICAL_FIELDS, CRITICAL_KEYS, countsOf, lockedFields } from "@/lib/limits";
 import { pausedTestsForAdmin } from "./pauseClosure";
 import { REPORTED_OVER, labelled, reportCounts, reportedOver3 } from "./reports";
 import { HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL } from "@/lib/rules";
@@ -18,6 +19,8 @@ export type DisputeVM = { type?: "dispute"; id: string; at: string; head: string
 export type MineVM = { id: string; at: string; title: string; dev: string; why: string; when: string; testId: string };
 export type UserVM = { href: string; id: string; at: string; line: string; reports: number; state: "deleted" | "suspended" | "normal"; stateLine: string };
 export type TestVM = { href: string; id: string; at: string; line: string; status: string; adminPaused: boolean; stopped: boolean; critical: number; closedLine: string };
+/** (Owner, Oct 28 afternoon) The per-field change counts on an admin test row: "NDA 3, steps 1". */
+const countsText = (v: unknown) => { const c = countsOf(v); return CRITICAL_KEYS.filter((k) => c[k] > 0).map((k) => `${CRITICAL_FIELDS[k]} ${c[k]}`).join(", "); };
 export type TextVM = { id: string; at: string; text: string; href?: string };
 /** A hold lift waiting for an admin's Approve (the 4th hold onward), in its own box: styled like a dispute row. */
 export type LiftVM = { id: string; at: string; head: string; owed: string; paid: string };
@@ -142,12 +145,12 @@ export async function testRow(t: Awaited<ReturnType<typeof db.test.findMany<{ in
   return {
     id: t.id,
     at: t.createdAt.toISOString(),
-    line: `${fmtDateTime(t.createdAt)} · “${t.title}” · ${t.adminStoppedAt ? "stopped by the team" : t.adminPausedAt ? "paused by the team" : t.status} · ${displayName(t.developer)} · ${t._count.contracts} joined${t.criticalChanges > 0 ? ` · ${t.criticalChanges} critical change${t.criticalChanges === 1 ? "" : "s"}` : ""}`,
+    line: `${fmtDateTime(t.createdAt)} · “${t.title}” · ${t.adminStoppedAt ? "stopped by the team" : t.adminPausedAt ? "paused by the team" : t.status} · ${displayName(t.developer)} · ${t._count.contracts} joined${countsText(t.criticalCounts) ? ` · changes since testers joined: ${countsText(t.criticalCounts)}` : ""}`,
     href: `/app/find/${t.id}`,
     status: t.status,
     adminPaused: !!t.adminPausedAt,
     stopped: t.status === "stopped",
-    critical: t.criticalChanges,
+    critical: lockedFields(countsOf(t.criticalCounts)).length, // fields that used all 3 changes
     closedLine: t.pauseClosedAt ? `Closed after 7 days paused: ${t.pauseClosedReason}` : "",
   };
 }

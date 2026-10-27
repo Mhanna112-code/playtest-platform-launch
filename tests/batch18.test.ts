@@ -178,7 +178,7 @@ describe("Q) a declined payment starts the hold at once (no owed window)", () =>
     expect(await db.payment.count({ where: { contractId: e.sessionId, kind: "extra", status: "failed" } })).toBe(1);
   });
 
-  it("while on a hold Pay, Reject and extra pay are refused; the tester's Dispute and Charge wait with 'delayed' wording", async () => {
+  it("while on a hold Pay, Reject and extra pay are refused; (batch 6) the tester's Dispute still works", async () => {
     const { dev, sessionId, testId, sub } = await owing();
     const two = await joined(testId, "Ben Carter", "he");
     await sact(two.sessionId, "written", two.tester.cookie, { answers: ["a", "b"] });
@@ -192,13 +192,9 @@ describe("Q) a declined payment starts the hold at once (no owed window)", () =>
     expect((await act(testId, "pay-extra", dev.cookie, { seenAt: seen(), contractId: sessionId, submissionId: sub.id, amount: "2.00" })).body.error.code).toBe("held");
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, action: "reject", reason: "Not what I asked for" })).body.error.code).toBe("held");
     const d = await sact(two.sessionId, "dispute", two.tester.cookie, { kind: "submission", id: sub2.id, reason: "I answered everything properly", seenAt: seen(), confirmed: true });
-    expect(d.status).toBe(409);
-    expect(d.body.error.message).toBe("Payment from this developer is delayed right now. You can try again once it's sorted.");
-    expect(d.body.error.message).not.toMatch(/failed/i);
-    // Pay what you owe: it works again.
+    expect(d.status).toBe(200);
     setStripeForTests(null);
     expect((await payOwed(dev.user)).paid).toBe(1);
-    expect((await sact(two.sessionId, "dispute", two.tester.cookie, { kind: "submission", id: sub2.id, reason: "I answered everything properly", seenAt: seen(), confirmed: true })).status).toBe(200);
   });
 
   it("when a payment fails and when Pay what you owe succeeds, both sides get the live blue notice and the first press stops once", async () => {

@@ -27,10 +27,14 @@ export function CategoryTile({ category, size = "h-12 w-12" }: { category: strin
 }
 export const mainCategory = (categories: string[]) => (categories[0] && CATEGORY_STYLE[categories[0]] ? categories[0] : "Other");
 
-/** "Accepting testers" (green, pulsing), "Not accepting testers" (grey), "Stopped", or a draft. */
-export function StatusPill({ status }: { status: string }) {
+/**
+ * "Accepting testers" (green, pulsing: open with at least one spot free), "Full" (grey: open with every spot taken), "Not accepting testers" (grey), "Stopped", or a draft.
+ * (Owner, Oct 28 afternoon) `full` = no spot is free.
+ */
+export function StatusPill({ status, full = false }: { status: string; full?: boolean }) {
   if (status === "stopped") return <span className="badge border-sky-300/40 text-sky-200"><span className="h-2 w-2 rounded-sm bg-sky-300" /> Stopped</span>;
   if (status === "draft") return <span className="badge"><span className="h-2 w-2 rounded-full bg-slate-500" /> Draft</span>;
+  if (status === "open" && full) return <span className="badge" data-status-pill="full"><span className="h-2 w-2 rounded-full bg-slate-500" /> Full</span>;
   return status === "open" ? (
     <span className="badge border-emerald-400/30 bg-emerald-400/10 text-emerald-300">
       <span className="relative flex h-2 w-2">

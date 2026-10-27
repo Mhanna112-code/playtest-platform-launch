@@ -9,7 +9,7 @@ import { POST as deletePOST } from "@/app/api/account/delete/route";
 import { POST as owedPOST } from "@/app/api/payments/owed/route";
 import { POST as adminPOST } from "@/app/api/admin/[action]/route";
 import { setStripeForTests } from "@/lib/server/stripe";
-import { CRITICAL_FIELDS, CRITICAL_WORDS, criticalLine, isCritical } from "@/lib/limits";
+import { CRITICAL_FIELDS, CRITICAL_WORDS, countsOf, criticalLine, isCritical } from "@/lib/limits";
 import { closedForSuspended, openForRestricted, restrictedOn } from "@/lib/closedPages";
 import { restrictionKey } from "@/lib/restricted";
 import { RATE_AFTER_CLOSE_KINDS, rateStops, testClosedForRate } from "@/lib/rules";
@@ -76,22 +76,22 @@ describe("batch 5 item 2: the 3-change limit covers the steps, NDA, questions, l
     expect(Object.keys(CRITICAL_FIELDS).sort()).toEqual(["description", "devices", "languages", "ndaText", "questions"]);
     for (const f of ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "buildUrl"]) expect(isCritical(f), f).toBe(false);
     expect(CRITICAL_WORDS).toBe("steps, NDA, questions, languages or devices");
-    expect(criticalLine()).toBe("You've changed the steps, NDA, questions, languages or devices 3 times since testers joined. Contact us in Settings to change them again.");
+    // (Batch 6 item 3) Per field: the line names the one field.
+    expect(criticalLine("ndaText")).toBe("You've changed the NDA 3 times since testers joined. Contact us in Settings to change it again.");
     const form = src("app/app/tests/TestForm.tsx");
-    expect(form).toContain("(saves that change the {CRITICAL_WORDS})");
-    expect(form).toContain("You&apos;ve changed the {CRITICAL_WORDS} {LIMITS.criticalChanges} times since testers joined, so those fields are locked.");
+    expect(form).toContain("{criticalLine(f)}");
     expect(form).not.toContain('attrs: limitReached ? { disabled: "true" } : {}'); // the build link stays editable
-    expect(fs.readFileSync(path.resolve(__dirname, "../prisma/schema.prisma"), "utf8")).toContain("the steps / What to do, the NDA, questions, required languages, required devices");
+    expect(fs.readFileSync(path.resolve(__dirname, "../prisma/schema.prisma"), "utf8")).toContain("criticalCounts Json");
   });
 
   it("devices and languages count; adding access keys never does; prices still send the Switch / Keep offer without counting", async () => {
     const { dev, testId } = await setup();
     const { sessionId } = await joined(testId);
-    for (const fields of [{ devices: ["Windows PC"] }, { languages: ["English"] }, { description: "Sail further" }]) expect((await edit(testId, dev.cookie, fields)).status).toBe(200);
-    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalChanges).toBe(3);
+    for (const fields of [{ devices: ["Windows PC"] }, { devices: ["Mac"] }, { devices: ["Windows PC", "Mac"] }, { languages: ["English"] }]) expect((await edit(testId, dev.cookie, fields)).status).toBe(200);
+    expect(countsOf((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).toMatchObject({ devices: 3, languages: 1 });
     const fourth = await edit(testId, dev.cookie, { devices: ["Mac"] });
     expect(fourth.status).toBe(400);
-    expect(fourth.body.error.message).toBe(criticalLine());
+    expect(fourth.body.error.message).toBe(criticalLine("devices"));
     // Keys stay out of the limit.
     expect((await edit(testId, dev.cookie, {}, { keysAdd: ["K1", "K2", "K3"] })).status).toBe(200);
     // Prices are not limited, and working testers still get the offer.
@@ -99,7 +99,7 @@ describe("batch 5 item 2: the 3-change limit covers the steps, NDA, questions, l
     expect(r.status).toBe(200);
     expect(r.body.offered).toBe(1);
     expect(await db.termsOffer.count({ where: { contractId: sessionId, status: "open" } })).toBe(1);
-    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalChanges).toBe(3);
+    expect(countsOf((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).toMatchObject({ devices: 3, languages: 1, description: 0 });
   });
 });
 

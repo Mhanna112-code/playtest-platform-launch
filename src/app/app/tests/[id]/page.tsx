@@ -24,7 +24,7 @@ import { rowsOf, toJson } from "@/lib/callRows";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
-import { HOLD_APPROVAL_AFTER, NO_LIVE_PART, hasLivePart } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, callListed, unlistedCallLine } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
@@ -70,7 +70,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const brokenKeys = await brokenKeyTesters(id);
   // (Owner, Oct 26) A suspended developer sees only Cancel call, End early and Stop the test here; every other button is hidden.
   const restricted = !!u.suspendedAt;
-  const hasLive = hasLivePart(t) || t.contracts.some((c) => c.liveRateCents != null);
   const keysEver = await db.accessKey.count({ where: { testId: id } });
   const keysLeft = keysEver > 0 ? await db.accessKey.count({ where: { testId: id, status: "free" } }) : null;
   const working = t.contracts.filter((c) => c.status === "working");
@@ -118,7 +117,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       `due ${fmtDate(c.dueAt).replace(/, \d{4}$/, "")}`,
       part("Written", c.writtenCents, "written"),
       part("Recording", c.recordingCents, "recording"),
-      c.liveRateCents != null ? `Live call ${whole(c.liveRateCents)}/h, ${whole(callPaid)} paid so far` : "Live call not in contract",
+      // (Owner, Oct 28 afternoon) A call that isn't a listed part (not in the listing, or not in this tester's contract) can still be requested: its pay is up to the developer.
+      callListed(t, c) ? `Live call ${whole(c.liveRateCents)}/h, ${whole(callPaid)} paid so far` : `Live call: ${unlistedCallLine("developer")}`,
     ].filter(Boolean).join(" · ");
     const toCall = (x: (typeof c.calls)[number]): DevCall => ({ id: x.id, joinable: callJoinable(x, now), report: x.noShowBy ? { byMe: x.noShowBy === "developer", note: x.noShowNote } : null, when: x.startsAt.toISOString(), minutes: x.minutes, rate: rateLabel(x.rateCents, c.liveRateCents), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, late: lateOf(c, x) });
     const live = c.calls.filter((x) => x.status === "booked" && !x.review);
@@ -141,7 +141,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       // (NEXT-UI 21) The testers' requests wait in Needs you; here only the developer's own.
       requests: reqs.filter((r) => r.contractId === c.id && r.fromSide === "developer").map((r) => ({
         id: r.id, minutes: r.minutes, rows: toJson(rowsOf(r)), mine: r.fromSide === "developer",
-        rate: rateLabel(c.liveRateCents, c.liveRateCents),
+        rate: rateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents),
       })),
     };
   });
@@ -162,7 +162,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     .sort((a, b) => a.at.getTime() - b.at.getTime());
   const needsRequests = reqs.filter((r) => r.fromSide === "tester").flatMap((r) => {
     const c = t.contracts.find((x) => x.id === r.contractId);
-    return c ? [{ id: r.id, contractId: c.id, name: displayName(c.tester), rows: toJson(rowsOf(r)), minutes: r.minutes, rate: rateLabel(c.liveRateCents, c.liveRateCents) }] : [];
+    return c ? [{ id: r.id, contractId: c.id, name: displayName(c.tester), rows: toJson(rowsOf(r)), minutes: r.minutes, rate: rateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents) }] : [];
   });
   const disputesWaiting = t.contracts.flatMap((c) => [
     ...c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), what: x.kind === "written" ? "their written answers" : "their recording", reason: x.dispute!.reason })),
@@ -190,6 +190,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         seenAt={seenAt}
         nextRoundId={next?.id ?? null}
         spotsLine={`${working.length} of ${t.spots} spots used`}
+        full={working.length >= t.spots}
         joinMode={t.joinMode}
         deadlineDays={t.deadlineDays}
         categories={t.categories}
@@ -378,8 +379,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       <DevCallPanel
         testId={t.id}
         seenAt={seenAt}
-        canRequest={t.status !== "stopped" && t.status !== "draft" && !u.holdStartedAt && !restricted && hasLive}
-        noRequestReason={t.status === "stopped" ? "This test was stopped, so no calls can be requested or booked." : !hasLive ? NO_LIVE_PART : restricted ? "Your account is suspended: you can only cancel booked calls here." : u.holdStartedAt ? "Your tests are paused until you pay what you owe: calls wait meanwhile." : ""}
+        canRequest={t.status !== "stopped" && t.status !== "draft" && !u.holdStartedAt && !restricted}
+        noRequestReason={t.status === "stopped" ? "This test was stopped, so no calls can be requested or booked." : restricted ? "Your account is suspended: you can only cancel booked calls here." : u.holdStartedAt ? "Your tests are paused until you pay what you owe: calls wait meanwhile." : ""}
         testers={restricted ? devTesters.map((x) => ({ ...x, requests: [] })) : devTesters}
         past={t.contracts
           .flatMap((c) => c.calls.filter((x) => x.status === "cancelled" || x.review).map((x) => ({

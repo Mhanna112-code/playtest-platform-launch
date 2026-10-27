@@ -210,7 +210,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       ) : closed && invite && t.status === "open" && testersIn >= t.spots ? (
         <p className="info">{t.title} is full right now. Your invite stays open; we&apos;ll tell you when a spot opens.</p>
       ) : paused ? (
-        <p className="info" data-paused="">This test is paused right now, so it isn&apos;t taking new testers.</p>
+        <p className="info" data-paused="">This test is paused right now.</p>
       ) : closed ? (
         <p className="err">{t.status === "stopped" ? "This test was stopped." : testersIn >= t.spots ? "This test is full." : "This test isn't taking new testers any more."}</p>
       ) : (

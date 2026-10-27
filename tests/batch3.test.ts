@@ -111,7 +111,7 @@ describe("live calls blocked during holds and on stopped/closed tests", () => {
     expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).status).toBe("cancelled");
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "was cancelled because the test is paused." } } })).toBe(1);
     expect((await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: inHours(150) })).body.error.code).toBe("held");
-    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: inHours(150) })).body.error.message).toBe("This test is paused. Payment for your work may be delayed.");
+    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: inHours(150) })).body.error.message).toBe("This test is paused right now. You can request calls once it resumes.");
     expect(slots).toHaveLength(2);
   });
 

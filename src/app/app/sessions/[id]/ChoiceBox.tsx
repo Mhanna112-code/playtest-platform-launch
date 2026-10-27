@@ -7,13 +7,12 @@ import { money, toCents } from "@/lib/format";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { ChangesBox } from "@/components/ChangesBox";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { OWED_FOR_TESTERS } from "@/lib/rules";
 
 /**
  * Day 14 without a review: charge the developer (the lower of listing and asked, minus what's already been paid for this
  * part) or let it go. Charge needs its tick; Let it go asks once in place. (Never shown when the part is paid in full.)
  */
-export function ChoiceBox({ devOwes = false, paused = false, sessionId, submissionId, line, devName, cents, seenAt }: { devOwes?: boolean; paused?: boolean; sessionId: string; submissionId: string; line: string; devName: string; cents: number; seenAt: string }) {
+export function ChoiceBox({ paused = false, sessionId, submissionId, line, devName, cents, seenAt }: { paused?: boolean; sessionId: string; submissionId: string; line: string; devName: string; cents: number; seenAt: string }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
@@ -36,19 +35,18 @@ export function ChoiceBox({ devOwes = false, paused = false, sessionId, submissi
   return (
     <div className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">
       <p>{line}.</p>
-      {devOwes && <p className="note" data-owed-note="">{OWED_FOR_TESTERS} Let it go still works.</p>}
-      {paused && <p className="note">This test is paused right now. You can charge once it resumes; Let it go still works.</p>}
+      {/* (Owner, Oct 28 afternoon) Charge and Let it go both work while the test is paused; a Charge then may be paid later (never says why). */}
+      {paused && <p className="note" data-paused-charge="">This test is paused right now. You can still charge or let it go; payment may be delayed until the test resumes.</p>}
       {(
         <div className="flex flex-wrap items-center gap-2">
-          {!paused && <><label className="inline-flex items-center gap-1">
+          <label className="inline-flex items-center gap-1">
             $ <input className="input w-24" inputMode="decimal" aria-label="Amount to charge" data-min="0.5" data-max={String(cents / 100)} data-msg={`Charge from $0.50 up to ${money(cents)}.`} value={amount} onChange={(e) => { setAmount(e.target.value); setTicked(false); }} />
             <span className="note">(up to {money(cents)})</span>
           </label>
           <label>
             <input type="checkbox" checked={ticked} disabled={typed == null} onChange={(e) => setTicked(e.target.checked)} /> charge {devName} {typed == null ? "–" : money(typed)} now
           </label>
-          <button className="btn" disabled={busy || !ticked || typed == null || devOwes} onClick={(e) => checkFields(e.currentTarget.parentElement) && go("charge")}>{`Charge ${devName} ${typed == null ? "" : money(typed)}`}</button>
-          </>}
+          <button className="btn" disabled={busy || !ticked || typed == null} onClick={(e) => checkFields(e.currentTarget.parentElement) && go("charge")}>{`Charge ${devName} ${typed == null ? "" : money(typed)}`}</button>
           <ConfirmButton live className="btn-secondary" disabled={busy} title="Let it go?" confirmLabel="Let it go" onConfirm={() => go("letgo")}
             body={<p>This closes with nothing more paid.</p>}>
             Let it go

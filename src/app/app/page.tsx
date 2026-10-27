@@ -245,7 +245,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
                         {/* Under a suspension or a hold the test pages are closed: the card doesn't open. */}
                         <p>{restricted ? title : <Link href={`/app/tests/${t.id}`} className={`${CARD_LINK} no-underline hover:no-underline`}>{title}</Link>}</p>
                         <div className="flex flex-wrap gap-2">
-                          {t.status === "stopped" ? <StatusPill status="stopped" /> : paused ? <span className="badge border-amber-300/40 text-amber-200"><span className="h-2 w-2 rounded-full bg-amber-300" /> Paused{why ? `: ${why}` : ""}</span> : t.status === "open" ? null : <StatusPill status={t.status} />} {/* (Owner, Oct 28) the doc: an Open test has no label (a full one too); Draft, Paused, Stopped and Closed do */}
+                          {t.status === "stopped" ? <StatusPill status="stopped" /> : paused ? <span className="badge border-amber-300/40 text-amber-200"><span className="h-2 w-2 rounded-full bg-amber-300" /> Paused{why ? `: ${why}` : ""}</span> : <StatusPill status={t.status} full={inIt.length >= t.spots} />} {/* (Owner, Oct 28 afternoon) open with a free spot: "Accepting testers"; open and full: "Full"; Draft, Paused, Stopped and Closed as before */}
                           {owedTests.has(t.id) && <span className="badge border-rose-300/40 text-rose-200">Payment failed</span>}
                           {t.mature && <span className="badge border-rose-300/40 text-rose-200">Mature (18+)</span>}
                           {t.ndaText && <span className="badge"><FileSignature className="h-3.5 w-3.5" /> NDA</span>}

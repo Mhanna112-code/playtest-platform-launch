@@ -4,7 +4,7 @@ import { displayName, fmtDateTime, fmtTime, money, pronouns } from "@/lib/format
 import { checkCallMinutes, checkCancel } from "@/lib/rules";
 import { FOREVER_AHEAD, MAX_ROWS, occurrences, rowsOf, stepMs, toJson, type CallRow, type RowRepeat } from "@/lib/callRows";
 import type { Prisma } from "@prisma/client";
-import { NO_LIVE_PART, PAUSED_FOR_TESTERS, hasLivePart, testPaused } from "@/lib/rules";
+import { PAUSED_RIGHT_NOW, callListed, testPaused, unlistedCallLine } from "@/lib/rules";
 import { DEV_SUSPENDED } from "./users";
 import { HttpError } from "./http";
 import { notify } from "./notify";
@@ -35,8 +35,14 @@ async function ctx(userId: string, contractId: string) {
 }
 type Ctx = Awaited<ReturnType<typeof ctx>>;
 
-export const rateLabel = (rateCents: number | null, contractRate: number | null) =>
-  rateCents == null ? "Not in your contract" : `${rateCents === contractRate ? "Contract" : "Agreed"} ${money(rateCents).replace(/\.00$/, "")}/h`;
+/**
+ * A call's rate as each side reads it: "Contract $30/h" for a listed call; (owner, Oct 28 afternoon) a call that isn't a listed part reads "Not a listed part: pay for this call is
+ * up to <dev>" (tester) / "Not a listed part: pay is up to you, at most $100 for this call" (developer).
+ */
+export const rateLabel = (rateCents: number | null, contractRate: number | null, side: Side = "developer", devName?: string) =>
+  rateCents == null ? unlistedCallLine(side, devName) : `${rateCents === contractRate ? "Contract" : "Agreed"} ${money(rateCents).replace(/\.00$/, "")}/h`;
+/** The rate a call is booked at: the contract rate when the call is a listed part, else none (not a listed part: pay is up to the developer). */
+export const bookRate = (test: { liveRateCents: number | null }, c: { liveRateCents: number | null }) => (callListed(test, c) ? c.liveRateCents : null);
 
 /** Every call time a request covers: each row's calls (a Forever row: the next 4 ahead). */
 export const requestTimes = (r: { rows?: unknown; times: Date[]; startsAt: Date; weeks: number; repeat?: string }) => rowsOf(r).flatMap(occurrences);
@@ -196,11 +202,10 @@ const refusalFor = (r: { status: string; updatedAt: Date; closedReason: string; 
 
 async function refusals(c: Ctx["c"], side: Side) {
   if (c.status !== "working") throw new HttpError(409, "closed", side === "tester" ? "Your session has ended." : `${displayName(c.tester)}'s session has ended.`);
-  if (testPaused(c.test.developer, c.test)) throw new HttpError(409, "paused", side === "tester" ? PAUSED_FOR_TESTERS : c.test.developer.suspendedAt ? DEV_SUSPENDED : "Pay what you owe first.");
+  if (testPaused(c.test.developer, c.test)) throw new HttpError(409, "paused", side === "tester" ? `${PAUSED_RIGHT_NOW} You can request calls once it resumes.` : c.test.developer.suspendedAt ? DEV_SUSPENDED : c.test.developer.holdStartedAt ? "Pay what you owe first." : "The team paused this test.");
   // (Owner) "Closed" only means no NEW testers: testers already in carry on, so calls work. Only a stopped test refuses.
   if (c.test.status === "stopped") throw new HttpError(409, "closed", "This test was stopped.");
-  // (Owner, Oct 28) No live call part, no calls: a request (or an accept) on a test without one is refused for good.
-  if (!hasLivePart(c.test, c)) throw new HttpError(409, "no_live", NO_LIVE_PART);
+  // (Owner, Oct 28 afternoon) Calls are allowed whether or not a live call is a listed part: one that isn't reads "Not a listed part" and its pay is up to the developer.
   if (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) throw new HttpError(409, "gone", "This time isn't available.");
 }
 
@@ -231,7 +236,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
         const clash = await acceptClash(c, "developer", [hit], match.minutes);
         if (clash.length) throw new HttpError(409, "clash", clash[0]);
         if ((await bookedTimes(c.id)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit("developer", displayName(c.tester)));
-        const call = await bookAt(c.id, hit, match.minutes, c.liveRateCents, null, true);
+        const call = await bookAt(c.id, hit, match.minutes, bookRate(c.test, c), null, true);
         await db.callRequest.update({ where: { id: match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
         const line = `Booked: you both picked ${fmtDateTime(hit)}`;
         await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: c.test.developerId });
@@ -288,7 +293,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
       const clash = await acceptClash(c, "tester", [hit], m.minutes);
       if (clash.length) throw new HttpError(409, "clash", clash[0]);
       if ((await bookedTimes(contractId)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit("tester", displayName(c.tester)));
-      const call = await bookAt(contractId, hit, m.minutes, c.liveRateCents);
+      const call = await bookAt(contractId, hit, m.minutes, bookRate(c.test, c));
       await db.callRequest.update({ where: { id: m.id }, data: { status: "booked", callId: call.id, decidedAt: new Date() } });
       await closeBatch(m.batchId, m.id);
       const line = `Booked: you both picked ${fmtDateTime(hit)}`;
@@ -328,8 +333,8 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   else await testerGate(c.testerId, contractId, c.testId, body);
   if (action === "accept") {
     await refusals(c, side);
-    // Every call books at the contract rate, fixed at acceptance (every week of a weekly).
-    const rate = c.liveRateCents;
+    // Every call books at the contract rate, fixed at acceptance (every week of a weekly); a call that isn't a listed part has none.
+    const rate = bookRate(c.test, c);
     // The other side picks ONE row; a repeating row books its whole set (Forever: the next 4 ahead).
     const rowsR = rowsOf(r);
     let row: CallRow;
@@ -364,7 +369,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     await db.callRequest.update({ where: { id: r.id }, data: { status: "booked", callId: first!.id, decidedAt: new Date() } });
     if (side === "tester") await closeBatch(r.batchId, r.id);
     const what = row.repeat === "once" ? fmtDateTime(times[0]) : row.count ? `${row.count} ${unitOf(row.repeat)} calls from ${fmtDateTime(times[0])}` : `${unitOf(row.repeat)} calls from ${fmtDateTime(times[0])} (until cancelled)`;
-    await notify(other.email, `Booked: ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#call-${first!.id}` : `/app/sessions/${c.id}#call-${first!.id}`, { about: user.id });
+    await notify(other.email, `Booked: ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents, side === "tester" ? "developer" : "tester", displayName(c.test.developer))}).`], side === "tester" ? `/app/tests/${c.testId}#call-${first!.id}` : `/app/sessions/${c.id}#call-${first!.id}`, { about: user.id });
     return { booked: true, callId: first!.id, calls: times.length };
   }
   const status = action === "withdraw" ? "withdrawn" : "declined";

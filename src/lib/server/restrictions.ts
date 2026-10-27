@@ -6,15 +6,16 @@ import { HttpError } from "./http";
 import { adminUsers, bell, notify } from "./notify";
 import { cancelCallsAhead, recordEvent, spotOpened, tellCancelled } from "./tests";
 import { closeRequests } from "./requests";
-import { chargeDeferred, resumeTests } from "./holds";
+import { chargeDeferred, resumeTests, shiftAfterPause } from "./holds";
 import { sendWaitingTransfer } from "./stripe";
 import { accountEvent } from "./reports";
 import { devDeleteBlockers, devDeleteRefusal } from "./deletion";
 
 // (Design doc 2 and 11.4; owner, Oct 27) Suspensions and deletion.
-//   Developer suspended (or on a payment / chargeback hold: ONE state, see lib/restricted.ts): all their tests are paused (testers stay in them; on a suspension they can only
-//   cancel booked calls, on a hold they can still send work); every press on the developer's pages is refused except Cancel call; calls starting within 3 days of the start are
-//   cancelled with no fault, later ones 3 days before they start if it still lasts. Lifted: the tests resume as normal.
+//   Developer suspended (or on a payment / chargeback hold: ONE state, see lib/restricted.ts): all their tests are paused (testers stay in them; (owner, Oct 28 afternoon) under
+//   every kind of pause testers can't send work or chat, and can still save drafts, charge or let go, dispute, rate, leave and cancel calls: rules.ts PAUSE_DEFAULTS); every press on
+//   the developer's pages is refused except Cancel call; calls starting within 3 days of the start are cancelled with no fault, later ones 3 days before they start if it still
+//   lasts. Invites and applications wait. Lifted: the tests resume as normal.
 //   Tester suspended: removed from every test at once (their work stays and is reviewed; the pay is charged but their share is held until
 //   reinstatement). Reinstated (owner, Oct 28): no automatic re-invite; the tests they were removed from wait on their dashboard with
 //   "You were removed from this test" and Ask to rejoin until they ask or dismiss.
@@ -56,8 +57,7 @@ async function pauseDeveloper(u: { id: string; email: string }) {
   const tests = await db.test.findMany({ where: { developerId: u.id, status: { in: ["open", "closed", "draft"] } }, select: { id: true } });
   const contractIds = (await db.contract.findMany({ where: { test: { developerId: u.id } }, select: { id: true } })).map((c) => c.id);
   await closeRequests({ contractIds }, "the test is paused");
-  // (Owner, Oct 27) Pending applications close on a suspension: the developer can't answer them.
-  await db.application.updateMany({ where: { testId: { in: tests.map((t) => t.id) }, status: "pending" }, data: { status: "closed", closedReason: "paused", decidedAt: new Date() } });
+  // (Owner, Oct 28 afternoon) Invites and applications WAIT while the tests are paused: they work again after the lift unless something else closed them.
   for (const t of tests) await db.$transaction((tx) => recordEvent(tx, t.id, "paused", "Your account is paused", false));
   await cancelCallsNearPause(u.id);
   await (await import("./pauseClosure")).bellPausedTests(u.id);
@@ -120,9 +120,10 @@ export async function reinstateAccount(userId: string) {
   await db.user.update({ where: { id: userId }, data: { suspendedAt: null, suspendNote: "", suspendedById: null, reinstatedAt: now } });
   await accountEvent(userId, "reinstated", u.suspendedById);
   if (u.isDeveloper) {
-    await db.$transaction((tx) => resumeTests(tx, userId, start, now));
+    // (Owner, Oct 28 afternoon, DEFAULT) Deadlines and Open until move on by the pause; a hold still on keeps the tests paused (they resume, and move on the rest, when it lifts).
+    const running = await db.$transaction((tx) => resumeTests(tx, userId, start, now, [u.holdStartedAt]));
     if (!u.holdStartedAt) await chargeDeferred(userId);
-    const testers = await db.contract.findMany({ where: { status: "working", test: { developerId: userId } }, include: { tester: true } });
+    const testers = await db.contract.findMany({ where: { status: "working", testId: { in: running } }, include: { tester: true } });
     for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: userId, group: "paused" });
   }
   // (Owner, Oct 28) No automatic re-invite: the tests they were removed from wait on their dashboard with "You were removed from this test" and Ask to rejoin
@@ -207,13 +208,13 @@ export async function unpauseTest(testId: string) {
   const t = await db.test.findUnique({ where: { id: testId } });
   if (!t?.adminPausedAt) throw new HttpError(409, "not_paused", "That test isn't paused by the team.");
   const start = t.adminPausedAt, now = new Date();
-  const gap = now.getTime() - start.getTime();
+  const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
   await db.$transaction(async (tx) => {
-    await tx.test.update({ where: { id: testId }, data: { adminPausedAt: null, adminNote: "", ...(t.openUntil ? { openUntil: new Date(t.openUntil.getTime() + gap) } : {}) } });
-    for (const c of await tx.contract.findMany({ where: { testId, status: "working" } })) await tx.contract.update({ where: { id: c.id }, data: { dueAt: new Date(c.dueAt.getTime() + gap) } });
+    await tx.test.update({ where: { id: testId }, data: { adminPausedAt: null, adminNote: "" } });
+    // (Owner, Oct 28 afternoon, DEFAULT) The same clock shift as a hold lift or a reinstatement (only the part not covered by the developer's own pause, if one is still on).
+    await shiftAfterPause(tx, t, start, now, [dev.holdStartedAt, dev.suspendedAt]);
     await recordEvent(tx, testId, "resumed", "The team lifted the pause on this test", true);
   });
-  const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
   await notify(dev.email, `The team lifted the pause on “${t.title}”`, [`The team lifted the pause on “${t.title}”: it is running again.`], `/app/tests/${testId}`, { own: true });
   return { ok: true };
 }

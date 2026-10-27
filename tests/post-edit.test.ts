@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
+import { countsOf } from "@/lib/limits";
 import { POST as testsPOST } from "@/app/api/tests/route";
 import { GET as testGET } from "@/app/api/tests/[id]/[action]/route";
 import { json, makeUser, req } from "./helpers";
@@ -62,15 +63,16 @@ describe("Edit (design doc 5)", () => {
     const { dev, testId } = await setup();
     // Before anyone joined, nothing counts.
     for (let i = 0; i < 4; i++) expect((await edit(testId, dev.cookie, { description: `Before ${i}` })).status).toBe(200);
-    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalChanges).toBe(0);
+    expect(countsOf((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts).description).toBe(0);
     await joined(testId);
     for (let i = 0; i < 3; i++) expect((await edit(testId, dev.cookie, { description: `After ${i}`, buildUrl: `https://example.com/${i}` })).status).toBe(200);
-    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalChanges).toBe(3);
-    // (Owner, Oct 28) The refusal names the whole list, whichever limited field the Save touched.
-    const r = await edit(testId, dev.cookie, { languages: ["English"] });
+    expect(countsOf((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts).description).toBe(3);
+    // (Owner, Oct 28 afternoon) Per field: the steps are locked, the languages still have their own 3 changes.
+    const r = await edit(testId, dev.cookie, { description: "Once more" });
     expect(r.status).toBe(400);
-    expect(r.body.error.message).toBe("You've changed the steps, NDA, questions, languages or devices 3 times since testers joined. Contact us in Settings to change them again.");
-    expect(r.body.error.critical).toEqual(["languages"]);
+    expect(r.body.error.message).toBe("You've changed the steps 3 times since testers joined. Contact us in Settings to change it again.");
+    expect(r.body.error.critical).toEqual(["description"]);
+    expect((await edit(testId, dev.cookie, { languages: ["English"] })).status).toBe(200);
     // Other fields still save: the build link is no longer limited.
     expect((await edit(testId, dev.cookie, { title: "New name", buildUrl: "https://example.com/again" })).status).toBe(200);
   });

@@ -1,7 +1,7 @@
 import { devChanges, seenOf, tabOf, withRenamed } from "./live";
 import { qOptional } from "@/lib/questions";
 import { overLimitText } from "@/lib/capacity";
-import { LIMITS, criticalLine, isCritical } from "@/lib/limits";
+import { countsAfter, countsOf, criticalLine, isCritical, lockedFields } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
 import { applyKeyChange, assignKeyAtJoin, checkTypedKeys, planKeyChange } from "./accessKeys";
 import { keyNeedLine, parseKeys } from "@/lib/keys";
@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, pronouns, toCents } from "@/lib/format";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import {
-  andList, testPaused, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
+  andList, testPaused, testerPaused, PAUSED_SEND, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { gapsOf, gapsUnseen, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError } from "./http";
@@ -260,7 +260,10 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (Number.isInteger(next.spots) && next.spots > current.spots && next.spots > cap.limit && !errs.some((e) => e.startsWith("Spots"))) errs.push(overLimitText(cap.limit));
     const critical = fields.filter(isCritical);
     const everJoined = (await tx.contract.count({ where: { testId } })) > 0;
-    if (critical.length && everJoined && t.criticalChanges >= LIMITS.criticalChanges) errs.push(criticalLine(t.criticalChanges));
+    // (Owner, Oct 28 afternoon) Each limited field has its OWN 3 changes: only a field that used all of them is refused (the others still save).
+    const counts = countsOf(t.criticalCounts);
+    const lockedNow = everJoined ? critical.filter((f) => lockedFields(counts).includes(f)) : [];
+    errs.push(...lockedNow.map(criticalLine));
     const plan = await planKeyChange(tx, testId, keysAdd, keysRemove, next.spots);
     const keyErrs = [...plan.errors, ...(plan.need ? [plan.need] : [])];
     errs.push(...keyErrs);
@@ -269,10 +272,10 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (stop) {
       // Both together: the blue stop and any red mistakes (red wins: the next press still saves nothing while red remains).
       throw new HttpError(409, "changed", dc.length ? "Press Save again to save." : "This test changed since you opened Edit. Press Save again to save your changes on top.", {
-        changes: stop, version: t.version, criticalChanges: t.criticalChanges, current, listingEdited, errors: errs, keys: await keysState(tx, testId), critical: critical.length ? critical : undefined,
+        changes: stop, version: t.version, criticalCounts: counts, current, listingEdited, errors: errs, keys: await keysState(tx, testId), critical: critical.length ? critical : undefined,
       });
     }
-    if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs, critical: critical.length && everJoined && t.criticalChanges >= LIMITS.criticalChanges ? critical : undefined });
+    if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs, critical: lockedNow.length ? lockedNow : undefined, criticalCounts: counts });
     if (!fields.length && !keysChanged) return t;
     const terms = changedTerms(current, next);
     const what = [...fields.map((f) => FIELD_NAMES[f]), ...(keysChanged ? ["access keys"] : [])].join(", ");
@@ -282,8 +285,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     switchedToAnyone = fields.includes("joinMode") && next.joinMode === "anyone";
     await recordEvent(tx, testId, listingFields.length ? "edited" : "edited_spots", `The listing was edited: ${listingFields.length ? listingFields.map((f) => FIELD_NAMES[f]).join(", ") : what}`, true, {
       ...listingData(next), ...(fields.includes("openUntil") ? { notified3d: false, notified1d: false } : {}), ...(listingFields.length ? { listingVersion: { increment: 1 } } : {}),
-      // (5) A save that changed a critical field after the first tester joined counts as one of the three.
-      ...(critical.length && everJoined ? { criticalChanges: { increment: 1 } } : {}),
+      // (5; owner, Oct 28 afternoon) A save that changed limited fields after the first tester joined uses one change of EACH of them.
+      ...(critical.length && everJoined ? { criticalCounts: countsAfter(counts, critical) } : {}),
     });
     if (keysChanged) {
       await applyKeyChange(tx, testId, plan.toAdd, plan.removable);
@@ -553,7 +556,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     if (old && (await tx.rating.count({ where: { contractId: old.id } }))) throw new HttpError(409, "not_again", old.endKind === "rated" && old.status === "left" ? "You rated this test, so you can't join it again." : "You can't join this test again.");
     if (old && old.status === "ended" && body.rejoinAccepted !== true && !(await tx.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } }))) throw new HttpError(409, "not_again", "You can't join this test again.");
     const dev = await tx.user.findUniqueOrThrow({ where: { id: t.developerId } });
-    if (testPaused(dev, t)) throw new HttpError(409, "paused", "This test is paused, so it isn't taking new testers right now.");
+    if (testPaused(dev, t)) throw new HttpError(409, "paused", PAUSED_RIGHT_NOW);
     const testersIn = await tx.contract.count({ where: working(testId) });
     const r = joinCheck({ status: t.status, listingVersion: t.listingVersion, spots: t.spots, testersIn, openUntil: t.openUntil }, seen, body.confirmed === true);
     if (r.result === "refused") throw new HttpError(409, "refused", r.message);
@@ -631,6 +634,8 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   // Only the required questions need an answer ("not required" ones may stay empty).
   if (answers.length !== qs.length || qs.some((q, i) => !qOptional(q) && !answers[i])) throw new HttpError(400, "bad_answers", "Answer every required question before sending.");
   const notes = str(body.notes, 10_000);
+  // (Owner, Oct 28 afternoon) No sending while the test is paused (the typed answers stay kept as a draft).
+  if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", PAUSED_SEND);
   await testerTermsGate(contractId, displayName(c0.test.developer), body);
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   const { sub, updated } = await db.$transaction(async (tx) => {

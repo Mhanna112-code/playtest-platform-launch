@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
 import { HttpError } from "./http";
 import { notify } from "./notify";
+import { CHAT_PAUSED, PAUSE_DEFAULTS, testerPaused } from "@/lib/rules";
 
 // Per-test chat between the developer and one tester (owner rule): open to testers in the test, invited testers
 // (open invite), applicants (pending) and past participants; never after a block. Bell: "Nora Lane · Harbor Run:
@@ -35,7 +36,9 @@ export async function openTesterChat(who: { id: string; suspendedAt?: Date | nul
   // (Owner, Oct 27) "Chat with <name>" is on every hover card, both ways: the developer's on the Testers panel / dashboard seats, the tester's on the developer's name. It is refused (and hidden)
   // while the viewer is suspended or held, and when the other side is suspended or a block exists, with the same words as before.
   if (c.testerId === who.id) {
-    if (!a || a.blocked || who.suspendedAt || c.test.developer.suspendedAt || c.test.developer.holdStartedAt) throw new HttpError(409, "unable", CHAT_UNABLE_DEV);
+    if (!a || a.blocked || who.suspendedAt) throw new HttpError(409, "unable", CHAT_UNABLE_DEV);
+    if (PAUSE_DEFAULTS.chatClosed && testerPaused(c.test.developer, c.test)) throw new HttpError(409, "paused", CHAT_PAUSED);
+    if (c.test.developer.suspendedAt || c.test.developer.holdStartedAt) throw new HttpError(409, "unable", CHAT_UNABLE_DEV);
   } else if (!a || a.blocked || who.suspendedAt || who.holdStartedAt || c.tester.suspendedAt) throw new HttpError(409, "unable", CHAT_UNABLE);
   return { href: `/app/chat/${c.id}` };
 }
@@ -52,6 +55,8 @@ export const firstWords = (s: string, max = 60) => (s.length <= max ? s : s.slic
 export async function sendChat(user: { id: string; name: string; email: string }, testId: string, testerId: string, raw: unknown) {
   const a = await chatAccess(user.id, testId, testerId);
   if (a.blocked) throw new HttpError(409, "closed", "This chat is closed.");
+  // (Owner, Oct 28 afternoon, DEFAULT) Closed both ways while the test is paused (the developer's Messages page is closed then).
+  if (PAUSE_DEFAULTS.chatClosed && testerPaused(await db.user.findUniqueOrThrow({ where: { id: a.test.developerId } }), a.test)) throw new HttpError(409, "paused", CHAT_PAUSED);
   const body = typeof raw === "string" ? raw.trim().slice(0, 4000) : "";
   if (!body) throw new HttpError(400, "empty", "Type a message first.");
   const m = await db.message.create({ data: { testId, testerId, contractId: a.contract.id, senderId: user.id, body } });

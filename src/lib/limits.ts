@@ -28,15 +28,15 @@ export const LIMITS = {
   disputeText: 2000,
   bio: 1000,
   contact: { min: 10, max: 3000 },
-  criticalChanges: 3, // (Owner, Oct 28) saves that change the steps (What to do), the NDA, questions, required languages or required devices, counted from the first join
+  criticalChanges: 3, // (Owner, Oct 28 afternoon) per field: saves that change the steps (What to do), the NDA, questions, required languages or required devices, each counted from the first join
   contactPerDay: 5, // (Owner, Oct 27) Contact us messages per account per day
 } as const;
 
 /**
- * (Owner, Oct 28) The limited test fields: once a tester has joined, at most 3 Saves may change what to do (the steps), the NDA, the questions, the required
- * languages or the required devices / technology (one Save counts once, however many of these fields it touches). Part prices, parts and the build link are
- * NOT limited (changing prices or parts still offers working testers Switch / Keep), and access keys stay out of it (a key given to a tester stays theirs).
- * The words are the ones used in messages.
+ * (Owner, Oct 28) The limited test fields: once a tester has joined, each of these fields may be changed by at most 3 Saves: what to do (the steps), the NDA, the questions,
+ * the required languages and the required devices / technology. (Owner, Oct 28 afternoon) The limit is PER FIELD: each field has its own 3 changes, and one Save that changes two of
+ * them uses one change of each. Part prices, parts and the build link are NOT limited (changing prices or parts still offers working testers Switch / Keep), and access keys stay out
+ * of it (a key given to a tester stays theirs). The words are the ones used in messages.
  */
 export const CRITICAL_FIELDS = {
   description: "steps",
@@ -46,19 +46,33 @@ export const CRITICAL_FIELDS = {
   devices: "devices",
 } as const;
 export type CriticalField = keyof typeof CRITICAL_FIELDS;
+export const CRITICAL_KEYS = Object.keys(CRITICAL_FIELDS) as CriticalField[];
 export const isCritical = (f: string): f is CriticalField => f in CRITICAL_FIELDS;
-/** "steps, NDA, questions, languages or devices": every limited field, for the notes and the refusal. */
+/** "steps, NDA, questions, languages or devices": every limited field. */
 export const CRITICAL_WORDS = (() => {
   const names = [...new Set(Object.values(CRITICAL_FIELDS))];
   return `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
 })();
 
-/** "Changes left: 2 of 3" */
+/** Each limited field's count of changes since the first join (Test.criticalCounts, a Json object; a missing or bad value counts 0). */
+export type CriticalCounts = Record<CriticalField, number>;
+export function countsOf(v: unknown): CriticalCounts {
+  const o = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+  const n = (x: unknown) => (typeof x === "number" && Number.isFinite(x) && x > 0 ? Math.floor(x) : 0);
+  return Object.fromEntries(CRITICAL_KEYS.map((k) => [k, n(o[k])])) as CriticalCounts;
+}
+/** The counts after one Save that changed these fields (each changed field uses one of its own changes). */
+export const countsAfter = (counts: CriticalCounts, changed: readonly CriticalField[]): CriticalCounts =>
+  Object.fromEntries(CRITICAL_KEYS.map((k) => [k, counts[k] + (changed.includes(k) ? 1 : 0)])) as CriticalCounts;
+/** The fields that have used all their changes. */
+export const lockedFields = (counts: CriticalCounts) => CRITICAL_KEYS.filter((k) => counts[k] >= LIMITS.criticalChanges);
+
+/** "Changes left: 2 of 3" (one field's count) */
 export const changesLeftLine = (used: number) => `Changes left: ${Math.max(0, LIMITS.criticalChanges - used)} of ${LIMITS.criticalChanges}`;
 
-/** (Owner, Oct 28) The refusal always names the whole list: "You've changed the steps, NDA, questions, languages or devices 3 times since testers joined. Contact us in Settings to change them again." */
-export function criticalLine(used: number = LIMITS.criticalChanges) {
-  return `You've changed the ${CRITICAL_WORDS} ${used} times since testers joined. Contact us in Settings to change them again.`;
+/** (Owner, Oct 28 afternoon) One field's lock: "You've changed the NDA 3 times since testers joined. Contact us in Settings to change it again." */
+export function criticalLine(field: CriticalField) {
+  return `You've changed the ${CRITICAL_FIELDS[field]} ${LIMITS.criticalChanges} times since testers joined. Contact us in Settings to change it again.`;
 }
 
 /** (Owner, Oct 27) Contact us: at most 5 messages per account per day. */

@@ -126,8 +126,9 @@ model Test {
   matureWhy   String   @default("")
   /// (Design doc 4) Optional NDA: text testers must accept before joining ("" = none)
   ndaText     String   @default("")
-  /// (Owner, Oct 28) Saves that changed a limited field (the steps / What to do, the NDA, questions, required languages, required devices) after the first tester joined; the limit is 3. Prices, parts, the build link and access keys are not limited
-  criticalChanges Int  @default(0)
+  /// (Owner, Oct 28 afternoon) Per limited field, the Saves that changed it after the first tester joined: { description, ndaText, questions, languages, devices } (a missing key = 0).
+  /// Each field has its OWN limit of 3. Prices, parts, the build link and access keys are not limited
+  criticalCounts Json @default("{}")
   /// (Design doc 6, 10) An admin paused this test (it behaves like a stop for the developer, who can only stop it) or stopped it, and the note
   adminPausedAt   DateTime?
   adminStoppedAt  DateTime?

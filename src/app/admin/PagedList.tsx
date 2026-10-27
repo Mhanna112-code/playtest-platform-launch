@@ -117,7 +117,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
             <p className="flex flex-wrap items-center gap-2">
               {t.adminPaused ? <AdminButton action="unpause-test" id={t.id} label="Lift the pause" /> : <AdminButton action="pause-test" id={t.id} label="Pause" fields={[{ name: "note", label: "Why" }]} />}
               <AdminButton action="stop-test" id={t.id} label="Stop (close)" danger fields={[{ name: "note", label: "Why" }]} />
-              {t.critical >= 3 && <AdminButton action="allow-critical-changes" id={t.id} label="Allow 3 more critical changes" />}
+              {t.critical > 0 && <AdminButton action="allow-critical-changes" id={t.id} label="Allow 3 more changes of the locked fields" />}
             </p>
           )}
         </li>

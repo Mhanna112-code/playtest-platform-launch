@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, fmtTime, pronouns } from "@/lib/format";
-import { canAskToRejoin, leftText, MAX_ACTIVE_TESTS, termsDiff, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
+import { PAUSED_RIGHT_NOW, canAskToRejoin, leftText, MAX_ACTIVE_TESTS, termsDiff, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
@@ -35,7 +35,8 @@ export async function joinRefusal(testerId: string, testId: string, opts: { rejo
   if (t.status === "stopped") return "This test was stopped.";
   if (t.openUntil && t.openUntil < new Date()) return "This test isn't taking new testers any more.";
   if (t.status !== "open") return "This test isn't taking new testers any more.";
-  if (testPaused(t.developer, t)) return "This test is paused, so it isn't taking new testers right now.";
+  // (Owner, Oct 28 afternoon) Invites and applications wait while the test is paused; the join page says only this.
+  if (testPaused(t.developer, t)) return PAUSED_RIGHT_NOW;
   const old = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId } } });
   if (old?.status === "working") return "You've already joined this test.";
   if (old && (await db.rating.count({ where: { contractId: old.id } }))) return old.status === "left" && old.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't join this test again.";

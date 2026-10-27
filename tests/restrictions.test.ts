@@ -60,20 +60,20 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
     expect((await db.call.findUniqueOrThrow({ where: { id: far.id } })).status).toBe("cancelled");
   });
 
-  it("testers in the test see it paused (never why): joining and calls wait, Charge waits, Let it go works; lifting resumes it", async () => {
+  it("testers in the test see it paused (never why): joining, calls and sending wait; (batch 6) Charge goes through at once, Let it go works; lifting resumes it", async () => {
     const { dev, testId, sessionId, tester, sub } = await withWork();
     const a = await admin();
     await adm("suspend", a.cookie, { id: dev.user.id, note: "Spam" });
     const ben = await makeUser({ tester: true });
-    expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test is paused, so it isn't taking new testers right now.");
+    expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test is paused right now.");
     const r = await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), startsAt: atHours(80) });
     expect(r.body.error.message).not.toMatch(/suspend|hold|fail/i);
     await db.submission.update({ where: { id: sub.id }, data: { choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 86_400_000) } });
-    // (Owner, Oct 27) Under the team's suspension testers can only cancel booked calls (and rate): Charge and Let it go wait too. They read only "paused".
-    const ch = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "10.00", tickedCents: 1000 });
-    expect(ch.body.error.message).toBe("This test is paused right now. You can only cancel booked calls for now.");
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: seen(), confirmed: true })).body.error.message).toBe("This test is paused right now. You can only cancel booked calls for now.");
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).body.error.code).toBe("paused");
+    // (Owner, Oct 28 afternoon) Under the team's suspension with no hold a Charge is charged at once; sending waits. They read only "paused".
+    const ch = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "10.00", tickedCents: 1000, seenAt: seen(), confirmed: true });
+    expect(ch.status).toBe(200);
+    expect(ch.body.status).not.toBe("owed");
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).body.error.message).toBe("This test is paused right now. You can send this once it resumes.");
     expect((await adm("unsuspend", a.cookie, { id: dev.user.id })).status).toBe(200);
     expect(await db.testEvent.count({ where: { testId, kind: "resumed" } })).toBe(1);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "is running again" } } })).toBe(1);
@@ -198,7 +198,7 @@ describe("the team pausing or stopping a test (design doc 6)", () => {
     const e = await act(testId, "edit", dev.cookie, { version: 1, fields: { title: "x" } });
     expect(e.body.error).toMatchObject({ code: "admin_paused", failed: "Your Save on Harbor Run didn't go through" });
     const ben = await makeUser({ tester: true });
-    expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test is paused, so it isn't taking new testers right now.");
+    expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test is paused right now.");
     expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), startsAt: atHours(80) })).body.error.message).toMatch(/paused/);
     await adm("unpause-test", a.cookie, { id: testId });
     expect((await act(testId, "edit", dev.cookie, { version: (await db.test.findUniqueOrThrow({ where: { id: testId } })).version, fields: { title: "Back" } })).status).toBe(200);

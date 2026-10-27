@@ -39,7 +39,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         include: { test: { include: { developer: true } }, submissions: { include: { review: true, dispute: true } }, calls: { include: { review: true, dispute: true } } },
       })
     : [];
-  const owed = tester ? await db.payment.findMany({ where: { testerId: u.id, status: "failed", settledAt: null, owedUntil: { not: null } }, select: { submissionId: true, callId: true } }) : [];
+  const owed = tester ? await db.payment.findMany({ where: { testerId: u.id, OR: [{ status: "failed", settledAt: null, owedUntil: { not: null } }, { status: "owed" }] }, select: { submissionId: true, callId: true } }) : [];
   const owedKeys = new Set(owed.map((p) => p.submissionId ?? p.callId));
   const [paidOut, paidIn] = await Promise.all([
     dev ? db.payment.findMany({ where: { developerId: u.id, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "desc" }, take: 500 }) : [],

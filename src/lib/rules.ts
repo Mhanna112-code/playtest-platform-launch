@@ -447,11 +447,46 @@ export function shiftForHold<T extends Date | null>(d: T, holdStartedAt: Date, l
   return new Date(d.getTime() + Math.max(0, liftedAt.getTime() - holdStartedAt.getTime())) as T;
 }
 
-export const PAUSED_FOR_TESTERS = "This test is paused. Payment for your work may be delayed.";
-/** (Design doc 8) Charge / Dispute wait while a test is paused; the tester is never told why (no "hold", "suspended" ...). */
+/**
+ * (Owner, Oct 28 afternoon) What a tester can do in a paused test (a payment hold, a chargeback hold or an admin suspension of the developer). The items the owner hasn't confirmed
+ * yet are DEFAULTs: flip them here.
+ */
+export const PAUSE_DEFAULTS = {
+  /** DEFAULT: drafts stay editable while paused (written answers typed and kept, recordings uploaded); only Send is refused. false = the forms hide while paused. */
+  draftsEditable: true,
+  /** DEFAULT: chat is closed both ways while paused (the developer's Messages page is closed). false = chat stays open for the tester. */
+  chatClosed: true,
+  /** DEFAULT: the team's pause of one test (admin pause) follows the same tester rules. false = testers keep sending and chatting in a team-paused test. */
+  teamPauseSameRules: true,
+  /** DEFAULT: when a pause lifts (a hold lift, a reinstatement, the team's unpause) working testers' deadlines and Open until move later by its length. false = they stay. */
+  shiftDeadlines: true,
+} as const;
+
+/** The session page's paused notice: what still works (never why: no "hold", "suspended" ...). */
+export const PAUSED_FOR_TESTERS = `This test is paused right now. You can't send work${PAUSE_DEFAULTS.chatClosed ? " or chat" : ""} until it resumes${PAUSE_DEFAULTS.draftsEditable ? ", but you can keep writing and saving drafts" : ""}. You can still charge or let go of unreviewed work, dispute a payment, rate, leave the test and cancel booked calls. Payment for your work may be delayed.`;
+/** (Design doc 8) The tester is never told why a test is paused (no "hold", "suspended" ...). */
 export const PAUSED_RIGHT_NOW = "This test is paused right now.";
+/** (Owner, Oct 28 afternoon) Send (written answers, recordings) while the test is paused. */
+export const PAUSED_SEND = `${PAUSED_RIGHT_NOW} You can send this once it resumes.`;
+/** (Owner, Oct 28 afternoon, DEFAULT) Chat while the test is paused. */
+export const CHAT_PAUSED = "Chat is paused while the test is paused.";
+/** (Owner, Oct 28 afternoon) A Charge pressed while the developer is on a payment or chargeback hold: added to what they owe, paid when they pay it. */
+export const chargedDelayedLine = (cents: number) => `Charged ${money(cents)}. Payment may be delayed until the test resumes.`;
 /** Is a developer's test paused for its testers (a payment hold, the developer's suspension, or an admin pause)? */
 export const testPaused = (dev: { holdStartedAt?: Date | null; suspendedAt?: Date | null }, test?: { adminPausedAt?: Date | null } | null) => !!(dev.holdStartedAt || dev.suspendedAt || test?.adminPausedAt);
+/** (Owner, Oct 28 afternoon) Do the paused-test tester rules apply (no sending, chat closed)? A team pause of one test counts only with PAUSE_DEFAULTS.teamPauseSameRules. */
+export const testerPaused = (dev: { holdStartedAt?: Date | null; suspendedAt?: Date | null }, test?: { adminPausedAt?: Date | null } | null) =>
+  !!(dev.holdStartedAt || dev.suspendedAt || (PAUSE_DEFAULTS.teamPauseSameRules && test?.adminPausedAt));
+/**
+ * (Owner, Oct 28 afternoon, DEFAULT) How far a pause that ran from `start` to `now` moves deadlines, Open until and review clocks. When another pause of the same test is still on
+ * (`others`: the start of each), only the part before the earliest of them counts now: the rest is counted when that one lifts, so overlapping pauses never count twice.
+ */
+export function pauseShiftMs(start: Date, now: Date, others: (Date | null | undefined)[] = []) {
+  if (!PAUSE_DEFAULTS.shiftDeadlines) return 0;
+  const still = others.filter((d): d is Date => !!d).map((d) => d.getTime());
+  const until = still.length ? Math.min(now.getTime(), Math.min(...still)) : now.getTime();
+  return Math.max(0, until - start.getTime());
+}
 export const PAY_WAITS = "Pay what you owe first.";
 /** (Owner, Oct 27) What a tester reads while the developer owes a declined payment: Dispute and Charge wait (never "failed"). */
 export const OWED_FOR_TESTERS = "Payment from this developer is delayed right now. You can try again once it's sorted.";
@@ -545,9 +580,15 @@ export function checkCallMinutes(v: unknown): { ok: true; minutes: number } | { 
 /** (NEWEST+8) A call closes 24 hours after its planned start: no joining, no length logged any more. */
 export const CALL_CLOSE_MS = 24 * 3_600_000;
 export const callClosed = (startsAt: Date, now = new Date()) => now.getTime() >= startsAt.getTime() + CALL_CLOSE_MS;
-/** (Owner, Oct 28) A call can be requested or booked only on a test that has a Live call part (in the listing, or in that tester's contract). */
-export const hasLivePart = (test: { liveRateCents: number | null }, contract?: { liveRateCents: number | null } | null) => test.liveRateCents != null || contract?.liveRateCents != null;
-export const NO_LIVE_PART = "This test has no live call, so no calls can be requested or booked.";
+/**
+ * (Owner, Oct 28 afternoon) Calls can be requested and booked on ANY test, whether or not a live call is a listed part. A call is "listed" only when the listing has a Live call part
+ * AND it is in this tester's contract; otherwise it is "not a listed part": its pay is up to the developer (the Pay box starts empty), at most NO_LISTING_CAP_CENTS for each such call
+ * (its pay plus extras; outside the 100% cap), and Charge / Let it go never opens for it.
+ */
+export const callListed = (test: { liveRateCents: number | null }, contract: { liveRateCents: number | null }) => test.liveRateCents != null && contract.liveRateCents != null;
+/** The line shown wherever an unlisted call is requested or listed. */
+export const unlistedCallLine = (side: "tester" | "developer", devName = "the developer") =>
+  side === "tester" ? `Not a listed part: pay for this call is up to ${devName}` : `Not a listed part: pay is up to you, at most ${money(NO_LISTING_CAP_CENTS).replace(/\.00$/, "")} for this call`;
 export const NOBODY_JOINED = "Nobody joined, so the call was cancelled.";
 
 /** A declined Pay, shown under that Pay button. */

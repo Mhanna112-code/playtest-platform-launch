@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money, toCents } from "@/lib/format";
-import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, canDispute, checkDisputeDecision, delayedPayLine, declinedHoldLine, checkPay, checkReject, STRIPE_MAX_CENTS, checkExtraPay, EXTRA_PAY_CAP_PERCENT, NO_LISTING_CAP_CENTS, overListingLine, PAY_TICK_CENTS, PAY_TICK_LINE, PAUSED_RIGHT_NOW, PAY_WAITS, OWED_FOR_TESTERS, testPaused, testerShare } from "@/lib/rules";
+import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, canDispute, checkDisputeDecision, delayedPayLine, declinedHoldLine, checkPay, checkReject, STRIPE_MAX_CENTS, checkExtraPay, EXTRA_PAY_CAP_PERCENT, NO_LISTING_CAP_CENTS, overListingLine, PAY_TICK_CENTS, PAY_TICK_LINE, PAY_WAITS, testerShare } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify } from "./notify";
 import { blockedEitherWay } from "./blocks";
@@ -159,10 +159,7 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== tester.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
   const where = kind === "call" ? { callId: id } : { submissionId: id };
-  // (Owner, Oct 27) Disputes also wait while the developer owes a declined payment (the tester reads only "delayed").
-  if (await devOwes(c.test.developerId)) throw new HttpError(409, "delayed", OWED_FOR_TESTERS);
-  // (Design doc 8) Disputes wait while the test is paused.
-  if (testPaused(c.test.developer, c.test)) throw new HttpError(409, "paused", `${PAUSED_RIGHT_NOW} You can dispute once it resumes.`);
+  // (Owner, Oct 28 afternoon) Disputes work while the test is paused (and while the developer owes a declined payment): a decision for the tester during a hold is added to what is owed.
   const review = await db.review.findFirst({ where: { ...where, contractId } });
   if (review && !(await db.dispute.findFirst({ where }))) await testerGate(tester.id, contractId, c.testId, body);
   if (!review) throw new HttpError(409, "not_paid", "This hasn't been paid yet.");
@@ -216,24 +213,36 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
     const by = won?.decidedById ? await db.user.findUnique({ where: { id: won.decidedById } }) : null;
     throw new HttpError(409, "decided", `This dispute was already decided${by ? ` by ${displayName(by)}` : ""}${won?.decidedAt ? ` at ${fmtDateTime(won.decidedAt)}` : ""}.`);
   }
-  if (extra > 0 && (c.test.developer.holdStartedAt || c.test.developer.suspendedAt)) {
-    // Charged after the hold lifts (see liftHoldIfClear).
-    await db.payment.create({ data: { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, amountCents: extra, feeCents: 0, testerCents: 0, status: "deferred" } });
+  let delayed = false;
+  const owedRow = { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, amountCents: extra, feeCents: 0, testerCents: 0 };
+  if (extra > 0 && c.test.developer.holdStartedAt) {
+    // (Owner, Oct 28 afternoon) During a payment or chargeback hold the raise is added to what the developer owes ("Pay what you owe"); the tester is paid when it is paid.
+    await db.payment.create({ data: { ...owedRow, status: "owed" } });
+    await bell(c.test.developerId, `The team's decision on ${displayName(c.tester)}'s dispute (${money(extra)} more) was added to what you owe`, c.test.developer.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { payment: true, group: "payhold" });
+    delayed = true;
   } else if (extra > 0) {
+    // Charged at once, also during an admin suspension with no hold (owner, Oct 28 afternoon): a declined card starts a payment hold and the raise is owed.
     let result;
     try {
       result = await charge(c.test.developer, c.tester, extra, `dispute-${d.id}`, `Playtest: dispute decision on “${c.title}”`);
     } catch (e) {
-      await db.dispute.update({ where: { id: d.id }, data: { status: "open", decidedCents: null, decidedAt: null } });
-      throw e;
+      if (!(e instanceof HttpError && e.code === "card_failed")) {
+        await db.dispute.update({ where: { id: d.id }, data: { status: "open", decidedCents: null, decidedAt: null } });
+        throw e;
+      }
+      const failed = await db.payment.create({ data: { ...owedRow, status: "failed", failure: e.message, owedUntil: new Date() } });
+      await (await import("./holds")).declinedPayment(c.test.developerId, failed.id, extra, `the team's decision on ${displayName(c.tester)}'s dispute`);
+      delayed = true;
     }
-    await receipt(c.test.developer.email, `the dispute decision on ${displayName(c.tester)}'s work`, extra, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
-    await db.payment.create({ data: { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, ...result } });
+    if (result) {
+      await receipt(c.test.developer.email, `the dispute decision on ${displayName(c.tester)}'s work`, extra, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
+      await db.payment.create({ data: { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, ...result } });
+    }
   }
   const line = extra > 0 ? `The team raised the pay to ${money(decided!)} (${money(extra)} more).` : `The team kept the pay at ${money(review.amountCents)}${review.rejected ? " (rejected)" : ""}.`;
   await logEvent(c.testId, "admin", `The team decided ${displayName(c.tester)}'s dispute: ${line.replace(/^The team /, "").replace(/\.$/, "")}`, c.id);
   await (await import("./ratings")).maybePromptRating(c.id);
-  await notify(c.tester.email, `Your dispute on “${c.title}” was decided`, [line, ...(note ? [`Their note: “${note}”`] : [])], `/app/sessions/${c.id}#${d.callId ? "part-live" : partAnchor((await db.submission.findUnique({ where: { id: d.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers")}`, { group: "disputedecided" });
+  await notify(c.tester.email, `Your dispute on “${c.title}” was decided`, [line, ...(delayed ? ["Payment may be delayed until the test resumes."] : []), ...(note ? [`Their note: “${note}”`] : [])], `/app/sessions/${c.id}#${d.callId ? "part-live" : partAnchor((await db.submission.findUnique({ where: { id: d.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers")}`, { group: "disputedecided" });
   await notify(c.test.developer.email, `A dispute on “${c.title}” was decided`, [line, ...(note ? [`The team's note: “${note}”`] : [])], `/app/tests/${c.testId}#tester-${c.id}`, { group: "disputedecided" });
   return { extraCents: extra };
 }

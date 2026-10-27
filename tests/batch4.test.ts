@@ -14,7 +14,7 @@ import { POST as adminPOST } from "@/app/api/admin/[action]/route";
 import { GET as cronGET } from "@/app/api/cron/daily/route";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { devRestricted, restrictionKey, restrictionOf } from "@/lib/restricted";
-import { changesLeftLine, LIMITS } from "@/lib/limits";
+import { changesLeftLine, countsOf, LIMITS } from "@/lib/limits";
 import { notify, bell, sendSummaries } from "@/lib/server/notify";
 import { chargebackOpened, owed, startHold } from "@/lib/server/holds";
 import { findTests } from "@/lib/server/tests";
@@ -282,25 +282,25 @@ describe("B3) Join call", () => {
 });
 
 describe("C) Edit: 3 significant changes", () => {
-  it("(batch 5 item 2) the steps, NDA, questions, languages and devices count; prices, parts and the link don't; one Save is one change; the line reads 'Changes left: 2 of 3'", async () => {
+  it("(batch 5 item 2, batch 6 item 3) the steps, NDA, questions, languages and devices count PER FIELD; prices, parts and the link don't; the line reads 'Changes left: 2 of 3'", async () => {
     expect(changesLeftLine(1)).toBe("Changes left: 2 of 3");
     expect(changesLeftLine(3)).toBe("Changes left: 0 of 3");
     const { dev, testId } = await setup();
     await joined(testId);
     const ver = async () => (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { ndaText: "Secret", questions: ["A?"] } })).status).toBe(200);
-    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalChanges).toBe(1); // many fields, one change
-    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { languages: ["English"] } })).status).toBe(200);
-    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { devices: ["Windows PC"] } })).status).toBe(200);
+    expect(countsOf((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).toMatchObject({ ndaText: 1, questions: 1, description: 0 }); // one change of each
+    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { ndaText: "Two" } })).status).toBe(200);
+    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { ndaText: "Three" } })).status).toBe(200);
     const fourth = await act(testId, "edit", dev.cookie, { version: await ver(), fields: { ndaText: "Another" } });
     expect(fourth.status).toBe(400);
     expect(fourth.body.error.critical).toEqual(["ndaText"]);
     // Not limited: prices, parts and the build link.
     expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { writtenCents: "11.00", liveRateCents: "40.00", buildUrl: "https://example.com/z", liveRequired: true } })).status).toBe(200);
-    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalChanges).toBe(3);
+    expect(countsOf((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).toMatchObject({ ndaText: 3, questions: 1, languages: 0, devices: 0, description: 0 });
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain("changesLeftLine");
-    expect(form).toContain("disabled={limitReached}");
+    expect(form).toContain('disabled={fieldLocked("ndaText")}');
   });
 });
 
@@ -350,14 +350,14 @@ describe("D) testers", () => {
     expect(await db.notification.count({ where: { userId: tester.user.id, reminderKey: `rate:${sessionId}` } })).toBe(0);
   });
 
-  it("'Chat with <name>' works both ways and is refused with the same words when a side is suspended or held", async () => {
+  it("'Chat with <name>' works both ways and is refused when a side is suspended or held (batch 6: a tester reads that chat is paused)", async () => {
     const { dev, sessionId, tester } = await sentWork();
     const open = (cookie: string) => chatOpenPOST(req("/api/chat/open", { cookie, body: { contractId: sessionId } })).then(json);
     expect((await open(dev.cookie)).status).toBe(200);
     expect((await open(tester.cookie)).status).toBe(200);
     await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: new Date(), holdReason: "unpaid" } });
     expect((await open(dev.cookie)).body.error.message).toBe("Unable to chat with this tester.");
-    expect((await open(tester.cookie)).body.error.message).toBe("Unable to chat with this developer.");
+    expect((await open(tester.cookie)).body.error.message).toBe("Chat is paused while the test is paused.");
     expect(src("components/PersonHover.tsx")).toContain("chat?: ReactNode");
     expect(src("app/app/tests/[id]/TestersJoined.tsx")).toContain("seat.chat");
   });
@@ -384,19 +384,15 @@ describe("D) testers", () => {
 import { GET as pulseGET } from "@/app/api/pulse/route";
 import { alertOf } from "@/lib/alerts";
 
-describe("follow-up 1) no calls on a test without a Live call part", () => {
-  it("a request is refused on the server for good (developer and tester); the form is hidden", async () => {
+describe("follow-up 1) (undone by batch 6 item 1) calls on a test without a Live call part", () => {
+  it("a request is allowed again on both sides (see batch6.test.ts)", async () => {
     const { dev, testId } = await setup({ liveRateCents: null });
     const { tester, sessionId } = await joined(testId);
     const startsAt = new Date(Date.now() + 48 * 3_600_000).toISOString();
-    const d = await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt });
-    expect(d.status).toBe(409);
-    expect(d.body.error).toMatchObject({ code: "no_live", message: "This test has no live call, so no calls can be requested or booked." });
-    const t = await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt });
-    expect(t.body.error.code).toBe("no_live");
-    expect(await db.callRequest.count({ where: { testId } })).toBe(0);
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("&& hasLive}");
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("hasLivePart(c.test, c)");
+    expect((await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt })).status).toBe(200);
+    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: new Date(Date.now() + 72 * 3_600_000).toISOString() })).status).toBe(200);
+    expect(await db.callRequest.count({ where: { testId } })).toBe(2);
+    expect(src("app/app/sessions/[id]/page.tsx")).not.toContain("hasLivePart");
   });
 });
 
@@ -443,8 +439,8 @@ describe("follow-up 4) the redirect for a restricted developer", () => {
 });
 
 describe("follow-up 5, 7, 8, 9, 10) cards, the mistakes line, End early, profile stops, drafts", () => {
-  it("an Open test has no label on its card (a full one too)", () => {
-    expect(src("app/app/page.tsx")).toContain('t.status === "open" ? null : <StatusPill status={t.status} />');
+  it("(undone by batch 6 item 2) an Open test's card shows Accepting testers or Full", () => {
+    expect(src("app/app/page.tsx")).toContain("<StatusPill status={t.status} full={inIt.length >= t.spots} />");
   });
 
   it("'Fix the N mistakes above…' sits above the Save / Post button", () => {
@@ -487,12 +483,12 @@ describe("follow-up 6) one Save in another tab is one line in one voice, and 'Ch
     const { dev, testId } = await setup();
     const { GET } = await import("@/app/api/tests/[id]/[action]/route");
     const read = async () => (await json(await GET(req(`/api/tests/${testId}/listing`, { cookie: dev.cookie }), { params: Promise.resolve({ id: testId, action: "listing" }) }))).body;
-    expect(await read()).toMatchObject({ criticalChanges: 0, everJoined: false });
+    expect(await read()).toMatchObject({ criticalCounts: { description: 0, ndaText: 0, questions: 0, languages: 0, devices: 0 }, everJoined: false });
     await joined(testId);
-    await db.test.update({ where: { id: testId }, data: { criticalChanges: 2 } });
-    expect(await read()).toMatchObject({ criticalChanges: 2, everJoined: true });
+    await db.test.update({ where: { id: testId }, data: { criticalCounts: { ndaText: 2 } } });
+    expect(await read()).toMatchObject({ criticalCounts: { ndaText: 2, devices: 0 }, everJoined: true });
     const form = src("app/app/tests/TestForm.tsx");
-    expect(form).toContain("setCritUsed(r.criticalChanges)");
+    expect(form).toContain("setCritCounts(countsOf(r.criticalCounts))");
   });
 });
 

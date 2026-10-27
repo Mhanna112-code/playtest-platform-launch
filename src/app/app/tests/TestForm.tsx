@@ -10,7 +10,7 @@ import { Choices } from "@/components/Choices";
 import { api, ApiError, isFieldError } from "@/lib/client";
 import { NotSentTag, useKept } from "@/lib/useKept";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
-import { CRITICAL_WORDS, LIMITS, changesLeftLine, criticalLine, isCritical } from "@/lib/limits";
+import { LIMITS, changesLeftLine, countsOf, criticalLine, isCritical, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { keyNeedLine, parseKeys } from "@/lib/keys";
 import { HIGH_PART_CENTS, HIGH_PART_TICK, openUntilNeeded, type Listing } from "@/lib/rules";
 import { toCents } from "@/lib/format";
@@ -89,8 +89,8 @@ type EditProps = {
   id: string; version: number; testersIn: number; draft: boolean; seenAt?: string;
   /** The access keys now (Edit's In use / Free boxes). */
   keys: KeysData;
-  /** Saves that changed a critical field since the first tester joined, and whether any tester has joined yet. */
-  criticalUsed: number; everJoined: boolean;
+  /** (Owner, Oct 28 afternoon) Per limited field, the Saves that changed it since the first tester joined; and whether any tester has joined yet. */
+  criticalCounts: CriticalCounts; everJoined: boolean;
   /** When the test opened (the deadline must leave 3 days inside Open until from here). */
   openedAt: string;
 };
@@ -109,8 +109,8 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
   // (Owner) When the box last updated: the next Save goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const [version, setVersion] = useState(edit?.version ?? 0);
-  // (Owner, Oct 28) "Changes left: N of 3" follows another tab's Save live.
-  const [critUsed, setCritUsed] = useState(edit?.criticalUsed ?? 0);
+  // (Owner, Oct 28) Each field's "Changes left: N of 3" follows another tab's Save live.
+  const [critCounts, setCritCounts] = useState<CriticalCounts>(edit?.criticalCounts ?? countsOf({}));
   const [everJoined, setEverJoined] = useState(edit?.everJoined ?? false);
   const [critical, setCritical] = useState<string[]>([]);
   // (Owner, Oct 27) "I confirm this part pays more than $200." per part.
@@ -149,17 +149,20 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
   const changedKeys = useMemo(() => (edit ? (Object.keys(f) as (keyof F)[]).filter((k) => JSON.stringify(f[k]) !== JSON.stringify(base[k])) : []), [f, base, edit]);
   const keysChanged = parseKeys(keysText).length > 0 || keysRemove.length > 0;
   const nothingChanged = !!edit && changedKeys.length === 0 && !keysChanged;
-  // (5) After the third change to a critical field, editing it again doesn't save: the field is red and a line says so.
-  const apiOf = (ks: (keyof F)[]) => ks.flatMap((k) => API_FIELDS[k]);
-  const critNow = edit ? [...new Set(apiOf(changedKeys).filter(isCritical))] : [];
-  const locked = !!edit && everJoined && critUsed >= LIMITS.criticalChanges && critNow.length > 0;
-  const lockedKey = (k: keyof F) => locked && changedKeys.includes(k) && API_FIELDS[k].some(isCritical);
-  const lockLine = locked ? criticalLine(critUsed) : "";
-  // (Owner, Oct 28) Once a tester has joined, Saves that change the steps, the NDA, questions, required languages or required devices are limited to 3 (one Save counts once; prices, parts,
-  // the build link and access keys are not limited). "Changes left: 2 of 3"
-  // sits near Save; after the 3rd those fields are locked, with a note, and the rest stay editable.
+  // (Owner, Oct 28 afternoon) Once a tester has joined, each limited field (the steps, the NDA, questions, required languages, required devices) has its OWN 3 changes (one Save that
+  // changes two of them uses one change of each; prices, parts, the build link and access keys are not limited). "Changes left: N of 3" sits next to each field's label; a field
+  // at 0 locks with its note, and the other fields stay editable.
   const limited = !!edit && everJoined;
-  const limitReached = limited && critUsed >= LIMITS.criticalChanges;
+  const fieldLocked = (f: CriticalField) => limited && critCounts[f] >= LIMITS.criticalChanges;
+  // A field changed here that another tab's Save locked meanwhile doesn't save: the field is red and its line says so.
+  const apiOf = (ks: (keyof F)[]) => ks.flatMap((k) => API_FIELDS[k]);
+  const lockedNow = edit ? [...new Set(apiOf(changedKeys).filter(isCritical))].filter(fieldLocked) : [];
+  const locked = lockedNow.length > 0;
+  const lockedKey = (k: keyof F) => locked && changedKeys.includes(k) && API_FIELDS[k].some((a) => isCritical(a) && lockedNow.includes(a));
+  /** "Changes left: 2 of 3" next to a limited field's label (Edit, once a tester has joined). */
+  const left = (f: CriticalField) => (limited ? <span className="ml-2 text-xs font-normal text-slate-500" data-changes-left={f}>{changesLeftLine(critCounts[f])}</span> : null);
+  /** The lock note under a field that used its 3 changes. */
+  const lockNote = (f: CriticalField) => (fieldLocked(f) ? <p className="info mt-1" data-critical-locked={f}>{criticalLine(f)}</p> : null);
 
   // (4/11.5) The deadline must leave 3 days inside Open until, counted from when the test opened.
   const dl = Number(f.deadlineDays);
@@ -223,9 +226,9 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
     if (!edit) return;
     let alive = true;
     const tick = async () => {
-      const r = await api<{ version: number; listing: Listing; keys: KeysData; at: string; criticalChanges?: number; everJoined?: boolean }>(`/api/tests/${edit.id}/listing`).catch(() => null);
+      const r = await api<{ version: number; listing: Listing; keys: KeysData; at: string; criticalCounts?: CriticalCounts; everJoined?: boolean }>(`/api/tests/${edit.id}/listing`).catch(() => null);
       if (!r || !alive) return;
-      if (typeof r.criticalChanges === "number") setCritUsed(r.criticalChanges);
+      if (r.criticalCounts) setCritCounts(countsOf(r.criticalCounts));
       if (typeof r.everJoined === "boolean") setEverJoined(r.everJoined);
       if (r.version !== versionRef.current) {
         live.current.applyElsewhere(r.listing, r.at, { free: r.keys.free.map((k) => k.value) });
@@ -277,7 +280,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
         setListingEdited(err.data.listingEdited === true);
         setErrs(Array.isArray(err.data.errors) ? (err.data.errors as string[]) : []);
         if (typeof err.data.version === "number") setVersion(err.data.version);
-        if (typeof err.data.criticalChanges === "number") setCritUsed(err.data.criticalChanges);
+        if (err.data.criticalCounts) setCritCounts(countsOf(err.data.criticalCounts));
         if (err.data.current) applyElsewhere(err.data.current as Listing, typeof err.data.now === "string" ? err.data.now : new Date().toISOString(), err.data.keys ? { free: (err.data.keys as { free: string[] }).free } : null);
       }
       else if (err instanceof ApiError && !isFieldError(err)) {
@@ -288,6 +291,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
         setChanges(null);
         setErrs(err instanceof ApiError && Array.isArray(err.data.errors) ? (err.data.errors as string[]) : [(err as Error).message]);
         if (err instanceof ApiError && Array.isArray(err.data.critical)) setCritical(err.data.critical as string[]);
+        if (err instanceof ApiError && err.data.criticalCounts) setCritCounts(countsOf(err.data.criticalCounts));
       }
     } finally {
       setBusy(false);
@@ -327,9 +331,10 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
         {text("productName", "Product", { req: true, ph: "Harbor Run", max: LIMITS.productName, attrs: { "data-required-msg": "Enter the product name." } })}
         {text("title", "Name of this test", { req: true, ph: "First 3 levels", max: LIMITS.testName, attrs: { "data-required-msg": "Give the test a title." } })}
         <div>
-          <label className="label req" htmlFor="description">What should testers do?</label>
-          <textarea id="description" rows={4} disabled={limitReached} className={"input" + (bad("description") ? " field-bad" : "")} value={f.description} maxLength={LIMITS.whatToDo} data-required="" data-required-msg="Say what testers should do." onBlur={() => leave("description")} onChange={(e) => set({ description: e.target.value })} />
+          <label className="label req" htmlFor="description">What should testers do?{left("description")}</label>
+          <textarea id="description" rows={4} disabled={fieldLocked("description")} className={"input" + (bad("description") ? " field-bad" : "")} value={f.description} maxLength={LIMITS.whatToDo} data-required="" data-required-msg="Say what testers should do." onBlur={() => leave("description")} onChange={(e) => set({ description: e.target.value })} />
           <p className="mt-1 text-right text-xs text-slate-500" aria-hidden>{f.description.length}/{LIMITS.whatToDo.toLocaleString("en-US")}</p>
+          {lockNote("description")}
           {note("description")}
         </div>
         {text("buildUrl", "Link to the product or build", { ph: "https://…" })}
@@ -345,13 +350,15 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
           </div>
           {note("categories")}
         </fieldset>
-        {/* (Owner, Oct 28) Required languages and devices are limited fields: locked after the 3rd change since testers joined. */}
-        <fieldset disabled={limitReached} data-locked={limitReached ? "" : undefined} className={lockedKey("languages") ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}>
-          <Choices label="Language requirements (any one)" options={LANGUAGES} value={f.languages} onChange={(languages) => set({ languages })} />
+        {/* (Owner, Oct 28 afternoon) Required languages and devices are limited fields: each locks after its own 3rd change since testers joined. */}
+        <fieldset disabled={fieldLocked("languages")} data-locked={fieldLocked("languages") ? "" : undefined} className={lockedKey("languages") ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}>
+          <Choices label="Language requirements (any one)" aside={left("languages")} options={LANGUAGES} value={f.languages} onChange={(languages) => set({ languages })} />
+          {lockNote("languages")}
           {note("languages")}
         </fieldset>
-        <fieldset disabled={limitReached} data-locked={limitReached ? "" : undefined} className={lockedKey("devices") ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}>
-          <Choices label="Technology requirements: devices, platforms or skills (any one; none ticked = any)" options={DEVICES} value={f.devices} onChange={(devices) => set({ devices })} />
+        <fieldset disabled={fieldLocked("devices")} data-locked={fieldLocked("devices") ? "" : undefined} className={lockedKey("devices") ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}>
+          <Choices label="Technology requirements: devices, platforms or skills (any one; none ticked = any)" aside={left("devices")} options={DEVICES} value={f.devices} onChange={(devices) => set({ devices })} />
+          {lockNote("devices")}
           {note("devices")}
         </fieldset>
         {/* (4) Mature (18+): ticking it shows the required "why" at once. */}
@@ -424,20 +431,21 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
         </fieldset>
         {f.written && (
           <div className={lockedKey("questions") ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}>
-            <label className="label req" htmlFor="questions">Your questions (one per line)</label>
-            <textarea id="questions" rows={4} disabled={limitReached} className="input" value={f.questions} onChange={(e) => set({ questions: e.target.value })} placeholder={"What did you like?\nWhere did you get stuck?"} />
+            <label className="label req" htmlFor="questions">Your questions (one per line){left("questions")}</label>
+            <textarea id="questions" rows={4} disabled={fieldLocked("questions")} className="input" value={f.questions} onChange={(e) => set({ questions: e.target.value })} placeholder={"What did you like?\nWhere did you get stuck?"} />
             {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).length > 0 && (
               <ul className="mt-2 space-y-1">
                 {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (
                   <li key={q} className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm">
                     <span className="min-w-0 break-words text-ink-200">{q}</span>
                     <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-ink-300">
-                      <input type="checkbox" disabled={limitReached} checked={f.optionalQs.includes(q)} onChange={(e) => set({ optionalQs: e.target.checked ? [...f.optionalQs, q] : f.optionalQs.filter((x) => x !== q) })} /> Not required
+                      <input type="checkbox" disabled={fieldLocked("questions")} checked={f.optionalQs.includes(q)} onChange={(e) => set({ optionalQs: e.target.checked ? [...f.optionalQs, q] : f.optionalQs.filter((x) => x !== q) })} /> Not required
                     </label>
                   </li>
                 ))}
               </ul>
             )}
+            {lockNote("questions")}
             {note("questions")}
           </div>
         )}
@@ -474,8 +482,9 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
       <div className="panel">
         <h2>Optional</h2>
         <div>
-          <label className="label" htmlFor="ndaText">NDA (testers must accept it before joining)</label>
-          <textarea id="ndaText" rows={4} disabled={limitReached} className="input" maxLength={LIMITS.nda} value={f.ndaText} onChange={(e) => set({ ndaText: e.target.value })} placeholder="Leave empty for no NDA. Testers accept this text before they join; changing it later is a new offer they accept." />
+          <label className="label" htmlFor="ndaText">NDA (testers must accept it before joining){left("ndaText")}</label>
+          <textarea id="ndaText" rows={4} disabled={fieldLocked("ndaText")} className="input" maxLength={LIMITS.nda} value={f.ndaText} onChange={(e) => set({ ndaText: e.target.value })} placeholder="Leave empty for no NDA. Testers accept this text before they join; changing it later is a new offer they accept." />
+          {lockNote("ndaText")}
           {note("ndaText")}
         </div>
         {edit ? (
@@ -506,10 +515,8 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
           <button className="btn" disabled={busy || nothingChanged} aria-disabled={nothingChanged} title={nothingChanged ? "Nothing has changed yet" : undefined}>{busy ? "Saving…" : edit ? "Save" : "Post the test"}</button>
           {keep.restored && <NotSentTag />}
         </div>
-        {limited && <p className="note" data-changes-left="">{changesLeftLine(critUsed)} <span className="text-slate-500">(saves that change the {CRITICAL_WORDS})</span></p>}
-        {limitReached && <p className="info" data-critical-locked="">You&apos;ve changed the {CRITICAL_WORDS} {LIMITS.criticalChanges} times since testers joined, so those fields are locked. Contact us in Settings to change them again. Everything else stays editable.</p>}
         {saved && <p className="ok">{saved}</p>}
-        {lockLine && pressed && <p className="err-field" role="alert" data-critical-limit="">{lockLine}</p>}
+        {locked && pressed && lockedNow.map((f) => <p key={f} className="err-field" role="alert" data-critical-limit={f}>{criticalLine(f)}</p>)}
         <Err text={refusal} />
         <ChangesBox changes={changes} tail={listingEdited ? "Press Save again to save your changes (fields you didn't touch keep the newer values)." : "Press Save again to save."} />
       </div>

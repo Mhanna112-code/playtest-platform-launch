@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { displayName, pronouns } from "@/lib/format";
-import { isLate, payByFrom } from "@/lib/rules";
+import { PAUSED_SEND, isLate, payByFrom, testerPaused } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { MAX_RECORDING_BYTES, MAX_RECORDINGS, uploadTarget } from "./storage";
@@ -40,6 +40,8 @@ export async function finishRecording(tester: U, contractId: string, body: Recor
 /** Send the uploaded recordings (or send them again with new ones, until paid). */
 export async function sendRecording(tester: U, contractId: string, body: Record<string, unknown> = {}) {
   const c0 = await ownContract(tester.id, contractId);
+  // (Owner, Oct 28 afternoon) No sending while the test is paused (uploads, the drafts, still work).
+  if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", PAUSED_SEND);
   await testerTermsGate(contractId, displayName(c0.test.developer), body);
 
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
