@@ -109,7 +109,9 @@ Each object's states, and where people see them.
 - Email confirmation is needed only for Post a test, Join, Apply and accepting an invite. A blocked press shows, under the button: "Confirm your email first. We sent a link to <email>." with "Resend the link". The server checks too.
 - On a local setup with confirmation switched off (SKIP_EMAIL_CONFIRM=1), a strip under the header says "Email confirmation is off for testing." It never shows in production.
 - Names need at least 1 character, nothing else.
-- Deleted account: every open tab logs out with a red "This account no longer exists". [IN I]
+- Deleted account: every open tab logs out with a red "This account no longer exists".
+
+  [image: Kai deleted their account in another tab: this tab is signed out with the red notice.]
 
 ### Long lists
 
@@ -135,7 +137,9 @@ Each object's states, and where people see them.
 
 A payment hold, a chargeback hold and an admin suspension do the same thing to a developer's pages. Causes, timers and lifting are in Rules.
 
-- **Routing.** Every open page of that developer moves live to the dashboard top; on the dashboard it scrolls up. Every press is checked on the server, and a refused press sends them there too. [IN V]
+- **Routing.** Every open page of that developer moves live to the dashboard top; on the dashboard it scrolls up. Every press is checked on the server, and a refused press sends them there too.
+
+  [video: A payment hold starts while the test page (left) and Edit (right) are open: both move to the dashboard top, where the blue box explains.]
 - **Blue box at the dashboard top** (never red). It says:
   - if they just pressed something, "Your <press> on <test> didn't go through";
   - their account is suspended, or on hold (payment or chargeback);
@@ -278,7 +282,9 @@ From Every page: the live box, long lists, number format, and the blue box when 
 
 ### What's on it (top to bottom)
 
-- **Blue box**, only during a hold or suspension. [IN I]
+- **Blue box**, only during a hold or suspension.
+
+  [image: Payment hold: the blue box at the top of the developer dashboard.]
 - **"Your account is active again · <time>"** for 3 days after a reinstatement.
 - **Welcome line** with a "Post a test" shortcut next to the name.
 - **Stat tiles:** Parts to review, Testers joined (all tests), Spent so far (accepted work), Pays on average, Typical review, Rating. Big numbers shorten. The tester-limit card ("Can take up to N testers per test") is on Profile (Shared pages).
@@ -286,8 +292,22 @@ From Every page: the live box, long lists, number format, and the blue box when 
 - **Needs you:** applications, rejoin asks, call requests and disputes from every test, newest first. Each opens its row on the test page.
 - **Calls:** every booked call, soonest first. Join appears only when the call can be joined. Each row opens the call on the test page, where it can be cancelled.
 - **Your tests:** one card per test. Category icon left of the name; tags under the title (who can join, days per tester, Open until, keys left, invites waiting, applications, unread messages, Mature, NDA); a status label; feedback bars with stats at the bottom right. Clicking a card opens the test page.
-  - [IN I]x3: three very different tests (a game test with written answers, a recording and live calls; a free web-app test; an invite-only test with access keys).
-  - [IN I]x4: an open test with work waiting, a full test, a paused test (payment hold), a stopped test.
+  - Three very different tests (a game test with written answers, a recording and live calls; a free web-app test; an invite-only test with access keys).
+
+    [image: A game test with written answers, a recording and live calls.]
+
+    [image: A free web-app test (Finance, Productivity): its written answers pay nothing.]
+
+    [image: An invite-only test with access keys and an NDA.]
+  - An open test with work waiting, a full test, a paused test (payment hold), a stopped test.
+
+    [image: An open test with work waiting for review.]
+
+    [image: A full test: 2 of 2 spots taken.]
+
+    [image: A paused test: the developer is on a payment hold.]
+
+    [image: A stopped test.]
 - There is no pause countdown; the daily bell reminder says when a paused test closes.
 
 ### Buttons
@@ -307,7 +327,11 @@ From Every page: the live box, long lists, number format, and the blue box when 
 
 ### How it looks in each state
 
-- **Test** (on its card): Draft (a next round, not yet open); Open (no label); Paused ("Paused: account suspended / payment hold / chargeback hold / paused by the team"); Stopped (a Stopped label); Closed ("Closed after 7 days paused"). [IN I]x2
+- **Test** (on its card): Draft (a next round, not yet open); Open (no label); Paused ("Paused: account suspended / payment hold / chargeback hold / paused by the team"); Stopped (a Stopped label); Closed ("Closed after 7 days paused").
+
+  [image: Draft: the next round, not open yet.]
+
+  [image: Closed after 7 days paused.]
 - **Account active:** as above.
 - **Payment hold, chargeback hold or suspended:** the blue box at the top; Needs review and Needs you are hidden; cards don't open; Calls rows get their own Cancel ▾; Post a test leaves the header.
 - **Deleted:** every tab logs out.
@@ -327,13 +351,17 @@ From Every page: red field checks, kept drafts ("Not sent yet"), ranges shown ne
 
 ### What's on it
 
-"* marks required" at the top. [IN I] The form has four panels.
+"* marks required" at the top. The form has four panels.
+
+[image: The top of Post a test: “* marks the fields you have to fill in”.]
 
 **What are testers trying?**
 
 1. **Product** (up to 60 characters): the game, website, app or other product.
 2. **Name of this test** (required, up to 60).
-3. **What should testers do** (required, up to 1,000). Counters show on all three. [IN I]
+3. **What should testers do** (required, up to 1,000). Counters show on all three.
+
+   [image: Counters on Product (up to 60), Name of this test (up to 60) and What should testers do (up to 1,000).]
 4. **Link to the product or build** (must start with https://).
 5. **Categories** (at least 1): Game, Productivity, Social, Entertainment, Education, Health & fitness, Finance, Shopping, Business, Developer tools, AI, Other.
 6. **Languages** and **devices, platforms or skills** needed.
@@ -366,12 +394,24 @@ All numbers are in Rules.
 
 ### Buttons
 
-- **Post the test:** checks everything, then opens the test and lists it according to who can join: Find tests for Anyone and Approved only; invites only for Invite only. Before posting, the developer sees the parts, prices, spots, deadlines and who can join. [IN I] [IN V] [IN I]x2
+- **Post the test:** checks everything, then opens the test and lists it according to who can join: Find tests for Anyone and Approved only; invites only for Invite only. Before posting, the developer sees the parts, prices, spots, deadlines and who can join. [IN I]
+
+  [video: Filling in the four panels, pressing Post the test, landing on the new test's page.]
+
+  [image: Anyone can join: the new test shows in testers' Find tests.]
+
+  [image: Invite only: not in Find tests; the invited tester sees the invite on their dashboard.]
   - Elsewhere: the test appears in Find tests and in matching testers' "New tests for you" (Tester dashboard, Find tests and the join page), and the developer lands on Developer test page.
 
 ### What can stop a press
 
-- **Red, at the field** (when you leave the field, and on Post; the server checks too). [IN V] [IN I]x2
+- **Red, at the field** (when you leave the field, and on Post; the server checks too).
+
+  [video: Each box turns red when you leave it; Post then finds what only the server checks (a link without https://, a key typed twice).]
+
+  [image: Red when you leave the field: required fields empty, a price under $1, spots over the limit.]
+
+  [image: Red: a 10-day deadline needs Open until later, and there are fewer keys than spots.]
   - A required field left empty.
   - A price outside its range, or over $200 without the tick.
   - The deadline doesn't leave 3 days before Open until: "Set Open until to Nov 12 or later to allow a 10-day deadline."
@@ -404,7 +444,9 @@ From Every page: the live box, stop-once, red field checks, kept drafts, long li
   - **Free:** add keys, or remove them while the free keys still cover the open spots. Free keys go to new testers automatically.
 - **"Changes left: 2 of 3"** near Save, once a tester has joined.
 - **Save**, faded and doing nothing while nothing changed.
-- **The live box** sits under Save. [IN I]
+- **The live box** sits under Save.
+
+  [image: Edit's live box sits under Save: Ana sent her written answers while Edit was open.]
 
 ### Buttons
 
@@ -418,18 +460,44 @@ From Every page: the live box, stop-once, red field checks, kept drafts, long li
   - **More spots** tells invited testers "A spot opened on <test>…"; filling the test closes applications and keeps invites open.
   - **Title only** changes are info for everyone and never stop a press.
   - Under Save: "Saved. Offered the new terms to N…". When a tester later Switches or Keeps, the top box shows "Ana switched to the new terms" with "See their contract", which opens the test page at that tester's row in a new tab.
-- **3 changes after the first join.** Saves that change part prices, parts, questions, steps (What should testers do), the build link or the NDA are limited to 3 once a tester has joined. One Save counts once, however many fields it changes. After 3, those fields are locked with a note: "You've changed the <fields> 3 times since testers joined. Contact us in Settings to change them again." Other fields stay editable. An admin can "Allow 3 more" (Administrator console). [IN I]
+- **3 changes after the first join.** Saves that change part prices, parts, questions, steps (What should testers do), the build link or the NDA are limited to 3 once a tester has joined. One Save counts once, however many fields it changes. After 3, those fields are locked with a note: "You've changed the <fields> 3 times since testers joined. Contact us in Settings to change them again." Other fields stay editable. An admin can "Allow 3 more" (Administrator console).
+
+  [image: After 3 saves that changed the steps: “Changes left: 0 of 3” near Save and the locked note.]
 - **Dates.**
-  - Open until can only move later, before it passes: "Open until can only be extended: it's <date> now." Once passed: "Joining closed on <date> (Open until), so it can't be extended." [IN I]
-  - A new deadline applies to new testers. It can lengthen working testers' deadlines but never shorten them. It must leave 3 days before Open until: "Extend Open until to Nov 12 or later to allow a 10-day deadline." [IN I]
-- **Access keys.** A key that's in use, was given to a tester who left, or was reported as not working can't be added again (red). [IN I]x2 Testers whose key doesn't work never get a new one automatically; the developer assigns one from the yellow box on Developer test page. When such a tester leaves, the key leaves In use; it comes back only if they confirm it works when they rejoin.
+  - Open until can only move later, before it passes: "Open until can only be extended: it's <date> now." Once passed: "Joining closed on <date> (Open until), so it can't be extended."
+
+    [image: Open until can only move later: an earlier date is red.]
+  - A new deadline applies to new testers. It can lengthen working testers' deadlines but never shorten them. It must leave 3 days before Open until: "Extend Open until to Nov 12 or later to allow a 10-day deadline."
+
+    [image: A 30-day deadline needs Open until 3 days later: red under both fields.]
+- **Access keys.** A key that's in use, was given to a tester who left, or was reported as not working can't be added again (red). Testers whose key doesn't work never get a new one automatically; the developer assigns one from the yellow box on Developer test page. When such a tester leaves, the key leaves In use; it comes back only if they confirm it works when they rejoin.
+
+  [image: A key in use can't be added again (red).]
+
+  [image: Keys reported as not working, or given to a tester who left, can't be added again.]
 
 ### What can stop a press
 
-- **Changed in another tab or device.** Save stops once. Each field changed elsewhere updates here with a blue note under it, "Changed in another tab or device at <time>", saying what changed (an expand arrow when it's over two lines: keys, questions, instructions). Fields not changed there keep what you typed. Under Save: "This test changed since you opened Edit. Press Save again to save your changes on top." [IN I]x3 [IN V]
+- **Changed in another tab or device.** Save stops once. Each field changed elsewhere updates here with a blue note under it, "Changed in another tab or device at <time>", saying what changed (an expand arrow when it's over two lines: keys, questions, instructions). Fields not changed there keep what you typed. Under Save: "This test changed since you opened Edit. Press Save again to save your changes on top."
+
+  [video: Two tabs on Edit; the right one saves new instructions and keys, then the left one's Save stops once and its fields update with blue notes.]
+
+  [image: Another tab saved new instructions: the field updates with a blue note under it.]
+
+  [image: Keys added in another tab: the blue note under the key boxes.]
+
+  [image: Save stops once: “Since you opened this page” lists the other tab's saves; press Save again to save on top.]
 - **Other changes** (joins, work sent, calls and so on, as set in Alerts) stop Save once, listed under it.
-- **A field can be red and blue at once**, e.g. fewer access keys than open spots after another tab added spots. [IN I]x3
-- **Always refused:** "This test was stopped." If an admin stops or pauses the test while it's being edited, Save is refused and the developer goes back to the test page, whose banner names the press that didn't go through. [IN V]
+- **A field can be red and blue at once**, e.g. fewer access keys than open spots after another tab added spots.
+
+  [image: You ticked a key to remove; another tab added a spot (blue): now fewer free keys than open spots (red).]
+
+  [image: You typed a 40-day deadline; another tab moved Open until later (blue), still too early for it (red).]
+
+  [image: You ticked one key to remove; another tab removed another (blue): the free keys no longer cover the open spots (red).]
+- **Always refused:** "This test was stopped." If an admin stops or pauses the test while it's being edited, Save is refused and the developer goes back to the test page, whose banner names the press that didn't go through.
+
+  [video: The team stops the test while Edit is open; Save is refused and the test page's banner names the Save that didn't go through.]
 
 ### How it looks in each state
 
@@ -454,17 +522,37 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
 
 ### What's on it (top to bottom; every panel folds)
 
-1. **Overview** [IN I]: title, status pill, who-can-join badge, category, part and deadline badges, keys-left badge, "terms · spots", and "Open until <date>" on the right (changed only in Edit test). Buttons: Edit, Alerts, Next round (or "Go to the next round"), End early, Stop.
+1. **Overview**: title, status pill, who-can-join badge, category, part and deadline badges, keys-left badge, "terms · spots", and "Open until <date>" on the right (changed only in Edit test). Buttons: Edit, Alerts, Next round (or "Go to the next round"), End early, Stop.
+
+   [image: Overview: title, status, badges, terms and spots, Open until, and the Edit, Alerts, Next round, End early and Stop buttons.]
 2. **Banners** when they apply: the team stopped or paused the test; the test was closed after a pause (with the reason); the stopped line; "<test> closes in …" when under 3 days are left.
-3. **Live box** [IN V]. It also shows contract news, e.g. "Ana switched to the new terms" with "See their contract" (scrolls to Ana's row with her contract shown), and a new dispute, linking to its Needs you row.
+3. **Live box**. It also shows contract news, e.g. "Ana switched to the new terms" with "See their contract" (scrolls to Ana's row with her contract shown), and a new dispute, linking to its Needs you row.
+
+   [video: Ana (right, phone) sends her answers and switches to the new terms; the developer's live box updates and See their contract scrolls to her row.]
 4. **Yellow keys box** (quiet, never stops a press): how many testers report a key not working, the 3 most recent, "Show N more", and "Assign a free key" on each row. Key rules are in Edit test.
-5. **Needs you** [IN I], grouped per person, each with a fold for their sent parts: Pay or Reject for each sent piece; applications (Accept, Decline); rejoin asks (with the time they'd get back); call requests; calls waiting for a length or for Pay; disputes waiting for the developer's side; testers waiting to be rated. [IN I]x2
-6. **Testers** [IN I]:
+5. **Needs you**, grouped per person, each with a fold for their sent parts: Pay or Reject for each sent piece; applications (Accept, Decline); rejoin asks (with the time they'd get back); call requests; calls waiting for a length or for Pay; disputes waiting for the developer's side; testers waiting to be rated.
+
+   [image: Needs you, grouped per person: Pay or Reject for sent work, a call waiting for its length, a dispute waiting for the developer's side.]
+
+   [image: On an Approved-only test: applications to Accept or Decline, and a rejoin ask with the time they'd get back.]
+
+   [image: A dispute waiting for the developer's side, and a call that happened waiting for its length.]
+6. **Testers**:
+
+   [image: Testers: the avatar row with Ana's hover card, and one row per tester with parts sent, pay and their contract.]
    - An avatar row (about 12, then +N). Each hover card shows rating, accepted parts, the profile link and "Chat with <name>".
    - A scroll box of tester rows with a name search: required and optional parts sent, paid per part and in total, the agreed scope (their current contract, switched or kept), a call summary, Rate, and Extra pay on each sent part.
    - "No longer working (N)" below, each row tagged Left, Ended early, Stopped or Removed.
-7. **Live session** [IN I]: the rate line; tick testers (each with their terms and "N of 3 booked") or Select all; the request form; waiting requests; booked calls and call sets; Past calls.
-8. **Invite testers** [IN I] [IN I]x2: three lists, "People you've worked with" (with "In N tests with you", a fold linking those tests), "Suggested" (top 5) and "Find testers" (name search plus device and language ticks); then "Invited" (waiting invites).
+7. **Live session**: the rate line; tick testers (each with their terms and "N of 3 booked") or Select all; the request form; waiting requests; booked calls and call sets; Past calls.
+
+   [image: Live session: tick testers, request times, a waiting request, booked calls (Join shows near the start).]
+8. **Invite testers**: three lists, "People you've worked with" (with "In N tests with you", a fold linking those tests), "Suggested" (top 5) and "Find testers" (name search plus device and language ticks); then "Invited" (waiting invites).
+
+   [image: Invite testers: People you've worked with and Suggested, with orange labels for missing needs.]
+
+   [image: Find testers by name: Dee is ticked; the orange label shows the need they miss.]
+
+   [image: Invite anyway: the inline box lists the needs Dee doesn't meet.]
 9. **By question:** each written question with every tester's answer, its time, a "not required" mark and Paid, Rejected or Not reviewed yet.
 
 ### Buttons
@@ -472,10 +560,20 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
 **Overview**
 
 - **Edit:** opens Edit test.
-- **Alerts:** "Tick what should not stop your buttons." Kinds: Joins and applications; Testers leaving; Work sent; Call changes; Payments (going through or failing); Disputes; Decisions by the team; Your saves and presses in another tab; Listing changes. Ignored lines still show, greyed, in the live box. A hold or pause, a closed tester account, a stopped test and final refusals always stop. Under each stop box: "Don't stop me for: <kind>". [IN I]
-- **Next round:** makes a draft copy titled "(round N)"; nothing is public until the developer presses Accept testers again; records stay with the original round. [IN I]
-- **End early** (confirm pop-up "End their work now"): tick testers (or "All (N)") and give one reason they read. Their work ends; calls ahead are cancelled; what they sent still waits for review; unsent parts close with no pay; they can be invited back later. Tester bell: "Your work on <test> was ended early"; calls: "…cancelled because your session was ended." [IN I]
-- **Stop** (confirm pop-up "Are you sure you want to stop “<test>”?"): ends every tester's work, cancels every call and request ahead, takes no new testers, and can't be edited or reopened. What was sent still waits for Pay or Reject. Testers: "<test> was stopped" and the stopped line on their page. Edit, Next round, End early and Stop disappear; Invite closes. [IN I]x2
+- **Alerts:** "Tick what should not stop your buttons." Kinds: Joins and applications; Testers leaving; Work sent; Call changes; Payments (going through or failing); Disputes; Decisions by the team; Your saves and presses in another tab; Listing changes. Ignored lines still show, greyed, in the live box. A hold or pause, a closed tester account, a stopped test and final refusals always stop. Under each stop box: "Don't stop me for: <kind>".
+
+  [image: Alerts: tick what should not stop your buttons.]
+- **Next round:** makes a draft copy titled "(round N)"; nothing is public until the developer presses Accept testers again; records stay with the original round.
+
+  [image: Next round: a draft copy “(round 2)”, hidden from new testers until Accept testers again.]
+- **End early** (confirm pop-up "End their work now"): tick testers (or "All (N)") and give one reason they read. Their work ends; calls ahead are cancelled; what they sent still waits for review; unsent parts close with no pay; they can be invited back later. Tester bell: "Your work on <test> was ended early"; calls: "…cancelled because your session was ended."
+
+  [image: End early: one tester ticked, a reason given, then the confirm pop-up “End their work now”.]
+- **Stop** (confirm pop-up "Are you sure you want to stop “<test>”?"): ends every tester's work, cancels every call and request ahead, takes no new testers, and can't be edited or reopened. What was sent still waits for Pay or Reject. Testers: "<test> was stopped" and the stopped line on their page. Edit, Next round, End early and Stop disappear; Invite closes.
+
+  [image: Stop: the confirm pop-up “Are you sure you want to stop …?”.]
+
+  [image: The tester's page after Stop (phone): the stopped line says what they can still do.]
 
 **Needs you**
 
@@ -512,7 +610,15 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
 
 ### What can stop a press
 
-- **Stop-once** on every button (Stop, End early, Next round, Accept testers again, Pay, Reject, Extra pay, call buttons, Invite, Assign a free key) for any unseen change: a tester joined, left, applied, sent or updated work, booked, requested or cancelled a call, switched or kept terms, charged or let go, disputed, said no thanks; the team decided; the test filled; payments went through or failed; your own press in another tab. The changes are listed under the button. [IN V] [IN I]x3
+- **Stop-once** on every button (Stop, End early, Next round, Accept testers again, Pay, Reject, Extra pay, call buttons, Invite, Assign a free key) for any unseen change: a tester joined, left, applied, sent or updated work, booked, requested or cancelled a call, switched or kept terms, charged or let go, disputed, said no thanks; the team decided; the test filled; payments went through or failed; your own press in another tab. The changes are listed under the button.
+
+  [video: Ben (right, phone) sends his answers while the developer presses Pay for Ana; Pay stops once and lists the change, the second press goes ahead.]
+
+  [image: Pay stops once: Ben sent his answers since the page loaded.]
+
+  [image: Cam left while the Stop pop-up was open: the press didn't go through and the change shows under Stop.]
+
+  [image: Invite stops once: Fay removed iPhone and iPad from her profile after the page loaded.]
 - **Invite** also stops for: "<name> removed <X>, which this test needs", "<name> joined this test…", "<name> can't be invited right now", "<name> can't join more tests right now".
 - **Always refused** (blue, under the button):
   - "This test was stopped."; "The team stopped this test."; "The team paused this test: you can only stop it."
@@ -527,9 +633,15 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
 
 - **Draft:** "Hidden from new testers." with Accept testers again; the Testers card says "Not taking testers."
 - **Open:** as above.
-- **Paused by the team:** a banner "The team paused this test: it behaves like a stop, and you can only stop it." Only Stop works. [IN V]
-- **Stopped:** the Stopped label and the stopped line; the overview buttons and Invite are hidden; the call panel says "This test was stopped, so no calls can be requested or booked." Pay, Reject, chat, rate and answers still work. [IN I]
-- **Stopped by the team:** the page moves to the top of the overview, where the banner "The team stopped this test." stays and names any press that didn't go through. Then the stopped rules apply. [IN V]
+- **Paused by the team:** a banner "The team paused this test: it behaves like a stop, and you can only stop it." Only Stop works.
+
+  [video: The team pauses the test; the developer's End early is refused and the banner explains.]
+- **Stopped:** the Stopped label and the stopped line; the overview buttons and Invite are hidden; the call panel says "This test was stopped, so no calls can be requested or booked." Pay, Reject, chat, rate and answers still work.
+
+  [image: Stopped: the Stopped label and the stopped line; the overview buttons are gone and Live session says no calls can be booked.]
+- **Stopped by the team:** the page moves to the top of the overview, where the banner "The team stopped this test." stays and names any press that didn't go through. Then the stopped rules apply.
+
+  [video: The team stops the test while a call is being requested; the request is refused and the banner names the press that didn't go through.]
 - **Closed after a pause:** like stopped, with the reason in a banner.
 - **Payment hold, chargeback hold or suspended:** the page is closed; the developer moves to the dashboard top.
 

@@ -1,0 +1,226 @@
+{
+  "dash-card-game.png": {
+    "caption": "A game test with written answers, a recording and live calls",
+    "kind": "image"
+  },
+  "dash-card-free.png": {
+    "caption": "A free web-app test (Finance, Productivity): its written answers pay nothing",
+    "kind": "image"
+  },
+  "dash-card-invite.png": {
+    "caption": "An invite-only test with access keys and an NDA",
+    "kind": "image"
+  },
+  "dash-card-work-waiting.png": {
+    "caption": "An open test with work waiting for review",
+    "kind": "image"
+  },
+  "dash-card-full.png": {
+    "caption": "A full test: 2 of 2 spots taken",
+    "kind": "image"
+  },
+  "dash-card-stopped.png": {
+    "caption": "A stopped test",
+    "kind": "image"
+  },
+  "dash-card-draft.png": {
+    "caption": "Draft: the next round, not open yet",
+    "kind": "image"
+  },
+  "dash-card-closed.png": {
+    "caption": "Closed after 7 days paused",
+    "kind": "image"
+  },
+  "dash-blue-box.png": {
+    "caption": "Payment hold: the blue box at the top of the developer dashboard",
+    "kind": "image"
+  },
+  "dash-card-paused.png": {
+    "caption": "A paused test (payment hold)",
+    "kind": "image"
+  },
+  "every-deleted-account.png": {
+    "caption": "Kai deleted their account in another tab: this tab is signed out with the red notice",
+    "kind": "image"
+  },
+  "every-hold-routing.webm": {
+    "caption": "A payment hold starts while the test page (left) and Edit (right) are open: both move to the dashboard top, where the blue box explains",
+    "kind": "video"
+  },
+  "post-required-mark.png": {
+    "caption": "The top of Post a test: “* marks the fields you have to fill in”",
+    "kind": "image"
+  },
+  "post-counters.png": {
+    "caption": "Counters on Product (up to 60), Name of this test (up to 60) and What should testers do (up to 1,000)",
+    "kind": "image"
+  },
+  "post-the-test.webm": {
+    "caption": "Posting a test: fill in the four panels, press Post the test, land on the new test's page",
+    "kind": "video"
+  },
+  "post-listed-find.png": {
+    "caption": "Anyone can join: the new test shows in testers' Find tests",
+    "kind": "image"
+  },
+  "post-listed-invite.png": {
+    "caption": "Invite only: not in Find tests; the invited tester sees it on their dashboard",
+    "kind": "image"
+  },
+  "post-red-required-price.png": {
+    "caption": "Red at the field when you leave it: required fields empty, a price under $1, spots over the limit",
+    "kind": "image"
+  },
+  "post-red-dates-keys.png": {
+    "caption": "Red when you leave the field: the deadline doesn't leave 3 days before Open until, and fewer keys than spots",
+    "kind": "image"
+  },
+  "post-red-checks.webm": {
+    "caption": "Red at the field: each box is checked when you leave it, and Post checks everything again on the server",
+    "kind": "video"
+  },
+  "edit-live-box.png": {
+    "caption": "Edit's live box sits under Save: Ana sent her written answers while Edit was open",
+    "kind": "image"
+  },
+  "edit-open-until.png": {
+    "caption": "Open until can only move later: an earlier date is red",
+    "kind": "image"
+  },
+  "edit-deadline.png": {
+    "caption": "A 30-day deadline needs Open until 3 days later: red under both fields",
+    "kind": "image"
+  },
+  "edit-key-in-use.png": {
+    "caption": "A key in use can't be added again (red)",
+    "kind": "image"
+  },
+  "edit-key-reported-left.png": {
+    "caption": "Keys reported as not working or given to a tester who left can't be added again",
+    "kind": "image"
+  },
+  "edit-elsewhere-field.png": {
+    "caption": "Another tab saved new instructions: the field updates with a blue note under it",
+    "kind": "image"
+  },
+  "edit-elsewhere-keys.png": {
+    "caption": "Keys added in another tab: the blue note under the key boxes",
+    "kind": "image"
+  },
+  "edit-elsewhere-save.png": {
+    "caption": "Save stops once: “This test changed since you opened Edit. Press Save again…”",
+    "kind": "image"
+  },
+  "edit-changed-elsewhere.webm": {
+    "caption": "Two tabs on Edit: the right tab saves new instructions and keys; the left tab's fields update with blue notes, and its Save stops once",
+    "kind": "video"
+  },
+  "edit-red-blue-spots-keys.png": {
+    "caption": "You ticked a key to remove; another tab added a spot (blue): now fewer free keys than open spots (red)",
+    "kind": "image"
+  },
+  "edit-red-blue-deadline.png": {
+    "caption": "You typed a 40-day deadline; another tab moved Open until later (blue), still too early for it (red)",
+    "kind": "image"
+  },
+  "edit-red-blue-keys.png": {
+    "caption": "You ticked one key to remove; another tab removed another (blue): the free keys no longer cover the open spots (red)",
+    "kind": "image"
+  },
+  "edit-three-changes.png": {
+    "caption": "After 3 saves that changed the steps, those fields are locked; “Changes left: 0 of 3” near Save",
+    "kind": "image"
+  },
+  "edit-team-stopped.webm": {
+    "caption": "The team stops the test while Edit is open: Save is refused and the test page's banner names the press that didn't go through",
+    "kind": "video"
+  },
+  "tp-overview.png": {
+    "caption": "Overview: title, status, badges, terms and spots, Open until, and the Edit, Alerts, Next round, End early and Stop buttons",
+    "kind": "image"
+  },
+  "tp-needs-you.png": {
+    "caption": "Needs you, grouped per person: Pay or Reject for sent work, a call waiting for its length, a dispute waiting for your side",
+    "kind": "image"
+  },
+  "tp-needs-dispute-call.png": {
+    "caption": "A dispute waiting for the developer's side, and a call that happened waiting for its length",
+    "kind": "image"
+  },
+  "tp-testers.png": {
+    "caption": "Testers: the avatar row with Ana's hover card, and one row per tester with parts sent, pay and their contract",
+    "kind": "image"
+  },
+  "tp-live-session.png": {
+    "caption": "Live session: tick testers, request times, waiting requests, booked calls (Join shows near the start) and past calls",
+    "kind": "image"
+  },
+  "tp-alerts.png": {
+    "caption": "Alerts: tick what should not stop your buttons",
+    "kind": "image"
+  },
+  "tp-needs-applications.png": {
+    "caption": "On an Approved-only test: applications to Accept or Decline, and a rejoin ask with the time they'd get back",
+    "kind": "image"
+  },
+  "tp-invite.png": {
+    "caption": "Invite testers: People you've worked with, Suggested and Find testers, then Invited",
+    "kind": "image"
+  },
+  "tp-invite-find.png": {
+    "caption": "Find testers by name: missing needs show as orange labels",
+    "kind": "image"
+  },
+  "tp-invite-anyway.png": {
+    "caption": "Invite anyway: the inline box lists the needs Dee doesn't meet",
+    "kind": "image"
+  },
+  "tp-next-round.png": {
+    "caption": "Next round: a draft copy “(round 2)”, hidden from new testers until Accept testers again",
+    "kind": "image"
+  },
+  "tp-end-early.png": {
+    "caption": "End early: tick testers, give one reason they read, then the confirm pop-up “End their work now”",
+    "kind": "image"
+  },
+  "tp-stop-confirm.png": {
+    "caption": "Stop: the confirm pop-up “Are you sure you want to stop …?”",
+    "kind": "image"
+  },
+  "tp-stopped.png": {
+    "caption": "Stopped: the Stopped label and the stopped line; the overview buttons are gone and Live session says no calls can be booked",
+    "kind": "image"
+  },
+  "tp-stopped-tester.png": {
+    "caption": "The tester's page after Stop: the stopped line says what they can still do (phone)",
+    "kind": "image"
+  },
+  "tp-live-box.webm": {
+    "caption": "The live box: Ana (right, phone) sends her answers and switches to the new terms; the developer's box updates and See their contract scrolls to her row",
+    "kind": "video"
+  },
+  "tp-stop-once-pay.png": {
+    "caption": "Stop-once on Pay: Ben sent his answers since the page loaded, listed under the button",
+    "kind": "image"
+  },
+  "tp-stop-once.webm": {
+    "caption": "Stop-once: Ben (right, phone) sends his answers while the developer presses Pay for Ana; Pay stops once and lists the change, the second press goes ahead",
+    "kind": "video"
+  },
+  "tp-stop-once-stop.png": {
+    "caption": "Stop-once after a pop-up: Cam left while the Stop pop-up was open; the press didn't go through and the change shows under Stop",
+    "kind": "image"
+  },
+  "tp-stop-once-invite.png": {
+    "caption": "Invite stops once: Fay removed iPhone and iPad from her profile after the page loaded",
+    "kind": "image"
+  },
+  "tp-team-paused.webm": {
+    "caption": "The team pauses the test: End early is refused (“you can only stop it”) and the banner explains",
+    "kind": "video"
+  },
+  "tp-team-stopped.webm": {
+    "caption": "The team stops the test while a call is being requested: the request is refused, the page moves to the top and the banner names the press that didn't go through",
+    "kind": "video"
+  }
+}
