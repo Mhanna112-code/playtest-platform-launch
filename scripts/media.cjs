@@ -547,7 +547,7 @@ group("edit", async () => {
   for (const d of ["Sail into the first storm.", "Sail into the first two storms.", "Sail into all three storms."]) await apiEdit(dev, t3, { description: d });
   await dev.goto(`/app/tests/${t3}/edit`);
   await dev.waitForSelector("[data-critical-locked]");
-  await shotSpan(dev, "edit-three-changes", "After 3 saves that changed the steps, those fields are locked; “Changes left: 0 of 3” near Save", saveBtn(dev), "[data-critical-locked]");
+  await shotSpan(dev, "edit-three-changes", "After 3 saves that changed the steps, the steps field locks with its note; every other limited field shows its own “Changes left: N of 3”", saveBtn(dev), "[data-critical-locked]");
 
   // The team stops the test while Edit is open: Save is refused and the developer goes back to the test page.
   const t4 = await postTest(dev, { title: "Harbor Run: lighthouse", spots: "3" });

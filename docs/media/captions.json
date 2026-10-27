@@ -128,7 +128,7 @@
     "kind": "image"
   },
   "edit-three-changes.png": {
-    "caption": "After 3 saves that changed the steps, those fields are locked; “Changes left: 0 of 3” near Save",
+    "caption": "After 3 saves that changed the steps, the steps field locks with its note; every other limited field shows its own “Changes left: N of 3”",
     "kind": "image"
   },
   "edit-team-stopped.webm": {
