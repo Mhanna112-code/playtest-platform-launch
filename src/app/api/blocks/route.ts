@@ -5,7 +5,7 @@ import { requireActive } from "@/lib/server/users";
 // Block / Unblock (owner, Oct 27): Block lives only on profiles. The one stop is a race check: already blocked in another tab.
 export async function POST(req: Request) {
   return handle(async () => {
-    const u = await requireActive(req);
+    const u = await requireActive(req, { devSide: "auto" });
     const body = await readJson(req);
     const id = String(body.userId ?? "");
     if (body.action === "unblock") return ok(await unblockUser(u, id));

@@ -12,6 +12,7 @@ export async function GET(req: Request) {
     const s = token ? await db.session.findUnique({ where: { tokenHash: hashToken(token) }, include: { user: true } }) : null;
     if (!s || s.expiresAt < new Date()) return ok({ state: "out" }, { headers: { "cache-control": "no-store" } });
     if (s.user.deletedAt) return ok({ state: "deleted" }, { headers: { "cache-control": "no-store" } });
-    return ok({ state: "ok", userId: s.user.id, name: s.user.name || s.user.email, suspended: !!s.user.suspendedAt, developer: s.user.isDeveloper, tester: s.user.isTester }, { headers: { "cache-control": "no-store" } });
+    const u = s.user;
+    return ok({ state: "ok", userId: u.id, name: u.name || u.email, suspended: !!u.suspendedAt, held: !!u.holdStartedAt, holdReason: u.holdReason, developer: u.isDeveloper, tester: u.isTester, side: u.side }, { headers: { "cache-control": "no-store" } });
   });
 }

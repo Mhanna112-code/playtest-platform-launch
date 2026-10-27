@@ -43,7 +43,7 @@ describe("calls / hold / block refinements", () => {
   it("no length entry during a hold", async () => {
     const { dev, testId, call } = await booked(-60);
     await startHold(dev.user.id, "unpaid");
-    expect((await act(testId, "call-length", dev.cookie, { callId: call.id, minutes: 25 })).body.error.message).toBe("You can enter this once the hold is lifted.");
+    expect((await act(testId, "call-length", dev.cookie, { callId: call.id, minutes: 25 })).body.error.code).toBe("held"); // (Owner, Oct 27) every developer press is refused during a hold
   });
 
   it("a cancel or a block closes the room (status line) for both", async () => {

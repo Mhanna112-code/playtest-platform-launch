@@ -28,31 +28,40 @@ export const LIMITS = {
   disputeText: 2000,
   bio: 1000,
   contact: { min: 10, max: 3000 },
-  criticalChanges: 3, // saves that change instructions, link, languages, technology, parts or Open until, counted from the first join
+  criticalChanges: 3, // (Owner, Oct 27) saves that change part prices, parts, questions, steps (What to do), the build link or the NDA, counted from the first join
+  contactPerDay: 5, // (Owner, Oct 27) Contact us messages per account per day
 } as const;
 
-/** The test fields that count towards the critical-change limit (the doc's fields 3, 4, 6, 7, 8 and 12), with the words used in messages. */
+/**
+ * (Owner, Oct 27) The significant test fields: once a tester has joined, Saves that change part prices, parts, questions, steps (What to do), the build link or the NDA
+ * are limited to 3 (one Save counts once, however many of these fields it touches). The words are the ones used in messages.
+ */
 export const CRITICAL_FIELDS = {
-  description: "instructions",
-  buildUrl: "link",
-  languages: "language requirements",
-  devices: "technology requirements",
-  writtenCents: "parts",
-  recordingCents: "parts",
-  liveRateCents: "parts",
+  description: "steps",
+  buildUrl: "build link",
+  ndaText: "NDA", // (DEFAULT, pending the owner: the NDA counts; flip it by removing this line)
+  writtenCents: "part prices",
+  recordingCents: "part prices",
+  liveRateCents: "part prices",
   liveMinutes: "parts",
   writtenRequired: "parts",
   recordingRequired: "parts",
   liveRequired: "parts",
   questions: "questions",
-  openUntil: "Open until",
 } as const;
 export type CriticalField = keyof typeof CRITICAL_FIELDS;
 export const isCritical = (f: string): f is CriticalField => f in CRITICAL_FIELDS;
 
-/** "You've changed the instructions, link or parts 3 times since testers joined. Contact support to change them again." */
+/** "Changes left: 2 of 3" */
+export const changesLeftLine = (used: number) => `Changes left: ${Math.max(0, LIMITS.criticalChanges - used)} of ${LIMITS.criticalChanges}`;
+
+/** "You've changed the steps, build link or part prices 3 times since testers joined. Contact us to change them again." */
 export function criticalLine(fields: string[], used: number = LIMITS.criticalChanges) {
   const names = [...new Set(fields.map((f) => (isCritical(f) ? CRITICAL_FIELDS[f] : f)))];
   const list = names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
-  return `You've changed the ${list} ${used} times since testers joined. Contact support to change them again.`;
+  return `You've changed the ${list} ${used} times since testers joined. Contact us in Settings to change them again.`;
 }
+
+/** (Owner, Oct 27) Contact us: at most 5 messages per account per day. */
+export const CONTACT_LIMIT_PER_DAY = LIMITS.contactPerDay;
+export const contactLimitLine = () => `You've sent ${CONTACT_LIMIT_PER_DAY} messages today. We'll reply by email.`;

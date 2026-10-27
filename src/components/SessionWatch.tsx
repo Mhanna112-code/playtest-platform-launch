@@ -2,14 +2,15 @@
 import { useEffect, useRef } from "react";
 import { setPageUser } from "@/lib/client";
 import { usePathname } from "next/navigation";
-import { closedForSuspended } from "@/lib/closedPages";
+import { restrictionKey } from "@/lib/restricted";
+import { sideFor } from "@/lib/sides";
 
 // (Design doc 2; owner, Oct 27) Signed-in pages stay in step with the account: signing out in any tab signs out every tab and window of the browser
 // (they all go to the sign-in page); signing in (in any tab) brings the tabs waiting on the login page back to where they were; signing in as a
 // DIFFERENT account switches every other open tab to the new account, on the same page the new sign-in landed on (no cover screen); an old tab
 // never sends a press as the previous account (every press names the account its page belongs to; the server refuses a mismatch and the tab switches); Back / Forward restore a page and bring it up to date; an account deleted meanwhile (by the team, or by
-// the person on another device) sends every open tab to the login page with a red notice; a suspension that starts while a page
-// is open routes the person to the dashboard (the closed pages) where the red box explains.
+// the person on another device) sends every open tab to the login page with a red notice; (Owner, Oct 27) a suspension, a payment hold or a chargeback hold that starts while a
+// page is open moves EVERY open page of that account to the TOP of the dashboard (a tab already there scrolls to the top), where the blue box explains; when it lifts, the pages refresh.
 
 const KEY = "pt-auth";
 
@@ -55,17 +56,18 @@ export function landingOfNewSignIn() {
   return "/app";
 }
 
-export function SessionWatch({ userId, suspended }: { userId: string; name?: string; suspended: boolean }) {
+export function SessionWatch({ userId, restriction }: { userId: string; name?: string; restriction: string }) {
   const path = usePathname();
   const pathRef = useRef(path);
   pathRef.current = path;
+  const restrictionRef = useRef(restriction);
   // Every press from this page names its account, so a press racing a switch of accounts is refused (see lib/client.ts).
   useEffect(() => setPageUser(userId), [userId]);
 
   useEffect(() => {
     let alive = true;
     const check = async () => {
-      let s: { state: string; userId?: string; name?: string; suspended?: boolean; developer?: boolean; tester?: boolean };
+      let s: { state: string; userId?: string; name?: string; suspended?: boolean; held?: boolean; holdReason?: string; developer?: boolean; tester?: boolean; side?: string };
       try {
         s = await (await fetch("/api/account/status", { cache: "no-store" })).json();
       } catch {
@@ -75,10 +77,22 @@ export function SessionWatch({ userId, suspended }: { userId: string; name?: str
       if (s.state === "deleted") window.location.href = "/login?gone=1";
       else if (s.state === "out") window.location.href = `/login?next=${encodeURIComponent(pathRef.current)}`;
       else if (s.userId && s.userId !== userId) window.location.href = landingOfNewSignIn(); // a different account signed in elsewhere: switch to it
-      else if (s.suspended && !suspended) {
-        // A suspension began while this page was open: closed pages go to the dashboard, which says what happened.
-        if (closedForSuspended(pathRef.current, { isDeveloper: !!s.developer, isTester: !!s.tester })) window.location.href = "/app";
-        else window.location.reload();
+      else {
+        // The restriction on THIS page's side (a payment hold only restricts the developer side).
+        const who = { isDeveloper: !!s.developer, isTester: !!s.tester, side: s.side, suspendedAt: s.suspended ? "x" : null, holdStartedAt: s.held ? "x" : null, holdReason: s.holdReason };
+        const now = restrictionKey(who, sideFor(who, pathRef.current));
+        if (now !== restrictionRef.current) {
+          const before = restrictionRef.current;
+          restrictionRef.current = now;
+          if (!before && now) {
+            // It just began: this page moves to the top of the dashboard (already there: scroll up and refresh so the blue box shows).
+            if (/^\/app\/?$/.test(pathRef.current)) {
+              try { window.history.scrollRestoration = "manual"; } catch { /* ignore */ }
+              window.scrollTo({ top: 0 });
+              window.location.reload();
+            } else window.location.href = "/app";
+          } else window.location.reload();
+        }
       }
     };
     const t = setInterval(check, 20_000);
@@ -100,7 +114,7 @@ export function SessionWatch({ userId, suspended }: { userId: string; name?: str
       window.removeEventListener("storage", onStorage);
       window.removeEventListener("pageshow", onShow);
     };
-  }, [userId, suspended]);
+  }, [userId]);
 
   return null;
 }

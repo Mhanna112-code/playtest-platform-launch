@@ -6,6 +6,8 @@ import { ResendConfirm } from "@/components/ResendConfirm";
 import { confirmSkipped } from "@/lib/server/users";
 import { SideButton } from "./SideButton";
 import { DeleteAccount } from "./DeleteAccount";
+import { PasswordForm } from "../profile/PasswordForm";
+import { devRestricted } from "@/lib/restricted";
 
 export const metadata = { title: "Account · Playtest" };
 export const dynamic = "force-dynamic";
@@ -18,6 +20,8 @@ export default async function AccountPage() {
   const u = await requirePageUser();
   const dev = hasSide(u, "developer"), tester = hasSide(u, "tester");
   const side = sideFor(u, "/app/account");
+  // (Owner, Oct 27) The profile editor is closed while the account is suspended or (as a developer) on hold; the other settings stay.
+  const profileClosed = !!u.suspendedAt || (dev && devRestricted(u, side));
   const sides = [
     { side: "developer" as const, has: dev, title: "Developer", what: "Post tests and pay testers for feedback.", addLabel: "Start posting tests too" },
     { side: "tester" as const, has: tester, title: "Tester", what: "Test other people's products and get paid.", addLabel: "Start testing too" },
@@ -61,16 +65,17 @@ export default async function AccountPage() {
       <section className="card">
         <h2 className="mb-1 font-semibold text-white">Settings</h2>
         <ul className="divide-y divide-white/5">
-          {tester && !u.suspendedAt && link("/app/profile", UserRound, "Tester profile", "Devices, languages and bio, as developers see them")}
-          {dev && link("/app/profile", Building2, "Developer profile", "Your name, as testers see it on your tests")}
+          {tester && !profileClosed && link("/app/profile", UserRound, "Tester profile", "Devices, languages and bio, as developers see them")}
+          {dev && !profileClosed && link("/app/profile", Building2, "Developer profile", "Your name, as testers see it on your tests")}
           {link("/app/payments", Banknote, "Payments", "What you've paid or been paid, and how payments are set up")}
           {link("/app/notifications", Bell, "Notifications and alerts", "How you're notified by email")}
           {link("/app/account/blocked", Ban, "Blocked people", "Who you've blocked, and Unblock")}
-          {link("/app/profile#password", KeyRound, "Change password", "Your other devices are signed out")}
+          {link("#password", KeyRound, "Change password", "Your other devices are signed out")}
           {link("/privacy", ShieldCheck, "Privacy", "What we keep and why")}
           {link("/app/help", LifeBuoy, "Contact us", "Questions, problems, payments")}
         </ul>
       </section>
+      <section id="password" className="scroll-mt-24"><PasswordForm hasPassword={!!u.passwordHash} /></section>
       <DeleteAccount />
     </div>
   );

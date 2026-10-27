@@ -68,7 +68,7 @@ describe("Edit (design doc 5)", () => {
     expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalChanges).toBe(3);
     const r = await edit(testId, dev.cookie, { buildUrl: "https://example.com/again" });
     expect(r.status).toBe(400);
-    expect(r.body.error.message).toBe("You've changed the link 3 times since testers joined. Contact support to change them again.");
+    expect(r.body.error.message).toBe("You've changed the build link 3 times since testers joined. Contact us in Settings to change them again.");
     expect(r.body.error.critical).toEqual(["buildUrl"]);
     // Other fields still save.
     expect((await edit(testId, dev.cookie, { title: "New name" })).status).toBe(200);

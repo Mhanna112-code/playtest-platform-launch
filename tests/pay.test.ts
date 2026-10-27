@@ -126,25 +126,24 @@ describe("Stripe (test mode, faked)", () => {
     expect(await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } })).toMatchObject({ status: "charged", transferStatus: "sent", stripePaymentIntentId: "pi_1" });
   });
 
-  it("needs a card first; a declined Pay becomes owed (retry, 3-day cut-off); no second Pay on it", async () => {
+  it("needs a card first; a declined Pay is owed and starts the payment hold at once; no second Pay on it", async () => {
     fake(true);
     const { dev, sub } = await sent();
     expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).body.error.message).toBe("Add a card in Payments first, then press Pay again.");
     await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_1" } });
     const r = await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     expect(r.status).toBe(402);
-    expect(r.body.error.message).toMatch(/^Your card was declined, so Ana Silva wasn't paid \$10\.00 for the written answers yet\. It's now owed: we'll retry tomorrow, or pay it in Payments by .+ to avoid a pause\.$/);
+    expect(r.body.error.message).toBe("Your card was declined, so Ana Silva wasn't paid $10.00 for the written answers yet. Your tests are paused until you pay what you owe: open Payments.");
     expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(1);
     const p = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } });
     expect(p.status).toBe("failed");
-    const days = (p.owedUntil!.getTime() - p.createdAt.getTime()) / 86_400_000;
-    expect(Math.round(days)).toBe(3);
-    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();
-    // No second Pay on it: "Pay what you owe" covers it.
-    expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).body.error.message).toBe("This $10.00 is owed: pay it with “Pay what you owe” in Payments.");
+    expect(p.owedUntil).not.toBeNull(); // the "owed" marker (no cut-off any more)
+    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull(); // (Owner, Oct 27) a hold at once
+    // No second Pay on it: every Pay is unavailable during the hold, and "Pay what you owe" covers it.
+    expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).body.error.code).toBe("held");
   });
 
-  it("a second Pay while one is owed is refused ('Pay what you owe first.'); Reject still works", async () => {
+  it("a second Pay while one is owed is refused (the hold started with the first decline); Reject is refused too", async () => {
     fake(true);
     const a = await sent();
     const b = await sent();
@@ -153,12 +152,13 @@ describe("Stripe (test mode, faked)", () => {
     const tb = await db.submission.findUniqueOrThrow({ where: { id: b.sub.id }, include: { contract: true } });
     await db.test.update({ where: { id: tb.contract.testId }, data: { developerId: a.dev.user.id } });
     expect((await payReq(a.dev.cookie, { kind: "submission", id: a.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(402);
-    expect((await db.user.findUniqueOrThrow({ where: { id: a.dev.user.id } })).holdStartedAt).toBeNull();
+    expect((await db.user.findUniqueOrThrow({ where: { id: a.dev.user.id } })).holdStartedAt).not.toBeNull();
     await new Promise((r) => setTimeout(r, 40)); // the declined payment is older than the next press's page time
     // (Owner, Oct 27) While a failed payment is owed, Pay waits: the second press is refused (nothing new fails), and only Pay what you owe works.
     const second = await payReq(a.dev.cookie, { kind: "submission", id: b.sub.id, amount: "10.00", tickedCents: 1000 });
-    expect(second.status).toBe(409);
-    expect(second.body.error.message).toBe("Pay what you owe first.");
+    expect(second.status).toBe(403);
+    expect(second.body.error.code).toBe("held");
+    expect((await payReq(a.dev.cookie, { action: "reject", kind: "submission", id: b.sub.id, reason: "Not what I asked for" })).body.error.code).toBe("held");
   });
 });
 
@@ -216,7 +216,7 @@ describe("(NEXT-UI 26) a suspended developer", () => {
   it("cannot Pay or Reject (both wait until the suspension is lifted); everything else (invite, Edit, chat, next round, calls) is refused with the suspended line", async () => {
     const { dev, sub, sessionId, testId, tester } = await sent();
     await db.user.update({ where: { id: dev.user.id }, data: { suspendedAt: new Date() } });
-    const LINE = "Your account is suspended: your tests are paused. You can still cancel calls, end a tester's work early or stop a test. Paying and reviewing work wait until the suspension is lifted.";
+    const LINE = "Your account is suspended: your tests are paused. Contact us in Settings to appeal.";
     expect((await payReq(dev.cookie, { action: "reject", kind: "submission", id: sub.id, amount: "0", reason: "Nothing usable here" })).body.error.message).toBe(LINE);
     expect((await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe(LINE);
     expect((await act(testId, "message", dev.cookie, { contractId: sessionId, body: "hi" })).body.error.message).toBe(LINE);

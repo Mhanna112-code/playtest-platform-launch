@@ -9,7 +9,7 @@ import { DevCallPanel, type DevCall, type DevTester } from "./DevCallPanel";
 import { CallLength } from "./CallLength";
 import { InvitePanel } from "./InvitePanel";
 import { invitable, inviteExpired } from "@/lib/server/invites";
-import { owedForBox, sweepHeldCalls } from "@/lib/server/holds";
+import { owedForBox } from "@/lib/server/holds";
 import { termsRowLines } from "@/lib/server/terms";
 import { rejoinAskLine } from "@/lib/server/joining";
 import { RateBox } from "@/components/RateBox";
@@ -73,7 +73,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const working = t.contracts.filter((c) => c.status === "working");
   const paid = await db.payment.groupBy({ by: ["contractId"], where: { contractId: { in: t.contracts.map((c) => c.id) }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } });
   const paidSoFar = (id: string) => paid.find((p) => p.contractId === id)?._sum.amountCents ?? 0;
-  await sweepHeldCalls(u.id);
   const termsRows = await termsRowLines(t.contracts.map((c) => c.id));
   const callSets = await db.callSet.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } } });
   const reqs = await db.callRequest.findMany({ where: { testId: id, status: "pending", startsAt: { gt: new Date() } }, orderBy: { startsAt: "asc" } });

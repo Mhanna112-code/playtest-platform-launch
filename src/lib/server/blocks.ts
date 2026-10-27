@@ -72,7 +72,8 @@ export async function joinCall(user: { id: string }, callId: string) {
     new Date(),
     fmtTime,
   );
-  if (refusal) throw new HttpError(409, "cant_join", refusal);
+  // (Owner, Oct 27) A press after a cancellation: "This call was cancelled", with the reason.
+  if (refusal) throw new HttpError(409, "cant_join", call.status === "cancelled" && call.cancelNote ? `This call was cancelled: ${call.cancelNote.replace(/[.\s]+$/, "")}.` : refusal);
   const now = new Date();
   if (side === "developer" && !call.devJoinedAt) await db.call.update({ where: { id: call.id }, data: { devJoinedAt: now } });
   if (side === "tester" && !call.testerJoinedAt) await db.call.update({ where: { id: call.id }, data: { testerJoinedAt: now } });
@@ -91,7 +92,7 @@ export async function callStatus(user: { id: string }, callId: string) {
   const tester = amTester ? null : await db.user.findUnique({ where: { id: c.testerId }, select: { name: true, email: true } });
   const otherName = amTester ? (c.test.developer.name || c.test.developer.email.split("@")[0]) : (tester?.name || tester?.email.split("@")[0] || "");
   return {
-    line, bothJoinedAt: both, startsAt: call.startsAt, minutes: call.minutes,
+    line, cancelled: call.status === "cancelled", bothJoinedAt: both, startsAt: call.startsAt, minutes: call.minutes,
     other: { name: otherName, joinedAt: amTester ? call.devJoinedAt : call.testerJoinedAt },
     meJoinedAt: amTester ? call.testerJoinedAt : call.devJoinedAt,
   };

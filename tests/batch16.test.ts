@@ -67,23 +67,23 @@ describe("A) Chat with <name> on the hover card and the profile", () => {
 });
 
 describe("B) reminders", () => {
-  it("developer on a hold: ONE line a day (its own line, /payments#owed); a declined retry is merged into it", async () => {
+  it("developer on a hold: a daily paused reminder per test, stacked across tests (\"<test> is paused and closes on <date> unless you pay what you owe\")", async () => {
     const { dev, testId } = await setup();
-    const { tester, sessionId } = await joined(testId);
-    await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: new Date(Date.now() - 2 * DAY), holdReason: "unpaid", stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
-    await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 900, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + DAY) } });
-    setStripeForTests({ paymentIntents: { create: async () => { throw new Error("declined"); } } } as unknown as Stripe);
+    const second = await setup();
+    await db.test.update({ where: { id: second.testId }, data: { developerId: dev.user.id } });
+    await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: new Date(Date.now() - 2 * DAY), holdReason: "unpaid" } });
     await cron();
+    await cron(); // the same day: not again
+    const mine = (await lines(dev.user.id)).filter((l) => / is paused and closes on /.test(l.text));
+    expect(mine.length).toBe(2); // one per test
+    expect(mine[0].text).toMatch(/^Harbor Run is paused and closes on [A-Z][a-z]{2} \d+ unless you pay what you owe$/);
+    expect(mine[0]).toMatchObject({ link: "/app/payments#owed", own: false, groupKey: "pausedreminder" });
+    expect(mine.every((l) => l.reminderKey?.startsWith("paused:"))).toBe(true);
+    expect(testId).toBeTruthy();
+    // The next day: one more for each (the same line stacks across tests).
+    await db.notification.updateMany({ where: { userId: dev.user.id, groupKey: "pausedreminder" }, data: { createdAt: new Date(Date.now() - 25 * 3_600_000) } });
     await cron();
-    const hold = (await lines(dev.user.id)).filter((l) => /^Your tests are paused/.test(l.text));
-    expect(hold.length).toBe(1);
-    expect(hold[0]).toMatchObject({ link: "/app/payments#owed", own: true, payment: true });
-    expect(hold[0].text).toBe("Your tests are paused until you pay what you owe. Today's retry of $9.00 was declined");
-    expect((await lines(dev.user.id)).filter((l) => /^Today's retry/.test(l.text)).length).toBe(0);
-    // The next day: one more.
-    await db.notification.updateMany({ where: { userId: dev.user.id, text: { startsWith: "Your tests are paused" } }, data: { createdAt: new Date(Date.now() - 25 * 3_600_000) } });
-    await cron();
-    expect((await lines(dev.user.id)).filter((l) => /^Your tests are paused/.test(l.text)).length).toBe(2);
+    expect((await lines(dev.user.id)).filter((l) => / is paused and closes on /.test(l.text)).length).toBe(4);
   });
 
   it("applications and rejoin asks waiting: a line a day, stacked with that test's lines; it waits while the test is paused", async () => {
@@ -185,7 +185,7 @@ describe("C) stacking changes", () => {
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
     const paid = (await lines(tester.user.id)).find((l) => /^You were paid for your written answers/.test(l.text))!;
-    expect(paid).toMatchObject({ own: true, payment: true });
+    expect(paid).toMatchObject({ own: false, groupKey: "tpaid", payment: true }); // (Owner, Oct 27) "Paid" lines stack across tests, one entry a day
     await db.user.update({ where: { id: tester.user.id }, data: { stripeAccountId: "acct_" + randomUUID() } });
     const acct = (await db.user.findUniqueOrThrow({ where: { id: tester.user.id } })).stripeAccountId!;
     await payoutProblem(acct);
@@ -347,7 +347,7 @@ describe("L, M) live notices in pop-ups, and the design doc's Pop-ups list", () 
 
   it("the design doc lists every pop-up in section 2", () => {
     const doc = fs.readFileSync(path.resolve(__dirname, "../docs/DESIGN-DOC.md"), "utf8");
-    const i = doc.indexOf("**Pop-ups**");
+    const i = doc.indexOf("**Pop-ups");
     expect(i).toBeGreaterThan(0);
     const block = doc.slice(i, doc.indexOf("**Drafts, numbers, links**"));
     for (const name of ["Stop", "End early", "Invite anyway", "Block", "Join anyway", "Leave", "Let it go", "Rate and finish", "Delete account"]) expect(block, name).toContain(name);

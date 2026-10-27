@@ -1,4 +1,4 @@
-// (Design doc 9; owner, Oct 26) The bell stacks same-day lines about the same test into one entry, EXCEPT lines that always arrive on their own
+// (Design doc 9; owner, Oct 26-27) The bell stacks same-day lines about the same test into one entry, EXCEPT lines that always arrive on their own
 // (`own`: admin decisions, a test stopped, payment lines, a hold or pause lifted, a chargeback) and lines about no test. Lines with a `groupKey` stack
 // together on one day even across tests (pending invites, Charge or Let it go, unreviewed work, tests paused or resumed, payout problems, new disputes).
 export const dayKey = (d: Date) => d.toISOString().slice(0, 10);
@@ -12,6 +12,19 @@ export const GROUP_TITLES: Record<string, string> = {
   disputes: "New disputes",
   team: "The team acted on your tests",
   owed: "Payment due",
+  // (Owner, Oct 27) Lines of the SAME KIND stack across tests, one entry per kind per day.
+  payhold: "Payments and holds",
+  admindecision: "The team decided",
+  disputefiled: "Disputes filed",
+  disputedecided: "Disputes decided",
+  pausedreminder: "Paused tests",
+  tpaid: "You were paid",
+  trejected: "Work not accepted",
+  tdelayed: "Payments delayed",
+  tarrived: "Delayed payments arrived",
+  textra: "Extra pay",
+  tstopped: "Tests stopped or ended",
+  suspendedreview: "Suspended accounts",
 };
 
 export function bellKey(n: { id: string; testId: string | null; own: boolean; groupKey?: string | null; createdAt: Date }) {

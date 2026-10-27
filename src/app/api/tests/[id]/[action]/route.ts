@@ -11,6 +11,7 @@ import { asListing, editTest, endEarly, nextRound, openDraft, ownTest, stopTest 
 import { assignFreeKey, keyBoxes } from "@/lib/server/accessKeys";
 import { getUserFromRequest } from "@/lib/server/session";
 import { failedLine, requireActive, requireConfirmed } from "@/lib/server/users";
+import { RESTRICTED_OK_ACTIONS } from "@/lib/restricted";
 
 // (NEWEST+8) Presses that need a confirmed email.
 const NEEDS_CONFIRMED = new Set(["pay-extra", "edit", "invite", "request-time", "answer-request", "join", "apply", "rejoin-ask", "application", "rate", "call-length"]);
@@ -19,8 +20,8 @@ import { logTestAction } from "@/lib/server/actionText";
 
 type Ctx = { params: Promise<{ id: string; action: string }> };
 
-/** (Owner, Oct 26) A suspended developer's test page: only Cancel call, End early and Stop the test work. */
-const SUSPENDED_OK = new Set(["cancel-call", "cancel-set", "end-early", "stop"]);
+/** (Owner, Oct 27) A suspended or held developer: only Cancel call works (from the dashboard's Calls box). No Stop, no End early. */
+const SUSPENDED_OK = RESTRICTED_OK_ACTIONS;
 
 /** (Design doc 5) The Edit page's live view of the test: its listing and version, and the In use / Free access keys. */
 export async function GET(req: Request, { params }: Ctx) {
@@ -38,7 +39,7 @@ export async function GET(req: Request, { params }: Ctx) {
 export async function POST(req: Request, { params }: Ctx) {
   return handle(async () => {
     const { id, action } = await params;
-    const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action) });
+    const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action), devSide: !TESTER_SIDE.has(action) });
     const body = await readJson(req);
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
     await adminRefusal(req, u.id, id, action);

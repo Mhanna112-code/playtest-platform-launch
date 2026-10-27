@@ -410,7 +410,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
   });
   await tellCancelled(cancelled, "stopped");
   for (const c of contracts)
-    await notify(c.tester.email, `“${c.title}” was stopped`, [`${displayName(dev)} stopped “${c.title}”. Your work on it has ended.`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { own: true });
+    await notify(c.tester.email, `“${c.title}” was stopped`, [`${displayName(dev)} stopped “${c.title}”. Your work on it has ended.`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { group: "tstopped" });
   return { stopped: true, testers: contracts.length };
 }
 
@@ -450,7 +450,7 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
   });
   await tellCancelled(cancelled, "ended");
   for (const c of ended)
-    await notify(c.tester.email, `Your work on “${c.title}” was ended early`, [`${displayName(dev)} ended your work on “${c.title}”: “${reason}”`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { about: dev.id });
+    await notify(c.tester.email, `Your work on “${c.title}” was ended early`, [`${displayName(dev)} ended your work on “${c.title}”: “${reason}”`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { about: dev.id, group: "tstopped" });
   await spotOpened(testId);
   return { ended: true, count: ended.length };
 }

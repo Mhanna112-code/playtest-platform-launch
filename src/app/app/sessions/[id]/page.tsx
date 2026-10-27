@@ -8,7 +8,6 @@ import { callLengthText, callOutcome, joinedWords, callJoinable, bookedLateLabel
 import { requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
-import { sweepHeldCalls } from "@/lib/server/holds";
 import { paidLines } from "@/lib/server/paid";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeForm, LeaveButton, WrittenForm } from "./SessionActions";
@@ -58,7 +57,6 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const recording = c.submissions.find((s) => s.kind === "recording");
   const now = new Date();
   const seenAt = now.toISOString();
-  await sweepHeldCalls(c.test.developerId);
   const offer = await openOffer(c.id);
   const invitedBack = c.status !== "working" && (await db.invite.count({ where: { testId: c.testId, testerId: u.id, status: "sent" } })) > 0;
   const key = c.status === "working" ? await keyOf(c.id) : null;

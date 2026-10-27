@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     const body = await readJson(req);
     // (Owner, Oct 26) A suspended developer can neither Pay nor Reject: both wait until the suspension is lifted (a payment hold only
     // delays the CHARGE; see review()).
-    const u = await requireActive(req, { what: body.action === "reject" ? "Reject" : "Pay", piece: { kind: String(body.kind ?? ""), id: String(body.id ?? "") } });
+    const u = await requireActive(req, { devSide: true, what: body.action === "reject" ? "Reject" : "Pay", piece: { kind: String(body.kind ?? ""), id: String(body.id ?? "") } });
     requireConfirmed(u);
     // A declined Pay is refused under Pay and is not a debt: nothing is logged or shown anywhere else.
     const r = await review(u, body);

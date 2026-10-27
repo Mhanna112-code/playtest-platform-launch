@@ -104,17 +104,13 @@ describe("email settings and the bell", () => {
 });
 
 describe("live calls blocked during holds and on stopped/closed tests", () => {
-  it("a hold cancels only calls whose time comes during it (with the tester's line) and blocks offering and booking; length entry still works", async () => {
+  it("a hold cancels calls starting within 3 days (with the tester's line) and blocks offering and booking; length entry waits", async () => {
     const { dev, testId, tester, sessionId, call, slots } = await withCall();
     await startHold(dev.user.id, "unpaid");
-    expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).status).toBe("booked");
-    await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: new Date(Date.now() - 2 * 3_600_000) } });
-    await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 60_000) } });
-    const { sweepHeldCalls } = await import("@/lib/server/holds");
-    await sweepHeldCalls(dev.user.id);
+    // (Owner, Oct 27) The call is within 3 days of the hold's start: cancelled with no fault, both sides told.
     expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).status).toBe("cancelled");
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "was cancelled because the test is paused." } } })).toBe(1);
-    expect((await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: inHours(150) })).body.error.message).toBe("Pay what you owe first.");
+    expect((await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: inHours(150) })).body.error.code).toBe("held");
     expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: inHours(150) })).body.error.message).toBe("This test is paused. Payment for your work may be delayed.");
     expect(slots).toHaveLength(2);
   });
@@ -165,7 +161,7 @@ describe("call length and payment problems on a call", () => {
       webhooks: { constructEvent: (raw: string) => JSON.parse(raw) },
     } as unknown as Stripe);
     const r = await pay(dev.cookie, { kind: "call", id: call.id, amount: "15.00", tickedCents: 1500 });
-    expect(r.body.error.message).toMatch(/^Your card was declined, so Ana Silva wasn't paid \$15\.00 for the call yet\. It's now owed: /);
+    expect(r.body.error.message).toBe("Your card was declined, so Ana Silva wasn't paid $15.00 for the call yet. Your tests are paused until you pay what you owe: open Payments.");
     decline = false;
     const { payOwed: payNow } = await import("@/lib/server/holds");
     expect((await payNow(dev.user)).paid).toBe(1);
@@ -175,7 +171,8 @@ describe("call length and payment problems on a call", () => {
     expect(await db.testEvent.count({ where: { testId, kind: "chargeback", text: "Your bank reversed your $15.00 payment for Ana Silva's live call" } })).toBe(1);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
     const { payOwed } = await import("@/lib/server/holds");
-    expect(await payOwed(dev.user)).toEqual({ paid: 0, stillFailing: [], lifted: false }); // chargebacks can't be retried
+    // (Owner, Oct 27) The reversed $15.00 is owed again: "Pay what you owe" charges it on the card (paying alone never lifts a chargeback hold).
+    expect(await payOwed(dev.user)).toEqual({ paid: 1, stillFailing: [], lifted: false });
     // A chargeback hold is a hold with extra steps: a verified card and the admin's approval lift it (paying alone never does).
     const { startCardVerification, approveChargebackHold } = await import("@/lib/server/chargeback");
     await expect(approveChargebackHold(dev.user.id)).rejects.toMatchObject({ code: "steps_missing" });

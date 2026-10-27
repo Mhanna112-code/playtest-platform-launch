@@ -83,8 +83,8 @@ describe("Charge / Let it go at day 14", () => {
   });
 });
 
-describe("daily retry of owed payments", () => {
-  it("retries once a day; success sends a receipt, tells both sides and lifts the hold; chargebacks are never retried", async () => {
+describe("no daily retry of owed payments (owner, Oct 27)", () => {
+  it("the daily job never retries a failed payment: it is paid with Pay what you owe, which also repays an open chargeback and tells both sides", async () => {
     const { dev, sessionId, tester } = await waiting14();
     await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
     const p = await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 900, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + 2 * 86_400_000) } });
@@ -93,28 +93,17 @@ describe("daily retry of owed payments", () => {
     let calls = 0;
     setStripeForTests({ paymentIntents: { create: async () => { calls++; return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
     await cron();
+    expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "failed", retriedAt: null });
+    expect(calls).toBe(0);
+    const { payOwed } = await import("@/lib/server/holds");
+    expect(await payOwed(dev.user)).toMatchObject({ paid: 2, stillFailing: [] });
+    expect(calls).toBe(2);
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "charged" });
-    expect(calls).toBeGreaterThanOrEqual(1);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Receipt: you paid $9.00" }, payment: true } })).toBe(1);
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: { endsWith: "paid $9.00 for your written answers" } } })).toBe(1);
-    // The open chargeback is never retried and keeps the hold until the admin resolves it.
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { endsWith: "paid $9.00 for your written answers" }, groupKey: "tarrived" } })).toBe(1);
+    // The chargeback is repaid too (to the platform: the tester keeps their share), but the hold stays on until the admin resolves it.
+    expect(await db.payment.findFirstOrThrow({ where: { developerId: dev.user.id, kind: "chargeback" } })).toMatchObject({ amountCents: 700, testerCents: 0, status: "charged" });
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
-  });
-
-  it("a declined retry waits a day before trying again", async () => {
-    const { dev, sessionId, tester } = await waiting14();
-    await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
-    const p = await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 900, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + 86_400_000) } });
-    let calls = 0;
-    setStripeForTests({ paymentIntents: { create: async (x: { metadata?: { payKey?: string } }) => { if (String(x.metadata?.payKey ?? "").startsWith("retry-")) calls++; throw new Error("declined"); } } } as unknown as Stripe);
-    await cron();
-    await cron();
-    expect(calls).toBe(1);
-    expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).retriedAt).not.toBeNull();
-    // (Owner, Oct 27) After the 3-day cut-off the automatic daily retries stop.
-    const late = await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 800, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() - 1000) } });
-    await cron();
-    expect((await db.payment.findUniqueOrThrow({ where: { id: late.id } })).retriedAt).toBeNull();
   });
 });
 

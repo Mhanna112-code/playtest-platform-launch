@@ -111,7 +111,7 @@ describe("O) pop-up failures", () => {
   });
 });
 
-describe("Q) the owed window (a declined charge, before the hold)", () => {
+describe("Q) a declined payment starts the hold at once (no owed window)", () => {
   async function owing() {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
@@ -119,57 +119,89 @@ describe("Q) the owed window (a declined charge, before the hold)", () => {
     await settle();
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
-    const mk = (cents: number, days = 2) => db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: cents, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + days * DAY) } });
-    return { dev, tester, sessionId, testId, sub, mk };
+    return { dev, tester, sessionId, testId, sub };
   }
+  const decline = () => setStripeForTests({ paymentIntents: { create: async () => { throw new Error("declined"); } } } as unknown as Stripe);
 
-  it("a DAILY 'Pay $X by <date and time> or your tests are paused': one line across all owed payments, stacked, emailed even with email Off", async () => {
-    const { dev, mk } = await owing();
+  it("a declined Pay starts the payment hold AT ONCE: no 3-day window, no daily retry, no 'Pay $X by' reminder; 'Your tests are paused' ignores Off and stacks with the day's hold lines", async () => {
+    const { dev, sessionId, sub, tester } = await owing();
     await db.user.update({ where: { id: dev.user.id }, data: { emailPref: "off" } });
-    setStripeForTests({ paymentIntents: { create: async () => { throw new Error("declined"); } } } as unknown as Stripe);
-    await mk(900);
-    await mk(500, 1);
+    decline();
+    const r = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
+    expect(r.status).toBe(402);
+    expect(r.body.error).toMatchObject({ held: true, failed: "Your Pay on Harbor Run was declined" });
+    expect(r.body.error.message).toMatch(/Your tests are paused until you pay what you owe/);
+    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
+    const p = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } });
+    expect(p.status).toBe("failed");
+    // More declines during the hold add to what is owed (and say so, stacked with the day's other hold / payment lines).
+    const mine = await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 500, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date() } });
+    const { declinedPayment } = await import("@/lib/server/holds");
+    expect(await declinedPayment(dev.user.id, mine.id, 500, "Ana Silva's recording")).toBe(false); // the hold was already on
+    const l = await lines(dev.user.id);
+    expect(l.filter((x) => x.text === "Your tests are paused")).toHaveLength(1);
+    expect(l.find((x) => x.text === "Your tests are paused")).toMatchObject({ own: false, groupKey: "payhold", mustEmail: true, payment: true });
+    expect(l.find((x) => x.text.startsWith("Another payment was declined"))).toMatchObject({ groupKey: "payhold" });
+    // No cron retry, no reminder, no new hold.
     await cron();
-    await cron();
-    const l = (await lines(dev.user.id)).filter((x) => x.text.startsWith("Pay $"));
-    expect(l).toHaveLength(1);
-    expect(l[0].text).toMatch(/^Pay \$14\.00 by .+ or your tests are paused$/);
-    expect(l[0]).toMatchObject({ own: false, groupKey: "owed", payment: true });
-    // It ignores Off: it goes in the ONE end-of-day email (not right away), once.
-    const mails = await db.outboxEmail.findMany({ where: { to: dev.user.email, text: { contains: "Pay $14.00 by" } } });
+    expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).retriedAt).toBeNull();
+    expect((await lines(dev.user.id)).filter((x) => x.text.startsWith("Pay $"))).toHaveLength(0);
+    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdCount).toBe(1);
+    // It ignores Off: it goes in the ONE end-of-day email, once.
+    const mails = await db.outboxEmail.findMany({ where: { to: dev.user.email, text: { contains: "Your tests are paused" } } });
     expect(mails).toHaveLength(1);
     expect(mails[0].subject).toMatch(/^Your Playtest account updates/);
-    await db.notification.updateMany({ where: { userId: dev.user.id, groupKey: "owed" }, data: { createdAt: new Date(Date.now() - 25 * 3_600_000) } });
-    await cron();
-    expect((await lines(dev.user.id)).filter((x) => x.text.startsWith("Pay $")).length).toBe(2); // daily
+    // The tester reads only "delayed".
+    expect((await lines(tester.user.id)).map((x) => x.text).join(" ")).not.toMatch(/failed|hold|chargeback|suspend/i);
   });
 
-  it("while any failed payment is owed: Pay and extra pay wait ('Pay what you owe first.'), Reject works; the tester's Dispute and Charge wait", async () => {
-    const { dev, tester, sessionId, testId, sub, mk } = await owing();
+  it("a declined Charge (the tester's) and a declined extra pay start the hold at once too", async () => {
+    const { dev, testId, sessionId, sub, tester } = await owing();
+    decline();
+    // The tester's Charge: Charge has opened (14 days and Open until passed).
+    await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000), choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 14 * DAY) } });
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } });
+    const c = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true });
+    expect(c.status).toBe(200);
+    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
+    expect((await lines(tester.user.id)).some((x) => /may be delayed/.test(x.text) && x.groupKey === "tdelayed")).toBe(true);
+    // Extra pay: unavailable during the hold (refused before the card is tried).
+    const x = await act(testId, "pay-extra", dev.cookie, { seenAt: seen(), contractId: sessionId, submissionId: sub.id, amount: "2.00" });
+    expect(x.body.error.code).toBe("held");
+    // A developer with no hold whose extra pay is declined: a hold at once.
+    const e = await owing();
+    await db.review.create({ data: { submissionId: e.sub.id, contractId: e.sessionId, amountCents: 1000, agreedCents: 1000, payKey: "k-" + randomUUID() } });
+    const ex = await act(e.testId, "pay-extra", e.dev.cookie, { seenAt: seen(), contractId: e.sessionId, submissionId: e.sub.id, amount: "2.00" });
+    expect(ex.status).toBe(402);
+    expect(ex.body.error.held).toBe(true);
+    expect((await db.user.findUniqueOrThrow({ where: { id: e.dev.user.id } })).holdStartedAt).not.toBeNull();
+    expect(await db.payment.count({ where: { contractId: e.sessionId, kind: "extra", status: "failed" } })).toBe(1);
+  });
+
+  it("while on a hold Pay, Reject and extra pay are refused; the tester's Dispute and Charge wait with 'delayed' wording", async () => {
+    const { dev, sessionId, testId, sub } = await owing();
     const two = await joined(testId, "Ben Carter", "he");
     await sact(two.sessionId, "written", two.tester.cookie, { answers: ["a", "b"] });
     await settle();
     const sub2 = await db.submission.findFirstOrThrow({ where: { contractId: two.sessionId } });
     // A paid-below-listing piece the tester may dispute, before anything is owed.
     expect((await pay(dev.cookie, { kind: "submission", id: sub2.id, amount: "4.00", tickedCents: 400, reason: "Only half answered" })).status).toBe(200);
-    await mk(900);
-    const p = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
-    expect(p.status).toBe(409);
-    expect(p.body.error.message).toBe("Pay what you owe first.");
-    expect((await act(testId, "pay-extra", dev.cookie, { seenAt: seen(), contractId: sessionId, submissionId: sub.id, amount: "2.00" })).body.error.message).toBe("Pay what you owe first.");
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, action: "reject", reason: "Not what I asked for" })).status).toBe(200);
+    await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: (await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).testerId, amountCents: 900, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date() } });
+    await startHold(dev.user.id, "unpaid");
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).body.error.code).toBe("held");
+    expect((await act(testId, "pay-extra", dev.cookie, { seenAt: seen(), contractId: sessionId, submissionId: sub.id, amount: "2.00" })).body.error.code).toBe("held");
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, action: "reject", reason: "Not what I asked for" })).body.error.code).toBe("held");
     const d = await sact(two.sessionId, "dispute", two.tester.cookie, { kind: "submission", id: sub2.id, reason: "I answered everything properly", seenAt: seen(), confirmed: true });
     expect(d.status).toBe(409);
     expect(d.body.error.message).toBe("Payment from this developer is delayed right now. You can try again once it's sorted.");
     expect(d.body.error.message).not.toMatch(/failed/i);
-    void tester;
     // Pay what you owe: it works again.
     setStripeForTests(null);
     expect((await payOwed(dev.user)).paid).toBe(1);
     expect((await sact(two.sessionId, "dispute", two.tester.cookie, { kind: "submission", id: sub2.id, reason: "I answered everything properly", seenAt: seen(), confirmed: true })).status).toBe(200);
   });
 
-  it("when a payment fails and when a retry succeeds, both sides get the live blue notice and the first press stops once", async () => {
+  it("when a payment fails and when Pay what you owe succeeds, both sides get the live blue notice and the first press stops once", async () => {
     const { dev, testId } = await setup();
     const ana = await joined(testId);
     const r = await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: listingBody({ productName: "Night Ferry", title: "Night Ferry" }) })));
@@ -180,23 +212,25 @@ describe("Q) the owed window (a declined charge, before the hold)", () => {
     const subA = await db.submission.findFirstOrThrow({ where: { contractId: ana.sessionId } });
     const loaded = seen();
     await new Promise((x) => setTimeout(x, 40));
-    const p = await db.payment.create({ data: { kind: "review", contractId: ana.sessionId, submissionId: subA.id, developerId: dev.user.id, testerId: ana.tester.user.id, amountCents: 800, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + 2 * DAY) } });
+    const p = await db.payment.create({ data: { kind: "review", contractId: ana.sessionId, submissionId: subA.id, developerId: dev.user.id, testerId: ana.tester.user.id, amountCents: 800, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date() } });
     await new Promise((x) => setTimeout(x, 40));
-    const devStop = await act(B, "stop", dev.cookie, { seenAt: loaded });
-    expect(devStop.body.error.code).toBe("stop_once");
-    expect(devStop.body.error.changes.map((c: { text: string }) => c.text).join(" ")).toMatch(/Payment failed on Harbor Run/);
+    // The owner's rule: only Cancel call works during a hold, so the dev-side stop reasons are read through the live box (the same list the stop boxes use).
+    const { devChanges } = await import("@/lib/server/live");
+    const devLines = (await devChanges(dev.user.id, B, new Date(loaded), "", db, { all: true })).map((c) => c.text).join(" ");
+    expect(devLines).toMatch(/Payment failed on Harbor Run: \$8\.00 to Ana Silva for the written answers · pay what you owe in Payments/);
+    expect(devLines).not.toMatch(/retry|pay by/);
     const testerStop = await sact(ana.sessionId, "leave", ana.tester.cookie, { seenAt: loaded });
     expect(testerStop.body.error.code).toBe("stop_once");
     expect(JSON.stringify(testerStop.body.error.changes)).not.toMatch(/failed/i);
-    // The daily retry succeeds: both read it, and each first press stops once with the notice.
+    // Pay what you owe goes through: both read it, and the tester's first press stops once with the notice.
     setStripeForTests({ paymentIntents: { create: async () => ({ id: "pi_" + randomUUID(), status: "succeeded" }) } } as unknown as Stripe);
     const loaded2 = seen();
     await new Promise((x) => setTimeout(x, 40));
-    await cron();
+    expect((await payOwed(dev.user)).paid).toBe(1);
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).status).toBe("charged");
     await new Promise((x) => setTimeout(x, 40));
-    const devStop2 = await act(B, "stop", dev.cookie, { seenAt: loaded2 });
-    expect(devStop2.body.error.changes.map((c: { text: string }) => c.text).join(" ")).toMatch(/Payment went through on Harbor Run/);
+    const devLines2 = (await devChanges(dev.user.id, B, new Date(loaded2), "", db, { all: true })).map((c) => c.text).join(" ");
+    expect(devLines2).toMatch(/Payment went through on Harbor Run/);
     const testerStop2 = await sact(ana.sessionId, "leave", ana.tester.cookie, { seenAt: loaded2 });
     expect(testerStop2.body.error.code).toBe("stop_once");
     expect(testerStop2.body.error.changes.length).toBeGreaterThan(0);
@@ -317,13 +351,13 @@ describe("T) extra pay beside each sent part, capped at 100% of the contract tot
     const p = await db.payment.findFirstOrThrow({ where: { contractId: sessionId, kind: "extra" } });
     expect(p).toMatchObject({ amountCents: 15_000, feeCents: 3000, testerCents: 12_000, submissionId: sub.id });
     const bell = (await lines(tester.user.id)).find((l) => /paid you \$150\.00 extra for Harbor Run$/.test(l.text))!;
-    expect(bell).toMatchObject({ own: true, payment: true });
+    expect(bell).toMatchObject({ own: false, groupKey: "textra", payment: true }); // (Owner, Oct 27) "<dev> paid you $X extra" lines stack across tests, one entry a day
     expect((await overListingRoom(sessionId)).roomCents).toBe(5000);
     const over = await extra(dev.cookie, testId, { contractId: sessionId, submissionId: sub.id, amount: "60.00" });
     expect(over.status).toBe(400);
-    expect(over.body.error.message).toBe("You can pay Ana Silva up to $50.00 more above the listing prices.");
+    expect(over.body.error.message).toBe("This is more than you can pay above the listing (up to $50).");
     expect((await extra(dev.cookie, testId, { contractId: sessionId, submissionId: sub.id, amount: "50.00" })).status).toBe(200);
-    expect((await extra(dev.cookie, testId, { contractId: sessionId, submissionId: sub.id, amount: "1.00" })).body.error.message).toMatch(/^Everything allowed above the listing prices/);
+    expect((await extra(dev.cookie, testId, { contractId: sessionId, submissionId: sub.id, amount: "1.00" })).body.error.message).toBe("This is more than you can pay above the listing (up to $0).");
   });
 
   it("a normal Pay above the listing counts toward the same cap; booked and held calls add to the contract total; an unsent part has no extra box", async () => {
@@ -340,7 +374,7 @@ describe("T) extra pay beside each sent part, capped at 100% of the contract tot
     const two = await sentAt(10_000, "Ben Carter");
     const tooMuch = await pay(two.dev.cookie, { kind: "submission", id: two.sub.id, amount: "250.00", tickedCents: 25_000, understood: true });
     expect(tooMuch.status).toBe(400);
-    expect(tooMuch.body.error.message).toMatch(/^You can pay at most \$200\.00 for this: everything paid above the listing prices is capped at 100% of Ben Carter's contract total\.$/);
+    expect(tooMuch.body.error.message).toBe("This is more than you can pay above the listing (up to $100).");
   });
 });
 
@@ -403,7 +437,7 @@ describe("Y) cross-tab sign-in", () => {
     expect(src("lib/client.ts")).toContain('"x-uid"');
     expect(src("lib/client.ts")).toContain("account_changed");
     const doc = fs.readFileSync(path.resolve(__dirname, "../docs/DESIGN-DOC.md"), "utf8");
-    expect(doc).not.toContain("Signed in as someone else");
+    expect(doc).toContain("cover screen is gone");
   });
 });
 
@@ -442,13 +476,14 @@ describe("the final list of emails that ignore Off, and each notification emaile
     expect((await db.outboxEmail.findMany({ where: { to: off.user.email } })).map((m) => m.text).join()).toContain("The team stopped");
   });
 
-  it("the always list is exactly: the owed reminder, account paused / active again, the team pausing / stopping / closing a test", () => {
+  it("the always list is exactly: Your tests are paused (a hold starting, a chargeback hold), running again, account paused / active again, the team pausing / stopping / closing a test", () => {
     const hits: string[] = [];
     const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
     for (const f of walk(path.resolve(__dirname, "../src/lib/server"))) {
       for (const l of fs.readFileSync(f, "utf8").split(/\r?\n/)) if (l.includes("always: true") && !l.trim().startsWith("//") && !l.trim().startsWith("*")) hits.push(path.basename(f));
     }
     const names = [...hits].sort();
-    expect(names).toEqual(["holds.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
+    // (Owner, Oct 27) holds.ts: the hold starting (payment, chargeback), a payment hold turning into a chargeback hold, and "running again". The owed reminder is gone.
+    expect(names).toEqual(["holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
   });
 });

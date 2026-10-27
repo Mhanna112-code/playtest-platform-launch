@@ -10,17 +10,18 @@ import { DeveloperTiles } from "@/components/ProfileTiles";
 import { StatTile } from "@/components/StatTile";
 import { CategoryBadges } from "@/components/Category";
 import { CategoryChips, CategoryTile, daysLeft, FeedbackBar, mainCategory, PartBadges, Seats, StatusPill } from "@/components/Ui";
-import { canAskToRejoin, chargeAmount, termsLine, testerShare } from "@/lib/rules";
+import { callJoinable, canAskToRejoin, chargeAmount, termsLine, testerShare, testPaused } from "@/lib/rules";
 import { ratingSummary } from "@/lib/server/ratings";
 import { unreadCount } from "@/lib/server/messages";
 import { asListing, findTests } from "@/lib/server/tests";
-import { SuspendedBox } from "@/components/SuspendedBox";
+import { RestrictedBox } from "@/components/RestrictedBox";
+import { devRestricted, restrictionsOf } from "@/lib/restricted";
 import { PayoutBanner } from "@/components/PayoutBanner";
-import { UpcomingCalls } from "./UpcomingCalls";
+import { CallsBox } from "./CallsBox";
+import { DismissRemoved } from "./DismissRemoved";
 import { LongList } from "@/components/LongList";
 import { rejoinAskLine } from "@/lib/server/joining";
 import { pronouns } from "@/lib/format";
-import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
 import { HOLD_APPROVAL_AFTER } from "@/lib/rules";
@@ -49,22 +50,15 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
     );
   const now = new Date();
   const side = sideFor(u, "/app");
-  const cbSteps = side === "developer" && u.holdStartedAt && !u.suspendedAt ? await chargebackSteps(u.id) : null;
+  // (Owner, Oct 27) A suspension, a payment hold and a chargeback hold are one state for the developer's pages: ONE blue box at the very top says what happened and how to resume.
+  const devOff = side === "developer" && u.isDeveloper && devRestricted(u, side);
+  const testerOff = side === "tester" && u.isTester && !!u.suspendedAt;
+  const cbSteps = devOff && u.holdStartedAt ? await chargebackSteps(u.id) : null;
   return (
     <div className="space-y-8">
-      {/* (Design doc 2) A suspended account lands here: the red box at the very top names the press that failed. */}
-      {u.suspendedAt && <SuspendedBox failed={failed} developer={u.isDeveloper && side === "developer"} tester={u.isTester && side === "tester"} />}
-      {/* The other boxes that can sit at the very top: a payment hold (developer), the account active again (for 3 days after a suspension). */}
-      {side === "developer" && u.holdStartedAt && !u.suspendedAt && (cbSteps ? (
-        <>
-          <ChargebackSteps steps={cbSteps} />
-          <p className="note" data-hold-box=""><Link href="/app/payments">Open Payments</Link></p>
-        </>
-      ) : (
-        <section className="info" role="status" data-hold-box="">
-          <b>Your tests are paused until you pay what you owe.</b> Testers can still send work; no new testers, invites or calls. {u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER && <span data-hold-review="">After you pay, the team will review your account before your tests resume. </span>}<Link href="/app/payments">Pay what you owe in Payments</Link>.
-        </section>
-      ))}
+      {(devOff || testerOff) && (
+        <RestrictedBox failed={failed} developer={devOff} tester={testerOff} kinds={restrictionsOf(u)} steps={cbSteps?.remaining} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />
+      )}
       {!u.suspendedAt && u.reinstatedAt && now.getTime() - u.reinstatedAt.getTime() < 3 * DAY && (
         <p className="ok rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2" role="status" data-reinstated-box="">Your account is active again · {fmtDateTime(u.reinstatedAt)}</p>
       )}
@@ -74,12 +68,12 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
           <h1 className="text-3xl font-bold tracking-tight text-white">{u.name || u.email}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
-          {side === "developer" && !u.suspendedAt && <Link className="btn" href="/app/tests/new"><PlusCircle className="h-4 w-4" /> Post a test</Link>}
+          {side === "developer" && !devOff && <Link className="btn" href="/app/tests/new"><PlusCircle className="h-4 w-4" /> Post a test</Link>}
           {side === "tester" && !u.suspendedAt && <Link className="btn" href="/app/find"><Compass className="h-4 w-4" /> Find tests</Link>}
         </div>
       </div>
       {/* (NEXT-UI 6) One side at a time: the dashboard of the side in use (the header switch changes it). */}
-      {side === "developer" && <DeveloperDashboard user={u} now={now} category={category} />}
+      {side === "developer" && <DeveloperDashboard user={u} now={now} category={category} restricted={devOff} />}
       {side === "tester" && <TesterDashboard user={u} now={now} />}
     </div>
   );
@@ -89,9 +83,8 @@ type Viewer = Awaited<ReturnType<typeof requirePageUser>>;
 
 // ---------------------------------------------------------------- developer (the full app's dev/page.tsx)
 
-async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: Date; category?: string }) {
+async function DeveloperDashboard({ user, now, category, restricted }: { user: Viewer; now: Date; category?: string; restricted: boolean }) {
   const userId = user.id;
-  const suspended = !!user.suspendedAt;
   const allTests = await db.test.findMany({
     where: { developerId: userId },
     orderBy: { createdAt: "desc" },
@@ -106,7 +99,7 @@ async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: 
     db.invite.groupBy({ by: ["testId"], where: { testId: { in: testIds }, status: "sent" }, _count: { _all: true } }),
     db.payment.findMany({ where: { developerId: userId, status: "failed", settledAt: null, owedUntil: { not: null } }, select: { contractId: true } }),
     db.accessKey.groupBy({ by: ["testId"], where: { testId: { in: testIds }, status: "free" }, _count: { _all: true } }),
-    db.call.findMany({ where: { status: "booked", startsAt: { gt: now, lte: new Date(now.getTime() + 7 * DAY) }, contract: { test: { developerId: userId } } }, orderBy: { startsAt: "asc" }, include: { contract: { include: { tester: true, test: true } } } }),
+    db.call.findMany({ where: { status: "booked", startsAt: { gt: new Date(now.getTime() - 4 * 3_600_000) }, contract: { test: { developerId: userId } } }, orderBy: { startsAt: "asc" }, include: { contract: { include: { tester: true, test: true } } } }),
   ]);
   const unread = new Map(unreadList);
   const applicants = new Map((await db.user.findMany({ where: { id: { in: apps.map((a) => a.testerId) } } })).map((x) => [x.id, x]));
@@ -141,8 +134,16 @@ async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: 
   }
   items.sort((a, b) => b.at.getTime() - a.at.getTime());
   const toReview = items.filter((i) => i.key.startsWith("s-") || i.key.startsWith("c-")).length;
-  // (Owner, Oct 26) A suspended developer can neither Pay nor Reject: sent work and held calls are not offered for review until it is lifted.
-  const shown = suspended ? items.filter((i) => !/^s-|^c-/.test(i.key)) : items;
+  // (Owner, Oct 27) Sent work and held calls waiting for Pay / Reject are in the "Needs review" box (one row per test); Needs you keeps the answers. Under a suspension or a hold
+  // the pages these lead to are closed: neither box is shown.
+  const shown = restricted ? [] : items.filter((i) => !/^s-|^c-/.test(i.key));
+  const reviewRows = restricted ? [] : allTests
+    .map((t) => {
+      const mine = items.filter((i) => /^s-|^c-/.test(i.key) && i.href.startsWith(`/app/tests/${t.id}#`));
+      return { id: t.id, title: t.title, n: mine.length, at: mine.reduce((m, i) => (i.at > m ? i.at : m), new Date(0)) };
+    })
+    .filter((r) => r.n > 0)
+    .sort((a, b) => b.at.getTime() - a.at.getTime());
   const testersTotal = allTests.reduce((n, t) => n + t.contracts.filter((c) => c.status === "working").length, 0);
   const initial = (name: string) => name.trim().charAt(0).toUpperCase();
   const invitesBy = new Map(invites.map((i) => [i.testId, i._count._all]));
@@ -150,7 +151,9 @@ async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: 
   for (const a of apps) appsBy.set(a.testId, (appsBy.get(a.testId) ?? 0) + 1);
   const keysFree = new Map(freeKeys.map((k) => [k.testId, k._count._all]));
   const owedTests = new Set(owedPays.map((p) => contractTest.get(p.contractId ?? "")?.t.id).filter(Boolean));
-  const calls = nextCalls.map((c) => ({ id: c.id, testId: c.contract.testId, test: c.contract.test.title, who: displayName(c.contract.tester), when: c.startsAt.toISOString(), minutes: c.minutes, needsReason: c.startsAt.getTime() - now.getTime() < 24 * 3_600_000 }));
+  // (Owner, Oct 27) The Calls box: every booked call that has not ended, soonest first. Join shows only while the call can be joined; the row links to the call on the test page, or (when the
+  // test pages are closed) has Cancel itself.
+  const calls = nextCalls.filter((c) => c.startsAt > now || callJoinable(c, now)).map((c) => ({ id: c.id, testId: c.contract.testId, test: c.contract.test.title, who: displayName(c.contract.tester), when: c.startsAt.toISOString(), minutes: c.minutes, needsReason: c.startsAt.getTime() - now.getTime() < 24 * 3_600_000, joinable: callJoinable(c, now) }));
   const seenAt = now.toISOString();
   return (
     <>
@@ -160,6 +163,25 @@ async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: 
         <StatTile icon={Wallet} label="Spent so far" value={compactMoney(spent._sum.amountCents ?? 0)} hint="accepting work" tone="emerald" />
       </section>
       <DeveloperTiles userId={userId} />
+
+      {reviewRows.length > 0 && (
+        <section className="space-y-3" id="needs-review" aria-label="Needs review">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
+            <span className="h-2 w-2 rounded-full bg-amber-400" /> Needs review <span className="text-sm font-normal text-slate-400">{num(reviewRows.length)}</span>
+          </h2>
+          {/* Newest first: 3 rows, then "Show N more" opening a scroll box. Each row opens that test's Needs you. */}
+          <LongList shown={3} tall="max-h-72" className="space-y-2">
+            {reviewRows.map((r) => (
+              <li key={r.id}>
+                <Link href={`/app/tests/${r.id}#needs-you`} className="card card-hover flex items-center gap-3 p-4 no-underline hover:no-underline">
+                  <p className="min-w-0 flex-1 truncate text-slate-300" title={`${r.title} · ${plural(r.n, "part")} to pay or reject`}><b className="text-white">{r.title}</b> · {plural(r.n, "part")} to pay or reject</p>
+                  <span className="flex shrink-0 items-center gap-1 text-sm text-indigo-300">Review <ArrowRight className="h-4 w-4" /></span>
+                </Link>
+              </li>
+            ))}
+          </LongList>
+        </section>
+      )}
 
       {shown.length > 0 && (
         <section className="space-y-3" id="needs-you">
@@ -186,7 +208,7 @@ async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: 
         </section>
       )}
 
-      <UpcomingCalls calls={calls} seenAt={seenAt} />
+      <CallsBox calls={calls} seenAt={seenAt} restricted={restricted} />
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -198,7 +220,7 @@ async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: 
             <AppWindow className="h-12 w-12 text-slate-600" />
             <p className="font-medium text-slate-300">No tests yet</p>
             <p className="max-w-sm text-sm text-slate-500">Post your app, site or game and choose how you want feedback.</p>
-            {!suspended && <Link href="/app/tests/new" className="btn mt-2"><PlusCircle className="h-4 w-4" /> Post a test</Link>}
+            {!restricted && <Link href="/app/tests/new" className="btn mt-2"><PlusCircle className="h-4 w-4" /> Post a test</Link>}
           </div>
         ) : (
           <ul className="grid gap-4 md:grid-cols-2">
@@ -208,7 +230,7 @@ async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: 
               const waiting = t.contracts.filter((c) => c.submissions.some((s) => !s.review) && !c.submissions.some((s) => s.review && !s.review.rejected)).length;
               const messages = t.contracts.reduce((n, c) => n + (unread.get(c.id) ?? 0), 0);
               const paused = !!(user.holdStartedAt || user.suspendedAt || t.adminPausedAt);
-              const why = user.suspendedAt ? "account suspended" : user.holdStartedAt ? "payment hold" : t.adminPausedAt ? "paused by the team" : "";
+              const why = user.suspendedAt ? "account suspended" : user.holdStartedAt ? (user.holdReason === "chargeback" ? "chargeback hold" : "payment hold") : t.adminPausedAt ? "paused by the team" : "";
               const nInvited = invitesBy.get(t.id) ?? 0, nApps = appsBy.get(t.id) ?? 0;
               const title = <span className="text-lg font-semibold text-white">{t.title}</span>;
               return (
@@ -219,7 +241,8 @@ async function DeveloperDashboard({ user, now, category }: { user: Viewer; now: 
                       <CategoryTile category={mainCategory(t.categories)} />
                       <div className="min-w-0 space-y-2">
                         {t.productName && <p className="kicker">{t.productName}</p>}
-                        <p><Link href={`/app/tests/${t.id}`} className={`${CARD_LINK} no-underline hover:no-underline`}>{title}</Link></p>
+                        {/* Under a suspension or a hold the test pages are closed: the card doesn't open. */}
+                        <p>{restricted ? title : <Link href={`/app/tests/${t.id}`} className={`${CARD_LINK} no-underline hover:no-underline`}>{title}</Link>}</p>
                         <div className="flex flex-wrap gap-2">
                           {t.status === "stopped" ? <StatusPill status="stopped" /> : paused ? <span className="badge border-amber-300/40 text-amber-200"><span className="h-2 w-2 rounded-full bg-amber-300" /> Paused{why ? `: ${why}` : ""}</span> : <StatusPill status={t.status} />}
                           {owedTests.has(t.id) && <span className="badge border-rose-300/40 text-rose-200">Payment failed</span>}

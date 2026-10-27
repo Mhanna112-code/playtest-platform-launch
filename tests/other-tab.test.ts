@@ -286,7 +286,7 @@ describe("payments and disputes, only for this test", () => {
     expect((await live(dev.cookie, `test:${B}`, pageLoaded)).body.changes).toEqual([]);
     // A failure on A (owed): shows and stops on B (test page and Edit's Save), naming Harbor Run.
     await fail(ana.sessionId, dev.user.id, ana.tester.user.id, subA.id);
-    const line = expect.stringMatching(/^Payment failed on Harbor Run: \$8\.00 to Ana Silva for the written answers · we'll retry tomorrow · pay by .+ to avoid a pause$/);
+    const line = expect.stringMatching(/^Payment failed on Harbor Run: \$8\.00 to Ana Silva for the written answers · pay what you owe in Payments$/);
     expect((await live(dev.cookie, `test:${B}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([line]);
     expect(texts(await act(B, "stop", dev.cookie, { seenAt: pageLoaded }))).toEqual([line]);
     const v = (await db.test.findUniqueOrThrow({ where: { id: B } })).version;
@@ -317,12 +317,13 @@ describe("payments and disputes, only for this test", () => {
     const notesBefore = await db.notification.count({ where: { userId: ana.tester.user.id } });
     const r = await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { payKey: randomUUID(), seenAt: pageLoaded, kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, tab: "tab-1" } })).then(json);
     expect(r.body.error.code).toBe("card_failed");
+    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
     const owed = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id, status: "failed" } });
     expect(owed.owedUntil).not.toBeNull();
     // The developer's other test names the failure (top box and stop once).
-    const alert = expect.stringMatching(/^Payment failed on Harbor Run: \$10\.00 to Ana Silva for the written answers · we'll retry tomorrow · pay by .+ to avoid a pause$/);
+    const alert = expect.stringMatching(/^Payment failed on Harbor Run: \$10\.00 to Ana Silva for the written answers · pay what you owe in Payments$/);
     expect((await live(dev.cookie, `test:${B}`, pageLoaded, "tab-2")).body.changes.map((c: { text: string }) => c.text)).toEqual([alert]);
-    expect(texts(await act(B, "next-round", dev.cookie, { seenAt: pageLoaded, tab: "tab-2" }))).toEqual([alert]);
+    expect((await act(B, "next-round", dev.cookie, { seenAt: pageLoaded, tab: "tab-2" })).body.error.code).toBe("held"); // (Owner, Oct 27) the declined payment started the hold: every developer press is refused
     // The tester: one bell, the top-box line and a stop once, worded without failed / declined / card / hold.
     const delayed = "Nora Lane's payment for your written answers ($10) is delayed. You'll be told when it arrives.";
     const bells = await db.notification.findMany({ where: { userId: ana.tester.user.id }, orderBy: { createdAt: "asc" } });
@@ -336,7 +337,8 @@ describe("payments and disputes, only for this test", () => {
     const { payOwed } = await import("@/lib/server/holds");
     expect((await payOwed(dev.user)).paid).toBe(1);
     const after = await db.notification.findMany({ where: { userId: ana.tester.user.id }, orderBy: { createdAt: "asc" } });
-    expect(after.map((n) => n.text).slice(afterDecline)).toEqual(["Nora Lane paid $10.00 for your written answers"]);
+    // (Owner, Oct 27) The declined payment started the hold at once, so paying it lifts the hold: the tester also reads that the test is running again.
+    expect(after.map((n) => n.text).slice(afterDecline)).toEqual(["Nora Lane paid $10.00 for your written answers", "“Harbor Run” is running again"]);
     expect((await live(ana.tester.cookie, `session:${ana.sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([delayed, "Nora Lane paid $10.00 for your written answers"]);
   });
 

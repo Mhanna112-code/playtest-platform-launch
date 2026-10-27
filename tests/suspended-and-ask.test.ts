@@ -46,18 +46,20 @@ describe("a suspended developer keeps Cancel call, End early and Stop, with or w
     expect((await owed(s.dev.cookie)).status).toBe(hold ? 200 : 403);
     // The three presses that stay.
     expect((await act(s.testId, "cancel-call", s.dev.cookie, { callId: call.id, seenAt: seen(), confirmed: true })).status).toBe(200);
-    expect((await act(s.testId, "end-early", s.dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], reason: "We have what we need" })).status).toBe(200);
-    expect((await act(s.testId, "stop", s.dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+    // (Owner, Oct 27) End early and Stop are refused too (paused tests close after 7 days anyway; stopping would cut off testers' unsent work).
+    expect((await act(s.testId, "end-early", s.dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], reason: "We have what we need" })).body.error.code).toBe("suspended");
+    expect((await act(s.testId, "stop", s.dev.cookie, { seenAt: seen(), confirmed: true })).body.error.code).toBe("suspended");
   });
 
-  it("a payment hold alone is unchanged: Pay is recorded and its charge waits", async () => {
+  it("a payment hold alone: Pay is refused as well", async () => {
     const s = await setup();
     const { tester, sessionId } = await joined(s.testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     await later();
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await startHold(s.dev.user.id, "unpaid");
-    expect((await pay(s.dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).body).toMatchObject({ status: "deferred" });
+    // (Owner, Oct 27) Pay is unavailable during a payment hold too (no "charged when your account is clear" path any more).
+    expect((await pay(s.dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).body.error).toMatchObject({ code: "held" });
   });
 });
 

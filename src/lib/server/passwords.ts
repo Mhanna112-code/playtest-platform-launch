@@ -48,7 +48,7 @@ export async function signUp(body: Record<string, unknown>, base: string) {
   let who: { name: string; isDeveloper: boolean; isTester: boolean } | null = null;
   if (role) {
     const name = typeof body.name === "string" ? body.name.trim().slice(0, 80) : "";
-    if (name.length < 2) throw field("Enter your name");
+    if (name.length < 1) throw field("Enter your name"); // (Owner, Oct 27) at least 1 character, no other rules
     if (!body.acceptTerms) throw field("Agree to the Terms of Use to sign up");
     who = { name, isDeveloper: role !== "tester", isTester: role !== "developer" };
   }

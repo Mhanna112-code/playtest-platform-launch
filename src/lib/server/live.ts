@@ -52,31 +52,27 @@ async function subKinds(ids: (string | null)[], tx: Tx | typeof db = db) {
 const pieceLabel = (p: { kind: string; callId: string | null; submissionId: string | null }, kinds: Map<string, string>) =>
   p.kind === "dispute" ? "dispute decision" : p.callId ? "live call" : kinds.get(p.submissionId ?? "") === "recording" ? "recording" : "written answers";
 
-const day = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-
 /**
  * (NEWEST+3, payments ACROSS TESTS) The developer's payment problems on ANY of their tests, naming the test: an owed
- * charge declined, a daily retry declined, a failed payment that went through (retry or paid off), a chargeback opened
+ * charge declined, a failed payment that went through (paid off with Pay what you owe), a chargeback opened
  * or resolved. (A declined Pay press the developer repeats is their own action: reason E from another tab. Ordinary
  * successful payments stay on their own test. A hold shows as the paused banner.)
  */
 export async function devPaymentChanges(devId: string, testId: string, since: Date, tx: Tx | typeof db = db): Promise<TestEventLike[]> {
   const pays = await tx.payment.findMany({
-    where: { developerId: devId, contractId: { not: null }, OR: [{ status: "failed", owedUntil: { not: null }, createdAt: { gt: since } }, { status: "failed", owedUntil: { not: null }, retriedAt: { gt: since } }, { settledAt: { gt: since } }] },
+    where: { developerId: devId, contractId: { not: null }, OR: [{ status: "failed", owedUntil: { not: null }, createdAt: { gt: since } }, { settledAt: { gt: since } }] },
     take: 100,
   });
   const contracts = await tx.contract.findMany({ where: { id: { in: pays.map((p) => p.contractId!) } }, select: { id: true, tester: true, test: { select: { title: true } } } });
   const cmap = new Map(contracts.map((c) => [c.id, c]));
   const kinds = await subKinds(pays.map((p) => p.submissionId), tx);
   const out: TestEventLike[] = [];
-  const now = new Date();
   for (const p of pays) {
     const c = cmap.get(p.contractId!);
     const title = c?.test.title ?? "a test";
     const who = `${money(p.amountCents)} to ${c ? displayName(c.tester) : "a tester"} for the ${pieceLabel(p, kinds)}`;
-    const next = p.owedUntil && p.owedUntil > now ? ` · we'll retry tomorrow · pay by ${day(p.owedUntil)} to avoid a pause` : " · pay what you owe in Payments";
+    const next = " · pay what you owe in Payments"; // (Owner, Oct 27) no retries and no cut-off any more: a declined payment is a hold at once
     if (p.settledAt && p.settledAt > since) out.push({ kind: "payment", text: `Payment went through on ${title}: ${who}`, createdAt: p.settledAt });
-    else if (p.status === "failed" && p.retriedAt && p.retriedAt > since) out.push({ kind: "payment", text: `Retry failed on ${title}: ${who}${next}`, createdAt: p.retriedAt });
     else if (p.status === "failed" && p.createdAt > since) out.push({ kind: "payment", text: `Payment failed on ${title}: ${who}${next}`, createdAt: p.createdAt });
   }
   // Chargebacks opened / resolved on the developer's OTHER tests (this test's come as its own events).

@@ -48,9 +48,10 @@ describe("bell stacking: same-day lines about one test stack, except the lines t
     await payOwed(dev.user);
     await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
     const after = await lines(dev.user.id);
-    for (const text of ["Your tests are paused", "Your tests are running again"]) expect(after.find((l) => l.text === text)?.own, text).toBe(true);
+    // (Owner, Oct 27) Hold started / lifted lines are one KIND ("payhold"): they stack across tests, one entry a day.
+    for (const text of ["Your tests are paused", "Your tests are running again"]) expect(after.find((l) => l.text === text), text).toMatchObject({ own: false, groupKey: "payhold" });
     const tl = await lines(tester.user.id);
-    expect(tl.find((l) => l.text.endsWith("was stopped"))?.own).toBe(true);
+    expect(tl.find((l) => l.text.endsWith("was stopped"))).toMatchObject({ own: false, groupKey: "tstopped" });
     // (Owner, Oct 26) A tester's paused / resumed lines stack per day across tests (a group), they are not their own line.
     expect(tl.find((l) => l.text.endsWith("is running again"))).toMatchObject({ own: false, groupKey: "paused" });
   });
@@ -72,12 +73,14 @@ describe("bell stacking: same-day lines about one test stack, except the lines t
     expect((await aact(a.cookie, "suspend", { id: dev.user.id, note: "Testing" })).status).toBe(200);
     expect((await aact(a.cookie, "unsuspend", { id: dev.user.id })).status).toBe(200);
     const dl = await lines(dev.user.id);
-    for (const re of [/was decided$/, /will close later$/, /^The team lifted the pause/, /^Your account is paused$/, /^Your account is active again$/])
-      expect(dl.find((l) => re.test(l.text))?.own, String(re)).toBe(true);
+    for (const re of [/will close later$/, /^The team lifted the pause/]) expect(dl.find((l) => re.test(l.text))?.own, String(re)).toBe(true);
+    // (Owner, Oct 27) Lines of the same kind stack across tests: account paused / active again are "admin decisions"; a decided dispute is "disputes decided".
+    for (const re of [/^Your account is paused$/, /^Your account is active again$/]) expect(dl.find((l) => re.test(l.text)), String(re)).toMatchObject({ own: false, groupKey: "admindecision" });
+    expect(dl.find((l) => /was decided$/.test(l.text))).toMatchObject({ own: false, groupKey: "disputedecided" });
     // (Owner, Oct 26) The team pausing or stopping your test stacks into one line a day across all your tests (their emails stay always-send).
     for (const re of [/^The team paused/, /^The team stopped/]) expect(dl.find((l) => re.test(l.text)), String(re)).toMatchObject({ own: false, groupKey: "team" });
     expect(dl.filter((l) => l.groupKey === "team").map(bellKey).filter((k, i, a) => a.indexOf(k) === i).length).toBe(1);
-    expect((await lines(tester.user.id)).find((l) => /dispute on .* was decided$/.test(l.text))?.own).toBe(true);
+    expect((await lines(tester.user.id)).find((l) => /dispute on .* was decided$/.test(l.text))).toMatchObject({ own: false, groupKey: "disputedecided" });
   });
 
   it("admins get ONE new-dispute line a day across different tests, linking to #disputes", async () => {
@@ -101,18 +104,19 @@ describe("bell stacking: same-day lines about one test stack, except the lines t
 });
 
 describe("a paused test is told by bell, not by a countdown on the pages", () => {
-  it("one bell when it is paused and one a day before it closes (once); no countdown text on the developer pages", async () => {
+  it("one reminder when it is paused and then once a day (replacing the day-before line); no countdown text on the developer pages", async () => {
     const { dev, testId } = await setup();
     await startHold(dev.user.id, "unpaid");
     const first = (await lines(dev.user.id)).find((l) => / is paused and closes on /.test(l.text))!;
-    expect(first.text).toMatch(/^Harbor Run is paused and closes on [A-Z][a-z]{2} \d{1,2} unless your account is cleared$/);
-    expect(first.own).toBe(true);
-    expect(first.link).toBe(`/app/tests/${testId}`);
-    // A day before: 6.5 days into the pause.
+    expect(first.text).toMatch(/^Harbor Run is paused and closes on [A-Z][a-z]{2} \d{1,2} unless you pay what you owe$/);
+    expect(first).toMatchObject({ own: false, groupKey: "pausedreminder", link: "/app/payments#owed", reminderKey: `paused:${testId}` });
+    // A day before: 6.5 days into the pause. Daily: once a day, and no separate "closes tomorrow" line any more.
     await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: new Date(Date.now() - 6.5 * DAY) } });
+    await db.notification.updateMany({ where: { userId: dev.user.id, groupKey: "pausedreminder" }, data: { createdAt: new Date(Date.now() - 25 * 3_600_000) } });
     await cron();
     await cron();
-    expect((await lines(dev.user.id)).filter((l) => l.text.startsWith("Harbor Run closes tomorrow")).length).toBe(1);
+    expect((await lines(dev.user.id)).filter((l) => / is paused and closes on /.test(l.text)).length).toBe(2);
+    expect((await lines(dev.user.id)).filter((l) => l.text.startsWith("Harbor Run closes tomorrow")).length).toBe(0);
     // The pages carry no countdown any more.
     const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
     const files = walk(path.resolve(__dirname, "../src/app/app")).filter((f) => /\.tsx$/.test(f));

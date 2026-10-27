@@ -9,7 +9,7 @@ import { openDispute } from "@/lib/server/payments";
 import { reportKeyBroken } from "@/lib/server/accessKeys";
 import { db } from "@/lib/db";
 import { displayName, fmtDate } from "@/lib/format";
-import { testerRefusal } from "@/lib/rules";
+import { PAUSED_RIGHT_NOW, testerRefusal } from "@/lib/rules";
 import { leaveTest, sendWritten } from "@/lib/server/tests";
 import { requireActive, requireConfirmed } from "@/lib/server/users";
 
@@ -34,6 +34,17 @@ async function finalRefusal(userId: string, contractId: string, action: string) 
   if (line) throw new HttpError(409, "gone", line);
 }
 
+/**
+ * (Owner, Oct 27) While the developer is SUSPENDED by the team their tests are paused and testers can only cancel booked calls (and rate: a suspended person's tests can still be
+ * rated by the other side). Under a payment or chargeback hold testers keep sending work as before (the other pauses are in each rule). Testers read only "paused".
+ */
+const PAUSED_OK = new Set(["cancel-call", "cancel-set", "rate"]);
+async function suspendedDevRefusal(userId: string, contractId: string, action: string) {
+  if (PAUSED_OK.has(action)) return;
+  const c = await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true, test: { select: { developer: { select: { suspendedAt: true } } } } } });
+  if (c && c.testerId === userId && c.test.developer.suspendedAt) throw new HttpError(409, "paused", `${PAUSED_RIGHT_NOW} You can only cancel booked calls for now.`);
+}
+
 // Tester actions on their own session (contract).
 export async function POST(req: Request, { params }: Ctx) {
   return handle(async () => {
@@ -42,6 +53,7 @@ export async function POST(req: Request, { params }: Ctx) {
     const body = await readJson(req);
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
     await finalRefusal(u.id, id, action);
+    await suspendedDevRefusal(u.id, id, action);
     const res0 = await run(u, id, action, body);
     const data = await res0.clone().json().catch(() => null);
     // A rename the page hadn't shown: the press went ahead; the note goes under the button.

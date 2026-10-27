@@ -56,7 +56,8 @@ describe("sign-up asks who you are, like the full app's", () => {
     expect((await db.testerProfile.count({ where: { userId: both.user.id } }))).toBe(1);
     const dev = await signUp({ email: mail(), password: "longenough1", role: "developer", name: "Dee Moss", acceptTerms: "yes" }, "http://localhost:3400");
     expect(dev.user).toMatchObject({ isDeveloper: true, isTester: false });
-    await expect(signUp({ email: mail(), password: "longenough1", role: "tester", name: "A", acceptTerms: "yes" }, "http://x")).rejects.toThrow();
+    await expect(signUp({ email: mail(), password: "longenough1", role: "tester", name: "   ", acceptTerms: "yes" }, "http://x")).rejects.toThrow(); // (Owner, Oct 27) a name is at least 1 character, no other rules
+    expect((await signUp({ email: mail(), password: "longenough1", role: "tester", name: "A", acceptTerms: "yes" }, "http://x")).user.name).toBe("A");
     await expect(signUp({ email: mail(), password: "longenough1", role: "tester", name: "Ana Silva" }, "http://x")).rejects.toThrow("Agree to the Terms");
     const plain = await signUp({ email: mail(), password: "longenough1" }, "http://localhost:3400");
     expect(plain.user).toMatchObject({ isDeveloper: false, isTester: false });

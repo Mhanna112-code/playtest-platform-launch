@@ -69,25 +69,36 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
     const r = await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), startsAt: atHours(80) });
     expect(r.body.error.message).not.toMatch(/suspend|hold|fail/i);
     await db.submission.update({ where: { id: sub.id }, data: { choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 86_400_000) } });
+    // (Owner, Oct 27) Under the team's suspension testers can only cancel booked calls (and rate): Charge and Let it go wait too. They read only "paused".
     const ch = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "10.00", tickedCents: 1000 });
-    expect(ch.body.error.message).toBe("This test is paused right now. You can charge once it resumes.");
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect(ch.body.error.message).toBe("This test is paused right now. You can only cancel booked calls for now.");
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: seen(), confirmed: true })).body.error.message).toBe("This test is paused right now. You can only cancel booked calls for now.");
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).body.error.code).toBe("paused");
     expect((await adm("unsuspend", a.cookie, { id: dev.user.id })).status).toBe(200);
     expect(await db.testEvent.count({ where: { testId, kind: "resumed" } })).toBe(1);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "is running again" } } })).toBe(1);
   });
 
-  it("the closed pages: Post and Messages for a developer; Find, the profile editor and Messages for a tester", () => {
-    expect(closedForSuspended("/app/tests/abc", { isDeveloper: true, isTester: false })).toBe(false); // they may open test pages (only Cancel call, End early and Stop work there)
-    expect(closedForSuspended("/app/tests/new", { isDeveloper: true, isTester: false })).toBe(true);
-    expect(closedForSuspended("/app/messages", { isDeveloper: true, isTester: false })).toBe(true);
-    expect(closedForSuspended("/app", { isDeveloper: true, isTester: false })).toBe(false);
-    expect(closedForSuspended("/app/payments", { isDeveloper: true, isTester: false })).toBe(false);
-    expect(closedForSuspended("/app/profile", { isDeveloper: true, isTester: false })).toBe(false);
-    expect(closedForSuspended("/app/find", { isDeveloper: false, isTester: true })).toBe(true);
-    expect(closedForSuspended("/app/profile", { isDeveloper: false, isTester: true })).toBe(true);
-    expect(closedForSuspended("/app/help", { isDeveloper: false, isTester: true })).toBe(false);
-    expect(closedForSuspended("/app/sessions/x", { isDeveloper: false, isTester: true })).toBe(false);
+  it("the closed pages: test pages, Edit, Post and Messages for a restricted developer; Find, the profile editor and Messages for a suspended tester", () => {
+    const dev = { isDeveloper: true, isTester: false, suspendedAt: new Date() };
+    const held = { isDeveloper: true, isTester: false, holdStartedAt: new Date() };
+    const tester = { isDeveloper: false, isTester: true, suspendedAt: new Date() };
+    for (const u of [dev, held]) {
+      for (const p of ["/app/tests/abc", "/app/tests/abc/edit", "/app/tests/new", "/app/messages", "/app/chat/x", "/app/profile"]) expect(closedForSuspended(p, u), p).toBe(true);
+      for (const p of ["/app", "/app/payments", "/app/help", "/app/account", "/app/notifications", "/app/testers/x"]) expect(closedForSuspended(p, u), p).toBe(false);
+    }
+    expect(closedForSuspended("/app/find", tester)).toBe(true);
+    expect(closedForSuspended("/app/profile", tester)).toBe(true);
+    expect(closedForSuspended("/app/messages", tester)).toBe(true);
+    expect(closedForSuspended("/app/help", tester)).toBe(false);
+    expect(closedForSuspended("/app/sessions/x", tester)).toBe(false);
+    // A hold restricts only the developer side of an account with both.
+    const both = { isDeveloper: true, isTester: true, holdStartedAt: new Date(), side: "tester" };
+    expect(closedForSuspended("/app/tests/abc", both, "developer")).toBe(true);
+    expect(closedForSuspended("/app/find", both, "tester")).toBe(false);
+    expect(closedForSuspended("/app/messages", both, "tester")).toBe(false);
+    expect(closedForSuspended("/app/messages", both, "developer")).toBe(true);
+    expect(closedForSuspended("/app/tests/abc", { isDeveloper: true, isTester: false }, "developer")).toBe(false); // nobody restricted
   });
 });
 
@@ -122,13 +133,13 @@ describe("a suspended tester (design doc 2 and 11.4)", () => {
     expect(p.transferStatus).toBe("held");
     expect(JSON.stringify(r.body)).not.toMatch(/suspend/i);
 
-    // Lifting: re-invited to the open test with spots (not the invite-only one); the held share is released (waits for a payout account).
+    // Lifting: re-invited to every test that is still open with spots (invite-only ones too); the held share is released (waits for a payout account).
     expect((await adm("unsuspend", a.cookie, { id: ana.tester.user.id })).status).toBe(200);
     expect(await db.invite.count({ where: { testId: open.testId, testerId: ana.tester.user.id, status: "sent" } })).toBe(1);
-    expect(await db.invite.count({ where: { testId: inviteOnly.testId, testerId: ana.tester.user.id, status: "sent" } })).toBe(0);
+    expect(await db.invite.count({ where: { testId: inviteOnly.testId, testerId: ana.tester.user.id, status: "sent" } })).toBe(1); // (Owner, Oct 27) no invite-only exception
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).transferStatus).toBe("waiting");
     expect(await db.notification.count({ where: { userId: ana.tester.user.id, text: "Your account is active again" } })).toBe(1);
-    // The invite-only test keeps the removal (label + Ask to rejoin); the invite on the open test brings her back with one Join.
+    // The removal keeps its "Suspended" label until she rejoins; the invite on the open test brings her back with one Join.
     expect((await db.contract.findUniqueOrThrow({ where: { id: sess2 } })).endKind).toBe("suspended");
     expect((await act(open.testId, "join", ana.tester.cookie, { listingVersion: 1 })).status).toBe(200);
   });

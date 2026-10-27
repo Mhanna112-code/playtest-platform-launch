@@ -33,9 +33,10 @@ export async function testIdOfLink(path: string) {
  * `own`: the line always arrives as its own entry in the bell (admin decisions, a test stopped, payment failures and holds starting, a hold or
  * pause lifted, a chargeback); every other line about the same test on the same day stacks. `testId` names the test when the link doesn't.
  */
-export type Opts = { always?: boolean; about?: string; own?: boolean; testId?: string; group?: string; payment?: boolean };
+export type Opts = { always?: boolean; about?: string; own?: boolean; testId?: string; group?: string; payment?: boolean; reminder?: string };
 
 /**
+ * `reminder`: (Owner, Oct 27) names a reminder ("paused:<test>"): reminders also go in the summary email, each line once; a Weekly or Monthly email shows only the newest copy of each.
  * `group`: lines with the same group stack together on one day even across tests (see lib/bell.ts). `payment`: payment-related (failures, holds, retries, paid,
  * rejected, delayed, payouts, chargebacks): it is its own line unless it has a group, and it also goes out in the end-of-day payment email.
  */
@@ -55,13 +56,13 @@ export async function notify(to: string, subject: string, lines: string[], path:
   }
   // (Owner, Oct 27) Nothing is emailed right away: the notification waits for the person's email (the summary, or the end-of-day payment email). `always` marks the few
   // that ignore Off (account paused / active again, the team pausing / stopping / closing a test, the owed reminder): they ride in ONE end-of-day email, once.
-  await db.notification.create({ data: { userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, ...flags(opts) } });
+  await db.notification.create({ data: { userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
 }
 
 /** A bell notification only (no email), e.g. the Open until heads-ups. */
-export async function bell(userId: string, text: string, link: string, about?: string, opts: Pick<Opts, "own" | "testId" | "group" | "payment"> = {}) {
+export async function bell(userId: string, text: string, link: string, about?: string, opts: Pick<Opts, "own" | "testId" | "group" | "payment" | "reminder"> = {}) {
   if (about && !(await inReach(userId, about))) return;
-  await db.notification.create({ data: { userId, text, link, testId: opts.testId ?? (await testIdOfLink(link)), ...flags(opts) } });
+  await db.notification.create({ data: { userId, text, link, testId: opts.testId ?? (await testIdOfLink(link)), reminderKey: opts.reminder ?? null, ...flags(opts) } });
 }
 
 /** Everyone who is an admin (flagged, or listed in ADMIN_EMAILS). */

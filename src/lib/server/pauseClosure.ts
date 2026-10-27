@@ -36,7 +36,7 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
   });
   if (!cancelled) return { closed: false };
   await tellCancelled(cancelled, "closed");
-  for (const c of cs) await notify(c.tester.email, `“${c.title}” ended`, [`“${c.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { own: true });
+  for (const c of cs) await notify(c.tester.email, `“${c.title}” ended`, [`“${c.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
   await notify(t.developer.email, `“${t.title}” was closed. ${reason}`, [`“${t.title}” was closed. ${reason}`, "What testers already sent still waits for you to pay or reject. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
   return { closed: true, testers: cs.length };
 }
@@ -88,40 +88,45 @@ export async function pausedTestsForAdmin() {
 
 const day = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
+/** What lifts the pause, in the developer's words (an account cause wins over the team's pause). */
+function liftsWhen(causes: ReturnType<typeof pauseClosesAt> extends infer R ? (R extends { causes: infer C } ? C : never) : never) {
+  if (causes.includes("hold") || causes.includes("chargeback")) return "you pay what you owe";
+  if (causes.includes("suspension")) return "your account is cleared";
+  return "the team lifts the pause";
+}
+
+/** Where the reminder opens: what the developer has to do (Payments for a hold, the dashboard for a suspension, the test for the team's pause). */
+function reminderLink(causes: string[], testId: string) {
+  if (causes.includes("chargeback")) return "/app/payments#chargeback-steps";
+  if (causes.includes("hold")) return "/app/payments#owed";
+  if (causes.includes("suspension")) return "/app";
+  return `/app/tests/${testId}`;
+}
+
 /**
- * (Owner, Oct 26) The developer is told by bell, once per pause, that a test is paused and when it closes: "Harbor Run is paused and closes on
- * Nov 2 unless your account is cleared". (No countdown on the pages: the bell is enough, and the admin keeps the dates in its lists.)
+ * (Owner, Oct 27) The developer's DAILY reminder while a test is paused: "<test> is paused and closes on <date> unless your account is cleared" (for a hold: "...unless you pay
+ * what you owe"). It stacks with the same line for their other tests, once a day, and replaces the old "paused" and "day before it closes" lines for the developer.
+ * `bellPausedTests` sends the first one when a pause starts; the daily job sends the rest.
  */
-export async function bellPausedTests(devId: string, now = new Date()) {
+export async function bellPausedTests(devId: string, now = new Date(), onlyDue = true) {
   const dev = await db.user.findUnique({ where: { id: devId } });
   if (!dev) return 0;
+  const since = new Date(now.getTime() - 20 * 3_600_000);
   let n = 0;
   for (const t of await db.test.findMany({ where: { developerId: devId, status: { in: ["open", "closed"] } } })) {
     const info = pauseClosesAt(dev, t);
     if (!info) continue;
-    const text = `${t.title} is paused and closes on ${day(info.at)} ${info.causes.some((c) => c !== "team") ? "unless your account is cleared" : "unless the team lifts the pause"}`;
-    if (await db.notification.count({ where: { userId: devId, testId: t.id, text, createdAt: { gt: info.since } } })) continue;
-    await bell(devId, text, `/app/tests/${t.id}`, undefined, { own: true });
+    if (onlyDue && (await db.notification.count({ where: { userId: devId, reminderKey: `paused:${t.id}`, createdAt: { gt: since } } }))) continue;
+    await bell(devId, `${t.title} is paused and closes on ${day(info.at)} unless ${liftsWhen(info.causes)}`, reminderLink(info.causes, t.id), undefined, { group: "pausedreminder", reminder: `paused:${t.id}`, testId: t.id });
     n++;
   }
-  void now;
   return n;
 }
 
-/** The daily job: one bell a day before a paused test closes. */
-export async function warnPausedClosures(now = new Date()) {
-  const tests = await db.test.findMany({
-    where: { status: { in: ["open", "closed"] }, OR: [{ adminPausedAt: { not: null } }, { developer: { OR: [{ holdStartedAt: { not: null } }, { suspendedAt: { not: null } }] } }] },
-    include: { developer: true },
-  });
+/** The daily job: every paused test's reminder, once a day. */
+export async function pausedReminders(now = new Date()) {
+  const devs = await db.user.findMany({ where: { deletedAt: null, tests: { some: { status: { in: ["open", "closed"] } } }, OR: [{ holdStartedAt: { not: null } }, { suspendedAt: { not: null } }, { tests: { some: { adminPausedAt: { not: null } } } }] }, select: { id: true } });
   let n = 0;
-  for (const t of tests) {
-    const info = pauseClosesAt(t.developer, t);
-    if (!info || info.at.getTime() <= now.getTime() || info.at.getTime() - now.getTime() > DAY) continue;
-    const text = `${t.title} closes tomorrow (${day(info.at)}) unless ${info.causes.some((c) => c !== "team") ? "your account is cleared" : "the team lifts the pause"}`;
-    if (await db.notification.count({ where: { userId: t.developerId, testId: t.id, text: { startsWith: `${t.title} closes tomorrow` }, createdAt: { gt: info.since } } })) continue;
-    await bell(t.developerId, text, `/app/tests/${t.id}`, undefined, { own: true });
-    n++;
-  }
+  for (const d of devs) n += await bellPausedTests(d.id, now);
   return n;
 }

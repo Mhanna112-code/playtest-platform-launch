@@ -433,7 +433,7 @@ export const REVIEW_DAYS = 14; // unpaid sent work is paid automatically after t
 export const HOLD_APPROVAL_AFTER = 3;
 /** The label that replaces an exact hold count outside the profile totals (admin only). */
 export const MANY_HOLDS_LABEL = "More than 3 holds"; // (Owner, Oct 27) after a developer's 3rd payment hold, every later hold needs an admin's Approve to lift
-export const OWED_DAYS = 3; // a failed charge unpaid this long starts a payment hold
+export const OWED_DAYS = 3; // (no longer used since Oct 27: a declined payment starts the hold at once)
 const DAY = 86_400_000;
 
 /** What gets paid automatically after 14 days: the listing amount (older rule; see autoPayFor). */
@@ -550,9 +550,9 @@ export const NOBODY_JOINED = "Nobody joined, so the call was cancelled.";
 /** A declined Pay, shown under that Pay button. */
 export const declinedLine = (name: string, cents: number, label: string) =>
   `Your card was declined, so ${name} wasn't paid ${money(cents)} for the ${label === "live call" ? "call" : label}. Update your card in Payments, then press Pay again.`;
-/** (Owner, DECLINED PAY PRESS) A Pay declined at the press becomes owed like any other failed payment. */
-export const owedPayLine = (name: string, cents: number, label: string, by: string) =>
-  `Your card was declined, so ${name} wasn't paid ${money(cents)} for the ${label === "live call" ? "call" : label} yet. It's now owed: we'll retry tomorrow, or pay it in Payments by ${by} to avoid a pause.`;
+/** (Owner, Oct 27) A Pay declined at the press starts the payment hold at once. */
+export const declinedHoldLine = (name: string, cents: number, label: string) =>
+  `Your card was declined, so ${name} wasn't paid ${money(cents)} for the ${label === "live call" ? "call" : label} yet. Your tests are paused until you pay what you owe: open Payments.`;
 export const DELAYED_CALL_LINE = "Payment for this call may be delayed.";
 
 /** Email settings (Owner, Oct 26): Off, or On with Daily / Weekly / Monthly (one email lists everything since the last). The always-send emails ignore it. */
@@ -819,6 +819,13 @@ export const EXTRA_PAY_TICK_LINE = PAY_TICK_LINE;
  * tester's current contract total (the current part prices plus the agreed totals of their booked and held calls): at 100 they can never get more than double.
  */
 export const EXTRA_PAY_CAP_PERCENT = 100;
+/**
+ * (Owner, Oct 27) A part with NO listed price (work outside the tester's contract, or a part removed from the listing) can be paid at most this much in total. It is its own cap
+ * and does not count toward the 100% above.
+ */
+export const NO_LISTING_CAP_CENTS = 10_000;
+/** The blocked wording for any pay above the listing (Pay above the listing, extra pay): Y is what can still be paid above it. */
+export const overListingLine = (roomCents: number) => `This is more than you can pay above the listing (up to ${money(roomCents).replace(/\.00$/, "")}).`;
 export function checkExtraPay(amountCents: number | null, understood: boolean): Check {
   if (amountCents == null || !Number.isInteger(amountCents) || amountCents <= 0) return no("Enter an amount like 7.50.");
   if (amountCents > EXTRA_PAY_MAX_CENTS) return amountCents > STRIPE_MAX_CENTS ? no(STRIPE_MAX_LINE) : no(`The most you can pay at once is ${money(EXTRA_PAY_MAX_CENTS)}.`);

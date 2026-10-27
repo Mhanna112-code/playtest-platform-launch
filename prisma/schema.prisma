@@ -251,6 +251,8 @@ model Contract {
   /// (NEWEST+5) "Rate ..." prompt sent once, when rating first became available (tester side / developer side)
   ratePromptedAt    DateTime?
   devRatePromptedAt DateTime?
+  /// (Owner, Oct 27) A tester removed by a suspension dismissed the "Suspended" card on their dashboard
+  removedDismissedAt DateTime?
 
   submissions Submission[]
   recordings  Recording[]
@@ -367,6 +369,8 @@ model Payment {
   chargeback   String   @default("")
   chargebackAt DateTime?
   stripeChargeId String?
+  /// (Owner, Oct 27) A chargeback adds its amount to what the developer owes; this payment is the card charge that repays that reversed payment
+  repaysId     String?
   failure      String   @default("")
   createdAt    DateTime @default(now())
 
@@ -552,6 +556,8 @@ model Notification {
   payment   Boolean   @default(false)
   /// (Owner, Oct 27) One of the few emails that ignore Off (account paused / active again, the team paused / stopped / closed your test, the owed reminder): it goes in the end-of-day email, never right away
   mustEmail Boolean   @default(false)
+  /// (Owner, Oct 27) Reminders also go in the summary email, each line once; a Weekly / Monthly email keeps only the newest copy of each reminder (same reminderKey)
+  reminderKey String?
   readAt    DateTime?
   /// Included in a daily summary email (users on "One daily summary")
   summarizedAt DateTime?
@@ -769,6 +775,16 @@ model AccountEvent {
   kind      String
   byId      String?
   note      String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+/// (Owner, Oct 27) A Contact us message: at most 5 per account per day.
+model ContactMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  topic     String
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])

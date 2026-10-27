@@ -1,10 +1,17 @@
-// (Design doc 2) Pages a suspended account may not open. A suspended developer: Post a test and Messages. A suspended
-// tester: Find tests, editing the profile and Messages. Everything else stays (the dashboard, Payments, Settings and Contact us).
-export function closedForSuspended(path: string, u: { isDeveloper: boolean; isTester: boolean }) {
+import { devRestricted, type Restrictable } from "@/lib/restricted";
+
+type Who = Restrictable & { isDeveloper: boolean; isTester: boolean; side?: string };
+
+// (Design doc 2; owner, Oct 27) Pages a restricted account may not open.
+//  - A developer under an admin suspension, a payment hold or a chargeback hold: test pages and Edit, Post a test, Messages and chats, and the profile editor.
+//    Payments (Pay what you owe, receipts, the card), Settings / Account and Contact us stay open.
+//  - A suspended tester: Find tests, the profile editor and Messages.
+export function closedForSuspended(path: string, u: Who, side?: string | null) {
   const p = path.split(/[?#]/)[0].replace(/\/$/, "");
-  if (p === "/app/messages" || p.startsWith("/app/chat/")) return true;
-  // (Owner, Oct 26) A suspended developer may open their test pages, where only Cancel call, End early and Stop the test work; Post a test is closed.
-  if (u.isDeveloper && p === "/app/tests/new") return true;
-  if (u.isTester && (p === "/app/find" || p.startsWith("/app/find/") || p === "/app/profile")) return true;
+  const dev = u.isDeveloper && devRestricted(u, side);
+  if (dev && (p === "/app/tests" || p.startsWith("/app/tests/"))) return true;
+  if (dev && (p === "/app/messages" || p.startsWith("/app/chat/") || p === "/app/profile")) return true;
+  if (u.suspendedAt && (p === "/app/messages" || p.startsWith("/app/chat/") || p === "/app/profile")) return true;
+  if (u.suspendedAt && u.isTester && (p === "/app/find" || p.startsWith("/app/find/"))) return true;
   return false;
 }

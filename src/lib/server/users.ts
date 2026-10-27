@@ -6,11 +6,13 @@ import { requireUser } from "./session";
 export const SUSPENDED = "Your account is paused. Contact support if you think this is a mistake.";
 
 /** Signed in and not suspended: every action that changes something goes through this. */
-// (Design doc 2, 11.4; owner, Oct 26) A suspended developer: only Cancel call, End early and Stop the test go through (Pay and Reject are
-// hidden and refused too: paying and reviewing wait until the suspension is lifted); everything else is refused (blue, final) and names
-// the press that failed so the dashboard top can say so. A suspended tester: every press is refused. Testers never read "suspended"
-// about a developer.
-export const DEV_SUSPENDED = "Your account is suspended: your tests are paused. You can still cancel calls, end a tester's work early or stop a test. Paying and reviewing work wait until the suspension is lifted.";
+// (Design doc 2, 11.4; owner, Oct 27) A developer under an admin suspension, a payment hold or a chargeback hold: ONE state. Every press on
+// their pages is refused (blue, final) and names the press that failed so the dashboard top can say so; only Cancel call (from the dashboard's
+// Calls box) and "Pay what you owe" / the card on Payments, and Contact us, work. A suspended tester: every press is refused. Testers never read
+// "suspended", "hold" or "chargeback" about a developer.
+export const DEV_SUSPENDED = "Your account is suspended: your tests are paused. Contact us in Settings to appeal.";
+export const DEV_HELD = "Your tests are paused until you pay what you owe. Open Payments to pay.";
+export const DEV_CHARGEBACK = "Your tests are paused after a chargeback. Open Payments to see the steps.";
 
 const VERBS: Record<string, string> = {
   edit: "Save", stop: "Stop", "end-early": "End early", "next-round": "Next round", invite: "Invite", "cancel-invite": "Cancel invite", "request-time": "Call request", "answer-request": "Answer",
@@ -45,11 +47,21 @@ export async function failedLine(req: Request, what?: string, piece?: { kind: st
   return `Your ${verb}${title ? ` on ${title}` : ""} didn't go through`;
 }
 
-export async function requireActive(req: Request, opts: { devOk?: boolean; what?: string; piece?: { kind: string; id: string } } = {}) {
+/**
+ * `devSide`: the press belongs to the developer side (a test page, Post, Pay, Reject ...), so a payment or chargeback hold refuses it too.
+ * `devOk`: a developer's press that still works while restricted (Cancel call).
+ */
+export async function requireActive(req: Request, opts: { devOk?: boolean; devSide?: boolean | "auto"; what?: string; piece?: { kind: string; id: string } } = {}) {
   const u = await requireUser(req);
   const exempt = opts.devOk && u.isDeveloper;
-  if (u.suspendedAt && !exempt) {
-    throw new HttpError(403, "suspended", u.isDeveloper ? DEV_SUSPENDED : SUSPENDED, { failed: await failedLine(req, opts.what, opts.piece), suspended: true });
+  if (exempt) return u;
+  // The side the press belongs to decides the words (a mixed account reads the side it was pressed on).
+  const asDev = opts.devSide === true || (u.isDeveloper && (!u.isTester || u.side === "developer"));
+  if (u.suspendedAt) {
+    throw new HttpError(403, "suspended", asDev && u.isDeveloper ? DEV_SUSPENDED : SUSPENDED, { failed: await failedLine(req, opts.what, opts.piece), suspended: true });
+  }
+  if (u.holdStartedAt && u.isDeveloper && (opts.devSide === true || (opts.devSide === "auto" && asDev))) {
+    throw new HttpError(403, "held", u.holdReason === "chargeback" ? DEV_CHARGEBACK : DEV_HELD, { failed: await failedLine(req, opts.what, opts.piece), held: true });
   }
   return u;
 }
@@ -75,7 +87,8 @@ const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice
 /** Save name, pronoun, roles and (for testers) the tester profile. */
 export async function saveProfile(userId: string, body: Record<string, unknown>) {
   const name = str(body.name, 80);
-  if (name.length < 2) throw new HttpError(400, "bad_name", "Enter your name (others see it).");
+  // (Owner, Oct 27) A name is at least 1 character, with no other rules.
+  if (name.length < 1) throw new HttpError(400, "bad_name", "Enter your name (others see it).");
   const pronoun = ["she", "he", "they"].includes(body.pronoun as string) ? (body.pronoun as string) : "";
   const isDeveloper = body.isDeveloper === true;
   const isTester = body.isTester === true;

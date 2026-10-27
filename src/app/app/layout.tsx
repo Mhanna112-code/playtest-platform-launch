@@ -14,6 +14,7 @@ import { requirePageUser } from "@/lib/server/page-auth";
 import { isAdmin } from "@/lib/server/session";
 import { redirect } from "next/navigation";
 import { closedForSuspended } from "@/lib/closedPages";
+import { devRestricted, restrictionKey } from "@/lib/restricted";
 import { SessionWatch } from "@/components/SessionWatch";
 
 // The full Playtest Platform's header (NEWEST+8): logo, the side's links with their icons, the bell, the account pill
@@ -24,15 +25,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const name = u.name.trim() || u.email;
   // (NEXT-UI 6) The side this tab shows: the page's own side (developer pages, tester pages), else the side used last.
   const path = (await headers()).get("x-path") ?? "";
-  // (Design doc 2) A suspended account is routed from the pages that are closed to it to the dashboard, which explains.
-  if (u.suspendedAt && closedForSuspended(path, u)) redirect("/app");
   const side = sideFor(u, path);
+  // (Design doc 2; owner, Oct 27) A suspended or held account is routed from the pages that are closed to it to the dashboard, which explains.
+  if (closedForSuspended(path, u, side)) redirect("/app");
+  const asDevOff = u.isDeveloper && devRestricted(u, side);
+  const tOff = !!u.suspendedAt && u.isTester;
   // Following a link to a page of the other side remembers it as the side used last (what shared pages then show).
   const pageSide = hasBoth(u) ? sideForPath(path) : null;
   if (pageSide && pageSide !== u.side) after(() => db.user.update({ where: { id: u.id }, data: { side: pageSide } }).catch(() => null));
   const contracts = await db.contract.findMany({ where: { OR: [{ testerId: u.id }, { test: { developerId: u.id } }] }, select: { testId: true, testerId: true } });
   const unreadChats = (await Promise.all(contracts.map((c) => unreadCount(u.id, c.testId, c.testerId)))).reduce((a, b) => a + b, 0);
-  const messagesLink = (
+  // (Owner, Oct 27) Links to pages a restricted account can't open are hidden: Post a test and Messages for a restricted developer; Find tests, Profile and Messages for a suspended tester.
+  const hideMessages = asDevOff && side === "developer" || !!u.suspendedAt;
+  const hideProfile = !!u.suspendedAt || (side === "developer" && asDevOff);
+  const messagesLink = hideMessages ? null : (
     <Link className="nav-link relative" href="/app/messages"><MessagesSquare className="h-4 w-4" /> Messages
       {unreadChats > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950">{unreadChats > 9 ? "9+" : unreadChats}</span>}
     </Link>
@@ -46,9 +52,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             {isAdmin(u) && <Link href="/admin" className="nav-link text-punch-200"><ShieldCheck className="h-4 w-4" /> Admin</Link>}
             {/* Each side has its own links: developer: Dashboard, Post a test, Profile, Payments, Messages; tester: Dashboard, Find tests, Profile, Payments, Messages. */}
             <Link className="nav-link" href="/app"><LayoutDashboard className="h-4 w-4" /> Dashboard</Link>
-            {side === "developer" && <Link className="nav-link" href="/app/tests/new"><PlusCircle className="h-4 w-4" /> Post a test</Link>}
-            {side === "tester" && <Link className="nav-link" href="/app/find"><Compass className="h-4 w-4" /> Find tests</Link>}
-            <Link className="nav-link" href="/app/profile"><UserRound className="h-4 w-4" /> Profile</Link>
+            {side === "developer" && !(asDevOff) && <Link className="nav-link" href="/app/tests/new"><PlusCircle className="h-4 w-4" /> Post a test</Link>}
+            {side === "tester" && !u.suspendedAt && <Link className="nav-link" href="/app/find"><Compass className="h-4 w-4" /> Find tests</Link>}
+            {!hideProfile && <Link className="nav-link" href="/app/profile"><UserRound className="h-4 w-4" /> Profile</Link>}
             <Link className="nav-link" href="/app/payments"><CreditCard className="h-4 w-4" /> Payments</Link>
             {messagesLink}
           </div>
@@ -73,7 +79,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </nav>
       </header>
-      {/* (Design doc 2) The "Email confirmation is off for testing." strip is gone: with the testing switch on, nothing shows. */}
+      {/* (Owner, Oct 27) The strip "Email confirmation is off for testing." is back while SKIP_EMAIL_CONFIRM=1 (never in production). Email confirmation is needed only for Post a test, Join, Apply and accepting an invite: a blocked press says so under the button. */}
+      {confirmSkipped() && (
+        <div className="flex flex-wrap items-center justify-center gap-2 border-b border-sky-300/20 bg-sky-300/10 px-4 py-2 text-sm text-sky-100" data-confirm-off="">
+          <MailCheck className="h-4 w-4 text-sky-300" />
+          <span>Email confirmation is off for testing.</span>
+        </div>
+      )}
       {!u.emailVerifiedAt && !confirmSkipped() && (
         <div className="flex flex-wrap items-center justify-center gap-2 border-b border-sky-300/20 bg-sky-300/10 px-4 py-2 text-sm text-sky-100">
           <MailCheck className="h-4 w-4 text-sky-300" />
@@ -81,15 +93,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <ResendConfirm />
         </div>
       )}
-      {/* A suspended account's red box is at the top of the dashboard (and the profile); other open pages carry this one line. */}
-      {u.suspendedAt && !/^\/app\/?(\?.*)?$/.test(path) && !path.startsWith("/app/profile") && (
+      {/* A restricted account's blue box is at the top of the dashboard; other open pages (Payments, Settings) carry this one line. */}
+      {(asDevOff || tOff) && !/^\/app\/?(\?.*)?$/.test(path) && (
         <p className="mx-auto mt-4 max-w-6xl px-4" data-suspended-strip="">
-          <span className="block rounded-xl border border-rose-400/50 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">Your account is suspended. To appeal, use <Link href="/app/help" className="underline">Contact us</Link> in Settings.</span>
+          <span className="info block">
+            {u.suspendedAt ? <>Your account is suspended. To appeal, use <Link href="/app/help" className="underline">Contact us</Link> in Settings.</> : u.holdReason === "chargeback" ? <>Your tests are paused after a chargeback. <Link href="/app/payments#chargeback-steps" className="underline">Follow the steps in Payments</Link>.</> : <>Your tests are paused until you pay what you owe. <Link href="/app/payments#owed" className="underline">Pay what you owe</Link>.</>}
+          </span>
         </p>
       )}
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">{children}</main>
       <FieldChecks />
-      <SessionWatch userId={u.id} name={name} suspended={!!u.suspendedAt} />
+      <SessionWatch userId={u.id} name={name} restriction={restrictionKey(u, side)} />
     </>
   );
 }

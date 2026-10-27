@@ -31,20 +31,19 @@ async function withWork() {
 }
 
 describe("Pay and Reject while the account is not clear (owner, Oct 26)", () => {
-  it("a payment hold: Reject takes effect at once, Pay is recorded and its charge waits; the developer reads when it will be charged, the tester that it may be delayed", async () => {
-    const { dev, testId, sessionId, tester } = await withWork();
+  it("a payment hold: Pay and Reject are both unavailable (owner, Oct 27); each names itself, nothing is recorded and the tester is told nothing", async () => {
+    const { dev, sessionId, tester } = await withWork();
     const second = await db.submission.create({ data: { contractId: sessionId, kind: "recording", agreedCents: 1000, sentAt: new Date(), updatedAt: new Date() } });
     await startHold(dev.user.id, "unpaid");
     const rej = await pay(dev.cookie, { action: "reject", kind: "submission", id: second.id, reason: "Nothing usable in it" });
-    expect(rej.status).toBe(200);
-    expect(rej.body.rejected).toBe(true);
+    expect(rej.status).toBe(403);
+    expect(rej.body.error).toMatchObject({ code: "held", failed: "Your Reject on Harbor Run didn't go through" });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId, kind: "written" } });
     const paid = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
-    expect(paid.body).toMatchObject({ status: "deferred", later: "charged when your account is clear" });
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "You were paid for your written answers" } } })).toBe(1);
-    // (Owner, Oct 26) A tester's payment line is its own line (it does not stack) and also goes out in the end-of-day payment email.
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "You were paid for your written answers" }, own: true, payment: true } })).toBe(1);
-    void testId;
+    expect(paid.body.error).toMatchObject({ code: "held", failed: "Your Pay on Harbor Run didn't go through" });
+    expect(await db.review.count({ where: { contractId: sessionId } })).toBe(0);
+    expect(await db.payment.count({ where: { contractId: sessionId } })).toBe(0);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "You were paid" } } })).toBe(0);
   });
 
   it("a suspended developer can neither Pay nor Reject (each names itself, nothing is recorded); once lifted they can", async () => {
@@ -225,7 +224,7 @@ describe("chat after a block (owner, Oct 26)", () => {
 });
 
 describe("a suspended developer's test page (owner, Oct 26)", () => {
-  it("only Cancel call, End early and Stop the test go through; everything else is refused and names the press", async () => {
+  it("only Cancel call goes through; everything else (End early and Stop too) is refused and names the press", async () => {
     const { dev, testId, sessionId } = await withWork();
     const a = await admin();
     await adm("suspend", a.cookie, { id: dev.user.id, note: "Spam" });
@@ -234,7 +233,11 @@ describe("a suspended developer's test page (owner, Oct 26)", () => {
       expect(r.body.error.code, action).toBe("suspended");
       expect(r.body.error.failed, action).toMatch(/^Your .+ on Harbor Run didn't go through$/);
     }
-    expect((await act(testId, "end-early", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], reason: "We have what we need" })).status).toBe(200);
-    expect((await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+    // (Owner, Oct 27) No Stop and no End early while suspended (paused tests close after 7 days anyway, and stopping would cut off testers' unsent work).
+    for (const [action, body] of [["end-early", { contractIds: [sessionId], reason: "We have what we need" }], ["stop", {}]] as const) {
+      const r = await act(testId, action, dev.cookie, { seenAt: seen(), confirmed: true, ...body });
+      expect(r.body.error.code, action).toBe("suspended");
+    }
+    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).status).toBe("open");
   });
 });

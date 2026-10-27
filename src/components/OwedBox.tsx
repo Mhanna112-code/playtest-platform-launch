@@ -9,7 +9,7 @@ import { money } from "@/lib/format";
 type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string };
 
 /**
- * Failed payments (each listed) and reversed payments; one button retries every failed one. It stops once if the total
+ * (Owner, Oct 27) Failed payments (each listed) and reversed payments (a chargeback adds its amount); one button pays them all. It stops once if the total
  * changed since the page loaded; the second press pays at once, with the result right under the button.
  */
 export function OwedBox({ onHold, owed, chargeback = false, review = false }: { onHold: boolean; owed: Line[]; chargeback?: boolean; review?: boolean }) {
@@ -23,7 +23,6 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false }: { 
   // What the page / the stop box showed last: every press (the second too) is checked against it.
   const [total, setTotal] = useState(seenTotal);
   const [shownIds, setShownIds] = useState(retry.map((o) => o.id));
-  const first = retry.find((o) => o.until)?.until;
   return (
     <div id="owed" className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">
       {onHold && chargeback ? (
@@ -31,7 +30,7 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false }: { 
       ) : onHold ? (
         <p><b>Your tests are paused.</b> No new testers, invites or calls, and Pay waits, until you pay what you owe. Testers can still send work; their deadlines move on by the pause.</p>
       ) : (
-        first && <p><b>A payment failed.</b> Pay {money(seenTotal)} by {new Date(first).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} or your tests are paused.</p>
+        <p><b>A payment failed.</b> Pay {money(seenTotal)} to keep your tests running.</p>
       )}
       {onHold && review && <p data-hold-review="">After you pay what you owe, the team will review your account before your tests resume.</p>}
       {owed.length > 0 && (
@@ -72,10 +71,9 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false }: { 
       {done && <p className="ok">{done}</p>}
       {failing.length > 0 && (
         <p className="err">
-          Still declined: {failing.join("; ")}. Your tests stay paused until everything is paid. <a href="/app/payments">Update your card</a> and try again.
+          Still declined: {failing.join("; ")}. Your tests stay paused until everything is paid. <a href="/app/payments#card">Update your card</a> and try again.
         </p>
       )}
-      {owed.some((o) => !o.retry) && !chargeback && <p>Reversed payments can&apos;t be retried here: our team resolves them, then your tests resume.</p>}
       {chargeback && <p>Paying what you owe is only one of the steps above: your tests resume once the card is verified, what you owe is paid and the team approves.</p>}
       <Err text={err} />
     </div>

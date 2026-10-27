@@ -39,16 +39,18 @@ describe("Pay and Reject stay available until the tester chooses", () => {
     expect((await pay(dev.cookie, rejectBody(b.id))).status).toBe(200);
   });
 
-  it("after the test was closed because it stayed paused (the payment hold only delays the charge)", async () => {
+  it("after the test was closed because it stayed paused (once the hold is lifted)", async () => {
     const { dev, testId } = await setup();
     const [a, b] = [(await piece(testId, "Ana Silva")).sub, (await piece(testId)).sub];
     await startHold(dev.user.id, "unpaid");
     await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: new Date(Date.now() - 8 * DAY) } });
     await cron();
     expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).status).toBe("stopped");
-    const paid = await pay(dev.cookie, payBody(a.id));
-    expect(paid.status).toBe(200);
-    expect(paid.body.status).toBe("deferred");
+    // (Owner, Oct 27) Pay and Reject are unavailable during ANY hold: they work again once it is lifted (a closed test can still be paid or rejected).
+    expect((await pay(dev.cookie, payBody(a.id))).body.error.code).toBe("held");
+    expect((await pay(dev.cookie, rejectBody(b.id))).body.error.code).toBe("held");
+    await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: null, holdReason: "" } });
+    expect((await pay(dev.cookie, payBody(a.id))).status).toBe(200);
     expect((await pay(dev.cookie, rejectBody(b.id))).status).toBe(200);
   });
 

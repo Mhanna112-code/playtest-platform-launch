@@ -57,24 +57,25 @@ describe("invites", () => {
 });
 
 describe("payment hold", () => {
-  it("pauses everything but sending; lifting it shifts deadlines and Open until by the pause", async () => {
+  it("pauses everything but the testers' sending; Pay and Reject wait; lifting it shifts deadlines and Open until by the pause", async () => {
     const { dev, testId } = await setup({ openUntil: new Date(Date.now() + 20 * DAY).toISOString().slice(0, 10) });
     const { tester, sessionId } = await joined(testId);
     const before = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });
     const t0 = await db.test.findUniqueOrThrow({ where: { id: testId } });
     await startHold(dev.user.id, "unpaid");
-    // Sending still works; joining, booking, posting, Pay and Next round wait.
+    // Sending still works for the tester; joining, booking, posting, Pay, Reject and Next round wait.
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).status).toBe(200);
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
-    // (Owner) Pay is still a decision during a hold: recorded now, its CHARGE waits until the account is clear.
+    // (Owner, Oct 27) Pay and Reject are unavailable during ANY hold: refused, and the refusal names the press for the dashboard box.
     const waits = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
-    expect(waits.status).toBe(200);
-    expect(waits.body).toMatchObject({ status: "deferred", later: "charged when your account is clear" });
-    expect((await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } })).status).toBe("deferred");
+    expect(waits.status).toBe(403);
+    expect(waits.body.error).toMatchObject({ code: "held", failed: "Your Pay on Harbor Run didn't go through" });
+    expect((await pay(dev.cookie, { action: "reject", kind: "submission", id: sub.id, reason: "Not useful" })).body.error.code).toBe("held");
+    expect(await db.payment.count({ where: { submissionId: sub.id } })).toBe(0);
     const ben = await makeUser({ tester: true });
     expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test is paused, so it isn't taking new testers right now.");
-    expect((await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: listingBody() })))).body.error.message).toContain("Pay what you owe first.");
-    expect((await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(409);
+    expect((await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: listingBody() })))).body.error.code).toBe("held");
+    expect((await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true })).body.error.code).toBe("held");
     // Pretend the hold started 2 days ago, then pay what's owed (nothing failed) → lifts and shifts by ~2 days.
     await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: new Date(Date.now() - 2 * DAY) } });
     const r = await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })));
@@ -83,26 +84,27 @@ describe("payment hold", () => {
     const t1 = await db.test.findUniqueOrThrow({ where: { id: testId } });
     expect(Math.round((after.dueAt.getTime() - before.dueAt.getTime()) / DAY)).toBe(2);
     expect(Math.round((t1.openUntil!.getTime() - t0.openUntil!.getTime()) / DAY)).toBe(2);
-    // Lifting the hold charged it.
-    expect((await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } })).status).toBe("not_set_up");
+    // Lifted: Pay works again.
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
   });
 
-  it("only booked calls whose time comes during the hold are cancelled; the tester reads only that the test is paused", async () => {
+  it("calls starting within 3 days are cancelled with no fault when the hold starts; later ones 3 days before they start while it lasts; the tester reads only that the test is paused", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
-    await bookCall(testId, dev.cookie, sessionId, tester.cookie, 48);
+    const soon = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 48);
+    const later5 = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 24 * 5);
     await startHold(dev.user.id, "unpaid");
-    const call = await db.call.findFirstOrThrow({ where: { contractId: sessionId } });
-    expect(call.status).toBe("booked"); // a call after the hold may still happen
-    // The hold goes on; the call's time comes while still on hold → cancelled.
-    await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: new Date(Date.now() - 2 * 3_600_000) } });
-    await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 60_000) } });
-    const { sweepHeldCalls } = await import("@/lib/server/holds");
-    await sweepHeldCalls(dev.user.id);
-    expect(await db.call.findFirstOrThrow({ where: { contractId: sessionId } })).toMatchObject({ status: "cancelled", cancelledBy: "system" });
+    expect(await db.call.findUniqueOrThrow({ where: { id: soon.id } })).toMatchObject({ status: "cancelled", cancelledBy: "system" });
+    expect((await db.call.findUniqueOrThrow({ where: { id: later5.id } })).status).toBe("booked"); // a call after the hold may still happen
     const line = await db.notification.findFirstOrThrow({ where: { userId: tester.user.id, text: { contains: "was cancelled" } } });
     expect(line.text).toContain("because the test is paused");
     expect(line.text).not.toMatch(/hold|chargeback|suspend/i);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "was cancelled because the test is paused" } } })).toBe(1); // both sides told
+    // The hold goes on: 3 days before the later call (2 days later), the daily job cancels it.
+    const { cancelLatePauseCalls } = await import("@/lib/server/restrictions");
+    expect(await cancelLatePauseCalls(new Date(Date.now() + 1.5 * DAY))).toBe(0);
+    expect(await cancelLatePauseCalls(new Date(Date.now() + 2.5 * DAY))).toBe(1);
+    expect(await db.call.findUniqueOrThrow({ where: { id: later5.id } })).toMatchObject({ status: "cancelled", cancelledBy: "system" });
     expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), startsAt: new Date(Date.now() + 3 * DAY).toISOString(), confirmed: true })).body.error.message).toBe("This test is paused. Payment for your work may be delayed.");
     expect((await sact(sessionId, "leave", tester.cookie)).status).toBe(200); // may leave any time
   });
@@ -124,17 +126,24 @@ describe("chargebacks (Stripe dispute webhook)", () => {
     await later();
     expect((await hook("good")).status).toBe(200);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
+    // (Owner, Oct 27) Every developer press is refused during a hold (End early too); the bank's reversal is on the test's list of events.
     const r = await act(testId, "end-early", dev.cookie, { seenAt: pageLoaded, contractId: sessionId, reason: "We have enough" });
-    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toContain("Your bank reversed your $8.00 payment for Ana Silva's written answers");
+    expect(r.body.error.code).toBe("held");
+    expect((await db.testEvent.findMany({ where: { testId, kind: "chargeback" } })).map((e) => e.text)).toContain("Your bank reversed your $8.00 payment for Ana Silva's written answers");
     const owner = await makeUser({ email: `admin-${randomUUID()}@playtest.test` });
     await db.user.update({ where: { id: owner.user.id }, data: { isAdmin: true } });
     const p = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } });
     const { POST: adminPOST } = await import("@/app/api/admin/[action]/route");
-    void p;
     const approve = () => adminPOST(req("/api/admin/approve-chargeback", { cookie: owner.cookie, body: { id: dev.user.id } }), { params: Promise.resolve({ action: "approve-chargeback" }) }).then(json);
     expect((await approve()).body.error.code).toBe("steps_missing"); // the card isn't verified yet
     setStripeForTests(null); // no Stripe here (dev): the card check is simulated
     expect((await verifyPOST(req("/api/payments/verify-card", { cookie: dev.cookie, body: {} }))).status).toBe(200); // simulated without Stripe
+    // (Owner, Oct 27) The reversed $8.00 is owed again: Approve waits for it to be paid with "Pay what you owe".
+    expect((await approve()).body.error.message).toBe("Not yet: $8.00 is still owed.");
+    const paid = await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })));
+    expect(paid.body).toMatchObject({ paid: 1, stillFailing: [] });
+    expect(await db.payment.findFirstOrThrow({ where: { repaysId: p.id } })).toMatchObject({ kind: "chargeback", amountCents: 800, testerCents: 0, status: "not_set_up" });
+    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull(); // paying alone never lifts a chargeback hold
     expect((await approve()).status).toBe(200);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();
   });
@@ -182,12 +191,13 @@ describe("daily job", () => {
     expect((await sact(m.sessionId, "choose", m.tester.cookie, { submissionId: zs.id, choice: "charge", tickedCents: 1000 })).body).toMatchObject({ amountCents: 1000 });
   });
 
-  it("a failed charge unpaid after 3 days starts a hold; Open until heads-ups go 3 days and 1 day before", async () => {
+  it("the daily job never retries a declined payment or starts a hold by itself (a decline is a hold at once); Open until heads-ups go 3 days and 1 day before", async () => {
     const { dev, testId } = await setup();
     const { tester } = await joined(testId);
-    await db.payment.create({ data: { kind: "review", developerId: dev.user.id, testerId: tester.user.id, amountCents: 1000, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() - 1000), retriedAt: new Date() } });
-    await cron(); // (already retried today, so the daily retry skips it)
-    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdReason).toBe("unpaid");
+    const failed = await db.payment.create({ data: { kind: "review", developerId: dev.user.id, testerId: tester.user.id, amountCents: 1000, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() - 1000) } });
+    await cron();
+    expect((await db.payment.findUniqueOrThrow({ where: { id: failed.id } })).retriedAt).toBeNull(); // no daily retries
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Pay $" } } })).toBe(0); // no "Pay $X by ..." reminder
     const h = await setup();
     const hj = await joined(h.testId);
     await db.test.update({ where: { id: h.testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } });

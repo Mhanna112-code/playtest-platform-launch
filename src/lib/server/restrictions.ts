@@ -10,19 +10,19 @@ import { chargeDeferred, resumeTests } from "./holds";
 import { sendWaitingTransfer } from "./stripe";
 import { accountEvent } from "./reports";
 
-// (Design doc 2 and 11.4) Suspensions and deletion.
-//   Developer suspended: all their tests are paused (testers stay in them but can't do anything except send work, Let it go, Leave,
-//   chat and Rate); calls starting within 3 days of the suspension (or while it lasts) are cancelled with no fault; they can only Pay
-//   (from Payments) and cancel booked calls, and appeal through Contact us. Lifted: the tests resume as normal.
-//   Tester suspended: removed from every test at once (their work stays and is reviewed; the pay is charged but their share is held
-//   until reinstatement). Reinstated: re-invited to tests that are open with spots and not invite only; the others wait with a
+// (Design doc 2 and 11.4; owner, Oct 27) Suspensions and deletion.
+//   Developer suspended (or on a payment / chargeback hold: ONE state, see lib/restricted.ts): all their tests are paused (testers stay in them; on a suspension they can only
+//   cancel booked calls, on a hold they can still send work); every press on the developer's pages is refused except Cancel call; calls starting within 3 days of the start are
+//   cancelled with no fault, later ones 3 days before they start if it still lasts. Lifted: the tests resume as normal.
+//   Tester suspended: removed from every test at once (their work stays and is reviewed; the pay is charged but their share is held until
+//   reinstatement). Reinstated: re-invited to the tests they were removed from that are open with free spots; the others wait with a
 //   "Suspended" label and Ask to rejoin.
 
 const DAY = 86_400_000;
 export const CALL_SUSPENSION_DAYS = 3;
 
-/** Calls starting within the next 3 days of a suspended developer are cancelled with no fault (both sides told). */
-export async function cancelCallsNearSuspension(devId: string, now = new Date()) {
+/** Calls starting within the next 3 days of a suspended or held developer are cancelled with no fault (both sides told). */
+export async function cancelCallsNearPause(devId: string, now = new Date()) {
   const soon = new Date(now.getTime() + CALL_SUSPENSION_DAYS * DAY);
   const calls = await db.call.findMany({
     where: { status: "booked", startsAt: { gt: now, lte: soon }, contract: { test: { developerId: devId } } },
@@ -40,20 +40,25 @@ export async function cancelCallsNearSuspension(devId: string, now = new Date())
   }
   return n;
 }
+/** @deprecated the old name (suspensions only) */
+export const cancelCallsNearSuspension = cancelCallsNearPause;
 
-/** The daily job: later calls of a suspended developer are cancelled once the suspension is still in force 3 days before them. */
-export async function cancelLateSuspensionCalls(now = new Date()) {
+/** The daily job: later calls of a suspended or held developer are cancelled once the pause is still in force 3 days before them. */
+export async function cancelLatePauseCalls(now = new Date()) {
   let n = 0;
-  for (const u of await db.user.findMany({ where: { suspendedAt: { not: null }, isDeveloper: true }, select: { id: true } })) n += await cancelCallsNearSuspension(u.id, now);
+  for (const u of await db.user.findMany({ where: { isDeveloper: true, OR: [{ suspendedAt: { not: null } }, { holdStartedAt: { not: null } }] }, select: { id: true } })) n += await cancelCallsNearPause(u.id, now);
   return n;
 }
+export const cancelLateSuspensionCalls = cancelLatePauseCalls;
 
 async function pauseDeveloper(u: { id: string; email: string }) {
   const tests = await db.test.findMany({ where: { developerId: u.id, status: { in: ["open", "closed", "draft"] } }, select: { id: true } });
   const contractIds = (await db.contract.findMany({ where: { test: { developerId: u.id } }, select: { id: true } })).map((c) => c.id);
   await closeRequests({ contractIds }, "the test is paused");
+  // (Owner, Oct 27) Pending applications close on a suspension: the developer can't answer them.
+  await db.application.updateMany({ where: { testId: { in: tests.map((t) => t.id) }, status: "pending" }, data: { status: "closed", closedReason: "paused", decidedAt: new Date() } });
   for (const t of tests) await db.$transaction((tx) => recordEvent(tx, t.id, "paused", "Your account is paused", false));
-  await cancelCallsNearSuspension(u.id);
+  await cancelCallsNearPause(u.id);
   await (await import("./pauseClosure")).bellPausedTests(u.id);
 }
 
@@ -85,7 +90,7 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
   await accountEvent(userId, "suspended", adminId, note);
   if (u.isDeveloper) await pauseDeveloper(u);
   if (u.isTester) await removeTester(u, "suspended");
-  await notify(u.email, "Your account is paused", ["Your account is paused. Contact us in Settings if you think this is a mistake."], "/app/help", { always: true, own: true });
+  await notify(u.email, "Your account is paused", ["Your account is paused. Contact us in Settings if you think this is a mistake."], "/app/help", { always: true, group: "admindecision" });
   return { ok: true };
 }
 
@@ -105,7 +110,7 @@ export async function releaseHeldShares(testerId: string, ids?: string[]) {
   return { released: held.length, sent };
 }
 
-/** (11.4) Re-invite a reinstated tester to the tests they were removed from that are open with spots and not invite only. */
+/** (11.4; owner, Oct 27) Re-invite a reinstated tester to the tests they were removed from that are still open with free spots (invite-only ones too). */
 async function reinviteAfterSuspension(u: { id: string; email: string; name: string }) {
   const removed = await db.contract.findMany({ where: { testerId: u.id, status: "left", endKind: "suspended" }, include: { test: { include: { developer: true } } } });
   const invited: string[] = [];
@@ -113,7 +118,8 @@ async function reinviteAfterSuspension(u: { id: string; email: string; name: str
     const t = c.test;
     const testersIn = await db.contract.count({ where: { testId: t.id, status: "working" } });
     const blocked = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: u.id }] } })) > 0;
-    const open = t.status === "open" && (!t.openUntil || t.openUntil > new Date()) && testersIn < t.spots && t.joinMode !== "invite" && !t.developer.suspendedAt && !t.developer.holdStartedAt && !t.adminPausedAt && !blocked;
+    // (Owner, Oct 27) Invite-only tests too: no exception.
+    const open = t.status === "open" && (!t.openUntil || t.openUntil > new Date()) && testersIn < t.spots && !t.developer.suspendedAt && !t.developer.holdStartedAt && !t.adminPausedAt && !blocked;
     if (!open) continue;
     if (await db.invite.count({ where: { testId: t.id, testerId: u.id, status: "sent" } })) continue;
     await db.invite.create({ data: { testId: t.id, testerId: u.id } });
@@ -141,7 +147,7 @@ export async function reinstateAccount(userId: string) {
     await reinviteAfterSuspension(u);
     await releaseHeldShares(userId);
   }
-  await notify(u.email, "Your account is active again", ["Your account is active again."], "/app", { always: true, own: true });
+  await notify(u.email, "Your account is active again", ["Your account is active again."], "/app", { always: true, group: "admindecision" });
   return { ok: true };
 }
 
@@ -171,7 +177,7 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
         return list;
       });
       await tellCancelled(cancelled, "stopped");
-      for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { own: true });
+      for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
     }
   }
   if (u.isTester) await removeTester(u, "deleted");
@@ -186,7 +192,7 @@ export async function suspendedAccountsReminder(now = new Date()) {
   if (!people.length) return 0;
   const admins = (process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
   const admin = await db.user.findMany({ where: { OR: [{ isAdmin: true }, { email: { in: admins } }] }, select: { id: true } });
-  for (const a of admin) await bell(a.id, `${people.length} suspended account${people.length === 1 ? "" : "s"} to review`, "/admin#users");
+  for (const a of admin) await bell(a.id, `${people.length} suspended account${people.length === 1 ? "" : "s"} to review`, "/admin#users", undefined, { group: "suspendedreview", reminder: "suspended-review" });
   await db.appState.upsert({ where: { key: "suspended-reminder" }, update: { value: now.toISOString() }, create: { key: "suspended-reminder", value: now.toISOString() } });
   return people.length;
 }
@@ -238,7 +244,7 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
     return list;
   });
   await tellCancelled(cancelled, "stopped");
-  for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { own: true });
+  for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
   await notify(t.developer.email, `The team stopped “${t.title}”${note ? `: ${note}` : ""}`, [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay or reject. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
   return { ok: true };
 }
@@ -290,7 +296,7 @@ export async function payoutFixed(accountId: string) {
 export async function payoutReminders(now = new Date()) {
   const due = await db.user.findMany({ where: { payoutProblemAt: { not: null }, OR: [{ payoutRemindedAt: null }, { payoutRemindedAt: { lt: new Date(now.getTime() - REMIND_DAYS * DAY + 3_600_000) } }] } });
   for (const u of due) {
-    await bell(u.id, PAYOUT_LINE, "/app/payments#payout", undefined, { payment: true, group: "payout" });
+    await bell(u.id, PAYOUT_LINE, "/app/payments#payout", undefined, { payment: true, group: "payout", reminder: "payout" });
     await db.user.update({ where: { id: u.id }, data: { payoutRemindedAt: now } });
   }
   return due.length;

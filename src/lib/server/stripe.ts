@@ -84,6 +84,27 @@ export async function charge(dev: Party, tester: Party, amountCents: number, pay
   }
 }
 
+/**
+ * (Owner, Oct 27) Charge the developer's card for a payment their bank reversed (a chargeback adds its amount to what they owe). The money stays with the platform:
+ * the tester already got their share with the first charge. A declined card throws a plain sentence, like charge().
+ */
+export async function chargePlatform(dev: Party, amountCents: number, payKey: string, description: string) {
+  if (amountCents === 0) return { status: "charged", stripePaymentIntentId: null as string | null };
+  if (!stripeOn()) return { status: "not_set_up", stripePaymentIntentId: null as string | null };
+  try {
+    const pi = await getStripe().paymentIntents.create(
+      { amount: amountCents, currency: "usd", customer: dev.stripeCustomerId!, payment_method: dev.stripePaymentMethodId!, off_session: true, confirm: true, description, metadata: { developerId: dev.id, payKey } },
+      { idempotencyKey: `pay-${payKey}` },
+    );
+    if (pi.status !== "succeeded") throw new Error(`status ${pi.status}`);
+    return { status: "charged", stripePaymentIntentId: pi.id as string | null };
+  } catch (e) {
+    const msg = (e as { message?: string }).message ?? "unknown";
+    console.error("[stripe] platform charge failed:", msg);
+    throw new HttpError(402, "card_failed", "Your card couldn't be charged. Update your card in Payments and try again.", { stripe: msg });
+  }
+}
+
 /** Send a waiting tester share once they've connected a payout account (admin → payouts). */
 export async function sendWaitingTransfer(paymentId: string) {
   const p = await db.payment.findUniqueOrThrow({ where: { id: paymentId } });
