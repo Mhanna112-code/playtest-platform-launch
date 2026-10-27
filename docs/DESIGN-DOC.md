@@ -469,8 +469,6 @@ From Every page: the live box, stop-once, red field checks, kept drafts, long li
 - **3 changes per field after the first join.** Once a tester has joined, each of these fields has its own 3 changes: what to do (the steps), the NDA, questions, required languages, and required devices and technology. One Save that changes two of them uses one change of each. Each field shows "Changes left: N of 3" next to its label, and the counts update live when another tab saves. A field at 0 locks on its own, with the note "You've changed the <field> 3 times since testers joined. Contact us in Settings to change it again."; the other fields stay editable. Part prices, parts and the build link aren't limited; changing prices or parts still sends working testers the Switch / Keep offer. Access keys aren't limited either: a key given to a tester stays theirs, so adding keys never changes anyone's terms. An admin's "Allow 3 more" gives every field at 0 three more changes (Administrator console).
 
   [image: After 3 saves that changed the steps: “Changes left: 0 of 3” near Save and the locked note.]
-
-  Updated: each limited field now has its own 3 changes, with "Changes left: N of 3" next to its label; only the field at 0 locks.
 - **Dates.**
   - Open until can only move later, before it passes: "Open until can only be extended: it's <date> now." Once passed: "Joining closed on <date> (Open until), so it can't be extended."
 
@@ -574,9 +572,7 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
   [image: Alerts: tick what should not stop your buttons.]
 - **Next round:** makes a draft copy titled "(round N)" and goes straight to Post a test, filled in with its details; nothing is public until the developer presses Post the test there; records stay with the original round.
 
-  [image: Next round: a draft copy “(round 2)”, hidden from new testers until Accept testers again.]
-
-  Updated: Next round now opens the draft in Post a test, filled in; Post the test there opens it for testers.
+  [image: Next round: the draft “(round 2)” opens in Post a test, filled in; Post the test opens it for testers.]
 - **End early** (confirm pop-up "End their work now"): tick testers (or "All (N)") and give one reason they read. Their work ends; calls ahead are cancelled; what they sent still waits for review; unsent parts close with no pay; they can be invited back later. Tester bell: "Your work on <test> was ended early"; calls: "…cancelled because your session was ended."
 
   [image: End early: one tester ticked, a reason given, then the confirm pop-up “End their work now”.]
@@ -651,9 +647,7 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
   [video: The team pauses the test; the developer's End early is refused and the banner explains.]
 - **Stopped:** the page shows only what still works. Gone: Invite testers, the call-request tools in Live session (Past calls stay), Edit, Stop and End early. Left: the Stopped label and the stopped line, Next round (it starts a new draft from this test), Needs you (Pay, Reject, a call's length, a dispute's side), the Testers panel (rows, Rate, Extra pay), chat, Alerts and the answers.
 
-  [image: Stopped: the Stopped label and the stopped line; the overview buttons are gone and Live session says no calls can be booked.]
-
-  Updated: on a stopped test Next round stays, and Live session shows only Past calls: the request tools and the "no calls can be requested or booked" line are gone.
+  [image: Stopped: the Stopped label and the stopped line; only what still works: Needs you, the Testers panel and past calls; Next round stays.]
 - **Stopped by the team:** the page moves to the top of the overview, where the banner "The team stopped this test." stays and names any press that didn't go through. Then the stopped rules apply.
 
   [video: The team stops the test while a call is being requested; the request is refused and the banner names the press that didn't go through.]
