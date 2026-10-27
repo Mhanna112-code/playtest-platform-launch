@@ -214,7 +214,7 @@ These rules hold on every signed-in page; page tabs only add what's specific to 
 ## Why going Back is safe
 
 - Back and Forward show the saved page instantly and then refresh it from the server; nothing on a restored page is trusted when a button is pressed.
-- Signing out, a suspension, a deletion or switching account in any tab invalidates the session everywhere; a restored page of the old account is hidden and its presses are refused.
+- [AMENDED] Signing out, a suspension or a deletion in any tab ends the session in every tab (signing out sends every tab to the sign-in page). Signing in as a different account switches every other tab to the new account, on the page that sign-in landed on. A restored page of the old account is never trusted: its presses are refused and the tab switches.
 - Restored forms keep only unsent text the person typed (kept drafts); amounts, offers and call times are re-read from the server before any action.
 
 ## 3. Developer dashboard
