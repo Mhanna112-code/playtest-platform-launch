@@ -21,7 +21,6 @@ One account can be a developer, a tester or both; a switch in the header changes
 - Every page explains once, with examples, what holds everywhere: notices, how state stays consistent (with a state map of tests, accounts, parts and calls), long lists, pop-ups, suspensions and holds, the bell and emails.
 - Rules holds every number, cap and timer: test lifecycle, money, ratings, holds and suspensions, limits.
 - QA and open questions lists the edge cases to test, the decisions still open and post-launch ideas.
-- **[IN I]** marks where a picture goes and **[IN V]** where a video goes; "x3" means three different cases. They are filled in after the build.
 - Testers never see the words hold, suspended, failed or chargeback about a developer. They see "paused" and "delayed".
 
 ## Every page
@@ -460,7 +459,7 @@ From Every page: the live box, stop-once, red field checks, kept drafts, long li
   - **More spots** tells invited testers "A spot opened on <test>…"; filling the test closes applications and keeps invites open.
   - **Title only** changes are info for everyone and never stop a press.
   - Under Save: "Saved. Offered the new terms to N…". When a tester later Switches or Keeps, the top box shows "Ana switched to the new terms" with "See their contract", which opens the test page at that tester's row in a new tab. The same line, with the same link, also shows in the notice under a pressed button when a press stops once for it.
-- **3 changes per field after the first join.** Once a tester has joined, each of these fields has its own 3 changes: what to do (the steps), the NDA, questions, required languages, and required devices and technology. One Save that changes two of them uses one change of each. Each field shows "Changes left: N of 3" next to its label, and the counts update live when another tab saves. A field at 0 locks on its own, with the note "You've changed the <field> 3 times since testers joined. Contact us in Settings to change it again."; the other fields stay editable. Part prices, parts and the build link aren't limited; changing prices or parts still sends working testers the Switch / Keep offer. Access keys aren't limited either: a key given to a tester stays theirs, so adding keys never changes anyone's terms. An admin can "Allow 3 more" (Administrator console).
+- **3 changes per field after the first join.** Once a tester has joined, each of these fields has its own 3 changes: what to do (the steps), the NDA, questions, required languages, and required devices and technology. One Save that changes two of them uses one change of each. Each field shows "Changes left: N of 3" next to its label, and the counts update live when another tab saves. A field at 0 locks on its own, with the note "You've changed the <field> 3 times since testers joined. Contact us in Settings to change it again."; the other fields stay editable. Part prices, parts and the build link aren't limited; changing prices or parts still sends working testers the Switch / Keep offer. Access keys aren't limited either: a key given to a tester stays theirs, so adding keys never changes anyone's terms. An admin's "Allow 3 more" gives every field at 0 three more changes (Administrator console).
 
   [image: After 3 saves that changed the steps: “Changes left: 0 of 3” near Save and the locked note.]
 
@@ -545,7 +544,7 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
    - An avatar row (about 12, then +N). Each hover card shows rating, accepted parts, the profile link and "Chat with <name>".
    - A scroll box of tester rows with a name search: required and optional parts sent, paid per part and in total, the agreed scope (their current contract, switched or kept), a call summary, Rate, and Extra pay on each sent part.
    - "No longer working (N)" below, each row tagged Left, Ended early, Stopped or Removed.
-7. **Live session**: the rate line; tick testers (each with their terms and "N of 3 booked") or Select all; the request form; waiting requests; booked calls and call sets; Past calls. Calls can be requested with any tester, whether or not a live call is a listed part. Each tester shows "Live call · $X/h" when a call is listed and in their contract, otherwise "Not a listed part: pay is up to you, at most $100 in total for unlisted parts".
+7. **Live session**: the rate line; tick testers (each with their terms and "N of 3 booked") or Select all; the request form; waiting requests; booked calls and call sets; Past calls. Calls can be requested with any tester, whether or not a live call is a listed part. Each tester shows "Live call · $X/h" when a call is listed and in their contract, otherwise "Not a listed part: pay is up to you, at most $100 for this call".
 
    [image: Live session: tick testers, request times, a waiting request, booked calls (Join shows near the start).]
 8. **Invite testers**: three lists, "People you've worked with" (with "In N tests with you", a fold linking those tests), "Suggested" (top 5) and "Find testers" (name search plus device and language ticks); then "Invited" (waiting invites).
@@ -973,7 +972,7 @@ From Every page: the bell (admin lines and the "Reported more than 3 times" labe
 
 Admin buttons have no confirm pop-up; each shows "Done." or the refusal.
 
-- **Decide a dispute:** the row shows the listing, paid for this piece, paid for this part so far, and the allowed range (from what was paid up to the listing minus what was paid on other pieces). Enter the total pay; blank keeps it. The decision and reason are recorded; both sides are told ("…was decided"); a raise is charged at once; during a payment or chargeback hold it is added to what the developer owes and paid to the tester when they pay; during a suspension with no hold it waits.
+- **Decide a dispute:** the row shows the listing, paid for this piece, paid for this part so far, and the allowed range (from what was paid up to the listing minus what was paid on other pieces). Enter the total pay; blank keeps it. The decision and reason are recorded; both sides are told ("…was decided"); a raise is charged at once; during a payment or chargeback hold it is added to what the developer owes and paid to the tester when they pay; during a suspension with no hold it is charged at once, and a decline starts a payment hold.
 - **Suspend** (a reason is required; Preview shows the effects first):
   - a developer: all their tests pause; applications close; calls within 3 days are cancelled with no fault; they get "Your account is paused".
   - a tester: removed from every test (developers get "<name> left <test>"); pay for their sent work is still charged and their share is held.
@@ -984,7 +983,7 @@ Admin buttons have no confirm pop-up; each shows "Done." or the refusal.
 - **Extend** a paused test's closing date (1–90 days, this pause only): "<test> will close later". **Close now:** testers read "<test> ended"; the developer gets "<test> was closed. <reason>".
 - **Approve** a lift or a chargeback hold. A chargeback Approve is refused until the card is verified and what's owed is paid ("Not yet: the card isn't verified and $X is still owed."). The developer gets "The team approved lifting your hold", or "Your tests are running again" if that lifts it.
 - **Release / Refund** a held tester share; **Send** a waiting payout.
-- **Allow 3 more** critical-field changes for a test (Edit test).
+- **Allow 3 more** for a test: every limited field at 0 gets 3 more changes (Edit test).
 
 ### What can stop a press
 
@@ -1030,10 +1029,10 @@ The rules several pages share, with every number, cap and timer. How pages show 
 - **Chargebacks:** a chargeback starts a chargeback hold with three steps: verify a card with 3D Secure, pay what is owed, then an admin's Approve. Paying alone never lifts it. A chargeback during a payment hold turns it into a chargeback hold. Every further chargeback adds to what is owed; a new chargeback clears an earlier card check.
 - **Hold count:** the first 3 holds lift as soon as the developer pays. From the 4th hold on, an admin must Approve the lift (Lifts on Administrator console); the developer's box says the team will review after they pay.
 - **Charge cap:** the listing minus what was already paid for that part.
-- **Charge during a pause:** during a payment or chargeback hold, a tester's Charge (and a dispute decided for the tester) goes through as their choice but isn't charged yet: it is added to the developer's "Pay what you owe", and the tester is paid when the developer pays. The tester sees "Charged $X. Payment may be delayed until the test resumes." During an admin suspension with no hold, Charge is charged at once; if it's declined, a payment hold starts and the amount is added to what is owed.
+- **Charge during a pause:** during a payment or chargeback hold, a tester's Charge (and a dispute decided for the tester) goes through as their choice but isn't charged yet: it is added to the developer's "Pay what you owe", and the tester is paid when the developer pays. The tester sees "Charged $X. Payment may be delayed until the test resumes." During an admin suspension with no hold, a Charge, or a dispute decided for the tester, is charged at once; if it's declined, a payment hold starts and the amount is added to what is owed.
 - **Dispute range:** from what this piece was paid up to the listing minus what was paid on other pieces. An admin decision can only raise pay. Each part can be disputed once; the developer adds their side once.
-- **Extra pay cap:** any amount above a part's listed price (normal Pay above the listing plus extra pay, parts outside the contract too) may total at most 100% of the tester's current contract total (part prices plus the agreed totals of booked and held calls). A part with no listed price can be paid at most $100 in total, which doesn't count toward the 100%. Blocked: "This is more than you can pay above the listing (up to $Y)."
-- **Calls that aren't a listed part:** either side can request a call even when a live call isn't a listed part of the test or isn't in that tester's contract, and the page says which it is. Pay for such a call is up to the developer, within the unlisted-part limit: at most $100 in total, outside the 100% cap. The Pay box starts empty. Charge and Let it go never open for a call outside the tester's contract.
+- **Extra pay cap:** any amount above a part's listed price (normal Pay above the listing plus extra pay, parts outside the contract too) may total at most 100% of the tester's current contract total (part prices plus the agreed totals of booked and held calls). Each unlisted part or unlisted call can be paid at most $100 (its pay plus extra pay), which doesn't count toward the 100%. Blocked: "This is more than you can pay above the listing (up to $Y)."
+- **Calls that aren't a listed part:** either side can request a call even when a live call isn't a listed part of the test or isn't in that tester's contract, and the page says which it is. Pay for such a call is up to the developer: at most $100 for that call (its pay plus extra pay), outside the 100% cap. The Pay box starts empty. Charge and Let it go never open for a call outside the tester's contract.
 - **Prices:** written and recording $1–$1,000 each, calls $10–$200 an hour, or free. The smallest charge is $0.50; Stripe's largest is $999,999.99.
 - **A suspended tester's pay** is still charged; their share is held until they are reinstated. If they never are, an admin refunds or releases it.
 - **Wording for testers:** "paused" and "delayed" only.
@@ -1054,7 +1053,7 @@ The rules several pages share, with every number, cap and timer. How pages show 
 | Their tests | all paused | all paused | all paused | they are removed from every test |
 | They can | Pay what you owe, Change card, Cancel call (dashboard), Payments, Contact us | the three steps, Change card, Cancel call, Payments, Contact us | Cancel call (dashboard), Change card, Payments, Contact us (appeal) | Payments (payout setup), Contact us (appeal) |
 | Testers in those tests can | save drafts, cancel booked calls, dispute, Charge or Let it go, Rate, Leave | the same | the same | (not in any test) |
-| Waits until it lifts | sending work, chat, new calls, joins, invites and applications, Pay, Reject; testers' charges are paid when the developer pays what they owe | the same | everything else; testers' charges go through at once | their held share of pay |
+| Waits until it lifts | sending work, chat, new calls, joins, invites and applications, Pay, Reject; testers' charges are paid when the developer pays what they owe | the same | everything else; testers' charges and disputes decided for them are charged at once | their held share of pay |
 | Lifts when | everything owed is paid (4th hold on: plus an admin's Approve) | card verified, owed paid, admin Approve | an admin lifts it | an admin reinstates them |
 | On lifting | tests resume; deadlines move on; testers get "<test> is running again" | the same | the same | no automatic re-invite: the tests they were removed from stay at their dashboard top ("You were removed from this test", with Ask to rejoin while the test is open with a spot) until they ask or dismiss; the developer can invite them again |
 
@@ -1082,8 +1081,8 @@ The rules several pages share, with every number, cap and timer. How pages show 
 | Part price | written and recording $1–$1,000, or free; over $200 needs a tick |
 | Call rate | $10–$200 an hour, or free |
 | Any charge | $0.50 to $999,999.99 |
-| Pay above the listing | at most 100% of the current contract total; unlisted parts at most $100 each in total |
-| Changes to the steps, NDA, questions, languages and devices | 3 per field after the first tester joins; one Save that changes two fields uses one change of each (an admin can allow 3 more); prices, parts, the build link and access keys aren't limited |
+| Pay above the listing | at most 100% of the current contract total; each unlisted part or unlisted call at most $100 (its pay plus extra pay), outside the 100% |
+| Changes to the steps, NDA, questions, languages and devices | 3 per field after the first tester joins; one Save that changes two fields uses one change of each (an admin's Allow 3 more gives 3 more to every field at 0); prices, parts, the build link and access keys aren't limited |
 | Call length | 10–180 min; logged up to 150% of booked, within 24 hours |
 | Call requests | 3 time rows; repeats 2–8 or Forever; per tester 3 booked times and 3 waiting requests |
 | Joining a call | 10 minutes before to 30 minutes after the start; cancelled if nobody joins by halfway |
@@ -1146,7 +1145,7 @@ Open questions about these rules are in QA and open questions.
 **Earlier questions**
 
 - **Timing:** which deadline rule wins (the individual deadline, the 3-day buffer, a 2-day late-joiner extension, a maximum recruitment period such as 30 days); shortening a tester's deadline with 24 hours' notice; the review window for extended tests; what happens to unreviewed work when a test closes on its own.
-- **Payments:** is a 10-day refund period workable with the payment provider's rules and payout timing; refund exceptions; charges still collectible during a chargeback; unresolved charges when an account closes; pay when a developer ends work early.
+- **Payments:** is a 10-day refund period workable with the payment provider's rules and payout timing; refund exceptions; unresolved charges when an account closes; pay when a developer ends work early.
 - **Restrictions:** different escalation for different causes; stopping abusive re-registration without blocking people who share devices or networks; reports on paused tests.
 - **Business:** higher prices for higher-rated testers; charging for work that isn't accepted; which tester stats are public; forums or group tests.
 - **Ratings:** scales and categories; early departures; tests ending without full completion.
