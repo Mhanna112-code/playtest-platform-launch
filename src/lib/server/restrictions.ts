@@ -89,7 +89,10 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
   if (u.deletedAt) throw new HttpError(409, "deleted", "That account was deleted.");
   await db.user.update({ where: { id: userId }, data: { suspendedAt: new Date(), suspendNote: note, suspendedById: adminId, reinstatedAt: null } });
   await accountEvent(userId, "suspended", adminId, note);
-  if (u.isDeveloper) await pauseDeveloper(u);
+  if (u.isDeveloper) {
+    await pauseDeveloper(u);
+    await (await import("./subscription")).pauseBilling(userId);
+  }
   if (u.isTester) await removeTester(u, "suspended");
   await notify(u.email, "Your account is paused", ["Your account is paused. Contact us in Settings if you think this is a mistake."], "/app/help", { always: true, group: "admindecision" });
   return { ok: true };
@@ -123,6 +126,7 @@ export async function reinstateAccount(userId: string) {
     // (Owner, Oct 28 afternoon, DEFAULT) Deadlines and Open until move on by the pause; a hold still on keeps the tests paused (they resume, and move on the rest, when it lifts).
     const running = await db.$transaction((tx) => resumeTests(tx, userId, start, now, [u.holdStartedAt]));
     if (!u.holdStartedAt) await chargeDeferred(userId);
+    await (await import("./subscription")).resumeBilling(userId, now);
     const testers = await db.contract.findMany({ where: { status: "working", testId: { in: running } }, include: { tester: true } });
     for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: userId, group: "paused" });
   }
@@ -150,6 +154,8 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
     const blockers = await devDeleteBlockers(userId);
     if (blockers.length) throw new HttpError(409, "delete_blocked", devDeleteRefusal(blockers), { blockers });
   }
+  // (Batch 8) The subscription ends at once, with no refund.
+  if (u.isDeveloper) await (await import("./subscription")).endOnDelete(userId);
   await db.user.update({ where: { id: userId }, data: { deletedAt: new Date(), deletedBy: by, deleteReason: reason.slice(0, 500) } });
   await db.invite.updateMany({ where: { testerId: userId, status: "sent" }, data: { status: "cancelled" } });
   if (u.isDeveloper) {

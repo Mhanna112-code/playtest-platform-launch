@@ -1,4 +1,5 @@
 "use client";
+import { SubscribersTag } from "@/components/SubscribeLink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { Err } from "@/components/Err";
@@ -99,7 +100,7 @@ type EditProps = {
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
 /** (Owner, Oct 28 evening) `draft`: a draft (a next round not opened yet) shown in Post a test: Post opens it for testers, and it can be deleted here. */
-export function TestForm({ init, edit, spotsLimit, draft }: { init: Listing; edit?: EditProps; spotsLimit?: number; draft?: { id: string } }) {
+export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init: Listing; edit?: EditProps; spotsLimit?: number; draft?: { id: string }; /** (Batch 8) false on the free plan: "Subscribers" on Approved-only */ perks?: boolean }) {
   const [f, setF] = useState<F>(toForm(init));
   // What this tab last knew the test to be (Edit): fields that differ from it are "changed" (Save is faded when none are).
   const [base, setBase] = useState<F>(toForm(init));
@@ -471,7 +472,7 @@ export function TestForm({ init, edit, spotsLimit, draft }: { init: Listing; edi
         </div>
         {edit && edit.testersIn > 0 && <p className="note">{edit.testersIn} tester{edit.testersIn === 1 ? " is" : "s are"} in: spots can&apos;t go below that.</p>}
         <div>
-          <label className="label" htmlFor="joinMode">How testers join</label>
+          <label className="label" htmlFor="joinMode">How testers join{!perks && <> <span className="text-xs font-normal text-slate-400">Approved only:</span> <SubscribersTag /></>}</label>
           <select id="joinMode" className="input max-w-xs" value={f.joinMode} onChange={(e) => set({ joinMode: e.target.value })}>
             <option value="anyone">Anyone can join (they press Join)</option>
             <option value="apply">Approved only (you accept or decline)</option>

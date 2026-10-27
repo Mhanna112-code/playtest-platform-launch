@@ -1,4 +1,5 @@
 "use client";
+import { SubscribersTag } from "@/components/SubscribeLink";
 import { useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
@@ -17,7 +18,7 @@ type Tester = { contractId: string; name: string; sent: string[]; toSend: string
  * The test page's top title panel: the developer's big buttons (Stop the test, End early, Next round).
  * Its stop-once box sits directly under this panel.
  */
-export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean }) {
+export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
   const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={error} didntGo={k === "stop" || k === "end-early"} /> : null);
   const [open, setOpen] = useState<"" | "end" | "next">("");
@@ -72,7 +73,7 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
               {p.restricted || p.teamStopped || p.status === "draft" ? null : p.nextRoundId ? (
                 <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.nextRoundId}`}><Repeat className="h-4 w-4" /> Go to the next round</a>
               ) : (
-                <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(open === "next" ? "" : "next")}><Repeat className="h-4 w-4" /> Next round</button>
+                <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(open === "next" ? "" : "next")}><Repeat className="h-4 w-4" /> Next round{p.perks === false && <SubscribersTag />}</button>
               )}
               {/* (Owner, Oct 28) A draft (a next round not opened yet) has no Next round and no End early. */}
               {p.status !== "draft" && !stopped && <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(open === "end" ? "" : "end")} disabled={p.working.length === 0}>

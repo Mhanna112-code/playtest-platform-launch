@@ -1,3 +1,4 @@
+import { fmtSubDay } from "@/lib/subscription";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Brand } from "@/components/Brand";
@@ -162,6 +163,19 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           </p>
         ))}
       </section>
+
+      {/* (Owner, Oct 28, batch 8) The admin settings: free during launch. */}
+      {await (async () => {
+        const launch = await (await import("@/lib/server/subscription")).launchState();
+        return (
+          <section className="card space-y-2" id="settings" data-free-until={launch.until ? launch.until.toISOString() : ""}>
+            <h2 className="text-lg font-semibold text-white">Settings</h2>
+            <p className="text-sm text-slate-300">Free during launch: {launch.until ? `${launch.free ? "free for everyone until" : "ended on"} ${fmtSubDay(launch.until)}` : "free for everyone, no end date"}.</p>
+            <AdminButton action="set-free-until" id="free-until" label="Set the date" fields={[{ name: "date", label: "Free until", ph: "YYYY-MM-DD (blank clears)" }]} />
+            <p className="text-xs text-slate-500">At least 30 days away. Every developer is told 30 days and 7 days before (even with email Off).</p>
+          </section>
+        );
+      })()}
 
       <section className="card space-y-3" id="users">
         <h2 className="text-lg font-semibold text-white">Accounts ({usersP.total})</h2>

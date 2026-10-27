@@ -12,6 +12,9 @@ import { sideFor } from "@/lib/sides";
 import { PayoutBanner } from "@/components/PayoutBanner";
 import { LongList } from "@/components/LongList";
 import { testerShare } from "@/lib/rules";
+import { SubscriptionBox } from "./SubscriptionBox";
+import { launchState } from "@/lib/server/subscription";
+import { RETRY_DAYS, fmtSubDay, subState } from "@/lib/subscription";
 
 export const metadata = { title: "Payments · Playtest" };
 export const dynamic = "force-dynamic";
@@ -43,7 +46,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const owedKeys = new Set(owed.map((p) => p.submissionId ?? p.callId));
   const [paidOut, paidIn] = await Promise.all([
     dev ? db.payment.findMany({ where: { developerId: u.id, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "desc" }, take: 500 }) : [],
-    tester ? db.payment.findMany({ where: { testerId: u.id, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "desc" }, take: 500 }) : [],
+    tester ? db.payment.findMany({ where: { testerId: u.id, kind: { not: "subscription" }, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "desc" }, take: 500 }) : [],
   ]);
   // The full app's billing / payouts pages: one column of cards, each with its icon heading; lists as rows.
   return (
@@ -60,6 +63,16 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       {q.saved === "payout" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Your payout account is connected.</p>}
       {q.pending === "payout" && <p className="info">Stripe still needs a few details before you can be paid. Continue setup below.</p>}
 
+      {dev && await (async () => {
+        // (Owner, Oct 28, batch 8) The subscription, before the card.
+        const launch = await launchState();
+        return (
+          <SubscriptionBox state={subState(u)} since={u.subscribedAt ? fmtSubDay(u.subscribedAt) : null} renews={u.subscriptionRenewsAt ? fmtSubDay(u.subscriptionRenewsAt) : null}
+            endedReason={u.subscriptionEndReason} seenAt={new Date().toISOString()} hasCard={!!u.stripePaymentMethodId} needsCard={on} restricted={!!(u.holdStartedAt || u.suspendedAt)}
+            launch={{ free: launch.free, until: launch.until ? fmtSubDay(launch.until) : null }}
+            pastDueBy={u.subscriptionPastDueAt ? fmtSubDay(new Date(u.subscriptionPastDueAt.getTime() + RETRY_DAYS * 86_400_000)) : null} />
+        );
+      })()}
       {dev && (
         <>
           <section id="card" className="card scroll-mt-24 space-y-3">
@@ -77,7 +90,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <LongList shown={8} tall="max-h-96" className="divide-y divide-white/5 text-sm">
               {paidOut.map((p) => (
                 <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                  <span className="text-slate-200">{p.kind === "call" ? "Live call" : p.kind === "dispute" ? "Dispute decision" : p.kind === "extra" ? "Extra pay" : p.kind === "chargeback" ? "A reversed payment, paid again" : "Sent work"}</span>
+                  <span className="text-slate-200">{p.kind === "call" ? "Live call" : p.kind === "dispute" ? "Dispute decision" : p.kind === "extra" ? "Extra pay" : p.kind === "chargeback" ? "A reversed payment, paid again" : p.kind === "subscription" ? "Subscription" : "Sent work"}</span>
                   <span className="text-slate-400">{fmtDateTime(p.createdAt)} · {money(p.amountCents)}{p.status === "not_set_up" ? " · recorded (payments not set up)" : ""}</span>
                 </li>
               ))}

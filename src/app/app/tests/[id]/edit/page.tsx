@@ -1,3 +1,4 @@
+import { hasPerks } from "@/lib/server/subscription";
 import { countsOf } from "@/lib/limits";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
@@ -39,6 +40,7 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
             init={asListing(t)}
             edit={{ id, version: t.version, testersIn, draft: t.status === "draft", seenAt, keys: await keyBoxes(id), criticalCounts: countsOf(t.criticalCounts), everJoined: (await db.contract.count({ where: { testId: id } })) > 0, openedAt: t.createdAt.toISOString() }}
             spotsLimit={(await testerCapacity(u.id)).limit}
+            perks={await hasPerks(u)}
           />
           {/* (Design doc 5) Live updates from every page's rules show in a blue box under the Save button. */}
           <LiveTop scope={`test:${id}`} seenAt={seenAt} contractLink={{ testId: id }} />

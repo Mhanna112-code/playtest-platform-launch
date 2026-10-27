@@ -15,7 +15,7 @@ export type DeleteBlockerRow = { key: string; text: string; href: string };
  * payout setup, delayed payments, unpaid work, what leaving means). (DEFAULT) A developer can't delete while work waits for Pay or Reject, a dispute is open or a hold is on:
  * those are listed here with links, and the server refuses the press with the same list.
  */
-export function DeleteAccount({ testerLines, blockers = [] }: { testerLines?: DeleteLine[]; blockers?: DeleteBlockerRow[] }) {
+export function DeleteAccount({ testerLines, blockers = [], subscriptionLine = "" }: { testerLines?: DeleteLine[]; blockers?: DeleteBlockerRow[]; /** (Batch 8) Shown when a subscription would end now. */ subscriptionLine?: string }) {
   const [err, setErr] = useState("");
   return (
     <section className="card space-y-2" id="delete-account">
@@ -42,6 +42,7 @@ export function DeleteAccount({ testerLines, blockers = [] }: { testerLines?: De
                 ))}
               </ul>
             )}
+            {subscriptionLine && <p data-delete-line="subscription">{subscriptionLine}</p>}
             <p>Every open tab of your account is signed out and told the account no longer exists.</p>
             {!testerLines?.length && <p className="font-medium text-white">This can&apos;t be undone.</p>}
           </>

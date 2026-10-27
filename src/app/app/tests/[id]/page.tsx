@@ -1,3 +1,4 @@
+import { hasPerks } from "@/lib/server/subscription";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, pronouns } from "@/lib/format";
@@ -68,6 +69,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   if (!t || t.developerId !== u.id) notFound();
   // (Owner, Oct 28 evening) A draft is not a test page: it opens in Post a test.
   if (t.status === "draft") redirect(`/app/tests/new?draft=${t.id}`);
+  // (Batch 8) The free plan: the perk buttons show a "Subscribers" tag (a press is refused with a Payments link).
+  const perks = await hasPerks(u);
   const next = await db.test.findFirst({ where: { previousId: id }, select: { id: true } });
   const brokenKeys = await brokenKeyTesters(id);
   // (Owner, Oct 26) A suspended developer sees only Cancel call, End early and Stop the test here; every other button is hidden.
@@ -192,6 +195,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         seenAt={seenAt}
         nextRoundId={next?.id ?? null}
         teamStopped={!!t.adminStoppedAt}
+        perks={perks}
         spotsLine={`${working.length} of ${t.spots} spots used`}
         full={working.length >= t.spots}
         joinMode={t.joinMode}
@@ -398,6 +402,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           testId={t.id}
           seenAt={seenAt}
           options={{ devices: t.devices, languages: t.languages }}
+          perks={perks}
           testers={testers}
           sent={expired ? [] : invites.filter((i) => i.status === "sent").map((i) => ({ id: i.id, name: people.get(i.testerId) ?? "?", status: "waiting for them to join" }))}
         />

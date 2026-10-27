@@ -73,6 +73,8 @@ export async function startHold(devId: string, reason: string) {
   const claimed = await db.user.updateMany({ where: { id: devId, holdStartedAt: null }, data: { holdStartedAt: now, holdReason: reason, holdAlertedAt: null, holdCount: { increment: 1 }, holdApprovedAt: null, holdApprovedById: null } });
   if (claimed.count !== 1) return false;
   await accountEvent(devId, "hold", null, reason);
+  // (Batch 8) Subscription billing pauses while the hold lasts.
+  await (await import("./subscription")).pauseBilling(devId, now);
   const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
   const tests = await db.test.findMany({ where: { developerId: devId, status: { in: ["open", "closed", "draft"] } } });
   for (const t of tests) {
@@ -172,6 +174,8 @@ export async function liftHoldIfClear(devId: string) {
     await tx.user.update({ where: { id: devId }, data: { holdStartedAt: null, holdReason: "", holdAlertedAt: null, chargebackCardVerifiedAt: null, chargebackApprovedAt: null, holdApprovedAt: null, holdApprovedById: null } });
   });
   await accountEvent(devId, "hold-lifted");
+  // (Batch 8) The subscription's paid days left resume (unless a suspension is still on).
+  await (await import("./subscription")).resumeBilling(devId, now);
   await chargeDeferred(devId);
   await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause."], "/app", { always: true, payment: true, group: "payhold" });
   const testers = await db.contract.findMany({ where: { status: "working", testId: { in: running } }, include: { tester: true } });
@@ -404,6 +408,10 @@ export async function runDaily(now = new Date()) {
   await rs.cancelLatePauseCalls(now);
   await rs.payoutReminders(now);
   await rs.suspendedAccountsReminder(now);
+  // (Batch 8) Subscription renewals (manual billing) and the free-during-launch notices.
+  const subs = await import("./subscription");
+  await subs.renewSubscriptions(now);
+  await subs.freeLaunchNotices(now);
   // 10. (Owner, Oct 26) The reminders that need their own rules, then the emails last (one email lists everything new; payment lines also go out end of day).
   await dailyReminders(now);
   await (await import("./ratings")).ratingReminders(now);

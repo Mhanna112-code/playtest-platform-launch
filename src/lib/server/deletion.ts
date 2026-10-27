@@ -55,7 +55,7 @@ export type TesterDeleteFacts = {
 export async function testerDeleteFacts(userId: string, now = new Date()): Promise<TesterDeleteFacts> {
   const u = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { payoutsReady: true } });
   const [waiting, delayed, subs, calls, disputes] = await Promise.all([
-    db.payment.aggregate({ where: { testerId: userId, status: "charged", transferStatus: "waiting" }, _sum: { testerCents: true } }),
+    db.payment.aggregate({ where: { testerId: userId, kind: { not: "subscription" }, status: "charged", transferStatus: "waiting" }, _sum: { testerCents: true } }),
     db.payment.findMany({ where: { testerId: userId, OR: [{ status: "failed", owedUntil: { not: null }, settledAt: null }, { status: { in: ["deferred", "owed"] } }] }, select: { amountCents: true } }),
     db.submission.findMany({ where: { review: null, contract: { testerId: userId } }, select: { id: true, agreedCents: true } }),
     db.call.findMany({ where: { review: null, status: "booked", startsAt: { lte: now }, contract: { testerId: userId } }, select: { id: true, rateCents: true, minutes: true, actualMinutes: true } }),

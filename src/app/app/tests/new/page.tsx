@@ -1,3 +1,4 @@
+import { hasPerks } from "@/lib/server/subscription";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { asListing } from "@/lib/server/tests";
@@ -24,6 +25,7 @@ export default async function NewTest({ searchParams }: { searchParams: Promise<
       <TestForm
         spotsLimit={(await testerCapacity(u.id)).limit}
         draft={draft ? { id: draft.id } : undefined}
+        perks={await hasPerks(u)}
         init={draft ? asListing(draft) : { productName: "", mature: false, matureWhy: "", ndaText: "", title: "", description: "", buildUrl: "", categories: ["Productivity"], devices: [], languages: [], spots: 5, writtenCents: 1000, recordingCents: null, liveRateCents: null, liveMinutes: 30, deadlineDays: 7, questions: [], openUntil: null, joinMode: "anyone" }}
       />
     </>

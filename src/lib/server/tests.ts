@@ -205,11 +205,19 @@ async function checkPost(dev: U, body: Record<string, unknown>) {
   return { l, keys };
 }
 
+/** (Batch 8) Posting (or opening a draft): the free plan runs one open test at a time, and Approved-only testers are a subscriber perk. */
+async function postPerks(devId: string, joinMode: string, exceptId = "") {
+  const subs = await import("./subscription");
+  await subs.canOpenAnother(devId, exceptId);
+  if (joinMode === "apply") await subs.requirePerk(devId, "approved");
+}
+
 /** (Owner, Oct 28 evening) A draft (a next round not opened yet) opens in Post a test: "Post the test" saves the typed details and opens it for testers. */
 export async function postDraft(dev: U, testId: string, body: Record<string, unknown>) {
   const t0 = await ownTest(dev.id, testId);
   if (t0.status !== "draft") throw new HttpError(409, "not_draft", t0.status === "stopped" ? "This test was stopped." : "This test is already open.");
   const { l, keys } = await checkPost(dev, body);
+  await postPerks(dev.id, l.joinMode, testId);
   return db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status !== "draft") throw new HttpError(409, "not_draft", "This test is already open.");
@@ -232,6 +240,7 @@ export async function deleteDraft(dev: U, testId: string) {
 export async function createTest(dev: U, body: Record<string, unknown>) {
   // (NEWEST+9) Spots up to the developer's tester capacity; (design doc 4) with access keys, at least as many keys as open spots.
   const { l, keys } = await checkPost(dev, body);
+  await postPerks(dev.id, l.joinMode);
   return db.$transaction(async (tx) => {
     const t = await tx.test.create({ data: { ...listingData(l), developerId: dev.id, status: "open" } });
     if (keys.length) await tx.accessKey.createMany({ data: keys.map((value) => ({ testId: t.id, value })) });
@@ -249,6 +258,11 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   const loaded = Number(body.version);
   const confirmed = body.confirmed === true;
   const touched = parseListing((body.fields ?? {}) as Record<string, unknown>, true);
+  // (Batch 8) Switching a test to Approved-only is a new use of the perk (a test that already is Approved-only stays so, and keeps working).
+  if (touched.joinMode === "apply") {
+    const cur = await db.test.findUniqueOrThrow({ where: { id: testId }, select: { joinMode: true } });
+    if (cur.joinMode !== "apply") await (await import("./subscription")).requirePerk(dev.id, "approved");
+  }
   // (Design doc 5) Access keys: the keys added and the free keys removed in this tab (applied on top of the newest keys).
   const keysAdd = checkTypedKeys(body.keysAdd);
   const keysRemove = parseKeys(body.keysRemove);
@@ -371,6 +385,7 @@ export async function openDraft(dev: U, testId: string, body: Record<string, unk
   const t = await ownTest(dev.id, testId);
   await devGateIfSeen(testId, body);
   if (t.status !== "draft") throw new HttpError(409, "not_draft", t.status === "stopped" ? "This test was stopped." : "This test is already open.");
+  await postPerks(dev.id, t.joinMode, testId);
   return db.$transaction((tx) => recordEvent(tx, testId, "opened", "The test opened for testers", true, { status: "open" }));
 }
 
@@ -499,6 +514,8 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
 /** Next round: a draft copy of the test for the next build. Optionally stops new testers joining this one. */
 export async function nextRound(dev: U, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
+  // (Batch 8) Next round is a subscriber perk.
+  await (await import("./subscription")).requirePerk(dev.id, "nextRound");
   const res = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     // (Owner, Oct 28 evening) Next round stays on a stopped test: it starts a new draft from it.

@@ -1,4 +1,5 @@
 "use client";
+import { SubscribersTag } from "@/components/SubscribeLink";
 import { useEffect, useMemo, useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { api } from "@/lib/client";
@@ -19,7 +20,7 @@ type Sent = { id: string; name: string; status: string };
  * Find testers (empty until you search). The filters narrow Suggested and Find testers. Greyed rows can't be ticked. A
  * ticked tester missing something the test needs gets an in-page confirm under Invite (Invite anyway / Cancel).
  */
-export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester[]; sent: Sent[]; options: { devices: string[]; languages: string[] } }) {
+export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester[]; sent: Sent[]; options: { devices: string[]; languages: string[] }; /** (Batch 8) false on the free plan: the "Subscribers" tag */ perks?: boolean }) {
   const { press, changes, error, busy, setError, at, errData } = usePress(p.seenAt);
   // (NEXT-UI 12b) When the Invite anyway box last updated (its first showing, a changed list, a live update): Invite anyway
   // goes ahead only if nothing new happened since; anything newer stops it again inside the box.
@@ -139,7 +140,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
 
   return (
     <details id="invite" className="card scroll-mt-24" open={open} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)} aria-label="Invite testers">
-      <summary className="fold-chevron flex cursor-pointer items-center gap-2 font-semibold text-white"><UserPlus className="h-5 w-5 text-sky-300" /> Invite testers</summary>
+      <summary className="fold-chevron flex cursor-pointer items-center gap-2 font-semibold text-white"><UserPlus className="h-5 w-5 text-sky-300" /> Invite testers{p.perks === false && <SubscribersTag />}</summary>
       <div className="mt-3 space-y-3 text-sm">
       {p.sent.length > 0 && (
         <>

@@ -49,7 +49,7 @@ export async function invitable(devId: string, testId: string) {
     const g = sums.find((x) => x.rateeId === id);
     return (3 * platformAvg + (g?._sum.stars ?? 0)) / (3 + (g?._count._all ?? 0));
   };
-  const acceptedBy = new Map((await db.payment.groupBy({ by: ["testerId"], where: { testerId: { in: testers.map((t) => t.id) }, status: { in: ["charged", "not_set_up"] } }, _count: { _all: true } })).map((g) => [g.testerId, g._count._all]));
+  const acceptedBy = new Map((await db.payment.groupBy({ by: ["testerId"], where: { testerId: { in: testers.map((t) => t.id) }, kind: { not: "subscription" }, status: { in: ["charged", "not_set_up"] } }, _count: { _all: true } })).map((g) => [g.testerId, g._count._all]));
   const matches = (t: (typeof testers)[number]) => (t.profile?.devices ?? []).filter((d) => test.devices.includes(d)).length + (t.profile?.languages ?? []).filter((l) => test.languages.includes(l)).length;
   const myTests = await db.contract.findMany({ where: { test: { developerId: devId } }, select: { testerId: true, joinedAt: true, test: { select: { id: true, title: true } } }, orderBy: { joinedAt: "desc" } });
   const together = (id: string) => {
@@ -107,6 +107,8 @@ function removedNeeds(t: { devices: string[]; languages: string[] }, p: { device
  */
 export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
+  // (Batch 8) Inviting testers is a subscriber perk (invites already sent stay valid when the subscription ends).
+  await (await import("./subscription")).requirePerk(dev.id, "invite");
   const ids = Array.isArray(body.testerIds) ? [...new Set(body.testerIds.filter((x): x is string => typeof x === "string"))] : [];
   if (!ids.length) throw new HttpError(400, "none", "Tick at least one tester.");
   const seenAt = new Date(String(body.seenAt ?? ""));

@@ -5,6 +5,7 @@ import { chargebackHolds } from "./chargeback";
 import { disputeBounds } from "./payments";
 import { termsLine } from "@/lib/rules";
 import { CRITICAL_FIELDS, CRITICAL_KEYS, countsOf, lockedFields } from "@/lib/limits";
+import { adminSubLine } from "@/lib/subscription";
 import { pausedTestsForAdmin } from "./pauseClosure";
 import { REPORTED_OVER, labelled, reportCounts, reportedOver3 } from "./reports";
 import { HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL } from "@/lib/rules";
@@ -129,7 +130,7 @@ async function users(cursor: string | null): Promise<Page<UserVM>> {
   const rows: UserVM[] = page.map((x) => ({
     id: x.id,
     at: x.createdAt.toISOString(),
-    line: `${x.email} · ${displayName(x)} · ${[x.isDeveloper && "developer", x.isTester && "tester"].filter(Boolean).join(" + ") || "no role"}`,
+    line: `${x.email} · ${displayName(x)} · ${[x.isDeveloper && "developer", x.isTester && "tester"].filter(Boolean).join(" + ") || "no role"}${x.isDeveloper ? ` · ${adminSubLine(x)}` : ""}`,
     href: profileHref(x),
     reports: reports.get(x.id) ?? 0,
     state: x.deletedAt ? "deleted" : x.suspendedAt ? "suspended" : "normal",
@@ -315,7 +316,7 @@ export async function userTotals(userId: string) {
   const cids = contracts.map((c) => c.id);
   const [spent, paidOut, disputes, chargebacks, suspensions, reports, partsSent, partsPaid] = await Promise.all([
     db.payment.aggregate({ where: { developerId: userId, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }),
-    db.payment.aggregate({ where: { testerId: userId, status: { in: ["charged", "not_set_up"] } }, _sum: { testerCents: true } }),
+    db.payment.aggregate({ where: { testerId: userId, kind: { not: "subscription" }, status: { in: ["charged", "not_set_up"] } }, _sum: { testerCents: true } }),
     db.dispute.count({ where: { OR: [{ testerId: userId }, { contractId: { in: cids } }] } }),
     db.payment.count({ where: { developerId: userId, chargebackAt: { not: null } } }),
     db.accountEvent.count({ where: { userId, kind: "suspended" } }),
@@ -336,7 +337,7 @@ async function userBox(kind: Kind, userId: string, cursor: string | null): Promi
   const name = async (id: string | null) => (id ? (await db.user.findUnique({ where: { id }, select: { email: true } }))?.email ?? "an admin" : "the system");
   if (kind === "u-payments" || kind === "u-payouts") {
     const dev = kind === "u-payments";
-    const pays = await db.payment.findMany({ where: dev ? { developerId: userId } : { testerId: userId }, orderBy: { createdAt: "desc" }, take: 2000 });
+    const pays = await db.payment.findMany({ where: dev ? { developerId: userId } : { testerId: userId, kind: { not: "subscription" } }, orderBy: { createdAt: "desc" }, take: 2000 });
     const people = new Map((await db.user.findMany({ where: { id: { in: pays.map((p) => (dev ? p.testerId : p.developerId)) } }, select: { id: true, email: true } })).map((u) => [u.id, u.email]));
     for (const p of pays) rows.push(mk("pay", p.id, p.createdAt, dev ? `${p.kind} ${money(p.amountCents)} to ${people.get(p.testerId)} · ${p.status}${p.chargeback === "open" ? " · chargeback open" : ""}` : `${money(p.testerCents)} from ${people.get(p.developerId)} (${p.kind}) · payout ${p.transferStatus}`));
   } else if (kind === "u-disputes") {

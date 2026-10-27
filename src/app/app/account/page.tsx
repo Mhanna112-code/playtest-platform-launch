@@ -1,3 +1,4 @@
+import { DELETE_ENDS_SUBSCRIPTION, subscribed } from "@/lib/subscription";
 import Link from "next/link";
 import { ArrowLeftRight, Ban, Bell, Banknote, CheckCircle2, KeyRound, LifeBuoy, PlusCircle, ShieldCheck, UserRound, Building2 } from "lucide-react";
 import { requirePageUser } from "@/lib/server/page-auth";
@@ -78,7 +79,7 @@ export default async function AccountPage() {
       </section>
       <section id="password" className="scroll-mt-24"><PasswordForm hasPassword={!!u.passwordHash} /></section>
       {/* (Owner, Oct 28) A tester's pop-up carries their real numbers; a developer's blockers (DEFAULT) are listed with links. */}
-      <DeleteAccount testerLines={tester ? testerDeleteLines(await testerDeleteFacts(u.id)) : undefined} blockers={dev ? await devDeleteBlockers(u.id) : []} />
+      <DeleteAccount testerLines={tester ? testerDeleteLines(await testerDeleteFacts(u.id)) : undefined} blockers={dev ? await devDeleteBlockers(u.id) : []} subscriptionLine={subscribed(u) ? DELETE_ENDS_SUBSCRIPTION : ""} />
     </div>
   );
 }

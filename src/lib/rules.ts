@@ -305,6 +305,8 @@ export const DEV_STOP_KINDS = [
   ...STOP_ONCE_KINDS, "paid", "rejected", "chargeback", "choice", "requested", "withdrew_req", "declined_req",
   // (NEWEST+3) the full set: applications, a tester's Switch/Keep, disputes, invite answers, admin decisions, listing info (F).
   "applied", "terms", "dispute", "invite", "admin", "info", "full",
+  // (Batch 8) "Your subscription ended." (or the free launch ended): a page open at that moment stops once.
+  "subscription",
 ] as const;
 
 /**
@@ -368,6 +370,7 @@ export const TESTER_EXEMPT_KINDS: Record<string, string> = {
   key: "the developer's yellow keys box only",
   paused: "a hold shows as the paused banner and refusals",
   resumed: "the paused banner goes away",
+  subscription: "the developer's own subscription: testers never see it",
 };
 export function devStopOnce(events: TestEventLike[], seenAt: Date, confirmed: boolean) {
   return stopOnce(events, seenAt, confirmed, DEV_STOP_KINDS);

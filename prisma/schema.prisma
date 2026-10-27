@@ -45,6 +45,23 @@ model User {
   stripePaymentMethodId String?
   stripeAccountId       String? @unique
   payoutsReady          Boolean @default(false)
+  /// (Owner, Oct 28, batch 8) The developer subscription ($7/month): "none" | "active" | "past_due" (a renewal was declined; Stripe retries for about a week, the perks
+  /// continue) | "ended" (subscriptionEndReason: "cancelled" | "lapsed" | "deleted")
+  subscriptionStatus     String    @default("none")
+  /// The Stripe subscription id, or "manual" when Stripe Billing isn't set up (renewals recorded by the daily job)
+  subscriptionId         String?
+  subscribedAt           DateTime?
+  /// The day renewals count from (monthly; the 31st renews on the last day of shorter months). Moves later by the time billing was paused
+  subscriptionAnchorAt   DateTime?
+  /// The end of the paid month: the next renewal, or the end when cancelled
+  subscriptionRenewsAt   DateTime?
+  subscriptionCanceling  Boolean   @default(false)
+  subscriptionEndedAt    DateTime?
+  subscriptionEndReason  String    @default("")
+  /// When a declined renewal made it past due (the lapse comes after the last retry)
+  subscriptionPastDueAt  DateTime?
+  /// Billing paused by a payment hold, a chargeback hold or a suspension (the paid days left resume when it lifts)
+  subscriptionPausedAt   DateTime?
   /// Payment hold: set while the developer owes money (a failed charge unpaid after 3 days, or a chargeback)
   holdStartedAt DateTime?
   holdReason    String    @default("")
