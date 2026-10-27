@@ -67,7 +67,8 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
     // The full app's ONE Live session panel (a fold on the test page), its length the next booked call's.
     <LivePanel fold minutes={testers.flatMap((t) => [...t.calls, ...t.sets.flatMap((x) => x.calls)]).filter((c) => !c.started).sort((a, b) => a.when.localeCompare(b.when))[0]?.minutes ?? null}>
     <section className="space-y-3" id="calls" aria-label="Call requests">
-      <p className="note">Calls you request use each tester&apos;s contract rate. A call that isn&apos;t a listed part reads “Not listed”: its pay is up to you.</p>
+      {/* (Owner, Oct 28) A stopped test shows only what still works: no request-tool text. */}
+      {canRequest && <p className="note">Calls you request use each tester&apos;s contract rate. A call that isn&apos;t a listed part reads “Not listed”: its pay is up to you.</p>}
       {/* The form is never hidden silently: a short line says why. */}
       {!canRequest && noRequestReason && <p className="note" data-no-request="">{noRequestReason}</p>}
       {canRequest && testers.length === 0 && <p className="note">Nobody is working on this test right now, so there is nobody to request a call with.</p>}
@@ -98,7 +99,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           {box("request")}
         </div>
       )}
-      {shown.length === 0 && <p className="note">No calls or requests yet.</p>}
+      {shown.length === 0 && canRequest && <p className="note">No calls or requests yet.</p>}
       <div className="max-h-[36rem] space-y-2 overflow-y-auto pr-1" data-testers-calls="">
       {shown.map((t) => (
         <div key={t.contractId} className="space-y-1 rounded-lg border border-white/10 p-3 text-sm">

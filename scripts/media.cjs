@@ -651,11 +651,10 @@ group("testpage", async () => {
   await dev.goto(`/app/tests/${t}`);
   await dev.click("button:has-text('Next round')");
   await dev.click("text=Start the next round");
-  await dev.waitForURL((u) => !u.pathname.includes(t), { timeout: 10000 });
-  const draft = dev.url().split("/tests/")[1].split("/")[0];
-  await dev.goto(`/app/tests/${draft}`);
-  await dev.waitForSelector("text=Hidden from new testers.");
-  await shot(dev, "tp-next-round", "Next round: a draft copy “(round 2)”, hidden from new testers until Accept testers again", testPanel(dev));
+  // (Oct 28) A draft opens in Post a test, filled in; Post the test opens it for testers.
+  await dev.waitForURL((u) => u.pathname.startsWith("/app/tests/new") && u.search.includes("draft="), { timeout: 10000 });
+  await dev.waitForSelector("[data-draft-note]");
+  await shot(dev, "tp-next-round", "Next round: the draft “(round 2)” opens in Post a test, filled in; Post the test opens it for testers", "main");
 
   // End early: the confirm pop-up.
   await dev.goto(`/app/tests/${t}`);
@@ -678,7 +677,7 @@ group("testpage", async () => {
   await dev.waitForSelector("text=This test is stopped.");
   await pause(dev, 1500);
   await dev.goto(`/app/tests/${t}`);
-  await shotSpan(dev, "tp-stopped", "Stopped: the Stopped label and the stopped line; the overview buttons are gone and Live session says no calls can be booked", testPanel(dev), liveSession(dev));
+  await shotSpan(dev, "tp-stopped", "Stopped: the Stopped label and the stopped line; only what still works: Needs you, the Testers panel and past calls; Next round stays", testPanel(dev), liveSession(dev));
   await ana.goto(`/app/sessions/${sA}`);
   await pause(ana, 1000);
   await shot(ana, "tp-stopped-tester", "The tester's page after Stop: the stopped line says what they can still do (phone)");

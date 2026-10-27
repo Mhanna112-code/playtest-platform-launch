@@ -176,7 +176,7 @@
     "kind": "image"
   },
   "tp-next-round.png": {
-    "caption": "Next round: a draft copy “(round 2)”, hidden from new testers until Accept testers again",
+    "caption": "Next round: the draft “(round 2)” opens in Post a test, filled in; Post the test opens it for testers",
     "kind": "image"
   },
   "tp-end-early.png": {
@@ -188,7 +188,7 @@
     "kind": "image"
   },
   "tp-stopped.png": {
-    "caption": "Stopped: the Stopped label and the stopped line; the overview buttons are gone and Live session says no calls can be booked",
+    "caption": "Stopped: the Stopped label and the stopped line; only what still works: Needs you, the Testers panel and past calls; Next round stays",
     "kind": "image"
   },
   "tp-stopped-tester.png": {
@@ -222,5 +222,13 @@
   "tp-team-stopped.webm": {
     "caption": "The team stops the test while a call is being requested: the request is refused, the page moves to the top and the banner names the press that didn't go through",
     "kind": "video"
+  },
+  "checks/dash-needs-review-and-calls.png": {
+    "caption": "Visual check: Needs review and Calls boxes",
+    "kind": "image"
+  },
+  "checks/live-box-switched-new-terms.png": {
+    "caption": "Visual check: the live box line “Ana Silva switched to the new terms” with See their contract",
+    "kind": "image"
   }
 }
