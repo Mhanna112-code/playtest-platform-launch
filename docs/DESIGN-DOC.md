@@ -1146,7 +1146,7 @@ Open questions about these rules are in QA and open questions.
 
 ### Post-launch
 
-Tester notification preferences; admin outage recording; admin pay above the listing; notification muting; more rating filters; question-based forums; group tests; advanced recruitment; automated risk controls; Themes and moments (transcribed recordings grouped into themes); an admin "Payout problems" list; a spending limit or prepaid budgets; in-app messages between admins and users; a soft "Ana is looking at this" marker on disputes; link checks on the build link (block private network addresses, check for malware and phishing with Google Web Risk, warn about password-protected archives); if invalid or unreachable emails are found, require those accounts to change their email (and password) before continuing.
+Tester notification preferences; admin outage recording; admin pay above the listing; notification muting; more rating filters; question-based forums; group tests; advanced recruitment; automated risk controls; Themes and moments (transcribed recordings grouped into themes); an admin "Payout problems" list; a spending limit or prepaid budgets; in-app messages between admins and users; a soft "Ana is looking at this" marker on disputes; link checks on the build link (block private network addresses, check for malware and phishing with Google Web Risk, warn about password-protected archives); if invalid or unreachable emails are found, require those accounts to change their email (and password) before continuing. Profile excerpts (testers request excerpts; developers approve or deny). If built: deleting the account closes pending requests; closing a test doesn't.
 
 ### Launch priorities
 
