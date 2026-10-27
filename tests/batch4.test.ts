@@ -90,7 +90,7 @@ describe("A3) a payment hold, a chargeback hold and a suspension are one state",
     expect(box).toContain("Contact us");
     expect(box).toContain("tests resume as normal");
     expect(box).toContain("LongList"); // 3 lines, then Show N more
-    expect(src("components/SessionWatch.tsx")).toContain('window.location.href = "/app"');
+    expect(src("components/SessionWatch.tsx")).toContain('window.location.replace("/app")');
     expect(src("components/SessionWatch.tsx")).toContain("window.scrollTo({ top: 0 })");
     expect(src("lib/client.ts")).toContain("`/app?failed=");
     const layout = src("app/app/layout.tsx");
@@ -375,5 +375,121 @@ describe("D) testers", () => {
     const app = await db.application.findFirstOrThrow({ where: { testId } });
     expect((await act(testId, "application", dev.cookie, { applicationId: app.id, action: "accept", seenAt: seen(), confirmed: true })).status).toBe(200);
     expect((await lines(dev.user.id)).map((l) => l.text)).toEqual(["Dee Moss applied to join “Harbor Run”"]);
+  });
+});
+
+// ---------- Oct 28 follow-ups (the media pass) ----------
+import { GET as pulseGET } from "@/app/api/pulse/route";
+import { alertOf } from "@/lib/alerts";
+
+describe("follow-up 1) no calls on a test without a Live call part", () => {
+  it("a request is refused on the server for good (developer and tester); the form is hidden", async () => {
+    const { dev, testId } = await setup({ liveRateCents: null });
+    const { tester, sessionId } = await joined(testId);
+    const startsAt = new Date(Date.now() + 48 * 3_600_000).toISOString();
+    const d = await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt });
+    expect(d.status).toBe(409);
+    expect(d.body.error).toMatchObject({ code: "no_live", message: "This test has no live call, so no calls can be requested or booked." });
+    const t = await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt });
+    expect(t.body.error.code).toBe("no_live");
+    expect(await db.callRequest.count({ where: { testId } })).toBe(0);
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("&& hasLive}");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("hasLivePart(c.test, c)");
+  });
+});
+
+describe("follow-up 2, 3) the team stopping a test", () => {
+  it("is a hard refusal for every press a stopped test does not allow, never a stop-once; Pay and chat carry on; the page moves live", async () => {
+    const a = await admin();
+    const { dev, testId, sessionId, sub } = await sentWork();
+    const loaded = seen();
+    await new Promise((r) => setTimeout(r, 30));
+    expect((await aact(a.cookie, "stop-test", { id: testId, note: "Policy" })).status).toBe(200);
+    for (const [action, body] of [["edit", { version: 1, fields: { title: "x" } }], ["stop", {}], ["next-round", {}], ["invite", { testerIds: [sessionId] }], ["end-early", { contractIds: [sessionId], reason: "Enough said" }], ["request-time", { contractIds: [sessionId], startsAt: new Date(Date.now() + 48 * 3_600_000).toISOString() }]] as const) {
+      const r = await act(testId, action, dev.cookie, { seenAt: loaded, ...body });
+      expect(r.status, action).toBe(409);
+      expect(r.body.error.code, action).toBe("admin_stopped");
+      expect(r.body.error.failed, action).toMatch(/didn't go through$/);
+    }
+    // Pay was allowed before and still is: no "Press again to go ahead" for the team's stop.
+    const p = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded, confirmed: false });
+    expect(p.status).toBe(200);
+    expect((await act(testId, "message", dev.cookie, { contractId: sessionId, body: "Thanks all" })).status).toBe(200);
+    // The pulse tells the open page (and Edit) the team stopped it.
+    const pulse = await json(await pulseGET(req(`/api/pulse?test=${testId}`, { cookie: dev.cookie })));
+    expect(pulse.body.adminStopped).toBe(true);
+    const ac = src("components/AutoRefresh.tsx");
+    expect(ac).toContain("adminStopped");
+    expect(ac).toContain("window.location.href = `/app/tests/${testId}`");
+    expect(src("app/app/tests/[id]/edit/page.tsx")).toContain("<AutoRefresh");
+    expect(src("app/app/tests/[id]/edit/page.tsx")).toMatch(/className="err-field"[^>]*>This test was stopped\./); // red, not blue
+    expect(alertOf("stopped")).toBeNull();
+  });
+});
+
+describe("follow-up 4) the redirect for a restricted developer", () => {
+  it("is decided before anything else renders, by the layout and by the page itself, and the pulse says restricted", async () => {
+    const layout = src("app/app/layout.tsx");
+    expect(layout.indexOf("closedForSuspended(path, u, side)")).toBeLessThan(layout.indexOf("db.notification.count"));
+    for (const f of ["app/app/tests/[id]/page.tsx", "app/app/tests/[id]/edit/page.tsx", "app/app/tests/new/page.tsx"]) expect(src(f), f).toContain("requireOpenDevPage");
+    expect(src("components/SessionWatch.tsx")).toContain('window.location.replace("/app")');
+    const { dev, testId } = await setup();
+    await startHold(dev.user.id, "unpaid");
+    expect((await json(await pulseGET(req(`/api/pulse?test=${testId}`, { cookie: dev.cookie })))).body.restricted).toBe(true);
+    expect(src("components/AutoRefresh.tsx")).toContain("!restricted");
+  });
+});
+
+describe("follow-up 5, 7, 8, 9, 10) cards, the mistakes line, End early, profile stops, drafts", () => {
+  it("an Open test has no label on its card (a full one too)", () => {
+    expect(src("app/app/page.tsx")).toContain('t.status === "open" ? null : <StatusPill status={t.status} />');
+  });
+
+  it("'Fix the N mistakes above…' sits above the Save / Post button", () => {
+    const form = src("app/app/tests/TestForm.tsx");
+    expect(form.indexOf("Fix the {errs.length")).toBeGreaterThan(0);
+    expect(form.indexOf("Fix the {errs.length")).toBeLessThan(form.indexOf('{busy ? "Saving…"'));
+  });
+
+  it("the End early pop-up counts held calls and every unreviewed part", () => {
+    expect(src("app/app/tests/[id]/page.tsx")).toContain('"live call"');
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("waiting: [");
+    expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain("Nothing they&apos;ve sent or held is waiting for review.");
+  });
+
+  it("a tester changing their profile is not a 'Joins and applications' stop", async () => {
+    expect(alertOf("profile")).toBeNull();
+    expect(src("lib/server/invites.ts")).toContain('kind: "profile", text: `${name} removed ${gone}');
+  });
+
+  it("a draft has no Next round and no End early", () => {
+    const top = src("app/app/tests/[id]/TopPanel.tsx");
+    expect(top).toContain('p.restricted || p.status === "draft" ? null');
+    expect(top).toContain('p.status !== "draft" && <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(open === "end"');
+  });
+});
+
+describe("follow-up 6) one Save in another tab is one line in one voice, and 'Changes left' follows live", () => {
+  it("'You changed the description and live call rate in another tab' (no second 'Nora Lane changed the description')", async () => {
+    const { dev, testId } = await setup();
+    const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
+    const loaded = seen();
+    await new Promise((r) => setTimeout(r, 30));
+    expect((await act(testId, "edit", dev.cookie, { version: v, tab: "tab-2", fields: { description: "Sail further", liveRateCents: "40.00" } })).status).toBe(200);
+    const stop = await act(testId, "next-round", dev.cookie, { seenAt: loaded, tab: "tab-1" });
+    expect(stop.body.error.code).toBe("stop_once");
+    expect(stop.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["You changed the description and live call rate in another tab"]);
+  });
+
+  it("the listing the open Edit page polls carries the change count and whether anyone joined", async () => {
+    const { dev, testId } = await setup();
+    const { GET } = await import("@/app/api/tests/[id]/[action]/route");
+    const read = async () => (await json(await GET(req(`/api/tests/${testId}/listing`, { cookie: dev.cookie }), { params: Promise.resolve({ id: testId, action: "listing" }) }))).body;
+    expect(await read()).toMatchObject({ criticalChanges: 0, everJoined: false });
+    await joined(testId);
+    await db.test.update({ where: { id: testId }, data: { criticalChanges: 2 } });
+    expect(await read()).toMatchObject({ criticalChanges: 2, everJoined: true });
+    const form = src("app/app/tests/TestForm.tsx");
+    expect(form).toContain("setCritUsed(r.criticalChanges)");
   });
 });

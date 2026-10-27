@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
-import { requirePageUser } from "@/lib/server/page-auth";
+import { requireOpenDevPage } from "@/lib/server/page-auth";
 import { TestForm } from "../TestForm";
 import { testerCapacity } from "@/lib/server/capacity";
 
 export const metadata = { title: "Post a test · Playtest" };
 
 export default async function NewTest() {
-  const u = await requirePageUser();
+  const u = await requireOpenDevPage();
   if (!u.isDeveloper) redirect("/app/profile");
   return (
     <>

@@ -27,8 +27,9 @@ describe("calls are always requests", () => {
   });
 
   it("not in the contract: the tester's request books only if the developer accepts, at no listed rate (there is no Ask $)", async () => {
-    const { dev, testId } = await setup({ liveRateCents: null });
+    const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
+    await db.contract.update({ where: { id: sessionId }, data: { liveRateCents: null } }); // the listing has a live call, this tester's contract has none
     const r = await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(48), ask: "35" });
     expect(r.body.requested).toBe(true);
     await act(testId, "answer-request", dev.cookie, { contractId: sessionId, requestId: r.body.id, action: "accept", seenAt: seen(), confirmed: true });

@@ -109,6 +109,9 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
   // (Owner) When the box last updated: the next Save goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const [version, setVersion] = useState(edit?.version ?? 0);
+  // (Owner, Oct 28) "Changes left: N of 3" follows another tab's Save live.
+  const [critUsed, setCritUsed] = useState(edit?.criticalUsed ?? 0);
+  const [everJoined, setEverJoined] = useState(edit?.everJoined ?? false);
   const [critical, setCritical] = useState<string[]>([]);
   // (Owner, Oct 27) "I confirm this part pays more than $200." per part.
   const [high, setHigh] = useState<Record<string, boolean>>({});
@@ -149,14 +152,14 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
   // (5) After the third change to a critical field, editing it again doesn't save: the field is red and a line says so.
   const apiOf = (ks: (keyof F)[]) => ks.flatMap((k) => API_FIELDS[k]);
   const critNow = edit ? [...new Set(apiOf(changedKeys).filter(isCritical))] : [];
-  const locked = !!edit && edit.everJoined && edit.criticalUsed >= LIMITS.criticalChanges && critNow.length > 0;
+  const locked = !!edit && everJoined && critUsed >= LIMITS.criticalChanges && critNow.length > 0;
   const lockedKey = (k: keyof F) => locked && changedKeys.includes(k) && API_FIELDS[k].some(isCritical);
   const partsLocked = (["written", "writtenPrice", "writtenRequired", "recording", "recordingPrice", "recordingRequired", "live", "liveRate", "liveRequired"] as (keyof F)[]).some(lockedKey);
-  const lockLine = locked ? criticalLine(critNow, edit!.criticalUsed) : "";
+  const lockLine = locked ? criticalLine(critNow, critUsed) : "";
   // (Owner, Oct 27) Once a tester has joined, Saves that change part prices, parts, questions, steps, the build link or the NDA are limited to 3 (one Save counts once). "Changes left: 2 of 3"
   // sits near Save; after the 3rd those fields are locked, with a note, and the rest stay editable.
-  const limited = !!edit && edit.everJoined;
-  const limitReached = limited && edit!.criticalUsed >= LIMITS.criticalChanges;
+  const limited = !!edit && everJoined;
+  const limitReached = limited && critUsed >= LIMITS.criticalChanges;
 
   // (4/11.5) The deadline must leave 3 days inside Open until, counted from when the test opened.
   const dl = Number(f.deadlineDays);
@@ -220,8 +223,10 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
     if (!edit) return;
     let alive = true;
     const tick = async () => {
-      const r = await api<{ version: number; listing: Listing; keys: KeysData; at: string }>(`/api/tests/${edit.id}/listing`).catch(() => null);
+      const r = await api<{ version: number; listing: Listing; keys: KeysData; at: string; criticalChanges?: number; everJoined?: boolean }>(`/api/tests/${edit.id}/listing`).catch(() => null);
       if (!r || !alive) return;
+      if (typeof r.criticalChanges === "number") setCritUsed(r.criticalChanges);
+      if (typeof r.everJoined === "boolean") setEverJoined(r.everJoined);
       if (r.version !== versionRef.current) {
         live.current.applyElsewhere(r.listing, r.at, { free: r.keys.free.map((k) => k.value) });
         setVersion(r.version);
@@ -272,6 +277,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
         setListingEdited(err.data.listingEdited === true);
         setErrs(Array.isArray(err.data.errors) ? (err.data.errors as string[]) : []);
         if (typeof err.data.version === "number") setVersion(err.data.version);
+        if (typeof err.data.criticalChanges === "number") setCritUsed(err.data.criticalChanges);
         if (err.data.current) applyElsewhere(err.data.current as Listing, typeof err.data.now === "string" ? err.data.now : new Date().toISOString(), err.data.keys ? { free: (err.data.keys as { free: string[] }).free } : null);
       }
       else if (err instanceof ApiError && !isFieldError(err)) {
@@ -485,16 +491,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
 
       <div className="space-y-2">
         {edit && edit.testersIn > 0 && <p className="note">Testers already working keep their contract; each is offered these new terms and can switch. Work they&apos;ve already sent keeps its price.</p>}
-        <div className="flex flex-wrap items-center">
-          <button className="btn" disabled={busy || nothingChanged} aria-disabled={nothingChanged} title={nothingChanged ? "Nothing has changed yet" : undefined}>{busy ? "Saving…" : edit ? "Save" : "Post the test"}</button>
-          {keep.restored && <NotSentTag />}
-        </div>
-        {limited && <p className="note" data-changes-left="">{changesLeftLine(edit!.criticalUsed)} <span className="text-slate-500">(saves that change the steps, build link, NDA, questions, parts or part prices)</span></p>}
-        {limitReached && <p className="info" data-critical-locked="">You&apos;ve changed the steps, build link, NDA, questions, parts or part prices {LIMITS.criticalChanges} times since testers joined, so those fields are locked. Contact us in Settings to change them again. Everything else stays editable.</p>}
-        {saved && <p className="ok">{saved}</p>}
-        {lockLine && pressed && <p className="err-field" role="alert" data-critical-limit="">{lockLine}</p>}
-        <Err text={refusal} />
-        <ChangesBox changes={changes} tail={listingEdited ? "Press Save again to save your changes (fields you didn't touch keep the newer values)." : "Press Save again to save."} />
+        {/* (Owner, Oct 28) Above the button: "Fix the N mistakes above…". */}
         {hasMore && (
           <>
             <p className="err-field">Fix the {errs.length === 1 ? "mistake" : `${errs.length} mistakes`} above, then press {edit ? "Save" : "Post the test"} again.</p>
@@ -503,6 +500,16 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
             </ul>
           </>
         )}
+        <div className="flex flex-wrap items-center">
+          <button className="btn" disabled={busy || nothingChanged} aria-disabled={nothingChanged} title={nothingChanged ? "Nothing has changed yet" : undefined}>{busy ? "Saving…" : edit ? "Save" : "Post the test"}</button>
+          {keep.restored && <NotSentTag />}
+        </div>
+        {limited && <p className="note" data-changes-left="">{changesLeftLine(critUsed)} <span className="text-slate-500">(saves that change the steps, build link, NDA, questions, parts or part prices)</span></p>}
+        {limitReached && <p className="info" data-critical-locked="">You&apos;ve changed the steps, build link, NDA, questions, parts or part prices {LIMITS.criticalChanges} times since testers joined, so those fields are locked. Contact us in Settings to change them again. Everything else stays editable.</p>}
+        {saved && <p className="ok">{saved}</p>}
+        {lockLine && pressed && <p className="err-field" role="alert" data-critical-limit="">{lockLine}</p>}
+        <Err text={refusal} />
+        <ChangesBox changes={changes} tail={listingEdited ? "Press Save again to save your changes (fields you didn't touch keep the newer values)." : "Press Save again to save."} />
       </div>
     </form>
   );

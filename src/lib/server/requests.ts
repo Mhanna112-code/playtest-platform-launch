@@ -4,7 +4,7 @@ import { displayName, fmtDateTime, fmtTime, money, pronouns } from "@/lib/format
 import { checkCallMinutes, checkCancel } from "@/lib/rules";
 import { FOREVER_AHEAD, MAX_ROWS, occurrences, rowsOf, stepMs, toJson, type CallRow, type RowRepeat } from "@/lib/callRows";
 import type { Prisma } from "@prisma/client";
-import { PAUSED_FOR_TESTERS, testPaused } from "@/lib/rules";
+import { NO_LIVE_PART, PAUSED_FOR_TESTERS, hasLivePart, testPaused } from "@/lib/rules";
 import { DEV_SUSPENDED } from "./users";
 import { HttpError } from "./http";
 import { notify } from "./notify";
@@ -199,6 +199,8 @@ async function refusals(c: Ctx["c"], side: Side) {
   if (testPaused(c.test.developer, c.test)) throw new HttpError(409, "paused", side === "tester" ? PAUSED_FOR_TESTERS : c.test.developer.suspendedAt ? DEV_SUSPENDED : "Pay what you owe first.");
   // (Owner) "Closed" only means no NEW testers: testers already in carry on, so calls work. Only a stopped test refuses.
   if (c.test.status === "stopped") throw new HttpError(409, "closed", "This test was stopped.");
+  // (Owner, Oct 28) No live call part, no calls: a request (or an accept) on a test without one is refused for good.
+  if (!hasLivePart(c.test, c)) throw new HttpError(409, "no_live", NO_LIVE_PART);
   if (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) throw new HttpError(409, "gone", "This time isn't available.");
 }
 

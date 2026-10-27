@@ -31,7 +31,7 @@ export async function GET(req: Request, { params }: Ctx) {
     if (!u) throw new HttpError(401, "signed_out", "You're signed out. Sign in again to keep going.");
     if (action !== "listing") throw new HttpError(404, "not_found", "That doesn't exist.");
     const t = await ownTest(u.id, id);
-    return ok({ version: t.version, listing: asListing(t), keys: await keyBoxes(id), at: new Date().toISOString() });
+    return ok({ version: t.version, listing: asListing(t), keys: await keyBoxes(id), at: new Date().toISOString(), criticalChanges: t.criticalChanges, everJoined: (await db.contract.count({ where: { testId: id } })) > 0 });
   });
 }
 
@@ -53,6 +53,7 @@ export async function POST(req: Request, { params }: Ctx) {
 }
 
 /** The tester-side and read-only presses on this route: the team's pause or stop of the test never refuses them here. */
+const STOPPED_ALLOWS = new Set(["message", "rate", "dispute-side", "pay-extra", "call-length", "no-show"]);
 const TESTER_SIDE = new Set(["join", "apply", "rejoin-ask", "withdraw-application", "my-gaps"]);
 
 /**
@@ -63,7 +64,10 @@ async function adminRefusal(req: Request, userId: string, testId: string, action
   if (TESTER_SIDE.has(action)) return;
   const t = await db.test.findUnique({ where: { id: testId }, select: { developerId: true, adminPausedAt: true, adminStoppedAt: true } });
   if (!t || t.developerId !== userId) return;
-  if (t.adminStoppedAt) throw new HttpError(409, "admin_stopped", "The team stopped this test.", { failed: await failedLine(req) });
+  // (Owner, Oct 28) A team stop is a HARD refusal for every press a stopped test does not allow (no stop-once); what a stopped test allows (chat, rate, a dispute reply, extra pay, a call's length
+  // and problem report) goes on under its own rules.
+  if (t.adminStoppedAt && !STOPPED_ALLOWS.has(action)) throw new HttpError(409, "admin_stopped", "The team stopped this test.", { failed: await failedLine(req) });
+  if (t.adminStoppedAt) return;
   if (t.adminPausedAt && action !== "stop") throw new HttpError(409, "admin_paused", "The team paused this test: you can only stop it.", { failed: await failedLine(req) });
 }
 

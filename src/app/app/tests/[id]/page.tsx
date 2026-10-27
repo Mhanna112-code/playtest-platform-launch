@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, pronouns } from "@/lib/format";
 import { chargeOpensAt, CALL_CLOSE_MS, callClosed, callOutcome, joinedWords, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, defaultCallMinutes, choiceNoteLine, closesInLine, lateLabel, termsLine } from "@/lib/rules";
-import { requirePageUser } from "@/lib/server/page-auth";
+import { requireOpenDevPage } from "@/lib/server/page-auth";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
 import { unreadCount } from "@/lib/server/messages";
 import { DevCallPanel, type DevCall, type DevTester } from "./DevCallPanel";
@@ -24,7 +24,7 @@ import { rowsOf, toJson } from "@/lib/callRows";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
-import { HOLD_APPROVAL_AFTER } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, NO_LIVE_PART, hasLivePart } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
@@ -47,10 +47,10 @@ export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
 
 export default async function TestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ failed?: string; saved?: string; offered?: string; skipped?: string; closed?: string; resent?: string; spotclosed?: string; spots?: string }> }) {
+  const u = await requireOpenDevPage(); // first: a restricted developer is sent to the dashboard before anything else runs
   await (await import("@/lib/server/calls")).sweepNobodyJoined();
   const { id } = await params;
   const { saved, offered, skipped, closed, resent, failed } = await searchParams;
-  const u = await requirePageUser();
   const seenAt = new Date().toISOString();
   const t = await db.test.findUnique({
     where: { id },
@@ -70,6 +70,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const brokenKeys = await brokenKeyTesters(id);
   // (Owner, Oct 26) A suspended developer sees only Cancel call, End early and Stop the test here; every other button is hidden.
   const restricted = !!u.suspendedAt;
+  const hasLive = hasLivePart(t) || t.contracts.some((c) => c.liveRateCents != null);
   const keysEver = await db.accessKey.count({ where: { testId: id } });
   const keysLeft = keysEver > 0 ? await db.accessKey.count({ where: { testId: id, status: "free" } }) : null;
   const working = t.contracts.filter((c) => c.status === "working");
@@ -196,6 +197,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           sent: [...(c.submissions.some((x) => x.kind === "written") ? ["written answers"] : []), ...(c.submissions.some((x) => x.kind === "recording") ? ["recording"] : [])],
           toSend: [...(c.writtenCents != null && !c.submissions.some((x) => x.kind === "written") ? ["written answers"] : []), ...(c.recordingCents != null && !c.submissions.some((x) => x.kind === "recording") ? ["recording"] : [])],
           ahead: c.calls.filter((x) => x.status === "booked" && x.startsAt > now).length,
+          // (Owner, Oct 28) Everything still waiting for Pay or Reject: unreviewed parts and held calls (started, not paid).
+          waiting: [...c.submissions.filter((x) => !x.review).map((x) => (x.kind === "recording" ? "recording" : "written answers")), ...(c.calls.some((x) => x.status === "booked" && x.startsAt <= now && !x.review) ? ["live call"] : [])],
         }))}
       />
       {t.pauseClosedAt && <p role="alert" className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100" data-pause-closed="">{t.pauseClosedReason}</p>}
@@ -373,8 +376,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       <DevCallPanel
         testId={t.id}
         seenAt={seenAt}
-        canRequest={t.status !== "stopped" && t.status !== "draft" && !u.holdStartedAt && !restricted}
-        noRequestReason={t.status === "stopped" ? "This test was stopped, so no calls can be requested or booked." : restricted ? "Your account is suspended: you can only cancel booked calls here." : u.holdStartedAt ? "Your tests are paused until you pay what you owe: calls wait meanwhile." : ""}
+        canRequest={t.status !== "stopped" && t.status !== "draft" && !u.holdStartedAt && !restricted && hasLive}
+        noRequestReason={t.status === "stopped" ? "This test was stopped, so no calls can be requested or booked." : !hasLive ? NO_LIVE_PART : restricted ? "Your account is suspended: you can only cancel booked calls here." : u.holdStartedAt ? "Your tests are paused until you pay what you owe: calls wait meanwhile." : ""}
         testers={restricted ? devTesters.map((x) => ({ ...x, requests: [] })) : devTesters}
         past={t.contracts
           .flatMap((c) => c.calls.filter((x) => x.status === "cancelled" || x.review).map((x) => ({

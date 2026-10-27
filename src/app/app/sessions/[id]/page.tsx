@@ -4,7 +4,7 @@ import { OWED_FOR_TESTERS } from "@/lib/rules";
 import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, MessagesSquare, Users, XCircle } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
-import { callLengthText, callOutcome, joinedWords, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, callReference, cancelNeedsReason, canDispute, closesInLine, DELAYED_CALL_LINE, isLate, PAUSED_FOR_TESTERS, PAUSED_RIGHT_NOW, lateLabel, termsLine, testPaused, testerShare, canAskToRejoin, leftText } from "@/lib/rules";
+import { callLengthText, callOutcome, joinedWords, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, callReference, cancelNeedsReason, canDispute, closesInLine, DELAYED_CALL_LINE, isLate, PAUSED_FOR_TESTERS, hasLivePart, PAUSED_RIGHT_NOW, lateLabel, termsLine, testPaused, testerShare, canAskToRejoin, leftText } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
@@ -83,7 +83,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const meOff = !!u.suspendedAt;
   // (Owner, Oct 27) While the developer owes a declined payment, the tester's Dispute and Charge buttons are disabled (the wording stays "delayed").
   const devOwesNow = await devOwes(c.test.developerId);
-  const canRequestCall = !refusal && !blockedPair && !paused;
+  const canRequestCall = !refusal && !blockedPair && !paused && hasLivePart(c.test, c);
   const pendingReqs = await db.callRequest.findMany({ where: { contractId: c.id, status: "pending", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
   const unread = await unreadCount(u.id, c.testId, c.testerId);
   const blockedByMe = (await db.block.count({ where: { blockerId: u.id, blockedId: c.test.developerId } })) > 0;

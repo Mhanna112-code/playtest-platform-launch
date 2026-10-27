@@ -11,7 +11,7 @@ import { AlertsMenu } from "@/components/AlertsMenu";
 import { OctagonX } from "lucide-react";
 
 /** A working tester, for End early's rows and the Stop / End dialogs: what they sent, what is still to send, calls ahead. */
-type Tester = { contractId: string; name: string; sent: string[]; toSend: string[]; ahead: number };
+type Tester = { contractId: string; name: string; sent: string[]; toSend: string[]; ahead: number; /** Sent parts and held calls not paid or rejected yet (what still waits for review). */ waiting: string[] };
 
 /**
  * The test page's top title panel: the developer's big buttons (Stop the test, End early, Next round).
@@ -67,14 +67,15 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               {!p.restricted && <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.id}/edit`}><Pencil className="h-4 w-4" /> Edit</a>}
               {!p.restricted && <AlertsMenu ignored={p.ignoredAlerts ?? []} />}
-              {p.restricted ? null : p.nextRoundId ? (
+              {p.restricted || p.status === "draft" ? null : p.nextRoundId ? (
                 <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.nextRoundId}`}><Repeat className="h-4 w-4" /> Go to the next round</a>
               ) : (
                 <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(open === "next" ? "" : "next")}><Repeat className="h-4 w-4" /> Next round</button>
               )}
-              <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(open === "end" ? "" : "end")} disabled={p.working.length === 0}>
+              {/* (Owner, Oct 28) A draft (a next round not opened yet) has no Next round and no End early. */}
+              {p.status !== "draft" && <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(open === "end" ? "" : "end")} disabled={p.working.length === 0}>
                 End early
-              </button>
+              </button>}
               {/* Stop the test: the full app's "Are you sure?" pop-up first; the stop-once box shows right under it. */}
               <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy} title={`Are you sure you want to stop “${p.title}”?`} confirmLabel="Stop the test"
                 body={(
@@ -146,9 +147,9 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
                   <div className="space-y-2">
                     <ul className="list-disc space-y-1 pl-5">
                       <li>Their work ends now, and each tester is told, with your reason.</li>
-                      <li>{chosen.some((w) => w.sent.length)
-                        ? <>What they&apos;ve sent ({[...new Set(chosen.flatMap((w) => w.sent))].join(", ")}) <strong className="text-white">stays waiting for your review</strong>: pay it or reject it with a reason, as usual.</>
-                        : <>Nothing they&apos;ve sent is waiting for review.</>}</li>
+                      <li>{chosen.some((w) => w.waiting.length)
+                        ? <>What is waiting for you ({[...new Set(chosen.flatMap((w) => w.waiting))].join(", ")}) <strong className="text-white">stays waiting for your review</strong>: pay it or reject it with a reason, as usual.</>
+                        : <>Nothing they&apos;ve sent or held is waiting for review.</>}</li>
                       {chosen.some((w) => w.toSend.length) && <li>What they haven&apos;t sent closes with no pay.</li>}
                       {chosenAhead > 0 && <li>{chosenAhead === 1 ? "The call still ahead is" : `The ${chosenAhead} calls still ahead are`} cancelled.</li>}
                       <li>You can invite them back later.</li>

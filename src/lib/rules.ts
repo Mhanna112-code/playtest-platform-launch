@@ -545,6 +545,9 @@ export function checkCallMinutes(v: unknown): { ok: true; minutes: number } | { 
 /** (NEWEST+8) A call closes 24 hours after its planned start: no joining, no length logged any more. */
 export const CALL_CLOSE_MS = 24 * 3_600_000;
 export const callClosed = (startsAt: Date, now = new Date()) => now.getTime() >= startsAt.getTime() + CALL_CLOSE_MS;
+/** (Owner, Oct 28) A call can be requested or booked only on a test that has a Live call part (in the listing, or in that tester's contract). */
+export const hasLivePart = (test: { liveRateCents: number | null }, contract?: { liveRateCents: number | null } | null) => test.liveRateCents != null || contract?.liveRateCents != null;
+export const NO_LIVE_PART = "This test has no live call, so no calls can be requested or booked.";
 export const NOBODY_JOINED = "Nobody joined, so the call was cancelled.";
 
 /** A declined Pay, shown under that Pay button. */

@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { requirePageUser } from "@/lib/server/page-auth";
+import { requireOpenDevPage } from "@/lib/server/page-auth";
 import { asListing } from "@/lib/server/tests";
 import { TestForm } from "../../TestForm";
 import { testerCapacity } from "@/lib/server/capacity";
 import { LiveTop } from "@/components/LiveTop";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { AlertsMenu } from "@/components/AlertsMenu";
 import { keyBoxes } from "@/lib/server/accessKeys";
 
@@ -13,20 +14,21 @@ export const dynamic = "force-dynamic";
 
 export default async function EditTest({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const u = await requirePageUser();
+  const u = await requireOpenDevPage();
   const t = await db.test.findUnique({ where: { id } });
   if (!t || t.developerId !== u.id) notFound();
   const testersIn = await db.contract.count({ where: { testId: id, status: "working" } });
   const seenAt = new Date().toISOString();
   return (
     <>
+      <AutoRefresh query={`test=${id}`} refresh={false} />
       <p><a href={`/app/tests/${id}`}>← Back to the test</a></p>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-bold tracking-tight text-white">Edit “{t.title}”</h1>
         <AlertsMenu ignored={u.ignoredAlerts} />
       </div>
       {t.status === "stopped" ? (
-        <p className="err">This test was stopped.</p>
+        <p className="err-field" role="alert" data-stopped="">This test was stopped.</p>
       ) : (
         <>
           <p className="note">Edit changes the listing for new testers only. Testers already in keep the contract they joined on.</p>

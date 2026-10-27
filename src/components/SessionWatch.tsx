@@ -90,7 +90,7 @@ export function SessionWatch({ userId, restriction }: { userId: string; name?: s
               try { window.history.scrollRestoration = "manual"; } catch { /* ignore */ }
               window.scrollTo({ top: 0 });
               window.location.reload();
-            } else window.location.href = "/app";
+            } else window.location.replace("/app");
           } else window.location.reload();
         }
       }

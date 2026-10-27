@@ -127,7 +127,7 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
       for (const p of people) {
         const name = displayName(p);
         const gone = removedNeeds(t, p.profile);
-        if (gone && p.profile && p.profile.updatedAt > seenAt) extra.push({ kind: "joined", text: `${name} removed ${gone}, which this test needs`, createdAt: p.profile.updatedAt });
+        if (gone && p.profile && p.profile.updatedAt > seenAt) extra.push({ kind: "profile", text: `${name} removed ${gone}, which this test needs`, createdAt: p.profile.updatedAt });
         const joined = contracts.find((c) => c.testerId === p.id && c.joinedAt > seenAt);
         if (joined) extra.push({ kind: "joined", text: `${name} joined this test, so ${pronouns(p.pronoun).subj}'s no longer in your invite list`.replace("they's", "they're"), createdAt: joined.joinedAt });
         // A ticked tester became greyed or removed since the page loaded.

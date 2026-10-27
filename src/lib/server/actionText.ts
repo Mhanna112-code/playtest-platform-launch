@@ -78,10 +78,10 @@ export async function logTestAction(userId: string, testId: string, action: stri
         text = `You changed the listing in another tab: ${andList(closings)}`;
         break;
       }
-      // Listing info (title, description, devices, languages) shows as its own line (F), not twice.
-      const names = (r.changed ?? []).filter((n) => !["title", "description", "devices", "languages"].includes(n));
+      // (Owner, Oct 28) One Save, one line, one voice: "You changed the description and access keys in another tab". (A rename stays its own info-only line.)
+      const names = (r.changed ?? []).filter((n) => n !== "title");
       if (!names.length) return;
-      text = `changed the ${andList(names)}`;
+      text = `You changed the ${andList(names)} in another tab`;
       break;
     }
     case "open": text = "opened the test"; break;

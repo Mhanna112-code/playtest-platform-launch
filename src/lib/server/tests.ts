@@ -269,7 +269,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (stop) {
       // Both together: the blue stop and any red mistakes (red wins: the next press still saves nothing while red remains).
       throw new HttpError(409, "changed", dc.length ? "Press Save again to save." : "This test changed since you opened Edit. Press Save again to save your changes on top.", {
-        changes: stop, version: t.version, current, listingEdited, errors: errs, keys: await keysState(tx, testId), critical: critical.length ? critical : undefined,
+        changes: stop, version: t.version, criticalChanges: t.criticalChanges, current, listingEdited, errors: errs, keys: await keysState(tx, testId), critical: critical.length ? critical : undefined,
       });
     }
     if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs, critical: critical.length && everJoined && t.criticalChanges >= LIMITS.criticalChanges ? critical : undefined });

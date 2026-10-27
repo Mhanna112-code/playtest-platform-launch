@@ -238,7 +238,8 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
     await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test was stopped", decidedAt: new Date() } });
     await tx.invite.updateMany({ where: { testId, status: "sent" }, data: { status: "cancelled" } });
     await tx.application.updateMany({ where: { testId, status: "pending" }, data: { status: "closed", closedReason: "stopped", decidedAt: new Date() } });
-    await recordEvent(tx, testId, "admin", "The team stopped this test", true, { status: "stopped", stoppedAt: new Date(), adminStoppedAt: new Date(), adminNote: note, adminStoppedById: adminId });
+    // (Owner, Oct 28) Not an "admin decision" stop-once: a stopped test always refuses what it does not allow, and Pay / Reject carry on without stopping for it.
+    await recordEvent(tx, testId, "stopped", "The team stopped this test", true, { status: "stopped", stoppedAt: new Date(), adminStoppedAt: new Date(), adminNote: note, adminStoppedById: adminId });
     return list;
   });
   await tellCancelled(cancelled, "stopped");

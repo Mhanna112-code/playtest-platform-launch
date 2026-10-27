@@ -30,6 +30,7 @@ export async function GET(req: Request) {
     const sus = sessionId ? 0 : await db.user.count({ where: { suspendedAt: { not: null } } });
     const pay = { n: payCount, last: (payLast?.createdAt.getTime() ?? 0) + (payLast?.status ?? "") };
     const v = [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0].join("|");
-    return ok({ v });
+    // (Owner, Oct 28) Whether the team stopped the test: an open test page or Edit moves to the top of the test page at once.
+    return ok({ v, adminStopped: !!t.adminStoppedAt, restricted: !!(u.suspendedAt || t.developer.holdStartedAt) });
   });
 }

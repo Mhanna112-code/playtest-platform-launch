@@ -21,13 +21,14 @@ import { SessionWatch } from "@/components/SessionWatch";
 // and the log-out icon; the confirm-email strip under it; a wide main column.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const u = await requirePageUser();
-  const unread = await db.notification.count({ where: { userId: u.id, readAt: null } });
-  const name = u.name.trim() || u.email;
   // (NEXT-UI 6) The side this tab shows: the page's own side (developer pages, tester pages), else the side used last.
   const path = (await headers()).get("x-path") ?? "";
   const side = sideFor(u, path);
   // (Design doc 2; owner, Oct 27) A suspended or held account is routed from the pages that are closed to it to the dashboard, which explains.
+  // (Owner, Oct 28) Decided BEFORE any other query: the page below renders in parallel with this layout, and a redirect thrown late can reach the browser after the page's first bytes (a blank page with only the footer).
   if (closedForSuspended(path, u, side)) redirect("/app");
+  const unread = await db.notification.count({ where: { userId: u.id, readAt: null } });
+  const name = u.name.trim() || u.email;
   const asDevOff = u.isDeveloper && devRestricted(u, side);
   const tOff = !!u.suspendedAt && u.isTester;
   // Following a link to a page of the other side remembers it as the side used last (what shared pages then show).

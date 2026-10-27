@@ -164,7 +164,7 @@ describe("owner corrections 2 and 3", () => {
     // The developer's other tab: goes through with the note; the join page: Apply goes through with it too.
     // (The developer's other tab: Ben's application and Ana's sends stop it once; the rename is listed with them.)
     const dv = await act(testId, "request-time", dev.cookie, { seenAt: pageLoaded, tab: "tab-2", contractIds: [sessionId], startsAt: new Date(Date.now() + 60 * 3_600_000).toISOString() });
-    expect(dv.body.error.changes.map((c: { text: string }) => c.text)).toContain("Nora Lane renamed the test to Harbor Run 2");
+    expect(dv.body.error.changes.map((c: { text: string }) => c.text)).toContain("You renamed the test to Harbor Run 2");
     const cara = await makeUser({ tester: true, name: "Cara Diaz" });
     const ap = await act(testId, "apply", cara.cookie, { note: "x", seenAt: pageLoaded });
     expect(ap.body.error ?? null).toBeNull();

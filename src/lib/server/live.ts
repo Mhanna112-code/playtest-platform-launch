@@ -37,7 +37,14 @@ export async function ownChanges(userId: string, testId: string, since: Date, ta
  */
 export async function devChanges(devId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db, opts: { all?: boolean } = {}): Promise<TestEventLike[]> {
   const events = await tx.testEvent.findMany({ where: { testId, createdAt: { gt: since }, kind: { in: [...DEV_STOP_KINDS, "renamed"] } }, orderBy: { createdAt: "asc" }, take: 100 });
-  const theirs = events.filter((e) => !e.text.startsWith("You "));
+  // (Owner, Oct 28) The developer's OWN listing edit (from another tab) is already said once, in their own voice, by the action log ("You changed the description and access keys in another tab"):
+  // its listing-info event ("Nora Lane changed the description") is dropped, and a rename of their own reads "You renamed the test to ...".
+  const me = displayName(await tx.user.findUniqueOrThrow({ where: { id: devId } }));
+  const theirs = events.filter((e) => !e.text.startsWith("You ")).flatMap((e) => {
+    if (e.kind === "info" && e.text.startsWith(`${me} `)) return [];
+    if (e.kind === "renamed" && e.text.startsWith(`${me} `)) return [{ ...e, text: e.text.replace(`${me} `, "You ") }];
+    return [e];
+  });
   const all = [...theirs, ...(await devPaymentChanges(devId, testId, since, tx)), ...(await ownChanges(devId, testId, since, tab, tx))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Design doc 6) Update types the developer ignores in the Alerts menu no longer stop a press (the live box still lists them, greyed).
   if (opts.all) return all;

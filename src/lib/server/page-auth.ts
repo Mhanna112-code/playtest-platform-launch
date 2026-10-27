@@ -2,12 +2,23 @@ import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { devRestricted } from "@/lib/restricted";
 import { hashToken, SESSION_COOKIE, userForToken } from "./session";
 
 /** The signed-in user for a server component, or null. */
 export async function getPageUser() {
   const jar = await cookies();
   return userForToken(jar.get(SESSION_COOKIE)?.value);
+}
+
+/**
+ * (Owner, Oct 28) A developer's page that is closed while the account is suspended or on a hold (test pages, Edit, Post a test): the page itself sends the developer to the dashboard before
+ * it renders anything, so the redirect never depends on the layout beating the page's first bytes.
+ */
+export async function requireOpenDevPage() {
+  const u = await requirePageUser();
+  if (u.isDeveloper && devRestricted(u, "developer")) redirect("/app");
+  return u;
 }
 
 export async function requirePageUser() {

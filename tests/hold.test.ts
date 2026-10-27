@@ -42,6 +42,7 @@ describe("invites", () => {
     const pageLoaded = seen();
     await later();
     await act(testId, "join", cara.cookie, { listingVersion: 1 });
+    await later(); // the clock can lag a few ms: let the join settle before the other tab's page time
     await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [dee.user.id], tab: "tab-2" });
     await db.testerProfile.update({ where: { userId: ben.user.id }, data: { languages: ["Spanish"] } });
     const r = await act(testId, "invite", dev.cookie, { seenAt: pageLoaded, testerIds: [cara.user.id, dee.user.id, ben.user.id], tab: "tab-1" });

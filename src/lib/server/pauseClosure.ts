@@ -123,10 +123,21 @@ export async function bellPausedTests(devId: string, now = new Date(), onlyDue =
   return n;
 }
 
-/** The daily job: every paused test's reminder, once a day. */
+/** The daily job: every paused test's reminder, once a day (one query for the paused tests, one for who already has today's). */
 export async function pausedReminders(now = new Date()) {
-  const devs = await db.user.findMany({ where: { deletedAt: null, tests: { some: { status: { in: ["open", "closed"] } } }, OR: [{ holdStartedAt: { not: null } }, { suspendedAt: { not: null } }, { tests: { some: { adminPausedAt: { not: null } } } }] }, select: { id: true } });
+  const since = new Date(now.getTime() - 20 * 3_600_000);
+  const tests = await db.test.findMany({
+    where: { status: { in: ["open", "closed"] }, developer: { deletedAt: null }, OR: [{ adminPausedAt: { not: null } }, { developer: { OR: [{ holdStartedAt: { not: null } }, { suspendedAt: { not: null } }] } }] },
+    include: { developer: true },
+    take: 5000,
+  });
+  const had = new Set((await db.notification.findMany({ where: { reminderKey: { in: tests.map((t) => `paused:${t.id}`) }, createdAt: { gt: since } }, select: { reminderKey: true } })).map((n) => n.reminderKey));
   let n = 0;
-  for (const d of devs) n += await bellPausedTests(d.id, now);
+  for (const t of tests) {
+    const info = pauseClosesAt(t.developer, t);
+    if (!info || had.has(`paused:${t.id}`)) continue;
+    await bell(t.developerId, `${t.title} is paused and closes on ${day(info.at)} unless ${liftsWhen(info.causes)}`, reminderLink(info.causes, t.id), undefined, { group: "pausedreminder", reminder: `paused:${t.id}`, testId: t.id });
+    n++;
+  }
   return n;
 }
