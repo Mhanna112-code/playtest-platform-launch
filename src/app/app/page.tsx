@@ -32,7 +32,6 @@ export const dynamic = "force-dynamic";
 /** A card's one link, stretched over the whole card (the full app's CARD_LINK). */
 const CARD_LINK = "after:absolute after:inset-0 after:rounded-2xl focus-visible:outline-none focus-visible:after:outline focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-volt-300";
 const plural = (n: number, w: string) => `${num(n)} ${w}${n === 1 ? "" : "s"}`;
-const wordsOf = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 /** What the tester gets, without the days ("Written $8.00 · Recording $9.60"). */
 const pays = (t: Parameters<typeof termsLine>[0]) => termsLine(t, true).split(" · ").slice(0, -1).join(" · ");
 const DAY = 86_400_000;
@@ -153,7 +152,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
   const owedTests = new Set(owedPays.map((p) => contractTest.get(p.contractId ?? "")?.t.id).filter(Boolean));
   // (Owner, Oct 27) The Calls box: every booked call that has not ended, soonest first. Join shows only while the call can be joined; the row links to the call on the test page, or (when the
   // test pages are closed) has Cancel itself.
-  const calls = nextCalls.filter((c) => c.startsAt > now || callJoinable(c, now)).map((c) => ({ id: c.id, testId: c.contract.testId, test: c.contract.test.title, who: displayName(c.contract.tester), when: c.startsAt.toISOString(), minutes: c.minutes, needsReason: c.startsAt.getTime() - now.getTime() < 24 * 3_600_000, joinable: callJoinable(c, now) }));
+  const calls = nextCalls.filter((c) => c.startsAt > now || callJoinable(c, now)).map((c) => ({ id: c.id, testId: c.contract.testId, test: c.contract.test.title, who: displayName(c.contract.tester), when: c.startsAt.toISOString(), minutes: c.minutes, needsReason: c.startsAt.getTime() - now.getTime() < 24 * 3_600_000, joinable: !restricted && callJoinable(c, now) }));
   const seenAt = now.toISOString();
   return (
     <>
@@ -354,7 +353,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const more = recommended.filter((t) => !t.contracts.some((c) => c.status === "working")).slice(0, 4);
   const removedCard = (c: (typeof contracts)[number]) => {
     const invited = inviteTests.has(c.testId);
-    const may = !suspended && c.test.status === "open" && (invited || askable(c));
+    const may = !suspended && c.test.status === "open" && !pausedTest(c.test) && (invited || askable(c));
     return (
       <li key={c.id} className="card flex flex-wrap items-center gap-3 p-4" data-removed={c.id}>
         <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
@@ -377,7 +376,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
           <p className="truncate font-semibold text-white" title={c.title}>{c.title} {pausedTest(c.test) && <PausedTag />}</p>
           <p className="text-sm text-slate-400">{c.status === "left" ? `You left this test (${fmtDate(c.endedAt ?? c.joinedAt)}).` : `Your work ended (${fmtDate(c.endedAt ?? c.joinedAt)}).`} Your deadline is {fmtDate(c.dueAt)}.</p>
         </div>
-        <span className="btn-secondary px-3 py-1.5 text-sm"><RotateCcw className="h-4 w-4" /> Ask to rejoin</span>
+        {!pausedTest(c.test) && <span className="btn-secondary px-3 py-1.5 text-sm"><RotateCcw className="h-4 w-4" /> Ask to rejoin</span>}
       </Link>
     </li>
   );

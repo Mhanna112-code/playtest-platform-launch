@@ -376,7 +376,7 @@ export async function runDaily(now = new Date()) {
   }
   // 8. (NEXT-UI 7) Forever sets of calls: the next ones are booked as each passes (4 ahead); ended sets are marked.
   await (await import("./requests")).topUpForeverSets(now);
-  // 9. (Design doc 11.4, 9, 10; owner, Oct 27) A suspended or held developer's later calls (cancelled 3 days before they start while it lasts); the payout-problem reminder every 3 days; the two-weekly reminder to review suspended accounts.
+  // 9. (Design doc 11.4, 9, 10; owner, Oct 27) A suspended or held developer's later calls (cancelled 3 days before they start while it lasts); the payout-problem reminder every 3 days; the daily reminder to review suspended accounts.
   const rs = await import("./restrictions");
   await rs.cancelLatePauseCalls(now);
   await rs.payoutReminders(now);

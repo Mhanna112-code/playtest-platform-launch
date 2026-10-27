@@ -5,7 +5,7 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
 
 /** (Design doc 8) The tester's access key, with "This key doesn't work" (the developer is told; a free extra replaces it). */
-export function KeyBox({ sessionId, seenAt, value, broken, fresh }: { sessionId: string; seenAt: string; value: string; broken: boolean; fresh?: boolean }) {
+export function KeyBox({ sessionId, seenAt, value, broken, fresh, canReport = true }: { sessionId: string; seenAt: string; value: string; broken: boolean; fresh?: boolean; canReport?: boolean }) {
   const { press, error, busy, changes } = usePress(seenAt);
   const [said, setSaid] = useState(false);
   return (
@@ -15,7 +15,7 @@ export function KeyBox({ sessionId, seenAt, value, broken, fresh }: { sessionId:
         <code className={`rounded bg-white/[0.06] px-2 py-0.5 font-mono ${broken || said ? "text-slate-500 line-through" : "text-amber-100"}`}>{value}</code>
         {broken || said ? (
           <span className="text-slate-400">You said it doesn&apos;t work. The developer was told; a new key shows here once they add one.</span>
-        ) : (
+        ) : !canReport ? null : (
           <button className="btn-ghost px-3 py-1 text-xs" disabled={busy} onClick={() => void press<{ replaced?: boolean }>(`/api/sessions/${sessionId}/key-broken`, {}, "key").then((r) => { if (!r) return; if (r.replaced) window.location.reload(); else setSaid(true); })}>This key doesn&apos;t work</button>
         )}
       </p>

@@ -31,7 +31,7 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
       <AutoRefresh query={dev ? `test=${c.testId}` : `session=${c.id}`} />
       <Link href={dev ? `/app/tests/${c.testId}#tester-${c.id}` : `/app/sessions/${c.id}`} className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white no-underline hover:no-underline"><ArrowLeft className="h-4 w-4" /> Back to {dev ? "the test" : "your session"}</Link>
       <Chat
-        closed={blocked}
+        closed={blocked || (!dev && !!c.test.developer.suspendedAt) /* (Owner, Oct 27) testers can't message under the team's suspension of the developer */}
         keepKey={`chat:${c.testId}:${c.testerId}`}
         path={dev ? `/api/tests/${c.testId}/message` : `/api/sessions/${c.id}/message`}
         extra={dev ? { contractId: c.id } : {}}
