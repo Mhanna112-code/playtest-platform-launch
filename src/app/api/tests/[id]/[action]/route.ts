@@ -8,14 +8,14 @@ import { answerRequest, cancelCallSet, devRequestTime } from "@/lib/server/reque
 import { apply, askToRejoin, decideApplication, join, withdrawApplication } from "@/lib/server/joining";
 import { addDevSide, payExtra } from "@/lib/server/payments";
 import { sendChat, sendMessage } from "@/lib/server/messages";
-import { asListing, editTest, endEarly, nextRound, openDraft, ownTest, stopTest } from "@/lib/server/tests";
+import { asListing, deleteDraft, editTest, endEarly, nextRound, openDraft, ownTest, postDraft, stopTest } from "@/lib/server/tests";
 import { assignFreeKey, keyBoxes } from "@/lib/server/accessKeys";
 import { getUserFromRequest } from "@/lib/server/session";
 import { failedLine, requireActive, requireConfirmed } from "@/lib/server/users";
 import { RESTRICTED_OK_ACTIONS } from "@/lib/restricted";
 
 // (Owner, Oct 27) Email confirmation is needed only for Post a test (its own route), Join (which is also accepting an invite) and Apply. A blocked press is a blue notice under the button with Resend the link.
-const NEEDS_CONFIRMED = new Set(["join", "apply"]);
+const NEEDS_CONFIRMED = new Set(["join", "apply", "post-draft"]);
 import { devRate } from "@/lib/server/ratings";
 import { logTestAction } from "@/lib/server/actionText";
 
@@ -84,6 +84,11 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
       case "open":
         await openDraft(u, id, body);
         return ok({ ok: true });
+      // (Owner, Oct 28 evening) A draft opens in Post a test: "Post the test" saves and opens it; it can also be deleted there.
+      case "post-draft":
+        return ok({ id: (await postDraft(u, id, body)).id });
+      case "delete-draft":
+        return ok(await deleteDraft(u, id));
       case "stop":
         return ok(await stopTest(u, id, body));
       case "rate":

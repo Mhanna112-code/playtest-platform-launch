@@ -17,7 +17,7 @@ type Tester = { contractId: string; name: string; sent: string[]; toSend: string
  * The test page's top title panel: the developer's big buttons (Stop the test, End early, Next round).
  * Its stop-once box sits directly under this panel.
  */
-export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean }) {
+export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
   const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={error} didntGo={k === "stop" || k === "end-early"} /> : null);
   const [open, setOpen] = useState<"" | "end" | "next">("");
@@ -35,7 +35,8 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
   async function go(action: string, body: Record<string, unknown> = {}) {
     const r = await press<{ id?: string }>(`/api/tests/${p.id}/${action}`, body, action);
     if (!r) return;
-    if (action === "next-round" && r.id) window.location.href = `/app/tests/${r.id}/edit`;
+    // (Owner, Oct 28 evening) Next round creates the draft and goes straight to Post a test with it.
+    if (action === "next-round" && r.id) window.location.href = `/app/tests/new?draft=${r.id}`;
     else window.location.reload();
   }
 
@@ -63,21 +64,22 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
             </div>
           </div>
           {/* The full app's header: the buttons at the top right (Edit, Next round, End early, Stop the test). */}
-          {!stopped && (
+          {/* (Owner, Oct 28 evening) A stopped test shows only what still works: Alerts and Next round (it starts a new draft from this test); no Edit, End early or Stop. */}
+          {(
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-              {!p.restricted && <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.id}/edit`}><Pencil className="h-4 w-4" /> Edit</a>}
+              {!p.restricted && !stopped && <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.id}/edit`}><Pencil className="h-4 w-4" /> Edit</a>}
               {!p.restricted && <AlertsMenu ignored={p.ignoredAlerts ?? []} />}
-              {p.restricted || p.status === "draft" ? null : p.nextRoundId ? (
+              {p.restricted || p.teamStopped || p.status === "draft" ? null : p.nextRoundId ? (
                 <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.nextRoundId}`}><Repeat className="h-4 w-4" /> Go to the next round</a>
               ) : (
                 <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(open === "next" ? "" : "next")}><Repeat className="h-4 w-4" /> Next round</button>
               )}
               {/* (Owner, Oct 28) A draft (a next round not opened yet) has no Next round and no End early. */}
-              {p.status !== "draft" && <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(open === "end" ? "" : "end")} disabled={p.working.length === 0}>
+              {p.status !== "draft" && !stopped && <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(open === "end" ? "" : "end")} disabled={p.working.length === 0}>
                 End early
               </button>}
               {/* Stop the test: the full app's "Are you sure?" pop-up first; the stop-once box shows right under it. */}
-              <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy} title={`Are you sure you want to stop “${p.title}”?`} confirmLabel="Stop the test"
+              {!stopped && <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy} title={`Are you sure you want to stop “${p.title}”?`} confirmLabel="Stop the test"
                 body={(
                   <div className="space-y-2">
                     <p>{p.working.length ? <>The work of <strong className="text-white">{p.working.length === 1 ? "1 tester" : `${p.working.length} testers`}</strong> ends now.</> : "Nobody is working on it right now."}</p>
@@ -94,7 +96,7 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
                 )}
                 onConfirm={() => go("stop")}>
                 <OctagonX className="h-4 w-4" /> Stop the test
-              </ConfirmButton>
+              </ConfirmButton>}
               {box("stop")}
             </div>
           )}

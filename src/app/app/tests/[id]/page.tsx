@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, pronouns } from "@/lib/format";
 import { chargeOpensAt, CALL_CLOSE_MS, callClosed, callOutcome, joinedWords, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, defaultCallMinutes, choiceNoteLine, closesInLine, lateLabel, termsLine } from "@/lib/rules";
@@ -24,7 +24,7 @@ import { rowsOf, toJson } from "@/lib/callRows";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
-import { HOLD_APPROVAL_AFTER, callListed, unlistedCallLine } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, NOT_LISTED, callListed } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
@@ -66,6 +66,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     },
   });
   if (!t || t.developerId !== u.id) notFound();
+  // (Owner, Oct 28 evening) A draft is not a test page: it opens in Post a test.
+  if (t.status === "draft") redirect(`/app/tests/new?draft=${t.id}`);
   const next = await db.test.findFirst({ where: { previousId: id }, select: { id: true } });
   const brokenKeys = await brokenKeyTesters(id);
   // (Owner, Oct 26) A suspended developer sees only Cancel call, End early and Stop the test here; every other button is hidden.
@@ -118,7 +120,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       part("Written", c.writtenCents, "written"),
       part("Recording", c.recordingCents, "recording"),
       // (Owner, Oct 28 afternoon) A call that isn't a listed part (not in the listing, or not in this tester's contract) can still be requested: its pay is up to the developer.
-      callListed(t, c) ? `Live call ${whole(c.liveRateCents)}/h, ${whole(callPaid)} paid so far` : `Live call: ${unlistedCallLine("developer")}`,
+      callListed(t, c) ? `Live call ${whole(c.liveRateCents)}/h, ${whole(callPaid)} paid so far` : `Live call: ${NOT_LISTED}`,
     ].filter(Boolean).join(" · ");
     const toCall = (x: (typeof c.calls)[number]): DevCall => ({ id: x.id, joinable: callJoinable(x, now), report: x.noShowBy ? { byMe: x.noShowBy === "developer", note: x.noShowNote } : null, when: x.startsAt.toISOString(), minutes: x.minutes, rate: rateLabel(x.rateCents, c.liveRateCents), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, late: lateOf(c, x) });
     const live = c.calls.filter((x) => x.status === "booked" && !x.review);
@@ -189,6 +191,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         version={t.version}
         seenAt={seenAt}
         nextRoundId={next?.id ?? null}
+        teamStopped={!!t.adminStoppedAt}
         spotsLine={`${working.length} of ${t.spots} spots used`}
         full={working.length >= t.spots}
         joinMode={t.joinMode}
@@ -241,7 +244,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           {mine.map((x) => (
             <div key={x.id} id={x.kind === "sub" ? `piece-${x.id}` : `call-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 scroll-mt-24">
               <p className="text-sm font-medium">
-                <a href={`/app/testers/${x.c.testerId}`}>{displayName(x.c.tester)}</a> · {x.kind === "sub" ? (x.s!.kind === "written" ? "Written answers" : "Recording") : "Live call"} · {x.kind === "sub" ? `sent ${fmtDateTime(x.s!.updatedAt)}` : `${fmtDateTime(x.x!.startsAt)} · ${x.x!.minutes} min booked`} · {(x.kind === "sub" ? x.s!.agreedCents : x.x!.rateCents) == null ? "Not in their contract" : "In their contract"}
+                <a href={`/app/testers/${x.c.testerId}`}>{displayName(x.c.tester)}</a> · {x.kind === "sub" ? (x.s!.kind === "written" ? "Written answers" : "Recording") : "Live call"} · {x.kind === "sub" ? `sent ${fmtDateTime(x.s!.updatedAt)}` : `${fmtDateTime(x.x!.startsAt)} · ${x.x!.minutes} min booked`} · {(x.kind === "sub" ? x.s!.agreedCents : x.x!.rateCents) == null ? NOT_LISTED : "In their contract"}
                 {x.kind === "sub" && x.s!.late && <span className="ml-2 badge">{lateLabel(x.c.dueAt, fmtDate)}</span>}
               </p>
               {x.kind === "sub" ? (
@@ -336,7 +339,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       <b className="text-white">{r.name}</b>
                       <span className={`badge ${r.required ? "border-amber-300/40 text-amber-200" : ""}`}>{r.required ? "Required" : "Not required"}</span>
                       <span className={r.sub ? "text-emerald-200" : "text-slate-400"}>{r.sub ? `Sent ${fmtDate(r.sub.sentAt)}` : "Not sent yet"}</span>
-                      {r.sub && <span className="text-slate-300">· paid {money(partPaid(r.sub.id))} of {r.sub.agreedCents != null ? money(r.sub.agreedCents) : "(not in the contract)"}</span>}
+                      {r.sub && <span className="text-slate-300">· paid {money(partPaid(r.sub.id))} of {r.sub.agreedCents != null ? money(r.sub.agreedCents) : `(${NOT_LISTED.toLowerCase()})`}</span>}
                       {/* (Owner, Oct 27) Extra pay sits next to each SENT part (unsent parts have none). */}
                       {r.sub && !restricted && <ExtraPay testId={t.id} contractId={c.id} submissionId={r.sub.id} name={name} seenAt={seenAt} roomCents={rooms.get(c.id) ?? 0} paidCents={partPaid(r.sub.id)} owes={owesNow} />}
                     </li>
@@ -380,7 +383,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         testId={t.id}
         seenAt={seenAt}
         canRequest={t.status !== "stopped" && t.status !== "draft" && !u.holdStartedAt && !restricted}
-        noRequestReason={t.status === "stopped" ? "This test was stopped, so no calls can be requested or booked." : restricted ? "Your account is suspended: you can only cancel booked calls here." : u.holdStartedAt ? "Your tests are paused until you pay what you owe: calls wait meanwhile." : ""}
+        noRequestReason={t.status === "stopped" ? "" : restricted ? "Your account is suspended: you can only cancel booked calls here." : u.holdStartedAt ? "Your tests are paused until you pay what you owe: calls wait meanwhile." : ""}
         testers={restricted ? devTesters.map((x) => ({ ...x, requests: [] })) : devTesters}
         past={t.contracts
           .flatMap((c) => c.calls.filter((x) => x.status === "cancelled" || x.review).map((x) => ({

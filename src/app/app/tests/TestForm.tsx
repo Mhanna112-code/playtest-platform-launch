@@ -16,6 +16,7 @@ import { HIGH_PART_CENTS, HIGH_PART_TICK, openUntilNeeded, type Listing } from "
 import { toCents } from "@/lib/format";
 import { KeyBoxes, type KeysData } from "./KeyBoxes";
 import { ExpandNote } from "@/components/ExpandNote";
+import { ConfirmButton } from "@/components/ConfirmButton";
 
 // Post and Edit share this form. Prices are typed in dollars ("7.50"; "0" for free). Edit sends only the fields the
 // user touched plus the version it loaded; if the test changed since, Save stops once and lists what changed.
@@ -97,7 +98,8 @@ type EditProps = {
 
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: EditProps; spotsLimit?: number }) {
+/** (Owner, Oct 28 evening) `draft`: a draft (a next round not opened yet) shown in Post a test: Post opens it for testers, and it can be deleted here. */
+export function TestForm({ init, edit, spotsLimit, draft }: { init: Listing; edit?: EditProps; spotsLimit?: number; draft?: { id: string } }) {
   const [f, setF] = useState<F>(toForm(init));
   // What this tab last knew the test to be (Edit): fields that differ from it are "changed" (Save is faded when none are).
   const [base, setBase] = useState<F>(toForm(init));
@@ -133,7 +135,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
   // (Design doc 5) Notes under each field changed in another tab or device: { field: { at, text } }.
   const [notes, setNotes] = useState<Record<string, { at: string; lines: string[] }>>({});
   // (NEXT-UI 10) The form typed and not sent is kept on the server ("Not sent yet"), for Post and for each Edit.
-  const keep = useKept(edit ? `test:edit:${edit.id}` : "test:new", { f, touched: [...touched], keysText }, touched.size === 0 && !keysText, (v) => {
+  const keep = useKept(edit ? `test:edit:${edit.id}` : draft ? `test:draft:${draft.id}` : "test:new", { f, touched: [...touched], keysText }, touched.size === 0 && !keysText, (v) => {
     setF({ ...toForm(init), ...v.f });
     setTouched(new Set(v.touched));
     if (v.keysText) setKeysText(v.keysText);
@@ -257,7 +259,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
     setRefusal("");
     try {
       if (!edit) {
-        const r = await api<{ id: string }>("/api/tests", { ...toApi(f), accessKeys: keysText, confirmHigh: confirmHigh() });
+        const r = await api<{ id: string }>(draft ? `/api/tests/${draft.id}/post-draft` : "/api/tests", { ...toApi(f), accessKeys: keysText, confirmHigh: confirmHigh() });
         await keep.clear();
         window.location.href = `/app/tests/${r.id}`;
         return;
@@ -518,6 +520,13 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
         {saved && <p className="ok">{saved}</p>}
         {locked && pressed && lockedNow.map((f) => <p key={f} className="err-field" role="alert" data-critical-limit={f}>{criticalLine(f)}</p>)}
         <Err text={refusal} />
+        {draft && (
+          <ConfirmButton className="btn-secondary px-3 py-1.5 text-sm text-rose-200" title="Delete this draft?" confirmLabel="Delete the draft"
+            body={<p>The draft and its details are deleted. Nobody has joined it, so nothing else changes. This can&apos;t be undone.</p>}
+            onConfirm={() => void api(`/api/tests/${draft.id}/delete-draft`, {}).then(async () => { await keep.clear(); window.location.href = "/app"; }).catch((e) => setRefusal((e as Error).message))}>
+            Delete the draft
+          </ConfirmButton>
+        )}
         <ChangesBox changes={changes} tail={listingEdited ? "Press Save again to save your changes (fields you didn't touch keep the newer values)." : "Press Save again to save."} />
       </div>
     </form>

@@ -462,8 +462,8 @@ describe("follow-up 5, 7, 8, 9, 10) cards, the mistakes line, End early, profile
 
   it("a draft has no Next round and no End early", () => {
     const top = src("app/app/tests/[id]/TopPanel.tsx");
-    expect(top).toContain('p.restricted || p.status === "draft" ? null');
-    expect(top).toContain('p.status !== "draft" && <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(open === "end"');
+    expect(top).toContain('p.restricted || p.teamStopped || p.status === "draft" ? null');
+    expect(top).toContain('p.status !== "draft" && !stopped && <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(open === "end"');
   });
 });
 

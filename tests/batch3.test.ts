@@ -35,7 +35,7 @@ describe("latest batch rules", () => {
     expect(R.callCancelledLine(d, "paused")).toBe("Your call on Thu, Nov 5 was cancelled because the test is paused.");
     expect(R.callCancelledLine(d, "stopped")).toBe("Your call on Thu, Nov 5 was cancelled because the test was stopped.");
     expect(R.callReference(4000, 25)).toEqual({ cents: 1667, text: "Listing: $40/h × 25 min = $16.67" });
-    expect(R.callReference(null, 25)).toEqual({ cents: null, text: "Not in the listing" });
+    expect(R.callReference(null, 25)).toEqual({ cents: null, text: "Not listed" });
     expect(R.checkActualMinutes(25, 30).ok).toBe(true);
     expect(R.checkActualMinutes(91, 30).ok).toBe(false);
     expect(R.declinedLine("Ana Silva", 1667, "live call")).toBe("Your card was declined, so Ana Silva wasn't paid $16.67 for the call. Update your card in Payments, then press Pay again.");

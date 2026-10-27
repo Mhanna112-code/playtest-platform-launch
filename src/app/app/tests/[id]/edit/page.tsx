@@ -1,5 +1,5 @@
 import { countsOf } from "@/lib/limits";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireOpenDevPage } from "@/lib/server/page-auth";
 import { asListing } from "@/lib/server/tests";
@@ -18,6 +18,8 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
   const u = await requireOpenDevPage();
   const t = await db.test.findUnique({ where: { id } });
   if (!t || t.developerId !== u.id) notFound();
+  // (Owner, Oct 28 evening) A draft is edited in Post a test.
+  if (t.status === "draft") redirect(`/app/tests/new?draft=${t.id}`);
   const testersIn = await db.contract.count({ where: { testId: id, status: "working" } });
   const seenAt = new Date().toISOString();
   return (

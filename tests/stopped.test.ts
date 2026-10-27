@@ -43,15 +43,17 @@ describe("after the test is stopped", () => {
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "disputed a payment" } } })).toBeGreaterThan(0);
   });
 
-  it("the developer's other buttons are refused for good, naming the stop", async () => {
+  it("the developer's other buttons are refused for good, naming the stop (batch 7: Next round still works)", async () => {
     const { dev, testId, sessionId } = await paidBelowListing();
     await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
     const someone = await makeUser({ tester: true });
-    for (const [action, body] of [["edit", { version: 1, fields: { title: "x" } }], ["invite", { testerIds: [someone.user.id] }], ["end-early", { contractIds: [sessionId], reason: "Enough thanks" }], ["next-round", {}]] as const) {
+    for (const [action, body] of [["edit", { version: 1, fields: { title: "x" } }], ["invite", { testerIds: [someone.user.id] }], ["end-early", { contractIds: [sessionId], reason: "Enough thanks" }]] as const) {
       const r = await act(testId, action, dev.cookie, { seenAt: seen(), confirmed: true, ...body });
       expect(r.status, action).toBe(409);
       expect(r.body.error.message, action).toMatch(/stopped/);
     }
+    // (Batch 7) Next round stays on a stopped test: it starts a new draft from it.
+    expect((await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
   });
 
   it("Dispute: the developer adding their side stops the tester's next dispute press once; an already disputed piece is final", async () => {

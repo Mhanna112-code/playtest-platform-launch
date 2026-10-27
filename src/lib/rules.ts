@@ -555,7 +555,7 @@ export const callCancelledLine = (startsAt: Date, why: keyof typeof CANCEL_WHY) 
 
 /** The Pay box reference for a call: the listing rate × the entered length (or the booked length). */
 export function callReference(rateCents: number | null, minutes: number, contractRate: number | null = rateCents) {
-  if (rateCents == null) return { cents: null as number | null, text: "Not in the listing" };
+  if (rateCents == null) return { cents: null as number | null, text: NOT_LISTED };
   const cents = callCharge(rateCents, minutes);
   const label = rateCents === contractRate ? "Listing" : "Agreed";
   return { cents, text: `${label}: ${money(rateCents).replace(/\.00$/, "")}/h × ${minutes} min = ${money(cents)}` };
@@ -586,9 +586,8 @@ export const callClosed = (startsAt: Date, now = new Date()) => now.getTime() >=
  * (its pay plus extras; outside the 100% cap), and Charge / Let it go never opens for it.
  */
 export const callListed = (test: { liveRateCents: number | null }, contract: { liveRateCents: number | null }) => test.liveRateCents != null && contract.liveRateCents != null;
-/** The line shown wherever an unlisted call is requested or listed. */
-export const unlistedCallLine = (side: "tester" | "developer", devName = "the developer") =>
-  side === "tester" ? `Not a listed part: pay for this call is up to ${devName}` : `Not a listed part: pay is up to you, at most ${money(NO_LISTING_CAP_CENTS).replace(/\.00$/, "")} for this call`;
+/** (Owner, Oct 28 evening) The short label on both sides for a call (or any part) that isn't a listed part of the tester's contract; the $100 cap is said only when a Pay goes over it. */
+export const NOT_LISTED = "Not listed";
 export const NOBODY_JOINED = "Nobody joined, so the call was cancelled.";
 
 /** A declined Pay, shown under that Pay button. */

@@ -189,20 +189,49 @@ export const seenDate = (v: unknown) => {
 /** The parts whose "I confirm this part pays more than $200." tick was ticked. */
 const confirmedHighOf = (body: Record<string, unknown>) => (Array.isArray(body.confirmHigh) ? body.confirmHigh.map(String) : []);
 
-export async function createTest(dev: U, body: Record<string, unknown>) {
+/** Post a test's checks (Post a test, and posting a draft): the listing, the tester capacity and the access keys. */
+async function checkPost(dev: U, body: Record<string, unknown>) {
   if (!dev.isDeveloper) throw new HttpError(403, "not_developer", "Turn on “post tests” in your profile to post a test.");
   if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", `${PAY_WAITS} New tests can't be posted while payments are on hold.`);
   const l = parseListing(body) as Listing;
   if (!l.mature) l.matureWhy = "";
   const now = new Date();
   const errs = checkListing(l, 0, now, { openedAt: now, confirmedHigh: confirmedHighOf(body) });
-  // (NEWEST+9) Spots up to the developer's tester capacity.
   const cap = await testerCapacity(dev.id);
   if (Number.isInteger(l.spots) && l.spots > cap.limit && !errs.some((e) => e.startsWith("Spots"))) errs.push(overLimitText(cap.limit));
-  // (Design doc 4) With access keys, there must be at least as many keys as open spots.
   const keys = checkTypedKeys(body.accessKeys);
   if (keys.length && Number.isInteger(l.spots) && keys.length < l.spots) errs.push(keyNeedLine(l.spots, keys.length));
   if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs });
+  return { l, keys };
+}
+
+/** (Owner, Oct 28 evening) A draft (a next round not opened yet) opens in Post a test: "Post the test" saves the typed details and opens it for testers. */
+export async function postDraft(dev: U, testId: string, body: Record<string, unknown>) {
+  const t0 = await ownTest(dev.id, testId);
+  if (t0.status !== "draft") throw new HttpError(409, "not_draft", t0.status === "stopped" ? "This test was stopped." : "This test is already open.");
+  const { l, keys } = await checkPost(dev, body);
+  return db.$transaction(async (tx) => {
+    const t = await lockTest(tx, testId);
+    if (t.status !== "draft") throw new HttpError(409, "not_draft", "This test is already open.");
+    if (keys.length) await tx.accessKey.createMany({ data: keys.map((value) => ({ testId, value })) });
+    // It opens now: the deadline buffer and the dashboard order count from here.
+    await recordEvent(tx, testId, "opened", "The test opened for testers", true, { ...listingData(l), status: "open", createdAt: new Date() });
+    return tx.test.findUniqueOrThrow({ where: { id: testId } });
+  });
+}
+
+/** (Owner, Oct 28 evening) Delete a draft from its Post page (after the confirm pop-up). Nobody can have joined a draft. */
+export async function deleteDraft(dev: U, testId: string) {
+  const t = await ownTest(dev.id, testId);
+  if (t.status !== "draft") throw new HttpError(409, "not_draft", "Only a draft can be deleted.");
+  await db.test.delete({ where: { id: testId } });
+  await db.keptForm.deleteMany({ where: { userId: dev.id, key: `test:draft:${testId}` } }).catch(() => null);
+  return { deleted: true };
+}
+
+export async function createTest(dev: U, body: Record<string, unknown>) {
+  // (NEWEST+9) Spots up to the developer's tester capacity; (design doc 4) with access keys, at least as many keys as open spots.
+  const { l, keys } = await checkPost(dev, body);
   return db.$transaction(async (tx) => {
     const t = await tx.test.create({ data: { ...listingData(l), developerId: dev.id, status: "open" } });
     if (keys.length) await tx.accessKey.createMany({ data: keys.map((value) => ({ testId: t.id, value })) });
@@ -472,7 +501,7 @@ export async function nextRound(dev: U, testId: string, body: Record<string, unk
   await ownTest(dev.id, testId);
   const res = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
-    if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped." + (await staleNote(testId, body.seenAt)));
+    // (Owner, Oct 28 evening) Next round stays on a stopped test: it starts a new draft from it.
     const existing = await tx.test.findFirst({ where: { previousId: testId } });
     if (existing) throw new HttpError(409, "exists", "This test already has a next round." + (await staleNote(testId, body.seenAt)), { id: existing.id });
     if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", `${PAY_WAITS} Your tests are paused until then.`);

@@ -1,19 +1,30 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { db } from "@/lib/db";
+import { asListing } from "@/lib/server/tests";
 import { requireOpenDevPage } from "@/lib/server/page-auth";
 import { TestForm } from "../TestForm";
 import { testerCapacity } from "@/lib/server/capacity";
 
 export const metadata = { title: "Post a test · Playtest" };
 
-export default async function NewTest() {
+export const dynamic = "force-dynamic";
+
+/** Post a test. (Owner, Oct 28 evening) ?draft=<id>: a draft (a next round not opened yet) opens here, filled in with its saved details. */
+export default async function NewTest({ searchParams }: { searchParams: Promise<{ draft?: string }> }) {
   const u = await requireOpenDevPage();
   if (!u.isDeveloper) redirect("/app/profile");
+  const { draft: draftId } = await searchParams;
+  const draft = draftId ? await db.test.findUnique({ where: { id: draftId } }) : null;
+  if (draftId && (!draft || draft.developerId !== u.id)) notFound();
+  if (draft && draft.status !== "draft") redirect(`/app/tests/${draft.id}`);
   return (
     <>
       <h1 className="text-3xl font-bold tracking-tight text-white">Post a test</h1>
+      {draft && <p className="note" data-draft-note="">A draft: {draft.title}. Check the details, then press Post the test to open it for testers.</p>}
       <TestForm
         spotsLimit={(await testerCapacity(u.id)).limit}
-        init={{ productName: "", mature: false, matureWhy: "", ndaText: "", title: "", description: "", buildUrl: "", categories: ["Productivity"], devices: [], languages: [], spots: 5, writtenCents: 1000, recordingCents: null, liveRateCents: null, liveMinutes: 30, deadlineDays: 7, questions: [], openUntil: null, joinMode: "anyone" }}
+        draft={draft ? { id: draft.id } : undefined}
+        init={draft ? asListing(draft) : { productName: "", mature: false, matureWhy: "", ndaText: "", title: "", description: "", buildUrl: "", categories: ["Productivity"], devices: [], languages: [], spots: 5, writtenCents: 1000, recordingCents: null, liveRateCents: null, liveMinutes: 30, deadlineDays: 7, questions: [], openUntil: null, joinMode: "anyone" }}
       />
     </>
   );

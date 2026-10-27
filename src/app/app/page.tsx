@@ -243,7 +243,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
                       <div className="min-w-0 space-y-2">
                         {t.productName && <p className="kicker">{t.productName}</p>}
                         {/* Under a suspension or a hold the test pages are closed: the card doesn't open. */}
-                        <p>{restricted ? title : <Link href={`/app/tests/${t.id}`} className={`${CARD_LINK} no-underline hover:no-underline`}>{title}</Link>}</p>
+                        <p>{restricted ? title : <Link href={t.status === "draft" ? `/app/tests/new?draft=${t.id}` : `/app/tests/${t.id}`} className={`${CARD_LINK} no-underline hover:no-underline`}>{title}</Link>}</p> {/* (Owner, Oct 28 evening) a draft opens in Post a test */}
                         <div className="flex flex-wrap gap-2">
                           {t.status === "stopped" ? <StatusPill status="stopped" /> : paused ? <span className="badge border-amber-300/40 text-amber-200"><span className="h-2 w-2 rounded-full bg-amber-300" /> Paused{why ? `: ${why}` : ""}</span> : <StatusPill status={t.status} full={inIt.length >= t.spots} />} {/* (Owner, Oct 28 afternoon) open with a free spot: "Accepting testers"; open and full: "Full"; Draft, Paused, Stopped and Closed as before */}
                           {owedTests.has(t.id) && <span className="badge border-rose-300/40 text-rose-200">Payment failed</span>}

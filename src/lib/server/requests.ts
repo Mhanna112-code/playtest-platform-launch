@@ -4,7 +4,7 @@ import { displayName, fmtDateTime, fmtTime, money, pronouns } from "@/lib/format
 import { checkCallMinutes, checkCancel } from "@/lib/rules";
 import { FOREVER_AHEAD, MAX_ROWS, occurrences, rowsOf, stepMs, toJson, type CallRow, type RowRepeat } from "@/lib/callRows";
 import type { Prisma } from "@prisma/client";
-import { PAUSED_RIGHT_NOW, callListed, testPaused, unlistedCallLine } from "@/lib/rules";
+import { NOT_LISTED, PAUSED_RIGHT_NOW, callListed, testPaused } from "@/lib/rules";
 import { DEV_SUSPENDED } from "./users";
 import { HttpError } from "./http";
 import { notify } from "./notify";
@@ -35,12 +35,9 @@ async function ctx(userId: string, contractId: string) {
 }
 type Ctx = Awaited<ReturnType<typeof ctx>>;
 
-/**
- * A call's rate as each side reads it: "Contract $30/h" for a listed call; (owner, Oct 28 afternoon) a call that isn't a listed part reads "Not a listed part: pay for this call is
- * up to <dev>" (tester) / "Not a listed part: pay is up to you, at most $100 for this call" (developer).
- */
-export const rateLabel = (rateCents: number | null, contractRate: number | null, side: Side = "developer", devName?: string) =>
-  rateCents == null ? unlistedCallLine(side, devName) : `${rateCents === contractRate ? "Contract" : "Agreed"} ${money(rateCents).replace(/\.00$/, "")}/h`;
+/** A call's rate as both sides read it: "Contract $30/h" for a listed call; (owner, Oct 28 evening) "Not listed" for one that isn't a listed part of the contract. */
+export const rateLabel = (rateCents: number | null, contractRate: number | null) =>
+  rateCents == null ? NOT_LISTED : `${rateCents === contractRate ? "Contract" : "Agreed"} ${money(rateCents).replace(/\.00$/, "")}/h`;
 /** The rate a call is booked at: the contract rate when the call is a listed part, else none (not a listed part: pay is up to the developer). */
 export const bookRate = (test: { liveRateCents: number | null }, c: { liveRateCents: number | null }) => (callListed(test, c) ? c.liveRateCents : null);
 
@@ -205,7 +202,7 @@ async function refusals(c: Ctx["c"], side: Side) {
   if (testPaused(c.test.developer, c.test)) throw new HttpError(409, "paused", side === "tester" ? `${PAUSED_RIGHT_NOW} You can request calls once it resumes.` : c.test.developer.suspendedAt ? DEV_SUSPENDED : c.test.developer.holdStartedAt ? "Pay what you owe first." : "The team paused this test.");
   // (Owner) "Closed" only means no NEW testers: testers already in carry on, so calls work. Only a stopped test refuses.
   if (c.test.status === "stopped") throw new HttpError(409, "closed", "This test was stopped.");
-  // (Owner, Oct 28 afternoon) Calls are allowed whether or not a live call is a listed part: one that isn't reads "Not a listed part" and its pay is up to the developer.
+  // (Owner, Oct 28 afternoon) Calls are allowed whether or not a live call is a listed part: one that isn't reads "Not listed" and its pay is up to the developer.
   if (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) throw new HttpError(409, "gone", "This time isn't available.");
 }
 
@@ -369,7 +366,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     await db.callRequest.update({ where: { id: r.id }, data: { status: "booked", callId: first!.id, decidedAt: new Date() } });
     if (side === "tester") await closeBatch(r.batchId, r.id);
     const what = row.repeat === "once" ? fmtDateTime(times[0]) : row.count ? `${row.count} ${unitOf(row.repeat)} calls from ${fmtDateTime(times[0])}` : `${unitOf(row.repeat)} calls from ${fmtDateTime(times[0])} (until cancelled)`;
-    await notify(other.email, `Booked: ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents, side === "tester" ? "developer" : "tester", displayName(c.test.developer))}).`], side === "tester" ? `/app/tests/${c.testId}#call-${first!.id}` : `/app/sessions/${c.id}#call-${first!.id}`, { about: user.id });
+    await notify(other.email, `Booked: ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#call-${first!.id}` : `/app/sessions/${c.id}#call-${first!.id}`, { about: user.id });
     return { booked: true, callId: first!.id, calls: times.length };
   }
   const status = action === "withdraw" ? "withdrawn" : "declined";

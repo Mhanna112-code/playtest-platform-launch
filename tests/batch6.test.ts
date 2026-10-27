@@ -64,7 +64,7 @@ async function disputed() {
 }
 
 describe("batch 6 item 1: calls without a Live call part are allowed again", () => {
-  it("both sides can request and book a call on a test with no live call; it reads 'Not a listed part' and has no rate", async () => {
+  it("both sides can request and book a call on a test with no live call; it reads 'Not listed' (batch 7) and has no rate", async () => {
     const { dev, testId } = await setup({ liveRateCents: null });
     const { tester, sessionId } = await joined(testId);
     const d = await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: atHours(48) });
@@ -75,11 +75,10 @@ describe("batch 6 item 1: calls without a Live call part are allowed again", () 
     expect(call.rateCents).toBeNull();
     expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: atHours(96) })).status).toBe(200);
     // The labels on each side.
-    expect(rateLabel(null, null, "tester", "Nora Lane")).toBe("Not a listed part: pay for this call is up to Nora Lane");
-    expect(rateLabel(null, null, "developer")).toBe("Not a listed part: pay is up to you, at most $100 for this call");
+    expect(rateLabel(null, null)).toBe("Not listed"); // (batch 7) the short label, both sides
     expect(rateLabel(3000, 3000)).toBe("Contract $30/h"); // listed and in the contract: as before
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain('unlistedCallLine("tester", dev)');
-    expect(src("app/app/tests/[id]/page.tsx")).toContain('unlistedCallLine("developer")');
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("{NOT_LISTED}");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("Live call: ${NOT_LISTED}");
   });
 
   it("listed only when the listing has a live call AND it is in this tester's contract", async () => {
