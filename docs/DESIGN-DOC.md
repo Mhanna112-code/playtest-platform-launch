@@ -196,6 +196,8 @@ A payment hold, a chargeback hold and an admin suspension do the same thing to a
 | Developer | "A dispute on <test> was decided" | each time | Disputes decided |
 | Developer | "Receipt: you paid $X for …" | every charge that goes through | own line |
 | Developer | "Your tests are paused" / "…paused after a chargeback" / "Another payment was declined: $X … was added to what you owe" / "Your bank reversed a $X payment …" / "Your tests are running again" | each time | Payments and holds |
+| Developer | "Your $7 subscription payment didn't go through. Update your card by <date> to keep it." / "Your subscription ended because the payment didn't go through." | when a renewal is declined; when the last retry fails | Open |
+| Developer | "…extras need a $7/month subscription from <date>" (free during launch is ending) | 30 days and 7 days before the date | Open |
 | Developer | "The team approved lifting your hold" / "A note from the team about your hold" | admin Approve | The team decided |
 | Developer | "<test> is paused and closes on <date> unless you pay what you owe" (or "…your account is cleared", "…the team lifts the pause") | when it pauses, then daily | Paused tests |
 | Developer | "The team paused <test>" / "The team stopped <test>" / "<test> was closed. <reason>" | each time | The team acted on your tests |
@@ -238,6 +240,9 @@ A payment hold, a chargeback hold and an admin suspension do the same thing to a
 | "Your tests are paused" (payment hold starts) | developer | when it starts |
 | "Your tests are paused after a chargeback" / "…your payment hold is now a chargeback hold" | developer | when it starts |
 | "Your tests are running again" | developer | when the hold lifts |
+| "Your $7 subscription payment didn't go through. Update your card by <date> to keep it." | developer | when a renewal is declined |
+| "Your subscription ended because the payment didn't go through." | developer | when the last retry fails (whether it is sent with email Off: Open) |
+| "…extras need a $7/month subscription from <date>" | every developer | 30 days and 7 days before the free-during-launch date |
 | "Your account is paused" / "Your account is active again" | developer or tester | suspension, reinstatement |
 | "The team paused / stopped <test>" / "<test> was closed. <reason>" | developer | each time |
 | Admin daily email: new disputes, lifts and chargeback holds waiting for Approve, call no-show and late reports (each once), accounts this admin suspended that still have paused tests, tests this admin paused (with closing dates) | each admin | once a day, only when it has something; can't be turned off |
@@ -380,7 +385,7 @@ From Every page: red field checks, kept drafts ("Not sent yet"), ranges shown ne
 - **Open until:** the last day to join.
 - **Who can join:**
   - Anyone can join: join at once while open with spots; first come, first served.
-  - Approved only: testers apply; the developer accepts or declines.
+  - Approved only: testers apply; the developer accepts or declines. A subscriber perk: on the free plan it carries a "Subscribers" tag, and Post is refused with a blue notice naming it.
   - Invite only: not in Find tests; only invited testers join.
   - Any test can also invite. An invite plus a waiting application or rejoin ask joins the tester at once.
 
@@ -419,6 +424,7 @@ All numbers are in Rules.
   - A link not starting with https:// ("The build link must start with https://").
   - Above the button: "Fix the N mistakes above…".
 - **Blue, under the button:** "Confirm your email first. We sent a link to <email>." with "Resend the link" under the button.
+- **Blue, under the button, on the free plan:** with an open test already (Open, Full or Paused), Post is refused: "You already have an open test. Subscribe ($7/month) to run several at once." with a link to Payments (new tab). The form keeps what was typed. The same applies when a draft is posted.
 
 ### How it looks in each state
 
@@ -500,6 +506,7 @@ From Every page: the live box, stop-once, red field checks, kept drafts, long li
 - **Always refused:** "This test was stopped." If an admin stops or pauses the test while it's being edited, Save is refused and the developer goes back to the test page, whose banner names the press that didn't go through.
 
   [video: The team stops the test while Edit is open; Save is refused and the test page's banner names the Save that didn't go through.]
+- **Subscriber perk:** on the free plan, Approved only under Who can join shows a small "Subscribers" tag, and a Save that switches to it is refused with a blue notice naming the perk. A test that is already Approved only stays so when a subscription ends.
 
 ### How it looks in each state
 
@@ -632,6 +639,7 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
   - Call lines: "This time isn't available."; clashes ("You already have a call with <name> at <time>."); "You already have 3 requests waiting with <name>…"; "<name> already has 3 booked times with you…"; "This call closed 24 hours after its start: the booked length is used."
   - Keys: "You have no free keys. Add some in Edit first."; "Every free key is kept for the N open spot(s). Add more keys in Edit first."
 - If the developer and an admin stop the test at the same time, the first wins and the other press is refused.
+- **Subscriber perks:** on the free plan, Invite and Next round stay visible with a small "Subscribers" tag; a press is refused with a blue notice naming the perk and a link to Payments. Invites already sent stay valid when a subscription ends. A page open at that moment gets "Your subscription ended." as a stop-once change.
 
 ### How it looks in each state
 
@@ -904,7 +912,7 @@ Pages both sides use. From Every page: notices, the live box, kept drafts, and t
   - "You leave every test you're in. Calls ahead are cancelled, and your invites and applications are cancelled. Open disputes are withdrawn."
   - "Your chats close. The ratings you gave and got stay."
   - "You can't sign in again, and this can't be undone."
-- **Deleting as a developer** is refused while sent work waits for Pay or Reject (parts where Charge is open included), a dispute is open, or a payment or chargeback hold is on. The Delete account section lists each one with a link, and the refusal reads "Pay or reject the work waiting for you first: <list>." Once none is left, deletion works as above; since nothing is left under review, Charge never opens later.
+- **Deleting as a developer** is refused while sent work waits for Pay or Reject (parts where Charge is open included), a dispute is open, or a payment or chargeback hold is on. The Delete account section lists each one with a link, and the refusal reads "Pay or reject the work waiting for you first: <list>." Once none is left, deletion works as above; since nothing is left under review, Charge never opens later. For a subscriber the warning adds "Your subscription ends now, with no refund for the rest of the month."
 - During a hold or suspension Settings stays open with Contact us, the email setting and Delete account; the profile editor and profile links are hidden.
 
 ## Notifications
@@ -926,6 +934,12 @@ Pages both sides use. From Every page: notices, the live box, kept drafts, and t
 - **Developer:** "Your card" (add or change it in Stripe) and "What you've paid" (receipts and history, paid so far per part). Pay and Reject are not here: they are in each test's Needs you, linked from the dashboard's Needs review.
   - **During a payment hold only:** "Pay what you owe" with the exact amount. It pays exactly what it shows. More declines during the hold add to it, and so do testers' charges and disputes decided for them during the hold.
   - **During a chargeback hold:** the three steps, each ✓ or ✗: verify a card with 3D Secure, pay what is owed, the team's Approve. "Verify a card" starts the check.
+- **Subscription · $7/month** (developers; the plans are in Rules):
+  - Not subscribed: the perks list and "Subscribe for $7/month", which needs a saved card.
+  - Subscribed: active since, renews on, and "Cancel subscription".
+  - Cancelled: "You can use the perks until <date>; you won't be charged again." with "Keep my subscription".
+  - Free during launch: "Free during launch until <date>: everything is included. Subscribe to keep the extras after that." With no date set: "Free during launch".
+  - Each subscription charge gets a receipt line. During a hold or suspension billing pauses, and Cancel still works.
 - **Tester:** "Everything you sent" with statuses ("Payment may be delayed" when it is), "Where your money goes" (payout setup with Stripe), "Your earnings" (" · yours once your account is active again" while suspended).
   - When a payout fails: "Your bank couldn't receive a payout. Update your payout details." with a button to Stripe; the money stays in their Stripe balance.
 - Payments stays open during holds and suspensions. Change card works during a payment hold, a chargeback hold and a suspension, and a suspended tester can still set up payouts.
@@ -968,7 +982,7 @@ From Every page: the bell (admin lines and the "Reported more than 3 times" labe
 - **Needs the team today**, **Payment holds** ("More than 3 holds" where it applies; no Approve here), **Decided disputes**.
 - **Reports:** who reported whom, the date, the reason, links to both profiles, and the label. **No-show reports** from calls.
 - **Payouts waiting** and **Latest payments**; **Held tester shares** (Release, Refund).
-- **Accounts** (Suspend, Lift, Delete) and **Tests** (Pause, Lift the pause, Stop, Allow 3 more); **Waitlist**.
+- **Accounts** (Suspend, Lift, Delete; each row shows the subscription state: free plan, subscribed, cancelled until <date>, lapsed, or paused for a hold or suspension) and **Tests** (Pause, Lift the pause, Stop, Allow 3 more); **Waitlist**.
 - Every list shows pages of 25 with Previous / Next and "1–25 of N"; only that list reloads. Rows link to the profile or test page they are about.
 - **On profiles,** admins see extra boxes (newest first, pages of 25): payments, payouts, disputes, chargebacks, holds and suspensions (with the acting admin), tests posted or joined, and reports against them. Testers' profiles also list their sent parts with totals. A totals line shows money spent or paid out and counts of reports, disputes, chargebacks, holds and suspensions.
 - **On a test's public page,** admins see a timeline, contract changes and payments.
@@ -989,6 +1003,7 @@ Admin buttons have no confirm pop-up; each shows "Done." or the refusal.
 - **Approve** a lift or a chargeback hold. A chargeback Approve is refused until the card is verified and what's owed is paid ("Not yet: the card isn't verified and $X is still owed."). The developer gets "The team approved lifting your hold", or "Your tests are running again" if that lifts it.
 - **Release / Refund** a held tester share; **Send** a waiting payout.
 - **Allow 3 more** for a test: every limited field at 0 gets 3 more changes (Edit test).
+- **Free during launch** (admin settings): "Free for everyone until <date>". Until then every developer has the subscription perks without paying; with no date set, it's free with no end. A date less than 30 days away is refused. Every developer is told 30 days and 7 days before the date, by bell and by email even with email Off.
 
 ### What can stop a press
 
@@ -1030,7 +1045,7 @@ The rules several pages share, with every number, cap and timer. How pages show 
 - **Pay:** one box per piece. It starts at the listing (or the call's rate × length); the developer can pay less (with a reason) or more (extra pay). Reject needs a reason. The card is charged at once and nothing shows success before the result. The split is 80% to the tester, 20% to the platform.
 - **When Pay or Reject works:** until the tester presses Charge or Let it go, including after Open until, after a Stop and after a pause closure. Never during a hold or suspension.
 - **Over $200:** setting a part price over $200 needs "I confirm this part pays more than $200."; any Pay box over $200 needs "I understand this payment can't be refunded and is charged now." every time. There is no 3D Secure check on Pay.
-- **Any declined payment starts a payment hold at once:** a part Pay, the tester's Charge, a call charge or extra pay. There are no retries and no grace days. More declines during the hold add to "Pay what you owe". Paying it all lifts the hold at once (from the 4th hold on, after an admin's Approve).
+- **Any declined payment starts a payment hold at once:** a part Pay, the tester's Charge, a call charge or extra pay. There are no retries and no grace days. A declined subscription renewal is the one exception: it lapses with no hold (Plans and the subscription, below). More declines during the hold add to "Pay what you owe". Paying it all lifts the hold at once (from the 4th hold on, after an admin's Approve).
 - **Chargebacks:** a chargeback starts a chargeback hold with three steps: verify a card with 3D Secure, pay what is owed, then an admin's Approve. Paying alone never lifts it. A chargeback during a payment hold turns it into a chargeback hold. Every further chargeback adds to what is owed; a new chargeback clears an earlier card check.
 - **Hold count:** the first 3 holds lift as soon as the developer pays. From the 4th hold on, an admin must Approve the lift (Lifts on Administrator console); the developer's box says the team will review after they pay.
 - **Charge cap:** the listing minus what was already paid for that part.
@@ -1041,6 +1056,19 @@ The rules several pages share, with every number, cap and timer. How pages show 
 - **Prices:** written and recording $1–$1,000 each, calls $10–$200 an hour, or free. The smallest charge is $0.50; Stripe's largest is $999,999.99.
 - **A suspended tester's pay** is still charged; their share is held until they are reinstated. If they never are, an admin refunds or releases it.
 - **Wording for testers:** "paused" and "delayed" only.
+
+### Plans and the subscription
+
+- **Free plan (every developer):** one open test at a time. A test counts as open while it is Open, Full or Paused; drafts, stopped and closed tests don't count.
+- **Subscription, $7 a month,** adds: several open tests at once, Approved-only testers (applications), Next round, and Invite testers.
+- Testers never pay and never see any of this. The 20% platform share on payments is unchanged.
+- **Billing:** monthly from the sign-up day; a sign-up on the 31st renews on the last day of shorter months. Cancel any time: the subscription lasts until the end of the paid month, with no refunds. Each charge gets a receipt line on Payments.
+- **On the free plan** the perk buttons stay visible with a small "Subscribers" tag, and a press is refused with a blue notice naming the perk (Post a test, Edit test, Developer test page).
+- **Losing the subscription** (a cancel reaches its end, or a renewal lapses): running tests carry on as they are (an Approved-only test stays Approved only, and invites already sent stay valid); only new uses of a perk are refused. A page open at that moment gets it as a stop-once change: "Your subscription ended."
+- **A declined renewal lapses, with no hold.** The payment is retried for about a week, and the perks continue meanwhile. After the last retry fails, the subscription ends and the developer is on the free plan. Testers are never affected. A chargeback on a subscription payment starts a chargeback hold like any chargeback, and the amount is added to what is owed.
+- **During a payment hold, a chargeback hold or a suspension** billing pauses: no renewal is charged. The paid days left resume when it lifts, so the next renewal moves later by the time it was paused. The developer can still cancel from Payments.
+- **Deleting the account**, or the team deleting it, ends the subscription at once with no refund.
+- **Free during launch:** until the date an admin sets, every developer has the perks without paying; with no date set, it's free with no end. Every developer is told 30 days and 7 days before the date. A developer who subscribes during the free period is first charged on that date. What happens to running tests that use perks when the free period ends: Open.
 
 ### Ratings
 
@@ -1086,6 +1114,11 @@ One row per change. A test is paused while its developer has any hold or suspens
 | A tester is suspended while their developer is on hold | The tester leaves every test ("Left this test"). Their sent work stays, waiting for Pay or Reject once the hold lifts; pay for it is charged, and the tester's share is held until they are reinstated. | The suspended tester is removed from every test, and every page except the dashboard, Payments, Settings and the bell list closes. Charges already added to what the developer owes are paid when the developer pays, with their share held. | Developer: "<tester> left <test>" (bell). Tester: "Your account is paused" (bell and email). |
 | The developer tries to delete their account during a hold | Refused: "Pay or reject the work waiting for you first: <list>." The Delete account section lists the hold with a link. Deleting never clears a hold, a chargeback or money owed. | Nothing changes. | No one: the refusal shows under the button. |
 | The 4th hold or later is paid | The hold stays until an admin presses Approve (Lifts on the Administrator console); the blue box says the team will review the account after they pay. The tests stay paused until then. | The test stays paused until the Approve. Charges added for them are paid when the developer pays. | Admins: "Hold lift waiting: <dev> paid what they owe (More than 3 holds)" (bell) and the admin daily email. Developer: "The team approved lifting your hold", or "Your tests are running again" when the Approve lifts it (bell; "Your tests are running again" is also emailed). Testers: "<test> is running again" (bell). |
+| A subscription renewal is declined | No hold starts. The payment is retried for about a week and the perks continue. After the last retry fails, the subscription ends and they are on the free plan: running tests carry on, new uses of a perk are refused, and an open page gets "Your subscription ended." as a stop-once change. | Nothing changes. | Developer: "Your $7 subscription payment didn't go through. Update your card by <date> to keep it." (bell and email), then "Your subscription ended because the payment didn't go through." (bell and email). |
+| A chargeback arrives on a subscription payment | A chargeback hold starts, like any chargeback, and the amount is added to what is owed. | As for any chargeback hold: the developer's tests pause. | As for any chargeback hold (above). |
+| A hold or suspension starts while subscribed | Billing pauses: no renewal is charged while it lasts, and the paid days left are kept. They can still cancel from Payments. | Only the hold or suspension rules above. | The hold or suspension lines above. |
+| That hold or suspension lifts | The paid days left resume, so the next renewal moves later by the time it was paused. | Only the lifting rules above. | The lift lines above. |
+| A subscriber deletes their account, or the team deletes it | The subscription ends at once, with no refund. The delete warning says: "Your subscription ends now, with no refund for the rest of the month." | As for any deleted developer (Every page). | As for any deletion; there is no subscription line. |
 
 ### Deletion
 
@@ -1096,6 +1129,7 @@ One row per change. A test is paused while its developer has any hold or suspens
 | What | Limit |
 |---|---|
 | Spots | 1–50 and the developer's tester limit (10 to start, +10% per 10 good ratings, at most 50) |
+| Open tests per developer | 1 at a time on the free plan (Open, Full and Paused count); several with the $7/month subscription |
 | Tester deadline | 1–90 days; must leave 3 days before Open until |
 | Open until | in the future, at most a year ahead, extend only |
 | Product, test name | 60 characters each |
@@ -1145,6 +1179,7 @@ Open questions about these rules are in QA and open questions.
 - **Ratings:** complete and rate; the developer not rating in 14 days; leaving early; ended by the developer; closing with mixed paid, rejected and unreviewed work; rating while the other side is suspended or held; leave and rejoin without duplicate records.
 - **Restrictions:** a developer pressing on a test page as a hold starts (routed to the dashboard top, blue box naming the press); the same on Profile and Edit; Cancel call from the Calls box during a hold; suspended on the session or payout page; a deleted user on an open page; two admins on one account; a lifted suspension and Ask to rejoin; long pauses closing; repeated pauses; a tester sending, saving a draft, charging or chatting while a test is paused; deadlines and Open until moving later when a pause lifts; a 6th Contact us message; a restricted account opening each closed page, a bell line and Change card; deleting with work still waiting.
 - **Cross-device:** a phone action refreshing a desktop tab; a hold reaching every tab; signing in as someone else in another tab; drafts kept after a refused press; sign-in expiring mid-send; network failure during upload or payment; an outage moving timers.
+- **Subscription:** a second test on the free plan (Open, Full and Paused count; drafts, stopped and closed don't), including a draft posted while another test is open; each perk on the free plan (Approved only on Post and Edit, Next round, Invite) refused with its "Subscribers" tag; Cancel, then Keep my subscription before the end; a page open when the subscription ends; running Approved-only tests and sent invites after it ends; a declined renewal (retries, perks during them, the lapse, no hold); a chargeback on a subscription payment; a hold or suspension starting and lifting mid-month (paid days resume, renewal moves later); cancelling during a hold; a sign-up on the 31st; deleting while subscribed; the free-during-launch date (under 30 days refused, the 30- and 7-day notices with email Off, no date set, subscribing during the free period and being charged first on that date).
 
 ### Open questions
 
@@ -1167,6 +1202,12 @@ Open questions about these rules are in QA and open questions.
 - Developer deletion: the owner suggested keeping open Charge rows and never opening Charge for work still under review. The app now refuses deletion until that work is paid or rejected instead. Confirm.
 - When a developer pays off a hold while their suspension continues, do they get "Your tests are running again", though their tests stay paused? (Rules, When account states change or combine.)
 - The team pauses a test that is already paused by its developer's hold: which closing date applies (the hold's 7 days or the team pause's), and which reason does the card show?
+- When free during launch ends, do running tests that use perks (several open tests, Approved only) carry on like a lapsed subscription?
+- After a subscription ends, can the developer still accept applications on a test that stays Approved only?
+- Can a developer on a hold or suspension subscribe, or press Keep my subscription?
+- Is "Your subscription ended because the payment didn't go through." emailed even with email Off?
+- Which bell stack do the subscription lines join?
+- An admin changing or clearing the free-during-launch date after the notices went out.
 
 **Earlier questions**
 
