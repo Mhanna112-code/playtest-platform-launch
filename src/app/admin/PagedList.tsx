@@ -1,13 +1,45 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api, errOf } from "@/lib/client";
-import type { ChargebackVM, DisputeVM, Kind, MineVM, Page, PausedVM, TestVM, TextVM, UserVM } from "@/lib/server/adminLists";
+import type { ChargebackVM, DisputeVM, Kind, LiftVM, MineVM, Page, PausedVM, ReportVM, TestVM, TextVM, UserVM } from "@/lib/server/adminLists";
 import { AdminButton } from "./AdminButton";
 import { DisputeDecision } from "./DisputeDecision";
 import { PreviewButton } from "./PreviewButton";
 
+type AnyRow = DisputeVM | MineVM | UserVM | TestVM | TextVM | PausedVM | ChargebackVM | LiftVM | ReportVM;
 
-type AnyRow = DisputeVM | MineVM | UserVM | TestVM | TextVM | PausedVM | ChargebackVM;
+/** A hold lift waiting for Approve: a note box and Approve (first press wins, like Decide). */
+function LiftApprove({ id }: { id: string }) {
+  const [note, setNote] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <label className="text-sm" htmlFor={`lift-note-${id}`}>Note to the developer</label>
+      <input id={`lift-note-${id}`} className="input w-72 max-w-full" value={note} onChange={(e) => setNote(e.target.value)} />
+      <button
+        className="btn-ghost"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setMsg(null);
+          try {
+            await api("/api/admin/approve-hold", { id, note });
+            setMsg({ ok: true, text: "Approved." });
+            setTimeout(() => window.location.reload(), 600);
+          } catch (e) {
+            setMsg({ ok: false, text: errOf(e) });
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        Approve
+      </button>
+      {msg && <span className={msg.ok ? "ok" : "err"}>{msg.text}</span>}
+    </div>
+  );
+}
 
 function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
   switch (kind) {
@@ -23,21 +55,41 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
         </div>
       );
     }
+    case "lifts": {
+      const l = row as LiftVM;
+      return (
+        <div id={`lift-${l.id}`} className="scroll-mt-24 space-y-1 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-lift-row={l.id}>
+          <p><b>{l.head}</b></p>
+          <p>{l.owed} · {l.paid}</p>
+          <LiftApprove id={l.id} />
+        </div>
+      );
+    }
+    case "reports": {
+      const r = row as ReportVM;
+      return (
+        <div className="space-y-0.5 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-report-row={r.id}>
+          <p><a href={r.reporterHref}>{r.reporter}</a> reported <a href={r.reportedHref}>{r.reported}</a> · {r.when}</p>
+          <p className="text-slate-300">“{r.note}”</p>
+        </div>
+      );
+    }
     case "mine": {
       const m = row as MineVM;
       return (
         <p className="border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-mine-row={m.testId}>
-          <a href={`/admin?test=${m.testId}#test-${m.testId}`}>“{m.title}”</a> · {m.dev} · {m.why} · {m.when}
+          <a href={`/app/find/${m.testId}`}>“{m.title}”</a> · {m.dev} · {m.why} · {m.when}
         </p>
       );
     }
     case "users": {
       const u = row as UserVM;
+      const [email, ...rest] = u.line.split(" · ");
       return (
         <li id={`user-${u.id}`} className="scroll-mt-24 space-y-1 py-2 text-slate-300" data-user-row={u.id}>
           <p>
-            {u.line}
-            {u.reports > 3 && <span className="badge ml-2 border-amber-300/40 text-amber-200">{u.reports} reports: look at them (a count is not proof)</span>}
+            <a href={u.href}>{email}</a> · {rest.join(" · ")}
+            {u.reports > 3 && <span className="badge ml-2 border-amber-300/40 text-amber-200">Reported more than 3 times</span>}
             {u.reports > 0 && u.reports <= 3 && <span className="ml-2 text-xs text-slate-500">{u.reports} report{u.reports === 1 ? "" : "s"}</span>}
           </p>
           {u.state === "deleted" ? (
@@ -56,11 +108,11 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
     }
     case "tests": {
       const t = row as TestVM;
+      const parts = t.line.split(" · ");
       return (
         <li id={`test-${t.id}`} className="scroll-mt-24 space-y-1 py-2 text-slate-300" data-test-row={t.id}>
-          <p>{t.line}</p>
+          <p>{parts[0]} · <a href={t.href}>{parts[1]}</a> · {parts.slice(2).join(" · ")}</p>
           {t.closedLine && <p className="text-xs text-rose-300">{t.closedLine}</p>}
-          <HistoryToggle testId={t.id} />
           {!t.stopped && (
             <p className="flex flex-wrap items-center gap-2">
               {t.adminPaused ? <AdminButton action="unpause-test" id={t.id} label="Lift the pause" /> : <AdminButton action="pause-test" id={t.id} label="Pause" fields={[{ name: "note", label: "Why" }]} />}
@@ -99,23 +151,12 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
     }
     default: {
       const t = row as TextVM;
-      return <li className="py-2 text-sm text-slate-300">{t.text}</li>;
+      return <li className="py-2 text-sm text-slate-300">{t.href ? <a href={t.href}>{t.text}</a> : t.text}</li>;
     }
   }
 }
 
-const LIST_KINDS = new Set<Kind>(["users", "tests", "payments", "waitlist", "history"]);
-
-/** (Owner, Oct 26) A test's full history, newest first, opened on demand (the ?test=ID area shows it open). */
-function HistoryToggle({ testId }: { testId: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div data-history-toggle={testId}>
-      <button className="btn-ghost" onClick={() => setOpen((o) => !o)} aria-expanded={open}>{open ? "Hide history" : "History"}</button>
-      {open && <div className="mt-2"><PagedList kind="history" arg={testId} initial={null} empty="Nothing recorded yet." /></div>}
-    </div>
-  );
-}
+const LIST_KINDS = new Set<Kind>(["users", "tests", "payments", "waitlist", "u-payments", "u-payouts", "u-disputes", "u-chargebacks", "u-holds", "u-tests", "u-reports", "u-parts", "t-timeline", "t-contracts", "t-payments"]);
 const PAGE = 25; // (Owner, Oct 26) pages of 25 (the server's PAGE)
 
 /**

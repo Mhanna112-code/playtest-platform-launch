@@ -57,7 +57,7 @@ describe("the daily job closes paused tests", () => {
     await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: ago(6) } });
     await cron();
     expect((await testOf(testId)).status).toBe("open");
-    await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: ago(8) } });
+    await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: ago(8), lastSummaryAt: ago(2) } }); // (yesterday's summary has gone: today's is due)
     expect((await cron()).closed).toBeGreaterThanOrEqual(1);
     const t = await testOf(testId);
     expect(t).toMatchObject({ status: "stopped" });
@@ -68,11 +68,12 @@ describe("the daily job closes paused tests", () => {
     // The tester: neutral (no hold / pause / suspend / chargeback words). The developer: the reason.
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "“Harbor Run” ended", own: true } })).toBe(1);
     for (const m of await db.outboxEmail.findMany({ where: { to: tester.user.email, createdAt: { gt: ago(1) } } })) expect(m.text + m.subject).not.toMatch(/hold|chargeback|suspend|paused for/i);
-    const devMail = await db.outboxEmail.findFirstOrThrow({ where: { to: dev.user.email, subject: { endsWith: "was closed" } } });
-    expect(devMail.text).toContain("stayed paused for 7 days: your payments were on hold");
+    // The developer is told why, in the end-of-day email (the team closing a test is one of the few emails that ignore Off).
+    const devMail = await db.outboxEmail.findFirstOrThrow({ where: { to: dev.user.email, text: { contains: "was closed. This test was closed because it stayed paused for 7 days: your payments were on hold" } } });
+    expect(devMail.subject).toMatch(/^Your Playtest summary/);
     // Running it again changes nothing (the developer is told once).
     await cron();
-    expect(await db.outboxEmail.count({ where: { to: dev.user.email, subject: { endsWith: "was closed" } } })).toBe(1);
+    expect(await db.outboxEmail.count({ where: { to: dev.user.email, text: { contains: "was closed. This test was closed" } } })).toBe(1);
   });
 
   it("a suspension closes the developer's tests the same way", async () => {

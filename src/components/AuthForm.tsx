@@ -19,7 +19,7 @@ export function AuthForm(p: { announce?: "in"; path: string; extra?: Record<stri
     setErr("");
     try {
       await api(p.path, { ...fields, ...(p.extra ?? {}) });
-      if (p.announce) announceAuth("in");
+      if (p.announce) announceAuth("in", p.next || "/app");
       if (p.next) window.location.href = p.next;
       else {
         setOk(true);

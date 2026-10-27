@@ -6,6 +6,11 @@ import { displayName, fmtDate } from "@/lib/format";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { TesterTiles } from "@/components/ProfileTiles";
 import { ChatWithButton } from "@/components/ChatWithButton";
+import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
+import { isAdmin } from "@/lib/server/session";
+
+import { BlockButton } from "@/components/BlockButton";
+import { ReportButton } from "@/components/ReportButton";
 
 export const metadata = { title: "Tester · Playtest" };
 export const dynamic = "force-dynamic";
@@ -21,12 +26,14 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
   const p = await db.user.findUnique({ where: { id }, include: { profile: true } });
   if (!p || !p.isTester) notFound();
   const mine = viewer.id === p.id;
-  if (!mine && !viewer.isAdmin && !viewer.isDeveloper) notFound();
-  if (!mine && !viewer.isAdmin && (await db.block.count({ where: { OR: [{ blockerId: viewer.id, blockedId: p.id }, { blockerId: p.id, blockedId: viewer.id }] } }))) notFound();
+  if (!mine && !isAdmin(viewer) && !viewer.isDeveloper) notFound();
+  if (!mine && !isAdmin(viewer) && (await db.block.count({ where: { OR: [{ blockerId: viewer.id, blockedId: p.id }, { blockerId: p.id, blockedId: viewer.id }] } }))) notFound();
   const name = displayName(p);
   const pr = p.profile;
   // (Owner, Oct 26) "Chat with <name>" for a developer: the chat of the most recent test they share; hidden when they share none.
   const shared = !mine && viewer.isDeveloper ? await db.contract.findFirst({ where: { testerId: p.id, test: { developerId: viewer.id } }, orderBy: { joinedAt: "desc" }, select: { id: true } }) : null;
+  const reportedRow = !mine ? await db.report.findUnique({ where: { reporterId_reportedId: { reporterId: viewer.id, reportedId: p.id } } }) : null;
+  const reportedOn = reportedRow ? fmtDate(reportedRow.createdAt) : null;
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <section className="card flex flex-wrap items-center gap-4">
@@ -50,6 +57,14 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
           {!pr?.categories.length && !pr?.devices.length && <span className="text-sm text-slate-500">Interests and devices not filled in yet.</span>}
         </div>
       </section>
+      {isAdmin(viewer) && !mine && <AdminPersonBoxes userId={p.id} adminId={viewer.id} developer={p.isDeveloper} tester={p.isTester} />}
+      {/* (Owner, Oct 27) Block and Report live only on profiles: here, on the developer side. */}
+      {viewer.isDeveloper && !mine && (
+        <div className="space-y-2 text-right text-xs text-slate-500">
+          <ReportButton userId={p.id} name={name} reportedOn={reportedOn} />
+          <BlockButton plain userId={p.id} name={name} effect="Your sessions with them end now (work they sent stays payable), calls between you are cancelled, and chat closes." />
+        </div>
+      )}
     </div>
   );
 }

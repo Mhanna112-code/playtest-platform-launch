@@ -19,7 +19,7 @@ type Tester = { contractId: string; name: string; sent: string[]; toSend: string
  */
 export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
-  const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={error} /> : null);
+  const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={error} didntGo={k === "stop" || k === "end-early"} /> : null);
   const [open, setOpen] = useState<"" | "end" | "next">("");
   // End early: the full app's ticks and "All", one reason, and a confirm dialog before it presses.
   const [picked, setPicked] = useState<string[]>([]);

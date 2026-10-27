@@ -27,6 +27,7 @@ describe("reason E: your own actions in another tab", () => {
   it("tester: written answers sent in tab 1 stop Leave once in tab 2; the same tab never stops for itself", async () => {
     const { testId } = await setup();
     const { tester, sessionId } = await joined(testId);
+    await later(); // the database clock can run a few ms ahead of this process: let the last write settle first
     const pageLoaded = seen();
     await later();
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: pageLoaded, tab: "tab-1" })).status).toBe(200);
@@ -44,6 +45,7 @@ describe("reason E: your own actions in another tab", () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
+    await later(); // the database clock can run a few ms ahead of this process: let the last write settle first
     const pageLoaded = seen();
     await later();
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
@@ -57,6 +59,7 @@ describe("reason E: your own actions in another tab", () => {
   it("join page: Withdraw application and No thanks stop once for your own other-tab actions and listing changes", async () => {
     const { dev, testId } = await setup({ joinMode: "apply" });
     const t = await makeUser({ tester: true, name: "Dee Moss" });
+    await later(); // the database clock can run a few ms ahead of this process: let the last write settle first
     const pageLoaded = seen();
     await later();
     expect((await act(testId, "apply", t.cookie, { seenAt: pageLoaded, tab: "tab-1", note: "hi" })).status).toBe(200);
@@ -81,20 +84,22 @@ describe("reason E: your own actions in another tab", () => {
   });
 });
 
-describe("Block goes through the gate; reason C wording", () => {
-  it("tester: Block stops once after the developer paid; the second press blocks", async () => {
+describe("Block has one stop: already blocked in another tab (owner, Oct 27)", () => {
+  it("Block goes through without the page gate; a second press (another tab) fails with a blue notice", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
+    await later(); // the database clock can run a few ms ahead of this process: let the last write settle first
     const pageLoaded = seen();
     await later();
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
-    const b = await blocksPOST(req("/api/blocks", { cookie: tester.cookie, body: { userId: dev.user.id, sessionId, seenAt: pageLoaded } })).then(json);
-    expect(texts(b)).toEqual(["Nora Lane paid $10.00 for your written answers"]);
-    expect(await db.block.count({ where: { blockerId: tester.user.id } })).toBe(0);
-    expect((await blocksPOST(req("/api/blocks", { cookie: tester.cookie, body: { userId: dev.user.id, sessionId, seenAt: pageLoaded, confirmed: true } })).then(json)).status).toBe(200);
+    // A change since the page loaded does NOT stop Block (no other stop-once reasons).
+    expect((await blocksPOST(req("/api/blocks", { cookie: tester.cookie, body: { userId: dev.user.id, seenAt: pageLoaded } })).then(json)).status).toBe(200);
     expect(await db.block.count({ where: { blockerId: tester.user.id } })).toBe(1);
+    const again = await blocksPOST(req("/api/blocks", { cookie: tester.cookie, body: { userId: dev.user.id } })).then(json);
+    expect(again.status).toBe(409);
+    expect(again.body.error.message).toBe("You already blocked Nora Lane.");
   });
 
   it("the developer accepting the tester's request stops the tester once; a taken request never names the other tester", async () => {
@@ -102,6 +107,7 @@ describe("Block goes through the gate; reason C wording", () => {
     const a = await joined(testId);
     const b = await joined(testId, "Ben Carter", "he");
     expect((await sact(a.sessionId, "request-time", a.tester.cookie, { startsAt: atHours(30), seenAt: seen(), confirmed: true })).status).toBe(200);
+    await later(); // the database clock can run a few ms ahead of this process: let the last write settle first
     const pageLoaded = seen();
     await later();
     const mine = await db.callRequest.findFirstOrThrow({ where: { contractId: a.sessionId, fromSide: "tester" } });
@@ -131,6 +137,7 @@ describe("the live top notice and the seen marker", () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
+    await later(); // the database clock can run a few ms ahead of this process: let the last write settle first
     const pageLoaded = seen();
     await later();
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
@@ -154,6 +161,7 @@ describe("(F) listing info", () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const outsider = await makeUser({ tester: true, name: "Cara Diaz" });
+    await later(); // the database clock can run a few ms ahead of this process: let the last write settle first
     const pageLoaded = seen();
     await later();
     const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
@@ -187,6 +195,7 @@ describe("Pay after a tester left (owner bug report)", () => {
     const { tester, sessionId } = await joined(testId, "Dev Tester");
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    await later(); // the database clock can run a few ms ahead of this process: let the last write settle first
     const pageLoaded = seen();
     await later();
     expect((await sact(sessionId, "leave", tester.cookie, {})).status).toBe(200);
@@ -206,6 +215,7 @@ describe("Reject: a missing reason is red before the stop-once", () => {
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    await later(); // the database clock can run a few ms ahead of this process: let the last write settle first
     const pageLoaded = seen();
     await later();
     await joined(testId, "Ben Carter", "he"); // a stop-once reason
@@ -267,6 +277,7 @@ describe("payments and disputes, only for this test", () => {
     const B = r.body.id as string;
     const ben = await joined(B, "Ben Carter", "he");
     await sact(ana.sessionId, "written", ana.tester.cookie, { answers: ["a", "b"] });
+    await later(); // the database clock can run a few ms ahead of this process: let the last write settle first
     const pageLoaded = seen();
     await later();
     // A success on A: nothing on B.
@@ -300,6 +311,7 @@ describe("payments and disputes, only for this test", () => {
       webhooks: { constructEvent: (raw: string) => JSON.parse(raw) },
     } as unknown as Stripe);
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: ana.sessionId } });
+    await later(); // the database clock can run a few ms ahead of this process: let the last write settle first
     const pageLoaded = seen();
     await later();
     const notesBefore = await db.notification.count({ where: { userId: ana.tester.user.id } });
@@ -337,6 +349,7 @@ describe("payments and disputes, only for this test", () => {
     const other = await setup({ title: "Elsewhere" });
     const onC = await act(other.testId, "join", ana.tester.cookie, { listingVersion: 1 });
     await sact(ana.sessionId, "written", ana.tester.cookie, { answers: ["a", "b"] });
+    await later(); // the database clock can run a few ms ahead of this process: let the last write settle first
     const pageLoaded = seen();
     await later();
     const subA = await db.submission.findFirstOrThrow({ where: { contractId: ana.sessionId } });
@@ -354,6 +367,7 @@ describe("payments and disputes, only for this test", () => {
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400, reason: "Short answers" });
     await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question", seenAt: seen(), confirmed: true });
+    await later(); // the database clock can run a few ms ahead of this process: let the last write settle first
     const pageLoaded = seen();
     await later();
     const p = await fail(sessionId, dev.user.id, tester.user.id, sub.id, { failure: "card_declined" });

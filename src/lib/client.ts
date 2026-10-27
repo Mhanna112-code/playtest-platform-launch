@@ -13,6 +13,12 @@ export const isFieldError = (e: unknown) => e instanceof ApiError && (e.status =
 /** The text to show for an error: form mistakes carry the FIELD mark so they render red; refusals render blue. */
 export const errOf = (e: unknown) => (isFieldError(e) ? FIELD : "") + (e as Error).message;
 
+/** The account this page belongs to (set by the signed-in layout): every press names it, so a press racing a switch of accounts is refused. */
+let PAGE_USER = "";
+export const setPageUser = (id: string) => {
+  PAGE_USER = id;
+};
+
 /** This page load's id: the server never stops a press for what this same tab did ("another tab" only). */
 export const TAB = typeof window === "undefined" ? "" : Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
 
@@ -24,7 +30,7 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
   try {
     res = await fetch(path, {
       method: method ?? (body === undefined ? "GET" : "POST"),
-      headers: body === undefined ? { "x-tab": TAB } : { "content-type": "application/json", "x-tab": TAB },
+      headers: { ...(body === undefined ? {} : { "content-type": "application/json" }), "x-tab": TAB, ...(PAGE_USER ? { "x-uid": PAGE_USER } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -32,6 +38,15 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
   }
   const data = await res.json().catch(() => null);
   if (!res.ok) {
+    // A press from a page that belongs to the previous account was refused: the tab switches to the new account (on the page the new sign-in landed on).
+    if (data?.error?.code === "account_changed" && typeof window !== "undefined") {
+      try {
+        const n = JSON.parse(window.localStorage.getItem("pt-auth") ?? "null") as { event?: string; at?: number; to?: string } | null;
+        window.location.href = n && n.event === "in" && n.to && n.to.startsWith("/") && Date.now() - (n.at ?? 0) < 10 * 60_000 ? n.to : "/app";
+      } catch {
+        window.location.href = "/app";
+      }
+    }
     if (res.status === 401 && typeof window !== "undefined") window.location.href = data?.error?.code === "deleted" ? "/login?gone=1" : "/login";
     // (Design doc 2) A press refused because the account is suspended: on to the dashboard top (or the profile, if that is where it was
     // pressed), where a red box names the press that didn't go through.

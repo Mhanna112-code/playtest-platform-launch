@@ -30,20 +30,24 @@ describe("notification schedule", () => {
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Work sent: your written answers for “Harbor Run”" } })).toBe(1);
   });
 
-  it("the developer is told ONCE, 1 day before Charge would open, then daily after it opens (14 days AND Open until)", async () => {
+  it("the developer is told 1 month / 1 week / 3 days / 1 day before Charge would open (skipping any already past), then daily after it opens", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     const n = (t: string) => db.notification.count({ where: { userId: dev.user.id, text: { contains: t } } });
-    // The old 1-week and 3-day reminders are gone: 5 days before, nothing.
+    // Charge opens at the later of 14 days after sending and Open until. Here Open until is 5 days off: the 1 month mark is already past, so only 1 week comes first.
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 5 * DAY) } });
-    await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() + 5 * DAY) } });
+    await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000), updatedAt: new Date(Date.now() - 14 * DAY) } });
     await cron();
-    expect(await n("review Ana Silva's written answers")).toBe(0);
-    // 12 hours before it would open: ONE reminder (never twice).
+    await cron();
+    expect(await n("review Ana Silva's written answers within 1 week")).toBe(1);
+    expect(await n("within 1 month")).toBe(0);
+    // 2 days before: the 3 days mark; then 12 hours before: tomorrow.
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } });
+    await cron();
+    expect(await n("review Ana Silva's written answers within 3 days")).toBe(1);
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 12 * 3_600_000) } });
-    await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000) } });
     await cron();
     await cron();
     expect(await n("review Ana Silva's written answers by tomorrow")).toBe(1);
@@ -106,30 +110,58 @@ describe("notification schedule", () => {
     expect(await n()).toBe(2); // declined: no more reminders
   });
 
-  it("admin digest every 3 days; each no-show appears in a digest once", async () => {
+  const mkAdmin = async () => {
+    const x = await makeUser({ email: `admin-${Math.random().toString(36).slice(2)}@playtest.test` });
+    await db.user.update({ where: { id: x.user.id }, data: { isAdmin: true, emailPref: "off" } }); // the admin daily email can't be turned off
+    return x;
+  };
+  const adminMails = (to: string) => db.outboxEmail.findMany({ where: { to, subject: { startsWith: "Playtest admin:" } }, orderBy: { createdAt: "asc" } });
+
+  it("ONE daily email per admin that can't be turned off: a call report appears once", async () => {
+    const adm = await mkAdmin();
     const { testId, dev } = await setup();
     const { tester, sessionId } = await joined(testId);
     await bookCall(testId, dev.cookie, sessionId, tester.cookie, 48);
     const call = await db.call.findFirstOrThrow({ where: { contractId: sessionId } });
     await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 60_000), noShowBy: "tester", noShowNote: "Nobody came", noShowAt: new Date() } });
-    await db.appState.deleteMany({ where: { key: "adminDigestAt" } });
-    const digests = () => db.outboxEmail.count({ where: { to: "owner@playtest.test", subject: { startsWith: "Playtest admin digest" } } });
-    const before = await digests();
     await cron();
-    expect(await digests()).toBe(before + 1);
+    const first = await adminMails(adm.user.email);
+    expect(first.length).toBeGreaterThanOrEqual(1);
+    expect(first[0].text).toContain("Call report on “Harbor Run” by the tester: “Nobody came”");
     expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).noShowDigestedAt).not.toBeNull();
-    await cron(); // within 3 days: no digest
-    expect(await digests()).toBe(before + 1);
+    await cron(); // the report was sent once (other open cases may be listed again, this one is not)
+    expect((await adminMails(adm.user.email)).filter((m) => m.text.includes("Nobody came"))).toHaveLength(1);
   });
 
-  it("failed payments and holds go in the 3-day digest, not in the daily new-cases email", async () => {
-    const { dev, testId } = await setup();
-    const { tester, sessionId } = await joined(testId);
-    await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 4321, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + 2 * DAY), retriedAt: new Date() } });
-    await db.appState.deleteMany({ where: { key: "adminDigestAt" } });
+  it("it lists THIS admin's suspended accounts with their paused tests and the tests this admin paused, with closing dates; failed payments are not in it; they drop off once closed", async () => {
+    const adm = await mkAdmin();
+    const other = await mkAdmin();
+    const a = await setup();
+    const b = await setup();
+    const { suspendAccount, pauseTest } = await import("@/lib/server/restrictions");
+    const { closePausedTest } = await import("@/lib/server/pauseClosure");
+    await suspendAccount(adm.user.id, a.dev.user.id, "Testing");
+    await pauseTest(adm.user.id, b.testId, "Looking");
+    const j = await joined(b.testId).catch(() => null);
+    void j;
+    await db.payment.create({ data: { kind: "review", developerId: b.dev.user.id, testerId: a.dev.user.id, amountCents: 4321, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + DAY) } });
     await cron();
-    const digest = await db.outboxEmail.findFirstOrThrow({ where: { to: "owner@playtest.test", subject: { startsWith: "Playtest admin digest" } }, orderBy: { createdAt: "desc" } });
-    expect(digest.text).toContain("Failed charge still owed: $43.21");
-    expect(digest.text).not.toContain("Dispute:");
+    const mails = await adminMails(adm.user.email);
+    expect(mails.length).toBeGreaterThanOrEqual(1);
+    const text = mails[0].text;
+    expect(text).toContain(`You suspended Nora Lane (${a.dev.user.email})`);
+    expect(text).toMatch(/paused test “Harbor Run”: Closes on [A-Z][a-z]{2} \d{1,2} unless your account is cleared/);
+    expect(text).toContain(`/app/find/${a.testId}`);
+    expect(text).toMatch(/You paused “Harbor Run” on .+: Closes on .+ unless the team lifts the pause/);
+    expect(text).toContain(`/app/find/${b.testId}`);
+    expect(text).not.toContain("43.21"); // failed payments need no action from the team: not in the email
+    // The other admin did neither: nothing about these.
+    expect((await adminMails(other.user.email)).some((m) => m.text.includes(a.dev.user.email) || m.text.includes(`/app/find/${b.testId}`))).toBe(false);
+    // Once the tests close, they drop off (and with nothing else, no email goes).
+    await closePausedTest(a.testId, "admin", new Date(), adm.user.id);
+    await closePausedTest(b.testId, "admin", new Date(), adm.user.id);
+    await db.appState.deleteMany({ where: { key: `adminDaily:${adm.user.id}` } });
+    await cron();
+    expect((await adminMails(adm.user.email)).filter((m) => m.text.includes(a.dev.user.email) || m.text.includes(`/app/find/${b.testId}`))).toHaveLength(1); // only the first one
   });
 });

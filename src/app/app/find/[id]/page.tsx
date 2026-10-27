@@ -8,11 +8,12 @@ import { termsLine, testerShare } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { asListing, needsLines } from "@/lib/server/tests";
 import { JoinBox } from "./JoinBox";
+import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
+import { isAdmin } from "@/lib/server/session";
 import { LiveTop } from "@/components/LiveTop";
 import { qOptional, qText } from "@/lib/questions";
 import { ratingSummary } from "@/lib/server/ratings";
 import { NoThanksButton } from "./NoThanksButton";
-import { BlockButton } from "@/components/BlockButton";
 import { gapsOf } from "@/lib/gaps";
 import { developerStats } from "@/lib/server/profileStats";
 import { sideLink } from "@/lib/sides";
@@ -63,6 +64,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <p><a href="/app/find">← All tests</a></p>
+      {isAdmin(u) && <AdminTestBoxes testId={t.id} adminId={u.id} />}
       {t.developerId !== u.id && <LiveTop scope={`listing:${t.id}`} seenAt={seenAt} seeIt="#listing" />}
       <section className="card space-y-4" id="listing">
         <div className="flex items-start gap-4">
@@ -218,12 +220,6 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             dueIfNow={dueIfNow}
             application={await db.application.findUnique({ where: { testId_testerId: { testId: t.id, testerId: u.id } } }).then((a) => (a ? { status: a.status, changed: !!a.changedAt, kind: a.kind } : null))}
           />
-        </div>
-      )}
-      {/* Block the developer, as in the full app: a small link at the bottom of the page. */}
-      {u.isTester && t.developerId !== u.id && !blocked && (
-        <div className="text-right text-xs text-slate-500">
-          <BlockButton plain userId={t.developerId} name={dev} effect="You won't see their tests or profile any more, and they can't invite you." />
         </div>
       )}
     </div>

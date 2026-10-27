@@ -3,6 +3,7 @@ import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { decideDispute } from "@/lib/server/payments";
 import { isAdmin, requireUser } from "@/lib/server/session";
 import { sendWaitingTransfer } from "@/lib/server/stripe";
+import { approveHoldLift } from "@/lib/server/holds";
 import { approveChargebackHold } from "@/lib/server/chargeback";
 import { closePausedTest, extendPauseClosure } from "@/lib/server/pauseClosure";
 import { adminStopTest, deleteAccount, pauseTest, previewSuspension, reinstateAccount, releaseHeldShares, suspendAccount, unpauseTest } from "@/lib/server/restrictions";
@@ -53,6 +54,8 @@ export async function POST(req: Request, { params }: Ctx) {
         await db.test.update({ where: { id }, data: { criticalChanges: 0 } });
         return ok({ ok: true });
       // (Owner, Oct 26) A chargeback hold needs the admin's approval (id = the developer) once the card is verified and what is owed is paid.
+      case "approve-hold":
+        return ok(await approveHoldLift(u.id, id, typeof body.note === "string" ? body.note.trim().slice(0, 500) : ""));
       case "approve-chargeback":
         return ok(await approveChargebackHold(id));
       // A paused test closes after 7 days: the admin can move its date later (days, default 7) or close it now (id = the test).

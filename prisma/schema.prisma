@@ -48,6 +48,11 @@ model User {
   /// Payment hold: set while the developer owes money (a failed charge unpaid after 3 days, or a chargeback)
   holdStartedAt DateTime?
   holdReason    String    @default("")
+  /// (Owner, Oct 27) How many payment holds this account has had (each start counts). After the 3rd, every later hold needs an admin's Approve to lift
+  /// (holdApprovedAt), even once what is owed is paid. Cleared when a hold lifts.
+  holdCount      Int       @default(0)
+  holdApprovedAt DateTime?
+  holdApprovedById String?
   /// No longer used (the 30-day admin alert was replaced by closing paused tests after 7 days); kept so the running app's client still matches
   holdAlertedAt DateTime?
   /// (Owner, Oct 26) A chargeback hold lifts only after: a card re-verified with 3D Secure (chargebackCardVerifiedAt), what is owed paid,
@@ -545,6 +550,8 @@ model Notification {
   groupKey  String?
   /// (Owner, Oct 26) Payment-related (failures, holds, retries, paid, rejected, delayed, payouts, chargebacks): also emailed in the end-of-day email
   payment   Boolean   @default(false)
+  /// (Owner, Oct 27) One of the few emails that ignore Off (account paused / active again, the team paused / stopped / closed your test, the owed reminder): it goes in the end-of-day email, never right away
+  mustEmail Boolean   @default(false)
   readAt    DateTime?
   /// Included in a daily summary email (users on "One daily summary")
   summarizedAt DateTime?
@@ -740,4 +747,29 @@ model AccessKey {
 
   @@unique([testId, value])
   @@index([testId, status])
+}
+
+/// (Owner, Oct 27) "Report <name>" on a profile: one report per pair, ever. The admin sees it in the reports list.
+model Report {
+  id         String   @id @default(cuid())
+  reporterId String
+  reportedId String
+  note       String   @default("")
+  createdAt  DateTime @default(now())
+
+  @@unique([reporterId, reportedId])
+  @@index([reportedId])
+}
+
+/// (Owner, Oct 27) The admin's account history: payment holds starting / lifting / approved, suspensions and reinstatements, with the admin who acted.
+model AccountEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  /// "hold" | "hold-lifted" | "hold-approved" | "suspended" | "reinstated"
+  kind      String
+  byId      String?
+  note      String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

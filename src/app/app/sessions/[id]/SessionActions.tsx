@@ -76,7 +76,7 @@ export function LeaveButton({ sessionId, seenAt, title }: { sessionId: string; s
       });
   return (
     <div className="space-y-2">
-      <ConfirmButton className="btn-secondary px-3 py-1.5 text-sm text-rose-200" title={`Are you sure you want to leave “${title}”?`} confirmLabel="Leave this test" onConfirm={leave}
+      <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" title={`Are you sure you want to leave “${title}”?`} confirmLabel="Leave this test" onConfirm={leave}
         body={(
           <ul className="list-disc space-y-1 pl-5">
             <li>What you already sent is still reviewed and paid as usual.</li>
@@ -86,14 +86,14 @@ export function LeaveButton({ sessionId, seenAt, title }: { sessionId: string; s
         )}>
         Leave this test
       </ConfirmButton>
-      <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
-      <Err text={err} />
+      <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} didntGo />
+      <Err text={err ? `Your press didn't go through. ${err}` : ""} />
     </div>
   );
 }
 
 /** Dispute once: only for a part in the contract paid below the listing amount. */
-export function DisputeForm({ sessionId, kind, id, seenAt }: { sessionId: string; kind: "submission" | "call"; id: string; seenAt?: string }) {
+export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "" }: { disabledNote?: string; sessionId: string; kind: "submission" | "call"; id: string; seenAt?: string }) {
   const [box, setBox] = useStopBox();
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
@@ -112,7 +112,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt }: { sessionId: string
       <p className="note">You can dispute this once. Our team decides; a decision can only raise the pay, up to the listing amount.</p>
       <button
         className="btn"
-        disabled={busy}
+        disabled={busy || !!disabledNote}
         onClick={async (e) => {
           if (!checkFields(e.currentTarget.closest("details"))) return;
           setBusy(true);
@@ -133,6 +133,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt }: { sessionId: string
       >
         Send the dispute
       </button>
+      {disabledNote && <p className="note" data-owed-note="">{disabledNote}</p>}
       {keep.restored && <NotSentTag />}
       <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       <Err text={err} />

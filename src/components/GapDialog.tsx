@@ -134,7 +134,7 @@ export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs
       {stop && (
         <div role="alert" className="mb-3 space-y-1.5 rounded-lg border border-sky-300/40 bg-sky-300/[0.08] p-2.5 text-sm text-sky-100">
           {stop.lines.length > 0 && <ul className="list-disc space-y-0.5 pl-6">{stop.lines.map((c) => <li key={c}>{c}</li>)}</ul>}
-          <p><strong className="font-semibold text-sky-50">Your “{stop.button}” didn&apos;t go through.</strong> Check what this test needs now, then press again.</p>
+          <p><strong className="font-semibold text-sky-50">Your press didn&apos;t go through.</strong> Check what this test needs now, then press again.</p>
         </div>
       )}
       <h2 id={`${id}-title`} className="flex items-center gap-2 font-semibold text-white"><Languages className="h-5 w-5 text-amber-300" /> {title}</h2>

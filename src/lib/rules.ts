@@ -13,8 +13,16 @@ export const MIN_CHARGE_CENTS = 50;
 
 export const PRICE_LIMITS = {
   partMin: 100, // $1.00 for written answers or a recording (or free)
+  partMax: 100_000, // (Owner, Oct 27) $1,000 for written answers or a recording
   rateMin: 1000, // $10.00 an hour for a live call (or free)
+  rateMax: 20_000, // (Owner, Oct 27) $200 an hour for a live call
 };
+/** A part price over this needs the tick "I confirm this part pays more than $200." (when it is created over it, or raised from at most it to over it). */
+export const HIGH_PART_CENTS = 20_000;
+export const HIGH_PART_TICK = "I confirm this part pays more than $200.";
+/** Any Pay box amount over this shows the tick "I understand this payment can't be refunded and is charged now." every time (refused until ticked). */
+export const PAY_TICK_CENTS = 20_000;
+export const PAY_TICK_LINE = "I understand this payment can't be refunded and is charged now.";
 
 /** Split a charge: the platform fee (20%) and what the tester gets (the rest). */
 export function splitFee(amountCents: number) {
@@ -172,6 +180,10 @@ export type ListingCtx = {
   openedAt?: Date;
   /** Edit: the wording says Extend rather than Set. */
   edit?: boolean;
+  /** (Owner, Oct 27) The parts whose "I confirm this part pays more than $200." tick was ticked ("written" | "recording"). */
+  confirmedHigh?: readonly string[];
+  /** Edit: the prices now saved (a saved price over $200 that is unchanged needs no tick). */
+  saved?: { writtenCents: number | null; recordingCents: number | null };
 };
 
 /** Check a listing's values. Returns every problem, each in a plain sentence. */
@@ -204,16 +216,18 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
   else if (l.spots < testersIn) errs.push(`Spots can't go below the ${testersIn} tester${testersIn === 1 ? "" : "s"} already in.`);
   if (!Number.isInteger(l.deadlineDays) || l.deadlineDays < LIMITS.deadlineDays.min || l.deadlineDays > LIMITS.deadlineDays.max) errs.push("Testers' deadline must be from 1 to 90 days after they join.");
   if (l.writtenCents == null && l.recordingCents == null && l.liveRateCents == null) errs.push("Choose at least one kind of feedback.");
-  const part = (c: number | null, name: string) => {
+  const part = (c: number | null, name: string, field: "writtenCents" | "recordingCents", key: "written" | "recording") => {
     if (c == null || c === 0) return;
     if (c < PRICE_LIMITS.partMin) errs.push(`The ${name} price must be at least ${money(PRICE_LIMITS.partMin)} (or free).`);
-    if (c > STRIPE_MAX_CENTS) errs.push(`The ${name} price: ${STRIPE_MAX_LINE}`);
+    else if (c > PRICE_LIMITS.partMax) {
+      if (isNew(field)) errs.push(`The ${name} price can be at most ${money(PRICE_LIMITS.partMax)}.`);
+    } else if (c > HIGH_PART_CENTS && isNew(field) && ctx.saved?.[field] !== c && !ctx.confirmedHigh?.includes(key)) errs.push(`Tick “${HIGH_PART_TICK}” for the ${name} price.`);
   };
-  part(l.writtenCents, "written answers");
-  part(l.recordingCents, "recording");
+  part(l.writtenCents, "written answers", "writtenCents", "written");
+  part(l.recordingCents, "recording", "recordingCents", "recording");
   if (l.liveRateCents != null) {
     if (l.liveRateCents !== 0 && l.liveRateCents < PRICE_LIMITS.rateMin) errs.push(`The live call rate must be at least ${money(PRICE_LIMITS.rateMin)} an hour (or free).`);
-    if (l.liveRateCents > STRIPE_MAX_CENTS) errs.push(`The live call rate: ${STRIPE_MAX_LINE}`);
+    else if (l.liveRateCents > PRICE_LIMITS.rateMax && isNew("liveRateCents")) errs.push(`The live call rate can be at most ${money(PRICE_LIMITS.rateMax)} an hour.`);
   }
   if (l.writtenCents != null && l.questions.filter((q) => q.trim()).length === 0) errs.push("Add at least one question for the written answers.");
   if (l.questions.length > LIMITS.questions.max) errs.push(`At most ${LIMITS.questions.max} questions.`);
@@ -416,6 +430,9 @@ export function joinCheck(t: JoinState, seenListingVersion: number, confirmed: b
 // ---------- Payment hold, auto-pay, Open until, invites (owner, Oct 22, newest) ----------
 
 export const REVIEW_DAYS = 14; // unpaid sent work is paid automatically after this
+export const HOLD_APPROVAL_AFTER = 3;
+/** The label that replaces an exact hold count outside the profile totals (admin only). */
+export const MANY_HOLDS_LABEL = "More than 3 holds"; // (Owner, Oct 27) after a developer's 3rd payment hold, every later hold needs an admin's Approve to lift
 export const OWED_DAYS = 3; // a failed charge unpaid this long starts a payment hold
 const DAY = 86_400_000;
 
@@ -436,6 +453,8 @@ export const PAUSED_RIGHT_NOW = "This test is paused right now.";
 /** Is a developer's test paused for its testers (a payment hold, the developer's suspension, or an admin pause)? */
 export const testPaused = (dev: { holdStartedAt?: Date | null; suspendedAt?: Date | null }, test?: { adminPausedAt?: Date | null } | null) => !!(dev.holdStartedAt || dev.suspendedAt || test?.adminPausedAt);
 export const PAY_WAITS = "Pay what you owe first.";
+/** (Owner, Oct 27) What a tester reads while the developer owes a declined payment: Dispute and Charge wait (never "failed"). */
+export const OWED_FOR_TESTERS = "Payment from this developer is delayed right now. You can try again once it's sorted.";
 
 /** Open until can be moved only before it passes; once passed, it can't be extended. */
 export function checkOpenUntilChange(current: Date | null, next: Date | null, now: Date, fmt: (d: Date) => string): Check {
@@ -790,11 +809,16 @@ export function canAskToRejoin(c: { status: string; endKind: string; endedAt: Da
 
 // ---------- Extra pay from the Testers panel (owner, Oct 26) ----------
 
-/** Over this amount the developer must tick that the payment can't be refunded and is charged now. */
-export const EXTRA_PAY_TICK_CENTS = 20_000;
+/** Over this amount the developer must tick that the payment can't be refunded and is charged now (the same tick as any Pay box). */
+export const EXTRA_PAY_TICK_CENTS = PAY_TICK_CENTS;
 /** The most one extra payment can be. For now only Stripe's own limit; the owner is deciding a cap, so it lives here and nowhere else. */
 export const EXTRA_PAY_MAX_CENTS = STRIPE_MAX_CENTS;
-export const EXTRA_PAY_TICK_LINE = "I understand this payment can't be refunded and is charged now.";
+export const EXTRA_PAY_TICK_LINE = PAY_TICK_LINE;
+/**
+ * (Owner, Oct 27) Everything a developer pays a tester ABOVE the listing prices (a Pay above the listing, plus extra pays) may total at most this percent of that
+ * tester's current contract total (the current part prices plus the agreed totals of their booked and held calls): at 100 they can never get more than double.
+ */
+export const EXTRA_PAY_CAP_PERCENT = 100;
 export function checkExtraPay(amountCents: number | null, understood: boolean): Check {
   if (amountCents == null || !Number.isInteger(amountCents) || amountCents <= 0) return no("Enter an amount like 7.50.");
   if (amountCents > EXTRA_PAY_MAX_CENTS) return amountCents > STRIPE_MAX_CENTS ? no(STRIPE_MAX_LINE) : no(`The most you can pay at once is ${money(EXTRA_PAY_MAX_CENTS)}.`);

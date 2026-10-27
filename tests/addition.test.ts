@@ -30,12 +30,12 @@ describe("newest addition", () => {
     expect((await paidLines([sessionId])).get(sessionId)).toBe("Paid so far: written answers $10.00 · recording $0.00 · live calls $0.00 (0 min)");
   });
 
-  it("every payment that goes through sends the developer a receipt (bell + email), whatever their email setting", async () => {
+  it("every payment that goes through sends the developer a receipt line (bell; the email follows the setting: Off means no email)", async () => {
     const { dev, sub } = await sent();
     await db.user.update({ where: { id: dev.user.id }, data: { emailPref: "off" } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     const line = "Receipt: you paid $10.00 for Ana Silva's written answers";
-    expect(await db.outboxEmail.count({ where: { to: dev.user.email, subject: line } })).toBe(1);
+    expect(await db.outboxEmail.count({ where: { to: dev.user.email, text: { contains: line } } })).toBe(0);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: line } })).toBe(1);
   });
 

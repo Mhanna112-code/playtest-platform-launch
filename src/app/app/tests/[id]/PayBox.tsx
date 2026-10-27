@@ -4,17 +4,20 @@ import { checkFields } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
 import { money, toCents } from "@/lib/format";
 import { usePress } from "@/lib/usePress";
+import { PAY_TICK_CENTS, PAY_TICK_LINE, PAY_WAITS } from "@/lib/rules";
 import { NotSentTag, useKept } from "@/lib/useKept";
 
 /**
  * The one Pay box (with Reject next to it) for a piece of sent work or a held call. Beside it: the listing amount (or
  * "Not in the listing") and what this tester has been paid so far on the test. Its stop-once box sits directly under it.
  */
-export function PayBox(p: { kind: "submission" | "call"; id: string; name: string; listingCents: number | null; listingText: string; paidSoFarCents: number; seenAt: string; partPaidCents?: number; note?: string }) {
+export function PayBox(p: { kind: "submission" | "call"; id: string; name: string; listingCents: number | null; listingText: string; paidSoFarCents: number; seenAt: string; partPaidCents?: number; note?: string; owes?: boolean }) {
   const start = p.listingCents; // always the listing (or the call's agreed rate × length); the developer may pay more
   const [amount, setAmount] = useState(start == null ? "" : (start / 100).toFixed(2));
   const [reason, setReason] = useState("");
   const [ticked, setTicked] = useState(false);
+  // (Owner, Oct 27) Over $200 the tick "I understand this payment can't be refunded and is charged now." shows every time; Pay is refused until it is ticked.
+  const [understood, setUnderstood] = useState(false);
   const [paidSoFar, setPaidSoFar] = useState(p.paidSoFarCents);
   const { press, changes, error, busy, at } = usePress(p.seenAt, (d) => typeof d.paidSoFarCents === "number" && setPaidSoFar(d.paidSoFarCents));
   const [done, setDone] = useState("");
@@ -26,7 +29,7 @@ export function PayBox(p: { kind: "submission" | "call"; id: string; name: strin
 
   async function go(action: "pay" | "reject") {
     const r = await press<{ status?: string; amountCents: number; rejected: boolean; paidSoFarCents?: number; later?: string }>("/api/review", {
-      action, kind: p.kind, id: p.id, payKey, amount, reason, tickedCents: ticked ? cents : null,
+      action, kind: p.kind, id: p.id, payKey, amount, reason, tickedCents: ticked ? cents : null, understood: understood && cents != null && cents > PAY_TICK_CENTS,
     }, action);
     if (!r) return;
     await keep.clear();
@@ -50,7 +53,13 @@ export function PayBox(p: { kind: "submission" | "call"; id: string; name: strin
         <label className="mb-2 flex items-center gap-2 text-sm text-ink-200">
           <input type="checkbox" checked={ticked} disabled={cents == null} onChange={(e) => setTicked(e.target.checked)} /> charged now: {cents == null ? "–" : money(cents)}
         </label>
-        <button className="btn" disabled={busy || !ticked || cents == null} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go("pay")}>Pay</button>
+        {cents != null && cents > PAY_TICK_CENTS && (
+          <label className="mb-2 flex max-w-xs items-start gap-2 text-sm text-ink-200" data-pay-tick="">
+            <input type="checkbox" className="mt-1" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} /> {PAY_TICK_LINE}
+          </label>
+        )}
+        <button className="btn" disabled={busy || !ticked || cents == null || !!p.owes || (cents != null && cents > PAY_TICK_CENTS && !understood)} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go("pay")}>Pay</button>
+        {p.owes && <span className="text-xs text-amber-200" data-owes-note="">{PAY_WAITS} <a href="#owed">Pay what you owe ↑</a></span>}
         <span className="text-xs text-slate-500">at least $0.50 (or 0)</span>
       </div>
       {at === "pay" && <ChangesBox changes={changes} error={error} />}

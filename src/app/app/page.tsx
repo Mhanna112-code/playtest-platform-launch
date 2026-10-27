@@ -23,6 +23,7 @@ import { pronouns } from "@/lib/format";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
+import { HOLD_APPROVAL_AFTER } from "@/lib/rules";
 
 export const metadata = { title: "Home · Playtest" };
 export const dynamic = "force-dynamic";
@@ -61,7 +62,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
         </>
       ) : (
         <section className="info" role="status" data-hold-box="">
-          <b>Your tests are paused until you pay what you owe.</b> Testers can still send work; no new testers, invites or calls. <Link href="/app/payments">Pay what you owe in Payments</Link>.
+          <b>Your tests are paused until you pay what you owe.</b> Testers can still send work; no new testers, invites or calls. {u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER && <span data-hold-review="">After you pay, the team will review your account before your tests resume. </span>}<Link href="/app/payments">Pay what you owe in Payments</Link>.
         </section>
       ))}
       {!u.suspendedAt && u.reinstatedAt && now.getTime() - u.reinstatedAt.getTime() < 3 * DAY && (

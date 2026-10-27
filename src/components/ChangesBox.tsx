@@ -14,7 +14,7 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: 
  * The stop-once box (and any refusal): a blue notice placed directly under the button that was pressed, scrolled into
  * view. Lists exactly what changed since the page loaded, then "Press again to go ahead."
  */
-export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link }: { changes: Change[] | null; error?: string; tail?: string; link?: string }) {
+export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link, didntGo = false }: { changes: Change[] | null; error?: string; tail?: string; link?: string; didntGo?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (changes) markShownInBox(changes); // seen: the top box lists them quietly, without its scroll
@@ -24,6 +24,8 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
   if (!changes && error && error.startsWith("\u0001")) return <p ref={ref as unknown as React.RefObject<HTMLParagraphElement>} className="err-field basis-full">{error.slice(1)}</p>;
   return (
     <div ref={ref} className="info basis-full" role="status" aria-live="polite">
+      {/* (Owner, Oct 27) A confirm dialog closes when its press fails; this notice sits under the button that opened it and says so. */}
+      {didntGo && <p className="font-medium" data-didnt-go="">Your press didn&apos;t go through.</p>}
       {changes && (
         <>
           <p className="font-medium">Since you opened this page:</p>

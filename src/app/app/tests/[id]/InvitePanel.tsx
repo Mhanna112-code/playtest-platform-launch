@@ -61,6 +61,11 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
       setConfirm(error.slice(8).split("\n"));
       if (typeof errData.now === "string") setGapAt(errData.now);
       setError("");
+    } else if (at === "anyway" && error && !changes) {
+      // (Owner, Oct 27) Any other failure of Invite anyway closes the box and shows the blue notice under the original Invite button.
+      setConfirm(null);
+      setMsg(`Your press didn't go through. ${error}`);
+      setError("");
     } else if (error.startsWith("Everyone you ticked now meets")) {
       // Nothing sent: the box closes; the notice goes under the original Invite button.
       setConfirm(null);
@@ -183,7 +188,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
             <button className="btn-ghost" onClick={() => setConfirm(null)}>Cancel</button>
           </div>
           {/* A stop for Invite anyway (what's missing changed, or any Invite reason) shows inside the box. */}
-          {at === "anyway" && <ChangesBox changes={changes} error={error} />}
+          {at === "anyway" && <ChangesBox changes={changes} error={error} didntGo />}
         </div>
       )}
       </div>

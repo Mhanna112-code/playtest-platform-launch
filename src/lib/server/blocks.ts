@@ -26,6 +26,8 @@ export async function blockUser(me: { id: string; email: string; name: string },
   if (!otherId || otherId === me.id) throw new HttpError(400, "bad_user", "Choose someone to block.");
   const other = await db.user.findUnique({ where: { id: otherId } });
   if (!other) throw new HttpError(404, "not_found", "That person doesn't exist.");
+  // (Owner, Oct 27) The only stop: already blocked (in another tab).
+  if (await iBlocked(me.id, otherId)) throw new HttpError(409, "already", `You already blocked ${displayName(other)}.`);
   await db.block.upsert({ where: { blockerId_blockedId: { blockerId: me.id, blockedId: otherId } }, update: {}, create: { blockerId: me.id, blockedId: otherId } });
   const now = new Date();
   const contracts = await db.contract.findMany({

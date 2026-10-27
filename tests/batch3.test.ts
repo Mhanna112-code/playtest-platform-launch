@@ -54,7 +54,7 @@ describe("latest batch rules", () => {
 });
 
 describe("email settings and the bell", () => {
-  it("'Don't email me' still fills the bell; receipts always send; 'One daily summary' gets one email from the daily job", async () => {
+  it("'Don't email me' still fills the bell; a payment line follows the setting; 'One daily summary' gets one email from the daily job", async () => {
     const { dev, testId } = await setup();
     await db.user.update({ where: { id: dev.user.id }, data: { emailPref: "none" } });
     const { tester, sessionId } = await joined(testId);
@@ -65,7 +65,10 @@ describe("email settings and the bell", () => {
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await db.user.update({ where: { id: tester.user.id }, data: { emailPref: "none" } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
-    expect(await db.outboxEmail.count({ where: { to: tester.user.email, subject: { contains: "You were paid" } } })).toBe(1); // receipt
+    // (Owner, Oct 27) The tester's "You were paid…" follows the setting like any payment line: On = the end-of-day payment email, Off = nothing.
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "You were paid" }, payment: true } })).toBe(1);
+    await cron();
+    expect(await db.outboxEmail.count({ where: { to: tester.user.email, text: { contains: "You were paid" } } })).toBe(0);
     await db.user.update({ where: { id: dev.user.id }, data: { emailPref: "daily" } });
     await cron();
     const summary = await db.outboxEmail.findFirstOrThrow({ where: { to: dev.user.email, subject: { startsWith: "Your Playtest summary" } } });
@@ -81,22 +84,22 @@ describe("email settings and the bell", () => {
     expect(await db.outboxEmail.count({ where: { to: tester.user.email, subject: { contains: "closes on" } } })).toBe(0);
   });
 
-  it("the admin gets one daily digest listing the cases; no per-event admin emails", async () => {
-    const before = await db.outboxEmail.count({ where: { to: "owner@playtest.test" } });
+  it("each admin gets one daily email listing new disputes (it can't be turned off); no per-event admin emails", async () => {
+    const adm = await makeUser({ email: `admin-${Math.random().toString(36).slice(2)}@playtest.test` });
+    await db.user.update({ where: { id: adm.user.id }, data: { isAdmin: true, emailPref: "off" } });
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, action: "reject", reason: "Not what we asked" });
     await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question" });
-    expect(await db.outboxEmail.count({ where: { to: "owner@playtest.test" } })).toBe(before);
-    await db.appState.deleteMany({ where: { key: "adminDigestAt" } });
+    expect(await db.outboxEmail.count({ where: { to: adm.user.email } })).toBe(0);
     await cron();
-    const daily = await db.outboxEmail.findFirstOrThrow({ where: { to: "owner@playtest.test", subject: { startsWith: "Playtest: " }, text: { contains: "I answered every question" } }, orderBy: { createdAt: "desc" } });
-    expect(daily.text).toContain("New dispute: “I answered every question”");
-    const n = await db.outboxEmail.count({ where: { to: "owner@playtest.test", text: { contains: "I answered every question" } } });
+    const daily = await db.outboxEmail.findFirstOrThrow({ where: { to: adm.user.email, subject: { startsWith: "Playtest admin:" } } });
+    expect(daily.text).toContain("New dispute:");
+    expect(daily.text).toContain("“I answered every question”");
     await cron(); // not new any more: no second email about it
-    expect(await db.outboxEmail.count({ where: { to: "owner@playtest.test", text: { contains: "I answered every question" } } })).toBe(n);
+    expect(await db.outboxEmail.count({ where: { to: adm.user.email, text: { contains: "I answered every question" } } })).toBe(1);
   });
 });
 

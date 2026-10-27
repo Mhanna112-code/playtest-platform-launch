@@ -12,7 +12,6 @@ import { invitable, inviteExpired } from "@/lib/server/invites";
 import { owedForBox, sweepHeldCalls } from "@/lib/server/holds";
 import { termsRowLines } from "@/lib/server/terms";
 import { rejoinAskLine } from "@/lib/server/joining";
-import { BlockButton } from "@/components/BlockButton";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, rateBlocker, ratingSummary } from "@/lib/server/ratings";
 import { LiveTop } from "@/components/LiveTop";
@@ -25,9 +24,11 @@ import { rowsOf, toJson } from "@/lib/callRows";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
+import { HOLD_APPROVAL_AFTER } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
+import { overListingRoom } from "@/lib/server/payments";
 import { ExtraPay } from "./ExtraPay";
 import { TopPanel } from "./TopPanel";
 import { NeedsYou } from "./NeedsYou";
@@ -95,6 +96,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const now = new Date();
   // (Owner, Oct 26) A chargeback hold's steps. (A paused test's closing date is told by bell and shown to the admin, not on the page.)
   const cbSteps = await chargebackSteps(u.id);
+  // (Owner, Oct 27) While a failed payment is owed, Pay (part Pay, extra pay) is disabled: "Pay what you owe first."; the room above the listing prices for extra pay.
+  const owesNow = owedList.some((o) => o.retry);
+  const rooms = new Map(await Promise.all(t.contracts.map(async (c) => [c.id, (await overListingRoom(c.id)).roomCents] as const)));
   const lateOf = (c: { dueAt: Date; tester: { name: string; email: string } }, x: { createdAt: Date }) => (isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(c.tester), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined);
   const partPaid = (id: string) => payments.filter((p) => (p.submissionId === id || p.callId === id) && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
   const payments = await db.payment.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
@@ -288,7 +292,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       <a href={`/api/recordings/${r.id}/file`} target="_blank" rel="noreferrer">{r.filename}</a>
                     </div>
                   ))}
-                  <PayBox key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} partPaidCents={partPaid(x.s!.id)}
+                  <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} partPaidCents={partPaid(x.s!.id)}
                     note={x.s!.agreedCents != null && chargeOpensAt(x.s!, t, x.c, now) && !x.s!.choiceOfferedAt ? choiceNoteLine(fmtDate(chargeOpensAt(x.s!, t, x.c, now)!).replace(/, \d{4}$/, ""), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
                     listingCents={x.s!.agreedCents} listingText={`${money(x.s!.agreedCents)} for ${x.s!.kind === "written" ? "written answers" : "a recording"}`} />
                 </>
@@ -301,7 +305,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     measured={x.x!.devJoinedAt && x.x!.testerJoinedAt ? defaultCallMinutes(x.x!.startsAt, x.x!.minutes, x.x!.devJoinedAt, x.x!.testerJoinedAt) : null}
                     max={Math.floor(x.x!.minutes * 1.5)} closesAt={new Date(x.x!.startsAt.getTime() + CALL_CLOSE_MS).toISOString()} closed={callClosed(x.x!.startsAt, now)}
                   />
-                  <PayBox key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} partPaidCents={partPaid(x.x!.id)}
+                  <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} partPaidCents={partPaid(x.x!.id)}
                     listingCents={callReference(x.x!.rateCents, x.x!.actualMinutes ?? x.x!.minutes, x.c.liveRateCents).cents}
                     listingText={callReference(x.x!.rateCents, x.x!.actualMinutes ?? x.x!.minutes, x.c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
                 </>
@@ -328,7 +332,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             (await ratingSummary(c.testerId)).line || "No ratings yet",
             `Accepted parts: ${(await testerStats(c.testerId)).accepted.value} ${(await testerStats(c.testerId)).accepted.hint}`,
           ].filter(Boolean),
-          block: restricted ? null : blockedIds.has(c.testerId) ? <span className="text-xs text-slate-400">You blocked {displayName(c.tester)}.</span> : <BlockButton seenAt={seenAt} testId={t.id} userId={c.testerId} name={displayName(c.tester)} effect="Their session ends now (work they sent stays payable), calls between you are cancelled, and chat closes." />,
+          block: null, // (Owner, Oct 27) Block and Report live only on profiles
         })))}
         gone={t.contracts.filter((c) => c.status !== "working").map((c) => ({ contractId: c.id, name: displayName(c.tester), how: c.endKind === "stopped" || c.endKind === "closed" ? "Stopped" : c.endKind === "suspended" || c.endKind === "deleted" ? "Removed" : c.endKind === "rated" ? "Left" : c.status === "left" ? "Left" : "Ended early", at: c.endedAt }))}
       >
@@ -354,7 +358,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   <h3 className="mr-auto"><a href={`/app/testers/${c.testerId}`}>{name}</a></h3>
                   <span className="badge">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
                   {c.ndaAcceptedAt && <span className="badge">NDA accepted {fmtDate(c.ndaAcceptedAt)}</span>}
-                  {!restricted && <ExtraPay testId={t.id} contractId={c.id} name={name} seenAt={seenAt} />}
                   {!restricted && <a href={`/app/chat/${c.id}`} className="btn-secondary relative px-3 py-1 text-xs no-underline hover:no-underline"><MessagesSquare className="h-3.5 w-3.5" /> Chat
                     {unreadN > 0 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950" aria-label={`${unreadN} unread`}>{unreadN}</span>}
                   </a>}
@@ -367,6 +370,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       <span className={`badge ${r.required ? "border-amber-300/40 text-amber-200" : ""}`}>{r.required ? "Required" : "Not required"}</span>
                       <span className={r.sub ? "text-emerald-200" : "text-slate-400"}>{r.sub ? `Sent ${fmtDate(r.sub.sentAt)}` : "Not sent yet"}</span>
                       {r.sub && <span className="text-slate-300">· paid {money(partPaid(r.sub.id))} of {r.sub.agreedCents != null ? money(r.sub.agreedCents) : "(not in the contract)"}</span>}
+                      {/* (Owner, Oct 27) Extra pay sits next to each SENT part (unsent parts have none). */}
+                      {r.sub && !restricted && <ExtraPay testId={t.id} contractId={c.id} submissionId={r.sub.id} name={name} seenAt={seenAt} roomCents={rooms.get(c.id) ?? 0} paidCents={partPaid(r.sub.id)} owes={owesNow} />}
                     </li>
                   ))}
                   {c.liveRateCents != null && (
@@ -414,7 +419,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       )}
       </TestersJoined>
       {cbSteps && <ChargebackSteps steps={cbSteps} />}
-      {(u.holdStartedAt || (owedList.length > 0 && !u.suspendedAt)) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} chargeback={!!cbSteps} />}
+      {(u.holdStartedAt || (owedList.length > 0 && !u.suspendedAt)) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} chargeback={!!cbSteps} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />}
       {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date())}</p>}
       <DevCallPanel
         testId={t.id}

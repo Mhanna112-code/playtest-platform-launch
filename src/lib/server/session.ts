@@ -37,7 +37,13 @@ export async function userForToken(token: string | null | undefined) {
   return s.user;
 }
 
-export const getUserFromRequest = (req: Request) => userForToken(readCookie(req.headers.get("cookie"), SESSION_COOKIE));
+export async function getUserFromRequest(req: Request) {
+  const u = await userForToken(readCookie(req.headers.get("cookie"), SESSION_COOKIE));
+  // (Owner, Oct 27) A press from a page of the PREVIOUS account (another account signed in in another tab since) is refused: the page then switches.
+  const page = req.headers.get("x-uid");
+  if (u && page && page !== u.id) throw new HttpError(409, "account_changed", "You're signed in as someone else in another tab. This page is switching to that account.");
+  return u;
+}
 
 export async function requireUser(req: Request) {
   const u = await getUserFromRequest(req);

@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { devOwes } from "@/lib/server/tests";
+import { OWED_FOR_TESTERS } from "@/lib/rules";
 import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, MessagesSquare, Users, XCircle } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
@@ -20,7 +22,6 @@ import { rateLabel } from "@/lib/server/requests";
 import { rowsOf, toJson } from "@/lib/callRows";
 import { unreadCount } from "@/lib/server/messages";
 import { PersonHover } from "@/components/PersonHover";
-import { BlockButton } from "@/components/BlockButton";
 import { LiveTop } from "@/components/LiveTop";
 import { qOptional, qText } from "@/lib/questions";
 import { RateBox } from "@/components/RateBox";
@@ -78,6 +79,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const rateWarn = await rateWarning(c.id);
   // Live calls: the request panel shows only when there's something to do or see.
   const paused = testPaused(c.test.developer, c.test);
+  // (Owner, Oct 27) While the developer owes a declined payment, the tester's Dispute and Charge buttons are disabled (the wording stays "delayed").
+  const devOwesNow = await devOwes(c.test.developerId);
   const canRequestCall = !refusal && !blockedPair && !paused;
   const pendingReqs = await db.callRequest.findMany({ where: { contractId: c.id, status: "pending", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
   const unread = await unreadCount(u.id, c.testId, c.testerId);
@@ -253,9 +256,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
               <p className="text-slate-400">{cents == null ? "Not in your contract" : `In your contract · ${cents === 0 ? "free" : `${money(testerShare(cents))} for you`}`}{` · Paid so far ${money(sub ? partPaid.get(sub.id) ?? 0 : 0)}`}</p>
               {sub && <p className="text-xs text-slate-500">{partLine(sub.agreedCents, partPaid.get(sub.id) ?? 0)}</p>}
               {sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0 && (
-                <ChoiceBox paused={paused} seenAt={seenAt} sessionId={c.id} submissionId={sub.id} devName={dev} cents={chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0)} line={choiceLine(dev, key, chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0))} />
+                <ChoiceBox devOwes={devOwesNow} paused={paused} seenAt={seenAt} sessionId={c.id} submissionId={sub.id} devName={dev} cents={chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0)} line={choiceLine(dev, key, chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0))} />
               )}
-              {sub && delayedSubs.has(sub.id) ? <p className="info">Payment for this part may be delayed.</p> : sub?.review && <TesterReview sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} />}
+              {sub && delayedSubs.has(sub.id) ? <p className="info">Payment for this part may be delayed.</p> : sub?.review && <TesterReview devOwes={devOwesNow} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} />}
             </li>
           ))}
           <li id="part-live" data-part="live" className="scroll-mt-24 space-y-1.5 rounded-xl border border-white/[0.08] p-3 text-sm">
@@ -274,7 +277,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             {c.calls.filter((x) => x.review).map((x) => (
               <div key={x.id} className="space-y-2">
                 <p className="text-slate-300">Live call on {fmtDateTime(x.startsAt)}</p>
-                {owedCalls.has(x.id) ? <p className="info">{DELAYED_CALL_LINE}</p> : <TesterReview sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} />}
+                {owedCalls.has(x.id) ? <p className="info">{DELAYED_CALL_LINE}</p> : <TesterReview devOwes={devOwesNow} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} />}
               </div>
             ))}
           </li>
@@ -349,12 +352,6 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         </section>
       )}
 
-      {/* Block the developer, as in the full app: a small link at the bottom; gone once they blocked them. */}
-      {!blockedByMe && (
-        <div className="text-right text-xs text-slate-500">
-          <BlockButton plain seenAt={seenAt} sessionId={c.id} userId={c.test.developerId} name={dev} effect="Your session with them ends now (work you sent stays payable), calls between you are cancelled, and chat closes." />
-        </div>
-      )}
     </div>
   );
 }
@@ -363,7 +360,7 @@ type Rev = { amountCents: number; agreedCents: number | null; rejected: boolean;
 type Disp = { status: string; decidedCents: number | null; decisionNote: string; devSide: string } | null;
 
 /** What the developer did with a piece, as the tester reads it (they see what they get; never holds or chargebacks). */
-function TesterReview({ sessionId, kind, id, review, dispute }: { sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
+function TesterReview({ sessionId, kind, id, review, dispute, devOwes: owes = false }: { devOwes?: boolean; sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
   const may = canDispute(review.amountCents, review.agreedCents, !!dispute).ok;
   return (
     <div className="space-y-2 rounded-lg bg-white/[0.03] p-3 text-sm">
@@ -378,7 +375,7 @@ function TesterReview({ sessionId, kind, id, review, dispute }: { sessionId: str
       {review.agreedCents == null && <p className="note">This wasn&apos;t in your contract, so the developer&apos;s amount is final.</p>}
       {dispute && <p>{dispute.status === "open" ? "You disputed this: waiting for the team." : `The team decided: ${money(dispute.decidedCents)} in all${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : ""}.`}</p>}
       {dispute?.devSide && <p>The developer&apos;s side: “{dispute.devSide}”</p>}
-      {may && <DisputeForm sessionId={sessionId} kind={kind} id={id} seenAt={new Date().toISOString()} />}
+      {may && <DisputeForm disabledNote={owes ? OWED_FOR_TESTERS : ""} sessionId={sessionId} kind={kind} id={id} seenAt={new Date().toISOString()} />}
     </div>
   );
 }

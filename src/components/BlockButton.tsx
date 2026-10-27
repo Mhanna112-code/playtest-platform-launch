@@ -1,27 +1,34 @@
 "use client";
-import { ChangesBox } from "@/components/ChangesBox";
+import { useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { api } from "@/lib/client";
-import { usePress } from "@/lib/usePress";
+import { Err } from "@/components/Err";
+import { api, errOf } from "@/lib/client";
 
 /**
- * Block someone: the full app's confirm dialog, then the press (through the page's stop-once gate: the box shows right
- * under the button). They are never told.
+ * Block someone, on their profile only (owner, Oct 27): the confirm dialog, then the press. The only stop is a race check: if you already blocked them in
+ * another tab, the press fails with a blue notice under this button. They are never told.
  */
-export function BlockButton({ userId, name, effect, seenAt, sessionId, testId, plain }: { userId: string; name: string; effect: string; seenAt?: string; sessionId?: string; testId?: string; plain?: boolean }) {
-  // (Owner) The tester's Block still stops just once; the developer's follows the box rule.
-  const { press, changes, error, busy } = usePress(seenAt ?? "", undefined, { once: !!sessionId });
+export function BlockButton({ userId, name, effect, plain }: { userId: string; name: string; effect: string; plain?: boolean }) {
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
   return (
     <div className="space-y-2">
       <ConfirmButton className={plain ? "hover:text-rose-200" : "btn-secondary px-3 py-1.5 text-xs"} disabled={busy} title={`Block ${name}?`} confirmLabel={`Block ${name}`}
         body={<p>{effect} They aren&apos;t told. You can unblock in Account → Blocked people.</p>}
         onConfirm={async () => {
-          const r = await press("/api/blocks", { userId, sessionId, testId });
-          if (r) window.location.reload();
+          setBusy(true);
+          setErr("");
+          try {
+            await api("/api/blocks", { userId });
+            window.location.reload();
+          } catch (e) {
+            setErr(errOf(e));
+            setBusy(false);
+          }
         }}>
         Block {name}
       </ConfirmButton>
-      <ChangesBox changes={changes} error={error} />
+      <Err text={err} />
     </div>
   );
 }

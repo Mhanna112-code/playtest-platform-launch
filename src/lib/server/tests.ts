@@ -186,13 +186,16 @@ export const seenDate = (v: unknown) => {
 
 // ---------- developer: post, edit ----------
 
+/** The parts whose "I confirm this part pays more than $200." tick was ticked. */
+const confirmedHighOf = (body: Record<string, unknown>) => (Array.isArray(body.confirmHigh) ? body.confirmHigh.map(String) : []);
+
 export async function createTest(dev: U, body: Record<string, unknown>) {
   if (!dev.isDeveloper) throw new HttpError(403, "not_developer", "Turn on “post tests” in your profile to post a test.");
   if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", `${PAY_WAITS} New tests can't be posted while payments are on hold.`);
   const l = parseListing(body) as Listing;
   if (!l.mature) l.matureWhy = "";
   const now = new Date();
-  const errs = checkListing(l, 0, now, { openedAt: now });
+  const errs = checkListing(l, 0, now, { openedAt: now, confirmedHigh: confirmedHighOf(body) });
   // (NEWEST+9) Spots up to the developer's tester capacity.
   const cap = await testerCapacity(dev.id);
   if (Number.isInteger(l.spots) && l.spots > cap.limit && !errs.some((e) => e.startsWith("Spots"))) errs.push(overLimitText(cap.limit));
@@ -251,7 +254,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const fields = LISTING_FIELDS.filter((k) => JSON.stringify(current[k]) !== JSON.stringify(next[k]));
     // (Design doc 4/5) The Post rules, then the critical-change limit and the access keys: every red mistake is found FIRST
     // (a stop-once reason never hides one), and nothing saves while any remains.
-    const errs = checkListing(next, testersIn, new Date(), { changed: new Set(fields), openedAt: t.createdAt, edit: true });
+    const errs = checkListing(next, testersIn, new Date(), { changed: new Set(fields), openedAt: t.createdAt, edit: true, confirmedHigh: confirmedHighOf(body), saved: { writtenCents: t.writtenCents, recordingCents: t.recordingCents } });
     if (fields.includes("openUntil")) { const short = openUntilShortened(current.openUntil, next.openUntil, fmtDate); if (short) errs.push(short); }
     // (NEWEST+9) Raising spots above the capacity is refused; a test already above it keeps its spots.
     if (Number.isInteger(next.spots) && next.spots > current.spots && next.spots > cap.limit && !errs.some((e) => e.startsWith("Spots"))) errs.push(overLimitText(cap.limit));
@@ -363,6 +366,10 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
 export async function devOnHold(devId: string) {
   const u = await db.user.findUnique({ where: { id: devId }, select: { holdStartedAt: true } });
   return !!u?.holdStartedAt;
+}
+/** (Owner, Oct 27) Does this developer owe a declined charge (before or during the hold)? Their Pay buttons wait; testers' Dispute and Charge wait. */
+export async function devOwes(devId: string) {
+  return (await db.payment.count({ where: { developerId: devId, status: "failed", owedUntil: { not: null }, settledAt: null } })) > 0;
 }
 export const topPanelGate = devGate;
 

@@ -8,6 +8,7 @@ import { cancelCallsAhead, recordEvent, spotOpened, tellCancelled } from "./test
 import { closeRequests } from "./requests";
 import { chargeDeferred, resumeTests } from "./holds";
 import { sendWaitingTransfer } from "./stripe";
+import { accountEvent } from "./reports";
 
 // (Design doc 2 and 11.4) Suspensions and deletion.
 //   Developer suspended: all their tests are paused (testers stay in them but can't do anything except send work, Let it go, Leave,
@@ -81,6 +82,7 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
   if (u.suspendedAt) throw new HttpError(409, "already", "That account is already suspended.");
   if (u.deletedAt) throw new HttpError(409, "deleted", "That account was deleted.");
   await db.user.update({ where: { id: userId }, data: { suspendedAt: new Date(), suspendNote: note, suspendedById: adminId, reinstatedAt: null } });
+  await accountEvent(userId, "suspended", adminId, note);
   if (u.isDeveloper) await pauseDeveloper(u);
   if (u.isTester) await removeTester(u, "suspended");
   await notify(u.email, "Your account is paused", ["Your account is paused. Contact us in Settings if you think this is a mistake."], "/app/help", { always: true, own: true });
@@ -128,6 +130,7 @@ export async function reinstateAccount(userId: string) {
   if (!u.suspendedAt) throw new HttpError(409, "not_suspended", "That account isn't suspended.");
   const start = u.suspendedAt, now = new Date();
   await db.user.update({ where: { id: userId }, data: { suspendedAt: null, suspendNote: "", suspendedById: null, reinstatedAt: now } });
+  await accountEvent(userId, "reinstated", u.suspendedById);
   if (u.isDeveloper) {
     await db.$transaction((tx) => resumeTests(tx, userId, start, now));
     if (!u.holdStartedAt) await chargeDeferred(userId);
@@ -200,7 +203,7 @@ export async function pauseTest(adminId: string, testId: string, note: string) {
   await closeRequests({ contractIds: (await db.contract.findMany({ where: { testId }, select: { id: true } })).map((c) => c.id) }, "the test is paused");
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
   await (await import("./pauseClosure")).bellPausedTests(dev.id);
-  await notify(dev.email, `The team paused “${t.title}”`, [`The team paused “${t.title}”${note ? `: ${note}` : "."} You can only stop it for now.`, "Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
+  await notify(dev.email, `The team paused “${t.title}”${note ? `: ${note}` : ""}`, [`The team paused “${t.title}”${note ? `: ${note}` : "."} You can only stop it for now.`, "Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
   return { ok: true };
 }
 
@@ -236,7 +239,7 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
   });
   await tellCancelled(cancelled, "stopped");
   for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { own: true });
-  await notify(t.developer.email, `The team stopped “${t.title}”`, [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay or reject. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
+  await notify(t.developer.email, `The team stopped “${t.title}”${note ? `: ${note}` : ""}`, [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay or reject. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
   return { ok: true };
 }
 

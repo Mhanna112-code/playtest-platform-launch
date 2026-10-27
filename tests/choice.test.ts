@@ -36,7 +36,8 @@ describe("Charge / Let it go at day 14", () => {
     expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe("Tick “charge Nora Lane $10.00 now” to charge.");
     const r = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000 });
     expect(r.body).toMatchObject({ choice: "charge", amountCents: 1000 });
-    expect(await db.outboxEmail.count({ where: { to: dev.user.email, subject: { startsWith: "Receipt: you paid $10.00" } } })).toBe(1);
+    // (Owner, Oct 27) A receipt follows the setting like any payment line: the daily job's email carries it (at most once).
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Receipt: you paid $10.00" }, payment: true } })).toBe(1);
     // The developer's Pay is now final, naming the tester's choice.
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.message).toBe("Ana Silva already charged $10.00 for this.");
   });
@@ -86,7 +87,7 @@ describe("daily retry of owed payments", () => {
   it("retries once a day; success sends a receipt, tells both sides and lifts the hold; chargebacks are never retried", async () => {
     const { dev, sessionId, tester } = await waiting14();
     await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
-    const p = await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 900, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() - 1000) } });
+    const p = await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 900, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + 2 * 86_400_000) } });
     await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 700, feeCents: 140, testerCents: 560, status: "charged", chargeback: "open", stripePaymentIntentId: "pi_" + randomUUID() } });
     await startHold(dev.user.id, "unpaid");
     let calls = 0;
@@ -94,7 +95,7 @@ describe("daily retry of owed payments", () => {
     await cron();
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "charged" });
     expect(calls).toBeGreaterThanOrEqual(1);
-    expect(await db.outboxEmail.count({ where: { to: dev.user.email, subject: { startsWith: "Receipt: you paid $9.00" } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Receipt: you paid $9.00" }, payment: true } })).toBe(1);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { endsWith: "paid $9.00 for your written answers" } } })).toBe(1);
     // The open chargeback is never retried and keeps the hold until the admin resolves it.
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
@@ -110,6 +111,10 @@ describe("daily retry of owed payments", () => {
     await cron();
     expect(calls).toBe(1);
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).retriedAt).not.toBeNull();
+    // (Owner, Oct 27) After the 3-day cut-off the automatic daily retries stop.
+    const late = await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 800, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() - 1000) } });
+    await cron();
+    expect((await db.payment.findUniqueOrThrow({ where: { id: late.id } })).retriedAt).toBeNull();
   });
 });
 
@@ -123,14 +128,19 @@ describe("charge amount and a second failure", () => {
     expect(R.chargeAmount(null, 0)).toBe(0); // not in the contract
   });
 
-  it("a second failed payment while one is still owed starts the hold at once", async () => {
+  it("while a failed payment is owed, the tester's Charge waits ('delayed', never 'failed') and the developer's Pay waits", async () => {
     const { tester, sessionId, sub, dev } = await waiting14();
     await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
-    await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 500, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + 2 * 86_400_000), retriedAt: new Date() } });
+    await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 500, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + 2 * 86_400_000) } });
+    setStripeForTests({ paymentIntents: { create: async () => { throw new Error("declined"); } } } as unknown as Stripe); // the daily retry is declined too
     await cron();
-    setStripeForTests({ paymentIntents: { create: async () => { throw new Error("declined"); } } } as unknown as Stripe);
-    await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000 });
-    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
+    const c = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000 });
+    expect(c.status).toBe(409);
+    expect(c.body.error.message).toBe("Payment from this developer is delayed right now. You can try again once it's sorted.");
+    expect(c.body.error.message).not.toMatch(/failed/i);
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.message).toBe("Pay what you owe first.");
+    // Let it go still works, and Reject still works for the developer.
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "letgo" })).status).toBe(200);
   });
 
   it("paid in full: no day-14 choice, notice or reminders; the developer can still Pay or Reject", async () => {

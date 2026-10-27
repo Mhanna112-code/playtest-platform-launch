@@ -12,7 +12,8 @@ import { NotSentTag, useKept } from "@/lib/useKept";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, criticalLine, isCritical } from "@/lib/limits";
 import { keyNeedLine, parseKeys } from "@/lib/keys";
-import { openUntilNeeded, type Listing } from "@/lib/rules";
+import { HIGH_PART_CENTS, HIGH_PART_TICK, openUntilNeeded, type Listing } from "@/lib/rules";
+import { toCents } from "@/lib/format";
 import { KeyBoxes, type KeysData } from "./KeyBoxes";
 import { ExpandNote } from "@/components/ExpandNote";
 
@@ -79,9 +80,9 @@ const NOTE_AT: Partial<Record<keyof F, string>> = { written: "parts", writtenPri
 
 // The parts, as the full app's Parts and prices cards (prices-widget.tsx there), with lean's names and price limits.
 const PARTS = [
-  { on: "written", req: "writtenRequired", price: "writtenPrice", title: "Written report", help: "Answers to your questions", ph: "10.00", unit: "", min: "1", max: "999999.99", msg: "The written answers price must be at least $1.00 (or Free); Stripe can't take more than $999,999.99 in one charge." },
-  { on: "recording", req: "recordingRequired", price: "recordingPrice", title: "Recorded session", help: "Screen recording, thinking out loud", ph: "15.00", unit: "", min: "1", max: "999999.99", msg: "The recording price must be at least $1.00 (or Free); Stripe can't take more than $999,999.99 in one charge." },
-  { on: "live", req: "liveRequired", price: "liveRate", title: "Live session", help: "A call while you watch, billed by the minute", ph: "30.00", unit: "/h", min: "10", max: "999999.99", msg: "The live call rate must be at least $10 an hour (or Free); Stripe can't take more than $999,999.99 in one charge." },
+  { on: "written", req: "writtenRequired", price: "writtenPrice", title: "Written report", help: "Answers to your questions", ph: "10.00", unit: "", min: "1", max: "1000", key: "written", msg: "The written answers price must be from $1.00 to $1,000.00 (or Free)." },
+  { on: "recording", req: "recordingRequired", price: "recordingPrice", title: "Recorded session", help: "Screen recording, thinking out loud", ph: "15.00", unit: "", min: "1", max: "1000", key: "recording", msg: "The recording price must be from $1.00 to $1,000.00 (or Free)." },
+  { on: "live", req: "liveRequired", price: "liveRate", title: "Live session", help: "A call while you watch, billed by the minute", ph: "30.00", unit: "/h", min: "10", max: "200", key: "", msg: "The live call rate must be from $10 to $200 an hour (or Free)." },
 ] as const;
 
 type EditProps = {
@@ -109,6 +110,9 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
   const [boxAt, setBoxAt] = useState("");
   const [version, setVersion] = useState(edit?.version ?? 0);
   const [critical, setCritical] = useState<string[]>([]);
+  // (Owner, Oct 27) "I confirm this part pays more than $200." per part.
+  const [high, setHigh] = useState<Record<string, boolean>>({});
+  const confirmHigh = () => (["written", "recording"] as const).filter((k) => high[k]);
   useLiveAppend(changes != null, (added) => {
     setChanges((c) => (c ? mergeChanges(c, added) : c));
     const newest = added.map((a) => a.at).sort().pop();
@@ -241,7 +245,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
     setRefusal("");
     try {
       if (!edit) {
-        const r = await api<{ id: string }>("/api/tests", { ...toApi(f), accessKeys: keysText });
+        const r = await api<{ id: string }>("/api/tests", { ...toApi(f), accessKeys: keysText, confirmHigh: confirmHigh() });
         await keep.clear();
         window.location.href = `/app/tests/${r.id}`;
         return;
@@ -250,7 +254,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
       const fields: Record<string, unknown> = {};
       for (const k of touched) for (const a of API_FIELDS[k]) fields[a] = all[a];
       const r = await api<{ offered: number; notReinvited?: string[]; resent?: string[]; closedApps?: string[]; spotClosed?: string[]; spots?: number }>(`/api/tests/${edit.id}/edit`, {
-        version, fields, seenAt: edit.seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}),
+        version, fields, confirmHigh: confirmHigh(), seenAt: edit.seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}),
         keysAdd: parseKeys(keysText), keysRemove,
       });
       await keep.clear();
@@ -385,6 +389,16 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
                         data-min={part.min} data-max={part.max} data-zero-ok="" data-msg={part.msg} />
                       {part.unit}
                     </label>
+                    <span className="text-xs text-slate-500">{part.min}–{Number(part.max).toLocaleString("en-US")}{part.unit}</span>
+                    {part.key && on && (() => {
+                      const cents = toCents(price);
+                      const savedSame = !!edit && toCents(base[part.price] as string) === cents && base[part.on];
+                      return cents != null && cents > HIGH_PART_CENTS && !savedSame ? (
+                        <label className="flex items-center gap-1.5 text-xs text-amber-200" data-high-tick={part.key}>
+                          <input type="checkbox" checked={!!high[part.key]} onChange={(e) => setHigh({ ...high, [part.key]: e.target.checked })} /> {HIGH_PART_TICK}
+                        </label>
+                      ) : null;
+                    })()}
                     <label className={`flex items-center gap-1 ${on ? "text-sky-200" : "text-slate-600"}`}>
                       <input type="checkbox" disabled={!on} checked={free} onChange={(e) => set({ [part.price]: e.target.checked ? "0" : "" } as Partial<F>)} aria-label={`${part.title}: free`} /> Free
                     </label>
@@ -393,7 +407,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
               </div>
             );
           })}
-          <p className="text-xs text-slate-500">Any cents. Free makes a part unpaid. Otherwise at least $1 for the written answers or a recording, and at least $10 an hour for a live call (each call request sets its own length).</p>
+          <p className="text-xs text-slate-500">Any cents. Free makes a part unpaid. Otherwise $1 to $1,000 for the written answers or a recording, and $10 to $200 an hour for a live call (each call request sets its own length). A written or recording price over $200 needs a tick.</p>
           {note("parts")}
         </fieldset>
         {f.written && (

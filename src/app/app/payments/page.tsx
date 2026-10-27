@@ -5,6 +5,7 @@ import { requirePageUser } from "@/lib/server/page-auth";
 import { stripeOn } from "@/lib/server/stripe";
 import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
+import { HOLD_APPROVAL_AFTER } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { sideFor } from "@/lib/sides";
@@ -53,7 +54,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       {tester && u.payoutProblemAt && <PayoutBanner />}
       {!on && <p className="info">{MESSAGES.off}</p>}
       {cbSteps && <ChargebackSteps steps={cbSteps} />}
-      {dev && (await owedForBox(u.id).then((o) => (u.holdStartedAt || (o.length && !u.suspendedAt) ? <OwedBox onHold={!!u.holdStartedAt} owed={o} chargeback={!!cbSteps} /> : null)))}
+      {dev && (await owedForBox(u.id).then((o) => (u.holdStartedAt || (o.length && !u.suspendedAt) ? <OwedBox onHold={!!u.holdStartedAt} owed={o} chargeback={!!cbSteps} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} /> : null)))}
       {q.error && q.error !== "off" && <p className="err">{MESSAGES[q.error]}</p>}
       {q.saved === "verified" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card verified.</p>}
       {q.saved === "card" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card saved.</p>}

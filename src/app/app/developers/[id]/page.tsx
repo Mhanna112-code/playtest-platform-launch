@@ -7,6 +7,10 @@ import { termsLine } from "@/lib/rules";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { DeveloperTiles } from "@/components/ProfileTiles";
 import { BlockButton } from "@/components/BlockButton";
+import { ReportButton } from "@/components/ReportButton";
+import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
+import { isAdmin } from "@/lib/server/session";
+
 
 export const metadata = { title: "Developer · Playtest" };
 export const dynamic = "force-dynamic";
@@ -21,9 +25,11 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
   const p = await db.user.findUnique({ where: { id } });
   if (!p || !p.isDeveloper) notFound();
   const mine = viewer.id === p.id;
-  if (!mine && !viewer.isAdmin && (await db.block.count({ where: { OR: [{ blockerId: viewer.id, blockedId: p.id }, { blockerId: p.id, blockedId: viewer.id }] } }))) notFound();
+  if (!mine && !isAdmin(viewer) && (await db.block.count({ where: { OR: [{ blockerId: viewer.id, blockedId: p.id }, { blockerId: p.id, blockedId: viewer.id }] } }))) notFound();
   const open = await db.test.findMany({ where: { developerId: p.id, status: "open" }, orderBy: { createdAt: "desc" }, include: { contracts: { where: { status: "working" }, select: { id: true } } } });
   const name = displayName(p);
+  const reportedRow = !mine ? await db.report.findUnique({ where: { reporterId_reportedId: { reporterId: viewer.id, reportedId: p.id } } }) : null;
+  const reportedOn = reportedRow ? fmtDate(reportedRow.createdAt) : null;
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <section className="card space-y-3">
@@ -59,9 +65,11 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
           </ul>
         )}
       </section>
+      {isAdmin(viewer) && !mine && <AdminPersonBoxes userId={p.id} adminId={viewer.id} developer={p.isDeveloper} tester={p.isTester} />}
       {/* Block the developer, as in the full app: a small link at the bottom of their profile (testers only). */}
       {viewer.isTester && !mine && !(await db.block.count({ where: { blockerId: viewer.id, blockedId: p.id } })) && (
-        <div className="text-right text-xs text-slate-500">
+        <div className="space-y-2 text-right text-xs text-slate-500">
+          <ReportButton userId={p.id} name={name} reportedOn={reportedOn} />
           <BlockButton plain userId={p.id} name={name} effect="You won't see their tests or profile any more, and they can't invite you." />
         </div>
       )}

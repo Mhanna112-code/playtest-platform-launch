@@ -12,7 +12,7 @@ type Line = { id: string; retry: boolean; amountCents: number; until: string | n
  * Failed payments (each listed) and reversed payments; one button retries every failed one. It stops once if the total
  * changed since the page loaded; the second press pays at once, with the result right under the button.
  */
-export function OwedBox({ onHold, owed, chargeback = false }: { onHold: boolean; owed: Line[]; chargeback?: boolean }) {
+export function OwedBox({ onHold, owed, chargeback = false, review = false }: { onHold: boolean; owed: Line[]; chargeback?: boolean; review?: boolean }) {
   const [err, setErr] = useState("");
   const [failing, setFailing] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -33,6 +33,7 @@ export function OwedBox({ onHold, owed, chargeback = false }: { onHold: boolean;
       ) : (
         first && <p><b>A payment failed.</b> Pay {money(seenTotal)} by {new Date(first).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} or your tests are paused.</p>
       )}
+      {onHold && review && <p data-hold-review="">After you pay what you owe, the team will review your account before your tests resume.</p>}
       {owed.length > 0 && (
         <ul className="list-disc pl-5">
           {owed.map((o) => <li key={o.id}>{o.text}</li>)}

@@ -8,7 +8,7 @@ import { isAdmin } from "@/lib/server/session";
 import { AdminButton } from "./AdminButton";
 import { PagedList } from "./PagedList";
 import { adminCases } from "@/lib/server/holds";
-import { adminPage, disputeRow, testRow, type DisputeVM, type Page, type TestVM } from "@/lib/server/adminLists";
+import { adminPage, disputeRow, type DisputeVM, type Page } from "@/lib/server/adminLists";
 import { StatTile } from "@/components/StatTile";
 import { BadgeDollarSign, FlaskConical, Inbox, ListChecks, Users, Wallet } from "lucide-react";
 
@@ -18,12 +18,12 @@ export const dynamic = "force-dynamic";
 const rows = <T,>(p: Page<unknown>) => p as unknown as Page<T>;
 
 /** The admin dashboard, laid out like the developer and tester dashboards: open disputes first, then this admin's own actions, then the lists. */
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ dispute?: string; user?: string; test?: string }> }) {
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ dispute?: string; user?: string }> }) {
   const u = await requirePageUser();
   if (!isAdmin(u)) notFound();
   const q = await searchParams;
-  const [disputes, mine, paused, chargebacks, decided, noShows, usersP, testsP, paymentsP, waitlistP] = await Promise.all(
-    (["disputes", "mine", "paused", "chargebacks", "decided", "noshows", "users", "tests", "payments", "waitlist"] as const).map((k) => adminPage(k, u.id, null)),
+  const [disputes, liftsP, mine, paused, chargebacks, decided, noShows, reportsP, usersP, testsP, paymentsP, waitlistP] = await Promise.all(
+    (["disputes", "lifts", "mine", "paused", "chargebacks", "decided", "noshows", "reports", "users", "tests", "payments", "waitlist"] as const).map((k) => adminPage(k, u.id, null)),
   );
   const [waiting, heldShares, held, devCount, testerCount, openTests] = await Promise.all([
     db.payment.findMany({ where: { transferStatus: "waiting" }, orderBy: { createdAt: "asc" }, take: 100 }),
@@ -34,10 +34,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     db.test.count({ where: { status: "open" } }),
   ]);
   const people = new Map((await db.user.findMany({ where: { id: { in: [...waiting, ...heldShares].flatMap((p) => [p.developerId, p.testerId]) } }, select: { id: true, email: true } })).map((x) => [x.id, x.email]));
-  // A link or a bell line can open one exact row: ?dispute=ID, ?user=ID or ?test=ID shows it first.
+  // A link or a bell line can open one exact row: ?dispute=ID or ?user=ID shows it first.
   const focusDispute: DisputeVM | null = q.dispute ? await db.dispute.findUnique({ where: { id: q.dispute } }).then((d) => (d ? disputeRow(d) : null)) : null;
   const focusUser = q.user ? await db.user.findUnique({ where: { id: q.user } }) : null;
-  const focusTest: TestVM | null = q.test ? await db.test.findUnique({ where: { id: q.test }, include: { developer: true, _count: { select: { contracts: true } } } }).then((t) => (t ? testRow(t) : null)) : null;
   const cases = await adminCases();
   // The full app's admin tiles: people, parts awaiting review, what was charged, the platform's share, what testers are owed.
   const charged = await db.payment.aggregate({ where: { status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true, feeCents: true }, _count: { _all: true } });
@@ -60,7 +59,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <StatTile icon={ListChecks} label="On the waitlist" value={String(waitlistP.total)} hint="→ Waitlist" tone="indigo" />
       </section>
 
-      {(focusDispute || focusUser || focusTest) && (
+      {(focusDispute || focusUser) && (
         <section className="card space-y-2" id="focus" data-focus="">
           <h2 className="text-lg font-semibold text-white">Opened from a link</h2>
           {focusDispute && <PagedList kind="disputes" initial={{ rows: [focusDispute], next: null, total: 1 }} />}
@@ -71,13 +70,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               {focusUser.deletedAt ? ` · deleted ${fmtDateTime(focusUser.deletedAt)}` : ""}
             </p>
           )}
-          {focusTest && <PagedList kind="tests" initial={{ rows: [focusTest], next: null, total: 1 }} />}
-          {focusTest && (
-            <div className="space-y-1" data-focus-history="">
-              <h3 className="font-semibold text-white">History of this test</h3>
-              <PagedList kind="history" arg={focusTest.id} initial={rows(await adminPage("history", u.id, null, focusTest.id))} empty="Nothing recorded yet." />
-            </div>
-          )}
         </section>
       )}
 
@@ -85,6 +77,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <h2 className="text-lg font-semibold text-white">Open disputes ({disputes.total})</h2>
         <p className="note">Newest first. A decision can only raise the pay, up to the listing amount. The extra is charged to the developer. Stripe card disputes are handled by hand in the Stripe dashboard.</p>
         <PagedList kind="disputes" initial={rows(disputes)} empty="No open disputes." scroll />
+      </section>
+
+      <section className="card scroll-mt-24 space-y-3" id="lifts">
+        <h2 className="text-lg font-semibold text-white">Lifts ({liftsP.total})</h2>
+        <p className="note">A payment hold from the 4th onward needs an Approve to lift, even after the developer paid what they owe. Newest first. The first press wins.</p>
+        <PagedList kind="lifts" initial={rows(liftsP)} empty="No lifts waiting." scroll />
       </section>
 
       <section className="card scroll-mt-24 space-y-3" id="chargebacks">
@@ -120,7 +118,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         {held.length === 0 && <p className="note">None.</p>}
         {held.map((x) => (
           <p key={x.id} className="text-sm">
-            {x.email} · on hold since {fmtDateTime(x.holdStartedAt!)} ({x.holdReason}). Their tests close after 7 days paused (see Paused tests).
+            {x.email} {x.holdCount > 3 && <span className="badge border-amber-300/40 text-amber-200">More than 3 holds</span>} · on hold since {fmtDateTime(x.holdStartedAt!)} ({x.holdReason}){x.holdCount > 3 ? " · its lift needs an Approve (see Lifts)" : ""}. Their tests close after 7 days paused (see Paused tests).
           </p>
         ))}
       </section>
@@ -128,6 +126,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       <section className="card scroll-mt-24 space-y-3" id="decided">
         <h2 className="text-lg font-semibold text-white">Decided disputes ({decided.total})</h2>
         <PagedList kind="decided" initial={rows(decided)} empty="None yet." scroll />
+      </section>
+
+      <section className="card space-y-3" id="reports">
+        <h2 className="scroll-mt-24 text-lg font-semibold text-white">Reports ({reportsP.total})</h2>
+        <p className="note">What people reported about each other from a profile (once per pair). The reported person is not told.</p>
+        <PagedList kind="reports" initial={rows(reportsP)} empty="None." />
       </section>
 
       <section className="card space-y-3">

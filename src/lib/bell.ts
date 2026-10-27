@@ -11,6 +11,7 @@ export const GROUP_TITLES: Record<string, string> = {
   payout: "Payout",
   disputes: "New disputes",
   team: "The team acted on your tests",
+  owed: "Payment due",
 };
 
 export function bellKey(n: { id: string; testId: string | null; own: boolean; groupKey?: string | null; createdAt: Date }) {

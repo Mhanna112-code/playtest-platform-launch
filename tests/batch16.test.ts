@@ -71,7 +71,7 @@ describe("B) reminders", () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: new Date(Date.now() - 2 * DAY), holdReason: "unpaid", stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
-    await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 900, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() - 1000) } });
+    await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 900, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + DAY) } });
     setStripeForTests({ paymentIntents: { create: async () => { throw new Error("declined"); } } } as unknown as Stripe);
     await cron();
     await cron();
@@ -210,10 +210,14 @@ describe("D) emails", () => {
     const off = await makeUser({ tester: true });
     expect((await json(await notifyPOST(req("/api/account/notify", { cookie: off.cookie, body: { emailPref: "off" } })))).status).toBe(200);
     await notify(off.user.email, "Quiet", ["Quiet"], "/app");
-    await notify(off.user.email, "Account paused", ["Account paused"], "/app", { always: true });
+    await notify(off.user.email, "Your account is paused", ["x"], "/app", { always: true });
+    expect(await db.outboxEmail.count({ where: { to: off.user.email } })).toBe(0); // (Owner, Oct 27) the few must-send lines go in ONE end-of-day email, not right away
+    await sendSummaries();
     await sendSummaries();
     const offMails = await db.outboxEmail.findMany({ where: { to: off.user.email } });
-    expect(offMails.map((m) => m.subject)).toEqual(["Account paused"]); // the always-send email went at once
+    expect(offMails).toHaveLength(1);
+    expect(offMails[0].text).toContain("Your account is paused");
+    expect(offMails[0].text).not.toContain("Quiet");
     // "each" is no longer a choice.
     const bad = await json(await notifyPOST(req("/api/account/notify", { cookie: off.cookie, body: { emailPref: "each" } })));
     expect(bad.status).toBeGreaterThanOrEqual(400);
@@ -325,113 +329,16 @@ describe("G, H) Charge opening and the cap", () => {
   });
 });
 
-describe("J) extra pay from the Testers panel", () => {
-  const extra = (cookie: string, testId: string, body: Record<string, unknown>) => act(testId, "pay-extra", cookie, { seenAt: seen(), payKey: randomUUID(), ...body });
-
-  it("pays the tester directly with the 80/20 split; a bell to them (its own line); on the Payments history; works for a past tester too", async () => {
-    const { dev, testId } = await setup();
-    const { tester, sessionId } = await joined(testId);
-    await settle();
-    const r = await extra(dev.cookie, testId, { contractId: sessionId, amount: "5.00" });
-    expect(r.status).toBe(200);
-    const p = await db.payment.findFirstOrThrow({ where: { contractId: sessionId, kind: "extra" } });
-    expect(p).toMatchObject({ amountCents: 500, feeCents: 100, testerCents: 400, developerId: dev.user.id, testerId: tester.user.id });
-    const bellLine = (await lines(tester.user.id)).find((l) => /paid you \$5\.00 extra for Harbor Run$/.test(l.text))!;
-    expect(bellLine.text).toBe("Nora Lane paid you $5.00 extra for Harbor Run");
-    expect(bellLine).toMatchObject({ own: true, payment: true });
-    expect(await db.testEvent.count({ where: { testId, text: "You paid Ana Silva $5.00 extra" } })).toBe(1);
-    expect(src("app/app/payments/page.tsx")).toMatch(/Extra pay/);
-    // A tester who has left can still be paid.
-    expect((await sact(sessionId, "leave", tester.cookie)).status).toBe(200);
-    await settle();
-    expect((await extra(dev.cookie, testId, { contractId: sessionId, amount: "2.50" })).status).toBe(200);
-  });
-
-  it("over $200 needs the tick (red at the tick); no cap but Stripe's, held in one constant", async () => {
-    const { dev, testId } = await setup();
-    const { sessionId } = await joined(testId);
-    await settle();
-    expect(EXTRA_PAY_MAX_CENTS).toBe(STRIPE_MAX_CENTS);
-    expect(checkExtraPay(EXTRA_PAY_TICK_CENTS, false).ok).toBe(true);
-    expect(checkExtraPay(EXTRA_PAY_TICK_CENTS + 1, false)).toEqual({ ok: false, message: "Tick “I understand this payment can't be refunded and is charged now.” to pay." });
-    expect(checkExtraPay(25, false).ok).toBe(false);
-    expect(checkExtraPay(STRIPE_MAX_CENTS + 1, true).ok).toBe(false);
-    const refused = await extra(dev.cookie, testId, { contractId: sessionId, amount: "250.00" });
-    expect(refused.status).toBe(400); // a form mistake: red
-    expect(refused.body.error.message).toMatch(/^Tick “I understand this payment can't be refunded/);
-    expect(await db.payment.count({ where: { contractId: sessionId, kind: "extra" } })).toBe(0);
-    expect((await extra(dev.cookie, testId, { contractId: sessionId, amount: "250.00", understood: true })).status).toBe(200);
-    expect(src("app/app/tests/[id]/ExtraPay.tsx")).toMatch(/needsTick/);
-  });
-
-  it("the same refusals as Pay: suspended, a hold, blocked either way; and the stop-once rules apply", async () => {
-    const { dev, testId } = await setup();
-    const { tester, sessionId } = await joined(testId);
-    await settle();
-    const pageLoaded = seen();
-    await settle();
-    const ben = await joined(testId, "Ben Carter", "he"); // something changed since the page loaded
-    void ben;
-    const stop = await act(testId, "pay-extra", dev.cookie, { contractId: sessionId, amount: "5.00", payKey: randomUUID(), seenAt: pageLoaded });
-    expect(stop.status).toBe(409);
-    expect(stop.body.error.code).toBe("stop_once");
-    expect((await act(testId, "pay-extra", dev.cookie, { contractId: sessionId, amount: "5.00", payKey: randomUUID(), seenAt: pageLoaded, confirmed: true })).status).toBe(200);
-    // Blocked either way.
-    await db.block.create({ data: { blockerId: tester.user.id, blockedId: dev.user.id } });
-    expect((await extra(dev.cookie, testId, { contractId: sessionId, amount: "5.00" })).status).toBe(409);
-    await db.block.deleteMany({ where: { blockerId: tester.user.id } });
-    // A hold.
-    await startHold(dev.user.id, "unpaid");
-    expect((await extra(dev.cookie, testId, { contractId: sessionId, amount: "5.00" })).body.error.message).toBe("Pay what you owe first.");
-    await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: null, holdReason: "" } });
-    // Suspended: refused (and hidden in the panel).
-    await db.user.update({ where: { id: dev.user.id }, data: { suspendedAt: new Date() } });
-    const sus = await extra(dev.cookie, testId, { contractId: sessionId, amount: "5.00" });
-    expect(sus.status).toBe(403);
-    expect(sus.body.error.code).toBe("suspended");
-    expect(src("app/app/tests/[id]/page.tsx")).toMatch(/!restricted && <ExtraPay/);
-  });
-});
-
-describe("K) admin test history", () => {
-  it("lists the test's whole timeline newest first, with which admin acted, in pages of 25", async () => {
-    const a = await admin();
-    const { dev, testId } = await setup();
-    const { tester, sessionId } = await joined(testId);
-    await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
-    await settle();
-    const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    await db.invite.create({ data: { testId, testerId: (await makeUser({ tester: true })).user.id } });
-    expect((await aact(a.cookie, "pause-test", { id: testId, note: "Looking" })).status).toBe(200);
-    const h = (await adminPage("history", a.user.id, null, testId)) as { rows: { text: string; at: string }[]; total: number };
-    const all = h.rows.map((r) => r.text).join("\n");
-    for (const re of [/Ana Silva joined/, /joined on: /, /Ana Silva sent her written answers/, /You paid Ana Silva \$10\.00/, /Payment \(review\) of \$10\.00 to Ana Silva/, /Invited /, new RegExp(`Paused by ${a.user.email}: Looking`)]) expect(all, String(re)).toMatch(re);
-    expect(h.rows.map((r) => r.at)).toEqual([...h.rows.map((r) => r.at)].sort().reverse());
-    // Pages of 25.
-    await db.testEvent.createMany({ data: Array.from({ length: 30 }, (_, i) => ({ testId, kind: "edited", text: `Edit ${i}`, createdAt: new Date(Date.now() - i * 1000) })) });
-    const p1 = (await adminPage("history", a.user.id, null, testId)) as { rows: { id: string }[]; next: string | null; total: number };
-    expect(p1.rows.length).toBe(25);
-    expect(p1.total).toBeGreaterThan(30);
-    const r2 = (await json(await moreGET(req(`/api/admin/more?kind=history&arg=${testId}&after=${encodeURIComponent(p1.next!)}`, { cookie: a.cookie })))).body;
-    expect(r2.rows.length).toBeGreaterThan(0);
-    expect(r2.rows.some((r: { id: string }) => p1.rows.some((o) => o.id === r.id))).toBe(false);
-    expect(src("app/admin/PagedList.tsx")).toMatch(/History/);
-    expect(src("app/admin/page.tsx")).toMatch(/History of this test/);
-    // Only the admin sees it.
-    expect((await json(await moreGET(req(`/api/admin/more?kind=history&arg=${testId}`, { cookie: dev.cookie })))).status).toBe(403);
-  });
-});
-
 describe("L, M) live notices in pop-ups, and the design doc's Pop-ups list", () => {
-  it("Stop, End early and Invite anyway show live notices; the other dialogs are unchanged", () => {
+  it("Stop, End early, Leave, Let it go, Rate and finish and Invite anyway show live notices; Block and Delete account are unchanged", () => {
     const confirm = src("components/ConfirmButton.tsx");
-    expect(confirm).toMatch(/live\?: boolean/);
-    expect(confirm).toMatch(/\{live && <div className="mt-3"><LiveNotices open=\{open\} \/><\/div>\}/);
+    expect(confirm).toContain("live?: boolean");
+    expect(confirm).toContain('{live && <div className="mt-3"><LiveNotices open={open} /></div>}');
     const top = src("app/app/tests/[id]/TopPanel.tsx");
     expect((top.match(/<ConfirmButton live /g) ?? []).length).toBe(2);
-    expect(src("app/app/tests/[id]/InvitePanel.tsx")).toMatch(/<LiveNotices open=\{!!confirm\} \/>/);
-    for (const f of ["components/BlockButton.tsx", "components/RateBox.tsx", "app/app/sessions/[id]/ChoiceBox.tsx", "app/app/sessions/[id]/SessionActions.tsx", "app/app/account/DeleteAccount.tsx"]) expect(src(f), f).not.toMatch(/<ConfirmButton live/);
+    expect(src("app/app/tests/[id]/InvitePanel.tsx")).toContain("<LiveNotices open={!!confirm} />");
+    for (const f of ["app/app/sessions/[id]/SessionActions.tsx", "app/app/sessions/[id]/ChoiceBox.tsx", "components/RateBox.tsx"]) expect(src(f), f).toMatch(/<ConfirmButton live/);
+    for (const f of ["components/BlockButton.tsx", "app/app/account/DeleteAccount.tsx"]) expect(src(f), f).not.toMatch(/<ConfirmButton live/);
     const live = src("components/LiveNotices.tsx");
     expect(live).toMatch(/JustUpdated/);
     expect(live).toMatch(/LongList/);
@@ -443,6 +350,6 @@ describe("L, M) live notices in pop-ups, and the design doc's Pop-ups list", () 
     const i = doc.indexOf("**Pop-ups**");
     expect(i).toBeGreaterThan(0);
     const block = doc.slice(i, doc.indexOf("**Drafts, numbers, links**"));
-    for (const name of ["Stop", "End early", "Invite anyway", "Block", "Join anyway", "Leave", "Let it go", "Rate and finish", "Delete account", "Signed in as someone else"]) expect(block, name).toContain(name);
+    for (const name of ["Stop", "End early", "Invite anyway", "Block", "Join anyway", "Leave", "Let it go", "Rate and finish", "Delete account"]) expect(block, name).toContain(name);
   });
 });

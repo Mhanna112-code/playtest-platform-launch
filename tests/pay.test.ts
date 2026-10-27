@@ -32,7 +32,7 @@ describe("the one Pay box", () => {
     expect(r.body).toMatchObject({ amountCents: 1000, status: "not_set_up", paidSoFarCents: 1000 });
     const p = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } });
     expect(p).toMatchObject({ amountCents: 1000, feeCents: 200, testerCents: 800, status: "not_set_up", contractId: sessionId });
-    expect(await db.outboxEmail.count({ where: { subject: { contains: "You were paid" }, text: { contains: "you get $8.00" } } })).toBeGreaterThan(0);
+    expect(await db.notification.count({ where: { text: { contains: "You were paid" }, payment: true } })).toBeGreaterThan(0);
   });
 
   it("refuses without the charged-now tick, or below the listing without a reason", async () => {
@@ -144,7 +144,7 @@ describe("Stripe (test mode, faked)", () => {
     expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).body.error.message).toBe("This $10.00 is owed: pay it with “Pay what you owe” in Payments.");
   });
 
-  it("a second failure while one is owed starts the hold at once", async () => {
+  it("a second Pay while one is owed is refused ('Pay what you owe first.'); Reject still works", async () => {
     fake(true);
     const a = await sent();
     const b = await sent();
@@ -155,8 +155,10 @@ describe("Stripe (test mode, faked)", () => {
     expect((await payReq(a.dev.cookie, { kind: "submission", id: a.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(402);
     expect((await db.user.findUniqueOrThrow({ where: { id: a.dev.user.id } })).holdStartedAt).toBeNull();
     await new Promise((r) => setTimeout(r, 40)); // the declined payment is older than the next press's page time
-    expect((await payReq(a.dev.cookie, { kind: "submission", id: b.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(402);
-    expect((await db.user.findUniqueOrThrow({ where: { id: a.dev.user.id } })).holdStartedAt).not.toBeNull();
+    // (Owner, Oct 27) While a failed payment is owed, Pay waits: the second press is refused (nothing new fails), and only Pay what you owe works.
+    const second = await payReq(a.dev.cookie, { kind: "submission", id: b.sub.id, amount: "10.00", tickedCents: 1000 });
+    expect(second.status).toBe(409);
+    expect(second.body.error.message).toBe("Pay what you owe first.");
   });
 });
 

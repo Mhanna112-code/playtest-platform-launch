@@ -13,7 +13,7 @@ export function SignOut() {
       onClick={async () => {
         await api("/api/auth/logout", {}).catch(() => null);
         announceAuth("out");
-        window.location.href = "/";
+        window.location.href = "/login"; // (Owner, Oct 27) every tab and window goes to the sign-in page
       }}
     >
       <LogOut className="h-4 w-4" />

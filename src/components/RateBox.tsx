@@ -35,7 +35,7 @@ export function RateBox(p: { path: string; seenAt: string; name: string; body?: 
         </select>
         <input className="input min-w-0 flex-1" maxLength={500} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="A note" aria-label="A note" />
         {p.working ? (
-          <ConfirmButton className="btn-secondary" disabled={busy} title="Rate and finish?" confirmLabel="Rate and finish" onConfirm={send}
+          <ConfirmButton live className="btn-secondary" disabled={busy} title="Rate and finish?" confirmLabel="Rate and finish" onConfirm={send}
             body={<>{[p.headline, ...p.lines].map((l) => <p key={l}>{l}</p>)}</>}>
             Rate and finish
           </ConfirmButton>
@@ -44,7 +44,7 @@ export function RateBox(p: { path: string; seenAt: string; name: string; body?: 
         )}
       </div>
       {keep.restored && <p><NotSentTag /></p>}
-      <ChangesBox changes={changes} error={error} />
+      <ChangesBox changes={changes} error={error} didntGo={p.working} />
     </div>
   );
 }
