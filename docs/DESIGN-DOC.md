@@ -385,7 +385,7 @@ From Every page: red field checks, kept drafts ("Not sent yet"), ranges shown ne
 - **Open until:** the last day to join.
 - **Who can join:**
   - Anyone can join: join at once while open with spots; first come, first served.
-  - Approved only: testers apply; the developer accepts or declines. A subscriber perk: on the free plan it carries a "Subscribers" tag, and Post is refused: "Approved-only testers needs a subscription ($7/month)." with a Payments link (new tab).
+  - Approved only: testers apply; the developer accepts or declines. A subscriber perk: on the free plan it carries a "Subscribers" tag, and Post is refused: "Approved-only testers need a subscription ($7/month)." with a Payments link (new tab).
   - Invite only: not in Find tests; only invited testers join.
   - Any test can also invite. An invite plus a waiting application or rejoin ask joins the tester at once.
 
@@ -506,7 +506,7 @@ From Every page: the live box, stop-once, red field checks, kept drafts, long li
 - **Always refused:** "This test was stopped." If an admin stops or pauses the test while it's being edited, Save is refused and the developer goes back to the test page, whose banner names the press that didn't go through.
 
   [video: The team stops the test while Edit is open; Save is refused and the test page's banner names the Save that didn't go through.]
-- **Subscriber perk:** on the free plan, Approved only under Who can join shows a small "Subscribers" tag, and a Save that switches to it is refused: "Approved-only testers needs a subscription ($7/month)." with a Payments link (new tab). A test that is already Approved only stays so when a subscription ends, and its applications can still be accepted or declined.
+- **Subscriber perk:** on the free plan, Approved only under Who can join shows a small "Subscribers" tag, and a Save that switches to it is refused: "Approved-only testers need a subscription ($7/month)." with a Payments link (new tab). A test that is already Approved only stays so when a subscription ends, and its applications can still be accepted or declined.
 
 ### How it looks in each state
 
