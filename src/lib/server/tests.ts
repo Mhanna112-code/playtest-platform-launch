@@ -260,12 +260,12 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (Number.isInteger(next.spots) && next.spots > current.spots && next.spots > cap.limit && !errs.some((e) => e.startsWith("Spots"))) errs.push(overLimitText(cap.limit));
     const critical = fields.filter(isCritical);
     const everJoined = (await tx.contract.count({ where: { testId } })) > 0;
-    if (critical.length && everJoined && t.criticalChanges >= LIMITS.criticalChanges) errs.push(criticalLine(critical, t.criticalChanges));
+    if (critical.length && everJoined && t.criticalChanges >= LIMITS.criticalChanges) errs.push(criticalLine(t.criticalChanges));
     const plan = await planKeyChange(tx, testId, keysAdd, keysRemove, next.spots);
     const keyErrs = [...plan.errors, ...(plan.need ? [plan.need] : [])];
     errs.push(...keyErrs);
     const keysChanged = plan.toAdd.length > 0 || plan.removable.length > 0;
-    const stop = dc.length ? dc.map((c) => ({ text: c.text, at: c.createdAt })) : !gate.go ? gate.changes.map((c) => ({ text: c.text, at: c.createdAt })) : null;
+    const stop = dc.length ? dc.map((c) => devLine(c, false)) : !gate.go ? gate.changes.map((c) => ({ text: c.text, at: c.createdAt })) : null;
     if (stop) {
       // Both together: the blue stop and any red mistakes (red wins: the next press still saves nothing while red remains).
       throw new HttpError(409, "changed", dc.length ? "Press Save again to save." : "This test changed since you opened Edit. Press Save again to save your changes on top.", {
@@ -349,16 +349,25 @@ export async function openDraft(dev: U, testId: string, body: Record<string, unk
  * (seenAt) any tester joined, left or sent work, a call was booked/confirmed/cancelled, times were offered/removed, or a
  * payment/rejection was made, the first press stops and returns the list; the second press (confirmed) goes ahead.
  */
-export async function devGate(tx: Tx, testId: string, body: Record<string, unknown>, extra: Record<string, unknown> = {}, extraChanges: TestEventLike[] = []) {
+/**
+ * One line of a developer's stop-once box. (Owner, Oct 28) A tester's Switch / Keep line carries its contract, so the box under the button shows "See their contract" like the top box.
+ */
+export const devLine = (c: TestEventLike & { contractId?: string | null }, withAlert = true) => ({
+  text: c.text, at: c.createdAt, ...(c.kind === "terms" && c.contractId ? { kind: "terms", contract: c.contractId } : {}), ...(withAlert && alertOf(c.kind) ? { alert: alertOf(c.kind) } : {}),
+});
+
+export async function devGate(tx: Tx, testId: string, body: Record<string, unknown>, extra: Record<string, unknown> = {}, extraChanges: TestEventLike[] = [], keep?: (e: TestEventLike) => boolean) {
   // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt).
   const boxAt = seenOf(body.boxAt);
   if (body.confirmed === true && !boxAt) return;
   const seenAt = body.confirmed === true && boxAt ? boxAt : seenDate(body.seenAt);
   if (body.confirmed === true) extraChanges = extraChanges.filter((c) => c.createdAt > seenAt);
   const t = await tx.test.findUniqueOrThrow({ where: { id: testId }, select: { developerId: true } });
-  const changes = withRenamed([...(await devChanges(t.developerId, testId, seenAt, tabOf(body), tx)), ...extraChanges].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()), body);
+  const raw = [...(await devChanges(t.developerId, testId, seenAt, tabOf(body), tx)), ...extraChanges].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  // (Owner, Oct 28) `keep`: a button that stops for only some kinds (Rate after the test closed).
+  const changes = withRenamed(keep ? raw.filter((e) => e.kind === "renamed" || keep(e)) : raw, body);
   if (changes.length) {
-    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: changes.map((c) => ({ text: c.text, at: c.createdAt, ...(alertOf(c.kind) ? { alert: alertOf(c.kind) } : {}) })), ...extra });
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: changes.map((c) => devLine(c)), ...extra });
   }
 }
 

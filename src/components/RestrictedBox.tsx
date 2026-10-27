@@ -18,21 +18,23 @@ export function RestrictedBox({ failed, developer, tester, kinds, steps, review 
     if (suspended) lines.push(<li key="s" data-restricted-why="suspended">Your account is suspended.</li>);
     if (hold) lines.push(<li key="h" data-restricted-why="hold">Your account is on hold because a payment was declined.</li>);
     if (chargeback) lines.push(<li key="c" data-restricted-why="chargeback">Your account is on hold after a chargeback.</li>);
-    lines.push(<li key="p" data-restricted-paused="">All your tests are paused. Testers stay in them. You can&apos;t open your test pages, Edit, Post a test or Messages, and Pay and Reject wait; you can still cancel booked calls below.</li>);
+    lines.push(<li key="p" data-restricted-paused="">All your tests are paused. Testers stay in them. Only your dashboard, Payments, Settings and your notifications stay open (no test pages, Edit, Post a test, profiles or Messages), and Pay and Reject wait; you can still cancel booked calls below.</li>);
     if (hold) lines.push(<li key="rh" data-restricted-resume="hold">To resume: <Link href="/app/payments#owed" target="_blank" rel="noreferrer" className="underline">Pay what you owe</Link> in Payments (it opens in a new tab).{review && <span data-hold-review=""> After you pay, the team will review your account before your tests resume.</span>}</li>);
     if (chargeback) lines.push(<li key="rc" data-restricted-resume="chargeback">To resume: follow the chargeback steps in <Link href="/app/payments#chargeback-steps" target="_blank" rel="noreferrer" className="underline">Payments</Link> (it opens in a new tab).{steps && steps.length > 0 && <> {stepsLine(steps)}</>}</li>);
     if (suspended) lines.push(<li key="rs" data-restricted-resume="suspended">To appeal, contact the team: <Link href="/app/help" className="underline">Contact us</Link> in Settings.</li>);
     lines.push(<li key="l">When it lifts, your tests resume as normal.</li>);
   }
   if (tester && suspended) {
-    lines.push(<li key="t1" data-restricted-tester="">Your account is suspended. You were removed from all the tests you were in. What you sent is still reviewed; payment for it waits until the suspension is lifted.</li>);
-    lines.push(<li key="t2">You can&apos;t open Find tests, edit your profile or read messages.</li>);
-    lines.push(<li key="t3">To appeal, contact the team: <Link href="/app/help" className="underline">Contact us</Link> in Settings.</li>);
-    lines.push(<li key="t4">When the suspension is lifted you&apos;re invited back to the tests you were removed from that are still open with free spots; the others are listed on your dashboard with a Suspended label and Ask to rejoin.</li>);
+    // (Owner, Oct 28) The suspended tester's box: their account is paused, they were removed from their tests, how to appeal, and that pay for accepted work still reaches Stripe.
+    lines.push(<li key="t1" data-restricted-tester="">Your account is paused. You were removed from all the tests you were in.</li>);
+    lines.push(<li key="t2" data-restricted-pay="">Pay for work already accepted still reaches your Stripe account. What you sent is still reviewed; pay for work accepted while your account is paused reaches it once your account is active again.</li>);
+    lines.push(<li key="t3">Only your dashboard, Payments, Settings and your notifications stay open.</li>);
+    lines.push(<li key="t4">To appeal, contact the team: <Link href="/app/help" className="underline">Contact us</Link> in Settings.</li>);
+    lines.push(<li key="t5">When your account is active again, the tests you were removed from wait on your dashboard with Ask to rejoin.</li>);
   }
   return (
     <section role="status" data-restricted-box="" data-suspended-box={suspended ? "" : undefined} id="restricted" className="info space-y-2">
-      <h2 className="text-base font-semibold">{suspended ? "Your account is suspended" : "Your account is on hold"}</h2>
+      <h2 className="text-base font-semibold">{tester && !developer ? "Your account is paused" : suspended ? "Your account is suspended" : "Your account is on hold"}</h2>
       <LongList className="list-disc space-y-1 pl-5" tall="max-h-52">{lines}</LongList>
     </section>
   );

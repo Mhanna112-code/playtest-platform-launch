@@ -113,7 +113,9 @@ describe("deleted accounts, page by page (owner, Oct 26)", () => {
   });
 
   it("a deleted developer's tests stop and leave Find, invites and applications close, testers see the stopped state", async () => {
-    const { dev, testId, sessionId } = await withWork();
+    const { dev, testId, sessionId, sub } = await withWork();
+    // (Owner, Oct 28; DEFAULT) A developer pays or rejects what waits for them before deleting.
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
     const open = await setup({ joinMode: "apply" });
     const applicant = await makeUser({ tester: true, name: "Cara Diaz" });
     await act(open.testId, "apply", applicant.cookie, { listingVersion: 1, seenAt: seen(), confirmed: true, anyway: true });

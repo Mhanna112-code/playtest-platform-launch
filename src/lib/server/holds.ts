@@ -292,7 +292,8 @@ export async function runDaily(now = new Date()) {
   await (await import("./calls")).sweepNobodyJoined(now);
   // 1. Sent work not paid or rejected within 14 days: the listing amount is paid automatically (clock paused in holds).
   const due = await db.submission.findMany({
-    where: { review: null, payBy: { lt: now }, contract: { test: PAUSE_FREE } },
+    // (Owner, Oct 28) Not a deleted tester's work: it can no longer be paid, charged or disputed, so Charge never opens and the developer isn't reminded.
+    where: { review: null, payBy: { lt: now }, contract: { test: PAUSE_FREE, tester: { deletedAt: null } } },
     include: { contract: { include: { tester: true, test: { include: { developer: true } } } } },
     orderBy: { payBy: "asc" },
     take: 1000,
@@ -349,7 +350,7 @@ export async function runDaily(now = new Date()) {
     out.headsUps++;
   }
   // 5. (Owner, Oct 27) The developer's unreviewed contract work: reminders before Charge would open (the daily ones once it has opened are in 1 above).
-  const upcoming = await db.submission.findMany({ where: { review: null, choiceOfferedAt: null, agreedCents: { not: null }, payBy: { not: null }, contract: { test: PAUSE_FREE } }, include: { contract: { include: { tester: true, test: true } } }, orderBy: { payBy: "asc" }, take: 2000 });
+  const upcoming = await db.submission.findMany({ where: { review: null, choiceOfferedAt: null, agreedCents: { not: null }, payBy: { not: null }, contract: { test: PAUSE_FREE, tester: { deletedAt: null } } }, include: { contract: { include: { tester: true, test: true } } }, orderBy: { payBy: "asc" }, take: 2000 });
   for (const s of upcoming) {
     // 1 month, 1 week, 3 days and 1 day before Charge opens (skipping any already past); the daily ones after it opens are in 1 above.
     const opens = chargeOpensAt(s, s.contract.test, s.contract, now);
@@ -360,7 +361,7 @@ export async function runDaily(now = new Date()) {
     await db.submission.update({ where: { id: s.id }, data: { devMarks: { push: m.mark } } });
   }
   // 6. Work outside the contract: no deadline, a bell to the developer every 3 days.
-  const outside = await db.submission.findMany({ where: { review: null, agreedCents: null, updatedAt: { lt: new Date(now.getTime() - REMIND_DAYS * 86_400_000 + 3_600_000) }, OR: [{ remindedAt: null }, { remindedAt: { lt: new Date(now.getTime() - REMIND_DAYS * 86_400_000 + 3_600_000) } }], contract: { test: PAUSE_FREE } }, include: { contract: { include: { tester: true } } }, take: 500 });
+  const outside = await db.submission.findMany({ where: { review: null, agreedCents: null, updatedAt: { lt: new Date(now.getTime() - REMIND_DAYS * 86_400_000 + 3_600_000) }, OR: [{ remindedAt: null }, { remindedAt: { lt: new Date(now.getTime() - REMIND_DAYS * 86_400_000 + 3_600_000) } }], contract: { test: PAUSE_FREE, tester: { deletedAt: null } } }, include: { contract: { include: { tester: true } } }, take: 500 });
   for (const s of outside) {
     await bell((await db.test.findUniqueOrThrow({ where: { id: s.contract.testId } })).developerId, `“${s.contract.title}”: ${displayName(s.contract.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} still waits for you to pay or reject.`, `/app/tests/${s.contract.testId}#piece-${s.id}`, undefined, { reminder: `outside:${s.id}` });
     await db.submission.update({ where: { id: s.id }, data: { remindedAt: now } });

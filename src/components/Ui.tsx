@@ -46,13 +46,22 @@ export function StatusPill({ status }: { status: string }) {
   );
 }
 
-/** One circle per spot: a tester's initial (linking to their profile), or a dashed empty seat. */
-export function Seats({ total, people }: { total: number; people: { id: string; name: string; contractId?: string }[] }) {
+/**
+ * One circle per spot: a tester's initial (linking to their profile), or a dashed empty seat. `plain` (owner, Oct 28: a restricted account's dashboard): the initial
+ * with the name on hover as plain text, no hover card, so no profile link, Chat with, Report or Block.
+ */
+export function Seats({ total, people, plain = false }: { total: number; people: { id: string; name: string; contractId?: string }[]; plain?: boolean }) {
   const shown = Math.min(total, 12);
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {Array.from({ length: shown }, (_, i) => {
         const p = people[i];
+        if (p && plain)
+          return (
+            <span key={p.id} title={p.name} data-plain-seat={p.id} className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-volt-300 to-sky-300 text-sm font-semibold text-ink-950 ring-2 ring-slate-950">
+              {p.name.trim().charAt(0).toUpperCase()}
+            </span>
+          );
         return p ? (
           // (Owner, Oct 26) The tester's hover card: their name, a link to the profile and "Chat with <name>" (the same per-test chat as the Testers panel's Chat button).
           <span key={p.id} className="group relative z-10 inline-block">

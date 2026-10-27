@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
-import { requirePageUser } from "@/lib/server/page-auth";
+import { leaveIfClosed, requireOpenPage } from "@/lib/server/page-auth";
 import { chatMessages, markChatRead } from "@/lib/server/messages";
 import { Chat } from "@/components/Chat";
 import { AutoRefresh } from "@/components/AutoRefresh";
@@ -17,10 +17,12 @@ export const dynamic = "force-dynamic";
  */
 export default async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const u = await requirePageUser();
+  // (Owner, Oct 28) Closed to a restricted account (it moves to the dashboard top); with both sides and only a hold, the role in this chat decides.
+  const u = await requireOpenPage("/app/chat");
   const c = await db.contract.findUnique({ where: { id }, include: { test: { include: { developer: true } }, tester: true } });
   if (!c || (c.testerId !== u.id && c.test.developerId !== u.id)) notFound();
   const dev = c.test.developerId === u.id;
+  leaveIfClosed(u, "/app/chat", dev ? "developer" : "tester");
   const other = dev ? displayName(c.tester) : displayName(c.test.developer);
   const deleted = c.tester.deletedAt != null || c.test.developer.deletedAt != null;
   const blocked = deleted || (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) > 0;

@@ -126,7 +126,7 @@ model Test {
   matureWhy   String   @default("")
   /// (Design doc 4) Optional NDA: text testers must accept before joining ("" = none)
   ndaText     String   @default("")
-  /// (Design doc 5) Saves that changed a critical field (instructions, link, languages, technology, parts, Open until) after the first tester joined; the limit is 3
+  /// (Owner, Oct 28) Saves that changed a limited field (the steps / What to do, the NDA, questions, required languages, required devices) after the first tester joined; the limit is 3. Prices, parts, the build link and access keys are not limited
   criticalChanges Int  @default(0)
   /// (Design doc 6, 10) An admin paused this test (it behaves like a stop for the developer, who can only stop it) or stopped it, and the note
   adminPausedAt   DateTime?
@@ -391,7 +391,7 @@ model Dispute {
   /// The developer's side, added once (shown under the piece; the admin sees both)
   devSide      String      @default("")
   devSideAt    DateTime?
-  /// "open" | "decided"
+  /// "open" | "decided" | "withdrawn" (owner, Oct 28: the tester deleted their account)
   status       String     @default("open")
   /// The total pay the admin decided (never below what was paid)
   decidedCents Int?

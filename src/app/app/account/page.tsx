@@ -8,6 +8,7 @@ import { SideButton } from "./SideButton";
 import { DeleteAccount } from "./DeleteAccount";
 import { PasswordForm } from "../profile/PasswordForm";
 import { devRestricted } from "@/lib/restricted";
+import { devDeleteBlockers, testerDeleteFacts, testerDeleteLines } from "@/lib/server/deletion";
 
 export const metadata = { title: "Account · Playtest" };
 export const dynamic = "force-dynamic";
@@ -76,7 +77,8 @@ export default async function AccountPage() {
         </ul>
       </section>
       <section id="password" className="scroll-mt-24"><PasswordForm hasPassword={!!u.passwordHash} /></section>
-      <DeleteAccount />
+      {/* (Owner, Oct 28) A tester's pop-up carries their real numbers; a developer's blockers (DEFAULT) are listed with links. */}
+      <DeleteAccount testerLines={tester ? testerDeleteLines(await testerDeleteFacts(u.id)) : undefined} blockers={dev ? await devDeleteBlockers(u.id) : []} />
     </div>
   );
 }

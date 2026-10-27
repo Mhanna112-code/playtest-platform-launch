@@ -9,14 +9,15 @@ import { closeRequests } from "./requests";
 import { chargeDeferred, resumeTests } from "./holds";
 import { sendWaitingTransfer } from "./stripe";
 import { accountEvent } from "./reports";
+import { devDeleteBlockers, devDeleteRefusal } from "./deletion";
 
 // (Design doc 2 and 11.4; owner, Oct 27) Suspensions and deletion.
 //   Developer suspended (or on a payment / chargeback hold: ONE state, see lib/restricted.ts): all their tests are paused (testers stay in them; on a suspension they can only
 //   cancel booked calls, on a hold they can still send work); every press on the developer's pages is refused except Cancel call; calls starting within 3 days of the start are
 //   cancelled with no fault, later ones 3 days before they start if it still lasts. Lifted: the tests resume as normal.
 //   Tester suspended: removed from every test at once (their work stays and is reviewed; the pay is charged but their share is held until
-//   reinstatement). Reinstated: re-invited to the tests they were removed from that are open with free spots; the others wait with a
-//   "Suspended" label and Ask to rejoin.
+//   reinstatement). Reinstated (owner, Oct 28): no automatic re-invite; the tests they were removed from wait on their dashboard with
+//   "You were removed from this test" and Ask to rejoin until they ask or dismiss.
 
 const DAY = 86_400_000;
 export const CALL_SUSPENSION_DAYS = 3;
@@ -110,25 +111,6 @@ export async function releaseHeldShares(testerId: string, ids?: string[]) {
   return { released: held.length, sent };
 }
 
-/** (11.4; owner, Oct 27) Re-invite a reinstated tester to the tests they were removed from that are still open with free spots (invite-only ones too). */
-async function reinviteAfterSuspension(u: { id: string; email: string; name: string }) {
-  const removed = await db.contract.findMany({ where: { testerId: u.id, status: "left", endKind: "suspended" }, include: { test: { include: { developer: true } } } });
-  const invited: string[] = [];
-  for (const c of removed) {
-    const t = c.test;
-    const testersIn = await db.contract.count({ where: { testId: t.id, status: "working" } });
-    const blocked = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: u.id }] } })) > 0;
-    // (Owner, Oct 27) Invite-only tests too: no exception.
-    const open = t.status === "open" && (!t.openUntil || t.openUntil > new Date()) && testersIn < t.spots && !t.developer.suspendedAt && !t.developer.holdStartedAt && !t.adminPausedAt && !blocked;
-    if (!open) continue;
-    if (await db.invite.count({ where: { testId: t.id, testerId: u.id, status: "sent" } })) continue;
-    await db.invite.create({ data: { testId: t.id, testerId: u.id } });
-    invited.push(t.title);
-    await notify(u.email, `You're invited back to “${t.title}”`, [`You're invited back to “${t.title}”. Open it and press Join.`], `/app/find/${t.id}`);
-  }
-  return invited;
-}
-
 /** Admin: lift a suspension. */
 export async function reinstateAccount(userId: string) {
   const u = await db.user.findUnique({ where: { id: userId } });
@@ -143,10 +125,9 @@ export async function reinstateAccount(userId: string) {
     const testers = await db.contract.findMany({ where: { status: "working", test: { developerId: userId } }, include: { tester: true } });
     for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: userId, group: "paused" });
   }
-  if (u.isTester) {
-    await reinviteAfterSuspension(u);
-    await releaseHeldShares(userId);
-  }
+  // (Owner, Oct 28) No automatic re-invite: the tests they were removed from wait on their dashboard with "You were removed from this test" and Ask to rejoin
+  // (while the test is open, has a spot and isn't paused) until they ask or dismiss; the developer can also invite them again as usual.
+  if (u.isTester) await releaseHeldShares(userId);
   await notify(u.email, "Your account is active again", ["Your account is active again."], "/app", { always: true, group: "admindecision" });
   return { ok: true };
 }
@@ -156,11 +137,18 @@ export async function reinstateAccount(userId: string) {
 /**
  * (Design doc 11.4) Deleting an account stops its tests, cancels its invites and applications and removes it from the tests it is in.
  * History stays; holds, chargebacks and obligations are never cleared. `by`: "self" | "admin".
+ * (Owner, Oct 28) A tester: they leave every test, calls ahead are cancelled, invites and applications are cancelled and open disputes are withdrawn; work they sent that
+ * isn't paid yet can no longer be paid, charged or disputed (delayed payments still reach their Stripe account when the developer pays).
+ * (DEFAULT) A developer deleting their own account is refused while devDeleteBlockers lists anything (work to pay or reject, an open dispute, a hold).
  */
 export async function deleteAccount(userId: string, by: "self" | "admin", reason = "") {
   const u = await db.user.findUnique({ where: { id: userId } });
   if (!u) throw new HttpError(404, "not_found", "That account doesn't exist.");
   if (u.deletedAt) throw new HttpError(409, "deleted", "That account was already deleted.");
+  if (by === "self" && u.isDeveloper) {
+    const blockers = await devDeleteBlockers(userId);
+    if (blockers.length) throw new HttpError(409, "delete_blocked", devDeleteRefusal(blockers), { blockers });
+  }
   await db.user.update({ where: { id: userId }, data: { deletedAt: new Date(), deletedBy: by, deleteReason: reason.slice(0, 500) } });
   await db.invite.updateMany({ where: { testerId: userId, status: "sent" }, data: { status: "cancelled" } });
   if (u.isDeveloper) {
@@ -180,7 +168,11 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
       for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
     }
   }
-  if (u.isTester) await removeTester(u, "deleted");
+  if (u.isTester) {
+    await removeTester(u, "deleted");
+    // (Owner, Oct 28) Open disputes are withdrawn.
+    await db.dispute.updateMany({ where: { testerId: userId, status: "open" }, data: { status: "withdrawn" } });
+  }
   return { ok: true };
 }
 

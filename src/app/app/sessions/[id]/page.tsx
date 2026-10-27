@@ -5,7 +5,7 @@ import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, Mes
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
 import { callLengthText, callOutcome, joinedWords, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, callReference, cancelNeedsReason, canDispute, closesInLine, DELAYED_CALL_LINE, isLate, PAUSED_FOR_TESTERS, hasLivePart, PAUSED_RIGHT_NOW, lateLabel, termsLine, testPaused, testerShare, canAskToRejoin, leftText } from "@/lib/rules";
-import { requirePageUser } from "@/lib/server/page-auth";
+import { requireOpenPage } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
 import { paidLines } from "@/lib/server/paid";
@@ -41,7 +41,7 @@ const partLine = (listing: number | null, paid: number) =>
 export default async function SessionPage({ params }: { params: Promise<{ id: string }> }) {
   await (await import("@/lib/server/calls")).sweepNobodyJoined();
   const { id } = await params;
-  const u = await requirePageUser();
+  const u = await requireOpenPage("/app/sessions"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
   const c = await db.contract.findUnique({
     where: { id },
     include: {

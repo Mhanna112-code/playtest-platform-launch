@@ -10,7 +10,7 @@ import { Choices } from "@/components/Choices";
 import { api, ApiError, isFieldError } from "@/lib/client";
 import { NotSentTag, useKept } from "@/lib/useKept";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
-import { LIMITS, changesLeftLine, criticalLine, isCritical } from "@/lib/limits";
+import { CRITICAL_WORDS, LIMITS, changesLeftLine, criticalLine, isCritical } from "@/lib/limits";
 import { keyNeedLine, parseKeys } from "@/lib/keys";
 import { HIGH_PART_CENTS, HIGH_PART_TICK, openUntilNeeded, type Listing } from "@/lib/rules";
 import { toCents } from "@/lib/format";
@@ -154,9 +154,9 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
   const critNow = edit ? [...new Set(apiOf(changedKeys).filter(isCritical))] : [];
   const locked = !!edit && everJoined && critUsed >= LIMITS.criticalChanges && critNow.length > 0;
   const lockedKey = (k: keyof F) => locked && changedKeys.includes(k) && API_FIELDS[k].some(isCritical);
-  const partsLocked = (["written", "writtenPrice", "writtenRequired", "recording", "recordingPrice", "recordingRequired", "live", "liveRate", "liveRequired"] as (keyof F)[]).some(lockedKey);
-  const lockLine = locked ? criticalLine(critNow, critUsed) : "";
-  // (Owner, Oct 27) Once a tester has joined, Saves that change part prices, parts, questions, steps, the build link or the NDA are limited to 3 (one Save counts once). "Changes left: 2 of 3"
+  const lockLine = locked ? criticalLine(critUsed) : "";
+  // (Owner, Oct 28) Once a tester has joined, Saves that change the steps, the NDA, questions, required languages or required devices are limited to 3 (one Save counts once; prices, parts,
+  // the build link and access keys are not limited). "Changes left: 2 of 3"
   // sits near Save; after the 3rd those fields are locked, with a note, and the rest stay editable.
   const limited = !!edit && everJoined;
   const limitReached = limited && critUsed >= LIMITS.criticalChanges;
@@ -332,7 +332,7 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
           <p className="mt-1 text-right text-xs text-slate-500" aria-hidden>{f.description.length}/{LIMITS.whatToDo.toLocaleString("en-US")}</p>
           {note("description")}
         </div>
-        {text("buildUrl", "Link to the product or build", { ph: "https://…", attrs: limitReached ? { disabled: "true" } : {} })}
+        {text("buildUrl", "Link to the product or build", { ph: "https://…" })}
         {/* The full app's Categories: a row of tick boxes, at least one. */}
         <fieldset className={"space-y-2 " + (bad("categories") ? "rounded-xl p-2 ring-1 ring-rose-400" : "")}>
           <legend className="label req">Categories</legend>
@@ -345,14 +345,15 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
           </div>
           {note("categories")}
         </fieldset>
-        <div className={lockedKey("languages") ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}>
+        {/* (Owner, Oct 28) Required languages and devices are limited fields: locked after the 3rd change since testers joined. */}
+        <fieldset disabled={limitReached} data-locked={limitReached ? "" : undefined} className={lockedKey("languages") ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}>
           <Choices label="Language requirements (any one)" options={LANGUAGES} value={f.languages} onChange={(languages) => set({ languages })} />
           {note("languages")}
-        </div>
-        <div className={lockedKey("devices") ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}>
+        </fieldset>
+        <fieldset disabled={limitReached} data-locked={limitReached ? "" : undefined} className={lockedKey("devices") ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}>
           <Choices label="Technology requirements: devices, platforms or skills (any one; none ticked = any)" options={DEVICES} value={f.devices} onChange={(devices) => set({ devices })} />
           {note("devices")}
-        </div>
+        </fieldset>
         {/* (4) Mature (18+): ticking it shows the required "why" at once. */}
         <div className="space-y-1.5">
           <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-ink-200">
@@ -375,7 +376,8 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
         <p className="note">Every term is fixed in each tester&apos;s contract when they join. Edits change the listing for new testers only.</p>
         {/* The full app's Parts and prices: one card per part (tick, title, what it is, Required, price, Free). Required is
             a label only (NEWEST+10): part of the terms, it blocks nothing. */}
-        <fieldset disabled={limitReached} className={"space-y-2 " + (partsLocked ? "rounded-xl p-2 ring-1 ring-rose-400" : "")}>
+        {/* (Owner, Oct 28) Parts and prices are not limited: a change still offers working testers Switch / Keep. */}
+        <fieldset className="space-y-2">
           <legend className="label req">Parts and prices</legend>
           {PARTS.map((part) => {
             const on = f[part.on] as boolean;
@@ -504,8 +506,8 @@ export function TestForm({ init, edit, spotsLimit }: { init: Listing; edit?: Edi
           <button className="btn" disabled={busy || nothingChanged} aria-disabled={nothingChanged} title={nothingChanged ? "Nothing has changed yet" : undefined}>{busy ? "Saving…" : edit ? "Save" : "Post the test"}</button>
           {keep.restored && <NotSentTag />}
         </div>
-        {limited && <p className="note" data-changes-left="">{changesLeftLine(critUsed)} <span className="text-slate-500">(saves that change the steps, build link, NDA, questions, parts or part prices)</span></p>}
-        {limitReached && <p className="info" data-critical-locked="">You&apos;ve changed the steps, build link, NDA, questions, parts or part prices {LIMITS.criticalChanges} times since testers joined, so those fields are locked. Contact us in Settings to change them again. Everything else stays editable.</p>}
+        {limited && <p className="note" data-changes-left="">{changesLeftLine(critUsed)} <span className="text-slate-500">(saves that change the {CRITICAL_WORDS})</span></p>}
+        {limitReached && <p className="info" data-critical-locked="">You&apos;ve changed the {CRITICAL_WORDS} {LIMITS.criticalChanges} times since testers joined, so those fields are locked. Contact us in Settings to change them again. Everything else stays editable.</p>}
         {saved && <p className="ok">{saved}</p>}
         {lockLine && pressed && <p className="err-field" role="alert" data-critical-limit="">{lockLine}</p>}
         <Err text={refusal} />

@@ -66,6 +66,8 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     const c = piece.contract;
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
     const name = displayName(c.tester);
+    // (Owner, Oct 28) A tester who deleted their account: work of theirs that isn't paid yet can no longer be paid, charged or disputed (final).
+    if (c.tester.deletedAt && !(await tx.review.findFirst({ where: piece.where }))) throw new HttpError(409, "gone", "This tester deleted their account, so this work can't be paid or rejected any more.");
     const already = await tx.review.findFirst({ where: piece.where });
     if (already) {
       if (already.reason === CHARGED_BY_TESTER) throw new HttpError(409, "reviewed", `${name} already charged ${money(already.amountCents)} for this.`);
@@ -260,9 +262,10 @@ export async function addDevSide(dev: U, testId: string, body: Record<string, un
 export async function waitingForReview(devId: string) {
   const held = { review: null, status: "booked", startsAt: { lte: new Date() } };
   return db.test.findMany({
-    where: { developerId: devId, contracts: { some: { OR: [{ submissions: { some: { review: null } } }, { calls: { some: held } }] } } },
+    // (Owner, Oct 28) Not a deleted tester's work: it can no longer be paid.
+    where: { developerId: devId, contracts: { some: { tester: { deletedAt: null }, OR: [{ submissions: { some: { review: null } } }, { calls: { some: held } }] } } },
     orderBy: { createdAt: "desc" },
-    include: { contracts: { include: { tester: true, submissions: { where: { review: null } }, calls: { where: held } } } },
+    include: { contracts: { where: { tester: { deletedAt: null } }, include: { tester: true, submissions: { where: { review: null } }, calls: { where: held } } } },
   });
 }
 

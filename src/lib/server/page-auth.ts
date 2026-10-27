@@ -2,7 +2,8 @@ import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { devRestricted } from "@/lib/restricted";
+import { closedForSuspended } from "@/lib/closedPages";
+import { sideFor } from "@/lib/sides";
 import { hashToken, SESSION_COOKIE, userForToken } from "./session";
 
 /** The signed-in user for a server component, or null. */
@@ -12,14 +13,23 @@ export async function getPageUser() {
 }
 
 /**
- * (Owner, Oct 28) A developer's page that is closed while the account is suspended or on a hold (test pages, Edit, Post a test): the page itself sends the developer to the dashboard before
- * it renders anything, so the redirect never depends on the layout beating the page's first bytes.
+ * (Owner, Oct 28) A page that is closed while the account is restricted (a suspended tester; a developer under a suspension, a payment hold or a chargeback hold on their developer
+ * side): every signed-in page except the dashboard, Payments, Settings and the bell list. The page itself sends them to the dashboard top before it renders anything, so the
+ * redirect never depends on the layout beating the page's first bytes. `path` is the page's address (its side comes from it, as in the layout).
  */
-export async function requireOpenDevPage() {
+export async function requireOpenPage(path: string) {
   const u = await requirePageUser();
-  if (u.isDeveloper && devRestricted(u, "developer")) redirect("/app");
+  if (closedForSuspended(path, u, sideFor(u, path))) redirect("/app");
   return u;
 }
+
+/** The same for a page whose side is the person's role in one contract (a chat, a call): checked once the page knows the role. */
+export function leaveIfClosed(u: { isDeveloper: boolean; isTester: boolean; side?: string; suspendedAt?: Date | null; holdStartedAt?: Date | null; holdReason?: string | null }, path: string, role: "developer" | "tester") {
+  if (closedForSuspended(path, u, sideFor(u, path), role)) redirect("/app");
+}
+
+/** Test pages, Edit and Post a test. */
+export const requireOpenDevPage = () => requireOpenPage("/app/tests");
 
 export async function requirePageUser() {
   const u = await getPageUser();

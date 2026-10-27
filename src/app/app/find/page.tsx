@@ -8,7 +8,7 @@ import { displayName, fmtDate, money } from "@/lib/format";
 import { DEVICES } from "@/lib/options";
 import { ratingSummary } from "@/lib/server/ratings";
 import { termsLine, testerShare } from "@/lib/rules";
-import { requirePageUser } from "@/lib/server/page-auth";
+import { requireOpenPage } from "@/lib/server/page-auth";
 import { asListing, findTests, needsLines } from "@/lib/server/tests";
 
 export const metadata = { title: "Find tests · Playtest" };
@@ -28,7 +28,7 @@ function fromText(t: { writtenCents: number | null; recordingCents: number | nul
 const topPrice = (t: { writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null }) => Math.max(t.writtenCents ?? 0, t.recordingCents ?? 0, t.liveRateCents ?? 0);
 
 export default async function FindPage({ searchParams }: { searchParams: Promise<Sp> }) {
-  const u = await requirePageUser();
+  const u = await requireOpenPage("/app/find"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
   if (!u.isTester) redirect("/app/profile");
   const sp = await searchParams;
   const [open, profile] = await Promise.all([findTests(u), db.testerProfile.findUnique({ where: { userId: u.id } })]);

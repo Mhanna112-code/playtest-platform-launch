@@ -5,6 +5,7 @@ import { markShownInBox } from "@/lib/live";
 import { bringInView, jumpTo } from "@/lib/markJump";
 import { LongList } from "@/components/LongList";
 import { QuickIgnore } from "@/components/QuickIgnore";
+import { ContractLink } from "@/components/ContractLink";
 
 export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string };
 
@@ -34,6 +35,8 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
             {[...changes].map((c, i) => (
               <li key={`${c.at}|${c.text}|${i}`}>
                 {c.text.startsWith("You also did this in another tab") ? `${c.text} at ${time(c.at)}` : `${c.text} · ${time(c.at)}`}
+                {/* (Owner, Oct 28) "Ana switched to the new terms" / "kept their current terms": the same "See their contract" as the top box (scrolls on the test page; a new tab from Edit). */}
+                {c.kind === "terms" && c.contract && <> <ContractLink contract={c.contract} /></>}
               </li>
             ))}
           </LongList>

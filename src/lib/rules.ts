@@ -810,6 +810,24 @@ export function canAskToRejoin(c: { status: string; endKind: string; endedAt: Da
   return !!c.endedAt && c.endedAt.getTime() < c.dueAt.getTime();
 }
 
+// ---------- Rate's stop-once lines (owner, Oct 27-28) ----------
+
+/** The stop-once kinds that still apply to Rate after the test closed (stopped or closed): pay, reject, charge, let go, a dispute filed or decided. */
+export const RATE_AFTER_CLOSE_KINDS = ["paid", "rejected", "payment", "choice", "chargeback", "dispute", "admin"] as const;
+/** The person's own presses in another tab that are about the same: Pay, Reject, Charge, Let it go, a dispute or the developer's side of one. */
+const RATE_OWN = /^(You also did this in another tab: )?(paid |rejected |charged for |let your |opened a dispute|added your side to a dispute)/;
+/** Is the test closed for Rate's purposes? */
+export const testClosedForRate = (t: { status: string }) => t.status === "closed" || t.status === "stopped";
+/**
+ * (Owner, Oct 28) Does this line stop Rate? While the test is still open EVERY stop-once kind applies (the full developer or tester list); after it closes only
+ * the post-close subset (batch 4 D4): pay, reject, charge, let go, dispute filed or decided.
+ */
+export function rateStops(e: TestEventLike, closed: boolean) {
+  if (!closed) return true;
+  if (e.kind === "own") return RATE_OWN.test(e.text);
+  return (RATE_AFTER_CLOSE_KINDS as readonly string[]).includes(e.kind);
+}
+
 // ---------- Extra pay from the Testers panel (owner, Oct 26) ----------
 
 /** Over this amount the developer must tick that the payment can't be refunded and is charged now (the same tick as any Pay box). */

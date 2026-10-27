@@ -28,38 +28,37 @@ export const LIMITS = {
   disputeText: 2000,
   bio: 1000,
   contact: { min: 10, max: 3000 },
-  criticalChanges: 3, // (Owner, Oct 27) saves that change part prices, parts, questions, steps (What to do), the build link or the NDA, counted from the first join
+  criticalChanges: 3, // (Owner, Oct 28) saves that change the steps (What to do), the NDA, questions, required languages or required devices, counted from the first join
   contactPerDay: 5, // (Owner, Oct 27) Contact us messages per account per day
 } as const;
 
 /**
- * (Owner, Oct 27) The significant test fields: once a tester has joined, Saves that change part prices, parts, questions, steps (What to do), the build link or the NDA
- * are limited to 3 (one Save counts once, however many of these fields it touches). The words are the ones used in messages.
+ * (Owner, Oct 28) The limited test fields: once a tester has joined, at most 3 Saves may change what to do (the steps), the NDA, the questions, the required
+ * languages or the required devices / technology (one Save counts once, however many of these fields it touches). Part prices, parts and the build link are
+ * NOT limited (changing prices or parts still offers working testers Switch / Keep), and access keys stay out of it (a key given to a tester stays theirs).
+ * The words are the ones used in messages.
  */
 export const CRITICAL_FIELDS = {
   description: "steps",
-  buildUrl: "build link",
-  ndaText: "NDA", // (DEFAULT, pending the owner: the NDA counts; flip it by removing this line)
-  writtenCents: "part prices",
-  recordingCents: "part prices",
-  liveRateCents: "part prices",
-  liveMinutes: "parts",
-  writtenRequired: "parts",
-  recordingRequired: "parts",
-  liveRequired: "parts",
+  ndaText: "NDA", // (Owner, Oct 28) confirmed: the NDA counts
   questions: "questions",
+  languages: "languages",
+  devices: "devices",
 } as const;
 export type CriticalField = keyof typeof CRITICAL_FIELDS;
 export const isCritical = (f: string): f is CriticalField => f in CRITICAL_FIELDS;
+/** "steps, NDA, questions, languages or devices": every limited field, for the notes and the refusal. */
+export const CRITICAL_WORDS = (() => {
+  const names = [...new Set(Object.values(CRITICAL_FIELDS))];
+  return `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
+})();
 
 /** "Changes left: 2 of 3" */
 export const changesLeftLine = (used: number) => `Changes left: ${Math.max(0, LIMITS.criticalChanges - used)} of ${LIMITS.criticalChanges}`;
 
-/** "You've changed the steps, build link or part prices 3 times since testers joined. Contact us to change them again." */
-export function criticalLine(fields: string[], used: number = LIMITS.criticalChanges) {
-  const names = [...new Set(fields.map((f) => (isCritical(f) ? CRITICAL_FIELDS[f] : f)))];
-  const list = names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
-  return `You've changed the ${list} ${used} times since testers joined. Contact us in Settings to change them again.`;
+/** (Owner, Oct 28) The refusal always names the whole list: "You've changed the steps, NDA, questions, languages or devices 3 times since testers joined. Contact us in Settings to change them again." */
+export function criticalLine(used: number = LIMITS.criticalChanges) {
+  return `You've changed the ${CRITICAL_WORDS} ${used} times since testers joined. Contact us in Settings to change them again.`;
 }
 
 /** (Owner, Oct 27) Contact us: at most 5 messages per account per day. */

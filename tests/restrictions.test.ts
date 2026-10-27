@@ -79,19 +79,17 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "is running again" } } })).toBe(1);
   });
 
-  it("the closed pages: test pages, Edit, Post and Messages for a restricted developer; Find, the profile editor and Messages for a suspended tester", () => {
+  it("(batch 5 item 3) the closed pages: every signed-in page except the dashboard, Payments, Settings and the bell list, for a restricted developer and a suspended tester", () => {
     const dev = { isDeveloper: true, isTester: false, suspendedAt: new Date() };
     const held = { isDeveloper: true, isTester: false, holdStartedAt: new Date() };
     const tester = { isDeveloper: false, isTester: true, suspendedAt: new Date() };
     for (const u of [dev, held]) {
-      for (const p of ["/app/tests/abc", "/app/tests/abc/edit", "/app/tests/new", "/app/messages", "/app/chat/x", "/app/profile"]) expect(closedForSuspended(p, u), p).toBe(true);
-      for (const p of ["/app", "/app/payments", "/app/help", "/app/account", "/app/notifications", "/app/testers/x"]) expect(closedForSuspended(p, u), p).toBe(false);
+      for (const p of ["/app/tests/abc", "/app/tests/abc/edit", "/app/tests/new", "/app/messages", "/app/chat/x", "/app/profile", "/app/testers/x", "/app/developers/x", "/app/find", "/app/find/x", "/app/sessions/x", "/app/calls/x"]) expect(closedForSuspended(p, u), p).toBe(true);
+      for (const p of ["/app", "/app/", "/app?failed=x", "/app/payments", "/app/help", "/app/account", "/app/account/blocked", "/app/notifications", "/app/switch"]) expect(closedForSuspended(p, u), p).toBe(false);
     }
-    expect(closedForSuspended("/app/find", tester)).toBe(true);
-    expect(closedForSuspended("/app/profile", tester)).toBe(true);
-    expect(closedForSuspended("/app/messages", tester)).toBe(true);
+    for (const p of ["/app/find", "/app/find/x", "/app/profile", "/app/messages", "/app/chat/x", "/app/sessions/x", "/app/calls/x", "/app/testers/x", "/app/developers/x"]) expect(closedForSuspended(p, tester), p).toBe(true);
     expect(closedForSuspended("/app/help", tester)).toBe(false);
-    expect(closedForSuspended("/app/sessions/x", tester)).toBe(false);
+    expect(closedForSuspended("/app/payments", tester)).toBe(false);
     // A hold restricts only the developer side of an account with both.
     const both = { isDeveloper: true, isTester: true, holdStartedAt: new Date(), side: "tester" };
     expect(closedForSuspended("/app/tests/abc", both, "developer")).toBe(true);
@@ -133,15 +131,21 @@ describe("a suspended tester (design doc 2 and 11.4)", () => {
     expect(p.transferStatus).toBe("held");
     expect(JSON.stringify(r.body)).not.toMatch(/suspend/i);
 
-    // Lifting: re-invited to every test that is still open with spots (invite-only ones too); the held share is released (waits for a payout account).
+    // Lifting (owner, Oct 28): NO automatic re-invite; the held share is released (waits for a payout account).
     expect((await adm("unsuspend", a.cookie, { id: ana.tester.user.id })).status).toBe(200);
-    expect(await db.invite.count({ where: { testId: open.testId, testerId: ana.tester.user.id, status: "sent" } })).toBe(1);
-    expect(await db.invite.count({ where: { testId: inviteOnly.testId, testerId: ana.tester.user.id, status: "sent" } })).toBe(1); // (Owner, Oct 27) no invite-only exception
+    expect(await db.invite.count({ where: { testId: open.testId, testerId: ana.tester.user.id, status: "sent" } })).toBe(0);
+    expect(await db.invite.count({ where: { testId: inviteOnly.testId, testerId: ana.tester.user.id, status: "sent" } })).toBe(0);
+    expect(await db.notification.count({ where: { userId: ana.tester.user.id, text: { startsWith: "You're invited back" } } })).toBe(0);
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).transferStatus).toBe("waiting");
     expect(await db.notification.count({ where: { userId: ana.tester.user.id, text: "Your account is active again" } })).toBe(1);
-    // The removal keeps its "Suspended" label until she rejoins; the invite on the open test brings her back with one Join.
+    // The removed tests wait on her dashboard with Ask to rejoin until she asks or dismisses them; asking takes the card away.
     expect((await db.contract.findUniqueOrThrow({ where: { id: sess2 } })).endKind).toBe("suspended");
-    expect((await act(open.testId, "join", ana.tester.cookie, { listingVersion: 1 })).status).toBe(200);
+    expect((await act(open.testId, "join", ana.tester.cookie, { listingVersion: 1 })).body.error.code).toBe("ask");
+    expect((await act(open.testId, "rejoin-ask", ana.tester.cookie, { listingVersion: 1, seenAt: seen(), confirmed: true, anyway: true })).body).toEqual({ asked: true });
+    expect((await db.contract.findUniqueOrThrow({ where: { id: ana.sessionId } })).removedDismissedAt).not.toBeNull();
+    // The developer can also invite her again as usual: with her ask waiting, the invite joins her at once.
+    expect((await act(open.testId, "invite", open.dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [ana.tester.user.id] })).status).toBe(200);
+    expect((await db.contract.findUniqueOrThrow({ where: { id: ana.sessionId } })).status).toBe("working");
   });
 
   it("admin refunds or releases a held share", async () => {
@@ -157,8 +161,10 @@ describe("a suspended tester (design doc 2 and 11.4)", () => {
 
 describe("deleting an account (design doc 2, 9, 11.4)", () => {
   it("stops its tests, removes it from the tests it is in, ends sign-in, and every open tab learns it", async () => {
-    const { dev, testId, sessionId, tester } = await withWork();
+    const { dev, testId, sessionId, tester, sub } = await withWork();
     const email = dev.user.email;
+    // (Owner, Oct 28; DEFAULT) Work waiting for Pay or Reject blocks a developer's deletion: pay it first.
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).status).toBe(200);
     const before = await json(await statusGET(req("/api/account/status", { cookie: dev.cookie })));
     expect(before.body.state).toBe("ok");
     const r = await json(await deletePOST(req("/api/account/delete", { cookie: dev.cookie, body: { confirmed: true } })));

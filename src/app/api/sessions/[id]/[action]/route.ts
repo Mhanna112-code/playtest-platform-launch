@@ -70,7 +70,7 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
       case "leave":
         return ok(await leaveTest(u, id, body));
       case "dismiss-removed": {
-        // (Owner, Oct 27) After a reinstatement the "Suspended" card stays on the dashboard until the tester rejoins or dismisses it.
+        // (Owner, Oct 28) After a reinstatement the "You were removed from this test" card stays on the dashboard until the tester asks to rejoin or dismisses it.
         const c = await db.contract.findUnique({ where: { id } });
         if (!c || c.testerId !== u.id || c.endKind !== "suspended") throw new HttpError(404, "not_found", "That card isn't there any more.");
         await db.contract.update({ where: { id }, data: { removedDismissedAt: new Date() } });

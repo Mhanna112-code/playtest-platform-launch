@@ -4,6 +4,7 @@ import { api } from "@/lib/client";
 import type { Change } from "@/components/ChangesBox";
 import { announce, clearShown, setShown, wasShownInBox } from "@/lib/live";
 import { LongList } from "@/components/LongList";
+import { ContractLink } from "@/components/ContractLink";
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const key = (c: Change) => `${c.at}|${c.text}`;
@@ -84,11 +85,7 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
             {l.kind === "terms" && l.contract && contractLink && (
               <>
                 {" "}
-                {contractLink === "scroll" ? (
-                  <a href={`#tester-${l.contract}`} onClick={() => setTimeout(() => (document.querySelector("#testers-joined") as HTMLDetailsElement | null)?.setAttribute("open", ""), 0)}>See their contract</a>
-                ) : (
-                  <a href={`/app/tests/${contractLink.testId}#tester-${l.contract}`} target="_blank" rel="noreferrer">See their contract</a>
-                )}
+                <ContractLink contract={l.contract} mode={contractLink} />
               </>
             )}
             {l.kind === "info" && seeIt && (

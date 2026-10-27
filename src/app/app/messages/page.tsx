@@ -2,7 +2,7 @@ import Link from "next/link";
 import { MessagesSquare } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
-import { requirePageUser } from "@/lib/server/page-auth";
+import { requireOpenPage } from "@/lib/server/page-auth";
 import { unreadCount } from "@/lib/server/messages";
 
 export const metadata = { title: "Messages · Playtest" };
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 /** Every conversation you're in, newest activity first, with unread counts (the full app's /messages). */
 export default async function MessagesPage() {
-  const u = await requirePageUser();
+  const u = await requireOpenPage("/app/messages"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
   const contracts = await db.contract.findMany({
     where: { OR: [{ testerId: u.id }, { test: { developerId: u.id } }] },
     include: { test: { include: { developer: true } }, tester: true },

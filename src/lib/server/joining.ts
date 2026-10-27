@@ -295,6 +295,8 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
     update: { note, listing: snap, status: "pending", changedAt: null, decidedAt: null, kind: "rejoin", ndaAcceptedAt },
     create: { testId, testerId: tester.id, note, listing: snap, kind: "rejoin", ndaAcceptedAt },
   });
+  // (Owner, Oct 28) A test a suspension removed them from leaves the dashboard top once they ask (or dismiss it).
+  if (old.endKind === "suspended" && !old.removedDismissedAt) await db.contract.update({ where: { id: old.id }, data: { removedDismissedAt: new Date() } });
   if (invited) {
     // The developer already invited them: the ask and the invite meet, and they are back at once.
     const c = await matchInviteAndAsk(testId, tester.id);

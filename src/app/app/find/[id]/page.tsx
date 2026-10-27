@@ -5,7 +5,7 @@ import { CategoryTile, mainCategory, PartBadges } from "@/components/Ui";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, money } from "@/lib/format";
 import { termsLine, testerShare, testPaused } from "@/lib/rules";
-import { requirePageUser } from "@/lib/server/page-auth";
+import { requireOpenPage } from "@/lib/server/page-auth";
 import { asListing, needsLines } from "@/lib/server/tests";
 import { JoinBox } from "./JoinBox";
 import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
@@ -35,7 +35,7 @@ const STEPS = {
 
 export default async function ListingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const u = await requirePageUser();
+  const u = await requireOpenPage("/app/find"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
   const t = await db.test.findUnique({ where: { id }, include: { developer: true } });
   if (!t || t.status === "draft") notFound();
   const mine = await db.contract.findUnique({ where: { testId_testerId: { testId: id, testerId: u.id } } });

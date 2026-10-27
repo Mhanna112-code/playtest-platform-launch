@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { CalendarDays, Languages, Monitor } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName, fmtDate } from "@/lib/format";
-import { requirePageUser } from "@/lib/server/page-auth";
+import { requireOpenPage } from "@/lib/server/page-auth";
 import { TesterTiles } from "@/components/ProfileTiles";
 import { ChatWithButton } from "@/components/ChatWithButton";
 import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function TesterProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const viewer = await requirePageUser();
+  const viewer = await requireOpenPage("/app/testers"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
   const p = await db.user.findUnique({ where: { id }, include: { profile: true } });
   if (!p || !p.isTester) notFound();
   const mine = viewer.id === p.id;

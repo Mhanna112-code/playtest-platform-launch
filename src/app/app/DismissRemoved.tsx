@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Err } from "@/components/Err";
 import { api, errOf } from "@/lib/client";
 
-/** (Owner, Oct 27) After a reinstatement the "Suspended" cards stay at the top of the dashboard until the tester rejoins or dismisses them. */
+/** (Owner, Oct 28) After a reinstatement the "You were removed from this test" cards stay at the top of the dashboard until the tester asks to rejoin or dismisses them. */
 export function DismissRemoved({ contractId }: { contractId: string }) {
   const [err, setErr] = useState("");
   return (

@@ -66,12 +66,13 @@ describe("Edit (design doc 5)", () => {
     await joined(testId);
     for (let i = 0; i < 3; i++) expect((await edit(testId, dev.cookie, { description: `After ${i}`, buildUrl: `https://example.com/${i}` })).status).toBe(200);
     expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalChanges).toBe(3);
-    const r = await edit(testId, dev.cookie, { buildUrl: "https://example.com/again" });
+    // (Owner, Oct 28) The refusal names the whole list, whichever limited field the Save touched.
+    const r = await edit(testId, dev.cookie, { languages: ["English"] });
     expect(r.status).toBe(400);
-    expect(r.body.error.message).toBe("You've changed the build link 3 times since testers joined. Contact us in Settings to change them again.");
-    expect(r.body.error.critical).toEqual(["buildUrl"]);
-    // Other fields still save.
-    expect((await edit(testId, dev.cookie, { title: "New name" })).status).toBe(200);
+    expect(r.body.error.message).toBe("You've changed the steps, NDA, questions, languages or devices 3 times since testers joined. Contact us in Settings to change them again.");
+    expect(r.body.error.critical).toEqual(["languages"]);
+    // Other fields still save: the build link is no longer limited.
+    expect((await edit(testId, dev.cookie, { title: "New name", buildUrl: "https://example.com/again" })).status).toBe(200);
   });
 
   it("an NDA change is a new offer the tester accepts (switch); the tester's terms history keeps the old text", async () => {

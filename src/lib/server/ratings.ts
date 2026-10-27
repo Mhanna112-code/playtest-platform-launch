@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { displayName, money, pronouns } from "@/lib/format";
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
-import { chargeIsOpen, testPaused } from "@/lib/rules";
+import { chargeIsOpen, rateStops, testClosedForRate, testPaused } from "@/lib/rules";
 import { testerGate } from "./testerGate";
 import { cancelCallsAhead, devGate, lockTest, ownContract, ownTest, recordEvent, spotOpened } from "./tests";
 
@@ -105,7 +105,9 @@ export async function testerRate(tester: { id: string; name: string; email: stri
   if (blocker === "rated") throw new HttpError(409, "rated", "You already rated this test.");
   if (blocker) throw new HttpError(409, "not_yet", blocker);
   const r = readRating(body);
-  await testerGate(tester.id, contractId, c0.testId, body);
+  // (Owner, Oct 28) While the test is open every stop-once kind applies; after it closes only pay, reject, charge, let go and disputes (batch 4 D4).
+  const closed = testClosedForRate(c0.test);
+  await testerGate(tester.id, contractId, c0.testId, body, undefined, { keep: (e) => rateStops(e, closed) });
   await db.$transaction(async (tx) => {
     await lockTest(tx, c0.testId);
     await tx.rating.create({ data: { testId: c0.testId, contractId, side: "tester", raterId: tester.id, rateeId: c0.test.developerId, ...r } });
@@ -124,7 +126,8 @@ export async function testerRate(tester: { id: string; name: string; email: stri
 
 /** Developer rates a tester who already rated them (within 14 days). Both ratings show at once. */
 export async function devRate(dev: { id: string; name: string; email: string }, testId: string, body: Record<string, unknown>) {
-  await ownTest(dev.id, testId);
+  const test = await ownTest(dev.id, testId);
+  const closed = testClosedForRate(test);
   const contractId = String(body.contractId ?? "");
   const c0 = await db.contract.findUnique({ where: { id: contractId }, include: { tester: true } });
   if (!c0 || c0.testId !== testId) throw new HttpError(404, "not_found", "Choose a tester.");
@@ -135,7 +138,8 @@ export async function devRate(dev: { id: string; name: string; email: string }, 
   const now = new Date();
   await db.$transaction(async (tx) => {
     await lockTest(tx, testId);
-    await devGate(tx, testId, body);
+    // (Owner, Oct 28) While the test is open every stop-once kind applies; after it closes only pay, reject, charge, let go and disputes (batch 4 D4).
+    await devGate(tx, testId, body, {}, [], (e) => rateStops(e, closed));
     await tx.rating.create({ data: { testId, contractId, side: "developer", raterId: dev.id, rateeId: c0.testerId, ...r, revealedAt: now } });
     await tx.rating.updateMany({ where: { contractId, side: "tester", revealedAt: null }, data: { revealedAt: now } });
   });

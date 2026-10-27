@@ -153,6 +153,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   );
   // (NEXT-UI 21) Needs you: sent work and held calls waiting for Pay / Reject, the testers' call requests, disputes waiting for the developer's side.
   const pieces = t.contracts
+    // (Owner, Oct 28) A tester who deleted their account: their unpaid work can no longer be paid, charged or disputed.
+    .filter((c) => !c.tester.deletedAt)
     .flatMap((c) => [
       ...c.submissions.filter((x) => !x.review).map((x) => ({ kind: "sub" as const, id: x.id, c, s: x, x: null, at: x.sentAt })),
       ...c.calls.filter((x) => x.status === "booked" && x.startsAt <= now && !x.review).map((x) => ({ kind: "call" as const, id: x.id, c, s: null, x, at: x.startsAt })),

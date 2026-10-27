@@ -96,7 +96,7 @@ describe("A3) a payment hold, a chargeback hold and a suspension are one state",
     const layout = src("app/app/layout.tsx");
     expect(layout).toContain("Email confirmation is off for testing.");
     expect(layout).toContain("confirmSkipped()");
-    expect(layout).toContain("hideMessages");
+    expect(layout).toContain("restrictedOn(u, side)"); // (Owner, Oct 28) every link to a closed page is hidden
     expect(src("app/app/page.tsx")).toContain('<RestrictedBox');
     expect(src("app/app/page.tsx")).not.toContain("border-rose-400/50");
   });
@@ -282,20 +282,22 @@ describe("B3) Join call", () => {
 });
 
 describe("C) Edit: 3 significant changes", () => {
-  it("the NDA, questions, part prices and the link count; one Save is one change; the line reads 'Changes left: 2 of 3'", async () => {
+  it("(batch 5 item 2) the steps, NDA, questions, languages and devices count; prices, parts and the link don't; one Save is one change; the line reads 'Changes left: 2 of 3'", async () => {
     expect(changesLeftLine(1)).toBe("Changes left: 2 of 3");
     expect(changesLeftLine(3)).toBe("Changes left: 0 of 3");
     const { dev, testId } = await setup();
     await joined(testId);
     const ver = async () => (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
-    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { ndaText: "Secret", writtenCents: "11.00", questions: ["A?"] } })).status).toBe(200);
+    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { ndaText: "Secret", questions: ["A?"] } })).status).toBe(200);
     expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalChanges).toBe(1); // many fields, one change
-    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { liveRateCents: "40.00" } })).status).toBe(200);
-    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { buildUrl: "https://example.com/z" } })).status).toBe(200);
+    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { languages: ["English"] } })).status).toBe(200);
+    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { devices: ["Windows PC"] } })).status).toBe(200);
     const fourth = await act(testId, "edit", dev.cookie, { version: await ver(), fields: { ndaText: "Another" } });
     expect(fourth.status).toBe(400);
     expect(fourth.body.error.critical).toEqual(["ndaText"]);
-    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { languages: ["English"], devices: ["Windows PC"] } })).status).toBe(200); // not significant
+    // Not limited: prices, parts and the build link.
+    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { writtenCents: "11.00", liveRateCents: "40.00", buildUrl: "https://example.com/z", liveRequired: true } })).status).toBe(200);
+    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalChanges).toBe(3);
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain("changesLeftLine");
     expect(form).toContain("disabled={limitReached}");
@@ -318,7 +320,7 @@ describe("D) testers", () => {
     expect(src("app/app/find/[id]/page.tsx")).toContain("This test isn&apos;t available right now.");
   });
 
-  it("Dismiss removes a 'Suspended' card after a reinstatement; re-invites include invite-only tests", async () => {
+  it("(batch 5 item 4) Dismiss removes a 'You were removed from this test' card after a reinstatement; no automatic re-invite", async () => {
     const a = await admin();
     const inviteOnly = await setup({ joinMode: "invite" });
     const t = await makeUser({ tester: true, name: "Ana Silva" });
@@ -327,7 +329,7 @@ describe("D) testers", () => {
     expect(j.status).toBe(200);
     expect((await aact(a.cookie, "suspend", { id: t.user.id, note: "Testing" })).status).toBe(200);
     expect((await aact(a.cookie, "unsuspend", { id: t.user.id })).status).toBe(200);
-    expect(await db.invite.count({ where: { testId: inviteOnly.testId, testerId: t.user.id, status: "sent" } })).toBe(1);
+    expect(await db.invite.count({ where: { testId: inviteOnly.testId, testerId: t.user.id, status: "sent" } })).toBe(0);
     const sid = j.body.sessionId as string;
     expect((await sact(sid, "dismiss-removed", t.cookie, {})).status).toBe(200);
     expect((await db.contract.findUniqueOrThrow({ where: { id: sid } })).removedDismissedAt).not.toBeNull();

@@ -4,7 +4,7 @@ import { CalendarDays, CalendarClock } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName, fmtDate } from "@/lib/format";
 import { termsLine } from "@/lib/rules";
-import { requirePageUser } from "@/lib/server/page-auth";
+import { requireOpenPage } from "@/lib/server/page-auth";
 import { DeveloperTiles } from "@/components/ProfileTiles";
 import { BlockButton } from "@/components/BlockButton";
 import { ReportButton } from "@/components/ReportButton";
@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function DeveloperProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const viewer = await requirePageUser();
+  const viewer = await requireOpenPage("/app/developers"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
   const p = await db.user.findUnique({ where: { id } });
   if (!p || !p.isDeveloper) notFound();
   const mine = viewer.id === p.id;

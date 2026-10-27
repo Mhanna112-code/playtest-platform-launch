@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDateTime } from "@/lib/format";
 import { callStatus } from "@/lib/server/blocks";
 import { roomUrl } from "@/lib/server/calls";
-import { requirePageUser } from "@/lib/server/page-auth";
+import { leaveIfClosed, requireOpenPage } from "@/lib/server/page-auth";
 import { CallRoom } from "./CallRoom";
 import { CallTimer } from "@/components/CallTimer";
 
@@ -12,9 +12,11 @@ export const dynamic = "force-dynamic";
 
 export default async function CallPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const u = await requirePageUser();
+  // (Owner, Oct 28) Closed to a restricted account (it moves to the dashboard top); with both sides and only a hold, the role in this call decides.
+  const u = await requireOpenPage("/app/calls");
   const call = await db.call.findUnique({ where: { id }, include: { slot: true, contract: { include: { test: true } } } });
   if (!call || (call.contract.testerId !== u.id && call.contract.test.developerId !== u.id)) notFound();
+  leaveIfClosed(u, "/app/calls", call.contract.test.developerId === u.id ? "developer" : "tester");
   const s = await callStatus(u, id);
   // The full app's call page header: "Call with Ana", then the test, the booked length and what's paid.
   const amTester = call.contract.testerId === u.id;

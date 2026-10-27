@@ -13,8 +13,8 @@ import { confirmSkipped } from "@/lib/server/users";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { isAdmin } from "@/lib/server/session";
 import { redirect } from "next/navigation";
-import { closedForSuspended } from "@/lib/closedPages";
-import { devRestricted, restrictionKey } from "@/lib/restricted";
+import { closedForSuspended, restrictedOn } from "@/lib/closedPages";
+import { restrictionKey } from "@/lib/restricted";
 import { SessionWatch } from "@/components/SessionWatch";
 
 // The full Playtest Platform's header (NEWEST+8): logo, the side's links with their icons, the bell, the account pill
@@ -29,17 +29,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (closedForSuspended(path, u, side)) redirect("/app");
   const unread = await db.notification.count({ where: { userId: u.id, readAt: null } });
   const name = u.name.trim() || u.email;
-  const asDevOff = u.isDeveloper && devRestricted(u, side);
-  const tOff = !!u.suspendedAt && u.isTester;
+  // (Owner, Oct 28) Restricted on this side: a suspended account (both sides), or a developer on a payment or chargeback hold on their developer side.
+  const off = restrictedOn(u, side);
   // Following a link to a page of the other side remembers it as the side used last (what shared pages then show).
   const pageSide = hasBoth(u) ? sideForPath(path) : null;
   if (pageSide && pageSide !== u.side) after(() => db.user.update({ where: { id: u.id }, data: { side: pageSide } }).catch(() => null));
   const contracts = await db.contract.findMany({ where: { OR: [{ testerId: u.id }, { test: { developerId: u.id } }] }, select: { testId: true, testerId: true } });
   const unreadChats = (await Promise.all(contracts.map((c) => unreadCount(u.id, c.testId, c.testerId)))).reduce((a, b) => a + b, 0);
-  // (Owner, Oct 27) Links to pages a restricted account can't open are hidden: Post a test and Messages for a restricted developer; Find tests, Profile and Messages for a suspended tester.
-  const hideMessages = asDevOff && side === "developer" || !!u.suspendedAt;
-  const hideProfile = !!u.suspendedAt || (side === "developer" && asDevOff);
-  const messagesLink = hideMessages ? null : (
+  // (Owner, Oct 28) A restricted account keeps only the links to pages it can open: Dashboard, Payments, the bell and the account (Settings). Post a test, Find tests,
+  // Profile and Messages are hidden.
+  const messagesLink = off ? null : (
     <Link className="nav-link relative" href="/app/messages"><MessagesSquare className="h-4 w-4" /> Messages
       {unreadChats > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950">{unreadChats > 9 ? "9+" : unreadChats}</span>}
     </Link>
@@ -53,9 +52,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             {isAdmin(u) && <Link href="/admin" className="nav-link text-punch-200"><ShieldCheck className="h-4 w-4" /> Admin</Link>}
             {/* Each side has its own links: developer: Dashboard, Post a test, Profile, Payments, Messages; tester: Dashboard, Find tests, Profile, Payments, Messages. */}
             <Link className="nav-link" href="/app"><LayoutDashboard className="h-4 w-4" /> Dashboard</Link>
-            {side === "developer" && !(asDevOff) && <Link className="nav-link" href="/app/tests/new"><PlusCircle className="h-4 w-4" /> Post a test</Link>}
-            {side === "tester" && !u.suspendedAt && <Link className="nav-link" href="/app/find"><Compass className="h-4 w-4" /> Find tests</Link>}
-            {!hideProfile && <Link className="nav-link" href="/app/profile"><UserRound className="h-4 w-4" /> Profile</Link>}
+            {side === "developer" && !off && <Link className="nav-link" href="/app/tests/new"><PlusCircle className="h-4 w-4" /> Post a test</Link>}
+            {side === "tester" && !off && <Link className="nav-link" href="/app/find"><Compass className="h-4 w-4" /> Find tests</Link>}
+            {!off && <Link className="nav-link" href="/app/profile"><UserRound className="h-4 w-4" /> Profile</Link>}
             <Link className="nav-link" href="/app/payments"><CreditCard className="h-4 w-4" /> Payments</Link>
             {messagesLink}
           </div>
@@ -95,10 +94,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       )}
       {/* A restricted account's blue box is at the top of the dashboard; other open pages (Payments, Settings) carry this one line. */}
-      {(asDevOff || tOff) && !/^\/app\/?(\?.*)?$/.test(path) && (
+      {off && !/^\/app\/?(\?.*)?$/.test(path) && (
         <p className="mx-auto mt-4 max-w-6xl px-4" data-suspended-strip="">
           <span className="info block">
-            {u.suspendedAt ? <>Your account is suspended. To appeal, use <Link href="/app/help" className="underline">Contact us</Link> in Settings.</> : u.holdReason === "chargeback" ? <>Your tests are paused after a chargeback. <Link href="/app/payments#chargeback-steps" className="underline">Follow the steps in Payments</Link>.</> : <>Your tests are paused until you pay what you owe. <Link href="/app/payments#owed" className="underline">Pay what you owe</Link>.</>}
+            {u.suspendedAt ? <>Your account is {side === "tester" ? "paused" : "suspended"}. To appeal, use <Link href="/app/help" className="underline">Contact us</Link> in Settings.</> : u.holdReason === "chargeback" ? <>Your tests are paused after a chargeback. <Link href="/app/payments#chargeback-steps" className="underline">Follow the steps in Payments</Link>.</> : <>Your tests are paused until you pay what you owe. <Link href="/app/payments#owed" className="underline">Pay what you owe</Link>.</>}
           </span>
         </p>
       )}

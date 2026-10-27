@@ -114,6 +114,8 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
   for (const t of allTests)
     for (const c of t.contracts) {
       const who = displayName(c.tester);
+      // (Owner, Oct 28) A tester who deleted their account: their unpaid work can no longer be paid, charged or disputed, so it isn't waiting for review.
+      if (c.tester.deletedAt) continue;
       for (const s of c.submissions.filter((x) => !x.review)) items.push({ key: `s-${s.id}`, at: s.sentAt, href: `/app/tests/${t.id}#piece-${s.id}`, who, text: <>sent their {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white">{t.title}</b></>, cta: "Review" });
       for (const x of c.calls.filter((y) => y.status === "booked" && y.startsAt <= now && !y.review)) items.push({ key: `c-${x.id}`, at: x.startsAt, href: `/app/tests/${t.id}#call-${x.id}`, who, text: <>held a live call for <b className="text-white">{t.title}</b>: enter its length and pay</>, cta: "Review" });
       for (const s of c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide)) items.push({ key: `d-${s.id}`, at: s.dispute!.createdAt, href: `/app/tests/${t.id}#item-dispute-${s.dispute!.id}`, who, text: <>disputed what you paid on <b className="text-white">{t.title}</b>: add your side</>, cta: "Answer" });
@@ -265,7 +267,8 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
                     <div className="grid items-end gap-3 sm:grid-cols-2">
                       <div className="space-y-1.5">
                         <p className="text-xs uppercase tracking-wide text-slate-500">Testers · {num(inIt.length)} of {num(t.spots)}</p>
-                        <Seats total={t.spots} people={inIt.map((c) => ({ id: c.testerId, name: displayName(c.tester), contractId: restricted ? undefined : c.id }))} />
+                        {/* (Owner, Oct 28) Restricted: names are plain text (no hover card: no Chat with, Report, Block or profile link). */}
+                        <Seats total={t.spots} plain={restricted} people={inIt.map((c) => ({ id: c.testerId, name: displayName(c.tester), contractId: restricted ? undefined : c.id }))} />
                       </div>
                       <div className="space-y-1.5">
                         <p className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-500">
@@ -324,10 +327,12 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const history = contracts.filter((c) => c.status !== "working");
   const pausedTest = (t: { adminPausedAt: Date | null; developer: { holdStartedAt: Date | null; suspendedAt: Date | null } }) => testPaused(t.developer, t);
   const byEnd = (a: (typeof contracts)[number], b: (typeof contracts)[number]) => (b.endedAt ?? b.joinedAt).getTime() - (a.endedAt ?? a.joinedAt).getTime();
-  // (Owner, Oct 27) Tests the team's suspension removed the tester from: while suspended a read-only list; after reinstatement they sit at the top with a "Suspended" label and
-  // Rejoin (an invite is waiting) or Ask to rejoin, until they rejoin or dismiss them. Other left / removed tests (before the deadline, not stopped, not rated) are in "Tests you left".
-  const removed = history.filter((c) => c.endKind === "suspended" && !c.removedDismissedAt).sort(byEnd);
-  const inviteTests = new Set(invites.map((i) => i.testId));
+  // (Owner, Oct 28) Tests the team's suspension removed the tester from: while suspended a read-only list; after reinstatement (no automatic re-invite) they sit at the top with
+  // "You were removed from this test" and Ask to rejoin (only while the test is open, has a spot and isn't paused), until they ask or dismiss them. The developer can also invite
+  // them again as usual (the invite shows under Invitations). Other left / removed tests (before the deadline, not stopped, not rated) are in "Tests you left".
+  const removed = history.filter((c) => c.endKind === "suspended" && !c.removedDismissedAt && !apps.some((a) => a.testId === c.testId && a.kind === "rejoin")).sort(byEnd);
+  const inRemoved = new Map((await db.contract.groupBy({ by: ["testId"], where: { testId: { in: removed.map((c) => c.testId) }, status: "working" }, _count: { _all: true } })).map((g) => [g.testId, g._count._all]));
+  const hasSpot = (c: (typeof contracts)[number]) => (inRemoved.get(c.testId) ?? 0) < c.test.spots && (!c.test.openUntil || c.test.openUntil > now);
   const askable = (c: (typeof contracts)[number]) => canAskToRejoin(c, rated.has(c.id)) && c.test.status !== "stopped" && !apps.some((a) => a.testId === c.testId && a.kind === "rejoin");
   const left = history.filter((c) => c.endKind !== "suspended" && askable(c)).sort(byEnd);
   const toSend = (c: (typeof contracts)[number]) => [
@@ -345,24 +350,24 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
     .map((c) => ({ c, parts: c.submissions.filter((s) => !s.review && s.choiceOfferedAt && chargeAmount(s.agreedCents, paidFor(s.id)) > 0) }))
     .filter((x) => x.parts.length > 0)
     .sort((a, b) => Math.max(...b.parts.map((s) => s.sentAt.getTime())) - Math.max(...a.parts.map((s) => s.sentAt.getTime())));
-  const answers = [
+  // (Owner, Oct 28) A suspended tester's session pages are closed: nothing here links to them.
+  const answers = suspended ? [] : [
     ...offers.flatMap((o) => { const c = byId.get(o.contractId); return c ? [{ key: `offer-${o.id}`, c, text: `${displayName(c.test.developer)} offered new terms: ${o.diff}`, href: `/app/sessions/${c.id}`, cta: "Switch or keep your terms" }] : []; }),
     ...devReqs.flatMap((r) => { const c = byId.get(r.contractId); return c ? [{ key: `req-${r.id}`, c, text: `${displayName(c.test.developer)} asked for a live call`, href: `/app/sessions/${c.id}#calls`, cta: "Accept or decline" }] : []; }),
   ];
-  const upcoming = contracts.flatMap((c) => c.calls.map((x) => ({ c, x }))).sort((a, b) => a.x.startsAt.getTime() - b.x.startsAt.getTime());
+  const upcoming = suspended ? [] : contracts.flatMap((c) => c.calls.map((x) => ({ c, x }))).sort((a, b) => a.x.startsAt.getTime() - b.x.startsAt.getTime());
   const more = recommended.filter((t) => !t.contracts.some((c) => c.status === "working")).slice(0, 4);
   const removedCard = (c: (typeof contracts)[number]) => {
-    const invited = inviteTests.has(c.testId);
-    const may = !suspended && c.test.status === "open" && !pausedTest(c.test) && (invited || askable(c));
+    const may = !suspended && c.test.status === "open" && !pausedTest(c.test) && hasSpot(c) && askable(c);
     return (
       <li key={c.id} className="card flex flex-wrap items-center gap-3 p-4" data-removed={c.id}>
         <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
         <div className="min-w-[12rem] flex-1">
-          <p className="truncate font-semibold text-white" title={c.title}>{c.title} <span className="badge ml-1 border-rose-300/40 text-rose-200" data-suspended-label="">Suspended</span> {pausedTest(c.test) && <PausedTag />}</p>
-          <p className="text-sm text-slate-400">You were removed from this test. {suspended ? "It comes back to you when your account is active again." : invited ? "You're invited back." : ""}</p>
+          <p className="truncate font-semibold text-white" title={c.title}>{c.title} {pausedTest(c.test) && <PausedTag />}</p>
+          <p className="text-sm text-slate-400" data-removed-label="">You were removed from this test.</p>
         </div>
         {may && (
-          <Link href={`/app/find/${c.testId}`} className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" data-rejoin={c.id}><RotateCcw className="h-4 w-4" /> {invited ? "Rejoin" : "Ask to rejoin"}</Link>
+          <Link href={`/app/find/${c.testId}`} className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" data-rejoin={c.id}><RotateCcw className="h-4 w-4" /> Ask to rejoin</Link>
         )}
         {!suspended && <DismissRemoved contractId={c.id} />}
       </li>
@@ -469,14 +474,20 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 </Link>
               </li>
             ))}
-            {waiting.map(({ c, s }) => (
-              <li key={s.id}>
-                <Link href={`/app/sessions/${c.id}#parts`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">
+            {waiting.map(({ c, s }) => {
+              const inner = (
+                <>
                   <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={c.title}>{c.title} {pausedTest(c.test) && <PausedTag />}</p>
                   <span className="badge text-amber-300"><Clock className="h-3.5 w-3.5" /> {s.kind === "recording" ? "Screen recording" : "Written answers"} sent: waiting for review</span>
-                </Link>
-              </li>
-            ))}
+                </>
+              );
+              return (
+                <li key={s.id}>
+                  {/* (Owner, Oct 28) Suspended: the session page is closed, so the row doesn't open. */}
+                  {suspended ? <div className="card flex flex-wrap items-center gap-3 p-4" data-waiting-plain="">{inner}</div> : <Link href={`/app/sessions/${c.id}#parts`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">{inner}</Link>}
+                </li>
+              );
+            })}
           </LongList>
         </section>
       )}
@@ -578,7 +589,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                       {mine.map((o) => <li key={o.id}>{fmtDate(o.createdAt)}: new terms offered ({o.diff}): {o.status === "switched" ? "you switched" : o.status === "kept" ? "you kept yours" : o.status === "open" ? "waiting for your answer" : "replaced by a newer offer"}</li>)}
                       {pays.map((p) => <li key={p.id}>{fmtDate(p.createdAt)}: paid {money(testerShare(p.amountCents))} to you</li>)}
                     </ul>
-                    <p className="mt-2 text-sm"><Link href={`/app/sessions/${c.id}#parts`}>Open the session</Link></p>
+                    {!suspended && <p className="mt-2 text-sm"><Link href={`/app/sessions/${c.id}#parts`}>Open the session</Link></p>}
                   </details>
                 </li>
               );

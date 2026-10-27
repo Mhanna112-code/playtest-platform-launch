@@ -68,7 +68,7 @@ export async function testerChanges(testerId: string, contractId: string, testId
 const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", "info", "payment", "admin", "own", "dispute"];
 
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
-export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean } = {}) {
+export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; keep?: (e: TestEventLike) => boolean } = {}) {
   // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt); Leave and
   // Block send no boxAt, so they still stop just once.
   const boxAt = seenOf(body.boxAt);
@@ -77,7 +77,9 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   if (!seenAt) return;
   // New terms count from the page's own render (pageSeenAt), or from the box's time on a second press; everything else from `seenAt`.
   const termsFrom = body.confirmed === true ? seenAt : seenOf(body.pageSeenAt) ?? seenAt;
-  const all = withRenamed(await testerChanges(testerId, contractId, testId, seenAt, tabOf(body), termsFrom), body);
+  const raw = await testerChanges(testerId, contractId, testId, seenAt, tabOf(body), termsFrom);
+  // (Owner, Oct 28) `keep`: a button that stops for only some kinds (Rate after the test closed).
+  const all = withRenamed(opts.keep ? raw.filter((e) => e.kind === "renamed" || opts.keep!(e)) : raw, body);
   const changes = all.filter((e) => (e.kind === "terms" ? !opts.skipTerms && e.createdAt > termsFrom : true));
   const terms = changes.filter((e) => e.kind === "terms");
   const r = stopOnce(changes.filter((e) => e.kind !== "terms"), seenAt, false, [...KINDS, "renamed"]);

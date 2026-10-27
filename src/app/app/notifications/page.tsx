@@ -2,7 +2,8 @@ import { Bell } from "lucide-react";
 import { db } from "@/lib/db";
 import { fmtDate } from "@/lib/format";
 import { requirePageUser } from "@/lib/server/page-auth";
-import { sideLink } from "@/lib/sides";
+import { sideFor, sideLink } from "@/lib/sides";
+import { closedForSuspended } from "@/lib/closedPages";
 import { AlertSettings } from "./AlertSettings";
 import { BellList, type BellEntry } from "./BellList";
 import { GROUP_TITLES, bellKey, dayKey } from "@/lib/bell";
@@ -23,11 +24,13 @@ export default async function Notifications() {
     groups.set(k, [...(groups.get(k) ?? []), n]);
   }
   const todayKey = dayKey(new Date());
+  // (Owner, Oct 28) A restricted account: a line whose page is closed to it lands on the dashboard top.
+  const hrefFor = (link: string) => (closedForSuspended(link, u, sideFor(u, link)) ? "/app" : sideLink(u, link));
   const entries: BellEntry[] = [...groups.entries()].map(([key, g]) => ({
     key,
     title: g[0].groupKey ? GROUP_TITLES[g[0].groupKey] : g[0].testId ? titles.get(g[0].testId) : undefined,
     day: dayKey(g[0].createdAt) === todayKey ? "today" : `on ${fmtDate(g[0].createdAt)}`,
-    lines: g.map((n) => ({ id: n.id, text: n.text, href: n.link ? sideLink(u, n.link) : "", read: !!n.readAt, ago: timeAgo(n.createdAt) })),
+    lines: g.map((n) => ({ id: n.id, text: n.text, href: n.link ? hrefFor(n.link) : "", read: !!n.readAt, ago: timeAgo(n.createdAt) })),
   }));
   await db.notification.updateMany({ where: { userId: u.id, readAt: null, id: { in: [...groups.values()].filter((g) => g.length === 1).map((g) => g[0].id) } }, data: { readAt: new Date() } });
   return (
