@@ -70,6 +70,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   // (Owner, Oct 28 afternoon) A Charge pressed (or a dispute decided for them) while the developer was on a hold: added to what the developer owes, paid when they pay it.
   const owedRows = await db.payment.findMany({ where: { contractId: c.id, OR: [{ status: "owed" }, { status: "failed", settledAt: null, owedUntil: { not: null }, kind: "dispute" }] }, select: { submissionId: true, callId: true, kind: true, amountCents: true } });
   const chargedOwed = new Map(owedRows.filter((p) => p.kind === "review" && p.submissionId).map((p) => [p.submissionId!, p.amountCents]));
+  // (Batch 9) Extra pays, with the developer's notes.
+  const extraRows = await db.payment.findMany({ where: { contractId: c.id, kind: "extra", status: { in: ["charged", "not_set_up"] } }, select: { submissionId: true, callId: true, amountCents: true, note: true, createdAt: true }, orderBy: { createdAt: "asc" } });
   const disputeOwed = new Set(owedRows.filter((p) => p.kind === "dispute").map((p) => p.submissionId ?? p.callId ?? ""));
   const owedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", settledAt: null, owedUntil: { not: null }, callId: { not: null } }, select: { callId: true } })).map((p) => p.callId!));
   const failedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", callId: { not: null } }, select: { callId: true } })).map((p) => p.callId!));
@@ -268,7 +270,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
               {sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && !meOff && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0 && (
                 <ChoiceBox paused={rulesPaused} seenAt={seenAt} sessionId={c.id} submissionId={sub.id} devName={dev} cents={chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0)} line={choiceLine(dev, key, chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0))} />
               )}
-              {sub && chargedOwed.has(sub.id) ? <p className="info" data-charged-delayed="">{chargedDelayedLine(chargedOwed.get(sub.id)!)}</p> : sub && delayedSubs.has(sub.id) ? <p className="info">Payment for this part may be delayed.</p> : sub?.review && <TesterReview off={meOff} delayed={disputeOwed.has(sub.id)} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} />}
+              {sub && chargedOwed.has(sub.id) ? <p className="info" data-charged-delayed="">{chargedDelayedLine(chargedOwed.get(sub.id)!)}</p> : sub && delayedSubs.has(sub.id) ? <p className="info">Payment for this part may be delayed.</p> : sub?.review && <TesterReview dev={dev} extras={extraRows.filter((p) => p.submissionId === sub.id)} off={meOff} delayed={disputeOwed.has(sub.id)} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} />}
             </li>
           ))}
           <li id="part-live" data-part="live" className="scroll-mt-24 space-y-1.5 rounded-xl border border-white/[0.08] p-3 text-sm">
@@ -287,7 +289,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             {c.calls.filter((x) => x.review).map((x) => (
               <div key={x.id} className="space-y-2">
                 <p className="text-slate-300">Live call on {fmtDateTime(x.startsAt)}</p>
-                {owedCalls.has(x.id) ? <p className="info">{DELAYED_CALL_LINE}</p> : <TesterReview off={meOff} delayed={disputeOwed.has(x.id)} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} />}
+                {owedCalls.has(x.id) ? <p className="info">{DELAYED_CALL_LINE}</p> : <TesterReview dev={dev} extras={extraRows.filter((p) => p.callId === x.id)} off={meOff} delayed={disputeOwed.has(x.id)} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} />}
               </div>
             ))}
           </li>
@@ -372,22 +374,25 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   );
 }
 
-type Rev = { amountCents: number; agreedCents: number | null; rejected: boolean; reason: string; createdAt: Date };
+type Rev = { amountCents: number; agreedCents: number | null; rejected: boolean; reason: string; createdAt: Date; rateCents?: number | null };
 type Disp = { status: string; decidedCents: number | null; decisionNote: string; devSide: string } | null;
 
 /** What the developer did with a piece, as the tester reads it (they see what they get; never holds or chargebacks). */
-function TesterReview({ sessionId, kind, id, review, dispute, delayed = false, off = false }: { off?: boolean; /** A raise decided while the developer was on a hold: owed, paid when they pay it. */ delayed?: boolean; sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
+function TesterReview({ sessionId, kind, id, review, dispute, delayed = false, off = false, dev = "The developer", extras = [] }: { dev?: string; /** (Batch 9) extra pays on this piece, with their notes */ extras?: { amountCents: number; note: string; createdAt: Date }[]; off?: boolean; /** A raise decided while the developer was on a hold: owed, paid when they pay it. */ delayed?: boolean; sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
   const may = canDispute(review.amountCents, review.agreedCents, !!dispute).ok;
   return (
     <div className="space-y-2 rounded-lg bg-white/[0.03] p-3 text-sm">
       {review.rejected ? (
         <p><b>Not accepted</b> ({fmtDateTime(review.createdAt)}): “{review.reason}”</p>
+      ) : review.amountCents === 0 ? (
+        <p data-paid-zero="">{dev} paid $0 for this ({fmtDateTime(review.createdAt)}){review.reason && <> · “{review.reason}”</>}</p>
       ) : (
         <p>
-          <b>Paid {money(review.amountCents)}</b>: you get {money(testerShare(review.amountCents))} ({fmtDateTime(review.createdAt)})
+          <b>Paid {money(review.amountCents)}</b>{review.rateCents != null && <> ({money(review.rateCents)}/h)</>}: you get {money(testerShare(review.amountCents))} ({fmtDateTime(review.createdAt)})
           {review.reason && <> · “{review.reason}”</>}
         </p>
       )}
+      {extras.map((x, i) => <p key={i} data-extra-line="">Extra {money(x.amountCents)}: you get {money(testerShare(x.amountCents))} ({fmtDateTime(x.createdAt)}){x.note && <> · “{x.note}”</>}</p>)}
       {review.agreedCents == null && <p className="note">This wasn&apos;t in your contract, so the developer&apos;s amount is final.</p>}
       {dispute && <p>{dispute.status === "open" ? "You disputed this: waiting for the team." : `The team decided: ${money(dispute.decidedCents)} in all${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : ""}.`}</p>}
       {delayed && <p className="info" data-dispute-delayed="">Payment may be delayed until the test resumes.</p>}

@@ -13,7 +13,8 @@ import { POST as testsPOST } from "@/app/api/tests/route";
 import { checkListing, HIGH_PART_TICK, type Listing } from "@/lib/rules";
 import { adminPage, userTotals } from "@/lib/server/adminLists";
 import { payOwed, startHold } from "@/lib/server/holds";
-import { overListingRoom } from "@/lib/server/payments";
+import { pieceOf, pieceRoom } from "@/lib/server/payments";
+const roomOf = async (submissionId: string) => pieceRoom((await pieceOf({ submissionId }))!);
 import { REPORTED_LABEL } from "@/lib/server/reports";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
@@ -166,12 +167,12 @@ describe("Q) a declined payment starts the hold at once (no owed window)", () =>
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
     expect((await lines(tester.user.id)).some((x) => /may be delayed/.test(x.text) && x.groupKey === "tdelayed")).toBe(true);
     // Extra pay: unavailable during the hold (refused before the card is tried).
-    const x = await act(testId, "pay-extra", dev.cookie, { seenAt: seen(), contractId: sessionId, submissionId: sub.id, amount: "2.00" });
+    const x = await act(testId, "pay-extra", dev.cookie, { seenAt: seen(), contractId: sessionId, submissionId: sub.id, amount: "2.00", tickedCents: 200 });
     expect(x.body.error.code).toBe("held");
     // A developer with no hold whose extra pay is declined: a hold at once.
     const e = await owing();
     await db.review.create({ data: { submissionId: e.sub.id, contractId: e.sessionId, amountCents: 1000, agreedCents: 1000, payKey: "k-" + randomUUID() } });
-    const ex = await act(e.testId, "pay-extra", e.dev.cookie, { seenAt: seen(), contractId: e.sessionId, submissionId: e.sub.id, amount: "2.00" });
+    const ex = await act(e.testId, "pay-extra", e.dev.cookie, { seenAt: seen(), contractId: e.sessionId, submissionId: e.sub.id, amount: "2.00", tickedCents: 200 });
     expect(ex.status).toBe(402);
     expect(ex.body.error.held).toBe(true);
     expect((await db.user.findUniqueOrThrow({ where: { id: e.dev.user.id } })).holdStartedAt).not.toBeNull();
@@ -326,29 +327,29 @@ describe("S) price caps and the $200 ticks", () => {
     expect(form).toContain("data-high-tick");
   });
 
-  it("any Pay box over $200 shows the tick every time and is refused until ticked", async () => {
+  it("(batch 9) any Pay box over $200 also needs 'I confirm this payment is over $200.' and is refused until ticked", async () => {
     const { dev, sub } = await sentAt(50_000);
     const no = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "250.00", tickedCents: 25_000, reason: "Partly done" });
     expect(no.status).toBe(400);
-    expect(no.body.error.message).toBe("Tick “I understand this payment can't be refunded and is charged now.” to pay.");
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "250.00", tickedCents: 25_000, reason: "Partly done", understood: true })).status).toBe(200);
+    expect(no.body.error.message).toBe("Tick “I confirm this payment is over $200.” to pay.");
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "250.00", tickedCents: 25_000, reason: "Partly done", over200: true })).status).toBe(200);
     expect(src("app/app/tests/[id]/PayBox.tsx")).toContain("data-pay-tick");
   });
 });
 
-describe("T) extra pay beside each sent part, capped at 100% of the contract total above the listing", () => {
-  const extra = (cookie: string, testId: string, body: Record<string, unknown>) => act(testId, "pay-extra", cookie, { seenAt: seen(), payKey: randomUUID(), ...body });
+describe("T) extra pay beside each sent part, (batch 9) capped per piece at 100% of its listing (never more than the max)", () => {
+  const extra = (cookie: string, testId: string, body: Record<string, unknown>) => act(testId, "pay-extra", cookie, { seenAt: seen(), payKey: randomUUID(), ...(typeof body.amount === "string" ? { tickedCents: Math.round(Number(body.amount) * 100) } : {}), ...body });
 
   it("pays above the listing for a sent part (80/20, a bell that does not stack); 'up to $Y' is the room left; the server refuses more", async () => {
     const { dev, tester, testId, sessionId, sub } = await sentAt(20_000);
-    expect((await overListingRoom(sessionId)).roomCents).toBe(20_000); // 100% of the $200 contract total
+    expect((await roomOf(sub.id)).aboveBaseCents).toBe(20_000); // 100% of the $200 listing
     const r = await extra(dev.cookie, testId, { contractId: sessionId, submissionId: sub.id, amount: "150.00" });
     expect(r.status).toBe(200);
     const p = await db.payment.findFirstOrThrow({ where: { contractId: sessionId, kind: "extra" } });
     expect(p).toMatchObject({ amountCents: 15_000, feeCents: 3000, testerCents: 12_000, submissionId: sub.id });
     const bell = (await lines(tester.user.id)).find((l) => /paid you \$150\.00 extra for Harbor Run$/.test(l.text))!;
     expect(bell).toMatchObject({ own: false, groupKey: "textra", payment: true }); // (Owner, Oct 27) "<dev> paid you $X extra" lines stack across tests, one entry a day
-    expect((await overListingRoom(sessionId)).roomCents).toBe(5000);
+    expect((await roomOf(sub.id)).aboveBaseCents).toBe(5000);
     const over = await extra(dev.cookie, testId, { contractId: sessionId, submissionId: sub.id, amount: "60.00" });
     expect(over.status).toBe(400);
     expect(over.body.error.message).toBe("This is more than you can pay above the listing (up to $50).");
@@ -356,19 +357,18 @@ describe("T) extra pay beside each sent part, capped at 100% of the contract tot
     expect((await extra(dev.cookie, testId, { contractId: sessionId, submissionId: sub.id, amount: "1.00" })).body.error.message).toBe("This is more than you can pay above the listing (up to $0).");
   });
 
-  it("a normal Pay above the listing counts toward the same cap; booked and held calls add to the contract total; an unsent part has no extra box", async () => {
-    const { dev, tester, testId, sessionId, sub } = await sentAt(10_000);
-    await bookCall(testId, dev.cookie, sessionId, tester.cookie, 48); // 30 min at $30/h = $15
-    expect((await overListingRoom(sessionId)).capCents).toBe(11_500);
+  it("a normal Pay above the listing counts toward the same piece's cap; an unsent part has no extra box", async () => {
+    const { dev, sub } = await sentAt(10_000);
+    expect((await roomOf(sub.id)).capCents).toBe(10_000);
     // Pay $110 for a $100 part: $10 above the listing.
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "110.00", tickedCents: 11_000, understood: true })).status).toBe(200);
-    expect((await overListingRoom(sessionId)).roomCents).toBe(10_500);
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "110.00", tickedCents: 11_000 })).status).toBe(200);
+    expect((await roomOf(sub.id)).aboveBaseCents).toBe(9000);
     expect(src("app/app/tests/[id]/page.tsx")).toContain("r.sub && !restricted && <ExtraPay");
     expect(src("app/app/tests/[id]/ExtraPay.tsx")).toContain("up to {money(roomCents)}");
     expect(src("app/app/tests/[id]/ExtraPay.tsx")).toContain("Paid so far for this part:");
     // Pay above the cap is refused.
     const two = await sentAt(10_000, "Ben Carter");
-    const tooMuch = await pay(two.dev.cookie, { kind: "submission", id: two.sub.id, amount: "250.00", tickedCents: 25_000, understood: true });
+    const tooMuch = await pay(two.dev.cookie, { kind: "submission", id: two.sub.id, amount: "250.00", tickedCents: 25_000, over200: true });
     expect(tooMuch.status).toBe(400);
     expect(tooMuch.body.error.message).toBe("This is more than you can pay above the listing (up to $100).");
   });

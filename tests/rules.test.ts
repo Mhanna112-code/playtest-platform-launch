@@ -39,8 +39,8 @@ describe("the one Pay box", () => {
     expect(checkPay(0, null, "", 0).ok).toBe(true);
     expect(checkPay(700, null, "", 700).ok).toBe(true);
   });
-  it("the charged-now tick must name exactly the amount", () => {
-    expect(checkPay(1000, 1000, "", null)).toMatchObject({ ok: false, message: "Tick “charged now: $10.00” to pay." });
+  it("(batch 9) the tick must name exactly the amount", () => {
+    expect(checkPay(1000, 1000, "", null)).toMatchObject({ ok: false, message: "Tick “I understand this payment of $10.00 can't be refunded and is charged now.” to pay." });
     expect(checkPay(1000, 1000, "", 900).ok).toBe(false);
   });
   it("never negative, fractional, or under the smallest card charge", () => {

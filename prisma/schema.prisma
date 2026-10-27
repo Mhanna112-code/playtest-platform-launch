@@ -157,6 +157,9 @@ model Test {
   /// current pause: pauseCloseSetAt >= the pause's start); pauseClosedAt/Reason record a closure caused by the pause.
   pauseCloseAt      DateTime?
   pauseCloseSetAt   DateTime?
+  /// (Owner, Oct 28 night, batch 9) When this test was first paused, whatever the causes: ONE 7-day clock while it stays paused (a second cause starting or one
+  /// cause lifting while another remains never restarts it). Cleared when no cause is left.
+  pausedSince       DateTime?
   pauseClosedAt     DateTime?
   pauseClosedReason String   @default("")
   description String   @default("")
@@ -350,6 +353,8 @@ model Review {
   rejected     Boolean     @default(false)
   /// Paid automatically after 14 days without a review
   auto         Boolean     @default(false)
+  /// (Batch 9) A call's Pay: the rate typed in the box ($/h, cents), when one was typed; the tester sees it with the amount
+  rateCents    Int?
   /// Idempotency: one charge per press, never twice
   payKey       String      @unique
   createdAt    DateTime    @default(now())
@@ -390,6 +395,8 @@ model Payment {
   /// (Owner, Oct 27) A chargeback adds its amount to what the developer owes; this payment is the card charge that repays that reversed payment
   repaysId     String?
   failure      String   @default("")
+  /// (Batch 9) The developer's optional note to the tester (extra pay; a Pay's note is the review's reason)
+  note         String   @default("")
   createdAt    DateTime @default(now())
 
   @@index([developerId])

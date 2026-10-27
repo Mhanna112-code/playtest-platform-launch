@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money, toCents } from "@/lib/format";
-import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, canDispute, checkDisputeDecision, delayedPayLine, declinedHoldLine, checkPay, checkReject, STRIPE_MAX_CENTS, checkExtraPay, EXTRA_PAY_CAP_PERCENT, NO_LISTING_CAP_CENTS, overListingLine, PAY_TICK_CENTS, PAY_TICK_LINE, PAY_WAITS, testerShare } from "@/lib/rules";
+import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, callReference, checkDevSide, canDispute, checkDisputeDecision, delayedPayLine, declinedHoldLine, checkPay, checkReject, STRIPE_MAX_CENTS, checkExtraPay, extraCapCents, overListingLine, overMaxLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, PAY_WAITS, testerShare } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify } from "./notify";
 import { blockedEitherWay } from "./blocks";
@@ -27,14 +27,14 @@ async function loadPiece(tx: Prisma.TransactionClient, kind: string, id: string)
   if (kind === "submission") {
     const s = await tx.submission.findUnique({ where: { id }, include: { review: true, contract: { include: { test: true, tester: true } } } });
     if (!s) return null;
-    return { contract: s.contract, review: s.review, listing: s.agreedCents, label: s.kind === "written" ? "written answers" : "recording", where: { submissionId: s.id } };
+    return { contract: s.contract, review: s.review, listing: s.agreedCents, label: s.kind === "written" ? "written answers" : "recording", where: { submissionId: s.id }, kind: "submission" as const, minutes: 0 };
   }
   if (kind === "call") {
     const c = await tx.call.findUnique({ where: { id }, include: { review: true, contract: { include: { test: true, tester: true } } } });
     if (!c) return null;
     if (c.status === "cancelled") throw new HttpError(409, "cancelled", "This call was cancelled, so there's nothing to pay.");
     if (c.startsAt > new Date()) throw new HttpError(409, "not_yet", "You can pay for this call once it has started.");
-    return { contract: c.contract, review: c.review, listing: callReference(c.rateCents, c.actualMinutes ?? c.minutes).cents, label: "live call", where: { callId: c.id } };
+    return { contract: c.contract, review: c.review, listing: callReference(c.rateCents, c.actualMinutes ?? c.minutes).cents, label: "live call", where: { callId: c.id }, kind: "call" as const, minutes: c.actualMinutes ?? c.minutes };
   }
   return null;
 }
@@ -54,7 +54,11 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
   if (done) return { reviewId: done.id, amountCents: done.amountCents, rejected: done.rejected, repeated: true }; // the same press again: never twice
   const amountCents = reject ? 0 : toCents(body.amount);
   const tickedCents = typeof body.tickedCents === "number" ? body.tickedCents : null;
-  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 1000) : "";
+  // (Batch 9) The optional note on every Pay (required below the listing): the same field as the reason.
+  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 1000) : typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
+  const over200 = body.over200 === true || body.understood === true;
+  // (Batch 9) A call's Pay: the rate typed ($/h), when one was.
+  const rateCents = body.rate === undefined || body.rate === null || body.rate === "" ? null : toCents(body.rate);
 
   // (Owner, Oct 27) Pay and Reject are unavailable during ANY payment hold, chargeback hold or suspension (the route refuses first; this is the backstop).
   const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, suspendedAt: true } });
@@ -77,29 +81,30 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
       throw new HttpError(409, "reviewed", already.rejected ? "You already rejected this." : `You already paid ${money(already.amountCents)} for this.`);
     }
     if (!reject && (await devOwes(dev.id))) throw new HttpError(409, "owed_first", PAY_WAITS);
+    // (Owner, Oct 28 night, batch 9) A part that isn't listed has only Pay (any amount from $0, which closes it): never Reject.
+    if (reject && piece.listing == null) throw new HttpError(409, "not_listed", "A part that isn't listed can't be rejected: pay $0 to close it.");
     // Form mistakes (red at the field) come BEFORE the stop-once: a second press would only fail on them.
     if (reject) {
       const r = checkReject(reason);
       if (!r.ok) throw new HttpError(400, "bad_reason", r.message);
     } else {
-      const check = checkPay(amountCents, piece.listing, reason, tickedCents);
+      const check = checkPay(amountCents, piece.listing, reason, tickedCents, over200);
       if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
-      // (Owner, Oct 27) Over $200 the Pay box shows the tick "I understand this payment can't be refunded and is charged now." every time: refused until ticked.
-      if (amountCents! > PAY_TICK_CENTS && body.understood !== true) throw new HttpError(400, "bad_tick", `Tick “${PAY_TICK_LINE}” to pay.`);
-      // Everything paid above the listing prices (this Pay's excess plus extra pays) is capped at EXTRA_PAY_CAP_PERCENT of the tester's contract total.
-      if (piece.listing != null && amountCents! > piece.listing) {
-        const { roomCents } = await overListingRoom(c.id);
-        if (amountCents! - piece.listing > roomCents) throw new HttpError(400, "over_cap", overListingLine(roomCents));
-      } else if (piece.listing == null) {
-        // (Owner, Oct 27) A part with no listed price can be paid at most $100 in total (its own cap).
-        const room = await noListingRoom(piece.where, tx);
-        if (amountCents! > room) throw new HttpError(400, "over_cap", overListingLine(room));
+      if (piece.kind === "call" && rateCents != null) {
+        if (rateCents < 0) throw new HttpError(400, "bad_rate", "Enter a rate like 30.00.");
+        if (piece.listing == null && rateCents > NO_LISTING_CALL_RATE_CAP_CENTS) throw new HttpError(400, "over_cap", "A call that isn't listed can be paid at most $200 an hour.");
       }
+      // (Batch 9 section 6) Caps per piece: listed, what is paid above the listing (this Pay's excess plus the extra pays on it) is at most 100% of the listing and never
+      // more than the max; unlisted, the Pay itself is at most the max ($1000, or $200/h × the logged minutes for a call).
+      const room = await pieceRoom(piece, tx);
+      if (piece.listing != null && amountCents! > piece.listing) {
+        if (amountCents! - piece.listing > room.aboveBaseCents) throw new HttpError(400, "over_cap", overListingLine(room.aboveBaseCents));
+      } else if (piece.listing == null && amountCents! > room.maxCents) throw new HttpError(400, "over_cap", overMaxLine(room.maxCents));
       const card = amountCents! > 0 ? cardRefusal(dev) : "";
       if (card) throw new HttpError(409, "no_card", card);
     }
     await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name });
-    const rev = await tx.review.create({ data: { ...piece.where, contractId: c.id, amountCents: amountCents!, agreedCents: piece.listing, reason, payKey, rejected: reject } });
+    const rev = await tx.review.create({ data: { ...piece.where, contractId: c.id, amountCents: amountCents!, agreedCents: piece.listing, reason, payKey, rejected: reject, rateCents: !reject && piece.kind === "call" ? rateCents : null } });
     const payment = reject
       ? null
       : await tx.payment.create({
@@ -135,11 +140,12 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     await tx.payment.update({ where: { id: payment!.id }, data: result });
     await recordEvent(tx, c.testId, "paid", `You paid ${name} ${money(rev.amountCents)} for the ${piece.label}`, false, {}, c.id);
   });
+  // (Batch 9) The note rides in the bell line too; $0 reads "<dev> paid $0 for this".
   await notify(
     c.tester.email,
-    `You were paid for your ${piece.label} on “${c.title}”`,
+    `${rev.amountCents === 0 ? `${displayName(dev)} paid $0 for your ${piece.label} on “${c.title}”` : `You were paid for your ${piece.label} on “${c.title}”`}${rev.reason ? `: “${rev.reason}”` : ""}`,
     [
-      `${displayName(dev)} paid ${money(rev.amountCents)} for your ${piece.label}: you get ${money(testerShare(rev.amountCents))}.`,
+      rev.amountCents === 0 ? `${displayName(dev)} paid $0 for this.` : `${displayName(dev)} paid ${money(rev.amountCents)}${rev.rateCents != null ? ` (${money(rev.rateCents)}/h)` : ""} for your ${piece.label}: you get ${money(testerShare(rev.amountCents))}.`,
       ...(rev.reason ? [`Their note: “${rev.reason}”`] : []),
       ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : []),
     ],
@@ -278,30 +284,30 @@ export async function waitingForReview(devId: string) {
   });
 }
 
+type PieceKey = { submissionId?: string | null; callId?: string | null };
 /**
- * (Owner, Oct 27) How much more can this tester still be paid ABOVE the listing prices? Everything above a part's listed price (a Pay above the listing, plus extra pays on
- * parts that have a listed price) may total at most EXTRA_PAY_CAP_PERCENT of their current contract total: the current part prices plus the agreed totals of their booked and held calls.
- * Parts with no listed price have their own $100 cap (noListingRoom) and do not count here.
+ * (Owner, Oct 28 night, batch 9 section 6) What can still be paid on ONE piece. Listed: `aboveBaseCents` is what may still be paid above the listing (this piece's Pay above
+ * it plus its extra pays count; at most 100% of the listing, never more than the max). Unlisted: the Pay is at most `maxCents`, and `aboveBaseCents` is what extra pay may
+ * still add (100% of the max). Calls use the logged minutes.
  */
-export async function overListingRoom(contractId: string, tx: Prisma.TransactionClient = db) {
-  const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: { calls: { where: { status: "booked" } }, submissions: { select: { id: true, agreedCents: true } } } });
-  const callTotal = c.calls.reduce((a, x) => a + (callReference(x.rateCents, x.actualMinutes ?? x.minutes, c.liveRateCents).cents ?? 0), 0);
-  const contractTotal = (c.writtenCents ?? 0) + (c.recordingCents ?? 0) + callTotal;
-  const capCents = Math.round((contractTotal * EXTRA_PAY_CAP_PERCENT) / 100);
-  const reviews = await tx.review.findMany({ where: { contractId, rejected: false }, select: { amountCents: true, agreedCents: true } });
-  const over = reviews.reduce((a, r) => a + (r.agreedCents != null ? Math.max(0, r.amountCents - r.agreedCents) : 0), 0);
-  const listed = new Set(c.submissions.filter((s) => s.agreedCents != null).map((s) => s.id));
-  const extraRows = await tx.payment.findMany({ where: { contractId, kind: "extra", status: { in: ["charged", "not_set_up", "deferred", "pending"] } }, select: { amountCents: true, submissionId: true } });
-  const extras = extraRows.filter((p) => p.submissionId && listed.has(p.submissionId)).reduce((a, p) => a + p.amountCents, 0);
-  return { contractTotal, capCents, usedCents: over + extras, roomCents: Math.max(0, capCents - over - extras) };
+export async function pieceRoom(piece: { where: PieceKey; listing: number | null; kind: "submission" | "call"; minutes: number }, tx: Prisma.TransactionClient = db) {
+  const key = piece.where.submissionId ? { submissionId: piece.where.submissionId } : { callId: piece.where.callId! };
+  const maxCents = pieceMaxCents(piece.kind, piece.minutes);
+  const cap = extraCapCents(piece.listing, maxCents);
+  const rev = await tx.review.findFirst({ where: { ...key, rejected: false }, select: { amountCents: true } });
+  const extras = (await tx.payment.aggregate({ where: { ...key, kind: "extra", status: { in: ["charged", "not_set_up", "deferred", "pending", "owed"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
+  const payAbove = piece.listing != null && rev ? Math.max(0, rev.amountCents - piece.listing) : 0;
+  return { listed: piece.listing != null, maxCents, capCents: cap, usedCents: payAbove + extras, aboveBaseCents: Math.max(0, cap - payAbove - extras) };
 }
 
-/** (Owner, Oct 27) What can still be paid for a part with no listed price: $100 in total (the Pay and any extra pays on it). */
-export async function noListingRoom(where: { submissionId?: string | null; callId?: string | null }, tx: Prisma.TransactionClient = db) {
-  const key = where.submissionId ? { submissionId: where.submissionId } : { callId: where.callId! };
-  const rev = await tx.review.findFirst({ where: { ...key, rejected: false }, select: { amountCents: true } });
-  const extras = (await tx.payment.aggregate({ where: { ...key, kind: "extra", status: { in: ["charged", "not_set_up", "deferred", "pending"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
-  return Math.max(0, NO_LISTING_CAP_CENTS - (rev?.amountCents ?? 0) - extras);
+/** The piece behind an Extra pay or a page's "up to $Y": a sent part or a held call. */
+export async function pieceOf(where: PieceKey, tx: Prisma.TransactionClient = db) {
+  if (where.submissionId) {
+    const sub = await tx.submission.findUnique({ where: { id: where.submissionId } });
+    return sub ? { where: { submissionId: sub.id }, listing: sub.agreedCents, kind: "submission" as const, minutes: 0, contractId: sub.contractId, label: sub.kind === "recording" ? "recording" : "written answers" } : null;
+  }
+  const call = await tx.call.findUnique({ where: { id: where.callId ?? "" } });
+  return call ? { where: { callId: call.id }, listing: callReference(call.rateCents, call.actualMinutes ?? call.minutes).cents, kind: "call" as const, minutes: call.actualMinutes ?? call.minutes, contractId: call.contractId, label: "live call", startsAt: call.startsAt, status: call.status } : null;
 }
 
 /**
@@ -313,41 +319,45 @@ export async function noListingRoom(where: { submissionId?: string | null; callI
 export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testId: string, body: Record<string, unknown>) {
   const c = await db.contract.findUnique({ where: { id: String(body.contractId ?? "") }, include: { test: true, tester: true } });
   if (!c || c.testId !== testId || c.test.developerId !== dev.id) throw new HttpError(404, "not_found", "Choose a tester.");
-  const sub = await db.submission.findUnique({ where: { id: String(body.submissionId ?? "") } });
-  if (!sub || sub.contractId !== c.id) throw new HttpError(404, "not_found", "Choose a part they sent.");
+  // (Batch 9) Extra pay goes on a sent part or a held call.
+  const piece = await pieceOf(body.callId ? { callId: String(body.callId) } : { submissionId: String(body.submissionId ?? "") });
+  if (!piece || piece.contractId !== c.id) throw new HttpError(404, "not_found", "Choose a part they sent.");
+  if (piece.kind === "call" && ("status" in piece && (piece.status === "cancelled" || (piece.startsAt && piece.startsAt > new Date())))) throw new HttpError(409, "not_held", "Extra pay goes on a call that took place.");
   // (Owner, Oct 27) Unavailable during ANY payment hold, chargeback hold or suspension (the route refuses first; this is the backstop).
   const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { suspendedAt: true } });
   if (devNow.suspendedAt) throw new HttpError(403, "suspended", "Your account is suspended: extra pay waits until it is lifted.");
   await (await import("./holds")).devHoldRefusal(dev.id, "pay");
   if ((await blockedEitherWay(dev.id, c.testerId)) || c.tester.deletedAt) throw new HttpError(409, "unavailable", "This payment isn't available.");
   const amount = toCents(body.amount);
-  const check = checkExtraPay(amount, body.understood === true);
+  const check = checkExtraPay(amount, typeof body.tickedCents === "number" ? body.tickedCents : null, body.over200 === true || body.understood === true);
   if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
-  // (Owner, Oct 27) Any amount above a part's listed price counts toward the cap (100% of the contract total); a part with no listed price has its own $100 cap in total.
-  const room = sub.agreedCents == null ? await noListingRoom({ submissionId: sub.id }) : (await overListingRoom(c.id)).roomCents;
-  if (amount! > room) throw new HttpError(400, "over_cap", overListingLine(room));
+  const note = typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
+  // (Batch 9 section 6) Per piece: listed, 100% of the listing at most (never more than the max); unlisted, 100% of the max on top of the Pay.
+  const room = (await pieceRoom(piece)).aboveBaseCents;
+  if (amount! > room) throw new HttpError(400, "over_cap", piece.listing != null ? overListingLine(room) : overMaxLine(room));
   const card = cardRefusal(dev);
   if (card) throw new HttpError(409, "no_card", card);
   await db.$transaction((tx) => devGate(tx, testId, body));
   const payKey = typeof body.payKey === "string" && /^[\w-]{8,80}$/.test(body.payKey) ? body.payKey : randomUUID();
   const name = displayName(c.tester);
-  const label = sub.kind === "recording" ? "recording" : "written answers";
+  const label = piece.label;
+  const at = piece.kind === "call" ? { callId: piece.where.callId! } : { submissionId: piece.where.submissionId! };
   let result;
   try {
     result = await charge(dev, c.tester, amount!, `extra-${payKey}`, `Playtest: extra pay for ${name} on “${c.test.title}”`);
   } catch (e) {
     if (!(e instanceof HttpError && e.code === "card_failed")) throw e;
     // (Owner, Oct 27) A declined extra pay starts the payment hold at once, like any declined payment.
-    const failed = await db.payment.create({ data: { kind: "extra", contractId: c.id, submissionId: sub.id, developerId: dev.id, testerId: c.testerId, amountCents: amount!, feeCents: 0, testerCents: 0, status: "failed", failure: (e as Error).message, owedUntil: new Date() } });
+    const failed = await db.payment.create({ data: { kind: "extra", contractId: c.id, ...at, note, developerId: dev.id, testerId: c.testerId, amountCents: amount!, feeCents: 0, testerCents: 0, status: "failed", failure: (e as Error).message, owedUntil: new Date() } });
     await (await import("./holds")).declinedPayment(dev.id, failed.id, amount!, `extra pay for ${name}`);
     throw new HttpError(402, "card_failed", `Your card was declined, so ${name} wasn't paid ${money(amount)} extra yet. Your tests are paused until you pay what you owe: open Payments.`, { held: true, failed: `Your extra pay on ${c.test.title} was declined` });
   }
   await db.$transaction(async (tx) => {
-    await tx.payment.create({ data: { kind: "extra", contractId: c.id, submissionId: sub.id, developerId: dev.id, testerId: c.testerId, ...result, amountCents: amount! } });
+    await tx.payment.create({ data: { kind: "extra", contractId: c.id, ...at, note, developerId: dev.id, testerId: c.testerId, ...result, amountCents: amount! } });
     await recordEvent(tx, testId, "paid", `You paid ${name} ${money(amount)} extra for the ${label}`, false, {}, c.id);
   });
-  const line = `${displayName(dev)} paid you ${money(amount)} extra for ${c.test.title}`;
-  await notify(c.tester.email, line, [line + `: you get ${money(testerShare(amount!))}.`, ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : [])], `/app/sessions/${c.id}#part-${sub.kind}`, { payment: true, group: "textra", about: dev.id });
+  const line = `${displayName(dev)} paid you ${money(amount)} extra for ${c.test.title}${note ? `: “${note}”` : ""}`;
+  await notify(c.tester.email, line, [line + `. You get ${money(testerShare(amount!))}.`, ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : [])], `/app/sessions/${c.id}#${piece.kind === "call" ? "part-live" : `part-${label === "recording" ? "recording" : "written"}`}`, { payment: true, group: "textra", about: dev.id });
   await receipt(dev.email, `an extra payment to ${name}`, amount!, result.status, `/app/tests/${testId}#tester-${c.id}`);
   return { paid: true, amountCents: amount, status: result.status };
 }

@@ -8,7 +8,7 @@ const DAY = 86_400_000;
 export type PauseCause = "hold" | "chargeback" | "suspension" | "team";
 
 type Dev = { holdStartedAt?: Date | null; holdReason?: string | null; suspendedAt?: Date | null };
-type Tst = { status: string; adminPausedAt?: Date | null; pauseCloseAt?: Date | null; pauseCloseSetAt?: Date | null };
+type Tst = { status: string; adminPausedAt?: Date | null; pauseCloseAt?: Date | null; pauseCloseSetAt?: Date | null; pausedSince?: Date | null };
 
 /** Why a test is paused right now (empty when it isn't). Only tests that are live (open or full) count. */
 export function pauseCauses(dev: Dev, test: Tst): PauseCause[] {
@@ -20,12 +20,19 @@ export function pauseCauses(dev: Dev, test: Tst): PauseCause[] {
   return out;
 }
 
-/** When the current continuous pause began: the earliest of its causes. */
+/**
+ * When the current continuous pause began. (Owner, Oct 28 night, batch 9) ONE clock per paused test: the stored `pausedSince` (set when it was first paused, whatever
+ * the cause; a second cause starting, or one lifting while another remains, never moves it), else the earliest of its causes.
+ */
 export function pauseSince(dev: Dev, test: Tst): Date | null {
   if (!pauseCauses(dev, test).length) return null;
-  const times = [dev.holdStartedAt, dev.suspendedAt, test.adminPausedAt].filter((d): d is Date => !!d).map((d) => d.getTime());
+  const times = [dev.holdStartedAt, dev.suspendedAt, test.adminPausedAt, test.pausedSince].filter((d): d is Date => !!d).map((d) => d.getTime());
   return new Date(Math.min(...times));
 }
+
+/** (Batch 9) The card's reasons, every one: "payment hold · paused by the team". */
+export const PAUSE_LABELS: Record<PauseCause, string> = { hold: "payment hold", chargeback: "chargeback hold", suspension: "account suspended", team: "paused by the team" };
+export const pauseReasons = (dev: Dev, test: Tst) => pauseCauses(dev, test).map((c) => PAUSE_LABELS[c]).join(" · ");
 
 /** The date a paused test closes: 7 days after the pause began, or the date the admin set during this pause (never earlier than 7 days). */
 export function pauseClosesAt(dev: Dev, test: Tst): { at: Date; since: Date; extended: boolean; causes: PauseCause[] } | null {

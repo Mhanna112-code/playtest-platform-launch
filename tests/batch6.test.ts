@@ -95,7 +95,7 @@ describe("batch 6 item 1: calls without a Live call part are allowed again", () 
     expect((await db.call.findFirstOrThrow({ where: { contractId: sessionId } })).rateCents).toBeNull();
   });
 
-  it("pay for an unlisted call: the box starts empty, at most $100 for each call (its own cap), and Charge never opens for it", async () => {
+  it("pay for an unlisted call: the box starts empty, (batch 9) at most $200/h for the logged minutes, and Charge never opens for it", async () => {
     const { dev, testId } = await setup({ liveRateCents: null });
     const { tester, sessionId } = await joined(testId);
     await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: atHours(48) });
@@ -111,7 +111,7 @@ describe("batch 6 item 1: calls without a Live call part are allowed again", () 
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "charge" } } })).toBe(0);
     const over = await pay(dev.cookie, { kind: "call", id: call.id, amount: "150.00", tickedCents: 15000, confirmed: true });
     expect(over.status).toBe(400);
-    expect(over.body.error.message).toBe(R.overListingLine(10_000));
+    expect(over.body.error.message).toBe(R.overMaxLine(10_000)); // 30 minutes at $200/h
     expect((await pay(dev.cookie, { kind: "call", id: call.id, amount: "100.00", tickedCents: 10000, confirmed: true })).status).toBe(200);
   });
 });

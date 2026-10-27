@@ -35,9 +35,9 @@ describe("the one Pay box", () => {
     expect(await db.notification.count({ where: { text: { contains: "You were paid" }, payment: true } })).toBeGreaterThan(0);
   });
 
-  it("refuses without the charged-now tick, or below the listing without a reason", async () => {
+  it("refuses without the tick naming the amount (batch 9), or below the listing without a reason", async () => {
     const { dev, sub } = await sent();
-    expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00" })).body.error.message).toBe("Tick “charged now: $10.00” to pay.");
+    expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00" })).body.error.message).toBe("Tick “I understand this payment of $10.00 can't be refunded and is charged now.” to pay.");
     expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400 })).body.error.message).toContain("Say why");
     expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400, reason: "Only half answered" })).status).toBe(200);
   });

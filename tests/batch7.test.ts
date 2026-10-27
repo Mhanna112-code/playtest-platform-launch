@@ -25,10 +25,10 @@ describe("batch 7 item 1: 'Not listed'", () => {
     expect(R.NOT_LISTED).toBe("Not listed");
     expect(rateLabel(null, 3000)).toBe("Not listed");
     expect(R.callReference(null, 30).text).toBe("Not listed");
-    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain("p.listingCents == null ? NOT_LISTED");
+    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain("listed ? `Listing: ${p.listingText}` : NOT_LISTED");
     expect(src("app/app/sessions/[id]/page.tsx")).not.toContain('"Not in your contract"');
     expect(src("app/app/tests/[id]/page.tsx")).not.toContain('"Not in their contract"');
-    for (const f of ["app/app/tests/[id]/DevCallPanel.tsx", "app/app/tests/[id]/PayBox.tsx", "app/app/sessions/[id]/page.tsx"]) expect(src(f), f).not.toContain("$100");
+    for (const f of ["app/app/tests/[id]/DevCallPanel.tsx", "app/app/sessions/[id]/page.tsx"]) expect(src(f), f).not.toContain("$100");
     expect(R.overListingLine(10_000)).toBe("This is more than you can pay above the listing (up to $100).");
   });
 });
@@ -125,7 +125,7 @@ describe("batch 7 item 4: stop-once on every press still allowed", () => {
     await db.testEvent.create({ data: { testId, kind: "paid", text: "Ben Carter charged $1.00 for their recording" } });
     stops(await pay(dev.cookie, { kind: "submission", id: subA.id, amount: "10.00", tickedCents: 1000, seenAt: loaded }), "pay");
     stops(await pay(dev.cookie, { kind: "submission", id: subA.id, action: "reject", reason: "Not what I asked", seenAt: loaded }), "reject");
-    stops(await act(testId, "pay-extra", dev.cookie, { contractId: b.sessionId, submissionId: subB.id, amount: "2.00", seenAt: loaded }), "extra pay");
+    stops(await act(testId, "pay-extra", dev.cookie, { contractId: b.sessionId, submissionId: subB.id, amount: "2.00", tickedCents: 200, seenAt: loaded }), "extra pay");
     stops(await act(testId, "call-length", dev.cookie, { callId: call.id, minutes: 25, seenAt: loaded }), "call length");
     stops(await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "They skipped two answers", seenAt: loaded }), "dispute side");
     stops(await act(testId, "rate", dev.cookie, { contractId: a.sessionId, stars: 4, seenAt: loaded }), "rate");

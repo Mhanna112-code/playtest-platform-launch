@@ -6,7 +6,7 @@ import { HttpError } from "./http";
 import { adminUsers, bell, notify } from "./notify";
 import { cancelCallsAhead, recordEvent, spotOpened, tellCancelled } from "./tests";
 import { closeRequests } from "./requests";
-import { chargeDeferred, resumeTests, shiftAfterPause } from "./holds";
+import { chargeDeferred, markPaused, resumeTests, shiftAfterPause } from "./holds";
 import { sendWaitingTransfer } from "./stripe";
 import { accountEvent } from "./reports";
 import { devDeleteBlockers, devDeleteRefusal } from "./deletion";
@@ -90,6 +90,7 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
   await db.user.update({ where: { id: userId }, data: { suspendedAt: new Date(), suspendNote: note, suspendedById: adminId, reinstatedAt: null } });
   await accountEvent(userId, "suspended", adminId, note);
   if (u.isDeveloper) {
+    await markPaused({ developerId: userId }); // (batch 9) one clock per paused test
     await pauseDeveloper(u);
     await (await import("./subscription")).pauseBilling(userId);
   }
@@ -202,6 +203,7 @@ export async function pauseTest(adminId: string, testId: string, note: string) {
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
   if (t.status === "stopped") throw new HttpError(409, "stopped", "That test was stopped.");
   if (t.adminPausedAt) throw new HttpError(409, "already", "That test is already paused.");
+  await markPaused({ id: testId }); // (batch 9) one clock per paused test: kept if a hold or suspension already paused it
   await db.$transaction((tx) => recordEvent(tx, testId, "paused", "The team paused this test", true, { adminPausedAt: new Date(), adminNote: note, adminPausedById: adminId }));
   await closeRequests({ contractIds: (await db.contract.findMany({ where: { testId }, select: { id: true } })).map((c) => c.id) }, "the test is paused");
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
@@ -216,7 +218,7 @@ export async function unpauseTest(testId: string) {
   const start = t.adminPausedAt, now = new Date();
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
   await db.$transaction(async (tx) => {
-    await tx.test.update({ where: { id: testId }, data: { adminPausedAt: null, adminNote: "" } });
+    await tx.test.update({ where: { id: testId }, data: { adminPausedAt: null, adminNote: "", ...(dev.holdStartedAt || dev.suspendedAt ? {} : { pausedSince: null }) } });
     // (Owner, Oct 28 afternoon, DEFAULT) The same clock shift as a hold lift or a reinstatement (only the part not covered by the developer's own pause, if one is still on).
     await shiftAfterPause(tx, t, start, now, [dev.holdStartedAt, dev.suspendedAt]);
     await recordEvent(tx, testId, "resumed", "The team lifted the pause on this test", true);

@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, money } from "@/lib/format";
-import { NO_LISTING_CAP_CENTS, callReference, testerShare } from "@/lib/rules";
+import { NO_LISTING_WORK_CAP_CENTS, callReference, pieceMaxCents, testerShare } from "@/lib/rules";
 
 // (Owner, Oct 28) Deleting an account: what the confirm pop-up tells a tester (with their real numbers), and what blocks a developer.
 
@@ -64,10 +64,10 @@ export async function testerDeleteFacts(userId: string, now = new Date()): Promi
   const paidFor = async (where: { submissionId?: string | null; callId?: string | null }) =>
     (await db.payment.aggregate({ where: { ...(where.submissionId ? { submissionId: where.submissionId } : { callId: where.callId! }), status: { in: ["charged", "not_set_up", "deferred", "owed"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
   let unpaid = 0;
-  for (const s of subs) unpaid += s.agreedCents ?? NO_LISTING_CAP_CENTS;
-  for (const c of calls) unpaid += callReference(c.rateCents, c.actualMinutes ?? c.minutes).cents ?? NO_LISTING_CAP_CENTS;
+  for (const s of subs) unpaid += s.agreedCents ?? NO_LISTING_WORK_CAP_CENTS;
+  for (const c of calls) unpaid += callReference(c.rateCents, c.actualMinutes ?? c.minutes).cents ?? pieceMaxCents("call", c.actualMinutes ?? c.minutes);
   for (const d of disputes) {
-    const top = d.submission ? d.submission.agreedCents ?? NO_LISTING_CAP_CENTS : d.call ? callReference(d.call.rateCents, d.call.actualMinutes ?? d.call.minutes).cents ?? NO_LISTING_CAP_CENTS : 0;
+    const top = d.submission ? d.submission.agreedCents ?? NO_LISTING_WORK_CAP_CENTS : d.call ? callReference(d.call.rateCents, d.call.actualMinutes ?? d.call.minutes).cents ?? pieceMaxCents("call", d.call.actualMinutes ?? d.call.minutes) : 0;
     unpaid += Math.max(0, top - (await paidFor(d)));
   }
   return {

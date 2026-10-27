@@ -29,7 +29,7 @@ import { HOLD_APPROVAL_AFTER, NOT_LISTED, callListed } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
-import { overListingRoom } from "@/lib/server/payments";
+import { pieceOf, pieceRoom } from "@/lib/server/payments";
 import { ExtraPay } from "./ExtraPay";
 import { TopPanel } from "./TopPanel";
 import { NeedsYou } from "./NeedsYou";
@@ -104,7 +104,13 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const cbSteps = await chargebackSteps(u.id);
   // (Owner, Oct 27) While a failed payment is owed, Pay (part Pay, extra pay) is disabled: "Pay what you owe first."; the room above the listing prices for extra pay.
   const owesNow = owedList.some((o) => o.retry);
-  const rooms = new Map(await Promise.all(t.contracts.map(async (c) => [c.id, (await overListingRoom(c.id)).roomCents] as const)));
+  // (Batch 9 section 6) Extra pay's "up to $Y", per piece: every sent part and every held call.
+  const pieceKeys: { submissionId?: string; callId?: string }[] = t.contracts.flatMap((c) => [...c.submissions.map((x) => ({ submissionId: x.id })), ...c.calls.filter((x) => x.status === "booked" && x.startsAt <= new Date()).map((x) => ({ callId: x.id }))]);
+  const rooms = new Map(await Promise.all(pieceKeys.map(async (k) => {
+    const piece = (await pieceOf(k))!;
+    const r = await pieceRoom(piece);
+    return [k.submissionId ?? k.callId!, { room: r.aboveBaseCents, listed: r.listed }] as const;
+  })));
   const lateOf = (c: { dueAt: Date; tester: { name: string; email: string } }, x: { createdAt: Date }) => (isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(c.tester), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined);
   const partPaid = (id: string) => payments.filter((p) => (p.submissionId === id || p.callId === id) && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
   const payments = await db.payment.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
@@ -280,6 +286,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     max={Math.floor(x.x!.minutes * 1.5)} closesAt={new Date(x.x!.startsAt.getTime() + CALL_CLOSE_MS).toISOString()} closed={callClosed(x.x!.startsAt, now)}
                   />
                   <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} partPaidCents={partPaid(x.x!.id)}
+                    minutes={x.x!.actualMinutes ?? x.x!.minutes} rateCents={x.x!.rateCents}
                     listingCents={callReference(x.x!.rateCents, x.x!.actualMinutes ?? x.x!.minutes, x.c.liveRateCents).cents}
                     listingText={callReference(x.x!.rateCents, x.x!.actualMinutes ?? x.x!.minutes, x.c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
                 </>
@@ -345,7 +352,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       <span className={r.sub ? "text-emerald-200" : "text-slate-400"}>{r.sub ? `Sent ${fmtDate(r.sub.sentAt)}` : "Not sent yet"}</span>
                       {r.sub && <span className="text-slate-300">· paid {money(partPaid(r.sub.id))} of {r.sub.agreedCents != null ? money(r.sub.agreedCents) : `(${NOT_LISTED.toLowerCase()})`}</span>}
                       {/* (Owner, Oct 27) Extra pay sits next to each SENT part (unsent parts have none). */}
-                      {r.sub && !restricted && <ExtraPay testId={t.id} contractId={c.id} submissionId={r.sub.id} name={name} seenAt={seenAt} roomCents={rooms.get(c.id) ?? 0} paidCents={partPaid(r.sub.id)} owes={owesNow} />}
+                      {r.sub && !restricted && <ExtraPay testId={t.id} contractId={c.id} submissionId={r.sub.id} name={name} seenAt={seenAt} roomCents={rooms.get(r.sub.id)?.room ?? 0} listed={rooms.get(r.sub.id)?.listed ?? true} paidCents={partPaid(r.sub.id)} owes={owesNow} />}
                     </li>
                   ))}
                   {c.liveRateCents != null && (
@@ -356,6 +363,14 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       <span className="text-slate-300">· paid {money(callPaid)}</span>
                     </li>
                   )}
+                  {/* (Batch 9) Extra pay on each call that took place, listed or not (its own per-piece cap). */}
+                  {!restricted && c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).map((x) => (
+                    <li key={x.id} className="flex flex-wrap items-center gap-2" data-held-call={x.id}>
+                      <b className="text-white">Call on {fmtDateTime(x.startsAt)}</b>
+                      <span className="text-slate-300">· {x.rateCents == null ? NOT_LISTED : "In their contract"} · paid {money(partPaid(x.id))}</span>
+                      <ExtraPay testId={t.id} contractId={c.id} callId={x.id} name={name} seenAt={seenAt} roomCents={rooms.get(x.id)?.room ?? 0} listed={rooms.get(x.id)?.listed ?? true} paidCents={partPaid(x.id)} owes={owesNow} />
+                    </li>
+                  ))}
                 </ul>
                 <p className="text-sm"><b>Paid in all:</b> {money(paidSoFar(c.id))}{(bookedAhead || held || cancelledN) ? ` · Calls: ${[bookedAhead ? `${bookedAhead} booked ahead` : "", held ? `${held} held` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}` : ""}</p>
                 {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}

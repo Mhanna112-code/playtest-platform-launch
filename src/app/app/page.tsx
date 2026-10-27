@@ -23,7 +23,7 @@ import { LongList } from "@/components/LongList";
 import { rejoinAskLine } from "@/lib/server/joining";
 import { pronouns } from "@/lib/format";
 import { chargebackSteps } from "@/lib/server/chargeback";
-import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
+import { PAUSE_CLOSE_DAYS, pauseReasons } from "@/lib/pause";
 import { HOLD_APPROVAL_AFTER } from "@/lib/rules";
 
 export const metadata = { title: "Home · Playtest" };
@@ -231,7 +231,8 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
               const waiting = t.contracts.filter((c) => c.submissions.some((s) => !s.review) && !c.submissions.some((s) => s.review && !s.review.rejected)).length;
               const messages = t.contracts.reduce((n, c) => n + (unread.get(c.id) ?? 0), 0);
               const paused = !!(user.holdStartedAt || user.suspendedAt || t.adminPausedAt);
-              const why = user.suspendedAt ? "account suspended" : user.holdStartedAt ? (user.holdReason === "chargeback" ? "chargeback hold" : "payment hold") : t.adminPausedAt ? "paused by the team" : "";
+              // (Batch 9) Every reason: "Paused: payment hold · paused by the team".
+              const why = pauseReasons(user, t);
               const nInvited = invitesBy.get(t.id) ?? 0, nApps = appsBy.get(t.id) ?? 0;
               const title = <span className="text-lg font-semibold text-white">{t.title}</span>;
               return (

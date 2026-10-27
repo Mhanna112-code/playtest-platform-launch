@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
 import {
-  HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, chargedDelayedLine, countdownDue, INVITE_REMIND_DAYS, choiceLine, failedLine, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs,
+  HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, chargedDelayedLine, countdownDue, INVITE_REMIND_DAYS, choiceLine, failedLine, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, UNLISTED_REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, sendSummaries } from "./notify";
@@ -73,6 +73,8 @@ export async function startHold(devId: string, reason: string) {
   const claimed = await db.user.updateMany({ where: { id: devId, holdStartedAt: null }, data: { holdStartedAt: now, holdReason: reason, holdAlertedAt: null, holdCount: { increment: 1 }, holdApprovedAt: null, holdApprovedById: null } });
   if (claimed.count !== 1) return false;
   await accountEvent(devId, "hold", null, reason);
+  // (Batch 9) One closing clock per paused test: it starts now unless the test was already paused.
+  await markPaused({ developerId: devId }, now);
   // (Batch 8) Subscription billing pauses while the hold lasts.
   await (await import("./subscription")).pauseBilling(devId, now);
   const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
@@ -110,9 +112,15 @@ export async function resumeTests(tx: Prisma.TransactionClient, devId: string, s
     await shiftAfterPause(tx, t, start, now, still);
     if (still.some(Boolean)) continue;
     running.push(t.id);
+    if (t.pausedSince) await tx.test.update({ where: { id: t.id }, data: { pausedSince: null } }); // (batch 9) no cause left: the clock ends
     if (t.status !== "stopped") await recordEvent(tx, t.id, "resumed", "Your tests are running again", false);
   }
   return running;
+}
+
+/** (Owner, Oct 28 night, batch 9) A pause started: the tests it pauses that weren't paused yet start their one 7-day clock now. */
+export async function markPaused(where: { developerId?: string; id?: string }, now = new Date()) {
+  await db.test.updateMany({ where: { ...where, status: { in: ["open", "closed"] }, pausedSince: null }, data: { pausedSince: now } });
 }
 
 /**
@@ -386,8 +394,8 @@ export async function runDaily(now = new Date()) {
     await bell(s.contract.test.developerId, `“${s.contract.title}”: review ${name}'s ${s.kind === "recording" ? "recording" : "written answers"} ${m.label === "tomorrow" ? "by tomorrow" : m.label.replace("in ", "within ")} (after that ${name} can charge or let it go).`, `/app/tests/${s.contract.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
     await db.submission.update({ where: { id: s.id }, data: { devMarks: { push: m.mark } } });
   }
-  // 6. Work outside the contract: no deadline, a bell to the developer every 3 days.
-  const outside = await db.submission.findMany({ where: { review: null, agreedCents: null, updatedAt: { lt: new Date(now.getTime() - REMIND_DAYS * 86_400_000 + 3_600_000) }, OR: [{ remindedAt: null }, { remindedAt: { lt: new Date(now.getTime() - REMIND_DAYS * 86_400_000 + 3_600_000) } }], contract: { test: PAUSE_FREE, tester: { deletedAt: null } } }, include: { contract: { include: { tester: true } } }, take: 500 });
+  // 6. Work outside the contract: no deadline, a bell to the developer every 3 days; (batch 9, DEFAULT UNLISTED_REMIND_DAYS) only for 14 days after it was sent (the row stays).
+  const outside = await db.submission.findMany({ where: { review: null, agreedCents: null, updatedAt: { lt: new Date(now.getTime() - REMIND_DAYS * 86_400_000 + 3_600_000), gt: new Date(now.getTime() - UNLISTED_REMIND_DAYS * 86_400_000) }, OR: [{ remindedAt: null }, { remindedAt: { lt: new Date(now.getTime() - REMIND_DAYS * 86_400_000 + 3_600_000) } }], contract: { test: PAUSE_FREE, tester: { deletedAt: null } } }, include: { contract: { include: { tester: true } } }, take: 500 });
   for (const s of outside) {
     await bell((await db.test.findUniqueOrThrow({ where: { id: s.contract.testId } })).developerId, `“${s.contract.title}”: ${displayName(s.contract.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} still waits for you to pay or reject.`, `/app/tests/${s.contract.testId}#piece-${s.id}`, undefined, { reminder: `outside:${s.id}` });
     await db.submission.update({ where: { id: s.id }, data: { remindedAt: now } });

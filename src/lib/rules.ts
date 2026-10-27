@@ -20,9 +20,13 @@ export const PRICE_LIMITS = {
 /** A part price over this needs the tick "I confirm this part pays more than $200." (when it is created over it, or raised from at most it to over it). */
 export const HIGH_PART_CENTS = 20_000;
 export const HIGH_PART_TICK = "I confirm this part pays more than $200.";
-/** Any Pay box amount over this shows the tick "I understand this payment can't be refunded and is charged now." every time (refused until ticked). */
+/**
+ * (Owner, Oct 28 night, batch 9) EVERY Pay and Extra pay above $0 has the tick "I understand this payment of $X can't be refunded and is charged now." (it names the exact
+ * amount; a changed amount unticks it). Over PAY_TICK_CENTS ($200) a second tick is needed too: "I confirm this payment is over $200." Paying $0 needs no tick.
+ */
 export const PAY_TICK_CENTS = 20_000;
-export const PAY_TICK_LINE = "I understand this payment can't be refunded and is charged now.";
+export const PAY_TICK_LINE = (cents: number) => `I understand this payment of ${money(cents)} can't be refunded and is charged now.`;
+export const OVER_PAY_TICK_LINE = "I confirm this payment is over $200.";
 
 /** Split a charge: the platform fee (20%) and what the tester gets (the rest). */
 export function splitFee(amountCents: number) {
@@ -46,17 +50,24 @@ export const MAX_PAY_CENTS = STRIPE_MAX_CENTS;
 export const STRIPE_MAX_LINE = `Stripe can't take more than ${"$999,999.99"} in one charge.`;
 
 /**
- * The one Pay box (owner update, Oct 22): any amount from $0 up. A reason is required when the amount is below the
- * listing amount (a part outside the contract has no listing amount: any amount, no reason needed). A non-zero amount is at least the
- * smallest card charge. The "charged now: $X" tick must name exactly this amount.
+ * The one Pay box (owner update, Oct 22): any amount from $0 up. A note is required when the amount is below the listing amount (a part outside the contract has no
+ * listing amount: any amount, the note optional). A non-zero amount is at least the smallest card charge. (Batch 9) Above $0 the tick naming exactly this amount is
+ * needed, and over $200 the second tick too; $0 needs none.
  */
-export function checkPay(amountCents: number | null, listingCents: number | null, reason: string, tickedCents: number | null): Check {
+export function checkPay(amountCents: number | null, listingCents: number | null, reason: string, tickedCents: number | null, over200 = false): Check {
   if (amountCents == null || !Number.isInteger(amountCents) || amountCents < 0) return no("Enter an amount like 7.50.");
   if (amountCents > STRIPE_MAX_CENTS) return no(STRIPE_MAX_LINE);
   if (listingCents != null && amountCents < listingCents && reason.trim().length < 5)
     return no(`Say why you're paying less than the listing's ${money(listingCents)} (the tester reads it).`);
   if (amountCents > 0 && amountCents < MIN_CHARGE_CENTS) return no(`The smallest card charge is ${money(MIN_CHARGE_CENTS)}: pay $0.00 or at least ${money(MIN_CHARGE_CENTS)}.`);
-  if (tickedCents !== amountCents) return no(`Tick “charged now: ${money(amountCents)}” to pay.`);
+  return payTicks(amountCents, tickedCents, over200);
+}
+
+/** (Batch 9) The ticks on every Pay and Extra pay: the amount's own tick above $0, and the over-$200 tick above $200. */
+export function payTicks(amountCents: number, tickedCents: number | null, over200: boolean): Check {
+  if (amountCents === 0) return yes;
+  if (tickedCents !== amountCents) return no(`Tick “${PAY_TICK_LINE(amountCents)}” to pay.`);
+  if (amountCents > PAY_TICK_CENTS && !over200) return no(`Tick “${OVER_PAY_TICK_LINE}” to pay.`);
   return yes;
 }
 
@@ -585,7 +596,7 @@ export const CALL_CLOSE_MS = 24 * 3_600_000;
 export const callClosed = (startsAt: Date, now = new Date()) => now.getTime() >= startsAt.getTime() + CALL_CLOSE_MS;
 /**
  * (Owner, Oct 28 afternoon) Calls can be requested and booked on ANY test, whether or not a live call is a listed part. A call is "listed" only when the listing has a Live call part
- * AND it is in this tester's contract; otherwise it is "not a listed part": its pay is up to the developer (the Pay box starts empty), at most NO_LISTING_CAP_CENTS for each such call
+ * AND it is in this tester's contract; otherwise it is "not a listed part": its pay is up to the developer (the Pay box starts empty), (batch 9) at most $200 an hour for the minutes logged
  * (its pay plus extras; outside the 100% cap), and Charge / Let it go never opens for it.
  */
 export const callListed = (test: { liveRateCents: number | null }, contract: { liveRateCents: number | null }) => test.liveRateCents != null && contract.liveRateCents != null;
@@ -616,6 +627,8 @@ export function emailDecision(pref: string, always: boolean): "send" | "summary"
 /** Auto-pay at 14 days: contract parts only, the listing amount; null = never auto-paid. */
 export const autoPayFor = (listingCents: number | null) => (listingCents == null ? null : listingCents);
 export const REMIND_DAYS = 3;
+/** (Owner, Oct 28 night, batch 9, DEFAULT) A part that isn't listed: the developer's review reminders stop this many days after it was sent (the Needs you row stays until paid, even $0). */
+export const UNLISTED_REMIND_DAYS = 14;
 
 /** Cancel a call any time; within 24 hours of it a reason is required (the other side sees it). */
 export const cancelNeedsReason = (startsAt: Date, now: Date) => startsAt.getTime() - now.getTime() < CANCEL_HOURS * 3_600_000;
@@ -873,27 +886,32 @@ export function rateStops(e: TestEventLike, closed: boolean) {
 
 // ---------- Extra pay from the Testers panel (owner, Oct 26) ----------
 
-/** Over this amount the developer must tick that the payment can't be refunded and is charged now (the same tick as any Pay box). */
+/** Over this amount the developer must also tick "I confirm this payment is over $200." (the same ticks as any Pay box). */
 export const EXTRA_PAY_TICK_CENTS = PAY_TICK_CENTS;
 /** The most one extra payment can be. For now only Stripe's own limit; the owner is deciding a cap, so it lives here and nowhere else. */
 export const EXTRA_PAY_MAX_CENTS = STRIPE_MAX_CENTS;
 export const EXTRA_PAY_TICK_LINE = PAY_TICK_LINE;
 /**
- * (Owner, Oct 27) Everything a developer pays a tester ABOVE the listing prices (a Pay above the listing, plus extra pays) may total at most this percent of that
- * tester's current contract total (the current part prices plus the agreed totals of their booked and held calls): at 100 they can never get more than double.
+ * (Owner, Oct 28 night, batch 9 section 6) Extra pay is everything paid above a piece's base (the listing for a listed part, or the max for an unlisted one), counted PER
+ * PIECE across its Pay and every Extra pay on it. Listed: at most this percent of the listing, and never more than the max. Unlisted: the Pay itself is at most the max,
+ * and extra pay adds at most this percent of the max on top. (It replaced the per-contract 100% cap.)
  */
 export const EXTRA_PAY_CAP_PERCENT = 100;
-/**
- * (Owner, Oct 27) A part with NO listed price (work outside the tester's contract, or a part removed from the listing) can be paid at most this much in total. It is its own cap
- * and does not count toward the 100% above.
- */
-export const NO_LISTING_CAP_CENTS = 10_000;
-/** The blocked wording for any pay above the listing (Pay above the listing, extra pay): Y is what can still be paid above it. */
+/** (Batch 9 section 1) A part with no listed price: written answers or a recording at most $1000 per piece; a call at most $200 an hour for the minutes logged. */
+export const NO_LISTING_WORK_CAP_CENTS = 100_000;
+export const NO_LISTING_CALL_RATE_CAP_CENTS = 20_000;
+/** A piece's max: $1000 for written answers or a recording; $200/h × the logged minutes for a call. */
+export const pieceMaxCents = (kind: "submission" | "call", minutes = 0) => (kind === "call" ? Math.round((NO_LISTING_CALL_RATE_CAP_CENTS * minutes) / 60) : NO_LISTING_WORK_CAP_CENTS);
+/** How much may be paid above the base on one piece in all (listed: the percent of the listing, at most the max; unlisted: the percent of the max). */
+export const extraCapCents = (listingCents: number | null, maxCents: number) =>
+  listingCents == null ? Math.round((maxCents * EXTRA_PAY_CAP_PERCENT) / 100) : Math.min(Math.round((listingCents * EXTRA_PAY_CAP_PERCENT) / 100), maxCents);
+/** The blocked wording for pay above the listing (a Pay above it, extra pay): Y is what can still be paid above it. */
 export const overListingLine = (roomCents: number) => `This is more than you can pay above the listing (up to ${money(roomCents).replace(/\.00$/, "")}).`;
-export function checkExtraPay(amountCents: number | null, understood: boolean): Check {
+/** The same for a part that isn't listed: "above the max". */
+export const overMaxLine = (roomCents: number) => `This is more than you can pay above the max (up to ${money(roomCents).replace(/\.00$/, "")}).`;
+export function checkExtraPay(amountCents: number | null, tickedCents: number | null, over200 = false): Check {
   if (amountCents == null || !Number.isInteger(amountCents) || amountCents <= 0) return no("Enter an amount like 7.50.");
   if (amountCents > EXTRA_PAY_MAX_CENTS) return amountCents > STRIPE_MAX_CENTS ? no(STRIPE_MAX_LINE) : no(`The most you can pay at once is ${money(EXTRA_PAY_MAX_CENTS)}.`);
   if (amountCents < MIN_CHARGE_CENTS) return no(`The smallest card charge is ${money(MIN_CHARGE_CENTS)}.`);
-  if (amountCents > EXTRA_PAY_TICK_CENTS && !understood) return no(`Tick “${EXTRA_PAY_TICK_LINE}” to pay.`);
-  return yes;
+  return payTicks(amountCents, tickedCents, over200);
 }
