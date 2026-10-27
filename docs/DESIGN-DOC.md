@@ -190,7 +190,7 @@ A payment hold, a chargeback hold and an admin suspension do the same thing to a
 | Developer | "<tester> reports an access key not working" | each report | that test's day |
 | Developer | Call lines: booked, cancelled (with reason), remaining calls cancelled, nobody joined, cancelled because the test is paused, missed because the site was down, a Forever call skipped for a clash | each time | that test's day |
 | Developer | "<test>: review <tester>'s <part> within 1 month / 1 week / 3 days / by tomorrow", then "…waited over 14 days: pay or reject it" | 1 month, 1 week, 3 days and 1 day before Charge opens (skipping past ones), then daily | Work waiting for your review |
-| Developer | "<test>: <tester>'s <part> still waits for you to pay or reject." (work outside the contract) | every 3 days | that test's day |
+| Developer | "<test>: <tester>'s <part> still waits for you to pay or reject." (work outside the contract) | every 3 days, for 14 days after sending, then no more (DEFAULT) | that test's day |
 | Developer | "<test> closes on <date>: send your work before then." (Open until is near; testers get it too) | 1 month, 1 week, 3 days, 1 day before | that test's day |
 | Developer | "<tester> disputed a payment on <test>" | each time | Disputes filed |
 | Developer | "A dispute on <test> was decided" | each time | Disputes decided |
@@ -208,11 +208,11 @@ A payment hold, a chargeback hold and an admin suspension do the same thing to a
 | Tester | "You're in: <test>" / "You're back in <test>: your deadline is <date>." / "Your application (or ask to rejoin) wasn't accepted" | each time | that test's day |
 | Tester | "<dev> updated the listing: <changes>" (new terms offered) | each Save that changes their terms | that test's day |
 | Tester | "You have a new access key for <test>" / "Work sent: your …" | each time | that test's day |
-| Tester | "You were paid for your <part> on <test>" | each time | You were paid |
+| Tester | "You were paid for your <part> on <test>", with the developer's note if any | each time | You were paid |
 | Tester | "Your <part> on <test> wasn't accepted" | each time | Work not accepted |
 | Tester | "<dev>'s payment for your <part> ($X) is delayed. You'll be told when it arrives." / "Payment for your work on <test> may be delayed" | each time | Payments delayed |
 | Tester | "<dev> paid $X for your <part>" (a delayed payment arrived) | each time | Delayed payments arrived |
-| Tester | "<dev> paid you $X extra for <test>" | each time | Extra pay |
+| Tester | "<dev> paid you $X extra for <test>", with the note if any | each time | Extra pay |
 | Tester | "Your dispute on <test> was decided" | each time | Disputes decided |
 | Tester | "<dev> didn't review your <part> in 14 days: charge $X or let it go", then "Reminder: …" | when Charge opens, then every 3 days | Charge or Let it go |
 | Tester | "Rate <dev> on <test>", then "Reminder: rate <dev>…" | once; after a stop or close every 3 days, for 2 weeks | that test's day; its own line once stopped |
@@ -539,7 +539,7 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
 
    [video: Ana (right, phone) sends her answers and switches to the new terms; the developer's live box updates and See their contract scrolls to her row.]
 4. **Yellow keys box** (quiet, never stops a press): how many testers report a key not working, the 3 most recent, "Show N more", and "Assign a free key" on each row. Key rules are in Edit test.
-5. **Needs you**, grouped per person, each with a fold for their sent parts: Pay or Reject for each sent piece; applications (Accept, Decline); rejoin asks (with the time they'd get back); call requests; calls waiting for a length or for Pay; disputes waiting for the developer's side; testers waiting to be rated.
+5. **Needs you**, grouped per person, each with a fold for their sent parts: Pay or Reject for each sent piece (only Pay for an unlisted part); applications (Accept, Decline); rejoin asks (with the time they'd get back); call requests; calls waiting for a length or for Pay; disputes waiting for the developer's side; testers waiting to be rated.
 
    [image: Needs you, grouped per person: Pay or Reject for sent work, a call waiting for its length, a dispute waiting for the developer's side.]
 
@@ -552,7 +552,7 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
    - An avatar row (about 12, then +N). Each hover card shows rating, accepted parts, the profile link and "Chat with <name>".
    - A scroll box of tester rows with a name search: required and optional parts sent, paid per part and in total, the agreed scope (their current contract, switched or kept), a call summary, Rate, and Extra pay on each sent part.
    - "No longer working (N)" below, each row tagged Left, Ended early, Stopped or Removed.
-7. **Live session**: the rate line; tick testers (each with their terms and "N of 3 booked") or Select all; the request form; waiting requests; booked calls and call sets; Past calls. Calls can be requested with any tester, whether or not a live call is a listed part. Each tester shows "Live call · $X/h" when a call is listed and in their contract, otherwise the label "Not listed"; any part not listed in a tester's contract carries the same label. The $100 cap is said only when a Pay goes over it.
+7. **Live session**: the rate line; tick testers (each with their terms and "N of 3 booked") or Select all; the request form; waiting requests; booked calls and call sets; Past calls. Calls can be requested with any tester, whether or not a live call is a listed part. Each tester shows "Live call · $X/h" when a call is listed and in their contract, otherwise the label "Not listed"; any part not listed in a tester's contract carries the same label. The unlisted caps ($1000 for written answers or a recording, $200 an hour for a call) are said only when a Pay goes over them.
 
    [image: Live session: tick testers, request times, a waiting request, booked calls (Join shows near the start).]
 8. **Invite testers**: three lists, "People you've worked with" (with "In N tests with you", a fold linking those tests), "Suggested" (top 5) and "Find testers" (name search plus device and language ticks); then "Invited" (waiting invites).
@@ -588,17 +588,18 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
 
 **Needs you**
 
-- **Pay:** the box starts at the listing (or the call's rate × length; empty for a call that isn't a listed part). Paying less than the listing needs a reason the tester reads. Paying more is extra pay (cap below). Over $200, the tick "I understand this payment can't be refunded and is charged now." is needed every time. The card is charged at once; nothing shows success before the result. Tester bell: "You were paid for your <part> on <test>"; developer: a receipt. "Paid so far" updates on both sides.
+- **Pay:** the box starts at the listing (or, for a call, the rate × logged minutes); for an unlisted part it starts empty. Every Pay box has an optional note, "Note to <tester> (optional)"; paying a listed part less than the listing makes it required ("Say why you're paying less…"). The tester reads the note with the payment, on their session page and in the bell line. Paying more is extra pay (cap below). Every Pay needs the tick "I understand this payment of $X can't be refunded and is charged now.", naming the exact amount (a changed amount unticks it); over $200 the tick "I confirm this payment is over $200." is needed too. Paying $0 needs no tick. The card is charged at once; nothing shows success before the result. Tester bell: "You were paid for your <part> on <test>"; developer: a receipt. "Paid so far" updates on both sides.
+- **An unlisted part** ("Not listed") has only Pay, no Reject. The box starts empty; Pay is at most $1000 for written answers or a recording and $200 an hour for a call, and Extra pay can add up to the same again. Paying $0 is allowed and closes the row; the tester reads "<dev> paid $0 for this" plus the note. Review reminders come for 14 days after sending, then stop; the row stays until it's paid, even $0.
 - **Reject:** needs a reason the tester reads. Tester bell: "Your <part> on <test> wasn't accepted"; they can dispute it.
 - **A declined card** starts a payment hold at once: "Your card was declined, so <name> wasn't paid $X for the <part> yet. Your tests are paused until you pay what you owe: open Payments." The tester sees "payment may be delayed". Holds are in Rules.
 - **Accept / Decline an application or rejoin ask:** Accept joins them ("You're in: <test>" or "You're back in <test>: your deadline is <date>."); Decline tells them it wasn't accepted.
 - **Add your side** to a dispute, once. The tester's next dispute press stops once; an admin decides (Administrator console).
-- **Call length:** the measured minutes, up to 150% of booked, within 24 hours of the start (after that the booked length is used).
+- **Call length:** the measured minutes, up to 150% of booked, within 24 hours of the start (after that the booked length is used). The call's Pay box then has a "Rate ($/h)" field: typing a rate fills the amount with rate × logged minutes, rounded to the cent; typing an amount clears the rate. A listed call's rate starts at the contract rate; an unlisted call's starts empty and can't go over $200/h.
 - **Rate** a tester after they rated, within 14 days: 1–5 stars and an optional comment; both ratings then show.
 
 **Testers**
 
-- **Extra pay** on each sent part (current and past testers): an amount box and Pay, with "Paid so far for this part: $X" and "up to $Y". Unsent parts have none. Over the cap: "This is more than you can pay above the listing (up to $Y)." Tester bell: "<dev> paid you $X extra for <test>". Cap in Rules.
+- **Extra pay** on each sent part (current and past testers): an amount box, an optional note to the tester and Pay (with the same ticks as Pay), with "Paid so far for this part: $X" and "up to $Y". Unsent parts have none. Over the cap (per piece, in Rules): "This is more than you can pay above the listing (up to $Y).", or "…above the max…" for an unlisted part. Tester bell: "<dev> paid you $X extra for <test>", with the note if one was written. Cap in Rules.
 - **Chat with <name>** (hover card, row, profile): opens the per-test chat. After a block either way, a suspension or any other refusal: "Unable to chat with this tester."
 
 **Live session**
@@ -812,7 +813,7 @@ From Every page: the live box, stop-once, pop-ups, kept drafts, long lists, stop
 7. **Stopped line**, when stopped (Every page).
 8. **Rating box** and **rejoin card** when they apply.
 9. **Your agreed scope** and **Terms history** (earlier terms, questions, answers, NDAs, offers and choices).
-10. **Your parts:** each part's Required or Not required, in the contract or not ("Not listed" when not), sent or not, "Paid so far $Y", and status: draft, sent, under review, paid, not accepted, payment delayed. Each part repeats its term at the top ("Written answers: $8 · Required"). Charge or Let it go, and Dispute, sit on the part.
+10. **Your parts:** each part's Required or Not required, in the contract or not ("Not listed" when not), sent or not, "Paid so far $Y" (with the developer's note, and for a call the rate when one was typed), and status: draft, sent, under review, paid, not accepted, payment delayed. Each part repeats its term at the top ("Written answers: $8 · Required"). Charge or Let it go, and Dispute, sit on the part. A part that isn't listed is paid at the developer's choice (up to $1000, or $200 an hour for a call), can't be rejected and never opens Charge; paid $0, it reads "<dev> paid $0 for this" plus the note.
 11. **Live session** (the developer's panel, tester side): their rate ("Live call: $40/h"), or "Not listed" when a live call isn't a listed part or isn't in their contract, requests, booked calls, Past calls, and the length the developer logged and why.
 12. **Your recordings** and **The written part.**
 13. **Can't finish?** with Leave.
@@ -1042,17 +1043,19 @@ The rules several pages share, with every number, cap and timer. How pages show 
 
 ### Money
 
-- **Pay:** one box per piece. It starts at the listing (or the call's rate × length); the developer can pay less (with a reason) or more (extra pay). Reject needs a reason. The card is charged at once and nothing shows success before the result. The split is 80% to the tester, 20% to the platform.
+- **Pay:** one box per piece. It starts at the listing (or, for a call, the rate × logged minutes); for an unlisted part it starts empty. The developer can pay less (with a reason) or more (extra pay). Every Pay box, Extra pay included, has an optional note, "Note to <tester> (optional)"; paying a listed part below the listing makes it required ("Say why you're paying less…"). The tester reads the note with the payment, on their session page and in the bell line. Reject needs a reason. The card is charged at once and nothing shows success before the result. The split is 80% to the tester, 20% to the platform.
 - **When Pay or Reject works:** until the tester presses Charge or Let it go, including after Open until, after a Stop and after a pause closure. Never during a hold or suspension.
-- **Over $200:** setting a part price over $200 needs "I confirm this part pays more than $200."; any Pay box over $200 needs "I understand this payment can't be refunded and is charged now." every time. There is no 3D Secure check on Pay.
+- **Over $200:** setting a part price over $200 needs "I confirm this part pays more than $200." Every Pay and Extra pay needs the tick "I understand this payment of $X can't be refunded and is charged now.", naming the exact amount (a changed amount unticks it); over $200 the tick "I confirm this payment is over $200." is needed too. Paying $0 needs no tick. There is no 3D Secure check on Pay.
 - **Any declined payment starts a payment hold at once:** a part Pay, the tester's Charge, a call charge or extra pay. There are no retries and no grace days. A declined subscription renewal is the one exception: it lapses with no hold (Plans and the subscription, below). More declines during the hold add to "Pay what you owe". Paying it all lifts the hold at once (from the 4th hold on, after an admin's Approve).
 - **Chargebacks:** a chargeback starts a chargeback hold with three steps: verify a card with 3D Secure, pay what is owed, then an admin's Approve. Paying alone never lifts it. A chargeback during a payment hold turns it into a chargeback hold. Every further chargeback adds to what is owed; a new chargeback clears an earlier card check.
 - **Hold count:** the first 3 holds lift as soon as the developer pays. From the 4th hold on, an admin must Approve the lift (Lifts on Administrator console); the developer's box says the team will review after they pay.
 - **Charge cap:** the listing minus what was already paid for that part.
 - **Charge during a pause:** during a payment or chargeback hold, a tester's Charge (and a dispute decided for the tester) goes through as their choice but isn't charged yet: it is added to the developer's "Pay what you owe", and the tester is paid when the developer pays. The tester sees "Charged $X. Payment may be delayed until the test resumes." During an admin suspension with no hold, a Charge, or a dispute decided for the tester, is charged at once; if it's declined, a payment hold starts and the amount is added to what is owed.
 - **Dispute range:** from what this piece was paid up to the listing minus what was paid on other pieces. An admin decision can only raise pay. Each part can be disputed once; the developer adds their side once.
-- **Extra pay cap:** any amount above a part's listed price (normal Pay above the listing plus extra pay, parts outside the contract too) may total at most 100% of the tester's current contract total (part prices plus the agreed totals of booked and held calls). Each unlisted part or unlisted call can be paid at most $100 (its pay plus extra pay), which doesn't count toward the 100%. Blocked: "This is more than you can pay above the listing (up to $Y)."
-- **Calls that aren't a listed part:** either side can request a call even when a live call isn't a listed part of the test or isn't in that tester's contract. A call or any other part that isn't listed in the tester's contract carries the label "Not listed" on both sides. Pay for such a call is up to the developer: at most $100 for that call (its pay plus extra pay), outside the 100% cap; the cap is said only when a Pay goes over it (the blocked line above). The Pay box starts empty. Charge and Let it go never open for a call outside the tester's contract.
+- **Extra pay cap:** counted per piece, across its Pay and every Extra pay on it. Extra pay is everything paid above the base: the listing for a listed part, or the max for an unlisted one. The max is $1000 for written answers or a recording, and $200 an hour × logged minutes for a call. Unlisted part: the base Pay is at most the max, and extra pay can add up to 100% of the max on top (a written piece can total $2000; a 30-minute call $100 + $100). Listed part: extra pay can add up to 100% of the listing, but never more than the max (a $20 written listing allows $20 extra; a $50/h call allows $50/h × minutes extra). Blocked: "This is more than you can pay above the listing (up to $Y).", or "…above the max…" for an unlisted part.
+- **Calls that aren't a listed part:** either side can request a call even when a live call isn't a listed part of the test or isn't in that tester's contract. A call or any other part that isn't listed in the tester's contract carries the label "Not listed" on both sides. Pay for such a call is up to the developer: at most $200 an hour for the logged minutes, plus extra pay up to the same again (Extra pay cap above); the cap is said only when a Pay goes over it (the blocked line above). The Pay box and its rate start empty. Charge and Let it go never open for a call outside the tester's contract.
+- **Paying for a call:** the developer logs the length first. The call's Pay box has a "Rate ($/h)" field: typing a rate fills the amount with rate × logged minutes, rounded to the cent; typing an amount clears the rate. A listed call's rate starts at the contract rate; an unlisted call's starts empty and can't go over $200/h. The tester sees the amount and, when one was typed, the rate.
+- **Unlisted parts in Needs you** have only Pay, no Reject. Paying $0 is allowed and closes the row; the tester reads "<dev> paid $0 for this" plus the note. Charge or Let it go never opens for them. The developer gets review reminders for 14 days after sending, then no more; the row stays until it's paid, even $0.
 - **Prices:** written and recording $1–$1,000 each, calls $10–$200 an hour, or free. The smallest charge is $0.50; Stripe's largest is $999,999.99.
 - **A suspended tester's pay** is still charged; their share is held until they are reinstated. If they never are, an admin refunds or releases it.
 - **Wording for testers:** "paused" and "delayed" only.
@@ -1139,7 +1142,7 @@ One row per change. A test is paused while its developer has any hold or suspens
 | Part price | written and recording $1–$1,000, or free; over $200 needs a tick |
 | Call rate | $10–$200 an hour, or free |
 | Any charge | $0.50 to $999,999.99 |
-| Pay above the listing | at most 100% of the current contract total; each unlisted part or unlisted call at most $100 (its pay plus extra pay), outside the 100% |
+| Pay above the listing | per piece: up to 100% of the listing, never more than the max; an unlisted piece's Pay at most the max ($1000 for written answers or a recording, $200 an hour × logged minutes for a call), plus up to 100% of the max in extra pay |
 | Changes to the steps, NDA, questions, languages and devices | 3 per field after the first tester joins; one Save that changes two fields uses one change of each (an admin's Allow 3 more gives 3 more to every field at 0); prices, parts, the build link and access keys aren't limited |
 | Call length | 10–180 min; logged up to 150% of booked, within 24 hours |
 | Call requests | 3 time rows; repeats 2–8 or Forever; per tester 3 booked times and 3 waiting requests |
@@ -1172,7 +1175,7 @@ Open questions about these rules are in QA and open questions.
 
 ### Edge cases to test before launch
 
-- **Payments:** a declined Pay, Charge, call charge or extra pay starting a hold at once; another decline during the hold adding to what is owed; two tabs paying one part; a chargeback with work waiting; a chargeback during a payment hold; a tester or developer suspended mid-payment; a deleted developer with valid charges; a payout failure; an admin raising pay in a dispute; a held share released or refunded; the extra-pay cap with parts outside the contract and unlisted parts; a call that isn't a listed part paid from an empty box; a tester's Charge during a hold added to what is owed and paid when the developer pays.
+- **Payments:** a declined Pay, Charge, call charge or extra pay starting a hold at once; another decline during the hold adding to what is owed; two tabs paying one part; a chargeback with work waiting; a chargeback during a payment hold; a tester or developer suspended mid-payment; a deleted developer with valid charges; a payout failure; an admin raising pay in a dispute; a held share released or refunded; the extra-pay cap with parts outside the contract and unlisted parts; a call that isn't a listed part paid from an empty box; a tester's Charge during a hold added to what is owed and paid when the developer pays; the per-piece extra-pay caps: an unlisted written piece totalling $2000, a 30-minute unlisted call at $100 + $100, a $20 written listing allowing $20 extra, a $50/h call allowing $50/h × minutes extra, and a listing above the max ($3000, or $300/h) allowing only the max ($1000, or $200/h × minutes) extra (such listings are outside today's price ranges); paying an unlisted part $0; the note on Pay and Extra pay (required below the listing); the call rate field (a rate, then an amount typed over it); the amount tick unticking when the amount changes, and the second tick over $200.
 - **Participation:** two testers for the last spot; joining just before Open until; Open until or the default deadline changed while testers join or work; leaving during a suspension; pausing mid-send; closing mid-review; an invite accepted in one tab after it was cancelled in another; invite plus rejoin ask in either order; the 10-test limit on every way in.
 - **Terms:** an offer replaced by a newer one before the tester answers; work sent during a change; reviewing at an old price; rejoining with the right terms; the per-field 3-change limit (one Save changing two fields) and Allow 3 more.
 - **Calls:** overlapping bookings; cancelling from another tab; a hold or suspension starting within 3 days of a call, and one starting later; joining a paused test's call; requesting a call on a test with no Live call part; booking while terms are edited; a Forever set adding its next call; nobody joining by halfway.
@@ -1192,6 +1195,7 @@ Open questions about these rules are in QA and open questions.
   - Chat is closed both ways while a test is paused.
   - A team pause of one test follows the same tester rules as a developer's hold or suspension.
   - Subscription details (BATCH-8 §8).
+  - Unlisted parts: review reminders for 14 days after sending, then none; the row stays until paid, even $0 (BATCH-9 §2).
 - Confirm large totals before posting ("Up to $8,000 could be charged if all spots send everything.")? Not built.
 - When a limit in Rules changes, tell developers in the bell and on the fields it affects?
 - Fraud: invite developers by hand at launch, a longer tester payout delay, and a new-developer spending limit or prepaid budgets before public developer sign-up?
@@ -1203,6 +1207,7 @@ Open questions about these rules are in QA and open questions.
 - Developer deletion: the owner suggested keeping open Charge rows and never opening Charge for work still under review. The app now refuses deletion until that work is paid or rejected instead. Confirm.
 - When a developer pays off a hold while their suspension continues, do they get "Your tests are running again", though their tests stay paused? (Rules, When account states change or combine.)
 - The team pauses a test that is already paused by its developer's hold: which closing date applies (the hold's 7 days or the team pause's), and which reason does the card show?
+- Disputes on unlisted parts: BATCH-9 says a dispute about one can only be about the amount, but the guide refuses disputes on work outside the contract ("This wasn't in your contract, so the developer's amount is final."). Can an unlisted part be disputed?
 
 **Earlier questions**
 
