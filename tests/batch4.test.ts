@@ -493,3 +493,11 @@ describe("follow-up 6) one Save in another tab is one line in one voice, and 'Ch
     expect(form).toContain("setCritUsed(r.criticalChanges)");
   });
 });
+
+describe("follow-up 4b) session-ending changes are hard moves", () => {
+  it("SessionWatch replaces the location (deleted, signed out, switched account, restricted) and reloads an empty main; AutoRefresh does the same after a refresh", () => {
+    const w = src("components/SessionWatch.tsx");
+    for (const t of ['window.location.replace("/login?gone=1")', "window.location.replace(`/login?next=", "window.location.replace(landingOfNewSignIn())", 'window.location.replace("/app")', 'querySelector("main")?.children.length']) expect(w, t).toContain(t);
+    expect(src("components/AutoRefresh.tsx")).toContain('querySelector("main")?.children.length');
+  });
+});

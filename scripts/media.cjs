@@ -139,6 +139,33 @@ async function shot(page, name, caption, target, after) {
   record(file, caption, "image");
   return file;
 }
+/** A Post / Edit form field with its label and notes: the nearest block holding the label of the input with this id. */
+const field = (page, id) => page.locator("#" + id).locator(`xpath=ancestor::div[label[@for='${id}']][1]`);
+/** Types text into a field one key at a time (so the recording shows it), `ms` between keys. */
+async function typeSlow(page, selector, text, ms = 25) {
+  await page.locator(selector).click();
+  await page.keyboard.type(text, { delay: ms });
+}
+/** A screenshot of everything from the top of one element to the bottom of another (with a little room above and below). */
+async function shotSpan(page, name, caption, from, to, padTop = 12, padBottom = 12) {
+  await page.bringToFront();
+  await page.waitForTimeout(400);
+  const loc = (t) => (typeof t === "string" ? page.locator(t).first() : t);
+  const a = loc(from), b = loc(to);
+  await a.waitFor({ state: "visible" });
+  await b.waitFor({ state: "visible" });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(150);
+  const [ba, bb] = [await a.boundingBox(), await b.boundingBox()];
+  if (!ba || !bb) throw new Error("no box for " + name);
+  const sy = await page.evaluate(() => window.scrollY);
+  const x = Math.max(0, Math.min(ba.x, bb.x) - 12), right = Math.max(ba.x + ba.width, bb.x + bb.width) + 12;
+  const y = Math.max(0, Math.min(ba.y, bb.y) + sy - padTop), bottom = Math.max(ba.y + ba.height, bb.y + bb.height) + sy + padBottom;
+  const file = `${name}.png`;
+  await page.screenshot({ path: path.join(OUT, file), fullPage: true, clip: { x, y, width: Math.min(page.viewportSize().width - x, right - x), height: bottom - y } });
+  record(file, caption, "image");
+  return file;
+}
 /** Saves a recorded page's video (closing its context). */
 async function saveVideo(page, file) {
   const v = page.video();
@@ -783,7 +810,8 @@ group("tpstop", async () => {
   await D.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "30");
   await adminDo(admin, "stop-test", t3, { note: "Media pass check: the build link is broken" });
   await pause(D, 800);
-  await D.click("section[aria-label='Call requests'] >> text=Request a time");
+  // The page may already have moved to the top by itself (it follows a team stop live): then there is nothing left to press.
+  await D.click("section[aria-label='Call requests'] >> text=Request a time", { timeout: 4000 }).catch(() => {});
   await D.waitForSelector("[data-admin-banner]", { timeout: 15000 });
   await pause(D, 4000);
   await D.screenshot({ path: path.join(VTMP, "tp-stopped-team-after.png"), fullPage: true });

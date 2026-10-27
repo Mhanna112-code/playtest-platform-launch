@@ -74,9 +74,14 @@ export function SessionWatch({ userId, restriction }: { userId: string; name?: s
         return; // offline: try again later
       }
       if (!alive) return;
-      if (s.state === "deleted") window.location.href = "/login?gone=1";
-      else if (s.state === "out") window.location.href = `/login?next=${encodeURIComponent(pathRef.current)}`;
-      else if (s.userId && s.userId !== userId) window.location.href = landingOfNewSignIn(); // a different account signed in elsewhere: switch to it
+      // (Owner, Oct 28) Backstop: a signed-in page whose main column came back empty (a redirect that landed in the middle of a refresh) is loaded again from the server.
+      if (/^\/app/.test(pathRef.current) && s.state === "ok" && !document.querySelector("main")?.children.length) {
+        window.location.reload();
+        return;
+      }
+      if (s.state === "deleted") window.location.replace("/login?gone=1");
+      else if (s.state === "out") window.location.replace(`/login?next=${encodeURIComponent(pathRef.current)}`);
+      else if (s.userId && s.userId !== userId) window.location.replace(landingOfNewSignIn()); // a different account signed in elsewhere: switch to it
       else {
         // The restriction on THIS page's side (a payment hold only restricts the developer side).
         const who = { isDeveloper: !!s.developer, isTester: !!s.tester, side: s.side, suspendedAt: s.suspended ? "x" : null, holdStartedAt: s.held ? "x" : null, holdReason: s.holdReason };

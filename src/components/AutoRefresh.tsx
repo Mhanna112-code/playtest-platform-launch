@@ -26,7 +26,11 @@ export function AutoRefresh({ query, refresh = true }: { query: string; refresh?
         }
         stopped.current = !!adminStopped;
         // A suspension / hold is routed by SessionWatch (a hard move to the dashboard): refreshing a page the server is about to redirect would race it.
-        if (refresh && !restricted && last.current !== null && v !== last.current && alive) router.refresh();
+        if (refresh && !restricted && last.current !== null && v !== last.current && alive) {
+          router.refresh();
+          // Backstop: if the refresh left the main column empty (the server redirected it mid-flight), load the page again.
+          setTimeout(() => { if (alive && !document.querySelector("main")?.children.length) window.location.reload(); }, 6000);
+        }
         last.current = v;
       } catch {
         // offline: try again next time
