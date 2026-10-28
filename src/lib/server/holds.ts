@@ -510,7 +510,7 @@ export async function runDaily(now = new Date()) {
     // Once it opens: the developer is reminded daily until it's paid, rejected, charged or let go.
     const gone = !!c.tester.deletedAt;
     if (!s.devRemindedAt || now.getTime() - s.devRemindedAt.getTime() >= 23 * 3_600_000) {
-      await bell(dev.id, `“${c.title}”: ${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} waited over ${REVIEW_DAYS} days: pay or reject it${gone ? "" : ` (${displayName(c.tester)} can now charge or let it go)`}.`, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
+      await bell(dev.id, `“${c.title}”: ${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} waited over ${REVIEW_DAYS} days: pay it${gone ? "" : ` (${displayName(c.tester)} can now charge or let it go)`}.`, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
       await db.submission.update({ where: { id: s.id }, data: { devRemindedAt: now } });
     }
     if (gone) continue; // the tester can't sign in: Charge and Let it go never open

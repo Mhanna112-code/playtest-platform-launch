@@ -130,6 +130,9 @@ const nowIso = () => new Date().toISOString();
 /** A new account through the sign-up API (name, role, Terms), email confirmed, a tester profile when testing. */
 async function account(email, name, role, pronoun = "they", tester = {}) {
   const p = await ctx(tester.phone ? PHONE : tester.desktop ? DESKTOP : V);
+  // (Batch 15 section 7) Sign-ups are limited per network (10 an hour): the recorder makes many accounts from this machine, so it clears its own local count first
+  // (in the media database only).
+  if (MEDIA_DB !== "playtest_lite") sql(`delete from "LoginAttempt" where kind = 'signup' and ip in ('::1', '127.0.0.1', '::ffff:127.0.0.1')`);
   const r = await post(p, "/api/auth/signup", { email, password: PASSWORD, role, name, acceptTerms: true });
   if (!r.ok) throw new Error("sign-up failed for " + email);
   own(`update "User" set "emailVerifiedAt" = (now() at time zone 'utc') where email = ${lit(email)}`);
@@ -655,7 +658,7 @@ group("edit", async () => {
 
 // ---------- Developer test page ----------
 // (Batch 15 section 30) No Reject: the decision without money is a $0 Pay with a reason.
-const rejectPiece = (dev, subId, reason) => post(dev, "/api/review", { amount: "0", kind: "submission", id: subId, reason, payKey: `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, seenAt: nowIso(), confirmed: true }).then((r) => ok(r, "reject"));
+const rejectPiece = (dev, subId, reason) => post(dev, "/api/review", { amount: "0", kind: "submission", id: subId, reason, payKey: require("crypto").randomUUID(), seenAt: nowIso(), confirmed: true }).then((r) => ok(r, "reject"));
 const subOf = (sessionId) => sql(`select id from "Submission" where "contractId" = '${sessionId}' order by "sentAt" desc limit 1`);
 /** The call timer's “Covered time is up” pop-ups (one per timer on the page) would cover the pictures: close them all. */
 async function closeTimerPopups(page) {
@@ -966,7 +969,7 @@ const piOf = (subId) => sql(`select "stripePaymentIntentId" from "Payment" where
 /** Pay one sent piece through the API at its listed price (the developer's own press). */
 async function apiPay(dev, subId, dollars) {
   const cents = Math.round(Number(dollars) * 100);
-  return ok(await post(dev, "/api/review", { action: "pay", kind: "submission", id: subId, amount: dollars, tickedCents: cents, payKey: `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, seenAt: nowIso(), confirmed: true }), "pay");
+  return ok(await post(dev, "/api/review", { action: "pay", kind: "submission", id: subId, amount: dollars, tickedCents: cents, payKey: require("crypto").randomUUID(), seenAt: nowIso(), confirmed: true }), "pay");
 }
 /** Press Pay on one piece of the developer test page (the amount box starts at the listing; the every-payment tick). */
 async function payPiece(page, subId) {
@@ -2101,7 +2104,7 @@ group("emails", async () => {
   await apiPay(nora, subOf(sA), "10.00");
   await bookCall(nora, ana, t, sA, 50);
   setCard(nora.email, "pm_card_declined");
-  await post(nora, "/api/review", { action: "pay", kind: "submission", id: subOf(sB), amount: "10.00", tickedCents: 1000, payKey: `media-${Date.now()}-em`, seenAt: nowIso(), confirmed: true });
+  await post(nora, "/api/review", { action: "pay", kind: "submission", id: subOf(sB), amount: "10.00", tickedCents: 1000, payKey: require("crypto").randomUUID(), seenAt: nowIso(), confirmed: true });
   setCard(nora.email, "pm_card_visa");
   await hook("retry", nora.email);
   // Omar (email Off): a charge made while he's away needs his bank's confirmation (a must-send line), and a subscription renewal is declined.
@@ -2248,7 +2251,7 @@ async function adminPress(page, row, label, fields = {}) {
 async function disputed(dev, tester, testId, sessionId, rejectFirst = true, pay0 = false) {
   const sub = subOf(sessionId);
   if (rejectFirst) await rejectPiece(dev, sub, "The answers are too short to use.");
-  if (pay0) ok(await post(dev, "/api/review", { action: "pay", kind: "submission", id: sub, amount: "0", tickedCents: 0, payKey: `media-${Date.now()}-z`, seenAt: nowIso(), confirmed: true }), "pay $0");
+  if (pay0) ok(await post(dev, "/api/review", { action: "pay", kind: "submission", id: sub, amount: "0", tickedCents: 0, reason: "Nothing usable in these answers.", payKey: require("crypto").randomUUID(), seenAt: nowIso(), confirmed: true }), "pay $0");
   ok(await post(tester, `/api/sessions/${sessionId}/dispute`, { ...go, kind: "submission", id: sub, reason: rejectFirst ? "I answered every question; the test didn't ask for long answers." : "I spent an hour on this feedback; $0 isn't fair." }), "dispute");
   const id = sql(`select id from "Dispute" where "submissionId" = '${sub}'`);
   ok(await post(dev, `/api/tests/${testId}/dispute-side`, { ...go, disputeId: id, text: "The answers were one line each." }), "dispute side");
@@ -2579,6 +2582,514 @@ group("editstop", async () => {
     "Edit stops once, then saves | The developer edits the instructions; Ana sends her answers and Ben joins (taking free key K-2); Save stops once with the list and the updated keys; the second press saves");
 }, { section: "Edit" });
 
+// ---------- Batch 15: the launch fixes (one case or more per item; the report's "Launch fixes" section) ----------
+const LF = "Launch fixes";
+const utcNow = "(now() at time zone 'utc')";
+/** Opens the test page and scrolls an element into view (the pictures start from the top of the page anyway). */
+async function open(page, url, sel) {
+  await page.goto(url);
+  if (sel) await page.waitForSelector(sel, { timeout: 20000 });
+  await pause(page, 700);
+}
+/** A call that took place: both were in the call page from `from` minutes ago for `len` minutes (presence rows), then the length is made final by a page load. */
+function tookPlace(callId, devId, testerId, from = 90, len = 29) {
+  own(`update "Call" set "startsAt" = ${utcNow} - interval '${from} minutes', "devJoinedAt" = ${utcNow} - interval '${from} minutes', "testerJoinedAt" = ${utcNow} - interval '${from} minutes' where id = '${callId}'`);
+  sql(`insert into "CallPresence" (id, "callId", "userId", side, "startAt", "endAt") values ('pr' || md5(random()::text), '${callId}', '${devId}', 'developer', ${utcNow} - interval '${from - 1} minutes', ${utcNow} - interval '${from - 1 - len} minutes'), ('pr' || md5(random()::text), '${callId}', '${testerId}', 'tester', ${utcNow} - interval '${from - 1} minutes', ${utcNow} - interval '${from - 1 - len} minutes')`);
+}
+const piece = (page, id) => page.locator(`#piece-${id}, #call-${id}`).first();
+
+group("b15pay", async () => {
+  const nora = await account(`dev+media${TS}lp@playtest.test`, "Nora Lane", "developer", "she");
+  const ana = await account(`tester+media${TS}lpa@playtest.test`, "Ana Silva", "tester", "she");
+  const ben = await account(`tester+media${TS}lpb@playtest.test`, "Ben Okafor", "tester", "he");
+  const t = await postTest(nora, { writtenCents: "10.00" });
+  const u = await postTest(nora, { title: "Harbor Run: open feedback", writtenCents: null, questions: [], liveRateCents: "30.00" });
+  const sA = await join(ana, t), sB = await join(ben, u);
+  await sendWritten(ana, sA);
+  ok(await post(ben, `/api/sessions/${sB}/written`, { answers: ["The map is lovely, the boat is slow."], notes: "", ...go }), "written (unlisted)");
+  const subA = subOf(sA), subB = subOf(sB);
+  // (§30, §31) The listed box: one green Pay, the room beside the amount, the line under the button.
+  await open(nora, `/app/tests/${t}`, `#piece-${subA}`);
+  await shot(nora, "b15-31-paybox", "§31 The Pay box | One green Pay; beside the amount the room left (“up to $10.00 above the listing”); the note is optional; “Ana Silva can dispute the amount once.”", `#piece-${subA}`);
+  const P = await rec(V, nora);
+  await open(P, `/app/tests/${t}`, `#piece-${subA}`);
+  await P.locator(`#amt-${subA}`).scrollIntoViewIfNeeded();
+  const from = at(P);
+  await P.locator(`#amt-${subA}`).fill("");
+  await typeSlow(P, `#amt-${subA}`, "25.00", 120);
+  await pause(P, 1500);
+  await shot(P, "b15-31-paybox-over", "§31 Over the cap, red as you type | $25.00 is more than the listing plus 100%: “This is more than you can pay above the listing (up to $10.00).” and Pay is disabled", `#piece-${subA}`);
+  await P.locator(`#amt-${subA}`).fill("");
+  await typeSlow(P, `#amt-${subA}`, "0", 120);
+  await pause(P, 1500);
+  await shot(P, "b15-30-zero-reason", "§30 $0 needs a reason | At $0 the note is required, in red at the box: “Say why you're paying $0 (the tester reads it).”", `#piece-${subA}`);
+  await typeSlow(P, `#why-${subA}`, "The answers were for another build.", 30);
+  await pause(P, 800);
+  await P.locator(`#amt-${subA}`).fill("");
+  await typeSlow(P, `#amt-${subA}`, "12.00", 120);
+  await P.locator(`#piece-${subA} [data-pay-tick] input`).check();
+  await pause(P, 1200);
+  await P.locator(`#piece-${subA} button:has-text('Pay')`).first().click();
+  await P.waitForSelector(`text=/Paid \\$12\\.00/`).catch(() => {});
+  await pause(P, 2500);
+  finishVideo([{ file: await saveVideo(P, "b15-31-paybox.webm"), from }], "b15-31-paybox-video", "§30 and §31 The Pay box live | An amount over the cap turns red at once; $0 asks for a reason; a valid amount with its tick pays");
+  await open(nora, `/app/tests/${u}`, `#piece-${subB}`);
+  await shot(nora, "b15-30-unlisted", "§30 An unlisted part | No Reject anywhere: “This part isn't listed: pay any amount, $0 included. Ben Okafor can dispute the amount once.”", `#piece-${subB}`);
+  await rejectPiece(nora, subB, "Thanks, the open feedback came after we'd shipped this build.");
+  await open(ben, `/app/sessions/${sB}`, "#parts");
+  await shot(ben, "b15-30-paid-zero-tester", "§30 Paid $0, as the tester reads it | “Paid $0: “<reason>”” on the part; it can be disputed once like any amount", "#part-written");
+}, { section: LF, fake: true });
+
+group("b15calls", async () => {
+  const nora = await account(`dev+media${TS}lc@playtest.test`, "Nora Lane", "developer", "she");
+  const ana = await account(`tester+media${TS}lca@playtest.test`, "Ana Silva", "tester", "she", { phone: true });
+  const t = await postTest(nora, { liveRateCents: "30.00", spots: "3" });
+  const sA = await join(ana, t);
+  // §40 The call page: both people open it; their pages send a heartbeat every ~10 seconds.
+  const call = await bookCall(nora, ana, t, sA, 0.1);
+  own(`update "Call" set "startsAt" = ${utcNow} - interval '2 minutes' where id = '${call}'`);
+  const D = await rec(V, nora), T = await rec(PHONE, ana);
+  await D.goto(`/app/calls/${call}`);
+  await T.goto(`/app/calls/${call}`);
+  const fromD = at(D), fromT = at(T);
+  await pause(D, 12000);
+  const beats = sql(`select count(*) from "CallPresence" where "callId" = '${call}'`);
+  console.log(`   call presence rows: ${beats}`);
+  finishVideo([{ file: await saveVideo(D, "b15-40-call-d.webm"), from: fromD }, { file: await saveVideo(T, "b15-40-call-t.webm"), from: fromT }], "b15-40-call-page",
+    "§40 Both in the call | The developer (left) and Ana (right, phone) in the call page: “the length is measured while you're both here”; each page tells the site every ~10 seconds");
+  // The call ran 29 minutes with both there (the presence the pages recorded, stretched to a whole call for the picture); both left.
+  sql(`delete from "CallPresence" where "callId" = '${call}'`);
+  tookPlace(call, nora.uid, ana.uid, 90, 29);
+  await open(nora, `/app/tests/${t}`, `#call-${call}`);
+  await shot(nora, "b15-40-measured", "§40 The measured length | “Length: 29 min (both in the call …)”; the Pay box's Rate and Amount use it; “Lower the length” is under it", `#call-${call}`);
+  // Rate and Amount fill each other.
+  const R = await rec(V, nora);
+  await open(R, `/app/tests/${t}`, `#call-${call}`);
+  await R.locator(`#rate-${call}`).scrollIntoViewIfNeeded();
+  const fromR = at(R);
+  await R.locator(`#rate-${call}`).fill("");
+  await typeSlow(R, `#rate-${call}`, "40", 150);
+  await pause(R, 1500);
+  await R.locator(`#amt-${call}`).fill("");
+  await typeSlow(R, `#amt-${call}`, "10.00", 150);
+  await pause(R, 2000);
+  await shot(R, "b15-40-rate-amount", "§40 Rate and Amount fill each other | Typing $40/h filled $19.33; typing $10.00 filled the rate back ($20.69/h); the one typed last wins on the server too", `#call-${call}`);
+  finishVideo([{ file: await saveVideo(R, "b15-40-rate.webm"), from: fromR }], "b15-40-rate-amount-video", "§40 Rate and Amount, live | A rate fills the amount (rate × 29 min); an amount fills the rate (to the cent per hour)");
+  // Lower the length, with a reason the tester reads.
+  await open(nora, `/app/tests/${t}`, `#call-${call}`);
+  await nora.locator(`#call-${call} [data-lower-length] > summary`).click();
+  await nora.locator(`#call-${call} [data-lower-length] input`).fill("20");
+  await nora.locator(`#lower-why-${call}`).fill("We spent the first 9 minutes fixing my microphone.");
+  await shot(nora, "b15-40-lower", "§40 Lower the length | Only lower, never raise; a reason is required and the tester reads it", `#call-${call}`);
+  await nora.locator(`#call-${call} [data-lower-length] button:has-text('Lower the length')`).click();
+  await nora.waitForSelector("text=/lowered from 29 min/", { timeout: 20000 });
+  await pause(nora, 800);
+  await shot(nora, "b15-40-lowered", "§40 Lowered | “Length: 20 min (lowered from 29 min; both in the call …)” with the reason in italics; the Pay box now uses 20 minutes", `#call-${call}`);
+  await open(ana, `/app/sessions/${sA}`, "#part-live");
+  await shot(ana, "b15-40-tester-view", "§40 The tester's view | Ana reads the measured length, that it was lowered to 20 min, and why", "#part-live");
+}, { section: LF, fake: true });
+
+group("b15ceiling", async () => {
+  const nora = await account(`dev+media${TS}lk@playtest.test`, "Nora Lane", "developer", "she");
+  const ana = await account(`tester+media${TS}lka@playtest.test`, "Ana Silva", "tester", "she");
+  const t = await postTest(nora, { liveRateCents: "150.00", spots: "3" });
+  const sA = await join(ana, t);
+  await bookCall(nora, ana, t, sA, 48, 180);
+  await bookCall(nora, ana, t, sA, 72, 180);
+  // $900 of the $1,000 is booked: the warning shows wherever calls are requested, offered, accepted or paid.
+  const D = await rec(V, nora);
+  await open(D, `/app/tests/${t}`, "#calls");
+  await liveSession(D).scrollIntoViewIfNeeded();
+  const from = at(D);
+  await pause(D, 1500);
+  await shot(D, "b15-34-warning", "§34 The warning | “$100.00 left of the $1,000 for calls with Ana Silva on this test.”: small, no stop", liveSession(D));
+  await D.check("section[aria-label='Call requests'] label:has-text('Ana Silva') input");
+  const when = new Date(Date.now() + 5 * 86400000);
+  await D.fill("section[aria-label='Call requests'] input[type=datetime-local]", new Date(when.getTime() - when.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+  await D.fill("section[aria-label='Call requests'] input[aria-label='Length in minutes']", "60");
+  await pause(D, 800);
+  await D.click("section[aria-label='Call requests'] >> text=Request a time");
+  await D.waitForSelector("text=/can come to at most \\$1,000/", { timeout: 15000 });
+  await pause(D, 2500);
+  await shot(D, "b15-34-refused", "§34 Refused at the limit | “Calls with Ana Silva on this test can come to at most $1,000; $100.00 is left, so this call can't be booked.”", liveSession(D));
+  finishVideo([{ file: await saveVideo(D, "b15-34.webm"), from }], "b15-34-ceiling", "§34 One $1,000 for a tester's calls | The warning under an hour's worth, then a 60-minute request at $150/h refused with what's left");
+  await open(ana, `/app/sessions/${sA}`, "#part-live");
+  await shot(ana, "b15-34-tester", "§34 The tester's wording | “$100.00 left of the $1,000 for your calls on this test.”", "#part-live");
+}, { section: LF, fake: true });
+
+group("b15live", async () => {
+  const nora = await account(`dev+media${TS}ll@playtest.test`, "Nora Lane", "developer", "she");
+  const ana = await account(`tester+media${TS}lla@playtest.test`, "Ana Silva", "tester", "she");
+  const t = await postTest(nora, { liveRateCents: "30.00", spots: "3" });
+  const sA = await join(ana, t);
+  // 6 booked: a weekly set of 6.
+  const d0 = new Date(Date.now() + 26 * 3600000); d0.setSeconds(0, 0);
+  ok(await post(nora, `/api/tests/${t}/request-time`, { ...go, contractIds: [sA], minutes: 30, rows: [{ startsAt: d0.toISOString(), repeat: "weekly", count: 6 }] }), "weekly request");
+  const reqId = sql(`select id from "CallRequest" where "contractId" = '${sA}' and status = 'pending' order by "createdAt" desc limit 1`);
+  ok(await post(ana, `/api/sessions/${sA}/answer-request`, { ...go, requestId: reqId, action: "accept" }), "accept weekly");
+  // 4 that are over: one took place (paid), one cancelled by Ana with a reason, one nobody joined, one missed when the site was down.
+  const c1 = await bookCall(nora, ana, t, sA, 400);
+  tookPlace(c1, nora.uid, ana.uid, 60 * 24 * 3, 29);
+  await nora.goto(`/app/tests/${t}`); // the page load makes its length final
+  ok(await post(nora, "/api/review", { kind: "call", id: c1, amount: "14.50", rate: "30.00", typed: "amount", tickedCents: 1450, payKey: require("crypto").randomUUID(), ...go }), "pay call");
+  const mk = (h, status, by, note) => own(`insert into "Call" (id, "slotId", "contractId", "startsAt", minutes, "rateCents", status, "cancelledBy", "cancelledAt", "cancelNote", "devMarks") select 'mc' || md5(random()::text), "slotId", "contractId", ${utcNow} - interval '${h} hours', 30, 3000, '${status}', ${by ? `'${by}'` : "null"}, ${utcNow} - interval '${h + 2} hours', ${note ? lit(note) : "''"}, ARRAY[]::text[] from "Call" where id = '${c1}'`);
+  mk(30, "cancelled", "tester", "My internet is down all day, sorry.");
+  mk(54, "cancelled", "system", "Nobody joined, so the call was cancelled.");
+  mk(80, "cancelled", "system", "missed because the site was down");
+  await open(nora, `/app/tests/${t}`, "#calls");
+  await liveSession(nora).scrollIntoViewIfNeeded();
+  await shot(nora, "b15-33-live-session", "§33 and §42 Live session: calls ahead only | Each tester's booked calls in a scroll box about 3 calls tall, soonest first; calls that are over moved to the tester's row", liveSession(nora));
+  await nora.locator(`[data-calls-fold="${sA}"] > summary`).click();
+  await pause(nora, 600);
+  await shot(nora, "b15-42-tester-row", "§42 The tester row's Calls (4) | Took place · 29 min · paid $14.50 (with Pay more), Cancelled by Ana Silva · <time> with her reason, Nobody joined, Missed: the site was down", `#tester-${sA}`);
+  await open(ana, `/app/sessions/${sA}`, "#call-history");
+  await ana.locator("#call-history > summary").click();
+  await pause(ana, 600);
+  await shot(ana, "b15-42-call-history", "§42 The tester's Call history | The same calls and badges on Ana's session page; her Live session keeps only the calls ahead", "#call-history");
+}, { section: LF, fake: true });
+
+group("b15stops", async () => {
+  const nora = await account(`dev+media${TS}ls@playtest.test`, "Nora Lane", "developer", "she");
+  const ana = await account(`tester+media${TS}lsa@playtest.test`, "Ana Silva", "tester", "she", { phone: true });
+  const ben = await account(`tester+media${TS}lsb@playtest.test`, "Ben Okafor", "tester", "he");
+  const t = await postTest(nora, { recordingCents: "15.00", spots: "4" });
+  const sA = await join(ana, t), sB = await join(ben, t);
+  // §36 The developer's stop box: Ben sends while the page is open; Pay on Ana's recording stops once.
+  const recA = own(`insert into "Submission" (id, "contractId", kind, "agreedCents", "sentAt", "updatedAt", "payBy", "devMarks") values ('ms' || md5(random()::text), '${sA}', 'recording', 1500, ${utcNow}, ${utcNow}, ${utcNow} + interval '7 days', ARRAY[]::text[]) returning id`);
+  await open(nora, `/app/tests/${t}`, `#piece-${recA}`);
+  await sendWritten(ben, sB);
+  await nora.locator(`#piece-${recA} [data-pay-tick] input`).check();
+  await nora.locator(`#piece-${recA} button:has-text('Pay')`).first().click();
+  await nora.waitForSelector(`#piece-${recA} [data-stop-box]`);
+  await pause(nora, 800);
+  await shot(nora, "b15-36-dev-box", "§36 Every stop box names the press | “Your Pay on Ana Silva's recording didn't go through.” · Since you opened this page: … · the Alerts line · bold “Press Pay again to go ahead.”", `#piece-${recA}`);
+  // The tester's stop-once: Ana has typed an answer; the developer pays her recording; Send stops once, the second goes.
+  const T = await rec(V, ana);
+  await open(T, `/app/sessions/${sA}`, "#a0");
+  await T.locator("#a0").scrollIntoViewIfNeeded();
+  const fromT = at(T);
+  await typeSlow(T, "#a0", "The harbor lights are beautiful.", 30);
+  await T.locator("#a1").fill("The second bridge.");
+  await pause(T, 600);
+  ok(await post(nora, "/api/review", { kind: "submission", id: recA, amount: "15.00", tickedCents: 1500, payKey: require("crypto").randomUUID(), ...go }), "pay recording");
+  await pause(T, 800);
+  await T.click("button:has-text('Send my answers')");
+  await T.waitForSelector("[data-stop-box]");
+  await pause(T, 2500);
+  await shot(T, "b15-36-tester-box", "§36 The tester's stop box | Send stops once: “Your Send didn't go through.” · Nora Lane paid $15.00 for your recording · “Turn off alerts” · “Press Send again to go ahead.”", T.locator("[data-stop-box]").first());
+  await T.click("button:has-text('Send my answers')");
+  await T.waitForSelector("text=/^Sent [A-Z]/").catch(() => {});
+  await pause(T, 2500);
+  finishVideo([{ file: await saveVideo(T, "b15-36-tester.webm"), from: fromT }], "b15-36-tester-stop-once", "§36 The tester's stop-once | Ana has typed her answers; the developer pays her recording; Send stops once with the blue list; the second press sends");
+  // Charge stops once after the developer paid something.
+  const sub = subOf(sA);
+  own(`update "Submission" set "choiceOfferedAt" = ${utcNow}, "choiceBy" = ${utcNow} + interval '7 days', "payBy" = ${utcNow} - interval '1 day' where id = '${sub}'`);
+  await open(ana, `/app/sessions/${sA}`, "#part-written");
+  const recB = own(`insert into "Submission" (id, "contractId", kind, "agreedCents", "sentAt", "updatedAt", "payBy", "devMarks") values ('ms' || md5(random()::text), '${sB}', 'recording', 1500, ${utcNow}, ${utcNow}, ${utcNow} + interval '7 days', ARRAY[]::text[]) returning id`);
+  void recB;
+  await apiEdit(nora, t, { description: "Sail through the first three harbors at night." });
+  await ana.locator("#part-written [data-pay-tick] input, #part-written input[type=checkbox]").first().check().catch(() => {});
+  await ana.locator("#part-written button:has-text('Charge')").first().click().catch(() => {});
+  await ana.waitForSelector("[data-stop-box]", { timeout: 15000 }).catch(() => {});
+  await pause(ana, 800);
+  await shot(ana, "b15-36-charge-stop", "§36 Charge stops once | The developer changed the listing after the page loaded: Charge stops once and names itself", "#part-written");
+  // §26 Alerts Off: a change that isn't Ana's contract never stops Send; new terms still do.
+  await open(ben, `/app/sessions/${sB}`, "[data-tester-alerts]");
+  await shot(ben, "b15-26-toggle-on", "§26 The tester's Alerts toggle | At the top right: “Alerts: On” and its line", "[data-tester-alerts]");
+  await ben.click("[data-tester-alerts] button");
+  await ben.waitForSelector("[data-tester-alerts='off']");
+  await shot(ben, "b15-26-toggle-off", "§26 Alerts: Off | One press, saved for all Ben's tests: only new terms from the developer stop a press now", "[data-tester-alerts]");
+  await ben.reload();
+  await ben.locator("#a0").fill("Second try: the fog level is still too dark.");
+  ok(await post(nora, "/api/review", { kind: "submission", id: subOf(sB), amount: "10.00", tickedCents: 1000, payKey: require("crypto").randomUUID(), ...go }), "pay Ben");
+  await ben.click("button:has-text('Send my updated answers'), button:has-text('Send my answers')").catch(() => {});
+  await pause(ben, 2500);
+  await shot(ben, "b15-26-off-goes", "§26 Alerts Off: Send goes through | Nora paid Ben after his page loaded: the live box shows it greyed and Send went straight through", "main");
+  await apiEdit(nora, t, { writtenCents: "12.00" });
+  await ben.locator("#a0").fill("Third try.").catch(() => {});
+  await ben.click("button:has-text('Send my updated answers'), button:has-text('Send my answers')").catch(() => {});
+  await pause(ben, 2500);
+  await shot(ben, "b15-26-off-terms-stop", "§26 New terms still stop | With Alerts Off, a terms offer still stops the press: the offer box at the top", "main");
+  // §25 Leave never stops: after a change, Leave goes through on the first press.
+  await open(ana, `/app/sessions/${sA}`, "main");
+  await apiEdit(nora, t, { description: "Sail through all three harbors at night." });
+  await ana.click("button:has-text('Leave')").catch(() => {});
+  await ana.waitForSelector("dialog[open]").catch(() => {});
+  await ana.click("dialog[open] button:has-text('Leave')").catch(() => {});
+  await pause(ana, 2500);
+  await shot(ana, "b15-25-leave", "§25 Leave never stops | The listing changed after the page loaded; Leave (after its own confirm) went through on the first press", "main");
+}, { section: LF, fake: true });
+
+group("b15paused", async () => {
+  const nora = await account(`dev+media${TS}lr@playtest.test`, "Nora Lane", "developer", "she");
+  const ana = await account(`tester+media${TS}lra@playtest.test`, "Ana Silva", "tester", "she");
+  const admin = await adminAccount();
+  const t = await postTest(nora, { liveRateCents: "30.00", spots: "6" });
+  const sA = await join(ana, t);
+  await bookCall(nora, ana, t, sA, 48);
+  await bookCall(nora, ana, t, sA, 72);
+  // Five testers dispute a $0 payment each: the dashboard box with 5 disputes scrolls.
+  for (const [i, n] of ["Ben Okafor", "Cam Lee", "Dee Marsh", "Eli Novak", "Fay Ito"].entries()) {
+    const x = await account(`tester+media${TS}lr${i}@playtest.test`, n, "tester", "they");
+    const s = await join(x, t);
+    await sendWritten(x, s);
+    await rejectPiece(nora, subOf(s), "These answers are about another game.");
+    ok(await post(x, `/api/sessions/${s}/dispute`, { ...go, kind: "submission", id: subOf(s), reason: "I played Harbor Run for an hour and answered both questions about it." }), "dispute");
+  }
+  await adminDo(admin, "suspend", nora.uid, { note: "Media pass check: several testers reported unpaid work", side: "developer" });
+  const D = await rec(V, nora);
+  await open(D, "/app", "[data-restricted-box]");
+  const from = at(D);
+  await shot(D, "b15-27-disputes-box", "§27 Disputes: add your side | While suspended, the dashboard lists each open dispute with the tester's text and the Add your side box; more than 3 scroll", "[data-dispute-box]");
+  await card(D, "Harbor Run: first 3 levels").locator("a").first().click();
+  await D.waitForSelector("[data-test-banner]");
+  await pause(D, 1500);
+  await shotFull(D, "b15-29-restricted-view", "§29 and §37 The restricted view | A suspended developer opens the test from its card: the red banner (title, reason, what's allowed), the overview with Stop and End early, Booked calls with Cancel");
+  await D.locator("[data-restricted-calls] summary").first().click();
+  await D.locator("[data-restricted-calls] button:has-text('Cancel this call')").first().click();
+  await pause(D, 2000);
+  await D.click("button:has-text('Stop the test')");
+  await D.waitForSelector("dialog[open]");
+  await join(await account(`tester+media${TS}lrz@playtest.test`, "Gus Hale", "tester", "he"), t).catch(() => {});
+  await D.click("dialog[open] button:has-text('Stop the test')");
+  await D.waitForURL((u) => u.pathname === "/app", { timeout: 20000 }).catch(() => {});
+  await D.waitForSelector("[data-done-line]").catch(() => {});
+  await pause(D, 2500);
+  await shot(D, "b15-29-done", "§29 Done | Stop went through silently (no stop-once, whatever changed) and the dashboard top says “Done: you stopped Harbor Run: first 3 levels.”", "[data-done-line]");
+  finishVideo([{ file: await saveVideo(D, "b15-29.webm"), from }], "b15-29-restricted", "§29 A suspended developer's test page | From the card to the restricted view; a call cancelled; Stop goes through and the dashboard says it's done");
+  // §37 The banner for each cause, and §39's limited Alerts.
+  await adminDo(admin, "unsuspend", nora.uid, { side: "developer" });
+  const t2 = await postTest(nora, { title: "Harbor Run: reef", spots: "3" });
+  await join(ana, t2);
+  await adminDo(admin, "pause-test", t2, { note: "Media pass check: " + "a tester reported that the build link opens a different game, so we paused this test while we look. ".repeat(10).slice(0, 990) });
+  await open(nora, `/app/tests/${t2}`, "[data-test-banner]");
+  await shot(nora, "b15-37-team-paused", "§37 and §20 The team paused this test | Title, the 1,000-character reason in italics in its scroll box, and at the bottom “For now you can stop this test, end testers' work early, or cancel calls.”", "[data-test-banner]");
+  await nora.click("[data-alerts-menu] > summary");
+  await pause(nora, 500);
+  await shot(nora, "b15-39-alerts-paused", "§39 Alerts on a paused test | Only what can still happen: testers leaving, call changes, payments, disputes, the team's decisions, your own saves", nora.locator("[data-alerts-menu]"));
+  await adminDo(admin, "unpause-test", t2);
+  hold(nora.email);
+  await open(nora, `/app/tests/${t2}`, "[data-test-banner]");
+  await shot(nora, "b15-37-hold", "§37 A payment hold | “Your tests are paused until you pay what you owe.” on the same banner", "[data-test-banner]");
+  own(`update "User" set "holdStartedAt" = null, "holdReason" = '' where email = ${lit(nora.email)}`);
+  await stopTest(nora, t2);
+  await open(nora, `/app/tests/${t2}`, "[data-test-banner]");
+  await shot(nora, "b15-37-stopped", "§37 Stopped by the developer | “This test is stopped.” and what still works, built from the buttons shown (with Next round)", "[data-test-banner]");
+  await nora.click("[data-alerts-menu] > summary");
+  await pause(nora, 500);
+  await shot(nora, "b15-39-alerts-stopped", "§39 Alerts on a stopped test | Payments, disputes, the team's decisions and your own saves only", nora.locator("[data-alerts-menu]"));
+  const t3 = await postTest(nora, { title: "Harbor Run: shipwreck", spots: "3" });
+  await join(ana, t3);
+  await adminDo(admin, "stop-test", t3, { note: "Media pass check: the build link is broken" });
+  await open(nora, `/app/tests/${t3}`, "[data-test-banner]");
+  await shot(nora, "b15-37-team-stopped", "§37 The team stopped this test | The same banner; Next round isn't offered after a team stop, so the allowed line doesn't list it", "[data-test-banner]");
+}, { section: LF, fake: true });
+
+group("b15contract", async () => {
+  const nora = await account(`dev+media${TS}lt@playtest.test`, "Nora Lane", "developer", "she");
+  const ana = await account(`tester+media${TS}lta@playtest.test`, "Ana Silva", "tester", "she");
+  const ben = await account(`tester+media${TS}ltb@playtest.test`, "Ben Okafor", "tester", "he");
+  const cam = await account(`tester+media${TS}ltc@playtest.test`, "Cam Lee", "tester", "they");
+  const t = await postTest(nora, { spots: "5" });
+  const sA = await join(ana, t), sB = await join(ben, t), sC = await join(cam, t);
+  void sC;
+  const offerOf = (s) => sql(`select id from "TermsOffer" where "contractId" = '${s}' and status = 'open' order by "createdAt" desc limit 1`);
+  await apiEdit(nora, t, { writtenCents: "12.00" });
+  ok(await post(ana, `/api/sessions/${sA}/terms`, { ...go, choice: "switch", offerId: offerOf(sA) }), "switch");
+  ok(await post(ben, `/api/sessions/${sB}/terms`, { ...go, choice: "keep", offerId: offerOf(sB) }), "keep");
+  await apiEdit(nora, t, { title: "Harbor Run: night harbors", productName: "Harbor Run" });
+  await apiEdit(nora, t, { questions: ["What did you like?", "Where did you get stuck at night?", "Would you play level 4?"] });
+  ok(await post(ana, `/api/sessions/${sA}/terms`, { ...go, choice: "switch", offerId: offerOf(sA) }), "switch 2");
+  await open(nora, `/app/tests/${t}`, "#contract-changes");
+  await nora.click("#contract-changes > summary");
+  await pause(nora, 800);
+  await shot(nora, "b15-43-contract-changes", "§43 Contract changes | One entry per Save that changed terms or names, newest first: before → after, Switched / Kept / Not decided yet (names link to the rows), and each Save's effects", "#contract-changes");
+  await shot(nora, "b15-24-rename-row", "§24 Renames in the tester row | “Renamed: “Harbor Run · Harbor Run: first 3 levels” → “Harbor Run · Harbor Run: night harbors”” in each working tester's contract changes", `#tester-${sA}`);
+  await open(ana, `/app/sessions/${sA}`, "[data-terms-history]");
+  await ana.locator("[data-terms-history]").locator("xpath=ancestor::details[1]").locator("summary").first().click().catch(() => {});
+  await pause(ana, 600);
+  await shot(ana, "b15-43-tester-history", "§43 The tester's own deal history | The terms she joined on, each offer and what she chose, the rename, her earlier questions, and payments, in order; never others' choices", "[data-terms-history]");
+}, { section: LF, fake: true });
+
+group("b15keys", async () => {
+  const nora = await account(`dev+media${TS}ly@playtest.test`, "Nora Lane", "developer", "she");
+  const ana = await account(`tester+media${TS}lya@playtest.test`, "Ana Silva", "tester", "she");
+  const ben = await account(`tester+media${TS}lyb@playtest.test`, "Ben Okafor", "tester", "he");
+  const cam = await account(`tester+media${TS}lyc@playtest.test`, "Cam Lee", "tester", "they");
+  const t = await postTest(nora, { spots: "4", accessKeys: "HR-1111\nHR-2222\nHR-3333\nHR-4444\nHR-5555" });
+  const sA = await join(ana, t), sB = await join(ben, t), sC = await join(cam, t);
+  ok(await post(ben, `/api/sessions/${sB}/key-broken`, go), "key broken");
+  ok(await post(cam, `/api/sessions/${sC}/key-broken`, go), "key broken (Cam)");
+  // §45 The broken-key warning on the test page.
+  await open(nora, `/app/tests/${t}`, "[data-keys-warning]");
+  await shot(nora, "b15-45-warning", "§45 Keys that don't work | “2 testers' keys don't work: Ben Okafor (HR-2222), Cam Lee (HR-3333)”, each with its tick and Works now; Select all; Dismiss selected", "[data-keys-notice]");
+  await nora.locator("[data-keys-warning] li", { hasText: "Ben Okafor" }).locator("input").first().check();
+  await nora.locator("[data-keys-warning] li", { hasText: "Ben Okafor" }).locator("label:has-text('Works now') input").check();
+  await nora.locator("[data-keys-warning] li", { hasText: "Cam Lee" }).locator("input").first().check();
+  await pause(nora, 400);
+  await shot(nora, "b15-45-ticked", "§45 Two ticked, one works now | “Dismiss 2”: Ben's key is marked as working again, Cam's warning is only hidden", "[data-keys-notice]");
+  await nora.click("[data-keys-warning] button:has-text('Dismiss')");
+  await pause(nora, 1500);
+  await nora.reload();
+  await nora.waitForSelector("[data-keys-notice]");
+  await shot(nora, "b15-45-dismissed", "§45 Dismissed | The warning is gone; HR-2222 is no longer crossed out, HR-3333 still is", "[data-keys-notice]");
+  await open(ben, `/app/sessions/${sB}`, "#access-key");
+  await shot(ben, "b15-45-tester", "§45 The tester reads it | “The developer marked your key as working.” (his next older-page press stops once for it, even with Alerts Off)", "#access-key");
+  // §19 and §44 The Free box, and keys typed back from testers who left.
+  ok(await post(cam, `/api/sessions/${sC}/leave`, { ...go, reason: "Moving on" }), "leave");
+  ok(await post(ana, `/api/sessions/${sA}/leave`, { ...go, reason: "Done" }), "leave Ana");
+  await open(nora, `/app/tests/${t}/edit`, "#keysFree");
+  await nora.locator("#keys").scrollIntoViewIfNeeded();
+  await shot(nora, "b15-19-free-box", "§19 One Free box | Every free key one per line (“Free (2 keys · 2 open spots)”); In use lists Ben's key, and greyed, Ana's and Cam's “(left)”", "#keys");
+  await addKeys(nora, "HR-1111\nHR-3333");
+  await nora.locator("#spots").click();
+  await pause(nora, 600);
+  await shot(nora, "b15-44-reused", "§44 Typed back, with a warning | “HR-1111: reused, previously given to Ana Silva.” and “HR-3333: reported as broken by Cam Lee.”: a Reused tag, never a mistake", "#keys");
+  await saveBtn(nora).click();
+  await nora.waitForURL(/saved=1/, { timeout: 20000 });
+  await nora.waitForSelector("[data-keys-notice]");
+  await shot(nora, "b15-44-chips", "§44 The notice chips | “HR-1111 · reused (Ana Silva)” and “HR-3333 · reported as broken (Cam Lee)”", "[data-keys-notice]");
+  await open(nora, `/app/tests/${t}/edit`, "#keysFree");
+  await addKeys(nora, "HR-2222");
+  await nora.locator("#spots").click();
+  await pause(nora, 600);
+  await shot(nora, "b15-19-in-use", "§19 A working tester's key | Red at once: “HR-2222 is in use by Ben Okafor, so it can't be added.”", "#keys");
+}, { section: LF, fake: true });
+
+group("b15admin", async () => {
+  const nora = await account(`dev+media${TS}la@playtest.test`, "Nora Lane", "developer", "she");
+  const ana = await account(`tester+media${TS}laa@playtest.test`, "Ana Silva", "tester", "she");
+  const a1 = await adminAccount();
+  adminP = null;
+  const a2 = await account(`admin2+media${TS}${GROUP}@playtest.test`, "Second Admin", "developer", "they");
+  own(`update "User" set "isAdmin" = true where email = ${lit(a2.email)}`);
+  const t = await postTest(nora, { spots: "3" });
+  const sA = await join(ana, t);
+  await sendWritten(ana, sA, ["Long answer. " + "The harbor lights, the boat's handling, the second bridge, the map. ".repeat(140), "The second bridge."]);
+  const sub = subOf(sA);
+  await rejectPiece(nora, sub, "These answers don't match the build.");
+  ok(await post(ana, `/api/sessions/${sA}/dispute`, { ...go, kind: "submission", id: sub, reason: "I played the build for an hour; every answer is about it." }), "dispute");
+  await open(a1, "/admin", "#disputes");
+  await a1.locator("#disputes [data-dispute-work] > summary").first().click();
+  await pause(a1, 800);
+  await shot(a1, "b15-08-see-the-work", "§8 See the work | Each dispute row opens the piece as the developer sees it: the answers under their questions in the scroll box (a 10,000-character answer here)", a1.locator("#disputes [data-dispute-row]").first());
+  // §21 Two admins: one stops a test; the other sees who and is refused by name.
+  const t2 = await postTest(nora, { title: "Harbor Run: reef", spots: "3" });
+  await adminDo(a1, "stop-test", t2, { note: "Media pass check: broken build" });
+  await open(a2, "/admin", "#disputes");
+  const r = await post(a2, "/api/admin/stop-test", { id: t2, note: "Also broken" });
+  console.log("   second admin's stop:", r.status, JSON.stringify(r.body).slice(0, 160));
+  await a2.goto("/admin#tests");
+  await pause(a2, 1200);
+  await shot(a2, "b15-21-stopped-by", `§21 Which admin | The tests list names the admin by email: “stopped by ${a1.email}”; developers and testers still read “the team”`, a2.locator("text=/stopped by admin/").first().locator("xpath=ancestor::li[1]"));
+  // Contact us: a 50,000-character message in the admin list, with Mark replied.
+  const u = await account(`tester+media${TS}lau@playtest.test`, "Hal Jensen", "tester", "he");
+  ok(await post(u, "/api/help", { topic: "A payment", message: "Hello team, here is everything that happened. " + "I sent my answers, the developer paid $0 and I disputed it; ".repeat(820) }), "contact us");
+  await open(a1, "/admin", "#contact");
+  await shot(a1, "b15-21-contact", "§21 Contact us in the admin list | A 50,000-character message in a scroll box about 8 lines tall, with Mark replied", a1.locator("#contact [data-contact-row]").first());
+  await a1.locator("#contact [data-contact-row]").first().locator("button:has-text('Mark replied')").click();
+  await pause(a1, 1500);
+  await a2.goto("/admin");
+  await a2.waitForSelector("#contact");
+  await shot(a2, "b15-21-replied", "§21 Replied by | The other admin sees who replied and when", a2.locator("#contact [data-contact-row]").first());
+}, { section: LF, fake: true });
+
+group("b15misc", async () => {
+  const nora = await account(`dev+media${TS}lm@playtest.test`, "Nora Lane", "developer", "she");
+  const ana = await account(`tester+media${TS}lma@playtest.test`, "Ana Silva", "tester", "she");
+  const ben = await account(`tester+media${TS}lmb@playtest.test`, "Ben Okafor", "tester", "he");
+  // §18 Every tester gets the same days; Open until is the last day to join.
+  const t = await postTest(nora, { openUntil: day(14), liveRateCents: "30.00", questions: ["What did you like? " + "Tell us about the boats, the harbors and the music in as much detail as you like. ".repeat(40), "Where did you get stuck?"], description: "Steps: " + "Open the build, sail out of the first harbor, follow the lights and note anything confusing. ".repeat(60) });
+  const inviteOnly = await postTest(nora, { title: "Harbor Run: friends and family", joinMode: "invite" });
+  await open(ana, "/app/find", "main");
+  await shot(ana, "b15-18-find", "§18 and §38 Find tests | “14 days per tester · join by <date>”; the invite-only test is never listed, not even for invited testers", "main");
+  await open(ana, `/app/find/${t}`, "main");
+  await shot(ana, "b15-18-join-page", "§18, §3 and §17 The join page | “Your deadline: <date> (14 days from joining)”; a long question and 5,000-character steps in their scroll boxes", "main");
+  void inviteOnly;
+  const sA = await join(ana, t);
+  // §38 Join everywhere; a stale Join names who cancelled and when.
+  const call = await bookCall(nora, ana, t, sA, 0.12);
+  await open(ana, "/app", "#upcoming-calls");
+  await shot(ana, "b15-35-upcoming-join", "§35 and §38 Upcoming calls | The tester dashboard's Upcoming calls has Join while the call can be joined", "#upcoming-calls");
+  ok(await post(nora, `/api/tests/${t}/cancel-call`, { ...go, callId: call, reason: "Something came up at work" }), "cancel");
+  await ana.click("#upcoming-calls button:has-text('Join call')");
+  await ana.waitForSelector("text=/Your Join call didn't go through/");
+  await pause(ana, 600);
+  await shot(ana, "b15-38-stale-join", "§38 A stale Join | “Your Join call didn't go through: Nora Lane cancelled this call at <time>.” and the button leaves", "#upcoming-calls");
+  // §22 End early: the button waits for a reason and a tester; the tester reads it in italics.
+  const sB = await join(ben, t);
+  await open(nora, `/app/tests/${t}`, "section[aria-label='Test']");
+  await nora.click("button:has-text('End early')");
+  await nora.locator("[data-end-early] fieldset label", { hasText: "Ben Okafor" }).locator("input").check();
+  await pause(nora, 400);
+  await shot(nora, "b15-22-disabled", "§22 End early waits for a reason | The button stays disabled with “Say why first” until a reason and a tester are there; the counter reads 0 / 10,000", "[data-end-early]");
+  const why = "Thank you, Ben. We found what we needed in the first two harbors, so we're ending this round early. " + "We'll invite you to the next build. ".repeat(60);
+  await nora.locator("#reason").fill(why);
+  await pause(nora, 400);
+  await shot(nora, "b15-22-enabled", "§22 Ready | With a reason (here about 2,200 characters) the button is enabled; the counter shows it", "[data-end-early]");
+  ok(await post(nora, `/api/tests/${t}/end-early`, { ...go, contractIds: [sB], reason: why }), "end early");
+  await open(ben, `/app/sessions/${sB}`, "main");
+  await shot(ben, "b15-22-tester-reads", "§22 and §20 The tester reads why | The reason in italics in a scroll box on his page (never in the bell line)", ben.locator(".info").filter({ hasText: "ended your session" }).first());
+  // §13 A press with no connection: the message under the button, and the typed text stays.
+  await open(ana, `/app/sessions/${sA}`, "#a0");
+  await ana.locator("#a0").fill("Typed while the connection dropped.");
+  await ana.locator("#a1").fill("Still here after the failed press.");
+  await ana.context().setOffline(true);
+  await ana.click("button:has-text('Send my answers')");
+  await ana.waitForSelector("text=/You seem to be offline/").catch(() => {});
+  await pause(ana, 600);
+  await shotSpan(ana, "b15-13-offline", "§13 No connection | “You seem to be offline. Check your connection and try again.” under the button; the typed answers stay", "#a0", ana.locator("text=/You seem to be offline/").first(), 12, 16);
+  await ana.context().setOffline(false);
+  // §16 Per-side suspension: an account with both sides keeps its tester side.
+  const both = await account(`dev+media${TS}lmx@playtest.test`, "Ivy Park", "both", "she");
+  const admin = await adminAccount();
+  await adminDo(admin, "suspend", both.uid, { note: "Media pass check", side: "developer" });
+  await open(both, "/app", "main");
+  await shot(both, "b15-16-dev-side", "§16 Suspensions are per side | Ivy's developer side is paused (“Your developer account is paused”); the switch to her tester side still works", "main");
+  // §1 Chat: open while the test is paused; closed only while a person is restricted.
+  const sid = sA;
+  await adminDo(admin, "pause-test", t, { note: "Media pass check" });
+  await open(ana, `/app/chat/${sid}`, "main");
+  await shot(ana, "b15-01-chat-paused-test", "§1 Chat while the test is paused | The team paused the test: the chat stays open for both", "main");
+  await adminDo(admin, "unpause-test", t);
+  await adminDo(admin, "suspend", nora.uid, { note: "Media pass check", side: "developer" });
+  await open(ana, `/app/chat/${sid}`, "main");
+  await shot(ana, "b15-01-chat-dev-suspended", "§1 Chat while the developer is restricted | “Messages are paused for now. You can still read this chat.”", "main");
+}, { section: LF, fake: true });
+
+group("b15daily", async () => {
+  // The daily job on the media server's own database (CRON_SECRET=media-cron): review reminders, Charge opening, Open until heads-ups, the admin's daily email,
+  // the "N applications wait" line and the suspended accounts reminder.
+  const nora = await account(`dev+media${TS}ld@playtest.test`, "Nora Lane", "developer", "she");
+  const ana = await account(`tester+media${TS}lda@playtest.test`, "Ana Silva", "tester", "she");
+  const ben = await account(`tester+media${TS}ldb@playtest.test`, "Ben Okafor", "tester", "he");
+  const admin = await adminAccount();
+  const t = await postTest(nora, { openUntil: day(3), liveRateCents: "30.00" });
+  const u = await postTest(nora, { title: "Harbor Run: open feedback", writtenCents: null, questions: [], liveRateCents: "30.00", joinMode: "apply" });
+  const sA = await join(ana, t);
+  await sendWritten(ana, sA);
+  // A listed call left unpaid past its review date: Charge opens for it.
+  const call = await bookCall(nora, ana, t, sA, 400);
+  tookPlace(call, nora.uid, ana.uid, 60 * 24 * 9, 25);
+  await nora.goto(`/app/tests/${t}`);
+  own(`update "Contract" set "dueAt" = ${utcNow} - interval '1 day' where id = '${sA}'`);
+  own(`update "Call" set "payBy" = ${utcNow} - interval '1 hour' where id = '${call}'`);
+  // Unlisted written answers sent 5 days ago (review date in 2 days): the "3 days" mark is due.
+  ok(await post(ben, `/api/tests/${u}/apply`, { ...go, note: "I'd love to try it." }), "apply");
+  own(`update "Submission" set "updatedAt" = ${utcNow} - interval '5 days', "payBy" = ${utcNow} + interval '2 days' where "contractId" = '${sA}'`);
+  // A suspended account to review.
+  const zed = await account(`tester+media${TS}ldz@playtest.test`, "Zed Ruiz", "tester", "he");
+  await adminDo(admin, "suspend", zed.uid, { note: "Media pass check: spam", side: "tester" });
+  const r = await fetch(`${BASE}/api/cron/daily`, { headers: { authorization: "Bearer media-cron" } });
+  console.log("   daily job:", r.status, (await r.text()).slice(0, 200));
+  await openBell(nora);
+  await shot(nora, "b15-02-dev-bell", "§2 and §35 The developer's daily lines | Review reminders on one schedule, “N applications wait for your answer”, and a call to pay", bellList(nora));
+  await openBell(ana);
+  await shot(ana, "b15-15-charge-opens", "§15 Charge opens for a call | “Nora Lane didn't pay your call on <date> in 7 days: charge $12.50 or let it go” (the measured length × the rate)", bellList(ana));
+  await openBell(admin);
+  await shot(admin, "b15-daily-admin", "The admin's daily lines | The suspended accounts reminder (“N suspended account sides to review”) and the cases in the daily email", bellList(admin));
+}, { section: LF, fake: true });
+
 // ---------- the report manifest ----------
 const SECTIONS = [
   ["Every page", "Rules every signed-in page follows: a page moves on its own when the account changes underneath it (deleted in another tab, a hold or suspension starting), and long lists stay short."],
@@ -2595,6 +3106,7 @@ const SECTIONS = [
   ["Account states (holds, suspensions, deletion)", "What a payment hold, a chargeback hold, an admin suspension and a deletion do to every open page, live: routing to the dashboard top, closed pages and banners. Testers only ever read “paused”."],
   ["Outages", "An outage is detected by the outside health check: every clock moves later by its length, calls inside it are cancelled with no fault, and open pages say so."],
   ["Notifications and emails", "Bell lines as each person reads them, stacked by kind, and the emails they become, including the few sent even with email Off."],
+  ["Launch fixes", "Batch 15, item by item (§ numbers are the items in docs/BATCH-15.md): measured calls and the Pay boxes, one $1,000 for a tester's calls, one rule for every pause, stop boxes that name the press, keys, admins, and the security audit's fixes. Items with nothing on screen link to their text proof."],
 ];
 function writeManifest(list) {
   const cases = new Map(); // base -> case

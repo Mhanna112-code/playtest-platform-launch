@@ -160,7 +160,7 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
                     <ul className="list-disc space-y-1 pl-5">
                       <li>Their work ends now, and each tester is told, with your reason.</li>
                       <li>{chosen.some((w) => w.waiting.length)
-                        ? <>What is waiting for you ({[...new Set(chosen.flatMap((w) => w.waiting))].join(", ")}) <strong className="text-white">stays waiting for your review</strong>: pay it or reject it with a reason, as usual.</>
+                        ? <>What is waiting for you ({[...new Set(chosen.flatMap((w) => w.waiting))].join(", ")}) <strong className="text-white">stays waiting for your review</strong>: pay it as usual ($0 with a reason).</>
                         : <>Nothing they&apos;ve sent or held is waiting for review.</>}</li>
                       {chosen.some((w) => w.toSend.length) && <li>What they haven&apos;t sent closes with no pay.</li>}
                       {chosenAhead > 0 && <li>{chosenAhead === 1 ? "The call still ahead is" : `The ${chosenAhead} calls still ahead are`} cancelled.</li>}

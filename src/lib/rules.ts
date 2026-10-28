@@ -951,9 +951,9 @@ export function termsDiff(a: ContractTerms, b: ContractTerms) {
 /** Switching never moves the tester's deadline earlier; it moves later if the new days give more time. */
 export const newDueAt = (dueAt: Date, joinedAt: Date, days: number) => new Date(Math.max(dueAt.getTime(), joinedAt.getTime() + days * 86_400_000));
 
-/** The Pay box line about day 14: "If you don't pay or reject by Nov 5, Ana Silva can charge you $8.00, her contract price, or let it go." */
+/** The Pay box line about day 14: "If you don't pay by Nov 5, Ana Silva can charge you $8.00, her contract price, or let it go." */
 export const choiceNoteLine = (by: string, name: string, cents: number, poss: string) =>
-  `If you don't pay or reject by ${by}, ${name} can charge you ${money(cents)}, ${poss} contract price, or let it go.`;
+  `If you don't pay by ${by}, ${name} can charge you ${money(cents)}, ${poss} contract price, or let it go.`;
 
 // ---------- Join call (owner) ----------
 

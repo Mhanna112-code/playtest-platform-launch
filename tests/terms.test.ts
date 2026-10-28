@@ -18,7 +18,7 @@ describe("new terms offered to working testers", () => {
     const joinedAt = new Date("2026-11-01T00:00:00Z"), due = new Date("2026-11-08T00:00:00Z");
     expect(R.newDueAt(due, joinedAt, 3).toISOString()).toBe(due.toISOString()); // never earlier
     expect(R.newDueAt(due, joinedAt, 10).toISOString()).toBe("2026-11-11T00:00:00.000Z");
-    expect(R.choiceNoteLine("Nov 5", "Ana Silva", 800, "her")).toBe("If you don't pay or reject by Nov 5, Ana Silva can charge you $8.00, her contract price, or let it go.");
+    expect(R.choiceNoteLine("Nov 5", "Ana Silva", 800, "her")).toBe("If you don't pay by Nov 5, Ana Silva can charge you $8.00, her contract price, or let it go.");
   });
 
   it("Edit offers the new terms (bell + email); the contract changes only on Switch; sent work keeps its price", async () => {
