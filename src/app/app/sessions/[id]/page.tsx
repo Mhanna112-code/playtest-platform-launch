@@ -10,6 +10,7 @@ import { callChargeCap, callChoiceLine } from "@/lib/server/holds";
 import { fmtTime } from "@/lib/format";
 import { renderTimes } from "@/lib/tz";
 import { ReasonQuote } from "@/components/ScrollText";
+import { TesterAlertsToggle } from "@/components/TesterAlertsToggle";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
@@ -93,6 +94,10 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const freshKey = key && key.status === "inuse" && (await db.accessKey.count({ where: { contractId: c.id, status: "retired" } })) > 0;
   // (Design doc 9) Terms history: what they joined on, every offer and what they chose (previous questions, answers and NDAs stay here).
   const offers = await db.termsOffer.findMany({ where: { contractId: c.id }, orderBy: { createdAt: "asc" } });
+  // (Owner, Oct 30, batch 15 sections 24 and 43) Their own deal history, in order: renames, previous question sets and payments too (never other testers' choices).
+  const contractNotes = await db.contractNote.findMany({ where: { contractId: c.id }, orderBy: { createdAt: "asc" } });
+  const historyPays = await db.payment.findMany({ where: { contractId: c.id, status: { in: ["charged", "not_set_up"] }, kind: { notIn: ["chargeback", "subscription"] } }, orderBy: { createdAt: "asc" }, select: { id: true, amountCents: true, createdAt: true, kind: true, callId: true, submissionId: true } });
+  const subKinds = new Map(c.submissions.map((x) => [x.id, x.kind === "recording" ? "recording" : "written answers"]));
   const blockedPair = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: u.id }] } })) > 0;
   const partPaid = new Map((await db.payment.groupBy({ by: ["submissionId", "callId"], where: { contractId: c.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } })).map((g) => [g.submissionId ?? g.callId ?? "", g._sum.amountCents ?? 0]));
   // (Batch 11) A charge waiting for the developer's bank confirmation reads "Payment may be delayed" too.
@@ -185,9 +190,13 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       <AutoRefresh query={`session=${c.id}`} />
       {/* (Design doc 8, owner Oct 26) The top, in this order: the test name, the access-key box, the live updates box (every change except the
           contract's), and right below it the Switch / Keep offer box. */}
-      <div>
-        {c.test.productName && <p className="kicker">{c.test.productName}</p>}
-        <h1 className="text-2xl font-bold tracking-tight text-white">{c.title}</h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          {c.test.productName && <p className="kicker">{c.test.productName}</p>}
+          <h1 className="text-2xl font-bold tracking-tight text-white">{c.title}</h1>
+        </div>
+        {/* (Batch 15 section 26) The tester's one-press Alerts, at the top right. */}
+        {!meOff && <TesterAlertsToggle off={u.testerAlertsOff} />}
       </div>
       {pausedBanner && <p className="info" data-paused="">{pausedBanner}</p>}
       {key && <KeyBox canReport={!meOff} sessionId={c.id} seenAt={seenAt} value={key.value} broken={key.status === "broken"} fresh={!!freshKey} />}
@@ -287,8 +296,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           <p className="font-medium text-white">Terms history</p>
           <ul className="space-y-1.5 text-slate-300">
             <li>{fmtDate(c.joinedAt)}: you joined on {termsLine(c, true)}{c.ndaAcceptedAt ? ` and accepted the NDA` : ""}.</li>
-            {offers.map((o) => (
-              <li key={o.id}>
+            {[
+              ...offers.map((o) => ({ at: o.createdAt, key: o.id, node: (<li key={o.id}>
                 {fmtDate(o.createdAt)}: {dev} offered new terms ({o.diff}) · {o.status === "switched" ? `you switched${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "kept" ? `you kept your terms${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "open" ? "waiting for your answer" : "replaced by a newer offer"}
                 {Array.isArray(o.fromQuestions) && JSON.stringify(o.fromQuestions) !== JSON.stringify(o.questions) && (
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">Questions then and now</summary>
@@ -301,8 +310,11 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">NDA then and now</summary>
                     <div className="mt-1 space-y-2"><NdaBox label="Before" text={o.fromNdaText} /><NdaBox label="Offered" text={o.ndaText} /></div></details>
                 )}
-              </li>
-            ))}
+              </li>) })),
+              ...contractNotes.map((n) => ({ at: n.createdAt, key: n.id, node: <li key={n.id} data-history-line="">{`${fmtDateTime(n.createdAt)}: ${n.text}`}</li> })),
+              ...prevSetsOf(c.prevSets).map((p) => ({ at: new Date(p.until), key: `set-${p.until}`, node: <li key={`set-${p.until}`} data-history-line="">{`${fmtDate(new Date(p.until))}: your questions changed; your earlier answers are kept under “Previous questions and answers”`}</li> })),
+              ...historyPays.map((p) => ({ at: p.createdAt, key: p.id, node: <li key={p.id} data-history-line="">{`${fmtDate(p.createdAt)}: ${p.kind === "extra" ? "paid more" : p.kind === "dispute" ? "the team raised the pay by" : "paid"} ${money(p.amountCents)} for your ${p.callId ? "live call" : subKinds.get(p.submissionId ?? "") ?? "work"} (you get ${money(testerShare(p.amountCents))})`}</li> })),
+            ].sort((a, b) => a.at.getTime() - b.at.getTime()).map((x) => x.node)}
           </ul>
         </div>
       </details>
@@ -457,7 +469,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           </>
         )}
         {/* (Batch 13 section 8) The previous sets of questions and answers, newest first, read-only. */}
-        <PrevSetFolds sets={prevSets} />
+        <PrevSetFolds sets={prevSets} sentPart={!!written} />
         {/* (Batch 13) Show an excerpt of paid written answers on the profile (the developer allows or denies it). */}
         {written && excerptPicks.length > 0 && <ExcerptPicker submissionId={written.id} choices={excerptPicks} />}
         {excerptPending && <p className="note" data-excerpt-pending="">Your excerpt request is waiting for {dev}.</p>}

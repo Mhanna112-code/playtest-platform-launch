@@ -23,7 +23,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  */
 export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mine[]; sets?: TesterSet[]; refusal: string; lateNote?: string; devName: string; noReport?: boolean }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
-  const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={error} /></div> : null);
+  const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox side="tester" changes={changes} error={error} /></div> : null);
   async function go(action: string, body: Record<string, unknown>, key = action) {
     const r = await press(`/api/sessions/${p.sessionId}/${action}`, body, key);
     if (r) window.location.reload();

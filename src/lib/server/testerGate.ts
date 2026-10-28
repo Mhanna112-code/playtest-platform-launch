@@ -65,6 +65,9 @@ export async function testerChanges(testerId: string, contractId: string, testId
   return out.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }
 
+/** (Batch 15 sections 26 and 45) Changes to the tester's own contract: they stop a press even with Alerts Off. */
+export const CONTRACT_KINDS = new Set(["terms", "keyfixed"]);
+
 const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", "info", "payment", "admin", "own", "dispute"];
 
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
@@ -82,8 +85,11 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const all = withRenamed(opts.keep ? raw.filter((e) => e.kind === "renamed" || opts.keep!(e)) : raw, body);
   const changes = all.filter((e) => (e.kind === "terms" ? !opts.skipTerms && e.createdAt > termsFrom : true));
   const terms = changes.filter((e) => e.kind === "terms");
-  const r = stopOnce(changes.filter((e) => e.kind !== "terms"), seenAt, false, [...KINDS, "renamed"]);
-  const list = [...terms, ...(r.go ? [] : r.changes)].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const r = stopOnce(changes.filter((e) => e.kind !== "terms"), seenAt, false, [...KINDS, "renamed", "keyfixed"]);
+  // (Owner, Oct 30, batch 15 section 26) Alerts Off: only changes to the tester's own contract stop (a new terms offer, their key marked working).
+  const off = (await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
+  const rest = r.go ? [] : off ? r.changes.filter((e) => CONTRACT_KINDS.has(e.kind)) : r.changes;
+  const list = [...terms, ...rest].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   if (list.length) throw new HttpError(409, "stop_once", tail, { changes: asLines(list), tail, top: terms.length > 0 });
 }
 

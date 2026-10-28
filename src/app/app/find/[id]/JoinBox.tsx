@@ -104,7 +104,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
           <button className="btn" disabled={busy} onClick={() => go("join")}>Join on the current listing</button>
           <button className="btn-ghost" disabled={busy} onClick={() => go("withdraw-application")}>Withdraw application</button>
         </div>
-        <ChangesBox changes={box?.changes ?? null} tail={box?.tail} />
+        <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} />
         <Err text={err} />
       </div>
     );
@@ -113,7 +113,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       <div className="space-y-2">
         <p className="info">{p.application.kind === "rejoin" ? "You asked to rejoin. You'll hear back when the developer answers." : "You applied to join. You'll hear back when the developer answers."}</p>
         <button className="btn-ghost" disabled={busy} onClick={() => go("withdraw-application")}>Withdraw application</button>
-        <ChangesBox changes={box?.changes ?? null} tail={box?.tail} />
+        <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} />
         <Err text={err} />
       </div>
     );
@@ -163,7 +163,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
           onClose={() => setAsking(null)}
         />
       )}
-      <ChangesBox changes={box?.changes ?? null} tail={box?.tail} />
+      <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} />
       {done && <p className="ok">{done}</p>}
       <Err text={err} />
       {rejoining ? (

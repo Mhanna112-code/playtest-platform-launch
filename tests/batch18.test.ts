@@ -18,7 +18,7 @@ const roomOf = async (submissionId: string) => pieceRoom((await pieceOf({ submis
 import { REPORTED_LABEL } from "@/lib/server/reports";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
-import { act, bookCall, joined, listingBody, sact, seen, settle, setup } from "./fixtures";
+import { act, bookCall, joined, listingBody, sact, seen, settle, setup, atHours } from "./fixtures";
 
 const DAY = 86_400_000;
 const cron = () => cronGET(new Request("http://localhost:3400/api/cron/daily", { headers: { authorization: "Bearer cron-test" } })).then((r) => r.json());
@@ -216,7 +216,7 @@ describe("Q) a declined payment starts the hold at once (no owed window)", () =>
     const devLines = (await devChanges(dev.user.id, B, new Date(loaded), "", db, { all: true })).map((c) => c.text).join(" ");
     expect(devLines).toMatch(/Payment failed on Harbor Run: \$8\.00 to Ana Silva for the written answers · pay what you owe in Payments/);
     expect(devLines).not.toMatch(/retry|pay by/);
-    const testerStop = await sact(ana.sessionId, "leave", ana.tester.cookie, { seenAt: loaded });
+    const testerStop = await sact(ana.sessionId, "request-time", ana.tester.cookie, { startsAt: atHours(356), seenAt: loaded });
     expect(testerStop.body.error.code).toBe("stop_once");
     expect(JSON.stringify(testerStop.body.error.changes)).not.toMatch(/failed/i);
     // Pay what you owe goes through: both read it, and the tester's first press stops once with the notice.
@@ -228,7 +228,7 @@ describe("Q) a declined payment starts the hold at once (no owed window)", () =>
     await new Promise((x) => setTimeout(x, 40));
     const devLines2 = (await devChanges(dev.user.id, B, new Date(loaded2), "", db, { all: true })).map((c) => c.text).join(" ");
     expect(devLines2).toMatch(/Payment went through on Harbor Run/);
-    const testerStop2 = await sact(ana.sessionId, "leave", ana.tester.cookie, { seenAt: loaded2 });
+    const testerStop2 = await sact(ana.sessionId, "request-time", ana.tester.cookie, { startsAt: atHours(363), seenAt: loaded2 });
     expect(testerStop2.body.error.code).toBe("stop_once");
     expect(testerStop2.body.error.changes.length).toBeGreaterThan(0);
   });

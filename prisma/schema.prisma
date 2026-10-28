@@ -42,6 +42,8 @@ model User {
   /// (Design doc 9) A tester's payout failed ("Your bank couldn't receive a payout"): since when, and the last 3-day bell reminder
   /// (Design doc 6) The Alerts menu: update types the developer chose NOT to be stopped for (see src/lib/alerts.ts)
   ignoredAlerts     String[]  @default([])
+  /// (Batch 15 section 26) The tester's one-press Alerts: Off = only changes to their contract (a new terms offer, their key marked working) stop a press
+  testerAlertsOff   Boolean   @default(false)
   payoutProblemAt   DateTime?
   payoutRemindedAt  DateTime?
   createdAt   DateTime  @default(now())
@@ -572,6 +574,33 @@ model CallPresence {
   @@index([callId, userId])
 }
 
+/// (Owner, Oct 30, batch 15 section 43) One Save that changed the terms or the names: the developer's "Contract changes" panel. Who switched or kept comes from the
+/// offers it made (TermsOffer.changeId).
+model TestChange {
+  id        String   @id @default(cuid())
+  testId    String
+  /// The listing fields changed (terms and names only)
+  fields    String[]
+  before    Json
+  after     Json
+  /// "2 applications closed · 1 invite re-sent"
+  effects   String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([testId, createdAt])
+}
+
+/// (Owner, Oct 30, batch 15 section 24) An entry in ONE tester's contract changes that isn't an offer: a rename ("Renamed: “A · B” → “C · D”"), stored for every working tester.
+model ContractNote {
+  id         String   @id @default(cuid())
+  contractId String
+  kind       String
+  text       String
+  createdAt  DateTime @default(now())
+
+  @@index([contractId, createdAt])
+}
+
 /// Per-test chat between the developer and one tester (in the test, invited, applied, or a past participant).
 model Message {
   id         String   @id @default(cuid())
@@ -714,6 +743,8 @@ model TermsOffer {
   fromNdaText    String    @default("")
   /// "written $8 → $10, added a recording ($12)"
   diff           String
+  /// (Batch 15 section 43) The Save that made this offer (its entry in the developer's Contract changes)
+  changeId       String?
   /// "open" | "switched" | "kept" | "superseded"
   status         String    @default("open")
   decidedAt      DateTime?

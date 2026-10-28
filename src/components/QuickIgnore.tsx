@@ -22,3 +22,15 @@ export function QuickIgnore({ alerts }: { alerts: string[] }) {
     </div>
   );
 }
+
+/** (Batch 15 section 26) Under a tester's stop box: the quick "Turn off alerts" (new terms from the developer still stop). */
+export function TesterAlertsOff({ show }: { show: boolean }) {
+  const [done, setDone] = useState(false);
+  if (!show) return null;
+  return (
+    <div className="mt-1 space-y-1 text-xs text-sky-200/90" data-quick-alerts-off="">
+      <p>You can turn these stops off with Alerts at the top of the page (new terms from the developer still stop).</p>
+      <button type="button" className="btn-ghost !rounded-md !px-2 !py-0.5 text-xs" disabled={done} onClick={() => void api("/api/account/tester-alerts", { off: true }).then(() => { setDone(true); window.dispatchEvent(new CustomEvent("tester-alerts", { detail: { off: true } })); }).catch(() => null)}>{done ? "Alerts are off" : "Turn off alerts"}</button>
+    </div>
+  );
+}

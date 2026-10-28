@@ -35,10 +35,10 @@ describe("reason E: your own actions in another tab", () => {
     const own = await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(50), seenAt: pageLoaded, tab: "tab-1" });
     expect(own.status).toBe(200);
     // Tab 2: Leave stops once listing both, then goes through.
-    const r = await sact(sessionId, "leave", tester.cookie, { seenAt: pageLoaded, tab: "tab-2" });
+    const r = await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(307), seenAt: pageLoaded, tab: "tab-2" });
     expect(r.body.error.code).toBe("stop_once");
     expect(texts(r)).toEqual(["You also did this in another tab: sent your written answers", "You also did this in another tab: sent a call request"]);
-    expect((await sact(sessionId, "leave", tester.cookie, { seenAt: pageLoaded, tab: "tab-2", confirmed: true })).status).toBe(200);
+    expect((await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(314), seenAt: pageLoaded, tab: "tab-2", confirmed: true })).status).toBe(200);
   });
 
   it("developer: a payment made in another tab stops Stop once with the developer's own words", async () => {
@@ -112,7 +112,7 @@ describe("Block has one stop: already blocked in another tab (owner, Oct 27)", (
     await later();
     const mine = await db.callRequest.findFirstOrThrow({ where: { contractId: a.sessionId, fromSide: "tester" } });
     expect((await act(testId, "answer-request", dev.cookie, { contractId: a.sessionId, requestId: mine.id, action: "accept", seenAt: seen(), confirmed: true })).status).toBe(200);
-    const r = await sact(a.sessionId, "leave", a.tester.cookie, { seenAt: pageLoaded });
+    const r = await sact(a.sessionId, "request-time", a.tester.cookie, { startsAt: atHours(321), seenAt: pageLoaded });
     expect(texts(r)[0]).toMatch(/^Nora Lane accepted your call request: /);
     // A developer request to both; Ana takes it; Ben's page stops with the neutral line.
     await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [a.sessionId, b.sessionId], startsAt: atHours(80) });
@@ -120,7 +120,7 @@ describe("Block has one stop: already blocked in another tab (owner, Oct 27)", (
     await later();
     const ra = await db.callRequest.findFirstOrThrow({ where: { contractId: a.sessionId, fromSide: "developer", status: "pending" } });
     expect((await sact(a.sessionId, "answer-request", a.tester.cookie, { requestId: ra.id, action: "accept", seenAt: seen(), confirmed: true })).status).toBe(200);
-    const s = await sact(b.sessionId, "leave", b.tester.cookie, { seenAt: benLoaded });
+    const s = await sact(b.sessionId, "request-time", b.tester.cookie, { startsAt: atHours(328), seenAt: benLoaded });
     expect(texts(s)).toHaveLength(1);
     expect(texts(s)[0]).toMatch(/^The call time .+ is no longer available: another tester took it$/);
     expect(JSON.stringify(s.body)).not.toContain("Ana");
@@ -329,7 +329,9 @@ describe("payments and disputes, only for this test", () => {
     const bells = await db.notification.findMany({ where: { userId: ana.tester.user.id }, orderBy: { createdAt: "asc" } });
     expect(bells.slice(notesBefore).map((n) => n.text)).toEqual([delayed]);
     expect((await live(ana.tester.cookie, `session:${ana.sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([delayed]);
-    expect(texts(await sact(ana.sessionId, "leave", ana.tester.cookie, { seenAt: pageLoaded }))).toEqual([delayed]);
+    // (Batch 15 section 25) Leave no longer stops; the tester's gate itself (every other tester button) stops once with the line.
+    const gate = await (await import("@/lib/server/testerGate")).testerGate(ana.tester.user.id, ana.sessionId, (await db.contract.findUniqueOrThrow({ where: { id: ana.sessionId } })).testId, { seenAt: pageLoaded }).then(() => null, (e: { data?: { changes?: { text: string }[] } }) => e.data?.changes?.map((c) => c.text));
+    expect(gate).toEqual([delayed]);
     for (const t of [delayed, ...bells.map((n) => n.text)]) expect(t).not.toMatch(/fail|declin|card|hold/i);
     // It goes through ("Pay what you owe"): exactly one more notification, the normal paid line; the top box says paid.
     decline = false;
@@ -358,7 +360,7 @@ describe("payments and disputes, only for this test", () => {
     await fail(ana.sessionId, dev.user.id, ana.tester.user.id, subA.id);
     const delayed = "Nora Lane's payment for your written answers on Harbor Run ($8) is delayed. You'll be told when it arrives.";
     expect((await live(ana.tester.cookie, `session:${onB.body.sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([delayed]);
-    expect(texts(await sact(onB.body.sessionId, "leave", ana.tester.cookie, { seenAt: pageLoaded }))).toEqual([delayed]);
+    expect(texts(await sact(onB.body.sessionId, "request-time", ana.tester.cookie, { startsAt: atHours(342), seenAt: pageLoaded }))).toEqual([delayed]);
     expect((await live(ana.tester.cookie, `session:${onC.body.sessionId}`, pageLoaded)).body.changes).toEqual([]);
   });
 
@@ -385,7 +387,7 @@ describe("payments and disputes, only for this test", () => {
     const lines: string[] = (await live(tester.cookie, `session:${sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text);
     expect(lines).toEqual(expect.arrayContaining(["Nora Lane paid $8.00 for your written answers", "The team decided your dispute: the pay was raised to $8.00"]));
     for (const t of lines) expect(t).not.toMatch(/fail|hold|chargeback|reversed|bank/i);
-    const stop = await sact(sessionId, "leave", tester.cookie, { seenAt: pageLoaded });
+    const stop = await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(349), seenAt: pageLoaded });
     expect(stop.body.error.code).toBe("stop_once");
     for (const t of texts(stop)) expect(t).not.toMatch(/fail|hold|chargeback|reversed|bank/i);
     // The developer's side lists the chargeback (an event on this test).

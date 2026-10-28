@@ -24,7 +24,7 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
   const [minutes, setMinutes] = useState("");
   const [rows, setRows] = useState<RowState[]>([newRow()]);
   const [ticked, setTicked] = useState<string[]>(p.targets.length === 1 ? [p.targets[0].contractId] : []);
-  const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={error} link={typeof errData.requestId === "string" ? `req-${errData.requestId}` : undefined} /> : null);
+  const box = (k: string) => (at === k ? <ChangesBox side={p.side} changes={changes} error={error} link={typeof errData.requestId === "string" ? `req-${errData.requestId}` : undefined} /> : null);
   const go = async (action: string, body: Record<string, unknown>, key: string) => {
     const r = await press<{ message?: string }>(`${p.path}/${action}`, body, key);
     if (r) {

@@ -53,7 +53,7 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
           </ConfirmButton>
         </div>
       )}
-      <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} didntGo />
+      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} didntGo />
       <Err text={err && !err.startsWith(String.fromCharCode(1)) ? `Your press didn't go through. ${err}` : err} />
     </div>
   );

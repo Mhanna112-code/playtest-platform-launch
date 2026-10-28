@@ -102,7 +102,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
           {sentBefore ? `Send my updated recording${uploaded.length === 1 ? "" : "s"}` : `Send my recording${uploaded.length === 1 ? "" : "s"}`}
         </button>
       )}
-      <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
+      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       <Err text={err} />
     </div>
   );

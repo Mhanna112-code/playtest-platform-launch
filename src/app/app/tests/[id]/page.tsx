@@ -33,6 +33,7 @@ import { HOLD_APPROVAL_AFTER, NOT_LISTED, callListed, deletedNoPayoutsLine, join
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
+import { ContractChanges, type ChangeEntry } from "./ContractChanges";
 import { AnswersBox } from "@/components/AnswersBox";
 import { Formatted } from "@/components/Formatted";
 import { AttachmentList } from "@/components/AttachmentList";
@@ -200,6 +201,16 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Owner, Oct 29, batch 13) Excerpt requests waiting for Allow or Deny (hidden while the test has an NDA), and excerpts shown from this test (Take down in the row).
   const excerptReqs = await pendingForDeveloper(u.id, t.id);
   const shownEx = await db.excerpt.findMany({ where: { testId: t.id, status: "shown" }, orderBy: { decidedAt: "desc" } });
+  // (Batch 15 section 43) The developer's Contract changes: one entry per Save that changed the terms or the names, with who switched or kept.
+  const notesByContract = await db.contractNote.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
+  const dealChanges = await db.testChange.findMany({ where: { testId: id }, orderBy: { createdAt: "desc" }, take: 200 });
+  const dealOffers = dealChanges.length ? await db.termsOffer.findMany({ where: { changeId: { in: dealChanges.map((x) => x.id) } } }) : [];
+  const personOf = (cid: string) => { const c = t.contracts.find((x) => x.id === cid); return c ? { name: displayName(c.tester), contractId: c.id, left: c.status !== "working" } : null; };
+  const changeEntries: ChangeEntry[] = dealChanges.map((x) => {
+    const mine = dealOffers.filter((o) => o.changeId === x.id);
+    const who = (st: string[]) => mine.filter((o) => st.includes(o.status)).map((o) => personOf(o.contractId)).filter((p): p is NonNullable<typeof p> => !!p);
+    return { id: x.id, at: x.createdAt.toISOString(), fields: x.fields, before: x.before as Record<string, unknown>, after: x.after as Record<string, unknown>, effects: x.effects, chose: { switched: who(["switched"]), kept: who(["kept"]), undecided: who(["open"]) } };
+  });
   const needsCount = pieces.length + apps.length + needsRequests.length + disputesWaiting.length + excerptReqs.length;
   return (
     <>
@@ -430,8 +441,14 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 )}
                 <p className="text-sm"><b>Paid in all:</b> {money(paidSoFar(c.id))}{(bookedAhead || done || cancelledN) ? ` · Calls: ${[bookedAhead ? `${bookedAhead} booked ahead` : "", done ? `${done} done` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}` : ""}</p>
                 {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}
+                {/* (Batch 15 section 24) Renames are recorded in each tester's contract changes. */}
+                {notesByContract.some((n) => n.contractId === c.id) && (
+                  <ul className="note space-y-0.5" data-contract-notes="">
+                    {notesByContract.filter((n) => n.contractId === c.id).map((n) => <li key={n.id}>{n.text} · {fmtDateTime(n.createdAt)}</li>)}
+                  </ul>
+                )}
                 {/* (Batch 13 section 8) Earlier SENT sets this tester replaced after switching to changed questions. */}
-                <PrevSetFolds sets={prevSetsOf(c.submissions.find((s) => s.kind === "written")?.prevSets)} />
+                <PrevSetFolds developer sets={prevSetsOf(c.submissions.find((s) => s.kind === "written")?.prevSets)} />
                 {/* (Batch 13) Excerpts shown from this test: the developer can take one down at any time. */}
                 {shownEx.filter((e) => e.contractId === c.id).map((e) => (
                   <div key={e.id} className="flex flex-wrap items-start gap-2 text-sm" data-shown-excerpt="">
@@ -462,6 +479,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         </RowsBox>
       )}
       </TestersJoined>
+      {!restricted && <ContractChanges entries={changeEntries} fmt={(iso) => fmtDateTime(new Date(iso))} />}
       {cbSteps && <ChargebackSteps steps={cbSteps} />}
       {(u.holdStartedAt || (owedList.length > 0 && !u.devSuspendedAt)) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} chargeback={!!cbSteps} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />}
       {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date())}</p>}

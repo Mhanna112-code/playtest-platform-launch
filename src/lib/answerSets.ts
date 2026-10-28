@@ -6,7 +6,9 @@ import { qOptional, qText } from "./questions";
  */
 export type SetItem = { question: string; required: boolean; answer: string };
 /** A previous set: the questions and answers as they were until a switch to changed questions. */
-export type PrevSet = { until: string; items: SetItem[] };
+/** (Owner, Oct 30, batch 15 section 14) One version kept in a previous set: what was sent ("Sent <date>"), or the draft typed after it ("Draft (not sent)"). */
+export type PrevVersion = { kind: "sent" | "draft"; at?: string; items: SetItem[] };
+export type PrevSet = { until: string; items: SetItem[]; versions?: PrevVersion[] };
 
 /** At most 3 previous sets (questions have 3 changes). */
 export const MAX_PREV_SETS = 3;
@@ -34,10 +36,19 @@ export function itemsOf(stored: unknown, questions: string[] = []): SetItem[] {
 export function prevSetsOf(stored: unknown): PrevSet[] {
   if (!Array.isArray(stored)) return [];
   return stored.flatMap((x) => {
-    const o = (x ?? {}) as { until?: unknown; items?: unknown };
-    return typeof o.until === "string" ? [{ until: o.until, items: itemsOf(o.items) }] : [];
+    const o = (x ?? {}) as { until?: unknown; items?: unknown; versions?: unknown };
+    const versions = Array.isArray(o.versions)
+      ? o.versions.flatMap((v) => {
+          const w = (v ?? {}) as { kind?: unknown; at?: unknown; items?: unknown };
+          return w.kind === "sent" || w.kind === "draft" ? [{ kind: w.kind as "sent" | "draft", ...(typeof w.at === "string" ? { at: w.at } : {}), items: itemsOf(w.items) }] : [];
+        })
+      : undefined;
+    return typeof o.until === "string" ? [{ until: o.until, items: itemsOf(o.items), ...(versions?.length ? { versions } : {}) }] : [];
   });
 }
+
+/** (Batch 15 section 14) A set's versions; an older set stored without them reads "Sent" when the part was sent, else "Draft (not sent)". */
+export const versionsOf = (s: PrevSet, sentPart: boolean): PrevVersion[] => s.versions?.length ? s.versions : [{ kind: sentPart ? "sent" : "draft", items: s.items }];
 
 /** Do two sets ask exactly the same questions (text and order)? */
 export const sameQuestions = (a: { question: string }[], b: { question: string }[]) => a.length === b.length && a.every((x, i) => x.question === b[i].question);

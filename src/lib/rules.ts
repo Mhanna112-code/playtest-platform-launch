@@ -428,7 +428,7 @@ export const delayedPayLine = (devName: string, label: string, cents: number, ti
  * page hadn't shown it before goes through with this note under the button; a stop for other reasons lists it too.
  */
 export const RENAMED = "renamed";
-export const renamedNote = (title: string, at: string) => `Done. Also: the test was renamed to ${title} at ${at}.`;
+// (Batch 15 section 24) renamedNote is gone: a rename never leaves a note under a press; it is recorded in the contract changes.
 
 /** The test events a tester's page reads directly; their other reasons come from their own contract's records. */
 export const TESTER_EVENT_KINDS = ["info", "renamed", "full", "spot_open"] as const;

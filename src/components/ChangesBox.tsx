@@ -1,36 +1,49 @@
 "use client";
 import { isPerkRefusal } from "@/lib/subscription";
 import { SubscribeLink } from "@/components/SubscribeLink";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ResendConfirm } from "@/components/ResendConfirm";
 import { markShownInBox } from "@/lib/live";
 import { bringInView, jumpTo } from "@/lib/markJump";
 import { LongList } from "@/components/LongList";
-import { QuickIgnore } from "@/components/QuickIgnore";
+import { QuickIgnore, TesterAlertsOff } from "@/components/QuickIgnore";
 import { ContractLink } from "@/components/ContractLink";
+import { lastPressLabel } from "@/lib/client";
+import { pressVerb, refusalLine } from "@/lib/pressLabels";
 
 export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string };
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+const DEFAULT_TAILS = new Set(["Press again to go ahead.", "Press again to go ahead"]);
 
 /**
- * The stop-once box (and any refusal): a blue notice placed directly under the button that was pressed, scrolled into
- * view. Lists exactly what changed since the page loaded, then "Press again to go ahead."
+ * The stop-once box (and any refusal): a blue notice placed directly under the button that was pressed, scrolled into view.
+ * (Owner, Oct 30, batch 15 section 36) Top to bottom: "Your <button> didn't go through."; "Since you opened this page:" and the list; the Alerts lines (the tester's
+ * toggle wording on the tester side); and last, in bold, "Press <button> again to go ahead.". A refusal names the press first: "Your Pay didn't go through: <reason>".
+ * `press` is the button's label; without one, the label of the press that was just stopped or refused (from its API path).
  */
-export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link, didntGo = false }: { changes: Change[] | null; error?: string; tail?: string; link?: string; didntGo?: boolean }) {
+export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link, didntGo = false, press, side = "developer" }: { changes: Change[] | null; error?: string; tail?: string; link?: string; didntGo?: boolean; press?: string; side?: "developer" | "tester" }) {
   const ref = useRef<HTMLDivElement>(null);
+  const shown = !!(changes || error);
+  const [label, setLabel] = useState(press ?? "");
+  useEffect(() => {
+    if (shown) setLabel(press ?? lastPressLabel());
+  }, [shown, press, error]);
   useEffect(() => {
     if (changes) markShownInBox(changes); // seen: the top box lists them quietly, without its scroll
     if (changes || error) bringInView(ref.current);
   }, [changes, error]);
   if (!changes && !error) return null;
   if (!changes && error && error.startsWith("\u0001")) return <p ref={ref as unknown as React.RefObject<HTMLParagraphElement>} className="err-field basis-full">{error.slice(1)}</p>;
+  const name = press ?? (label || lastPressLabel());
+  const named = name && name !== "press" ? name : "";
+  const action = DEFAULT_TAILS.has(tail) ? (named ? `Press ${pressVerb(named)} again to go ahead.` : "Press again to go ahead.") : tail;
+  const alerts = changes ? [...new Set(changes.filter((c) => !c.ignored && c.kind !== "terms").map((c) => c.alert).filter((x): x is string => !!x))] : [];
   return (
-    <div ref={ref} className="info basis-full" role="status" aria-live="polite">
-      {/* (Owner, Oct 27) A confirm dialog closes when its press fails; this notice sits under the button that opened it and says so. */}
-      {didntGo && <p className="font-medium" data-didnt-go="">Your press didn&apos;t go through.</p>}
+    <div ref={ref} className="info basis-full" role="status" aria-live="polite" data-stop-box="">
       {changes && (
         <>
+          <p className="font-medium" data-didnt-go="">{named ? `Your ${named} didn't go through.` : "Your press didn't go through."}</p>
           <p className="font-medium">Since you opened this page:</p>
           {/* (Design doc 2) The newest 3 lines, then "Show N more" opening a scroll box about 8 lines tall. */}
           <LongList className="my-1 list-disc pl-5" tall="max-h-52">
@@ -42,14 +55,15 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
               </li>
             ))}
           </LongList>
-          <p>{tail}</p>
-          <QuickIgnore alerts={[...new Set(changes.map((c) => c.alert).filter((x): x is string => !!x))]} />
+          {side === "tester" ? <TesterAlertsOff show={changes.some((c) => c.kind !== "terms" && c.kind !== "keyfixed")} /> : <QuickIgnore alerts={alerts} />}
+          <p className="mt-1 font-semibold" data-press-again="">{action}</p>
         </>
       )}
-      {error && (error.startsWith("Confirm your email first.") ? <p className="flex flex-wrap items-center gap-2">{error} <ResendConfirm label="Resend the link" /></p> : isPerkRefusal(error) ? <p className="flex flex-wrap items-center gap-2" data-perk-refusal="">{error} <SubscribeLink /></p> : link ? (
+      {!changes && didntGo && !named && <p className="font-medium" data-didnt-go="">Your press didn&apos;t go through.</p>}
+      {error && (error.startsWith("Confirm your email first.") ? <p className="flex flex-wrap items-center gap-2">{refusalLine(named, error)} <ResendConfirm label="Resend the link" /></p> : isPerkRefusal(error) ? <p className="flex flex-wrap items-center gap-2" data-perk-refusal="">{refusalLine(named, error)} <SubscribeLink /></p> : link ? (
         // The refusal names something on this page (the other side's waiting request): the text links to it.
-        <p><a href={`#${link}`} onClick={(e) => { e.preventDefault(); jumpTo(link); }}>{error}</a></p>
-      ) : <p>{error}</p>)}
+        <p><a href={`#${link}`} onClick={(e) => { e.preventDefault(); jumpTo(link); }}>{refusalLine(named, error)}</a></p>
+      ) : <p data-refusal="">{refusalLine(named, error)}</p>)}
     </div>
   );
 }

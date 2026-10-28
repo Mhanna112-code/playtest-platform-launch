@@ -141,16 +141,13 @@ export async function logEvent(testId: string, kind: string, text: string, contr
 
 /**
  * A stop decision with renamed lines (info only): stops only for the other lines (and then lists the renamed ones too);
- * otherwise the press goes ahead and the body carries the note for the response.
+ * otherwise the press goes ahead (batch 15 section 24: with no note).
  */
 export function withRenamed(changes: TestEventLike[], body: Record<string, unknown>): TestEventLike[] {
   const stopping = changes.filter((c) => c.kind !== "renamed");
   if (stopping.length) return changes;
-  const last = changes.filter((c) => c.kind === "renamed").pop();
-  if (last) {
-    const title = last.text.replace(/^.* renamed the test to /, "");
-    body.__note = `Done. Also: the test was renamed to ${title} at ${last.createdAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}.`;
-  }
+  // (Owner, Oct 30, batch 15 section 24) No note under the press any more: a rename is recorded in each working tester's contract changes instead.
+  void body;
   return [];
 }
 

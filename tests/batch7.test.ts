@@ -163,7 +163,7 @@ describe("batch 7 item 4: stop-once on every press still allowed", () => {
       stops(await press("dispute", { kind: "submission", id: rec.id, reason: "I recorded the whole session" }), "dispute");
       stops(await press("rate", { stars: 4 }), "rate");
       if (call) {
-        stops(await press("leave", {}), "leave");
+        // (Batch 15 section 25) Leave never stops: it goes through on the first press (checked last, below).
         stops(await press("cancel-call", { callId: call.id }), "cancel call");
       }
     });

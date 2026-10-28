@@ -140,7 +140,7 @@ export function PayBox(p: {
         {p.owes && <span className="text-xs text-amber-200" data-owes-note="">{PAY_WAITS} <a href="#owed">Pay what you owe ↑</a></span>}
         <span className="text-xs text-slate-500">at least $0.50 (or 0)</span>
       </div>
-      {at === "pay" && <ChangesBox changes={changes} error={error} />}
+      {at === "pay" && <ChangesBox changes={changes} error={error} press={`${more ? "Pay more" : "Pay"} on ${p.name}'s ${p.kind === "call" ? "call" : /recording/.test(p.listingText) ? "recording" : "written answers"}`} />}
       {bankErr && <p className="info" data-bank-not-confirmed="">{bankErr}</p>}
       {!more && <p className="note" data-pay-under="">{payUnderLine(p.name, listed)}</p>}
       {p.note && <p className="note">{p.note}</p>}

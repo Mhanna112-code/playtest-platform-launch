@@ -21,7 +21,7 @@ export function KeyBox({ sessionId, seenAt, value, broken, fresh, canReport = tr
       </p>
       {fresh && !broken && <p className="info" role="status">The developer gave you a new access key.</p>}
       {changes == null && error && <p className="info" role="status">{error}</p>}
-      <ChangesBox changes={changes} />
+      <ChangesBox side="tester" changes={changes} />
     </div>
   );
 }

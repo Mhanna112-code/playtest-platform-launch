@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { json, makeUser, req } from "./helpers";
-import { act, joined, sact, seen, setup } from "./fixtures";
+import { act, joined, sact, seen, setup, atHours } from "./fixtures";
 
 // (Owner, Oct 22, NEWEST+4) Listing changes re-invite; applications; rejoining restores work.
 
@@ -155,11 +155,11 @@ describe("owner corrections 2 and 3", () => {
     expect(l).toEqual(["Nora Lane renamed the test to Harbor Run 2"]);
     const go = await sact(sessionId, "request-time", tester.cookie, { startsAt: new Date(Date.now() + 50 * 3_600_000).toISOString(), seenAt: pageLoaded });
     expect(go.body.error ?? null).toBeNull();
-    expect(go.body.note).toMatch(/^Done\. Also: the test was renamed to Harbor Run 2 at .+\.$/);
+    expect(go.body.note).toBeUndefined(); // (batch 15 section 24) no note under the press
     // With another reason (the developer paid), the stop lists the title line too.
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
-    const stop = await sact(sessionId, "leave", tester.cookie, { seenAt: pageLoaded });
+    const stop = await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(370), seenAt: pageLoaded });
     expect(stop.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane renamed the test to Harbor Run 2", "Nora Lane paid $10.00 for your written answers"]);
     // The developer's other tab: goes through with the note; the join page: Apply goes through with it too.
     // (The developer's other tab: Ben's application and Ana's sends stop it once; the rename is listed with them.)
@@ -168,7 +168,7 @@ describe("owner corrections 2 and 3", () => {
     const cara = await makeUser({ tester: true, name: "Cara Diaz" });
     const ap = await act(testId, "apply", cara.cookie, { note: "x", seenAt: pageLoaded });
     expect(ap.body.error ?? null).toBeNull();
-    expect(ap.body.note).toMatch(/^Done\. Also: the test was renamed to Harbor Run 2 at /);
+    expect(ap.body.note).toBeUndefined();
   });
 
   it("description changes stay a stop reason on the session page", async () => {
@@ -177,7 +177,7 @@ describe("owner corrections 2 and 3", () => {
     const pageLoaded = seen();
     await new Promise((r) => setTimeout(r, 30));
     await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { description: "Other words" } });
-    const r = await sact(sessionId, "leave", tester.cookie, { seenAt: pageLoaded });
+    const r = await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(377), seenAt: pageLoaded });
     expect(r.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane changed the description"]);
   });
 

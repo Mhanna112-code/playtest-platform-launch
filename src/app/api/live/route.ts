@@ -6,7 +6,7 @@ import { asLines, devChanges } from "@/lib/server/live";
 import { requireUser } from "@/lib/server/session";
 import { outageLines } from "@/lib/server/outages";
 import { renderTimes } from "@/lib/tz";
-import { testerChanges } from "@/lib/server/testerGate";
+import { CONTRACT_KINDS, testerChanges } from "@/lib/server/testerGate";
 import { ownTest } from "@/lib/server/tests";
 
 // The live top notice (owner, NEWEST+3): every stop-once reason (A-E) on this page since it was opened, as the page's
@@ -48,6 +48,9 @@ export async function GET(req: Request) {
     const outages = (await outageLines(since)).map((o) => ({ ...o, text: renderTimes(o.text, u.timeZone) }));
     const shown = changes.filter((c) => c.createdAt <= now);
     const seenTo = new Date(Math.max(margin.getTime(), ...shown.map((c) => c.createdAt.getTime())));
-    return ok({ changes: [...asLines(shown, ignored), ...outages].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()), now: seenTo.toISOString() });
+    const lines = asLines(shown, ignored);
+    // (Batch 15 section 26) A tester with Alerts Off: everything but their contract's changes shows greyed (it won't stop a press).
+    if (kind === "session" && u.testerAlertsOff) lines.forEach((l, i) => { if (!CONTRACT_KINDS.has(shown[i].kind)) Object.assign(l, { ignored: true }); });
+    return ok({ changes: [...lines, ...outages].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()), now: seenTo.toISOString() });
   });
 }

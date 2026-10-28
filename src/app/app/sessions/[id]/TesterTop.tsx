@@ -23,7 +23,7 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
   if (!offer)
     return box ? (
       <div className="space-y-2">
-        <ChangesBox changes={box.changes} tail={box.tail} />
+        <ChangesBox side="tester" changes={box.changes} tail={box.tail} />
         <button className="btn-ghost" onClick={() => window.location.reload()}>See the new terms</button>
       </div>
     ) : null;
@@ -67,7 +67,7 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
         <button className="btn" onClick={() => decide("switch")}>Switch to the new terms</button>
         <button className="btn-ghost" onClick={() => decide("keep")}>Keep my current terms</button>
       </div>
-      <ChangesBox changes={box?.changes ?? null} tail={box?.tail} />
+      <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} />
       <Err text={err} />
     </div>
   );

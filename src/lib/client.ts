@@ -1,4 +1,9 @@
 import { seenNow } from "./live";
+import { pressLabelOf } from "./pressLabels";
+
+/** (Batch 15 section 36) The label of the last press that was stopped or refused: the box under it names it ("Your Pay didn't go through."). */
+let LAST_PRESS = "";
+export const lastPressLabel = () => LAST_PRESS;
 
 // Browser helper for the JSON API: returns data, or throws an Error whose message is already in plain words.
 export class ApiError extends Error {
@@ -34,6 +39,7 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
+    LAST_PRESS = pressLabelOf(path);
     throw new ApiError(0, "offline", "You seem to be offline. Check your connection and try again.");
   }
   const data = await res.json().catch(() => null);
@@ -59,6 +65,7 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
       window.location.href = `/app?failed=${encodeURIComponent(data.error.failed)}`;
     }
     const e = data?.error;
+    LAST_PRESS = typeof e?.press === "string" ? e.press : pressLabelOf(path);
     throw new ApiError(res.status, e?.code ?? "server", e?.message ?? (res.status === 413 ? "That's too much to send at once. Try a smaller amount." : "Something went wrong. Try again in a moment."), e ?? {});
   }
   // A press that went ahead with a note (e.g. "Done. Also: the test was renamed to ..."): kept for the page's top box

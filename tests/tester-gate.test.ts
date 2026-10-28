@@ -19,7 +19,7 @@ describe("the tester's one set of stop-once reasons", () => {
     await later();
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
-    for (const [action, body] of [["request-time", { startsAt: atHours(48) }], ["leave", {}]] as const) {
+    for (const [action, body] of [["request-time", { startsAt: atHours(48) }], ["request-time", { startsAt: atHours(96) }]] as const) { // (batch 15 section 25) Leave never stops
       const r = await sact(sessionId, action, tester.cookie, { ...body, seenAt: pageLoaded });
       expect(r.body.error.code).toBe("stop_once");
       expect(r.body.error.changes.map((c: { text: string }) => c.text)).toContain("Nora Lane paid $10.00 for your written answers");

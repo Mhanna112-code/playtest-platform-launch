@@ -99,7 +99,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
       <span>{canSend && <button className="btn" disabled={busy || length > WRITTEN_MAX_CHARS}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && <NotSentTag />}</span>
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
-      <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
+      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {msg && (msg.ok ? <p className="ok">{msg.text}</p> : <Err text={msg.text} />)}
     </form>
   );
@@ -131,7 +131,7 @@ export function LeaveButton({ sessionId, seenAt, title }: { sessionId: string; s
         )}>
         Leave this test
       </ConfirmButton>
-      <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} didntGo />
+      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} didntGo />
       <Err text={err ? `Your press didn't go through. ${err}` : ""} />
     </div>
   );
@@ -180,7 +180,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
       </button>
       {disabledNote && <p className="note" data-owed-note="">{disabledNote}</p>}
       {keep.restored && <NotSentTag />}
-      <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />
+      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       <Err text={err} />
     </details>
   );

@@ -20,7 +20,7 @@ const termsOf = (x: { ndaText: string; writtenCents: number | null; recordingCen
 });
 
 /** After an Edit: offer the test's current terms to each working tester whose contract differs. Returns how many. */
-export async function offerNewTerms(testId: string) {
+export async function offerNewTerms(testId: string, changeId: string | null = null) {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
   const working = await db.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } });
   let offered = 0;
@@ -33,7 +33,7 @@ export async function offerNewTerms(testId: string) {
     if (!diff) continue;
     await db.termsOffer.create({
       data: {
-        contractId: c.id, testId, listingVersion: t.listingVersion, ...newTerms, questions: newTerms.questions as Prisma.InputJsonValue, diff,
+        contractId: c.id, testId, listingVersion: t.listingVersion, ...newTerms, questions: newTerms.questions as Prisma.InputJsonValue, diff, changeId,
         // The terms the tester is on when this is offered stay in their terms history (previous questions and NDA).
         fromQuestions: c.questions as Prisma.InputJsonValue, fromNdaText: c.ndaText,
       },
@@ -112,8 +112,14 @@ async function questionSetsOnSwitch(c: { id: string; testerId: string; questions
   const fromDraft = Array.isArray(draft?.answers) ? restoreDraft(oldQs, [], draft!) : null;
   const byText = new Map(sent.map((x) => [x.question, x.answer]));
   const items = itemsFor(oldQs, fromDraft ?? oldQs.map((q) => byText.get(qText(q)) ?? ""));
+  // (Owner, Oct 30, batch 15 section 14) The set keeps what was SENT ("Sent <date>") and, when the tester edited it afterwards without sending, the draft ("Draft (not
+  // sent)"). The developer only ever sees sent versions (theirs come from the submission).
+  const sentItems = sub ? itemsFor(oldQs, oldQs.map((q) => byText.get(qText(q)) ?? "")) : null;
+  const draftItems = fromDraft ? itemsFor(oldQs, fromDraft) : null;
+  const draftDiffers = !!draftItems && (!sentItems || JSON.stringify(draftItems.map((x) => x.answer)) !== JSON.stringify(sentItems.map((x) => x.answer))) && draftItems.some((x) => x.answer.trim());
+  const versions = [...(sentItems ? [{ kind: "sent" as const, at: (sub!.updatedAt ?? sub!.sentAt).toISOString(), items: sentItems }] : []), ...(draftDiffers ? [{ kind: "draft" as const, ...(kept?.updatedAt ? { at: kept.updatedAt.toISOString() } : {}), items: draftItems! }] : [])];
   const ops: Prisma.PrismaPromise<unknown>[] = [];
-  if (items.some((x) => x.answer.trim()) || sub) ops.push(db.contract.update({ where: { id: c.id }, data: { prevSets: pushPrev(prevSetsOf(c.prevSets), { until: now.toISOString(), items }) as unknown as Prisma.InputJsonValue } }));
+  if (items.some((x) => x.answer.trim()) || sub) ops.push(db.contract.update({ where: { id: c.id }, data: { prevSets: pushPrev(prevSetsOf(c.prevSets), { until: now.toISOString(), items, ...(versions.length ? { versions } : {}) }) as unknown as Prisma.InputJsonValue } }));
   const nextQs = next.length ? next : ["Your feedback"];
   if (!sub?.review) {
     const notes = typeof draft?.notes === "string" ? draft.notes : sub?.notes ?? "";

@@ -301,6 +301,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   let reinvite = false;
   let spotsChanged = false;
   let switchedToInvite = false;
+  let changeId: string | null = null;
   const cap = await testerCapacity(dev.id);
   const result = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
@@ -365,6 +366,19 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (keysChanged) {
       await applyKeyChange(tx, testId, plan.toAdd, plan.removable);
     }
+    // (Owner, Oct 30, batch 15 section 43) A Save that changed the terms or the names: one entry in the developer's Contract changes.
+    const dealFields = fields.filter((f) => DEAL_FIELDS.includes(f));
+    if (dealFields.length) {
+      const pick = (l: Listing) => Object.fromEntries(dealFields.map((f) => [f, l[f] ?? null]));
+      changeId = (await tx.testChange.create({ data: { testId, fields: dealFields, before: pick(current) as Prisma.InputJsonValue, after: pick(next) as Prisma.InputJsonValue } })).id;
+    }
+    // (Batch 15 section 24) A rename is recorded in every working tester's contract changes (never a note under a press).
+    if (fields.includes("title") || fields.includes("productName")) {
+      const nameOf = (l: Listing) => (l.productName ? `${l.productName} · ${l.title}` : l.title);
+      const text = `Renamed: “${nameOf(current)}” → “${nameOf(next)}”`;
+      const cs = await tx.contract.findMany({ where: working(testId), select: { id: true } });
+      if (cs.length) await tx.contractNote.createMany({ data: cs.map((c) => ({ contractId: c.id, kind: "renamed", text })) });
+    }
     // (Owner, Oct 30, batch 15 section 18) Moving Open until later by D days: tester days grow by D, and every working tester's deadline moves D days later.
     if (fields.includes("openUntil") && next.openUntil && current.openUntil) {
       const d = daysBetween(openUntilDay(current.openUntil), openUntilDay(next.openUntil));
@@ -385,7 +399,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     return tx.test.findUniqueOrThrow({ where: { id: testId } });
   });
   // Working testers are OFFERED the new contract terms (Switch / Keep); their contract changes only if they switch.
-  const offered = termsChanged ? await offerNewTerms(testId) : 0;
+  const offered = termsChanged ? await offerNewTerms(testId, changeId) : 0;
   const closedApps = reinvite ? await (await import("./joining")).closeApplicationsAfterEdit(testId) : switchedToInvite ? await (await import("./joining")).closeApplicationsAfterEdit(testId, "invite_only") : [];
   // (Correction 4/5) Lowering spots never closes invites by itself; lowering them to the testers in fills the test.
   if (spotsChanged) {
@@ -399,6 +413,9 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   if (switchedToAnyone) await (await import("./joining")).onSwitchToAnyone(testId);
   // (NEWEST+4) Any listing change except spots / who can join re-sends open invites on the new listing.
   const { skipped: notReinvited, resent } = reinvite ? await (await import("./invites")).reinviteAfterEdit(testId) : { skipped: [], resent: [] };
+  // (Batch 15 section 43) The Save's effects on others, on its Contract changes entry.
+  const effects = [closedApps.length ? `${closedApps.length} application${closedApps.length === 1 ? "" : "s"} closed` : "", resent.length ? `${resent.length} invite${resent.length === 1 ? "" : "s"} re-sent` : ""].filter(Boolean).join(" · ");
+  if (changeId && effects) await db.testChange.update({ where: { id: changeId }, data: { effects } });
   return Object.assign(result, { offered, changed: changedNames, notReinvited, resent, closedApps });
 }
 
@@ -407,6 +424,9 @@ async function keysState(tx: Tx, testId: string) {
   const keys = await tx.accessKey.findMany({ where: { testId }, orderBy: { createdAt: "asc" } });
   return { free: keys.filter((k) => k.status === "free").map((k) => k.value), inUse: keys.filter((k) => k.status === "inuse" || k.status === "broken").length };
 }
+
+/** (Batch 15 sections 24 and 43) The fields a Contract changes entry records: the terms and the names. */
+export const DEAL_FIELDS: (keyof Listing)[] = ["productName", "title", "writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "deadlineDays", "questions", "ndaText"];
 
 /** (F) The listing info a working tester sees change live: title, description, devices, languages. */
 export const INFO_FIELDS: (keyof Listing)[] = ["description", "devices", "languages", "buildUrl", "categories", "joinMode", "productName", "mature", "matureWhy"];
@@ -707,7 +727,8 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
     const refusal = sessionRefusal(c, { openUntil: null }, displayName(c0.test.developer));
     if (refusal) throw new HttpError(409, "gone", refusal === "You left this test." ? "You already left this test." : refusal);
-    await testerGate(tester.id, contractId, c.testId, body);
+    // (Owner, Oct 30, batch 15 section 25) Leave never stops: no tester gate (its confirm pop-up is built from the current state when opened).
+    void body;
     await tx.contract.update({ where: { id: c.id }, data: { status: "left", endedAt: new Date() } });
     await cancelCallsAhead(tx, [c.id], `${displayName(tester)} left the test.`);
     await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the tester left", decidedAt: new Date() } });
