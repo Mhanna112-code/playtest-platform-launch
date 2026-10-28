@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-28T16:46:47.345Z",
+  "generated": "2026-10-28T21:10:56.366Z",
   "sizes": {
     "desktop": "1280x900",
     "phone": "375x812"
@@ -294,8 +294,8 @@
           "phone": "edit-open-until-phone.png"
         },
         {
-          "title": "Open until at most 30 days ahead",
-          "explanation": "Open until can move later, but at most 30 days from today: a later date is red",
+          "title": "Open until at most 30 days after the test opened",
+          "explanation": "Open until can move later, but at most 30 days after the test opened (batch 16): a later date is red with the last allowed date",
           "kind": "image",
           "desktop": "edit-open-until-30.png",
           "phone": "edit-open-until-30-phone.png"
@@ -316,21 +316,21 @@
         },
         {
           "title": "Blue note on a field",
-          "explanation": "Another tab saved new instructions: the field updates with a blue note under it",
+          "explanation": "Another tab saved new instructions: the field updates, and the blue note under it names it and what it replaced (“Instructions:” and the old text)",
           "kind": "image",
           "desktop": "edit-elsewhere-field.png",
           "phone": "edit-elsewhere-field-phone.png"
         },
         {
           "title": "Blue note on keys",
-          "explanation": "Keys added in another tab: the blue note under the key boxes",
+          "explanation": "Keys added in another tab: one line under the key boxes, “Added: HR-7777, HR-8888, HR-9999”",
           "kind": "image",
           "desktop": "edit-elsewhere-keys.png",
           "phone": "edit-elsewhere-keys-phone.png"
         },
         {
           "title": "Save stops once",
-          "explanation": "Save stops once: “This test changed since you opened Edit. Press Save again…”",
+          "explanation": "Save stops once for what this tab didn't have: “You changed the description in another tab” with what it replaced, and “Added: HR-7777, HR-8888, HR-9999”",
           "kind": "image",
           "desktop": "edit-elsewhere-save.png",
           "phone": "edit-elsewhere-save-phone.png"
@@ -386,14 +386,14 @@
         },
         {
           "title": "Tab A: the key boxes after the race",
-          "explanation": "The blue notes name what changed (“Ben Okafor joined and was given K-2”); red marks K-2 (deleted here, given to Ben meanwhile) and too few free keys; the box already shows the current keys with A's own edits",
+          "explanation": "The blue note names what changed (“Added: B-1”, “Removed: K-4, K-5, K-8”, the joins) and warns “Ben Okafor joined and was given K-2, which you had deleted here.” (blue, never red); red only for too few free keys; the box already shows the current keys with A's own edits",
           "kind": "image",
           "desktop": "keysrace-a-keys.png",
           "phone": "keysrace-a-keys-phone.png"
         },
         {
           "title": "Tab A: the notice under Save",
-          "explanation": "The red mistakes and the blue “since you opened this page” list: the joins and the other tab's key changes",
+          "explanation": "The red mistake (too few free keys) and the blue “since you opened this page” list: the joins, the K-2 warning and the other tab's key changes",
           "kind": "image",
           "desktop": "keysrace-a-notice.png",
           "phone": "keysrace-a-notice-phone.png"
@@ -407,7 +407,7 @@
         },
         {
           "title": "Access keys race (two tabs)",
-          "explanation": "Tab A (left) deletes K-2, K-6, K-7 and types N-1 in the Free box; Ben and Cam join and get K-2 and K-3; tab B (right) deletes K-4, K-5, K-8, adds B-1 and saves after its own blue notice; A's Save shows the blue notice and the red marks, the box refreshes with A's own edits, and A saves after adding a key",
+          "explanation": "Tab A (left) deletes K-2, K-6, K-7 and types N-1 in the Free box; Ben and Cam join and get K-2 and K-3; tab B (right) deletes K-4, K-5, K-8, adds B-1 and saves after its own blue notice; A's Save shows the blue notice (with the K-2 warning, not red) and the red mark for too few keys, the box refreshes with A's own edits, and A saves after adding a key",
           "kind": "video",
           "desktop": "keysrace.webm",
           "phone": "keysrace-phone.webm"
@@ -643,8 +643,8 @@
           "phone": "excerpt-needs-you-phone.png"
         },
         {
-          "title": "On the hover card",
-          "explanation": "Ana's shown excerpts on her hover card",
+          "title": "The hover card",
+          "explanation": "Rating, accepted parts, the profile link and Chat with Ana: no excerpts (they're on her profile)",
           "kind": "image",
           "desktop": "excerpt-hover.png",
           "phone": "excerpt-hover-phone.png"
@@ -878,7 +878,7 @@
           "phone": "excerpt-nda-refused-phone.png"
         },
         {
-          "title": "Ana's list in Settings",
+          "title": "Ana's list on her profile",
           "explanation": "Pending, shown and denied excerpts with Remove; the one from a test that now has an NDA reads “Hidden while … has an NDA”",
           "kind": "image",
           "desktop": "excerpt-settings.png",
@@ -1101,8 +1101,8 @@
           "phone": "money-chargeback-fee-phone.png"
         },
         {
-          "title": "Paid, but still on hold",
-          "explanation": "$25 paid: the chargeback hold stays until the card check and the team's Approve",
+          "title": "Verified and paid, but still on hold",
+          "explanation": "Card verified and $25 paid: “Paid. Your tests stay paused until the team approves.” The team's Approve lifts it",
           "kind": "image",
           "desktop": "money-chargeback-paid.png",
           "phone": "money-chargeback-paid-phone.png"
@@ -1325,7 +1325,7 @@
       "cases": [
         {
           "title": "Settings",
-          "explanation": "Developer, tester or both; the profile; Contact us; email; and Delete account",
+          "explanation": "“Nora Lane · Developer”, the developer profile link, Payments, Contact us, the password form and Delete account (batch 16: no side cards, no excerpts)",
           "kind": "image",
           "desktop": "settings-dev.png",
           "phone": "settings-dev-phone.png"
@@ -1394,7 +1394,7 @@
         },
         {
           "title": "The admin dashboard",
-          "explanation": "The tiles (people, parts awaiting review, charged, the platform's share, owed to testers, waitlist), then open disputes first",
+          "explanation": "The tiles (people, parts awaiting review, charged, the platform's share, owed to testers), then open disputes first",
           "kind": "image",
           "desktop": "admin-top.png",
           "phone": "admin-top-phone.png"
@@ -2034,7 +2034,7 @@
         },
         {
           "title": "§21 Which admin",
-          "explanation": "The tests list names the admin by email: “stopped by admin+media1793185982848db15admin@playtest.test”; developers and testers still read “the team”",
+          "explanation": "The tests list names the admin by email: “stopped by admin+media1793220280713db15admin@playtest.test”; developers and testers still read “the team”",
           "kind": "image",
           "desktop": "b15-21-stopped-by.png",
           "phone": "b15-21-stopped-by-phone.png"
@@ -2111,14 +2111,14 @@
         },
         {
           "title": "§26 The tester's Alerts toggle",
-          "explanation": "At the top right: “Alerts: On” and its line",
+          "explanation": "At the top right: “Alerts: On” and its line, “Stops a press once for: new terms, your key, pay, calls, delayed pay, your dispute, listing changes, other tabs.”",
           "kind": "image",
           "desktop": "b15-26-toggle-on.png",
           "phone": "b15-26-toggle-on-phone.png"
         },
         {
           "title": "§26 Alerts: Off",
-          "explanation": "One press, saved for all Ben's tests: only new terms from the developer stop a press now",
+          "explanation": "One press, saved for all Ben's tests: the grey line now reads “Stops a press only for: new terms, your key marked as working.”",
           "kind": "image",
           "desktop": "b15-26-toggle-off.png",
           "phone": "b15-26-toggle-off-phone.png"
@@ -2370,7 +2370,7 @@
         },
         {
           "title": "§40 The measured length",
-          "explanation": "“Length: 29 min (both in the call …)”; the Pay box's Rate and Amount use it; “Lower the length” is under it",
+          "explanation": "“Length: 29 min (both in the call …)”; the Pay box's Rate and Amount use it",
           "kind": "image",
           "desktop": "b15-40-measured.png",
           "phone": "b15-40-measured-phone.png"
@@ -2390,22 +2390,8 @@
           "phone": "b15-40-rate-amount-video-phone.webm"
         },
         {
-          "title": "§40 Lower the length",
-          "explanation": "Only lower, never raise; a reason is required and the tester reads it",
-          "kind": "image",
-          "desktop": "b15-40-lower.png",
-          "phone": "b15-40-lower-phone.png"
-        },
-        {
-          "title": "§40 Lowered",
-          "explanation": "“Length: 20 min (lowered from 29 min; both in the call …)” with the reason in italics; the Pay box now uses 20 minutes",
-          "kind": "image",
-          "desktop": "b15-40-lowered.png",
-          "phone": "b15-40-lowered-phone.png"
-        },
-        {
           "title": "§40 The tester's view",
-          "explanation": "Ana reads the measured length, that it was lowered to 20 min, and why",
+          "explanation": "Ana reads the measured length",
           "kind": "image",
           "desktop": "b15-40-tester-view.png",
           "phone": "b15-40-tester-view-phone.png"
@@ -2500,6 +2486,684 @@
           "kind": "text",
           "desktop": "proof/AT-HOME.md",
           "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Batch 16 (Oct 28)",
+      "explanation": "Batch 16, item by item (§ numbers are the items in docs/BATCH-16.md): the tester Alerts line, Pays on average, the Mature box, blocks, invite and dashboard search, scroll boxes, Edit's notes from other tabs, other-tab and stopped-test rules, invitations and calls live, rounding, Charge and the chargeback steps; then the owner's extra cases on stop-once, Contract changes and the tester's live box.",
+      "cases": [
+        {
+          "title": "§4 Alerts On",
+          "explanation": "The grey line under the button lists everything that stops a press once: new terms, your key, pay, calls, delayed pay, your dispute, listing changes and other tabs.",
+          "kind": "image",
+          "desktop": "b16-04-alerts-on.png",
+          "phone": "b16-04-alerts-on-phone.png"
+        },
+        {
+          "title": "§4 Alerts Off",
+          "explanation": "One press and the line swaps: only new terms and your key marked as working still stop a press.",
+          "kind": "image",
+          "desktop": "b16-04-alerts-off.png",
+          "phone": "b16-04-alerts-off-phone.png"
+        },
+        {
+          "title": "§4 Alerts line, live",
+          "explanation": "Ana turns Alerts off and on again, and the grey line under the button changes with it each time.",
+          "kind": "video",
+          "desktop": "b16-04-alerts-video.webm",
+          "phone": "b16-04-alerts-video-phone.webm"
+        },
+        {
+          "title": "§5 Pays on average on the profile",
+          "explanation": "The tile shows one share of the listing with the hint “of the listing, over 2 pieces of work”, and no accepted / partly / rejected split.",
+          "kind": "image",
+          "desktop": "b16-05-pays-profile.png",
+          "phone": "b16-05-pays-profile-phone.png"
+        },
+        {
+          "title": "§5 Pays on average on the join page",
+          "explanation": "The same value and hint in “How Nora Lane reviews” before a tester joins.",
+          "kind": "image",
+          "desktop": "b16-05-pays-join.png",
+          "phone": "b16-05-pays-join-phone.png"
+        },
+        {
+          "title": "§9 Mature, left empty",
+          "explanation": "Left empty, the box is red with “Say why this test is mature (18+): it's required for mature content.” and the counter reads 0 / 500.",
+          "kind": "image",
+          "desktop": "b16-09-mature-empty.png",
+          "phone": "b16-09-mature-empty-phone.png"
+        },
+        {
+          "title": "§9 Mature, too short",
+          "explanation": "With “idk” the box stays red with “Say a little more: at least 5 characters.” and the counter reads 3 / 500.",
+          "kind": "image",
+          "desktop": "b16-09-mature-short.png",
+          "phone": "b16-09-mature-short-phone.png"
+        },
+        {
+          "title": "§9 The Mature box, live",
+          "explanation": "Ticking Mature and leaving the box empty, then typing “idk”, each shows its own red line; a real reason clears it, and the counter follows.",
+          "kind": "video",
+          "desktop": "b16-09-mature-video.webm",
+          "phone": "b16-09-mature-video-phone.webm"
+        },
+        {
+          "title": "§11 A blocked developer's test",
+          "explanation": "Ana blocked Omar; his new test's direct link reads only “This test isn't available right now.”, with nothing of the listing and no word of the block.",
+          "kind": "image",
+          "desktop": "b16-11-blocked-link.png",
+          "phone": "b16-11-blocked-link-phone.png"
+        },
+        {
+          "title": "§12 and §29 Search finds an old tester",
+          "explanation": "Fern joined in January 2025, behind more than 500 newer testers: the server's search finds her, and the results sit right under the search box.",
+          "kind": "image",
+          "desktop": "b16-12-invite-search.png",
+          "phone": "b16-12-invite-search-phone.png"
+        },
+        {
+          "title": "§12 and §29 Searching by name",
+          "explanation": "Typing her name asks the server, and her row appears in “Find testers” directly under the box, above the other lists.",
+          "kind": "video",
+          "desktop": "b16-12-invite-video.webm",
+          "phone": "b16-12-invite-video-phone.webm"
+        },
+        {
+          "title": "§13 Search by developer",
+          "explanation": "“NOR” finds every test with Nora Lane, open or stopped, most recent first, in its own scroll box (any part of the name, any case).",
+          "kind": "image",
+          "desktop": "b16-13-search-match.png",
+          "phone": "b16-13-search-match-phone.png"
+        },
+        {
+          "title": "§13 A blocked developer's past test",
+          "explanation": "“omar” still finds the test Ana was in before she blocked him.",
+          "kind": "image",
+          "desktop": "b16-13-search-blocked.png",
+          "phone": "b16-13-search-blocked-phone.png"
+        },
+        {
+          "title": "§13 No match",
+          "explanation": "A name nobody matches shows “No tests with a developer named “Zed”.”",
+          "kind": "image",
+          "desktop": "b16-13-search-none.png",
+          "phone": "b16-13-search-none-phone.png"
+        },
+        {
+          "title": "§13 Searching the tester dashboard",
+          "explanation": "Ana types “NOR”, then “omar”, then “Zed”: matching tests appear under the box, then the no-match line; clearing it brings the dashboard back.",
+          "kind": "video",
+          "desktop": "b16-13-search-video.webm",
+          "phone": "b16-13-search-video-phone.webm"
+        },
+        {
+          "title": "§14 The tester dashboard's lists",
+          "explanation": "Every test is in the list, about 4 rows tall, scrolling inside its box; no “Show N more” button.",
+          "kind": "image",
+          "desktop": "b16-14-tester-box.png",
+          "phone": "b16-14-tester-box-phone.png"
+        },
+        {
+          "title": "§14 Scrolling inside the box",
+          "explanation": "The list scrolls on its own while its heading stays put.",
+          "kind": "video",
+          "desktop": "b16-14-tester-video.webm",
+          "phone": "b16-14-tester-video-phone.webm"
+        },
+        {
+          "title": "§14 The developer's Your tests",
+          "explanation": "The card grid sits in a box about 2 card rows tall (one column on phones) and scrolls inside it.",
+          "kind": "image",
+          "desktop": "b16-14-dev-cards.png",
+          "phone": "b16-14-dev-cards-phone.png"
+        },
+        {
+          "title": "§14 Scrolling the test cards",
+          "explanation": "Nora's 8 tests scroll inside their box; the heading and filters above never move.",
+          "kind": "video",
+          "desktop": "b16-14-dev-video.webm",
+          "phone": "b16-14-dev-video-phone.webm"
+        },
+        {
+          "title": "§15 Your tests with Ana Silva",
+          "explanation": "Only Nora's own tests Ana joined (Nina's and Omar's never show), most recent first, each with when she joined and her state there.",
+          "kind": "image",
+          "desktop": "b16-15-tests-with.png",
+          "phone": "b16-15-tests-with-phone.png"
+        },
+        {
+          "title": "§15 Closed only",
+          "explanation": "With Open unticked, only the stopped test remains, marked Ended.",
+          "kind": "image",
+          "desktop": "b16-15-closed-only.png",
+          "phone": "b16-15-closed-only-phone.png"
+        },
+        {
+          "title": "§15 Open only",
+          "explanation": "With Closed unticked, only the tests still running remain.",
+          "kind": "image",
+          "desktop": "b16-15-open-only.png",
+          "phone": "b16-15-open-only-phone.png"
+        },
+        {
+          "title": "§16 Edit's Open until hint",
+          "explanation": "Edit says “only later, up to <date> (30 days after the test opened)” and what each tester gets after the change: “(14 now + 5)”.",
+          "kind": "image",
+          "desktop": "b16-16-hint.png",
+          "phone": "b16-16-hint-phone.png"
+        },
+        {
+          "title": "§16 Past the cap",
+          "explanation": "A date more than 30 days after the test opened turns red: “Open until can be at most 30 days after the test opened (<date>).”",
+          "kind": "image",
+          "desktop": "b16-16-cap-red.png",
+          "phone": "b16-16-cap-red-phone.png"
+        },
+        {
+          "title": "§16 Moving Open until",
+          "explanation": "5 days later shows “(14 now + 5)”; a date past the 30-day cap turns red.",
+          "kind": "video",
+          "desktop": "b16-16-video.webm",
+          "phone": "b16-16-video-phone.webm"
+        },
+        {
+          "title": "§17 The same value saved elsewhere",
+          "explanation": "Another tab saved exactly the title typed here: no blue note, and it no longer counts as unsaved.",
+          "kind": "image",
+          "desktop": "b16-17-same-title.png",
+          "phone": "b16-17-same-title-phone.png"
+        },
+        {
+          "title": "§17 and §19 Notes from another tab",
+          "explanation": "The same title saved elsewhere brings no note; Spots shows “4 → 5” on one line; new instructions show what they replaced and what was typed here, with Copy.",
+          "kind": "video",
+          "desktop": "b16-17-19-video.webm",
+          "phone": "b16-17-19-video-phone.webm"
+        },
+        {
+          "title": "§18 Keys changed in another tab",
+          "explanation": "One line per kind: “Added: K-7, K-8, K-9” and “Removed: K-5”; the deleted key leaves this tab's Free box too.",
+          "kind": "image",
+          "desktop": "b16-18-keys-note.png",
+          "phone": "b16-18-keys-note-phone.png"
+        },
+        {
+          "title": "§18 and §20 Keys from other tabs, live",
+          "explanation": "Another tab adds three keys and removes one; then Nora deletes K-2 here and Ben joins with it: the blue line says so without any press.",
+          "kind": "video",
+          "desktop": "b16-18-20-video.webm",
+          "phone": "b16-18-20-video-phone.webm"
+        },
+        {
+          "title": "§19 A short field changed elsewhere",
+          "explanation": "A short value changes on one line: “Changed in another tab or device at <time>: Spots: 4 → 5”.",
+          "kind": "image",
+          "desktop": "b16-19-spots-line.png",
+          "phone": "b16-19-spots-line-phone.png"
+        },
+        {
+          "title": "§19 Instructions changed elsewhere",
+          "explanation": "The note gives “Instructions:” and the text it replaced, folded to 3 lines with Show more, then “What you typed (not saved):” in full with a Copy button.",
+          "kind": "image",
+          "desktop": "b16-19-before-copy.png",
+          "phone": "b16-19-before-copy-phone.png"
+        },
+        {
+          "title": "§19 Show more",
+          "explanation": "The text it replaced opens in a scroll box about 8 lines tall.",
+          "kind": "image",
+          "desktop": "b16-19-before-open.png",
+          "phone": "b16-19-before-open-phone.png"
+        },
+        {
+          "title": "§20 A key you deleted, given to a joining tester",
+          "explanation": "As soon as the page sees it, a blue line says “Ben Okafor joined and was given K-2, which you had deleted here.”, and nothing is red.",
+          "kind": "image",
+          "desktop": "b16-20-given-key.png",
+          "phone": "b16-20-given-key-phone.png"
+        },
+        {
+          "title": "§21 An invite from another tab, live",
+          "explanation": "The live box says “You invited Cam Lee in another tab” and Cam's row in the invite panel updates at once.",
+          "kind": "image",
+          "desktop": "b16-21-live-invite.png",
+          "phone": "b16-21-live-invite-phone.png"
+        },
+        {
+          "title": "§21 The invite panel updated",
+          "explanation": "“Invited” now lists Cam Lee, waiting for him to join, without reloading the page.",
+          "kind": "image",
+          "desktop": "b16-21-invite-row.png",
+          "phone": "b16-21-invite-row-phone.png"
+        },
+        {
+          "title": "§21 Another tab's Pay stops this press once",
+          "explanation": "Nora paid Ana in another tab, so her Pay on Ben's answers here stops once with “You paid Ana Silva … in another tab” and “Press Pay again to go ahead.”",
+          "kind": "image",
+          "desktop": "b16-21-other-tab-stop.png",
+          "phone": "b16-21-other-tab-stop-phone.png"
+        },
+        {
+          "title": "§21 What another tab did",
+          "explanation": "An invite made in another tab shows live in the panel; a Pay made in another tab stops the next Pay here once, and the second press pays.",
+          "kind": "video",
+          "desktop": "b16-21-video.webm",
+          "phone": "b16-21-video-phone.webm"
+        },
+        {
+          "title": "§22 Pay more closes",
+          "explanation": "The test stopped 25 days ago: the Pay more box shows the small grey line “Pay more closes on <date>.” in its last 7 days.",
+          "kind": "image",
+          "desktop": "b16-22-pay-more-closes.png",
+          "phone": "b16-22-pay-more-closes-phone.png"
+        },
+        {
+          "title": "§24 A Send from an old page after the stop",
+          "explanation": "The press is refused and the page jumps to the top, where the stopped line says “Nora Lane stopped the test on <date>, so your Send didn't go through.” and what still works.",
+          "kind": "image",
+          "desktop": "b16-24-stale-send.png",
+          "phone": "b16-24-stale-send-phone.png"
+        },
+        {
+          "title": "§24 After the stop",
+          "explanation": "Ana's answers are typed when Nora stops the test; her Send is refused and the page moves to the stopped line, and Send, the answer boxes and the key box are gone.",
+          "kind": "video",
+          "desktop": "b16-24-video.webm",
+          "phone": "b16-24-video-phone.webm"
+        },
+        {
+          "title": "§25 A stopped test: the first press goes through",
+          "explanation": "Another tab paid Ben meanwhile, yet Nora's Pay on Ana's answers went straight through, with no stop box.",
+          "kind": "image",
+          "desktop": "b16-25-first-press.png",
+          "phone": "b16-25-first-press-phone.png"
+        },
+        {
+          "title": "§25 Pay on a stopped test",
+          "explanation": "Another tab pays Ben; Nora presses Pay on Ana's answers once and it goes through.",
+          "kind": "video",
+          "desktop": "b16-25-video.webm",
+          "phone": "b16-25-video-phone.webm"
+        },
+        {
+          "title": "§27 The profile changed in another tab",
+          "explanation": "Save stops once with “Changed in another tab or device since you opened this page:” and “Devices: Windows PC → Windows PC, iPad”, keeping the typed bio.",
+          "kind": "image",
+          "desktop": "b16-27-profile-stop.png",
+          "phone": "b16-27-profile-stop-phone.png"
+        },
+        {
+          "title": "§27 Save after a change elsewhere",
+          "explanation": "Ben types his bio; another tab adds iPad to his devices; the first Save stops once naming it, the second saves the bio on top.",
+          "kind": "video",
+          "desktop": "b16-27-video.webm",
+          "phone": "b16-27-video-phone.webm"
+        },
+        {
+          "title": "§28 Tests you were removed from",
+          "explanation": "Each row opens a limited view of that test.",
+          "kind": "image",
+          "desktop": "b16-28-removed-list.png",
+          "phone": "b16-28-removed-list-phone.png"
+        },
+        {
+          "title": "§28 The limited view",
+          "explanation": "The page opens with “Your account is paused. You can still dispute, charge or let go of unreviewed work, and rate.” over his parts and the work he sent, read-only, with no Send, calls, chat or key box.",
+          "kind": "image",
+          "desktop": "b16-28-limited-view.png",
+          "phone": "b16-28-limited-view-phone.png"
+        },
+        {
+          "title": "§30 The account page, developer side",
+          "explanation": "The page shows “Nora Lane · Developer”, one line to start testing too and only the Developer profile link, with no side cards, Change password link or excerpts list.",
+          "kind": "image",
+          "desktop": "b16-30-account-dev.png",
+          "phone": "b16-30-account-dev-phone.png"
+        },
+        {
+          "title": "§30 The account page, tester side",
+          "explanation": "The page shows “Ana Silva · Tester” with “Start posting tests too” and only the Tester profile link.",
+          "kind": "image",
+          "desktop": "b16-30-account-tester.png",
+          "phone": "b16-30-account-tester-phone.png"
+        },
+        {
+          "title": "§31 Invite stops once for requirement changes",
+          "explanation": "The test's devices changed in Edit (Windows PC → iPad) and the ticked tester added iPad to hers: Invite stops once naming both, and the panel shows the new tags.",
+          "kind": "image",
+          "desktop": "b16-31-invite-stop.png",
+          "phone": "b16-31-invite-stop-phone.png"
+        },
+        {
+          "title": "§31 Invite after requirement changes",
+          "explanation": "Nora ticks a tester; another tab changes the test's devices and the tester adds iPad to her profile; the first Invite stops once with both changes, the second sends the invite.",
+          "kind": "video",
+          "desktop": "b16-31-invite-video.webm",
+          "phone": "b16-31-invite-video-phone.webm"
+        },
+        {
+          "title": "§32 An open invitation",
+          "explanation": "Ana's dashboard shows Nora's invitation to an invite-only test.",
+          "kind": "image",
+          "desktop": "b16-32-invite-card.png",
+          "phone": "b16-32-invite-card-phone.png"
+        },
+        {
+          "title": "§32 The invitation closes live",
+          "explanation": "The card disappears and the live box says “Your invite to “Lumen Notes private beta” was closed.”",
+          "kind": "image",
+          "desktop": "b16-32-invite-closed.png",
+          "phone": "b16-32-invite-closed-phone.png"
+        },
+        {
+          "title": "§32 A closed invitation",
+          "explanation": "Nora cancels the invite while Ana's dashboard is open: the card goes and a neutral line says it closed.",
+          "kind": "video",
+          "desktop": "b16-32-video.webm",
+          "phone": "b16-32-video-phone.webm"
+        },
+        {
+          "title": "§32 A stale Join",
+          "explanation": "The test was stopped after the page loaded: Join is refused with “This test was stopped.” (no stop box) and the join card goes.",
+          "kind": "image",
+          "desktop": "b16-32-stale-join.png",
+          "phone": "b16-32-stale-join-phone.png"
+        },
+        {
+          "title": "§32 Join on a closed invite",
+          "explanation": "Nora stops the test while Ana reads the join page; her Join is refused with the reason.",
+          "kind": "video",
+          "desktop": "b16-32-join-video.webm",
+          "phone": "b16-32-join-video-phone.webm"
+        },
+        {
+          "title": "§33 The Call requests panel",
+          "explanation": "Every waiting request in both directions, soonest first, with Accept and Decline; the one opened from Needs you is highlighted.",
+          "kind": "image",
+          "desktop": "b16-33-panel.png",
+          "phone": "b16-33-panel-phone.png"
+        },
+        {
+          "title": "§33 An exact match",
+          "explanation": "The time row is blue, not red: “Ana Silva asked for exactly this: Request a time books it.”",
+          "kind": "image",
+          "desktop": "b16-33-exact-blue.png",
+          "phone": "b16-33-exact-blue-phone.png"
+        },
+        {
+          "title": "§33 An overlap",
+          "explanation": "The time row turns red before any press: “Overlaps Ana Silva's request for <day>, 1:30–2:00 PM.”",
+          "kind": "image",
+          "desktop": "b16-33-overlap-red.png",
+          "phone": "b16-33-overlap-red-phone.png"
+        },
+        {
+          "title": "§33 and §35 Answering a call request",
+          "explanation": "The Needs you row opens the panel; the form marks Ana's exact time blue and a clashing time red; the exact time books at once.",
+          "kind": "video",
+          "desktop": "b16-33-video.webm",
+          "phone": "b16-33-video-phone.webm"
+        },
+        {
+          "title": "§35 A call request in Needs you",
+          "explanation": "No Accept or Decline here: the whole row, and “Answer in Live session →”, open the Call requests panel.",
+          "kind": "image",
+          "desktop": "b16-35-needs-row.png",
+          "phone": "b16-35-needs-row-phone.png"
+        },
+        {
+          "title": "§36 Money boxes round to cents",
+          "explanation": "“1.4545” becomes 1.45 when the box is left, so the amount charged is the one shown.",
+          "kind": "image",
+          "desktop": "b16-36-rounded.png",
+          "phone": "b16-36-rounded-phone.png"
+        },
+        {
+          "title": "§36 Rounding as you leave the box",
+          "explanation": "Nora types 1.4545 and moves on: the box shows 1.45, with no red.",
+          "kind": "video",
+          "desktop": "b16-36-video.webm",
+          "phone": "b16-36-video-phone.webm"
+        },
+        {
+          "title": "§37 The excerpt request in Needs you",
+          "explanation": "The question it answers sits above the quote in small grey text, then Allow or Deny.",
+          "kind": "image",
+          "desktop": "b16-37-needs-you.png",
+          "phone": "b16-37-needs-you-phone.png"
+        },
+        {
+          "title": "§37 On the tester's profile",
+          "explanation": "Each excerpt shows its question (“Where did you get stuck?”) above the quote, cut to 2 lines with Show more when long.",
+          "kind": "image",
+          "desktop": "b16-37-profile.png",
+          "phone": "b16-37-profile-phone.png"
+        },
+        {
+          "title": "§38A The offer arrives live",
+          "explanation": "Nora raised the price while Ana's page was open: the offer box appears with Switch and Keep.",
+          "kind": "image",
+          "desktop": "b16-38-offer-live.png",
+          "phone": "b16-38-offer-live-phone.png"
+        },
+        {
+          "title": "§38A Switch works",
+          "explanation": "The press goes through on the offer shown (never “That offer doesn't exist.”), and her written answers now pay $12.00 ($9.60 for her).",
+          "kind": "image",
+          "desktop": "b16-38-switched.png",
+          "phone": "b16-38-switched-phone.png"
+        },
+        {
+          "title": "§38A Switch on an offer that arrived live",
+          "explanation": "The offer box appears without a reload and Switch to the new terms goes through.",
+          "kind": "video",
+          "desktop": "b16-38-video.webm",
+          "phone": "b16-38-video-phone.webm"
+        },
+        {
+          "title": "§39 Charge $9.00",
+          "explanation": "There is no tick: the button names the amount (“Charge Nora Lane $9.00”) and goes through on its own.",
+          "kind": "image",
+          "desktop": "b16-39-charge-9.png",
+          "phone": "b16-39-charge-9-phone.png"
+        },
+        {
+          "title": "§39 Charge over $200",
+          "explanation": "The tick “Charge Nora Lane $250.00 now (over $200)” is required, and the button stays disabled until it's ticked.",
+          "kind": "image",
+          "desktop": "b16-39-charge-250.png",
+          "phone": "b16-39-charge-250-phone.png"
+        },
+        {
+          "title": "§40 A held call on the tester's page",
+          "explanation": "One short grey line, “<time> · 29 min · waiting for Nora Lane to pay”, instead of a blue box per call.",
+          "kind": "image",
+          "desktop": "b16-40-call-line.png",
+          "phone": "b16-40-call-line-phone.png"
+        },
+        {
+          "title": "§41 Verify first",
+          "explanation": "Pay what you owe stays disabled until a card is verified, with “Verify your card first (step 1): then you can pay what you owe.”",
+          "kind": "image",
+          "desktop": "b16-41-verify-first.png",
+          "phone": "b16-41-verify-first-phone.png"
+        },
+        {
+          "title": "§41 Paid, still paused",
+          "explanation": "Step 2 is ticked and the box reads “Paid. Your tests stay paused until the team approves.”, since only the team's Approve lifts the hold.",
+          "kind": "image",
+          "desktop": "b16-41-paid.png",
+          "phone": "b16-41-paid-phone.png"
+        },
+        {
+          "title": "§41 The chargeback steps in order",
+          "explanation": "Pay what you owe waits for the card check; Nora verifies, pays, and the hold stays until the team approves.",
+          "kind": "video",
+          "desktop": "b16-41-video.webm",
+          "phone": "b16-41-video-phone.webm"
+        },
+        {
+          "title": "Next round stops once for a join",
+          "explanation": "Ben joined after the page loaded, so Next round stops once with “Your Next round didn't go through.” and the join listed.",
+          "kind": "image",
+          "desktop": "b16-x1-next-join.png",
+          "phone": "b16-x1-next-join-phone.png"
+        },
+        {
+          "title": "Next round stops again for a call change",
+          "explanation": "Ana requested a call after that box: the next press stops once more, now listing her request too.",
+          "kind": "image",
+          "desktop": "b16-x1-next-call.png",
+          "phone": "b16-x1-next-call-phone.png"
+        },
+        {
+          "title": "Next round, stopped once twice",
+          "explanation": "A join, then a call request, each stops Next round once; the third press makes the draft.",
+          "kind": "video",
+          "desktop": "b16-x1-next-video.webm",
+          "phone": "b16-x1-next-video-phone.webm"
+        },
+        {
+          "title": "End early stops once for a join",
+          "explanation": "Cam joined after the page loaded, so End early stops once and lists the join.",
+          "kind": "image",
+          "desktop": "b16-x1-end-join.png",
+          "phone": "b16-x1-end-join-phone.png"
+        },
+        {
+          "title": "End early stops again for a call change",
+          "explanation": "Ana requested a call after that box: the next press stops once more, now listing her request too.",
+          "kind": "image",
+          "desktop": "b16-x1-end-call.png",
+          "phone": "b16-x1-end-call-phone.png"
+        },
+        {
+          "title": "End early, stopped once twice",
+          "explanation": "A join, then a call request, each stops End early once; the third press ends Ana's work.",
+          "kind": "video",
+          "desktop": "b16-x1-end-video.webm",
+          "phone": "b16-x1-end-video-phone.webm"
+        },
+        {
+          "title": "Stop the test stops once for a join",
+          "explanation": "Dee joined after the page loaded, so Stop the test stops once and lists the join.",
+          "kind": "image",
+          "desktop": "b16-x1-stop-join.png",
+          "phone": "b16-x1-stop-join-phone.png"
+        },
+        {
+          "title": "Stop the test stops again for a call change",
+          "explanation": "Ben requested a call after that box: Stop stops once more, now listing his request too.",
+          "kind": "image",
+          "desktop": "b16-x1-stop-call.png",
+          "phone": "b16-x1-stop-call-phone.png"
+        },
+        {
+          "title": "Stop the test, stopped once twice",
+          "explanation": "A join, then a call request, each stops Stop once; the third press stops the test.",
+          "kind": "video",
+          "desktop": "b16-x1-stop-video.webm",
+          "phone": "b16-x1-stop-video-phone.webm"
+        },
+        {
+          "title": "Joins ticked off in Alerts",
+          "explanation": "“Joins and applications” is ticked, so a join no longer stops Nora's buttons.",
+          "kind": "image",
+          "desktop": "b16-x1-alerts-joins-off.png",
+          "phone": "b16-x1-alerts-joins-off-phone.png"
+        },
+        {
+          "title": "With joins ticked off, Stop goes straight through",
+          "explanation": "Eli joined after the page loaded, and the first Stop press stopped the test.",
+          "kind": "image",
+          "desktop": "b16-x1-stop-straight.png",
+          "phone": "b16-x1-stop-straight-phone.png"
+        },
+        {
+          "title": "Joins ticked off",
+          "explanation": "Nora ticks “Joins and applications” in Alerts; Eli joins; Stop the test goes through on the first press.",
+          "kind": "video",
+          "desktop": "b16-x1-off-video.webm",
+          "phone": "b16-x1-off-video-phone.webm"
+        },
+        {
+          "title": "Contract changes after three Saves",
+          "explanation": "Newest first: the NDA, the questions, then the price; each entry lists who switched and who kept (Ana switched twice then kept; Ben kept twice then switched), and Cam, who never answered, is “Not decided yet” on the open offer.",
+          "kind": "image",
+          "desktop": "b16-x2-contract-changes.png",
+          "phone": "b16-x2-contract-changes-phone.png"
+        },
+        {
+          "title": "Ana's Terms history",
+          "explanation": "Her contract fold lists the same three offers with what she chose: switched to $12.00, switched to the new questions, kept her terms without the NDA.",
+          "kind": "image",
+          "desktop": "b16-x2-terms-history.png",
+          "phone": "b16-x2-terms-history-phone.png"
+        },
+        {
+          "title": "The tester's Terms history",
+          "explanation": "Ana's contract fold lists every offer and her choice, matching the developer's Contract changes.",
+          "kind": "video",
+          "desktop": "b16-x2-video.webm",
+          "phone": "b16-x2-video-phone.webm"
+        },
+        {
+          "title": "The developer's Contract changes",
+          "explanation": "Nora opens the panel and reads the three entries, newest first, each with Switched, Kept and Not decided yet.",
+          "kind": "video",
+          "desktop": "b16-x2-dev-video.webm",
+          "phone": "b16-x2-dev-video-phone.webm"
+        },
+        {
+          "title": "Alerts On: the live box",
+          "explanation": "Nora's call request shows at the top of Ana's page as soon as it happens; nothing is stopped yet.",
+          "kind": "image",
+          "desktop": "b16-x3-on-live.png",
+          "phone": "b16-x3-on-live-phone.png"
+        },
+        {
+          "title": "Alerts On: the stop box on press",
+          "explanation": "Only when Ana presses Send does the blue box appear under it, listing the call request: “Press Send again to go ahead.”",
+          "kind": "image",
+          "desktop": "b16-x3-on-stop.png",
+          "phone": "b16-x3-on-stop-phone.png"
+        },
+        {
+          "title": "Alerts On",
+          "explanation": "A call request arrives in the live box at the top; Send stops once with it under the button; the second press sends.",
+          "kind": "video",
+          "desktop": "b16-x3-on-video.webm",
+          "phone": "b16-x3-on-video-phone.webm"
+        },
+        {
+          "title": "Alerts Off: greyed in the live box",
+          "explanation": "The same kind of call request shows greyed at the top of Ben's page, since it won't stop anything.",
+          "kind": "image",
+          "desktop": "b16-x3-off-live.png",
+          "phone": "b16-x3-off-live-phone.png"
+        },
+        {
+          "title": "Alerts Off: Send goes straight through",
+          "explanation": "Ben's answers were sent on one press, with no stop box.",
+          "kind": "image",
+          "desktop": "b16-x3-off-sent.png",
+          "phone": "b16-x3-off-sent-phone.png"
+        },
+        {
+          "title": "Alerts Off: new terms still stop",
+          "explanation": "After Nora changed the price, Ben's Send stops and the page goes to the offer box (Switch or Keep).",
+          "kind": "image",
+          "desktop": "b16-x3-off-terms.png",
+          "phone": "b16-x3-off-terms-phone.png"
+        },
+        {
+          "title": "Alerts Off",
+          "explanation": "A call request shows greyed and Send goes through at once; after a price change, Send stops for the new terms.",
+          "kind": "video",
+          "desktop": "b16-x3-off-video.webm",
+          "phone": "b16-x3-off-video-phone.webm"
         }
       ]
     }
