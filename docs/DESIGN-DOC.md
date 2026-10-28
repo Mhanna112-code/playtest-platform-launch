@@ -4,7 +4,7 @@ Oct 27, 2026 · @Mhanna112
 
 ## What Playtest is
 
-Playtest is a marketplace where developers pay testers to try their games, websites, apps and other products. A developer posts a test: what to do, the parts to send (written answers, a recording, live calls), the price of each part, the deadlines and who can join. Testers join or apply, send their work and are paid for each part the developer accepts. At the end both sides rate each other.
+Playtest is a marketplace where developers pay testers to try their games, websites, apps and other products. A developer posts a test: what to do, the parts to send (written answers, a recording, live calls), the price of each part, Open until (which is also every tester's deadline) and who can join. Testers join or apply, send their work and are paid for each part the developer accepts. At the end both sides rate each other.
 
 - **Developers** post and run tests, invite testers, pay or reject work, and rate testers.
 - **Testers** find and join tests, send work, take calls, get paid, and rate developers.
@@ -31,7 +31,7 @@ These rules hold on every signed-in page. Each page tab says which of them apply
 
 - **Blue:** something changed, or a press didn't go through. It sits right under the button that was pressed, and the page scrolls just enough to show it.
 - **Red:** a mistake in a field (checked when you leave the field and when you submit), or a deleted account.
-- **Yellow:** a list that needs attention, e.g. testers whose access key doesn't work.
+- **Yellow:** a list that needs attention.
 - **Green:** a confirmation, e.g. "Saved."
 - A failed press never shows success. It says why, keeps what was typed, and updates the page to what is true now.
 
@@ -61,7 +61,7 @@ Each object's states, and where people see them.
 | Draft | A next round not opened yet | Developer dashboard card "Draft". It isn't a test page: it opens in Post a test, filled in, where Post the test opens it for testers. Not in Find tests; for testers its link is not found. |
 | Open | Takes testers until Open until passes or it's full | Developer dashboard card: "Accepting testers". Find tests and the join page (Join, Apply); testers' session pages work normally. |
 | Full | No spots left | Developer dashboard card: "Full". Not in Find tests. Join page: "This test is full." Invited testers: "<test> is full right now. Your invite stays open; we'll tell you when a spot opens." |
-| Paused | An admin paused it, or its developer is on hold or suspended. It closes after 7 days. | Developer dashboard card: "Paused: account suspended / payment hold / chargeback hold / paused by the team". Admin pause: banner on the test page. Testers: "This test is paused right now." and a "Paused" tag on their dashboard; they can't send work (drafts can be saved), chat is closed both ways, and invites and applications wait. When it lifts, deadlines and Open until move later by the length of the pause. Not in Find tests; others opening the link see "This test isn't available right now." |
+| Paused | An admin paused it, or its developer is on hold or suspended. It closes after 7 days. | Developer dashboard card: "Paused: account suspended / payment hold / chargeback hold / paused by the team". Admin pause: banner on the test page. Testers: "This test is paused right now." and a "Paused" tag on their dashboard; their session page hides what doesn't work right now (Send, the call-request tools, Join call and chat's message box) under a blue banner that lists what still works; invites and applications wait. When it lifts, deadlines and Open until move later by the length of the pause. Not in Find tests; others opening the link see "This test isn't available right now." |
 | Stopped | Stopped by the developer or an admin, or its developer was deleted | "Stopped" label and the still-allowed line on both sides (below). Testers get a live-box line and a bell line. |
 | Closed | Closed after 7 days paused, or an admin pressed Close now | Like Stopped. Card: "Closed after 7 days paused". Testers read "This test ended on <date>." with no reason; the developer gets the reason by bell and a banner. |
 
@@ -85,11 +85,12 @@ Each object's states, and where people see them.
 | Sent, waiting for review | Developer: the piece in Needs you (Pay / Reject) and the dashboard's Needs review. Tester: "Waiting for the developer". "Sent late" if after the deadline. |
 | Paid | Tester: "Paid" and "Paid so far $Y"; developer: a receipt. |
 | Payment delayed | The developer's card was declined (a hold starts). Tester: "Payment may be delayed". |
+| Waiting for the bank | The developer's bank wants them to confirm the payment. On their own press the bank's pop-up opens at once; a charge made while they weren't there waits for Confirm on Payments for 3 days, then counts as declined. While a press waits for the bank the piece is locked: a Charge or Let it go is refused with "A payment for this is being confirmed right now." Tester: "Payment may be delayed". |
 | Rejected | Tester: "Not accepted" with the reason; they can dispute it. |
-| Charge open | 14 days after sending and after Open until. Tester: Charge or Let it go; the dashboard's "Charge or cancel". Developer: can still Pay or Reject until the tester chooses. |
+| Charge open | 7 days after sending and after Open until. Tester: Charge or Let it go; the dashboard's "Charge or cancel". Developer: can still Pay or Reject until the tester chooses. |
 | Charged | The tester charged up to the listing. During a payment or chargeback hold it's added to what the developer owes and paid when they pay; the tester sees "Charged $X. Payment may be delayed until the test resumes." Developer sees "<name> charged $X for this." |
 | Let go | Closed with nothing more paid. |
-| Disputed | Developer: the dispute in Needs you; admin: Open disputes. Decided: both are told. |
+| Disputed | Any part the developer reviewed (a Pay of any amount, $0 included, or a Reject; unlisted parts too) can be disputed once. Developer: the dispute in Needs you; admin: Open disputes. Decided: both are told. |
 
 **Call**
 
@@ -114,11 +115,18 @@ Each object's states, and where people see them.
 
 ### Long lists
 
-- Every blue box (the live box, stop boxes, notices in pop-ups, notices under buttons) and the yellow keys box shows 3 lines, then "Show N more", which opens a scroll box about 8 lines tall.
-  - Example: 12 testers report a key not working. The yellow box names the 3 most recent, then "Show 9 more".
+- Every blue box (the live box, stop boxes, notices in pop-ups, notices under buttons) shows 3 lines, then "Show N more", which opens a scroll box about 8 lines tall.
+  - Example: 12 testers send work while the page is open. The live box shows the 3 newest, then "Show 9 more".
 - A list inside a row, such as the unmet needs on an invite row, shows 3 items, then "+N more".
 - Dashboard boxes show the newest 3 rows, then "Show N more".
 - Long names, titles and reasons are cut with "…" in rows (full text on hover) and shown in full where they are the main content.
+- **Long text** is handled the same way everywhere:
+  - The NDA, wherever it's shown (the join page, the session page's terms, the Switch / Keep offer, Terms history, and the preview on Post and Edit), sits in a scroll box about 12 lines tall; the offer and Terms history show "Before" and "Offered" as two such boxes, never in full.
+  - The steps show in full on the listing, the join page and the session page; on cards and rows, 3 lines, then "Show more".
+  - Questions show in full in the answer form and in previous sets; in the offer box and "Questions then and now", 3, then "+N more".
+  - A piece's written answers sit in their own scroll box about 16 lines tall when they're longer, with the question labels inside; the Pay box stays outside it, always visible.
+  - Reasons, notes and messages in rows show 3 lines, then "Show more".
+  - Limited fields have live counters: "N / 1,000" (steps and NDA), "N / 300" (each question) and "N / 50,000" (a written part).
 
 ### Pop-ups
 
@@ -147,7 +155,7 @@ A payment hold, a chargeback hold and an admin suspension do the same thing to a
   - after more than 3 holds: the team will review the account after they pay;
   - when it lifts, their tests resume as normal.
 - **Open while it lasts:** the dashboard; Payments (receipts, Pay what you owe, Change card, payout setup); Settings (Contact us, the email setting, Delete account; the profile editor is hidden); the bell list, where a line whose page is closed opens the dashboard top. Change card works during a payment hold, a chargeback hold and a suspension, and a suspended tester can still set up payouts. The open pages other than the dashboard show one blue line under the header, e.g. "Your tests are paused until you pay what you owe. Pay what you owe." **Closed:** tester and developer profiles, session pages, Find tests and test listings, Messages and chat, Edit, test pages, Post a test. On their dashboard, names are plain text with no hover card, so there's no Chat with, Report, Block or profile link.
-- **The only press that works on their tests:** Cancel call, in the dashboard's Calls box. Stop and End early aren't available, and Pay and Reject wait until it lifts.
+- **The only press that works on their tests:** Cancel call, in the dashboard's Calls box, and Allow or Deny in the dashboard's Excerpt requests box. Stop and End early aren't available, and Pay and Reject wait until it lifts.
 - A hold limits only the developer side: on their tester side the same account works as usual. A suspension covers the whole account. A tester whose developer is suspended or on hold isn't restricted: they keep their session page, where the paused rules apply: they can't send work (drafts can be saved) or chat, and they can still cancel calls, dispute, Charge or Let it go, rate and leave (Tester session page).
 - **A suspended tester**'s pages follow the same rules: the open pages above stay open, and every other page, their session pages included, moves them to the dashboard top. The blue box there says their account is paused, they were removed from their tests, how to appeal (Contact us in Settings), and that pay for work already accepted still reaches their Stripe account. Any other press is refused with "Your account is paused. Contact support if you think this is a mistake." Their dashboard is in Tester dashboard, Find tests and the join page.
 - Testers never see hold, suspended, failed or chargeback about a developer. They see "paused" and "delayed".
@@ -163,16 +171,16 @@ A payment hold, a chargeback hold and an admin suspension do the same thing to a
 ### Deleted accounts
 
 - The deleted person: every open tab logs out with a red "This account no longer exists".
-- A deleted developer: their tests stop and leave Find tests; testers see the stopped test and what they can still do; invites and applications close; chats become read-only; the profile shows "Deleted account" with ratings kept; unpaid work follows the money rules and an admin settles anything owed.
-- A deleted tester: removed from every test (developers see "Left this test" and the name "Deleted account"); their work, payments and ratings stay; calls ahead, invites and applications are cancelled; open disputes are withdrawn; chats close. Sent work not paid yet can no longer be paid, charged or disputed. A delayed payment still reaches their Stripe account when the developer pays, if their payout setup is finished.
+- A deleted developer: their tests stop and leave Find tests; testers see the stopped test and what they can still do; invites and applications close; chats become read-only; the profile shows "Deleted account" with ratings kept; parts where Charge was already open stay open, and a tester's Charge goes to the deleted developer's saved card (if it's declined, the payment stays delayed for the tester and is listed for admins; the platform doesn't cover it); work still under review never opens Charge, and the tester's part reads "<dev> deleted their account, so this can't be paid."; open disputes are still decided by the admins, a decision for the tester charging the saved card the same way; pending excerpt requests on their tests close, and excerpts already shown stay.
+- A deleted tester: removed from every test (developers see "Left this test" and the name "Deleted account"); their work, payments and ratings stay; calls ahead, invites and applications are cancelled; open disputes are withdrawn; chats close. Work they sent stays in the developer's Needs you, with Pay and Reject (Pay only for an unlisted part) and the usual reminders, and Pay reaches their Stripe account if their payout account was connected. If it wasn't, those rows leave Needs you with "<name> deleted their account before setting up payouts, so this can't be paid." (DEFAULT). Unsent work is gone, and so are Charge and Dispute. Their excerpt requests and shown excerpts are removed. A delayed payment still reaches their Stripe account when the developer pays, if their payout setup is finished.
 - Admins still see deleted accounts in full: who deleted them, why, and the history.
-- Deleting never clears a hold, a chargeback or money owed. A developer can't delete their account while sent work waits for Pay or Reject (parts where Charge is open included), a dispute is open, or a hold is on; the warnings and refusals are in Settings on Shared pages.
+- Deleting never clears a hold, a chargeback or money owed. A developer can always delete their account; the warnings are in Settings on Shared pages.
 
 ### The bell
 
 - **Reach.** A line about another person arrives only if that person is or was in one of your open tests. Invites, applications, payments and disputes always arrive, because they can come from outside an open test. Chat follows the same reach.
 - **Every line opens the exact spot**, e.g. the developer's Needs you row, the tester's part, a call, the keys box, Payments. Each page tab lists the lines that open it.
-- **Stacking.** Lines about one test on the same day stack into one entry that opens to show them. Lines of the same kind stack across tests, one entry per kind per day: payments and holds; the team's decisions; disputes filed; disputes decided; the team acted on your tests; the paused-test reminder; tester Paid, Not accepted, Payments delayed, Delayed payments arrived and Extra pay; tests stopped or ended; invitations waiting; Charge or Let it go; work waiting for your review; payout problems; the admin suspended-accounts review.
+- **Stacking.** Lines about one test on the same day stack into one entry that opens to show them. Lines of the same kind stack across tests, one entry per kind per day: payments and holds; the team's decisions; disputes filed; disputes decided; the team acted on your tests; the paused-test reminder; tester Paid, Not accepted, Payments delayed, Delayed payments arrived and Extra pay (Pay more); tests stopped or ended; invitations waiting; Charge or Let it go; work waiting for your review; payout problems; tester applications closed by a listing change ("3 tests you applied to changed: your applications were closed"); tester invites sent again on a new listing ("3 tests you were invited to changed: your invites were sent again"); the admin suspended-accounts review.
   - Example: Harbor Run and Sky Lab both pay Ana on Monday. Ana's bell shows one "You were paid" entry with both inside.
 - Receipts, a pause being lifted or extended, and outages are always their own line.
 - **Reminders wait while a test is paused** and start again when it runs again. The developer's daily paused reminder is the exception.
@@ -187,40 +195,44 @@ A payment hold, a chargeback hold and an admin suspension do the same thing to a
 | Developer | "<tester> applied to join" / "<name> asks to rejoin"; then "N applications wait for your answer" | each time; then daily while waiting | that test's day |
 | Developer | "<tester> left <test>" (also after a suspension or deletion) | each time | that test's day |
 | Developer | "<tester> sent / updated written answers / a recording" | each send | that test's day |
-| Developer | "<tester> reports an access key not working" | each report | that test's day |
+| Developer | "<tester> asked to show an excerpt from <test> on their profile" | each request | that test's day |
 | Developer | Call lines: booked, cancelled (with reason), remaining calls cancelled, nobody joined, cancelled because the test is paused, missed because the site was down, a Forever call skipped for a clash | each time | that test's day |
-| Developer | "<test>: review <tester>'s <part> within 1 month / 1 week / 3 days / by tomorrow", then "…waited over 14 days: pay or reject it" | 1 month, 1 week, 3 days and 1 day before Charge opens (skipping past ones), then daily | Work waiting for your review |
-| Developer | "<test>: <tester>'s <part> still waits for you to pay or reject." (work outside the contract) | every 3 days, for 14 days after sending, then no more (DEFAULT) | that test's day |
+| Developer | "<test>: review <tester>'s <part> within 1 week / 3 days / by tomorrow", then "…waited over 7 days: pay or reject it" | 1 week, 3 days and 1 day before Charge opens (skipping past ones), then daily | Work waiting for your review |
+| Developer | "<test>: <tester>'s <part> still waits for you to pay or reject." (work outside the contract) | every 3 days, for 7 days after sending, then no more (DEFAULT) | that test's day |
 | Developer | "<test> closes on <date>: send your work before then." (Open until is near; testers get it too) | 1 month, 1 week, 3 days, 1 day before | that test's day |
 | Developer | "<tester> disputed a payment on <test>" | each time | Disputes filed |
 | Developer | "A dispute on <test> was decided" | each time | Disputes decided |
 | Developer | "Receipt: you paid $X for …" | every charge that goes through | own line |
-| Developer | "Your tests are paused" / "…paused after a chargeback" / "Another payment was declined: $X … was added to what you owe" / "Your bank reversed a $X payment …" / "Your tests are running again" | each time | Payments and holds |
+| Developer | "Your tests are paused" / "…paused after a chargeback" / "Another payment was declined: $X … was added to what you owe" / "Your bank reversed a $X payment …" / "Your bank's chargeback of $X was reversed in your favour." / "We charged your card $X for what you owed." / "Your bank wants you to confirm a $X payment. Confirm it in Payments by <date>." / "Your payment went through. Your tests stay paused while your account is suspended." / "Your tests are running again" (only when nothing pauses them any more) | each time | Payments and holds |
 | Developer | "Your $7 subscription payment didn't go through. Update your card by <date> to keep it." / "Your subscription ended because the payment didn't go through." | when a renewal is declined; when the last retry fails | Payments and holds |
-| Developer | "…extras need a $7/month subscription from <date>" (free during launch is ending) / "…now from <date>" (the date moved) / "The extras stay free for now." (the date cleared) | 30 days and 7 days before the date; again when an admin moves or clears it | Payments and holds |
+| Developer | "…extras need a $7/month subscription from <date>" (free during launch is ending) | 30 days and 7 days before the FREE_UNTIL date | Payments and holds |
 | Developer | "The team approved lifting your hold" / "A note from the team about your hold" | admin Approve | The team decided |
 | Developer | "<test> is paused and closes on <date> unless you pay what you owe" (or "…your account is cleared", "…the team lifts the pause") | when it pauses, then daily | Paused tests |
 | Developer | "The team paused <test>" / "The team stopped <test>" / "<test> was closed. <reason>" | each time | The team acted on your tests |
 | Developer | "The team lifted the pause on <test>" / "<test> will close later" | each time | own line |
 | Developer | "<tester> finished <test>. You can rate them for 14 days.", then "Reminder: rate <tester>…" | when they rate; every 3 days after a stop, inside the 14 days | that test's day |
-| Tester | "<dev> invited you to <test>" (or "…here's a new invite: <terms>" after an edit), then "Reminder: <dev> invited you…" | each invite; daily until answered | Invitations waiting |
-| Tester | "<test> is full, so your application was closed" / "…is full right now. Your invite stays open…" / "A spot opened on <test>…" / "…listing changed, so your application was closed" / "…is now invite only…" / "<test> changed since you applied" | each time | that test's day |
+| Tester | "<dev> invited you to <test>", then "Reminder: <dev> invited you…" | each invite; daily until answered | Invitations waiting |
+| Tester | "<test> is full, so your application was closed" / "…is full right now. Your invite stays open…" / "A spot opened on <test>…" / "…is now invite only…" / "<test> changed since you applied" | each time | that test's day |
+| Tester | "<test>'s listing changed, so your application was closed. You can apply again on the current listing." | each Save that changes the listing | Applications closed ("3 tests you applied to changed: your applications were closed") |
+| Tester | "<dev> updated <test>: your invite was sent again on the new listing." | each Save that changes the listing | Invites sent again ("3 tests you were invited to changed: your invites were sent again") |
 | Tester | "You're in: <test>" / "You're back in <test>: your deadline is <date>." / "Your application (or ask to rejoin) wasn't accepted" | each time | that test's day |
 | Tester | "<dev> updated the listing: <changes>" (new terms offered) | each Save that changes their terms | that test's day |
-| Tester | "You have a new access key for <test>" / "Work sent: your …" | each time | that test's day |
-| Tester | "You were paid for your <part> on <test>", with the developer's note if any | each time | You were paid |
+| Tester | "Work sent: your …" | each time | that test's day |
+| Tester | "<dev> paid you $X for your <part> on <test>" (or "<dev> paid $0 for your <part> on <test>"), with the developer's note if any | each time | You were paid |
 | Tester | "Your <part> on <test> wasn't accepted" | each time | Work not accepted |
 | Tester | "<dev>'s payment for your <part> ($X) is delayed. You'll be told when it arrives." / "Payment for your work on <test> may be delayed" | each time | Payments delayed |
 | Tester | "<dev> paid $X for your <part>" (a delayed payment arrived) | each time | Delayed payments arrived |
-| Tester | "<dev> paid you $X extra for <test>", with the note if any | each time | Extra pay |
+| Tester | "<dev> paid you $X more for your <part> on <test>" (Pay more), with the note if any | each time | Extra pay |
 | Tester | "Your dispute on <test> was decided" | each time | Disputes decided |
-| Tester | "<dev> didn't review your <part> in 14 days: charge $X or let it go", then "Reminder: …" | when Charge opens, then every 3 days | Charge or Let it go |
+| Tester | "Your excerpt from <test> is now on your profile." / "<dev> prefers that work from <test> isn't shown on profiles." | when the developer allows or denies a request (a bell line only) | that test's day |
+| Tester | "<dev> didn't review your <part> in 7 days: charge $X or let it go", then "Reminder: …" | when Charge opens, then every 3 days | Charge or Let it go |
 | Tester | "Rate <dev> on <test>", then "Reminder: rate <dev>…" | once; after a stop or close every 3 days, for 2 weeks | that test's day; its own line once stopped |
 | Tester | "<test> is running again" | each time | Tests paused or running again |
 | Tester | "<test> was stopped" / "Your work on <test> was ended early" / "<test> ended" | each time | Tests stopped or ended |
 | Tester | Call lines (as for developers) and "Your session on <test> ended." (after a block) | each time | that test's day |
 | Tester | "Your bank couldn't receive a payout. Update your payout details." | when a payout fails, then every 3 days until fixed | Payout |
 | Both | "<name> · <test>: <first words>" (chat) | each message | that test's day |
+| Both | "<name> took down the excerpt from <test>." | when the other side takes a shown excerpt down | that test's day |
 | Both | "Your account is paused" / "Your account is active again" | each time | The team decided |
 | Both | "The site was down from <a> to <b>. Deadlines and payment dates moved <length> later." | once per outage | own line |
 | Admin | "Dispute on <test>: <tester> says the pay should be higher (<dev>)" / "New report: <a> reported <b>" / "Hold lift waiting: <dev> paid what they owe (More than 3 holds)" | each time | one line a day for all three |
@@ -239,10 +251,12 @@ A payment hold, a chargeback hold and an admin suspension do the same thing to a
 | **Ignore the setting** (sent even with Off, once, in one end-of-day email) | | |
 | "Your tests are paused" (payment hold starts) | developer | when it starts |
 | "Your tests are paused after a chargeback" / "…your payment hold is now a chargeback hold" | developer | when it starts |
-| "Your tests are running again" | developer | when the hold lifts |
+| "Your tests are running again" | developer | when nothing pauses their tests any more |
+| "Your payment went through. Your tests stay paused while your account is suspended." | developer | when what they owe is paid (or a chargeback hold lifts) while a suspension continues |
+| "Your bank wants you to confirm a $X payment. Confirm it in Payments by <date>." | developer | when a charge made while they weren't there needs their confirmation |
 | "Your $7 subscription payment didn't go through. Update your card by <date> to keep it." | developer | when a renewal is declined |
 | "Your subscription ended because the payment didn't go through." | developer | when the last retry fails |
-| "…extras need a $7/month subscription from <date>" / "…now from <date>" / "The extras stay free for now." | every developer | 30 days and 7 days before the free-during-launch date; again when an admin moves or clears it |
+| "…extras need a $7/month subscription from <date>" | every developer | 30 days and 7 days before the FREE_UNTIL date |
 | "Your account is paused" / "Your account is active again" | developer or tester | suspension, reinstatement |
 | "The team paused / stopped <test>" / "<test> was closed. <reason>" | developer | each time |
 | Admin daily email: new disputes, lifts and chargeback holds waiting for Approve, call no-show and late reports (each once), accounts this admin suspended that still have paused tests, tests this admin paused (with closing dates) | each admin | once a day, only when it has something; can't be turned off |
@@ -293,9 +307,9 @@ From Every page: the live box, long lists, number format, and the blue box when 
 - **Welcome line** with a "Post a test" shortcut next to the name.
 - **Stat tiles:** Parts to review, Testers joined (all tests), Spent so far (accepted work), Pays on average, Typical review, Rating. Big numbers shorten. The tester-limit card ("Can take up to N testers per test") is on Profile (Shared pages).
 - **Needs review:** one row per test with work waiting, e.g. "Harbor Run · 3 parts to pay or reject", newest first. Each row opens that test's Needs you.
-- **Needs you:** applications, rejoin asks, call requests and disputes from every test, newest first. Each opens its row on the test page.
+- **Needs you:** applications, rejoin asks, call requests, disputes and excerpt requests from every test, newest first. Each opens its row on the test page.
 - **Calls:** every booked call, soonest first. Join appears only when the call can be joined. Each row opens the call on the test page, where it can be cancelled.
-- **Your tests:** one card per test. Category icon left of the name; tags under the title (who can join, days per tester, Open until, keys left, invites waiting, applications, unread messages, Mature, NDA); a status label; feedback bars with stats at the bottom right. Clicking a card opens the test page.
+- **Your tests:** one card per test. Category icon left of the name; tags under the title (who can join, Open until, keys left, invites waiting, applications, unread messages, Mature, NDA); a status label; feedback bars with stats at the bottom right. Clicking a card opens the test page.
   - Three very different tests (a game test with written answers, a recording and live calls; a free web-app test; an invite-only test with access keys).
 
     [image: A game test with written answers, a recording and live calls.]
@@ -337,7 +351,7 @@ From Every page: the live box, long lists, number format, and the blue box when 
 
   [image: Closed after 7 days paused.]
 - **Account active:** as above.
-- **Payment hold, chargeback hold or suspended:** the blue box at the top; Needs review and Needs you are hidden; cards don't open; Calls rows get their own Cancel ▾, the only press on their tests (Stop and End early aren't available); names are plain text with no hover card; Post a test leaves the header. Every other signed-in page except Payments, Settings and the bell list moves them back here.
+- **Payment hold, chargeback hold or suspended:** the blue box at the top, with an "Excerpt requests" box under it (Allow and Deny, since test pages are closed); Needs review and Needs you are hidden; cards don't open; Calls rows get their own Cancel ▾, the only press on their tests (Stop and End early aren't available); names are plain text with no hover card; Post a test leaves the header. Every other signed-in page except Payments, Settings and the bell list moves them back here.
 - **Deleted:** every tab logs out.
 
 ### Bell lines that open this page
@@ -373,7 +387,7 @@ From Every page: red field checks, kept drafts ("Not sent yet"), ranges shown ne
 
 **Deliverables (parts)**: up to three.
 
-- Written answers (1–20 questions, each required or optional), a Recording (with think-aloud), Live calls.
+- Written answers (1–20 questions, each required or optional and up to 300 characters, with a counter "N / 300"; the 300 is a DEFAULT), a Recording (with think-aloud), Live calls.
 - Each part is a card with its tick, a price (calls: "up to $ /h"), a Free tick and a Required tick. Required is only a label: it blocks nothing, and shows on the listing, in testers' terms, on their session page and on the developer's tester rows. Free parts are clearly marked before a tester commits.
 - Prices: written and recording $1–$1,000 each, calls $10–$200 an hour, or free. Each field shows its range.
 - A price over $200 needs the tick "I confirm this part pays more than $200." when it's set over $200 or raised from $200 or less to over it.
@@ -381,8 +395,7 @@ From Every page: red field checks, kept drafts ("Not sent yet"), ranges shown ne
 **Who and how long**
 
 - **Spots:** up to the developer's tester limit (10 per test to start, grows with good ratings, at most 50). The limit shows under the field.
-- **How long do new testers have?** 1–90 days after joining.
-- **Open until:** the last day to join.
+- **Open until:** required. It's the last day to join and every tester's deadline: at least 3 and at most 30 days after today. There's no separate "days after joining" field.
 - **Who can join:**
   - Anyone can join: join at once while open with spots; first come, first served.
   - Approved only: testers apply; the developer accepts or declines. A subscriber perk: on the free plan it carries a "Subscribers" tag, and Post is refused: "Approved-only testers need a subscription ($7/month)." with a Payments link (new tab).
@@ -391,7 +404,7 @@ From Every page: red field checks, kept drafts ("Not sent yet"), ranges shown ne
 
 **Optional**
 
-- **NDA:** text testers accept on Join, Apply and Ask to rejoin. The NDA template gets a legal review before launch.
+- **NDA:** its own card, "Keep it confidential? (NDA, optional)", with three points: an NDA stops testers sharing the build or what they saw, and they must accept it before joining; with or without one, the developer can always use the feedback they receive; testers can never show work from a test under an NDA as excerpts on their profile, and without one only with the developer's permission. The text box, up to 1,000 characters ("N / 1,000"): "Leave blank for no NDA. If filled, testers must accept it before joining." Testers accept it on Join, Apply and Ask to rejoin. The preview shows it in a scroll box about 12 lines tall. The NDA template gets a legal review before launch.
 - **Access keys:** one per line; each new tester gets a free one.
 
 All numbers are in Rules.
@@ -416,15 +429,18 @@ All numbers are in Rules.
   [image: Red when you leave the field: required fields empty, a price under $1, spots over the limit.]
 
   [image: Red: a 10-day deadline needs Open until later, and there are fewer keys than spots.]
+
+  Updated: there's no deadline field any more; Open until is required, 3 to 30 days ahead, and is every tester's deadline.
   - A required field left empty.
   - A price outside its range, or over $200 without the tick.
-  - The deadline doesn't leave 3 days before Open until: "Set Open until to Nov 12 or later to allow a 10-day deadline."
+  - Open until missing, or less than 3 or more than 30 days after today.
   - Spots over the limit.
   - Fewer access keys than spots; a key typed twice ("<key> is typed more than once. Each key goes in once."); a key that's too long.
   - A link not starting with https:// ("The build link must start with https://").
   - Above the button: "Fix the N mistakes above…".
 - **Blue, under the button:** "Confirm your email first. We sent a link to <email>." with "Resend the link" under the button.
 - **Blue, under the button, on the free plan:** with an open test already (Open, Full or Paused), Post is refused: "You already have an open test. Subscribe ($7/month) to run several at once." with a link to Payments (new tab). The form keeps what was typed. The same applies when a draft is posted.
+- **Blue, under the button, at 10 open tests** (subscribers): "You have 10 open tests, the most you can have at once. Stop or close one to post another." This covers posting a draft too. The count is checked on the server at the press: if another tab stopped a test meanwhile, the post simply goes through.
 
 ### How it looks in each state
 
@@ -448,7 +464,7 @@ From Every page: the live box, stop-once, red field checks, kept drafts, long li
 - **Access keys** in two boxes:
   - **In use** (read only): keys given to working testers. Keys reported as not working are greyed and crossed out. It follows changes live.
   - **Free:** add keys, or remove them while the free keys still cover the open spots. Free keys go to new testers automatically.
-- **"Changes left: N of 3"** next to the label of each limited field (the steps, NDA, questions, languages and devices), once a tester has joined.
+- **"Changes left: N of 3"** next to the label of each limited field (the steps, NDA, questions, languages, devices, build link, and parts and prices), once anyone is affected (the first join, application or invite).
 - **Save**, faded and doing nothing while nothing changed.
 - **The live box** sits under Save.
 
@@ -457,26 +473,28 @@ From Every page: the live box, stop-once, red field checks, kept drafts, long li
 ### Buttons
 
 - **Save** changes the listing for new testers. Elsewhere:
-  - **Working testers whose own terms change** (work, parts, prices, Required labels, deadline, requirements, NDA) get an offer at the top of their session page, Switch or Keep (Tester session page), and the bell line "<dev> updated the listing: <changes>". A tester whose terms don't change gets no offer. Work already sent keeps its price. A newer Save replaces a waiting offer.
+  - **Working testers whose own terms change** (work, parts, prices, Required labels, requirements, NDA) get an offer at the top of their session page, Switch or Keep (Tester session page), and the bell line "<dev> updated the listing: <changes>". A tester whose terms don't change gets no offer. Work already sent keeps its price. A newer Save replaces a waiting offer.
   - **A changed NDA** is always a new offer, never applied silently.
   - **Earlier questions, answers and NDAs** stay in the tester's Terms history.
-  - **Waiting applications** close when prices, parts, questions, the deadline, devices, languages, the description or the NDA change, or when the test becomes Invite only. The tester is told ("<test>'s listing changed, so your application was closed…" / "<test> is now invite only, so your application was closed.").
-  - **Open invites** are sent again on the new listing ("<dev> updated <test>, so here's a new invite: <terms>").
+  - **Waiting applications** close when prices, parts, questions, devices, languages, the description, the build link or the NDA change, or when the test becomes Invite only. The tester is told ("<test>'s listing changed, so your application was closed. You can apply again on the current listing.", stacked across tests as "3 tests you applied to changed: your applications were closed" / "<test> is now invite only, so your application was closed.").
+  - **Open invites** are sent again on the new listing ("<dev> updated <test>: your invite was sent again on the new listing.", stacked across tests the same way).
   - **Switching to Anyone can join** lets waiting applicants in ("You're in: <test>") or tells them "<test> changed since you applied".
   - **More spots** tells invited testers "A spot opened on <test>…"; filling the test closes applications and keeps invites open.
   - **Title only** changes are info for everyone and never stop a press.
-  - Under Save: "Saved. Offered the new terms to N…". When a tester later Switches or Keeps, the top box shows "Ana switched to the new terms" with "See their contract", which opens the test page at that tester's row in a new tab. The same line, with the same link, also shows in the notice under a pressed button when a press stops once for it.
-- **3 changes per field after the first join.** Once a tester has joined, each of these fields has its own 3 changes: what to do (the steps), the NDA, questions, required languages, and required devices and technology. One Save that changes two of them uses one change of each. Each field shows "Changes left: N of 3" next to its label, and the counts update live when another tab saves. A field at 0 locks on its own, with the note "You've changed the <field> 3 times since testers joined. Contact us in Settings to change it again."; the other fields stay editable. Part prices, parts and the build link aren't limited; changing prices or parts still sends working testers the Switch / Keep offer. Access keys aren't limited either: a key given to a tester stays theirs, so adding keys never changes anyone's terms. An admin's "Allow 3 more" gives every field at 0 three more changes (Administrator console).
+  - Under Save: "Saved. Offered the new terms to N…". When a tester later Switches, the top box shows one quiet line, "Ana switched to the new terms" with "See their contract", which opens the test page at that tester's row in a new tab; several in a day stack into "3 testers switched to the new terms". A Keep tells the developer nothing. Neither stops a press, because work already sent keeps its price.
+- **3 changes per field, counted once anyone is affected.** The count starts when the first tester joins, the first application arrives or the first invite is sent, whichever comes first, and keeps counting even if that applicant later withdraws. Before that, edits are free and nobody is told. From then on each of these 7 fields has its own 3 changes: what to do (the steps), the NDA, questions, required languages, required devices and technology, the build link, and parts and prices (one counter for the part ticks, prices, Required and Free ticks, the live rate and call length). One Save that changes two of them uses one change of each. Each field shows "Changes left: N of 3" next to its label, and the counts update live when another tab saves. A field at 0 locks on its own, with the note "You've changed the <field> 3 times since testers joined. Contact us in Settings to change it again."; the other fields stay editable. Changing parts or prices still sends working testers the Switch / Keep offer. Access keys aren't limited: a key given to a tester stays theirs, so adding keys never changes anyone's terms. An admin's "Allow 3 more" gives every field at 0 three more changes (Administrator console).
 
   [image: After 3 saves that changed the steps, the steps field locks with its note; every other limited field shows its own “Changes left: N of 3”.]
 - **Dates.**
-  - Open until can only move later, before it passes: "Open until can only be extended: it's <date> now." Once passed: "Joining closed on <date> (Open until), so it can't be extended."
+  - Open until is required and can only move later, before it passes, and never more than 30 days after today: "Open until can only be extended: it's <date> now." Once passed: "Joining closed on <date> (Open until), so it can't be extended." Moving it later moves every working tester's deadline with it.
 
     [image: Open until can only move later: an earlier date is red.]
-  - A new deadline applies to new testers. It can lengthen working testers' deadlines but never shorten them. It must leave 3 days before Open until: "Extend Open until to Nov 12 or later to allow a 10-day deadline."
+  - There's no separate deadline field: every tester's deadline is Open until.
 
     [image: A 30-day deadline needs Open until 3 days later: red under both fields.]
-- **Access keys.** A key that's in use, was given to a tester who left, or was reported as not working can't be added again (red). Testers whose key doesn't work never get a new one automatically; the developer assigns one from the yellow box on Developer test page. When such a tester leaves, the key leaves In use; it comes back only if they confirm it works when they rejoin.
+
+    Updated: there's no deadline field any more; every tester's deadline is Open until.
+- **Access keys.** A key that's in use, was given to a tester who left, or was reported as not working can't be added again (red). Testers whose key doesn't work never get a new one automatically: the developer deletes a free key here and sends it to them in a message; the Access keys notice on Developer test page links here. When such a tester leaves, the key leaves In use; it comes back only if they confirm it works when they rejoin.
 
   [image: A key in use can't be added again (red).]
 
@@ -499,6 +517,8 @@ From Every page: the live box, stop-once, red field checks, kept drafts, long li
   [image: You ticked a key to remove; another tab added a spot (blue): now fewer free keys than open spots (red).]
 
   [image: You typed a 40-day deadline; another tab moved Open until later (blue), still too early for it (red).]
+
+  Updated: there's no deadline field any more, so this case can't happen; Open until on its own can still be red and blue at once.
 
   [image: You ticked one key to remove; another tab removed another (blue): the free keys no longer cover the open spots (red).]
 - **Always refused:** "This test was stopped." If an admin stops or pauses the test while it's being edited, Save is refused and the developer goes back to the test page, whose banner names the press that didn't go through.
@@ -533,11 +553,11 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
 
    [image: Overview: title, status, badges, terms and spots, Open until, and the Edit, Alerts, Next round, End early and Stop buttons.]
 2. **Banners** when they apply: the team stopped or paused the test; the test was closed after a pause (with the reason); the stopped line; "<test> closes in …" when under 3 days are left.
-3. **Live box**. It also shows contract news, e.g. "Ana switched to the new terms" with "See their contract" (scrolls to Ana's row with her contract shown), and a new dispute, linking to its Needs you row. When a press stops once for a switch or keep, that line in the notice under the button has the same "See their contract" link.
+3. **Live box**. It also shows quiet lines that never stop a press: "Ana switched to the new terms" with "See their contract" (scrolls to Ana's row with her contract shown; several in a day: "3 testers switched to the new terms"; a Keep shows nothing), and "Ana reported their key doesn't work". A new dispute links to its Needs you row.
 
    [video: Ana (right, phone) sends her answers and switches to the new terms; the developer's live box updates and See their contract scrolls to her row.]
-4. **Yellow keys box** (quiet, never stops a press): how many testers report a key not working, the 3 most recent, "Show N more", and "Assign a free key" on each row. Key rules are in Edit test.
-5. **Needs you**, grouped per person, each with a fold for their sent parts: Pay or Reject for each sent piece (only Pay for an unlisted part); applications (Accept, Decline); rejoin asks (with the time they'd get back); call requests; calls waiting for a length or for Pay; disputes waiting for the developer's side; testers waiting to be rated.
+4. **Access keys** (read only, shown only when the test uses keys; never stops a press): "Free (not given to anyone yet)", the free keys as small chips with the count and the open spots ("4 free · 2 open spots: each new tester gets one."), and "Given", each assigned key with its tester ("KEY-1111 · Ana Silva"); a key reported as not working shows crossed out. Each part sits in its own scroll box about 4 lines tall, and they stack on phones. One line: "If a tester's key doesn't work, delete a free key in Edit and send it to them in a message." ("in Edit" opens Edit's access keys in a new tab). It updates live when keys are added or deleted and when a joining tester is given one. Key rules are in Edit test.
+5. **Needs you**, grouped per person, each with a fold for their sent parts: Pay or Reject for each sent piece (only Pay for an unlisted part); applications (Accept, Decline); rejoin asks (with the time they'd get back); call requests; calls waiting for a length or for Pay; disputes waiting for the developer's side; excerpt requests (Allow, Deny); testers waiting to be rated. A piece's written answers, shown formatted with their attachments and recordings (each downloadable or playable), sit in a scroll box about 16 lines tall when they're longer, with the question labels inside; the Pay box stays under it. A part sent for earlier questions is labelled "Sent for the questions until <date>" and is reviewed at the price it was sent at.
 
    [image: Needs you, grouped per person: Pay or Reject for sent work, a call waiting for its length, a dispute waiting for the developer's side.]
 
@@ -548,9 +568,9 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
 
    [image: Testers: the avatar row with Ana's hover card, and one row per tester with parts sent, pay and their contract.]
    - An avatar row (about 12, then +N). Each hover card shows rating, accepted parts, the profile link and "Chat with <name>".
-   - A scroll box of tester rows with a name search: required and optional parts sent, paid per part and in total, the agreed scope (their current contract, switched or kept), a call summary, Rate, and Extra pay on each sent part.
+   - A scroll box of tester rows with a name search: required and optional parts sent, paid per part and in total, the agreed scope (their current contract, switched or kept), a call summary, Rate, "Pay more" on every paid piece (written answers, recordings and calls, listed or unlisted) until its cap is reached, a "Previous questions and answers" fold with earlier sent sets, and Take down on an excerpt they show from this test. After a Keep the row says "On their terms from <date>".
    - "No longer working (N)" below, each row tagged Left, Ended early, Stopped or Removed.
-7. **Live session**: the rate line; tick testers (each with their terms and "N of 3 booked") or Select all; the request form; waiting requests; booked calls and call sets; Past calls. Calls can be requested with any tester, whether or not a live call is a listed part. Each tester shows "Live call · $X/h" when a call is listed and in their contract, otherwise the label "Not listed"; any part not listed in a tester's contract carries the same label. The unlisted caps ($1000 for written answers or a recording, $200 an hour for a call) are said only when a Pay goes over them.
+7. **Live session**: the rate line; tick testers (each with their terms and "N of 3 booked") or Select all; the request form; waiting requests; booked calls and call sets; Past calls. Calls can be requested with any tester, whether or not a live call is a listed part. Each tester shows "Live call · $X/h" when a call is listed and in their contract, otherwise the label "Not listed"; any part not listed in a tester's contract carries the same label. The unlisted caps ($1000 plus up to $1000 extra for written answers or a recording; $200 an hour for a call, and $1000 for all of one tester's unlisted calls on the test) are said only when a Pay goes over them.
 
    [image: Live session: tick testers, request times, a waiting request, booked calls (Join shows near the start).]
 8. **Invite testers**: three lists, "People you've worked with" (with "In N tests with you", a fold linking those tests), "Suggested" (top 5) and "Find testers" (name search plus device and language ticks); then "Invited" (waiting invites).
@@ -560,7 +580,7 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
    [image: Find testers by name: Dee is ticked; the orange label shows the need they miss.]
 
    [image: Invite anyway: the inline box lists the needs Dee doesn't meet.]
-9. **By question:** each written question with every tester's answer, its time, a "not required" mark and Paid, Rejected or Not reviewed yet.
+9. **By question:** each written question (answers grouped by the exact question text) with every tester's answer, its time, a "not required" mark and Paid, Rejected or Not reviewed yet.
 
 ### Buttons
 
@@ -584,9 +604,9 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
 
 **Needs you**
 
-- **Pay:** the box starts at the listing (or, for a call, the rate × logged minutes); for an unlisted part it starts empty. Every Pay box has an optional note, "Note to <tester> (optional)"; paying a listed part less than the listing makes it required ("Say why you're paying less…"). The tester reads the note with the payment, on their session page and in the bell line. Paying more is extra pay (cap below). Every Pay needs the tick "I understand this payment of $X can't be refunded and is charged now.", naming the exact amount (a changed amount unticks it); over $200 the tick "I confirm this payment is over $200." is needed too. Paying $0 needs no tick. The card is charged at once; nothing shows success before the result. Tester bell: "You were paid for your <part> on <test>"; developer: a receipt. "Paid so far" updates on both sides.
-- **An unlisted part** ("Not listed") has only Pay, no Reject. The box starts empty; Pay is at most $1000 for written answers or a recording and $200 an hour for a call, and Extra pay can add up to the same again. Paying $0 is allowed and closes the row; the tester reads "<dev> paid $0 for this" plus the note. Review reminders come for 14 days after sending, then stop; the row stays until it's paid, even $0.
-- **Reject:** needs a reason the tester reads. Tester bell: "Your <part> on <test> wasn't accepted"; they can dispute it.
+- **Pay:** the box starts at the listing (or, for a call, the rate × logged minutes); for an unlisted part it starts empty. Every Pay box has an optional note, "Note to <tester> (optional)"; paying a listed part less than the listing makes it required ("Say why you're paying less…"). The tester reads the note with the payment, on their session page and in the bell line. Paying more than the listing is extra pay, within the per-piece caps (Rules). After a piece is paid, its row keeps the same box as "Pay more" until the cap is reached, with the same ticks and optional note. Every Pay needs the tick "I understand this payment of $X can't be refunded and is charged now.", naming the exact amount (a changed amount unticks it); over $200 the tick "I confirm this payment is over $200." is needed too. Paying $0 needs no tick. The stop-once check runs first; then the card is charged at once, and nothing shows success before the result. If the bank wants the developer to confirm, its pop-up opens in the page: confirmed, the payment goes through; cancelled or failed, "Your bank didn't confirm the payment, so nothing was charged." and no hold. While the bank's confirmation is pending the piece is locked, and it's never charged twice. Tester bell: "<dev> paid you $X for your <part> on <test>" ("<dev> paid you $X more…" for a Pay more); developer: a receipt. "Paid so far" updates on both sides.
+- **An unlisted part** ("Not listed") has only Pay, no Reject. The box starts empty. Written answers or a recording can be paid up to $1000, plus up to $1000 more as extra pay ($2000 in all); a call up to $200 an hour for its logged minutes with no extra, within $1000 for all of that tester's unlisted calls on the test (the call's box shows "up to $X more for unlisted calls"). Paying $0 is allowed and closes the row; the tester reads "<dev> paid $0 for this" plus the note. Review reminders come for 7 days after sending, then stop; the row stays until it's paid, even $0.
+- **Reject:** needs a reason the tester reads. Tester bell: "Your <part> on <test> wasn't accepted"; they can dispute it. Any Pay can be disputed too, $0 included.
 - **A declined card** starts a payment hold at once: "Your card was declined, so <name> wasn't paid $X for the <part> yet. Your tests are paused until you pay what you owe: open Payments." The tester sees "payment may be delayed". Holds are in Rules.
 - **Accept / Decline an application or rejoin ask:** Accept joins them ("You're in: <test>" or "You're back in <test>: your deadline is <date>."); Decline tells them it wasn't accepted.
 - **Add your side** to a dispute, once. The tester's next dispute press stops once; an admin decides (Administrator console).
@@ -595,7 +615,7 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
 
 **Testers**
 
-- **Extra pay** on each sent part (current and past testers): an amount box, an optional note to the tester and Pay (with the same ticks as Pay), with "Paid so far for this part: $X" and "up to $Y". Unsent parts have none. Over the cap (per piece, in Rules): "This is more than you can pay above the listing (up to $Y).", or "…above the max…" for an unlisted part. Tester bell: "<dev> paid you $X extra for <test>", with the note if one was written. Cap in Rules.
+- **Pay more** on every paid piece (current and past testers; written answers, recordings and calls, listed or unlisted): the same Pay box, with "Paid so far for this part: $X" and "up to $Y", the same ticks and the optional note, until the piece's cap is reached. Unpaid pieces are paid in Needs you. Over the cap (per piece): "This is more than you can pay above the listing (up to $Y).", or "…above the max…" for an unlisted part. Tester bell: "<dev> paid you $X more for your <part> on <test>", with the note if one was written. Caps in Rules.
 - **Chat with <name>** (hover card, row, profile): opens the per-test chat. After a block either way, a suspension or any other refusal: "Unable to chat with this tester."
 
 **Live session**
@@ -618,7 +638,7 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
 
 ### What can stop a press
 
-- **Stop-once** on every button (Stop, End early, Next round, Pay, Reject, Extra pay, call buttons, Invite, Assign a free key) for any unseen change: a tester joined, left, applied, sent or updated work, booked, requested or cancelled a call, switched or kept terms, charged or let go, disputed, said no thanks; the team decided; the test filled; payments went through or failed; your own press in another tab. The changes are listed under the button. On a stopped test every press still allowed stops once the same way: Pay, Reject, Extra pay, a call's length, a dispute's side and Rate.
+- **Stop-once** on every button (Stop, End early, Next round, Pay, Reject, Pay more, call buttons, Invite) for any unseen change: a tester joined, left, applied, sent or updated work, booked, requested or cancelled a call, charged or let go, disputed, said no thanks; the team decided; the test filled; payments went through or failed; a chargeback reversed ("Your bank's chargeback of $X was reversed: $Y refunded to your card.", or "…taken off what you owe."); your own press in another tab. A tester switching terms and a key reported as not working never stop a press, and nor do excerpt requests: Allow, Deny and Take down go through whatever changed. The changes are listed under the button. On a stopped test every press still allowed stops once the same way: Pay, Reject, Pay more, a call's length, a dispute's side and Rate.
 
   [video: Ben (right, phone) sends his answers while the developer presses Pay for Ana; Pay stops once and lists the change, the second press goes ahead.]
 
@@ -634,7 +654,6 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
   - "<name> already charged $X for this."; "<name> let this go: nothing was charged."; "You already paid $X for this."; "You already rejected this."
   - "<test> is full. Add spots to invite more people."; "Joining closed on <date> (Open until), so nobody can be invited."
   - Call lines: "This time isn't available."; clashes ("You already have a call with <name> at <time>."); "You already have 3 requests waiting with <name>…"; "<name> already has 3 booked times with you…"; "This call closed 24 hours after its start: the booked length is used."
-  - Keys: "You have no free keys. Add some in Edit first."; "Every free key is kept for the N open spot(s). Add more keys in Edit first."
 - If the developer and an admin stop the test at the same time, the first wins and the other press is refused.
 - **Subscriber perks:** on the free plan, Invite and Next round stay visible with a small "Subscribers" tag; a press is refused with "Inviting testers needs a subscription ($7/month)." or "Next round needs a subscription ($7/month)." and a Payments link (new tab). Invites already sent stay valid when a subscription ends. A page open at that moment gets "Your subscription ended." as a stop-once change.
 
@@ -645,7 +664,7 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
 - **Paused by the team:** a banner "The team paused this test: it behaves like a stop, and you can only stop it." Only Stop works, and chat with testers is closed. Testers follow the paused-test rules (Rules).
 
   [video: The team pauses the test; the developer's End early is refused and the banner explains.]
-- **Stopped:** the page shows only what still works. Gone: Invite testers, the call-request tools in Live session (Past calls stay), Edit, Stop and End early. Left: the Stopped label and the stopped line, Next round (it starts a new draft from this test), Needs you (Pay, Reject, a call's length, a dispute's side), the Testers panel (rows, Rate, Extra pay), chat, Alerts and the answers.
+- **Stopped:** the page shows only what still works. Gone: Invite testers, the call-request tools in Live session (Past calls stay), Edit, Stop and End early. Left: the Stopped label and the stopped line, Next round (it starts a new draft from this test), Needs you (Pay, Reject, a call's length, a dispute's side), the Testers panel (rows, Rate, Pay more), chat, Alerts and the answers.
 
   [image: Stopped: the Stopped label and the stopped line; only what still works: Needs you, the Testers panel and past calls; Next round stays.]
 - **Stopped by the team:** the page moves to the top of the overview, where the banner "The team stopped this test." stays and names any press that didn't go through. Then the stopped rules apply.
@@ -658,10 +677,9 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
 
 - A tester joined, rejoined or left → that tester's row.
 - An application, rejoin ask, or "N applications wait for your answer" → Needs you.
-- Work sent or updated, "review … within…", "…waited over 14 days…", outside-contract work waiting → that piece in Needs you.
+- Work sent or updated, "review … within…", "…waited over 7 days…", outside-contract work waiting → that piece in Needs you.
 - A dispute filed → its Needs you row; a dispute decided, "<tester> finished… You can rate…" and the rate reminder → the tester's row.
 - Any call line (booked, cancelled, nobody joined, paused, outage, skipped) → that call in Live session.
-- A key not working → the yellow keys box.
 - The team paused, stopped or closed the test, lifted the pause, or "will close later" → the overview banner.
 - Open until heads-up and chat lines → the test page.
 
@@ -724,7 +742,7 @@ From Every page: the live box, long lists.
 ### What's on it
 
 - A title and intro, category chips, and filters: Device, Part, Sort by, Show.
-- **Cards:** product and title, categories, languages and devices needed, spots left, price per part, who can join, Open until, the deadline, Mature and NDA badges, "Invited", "You left this test".
+- **Cards:** product and title, categories, languages and devices needed, spots left, price per part, who can join, Open until (also everyone's deadline), Mature and NDA badges, "Invited", "You left this test".
 - Each card lists every unmet need in amber (3, then "+N more").
 - **Order:** tests needing a device the tester has, then tests open to any device, then the rest; newest first within each.
 
@@ -749,9 +767,9 @@ From Every page: the live box, stop-once, Join anyway, kept drafts, email confir
 
 - "← All tests", the live box, the header card (product, price block, badges).
 - An invitation card with No thanks, if invited.
-- "How it works", "<dev> wants to know" (the questions), "Your deal" (parts, prices, Required labels, deadline), "How <dev> reviews" (the developer's stats).
+- "How it works", "<dev> wants to know" (the questions), "Your deal" (parts, prices, Required labels, and "Your deadline: <date> (in 2 days 5 hours)", which is Open until), "How <dev> reviews" (the developer's stats).
 - A state line when it can't be joined (below).
-- **The join box:** the NDA to accept, then one of Join (Anyone can join), Apply (Approved only), Accept invitation (invited) or Ask to rejoin (left or ended before their deadline).
+- **The join box:** the NDA to accept (in a scroll box about 12 lines tall), then one of Join (Anyone can join), Apply (Approved only), Accept invitation (invited) or Ask to rejoin (left or ended before their deadline).
 - A tester's hover card on the developer's name has "Chat with <name>" (Shared pages).
 
 ### Buttons
@@ -799,39 +817,40 @@ From Every page: the live box, stop-once, pop-ups, kept drafts, long lists, stop
 ### What's on it (top to bottom)
 
 1. **Product and test name.**
-2. **Access key box**, if the test has keys: the key, and "This key doesn't work". After the developer assigns a new one: "The developer gave you a new access key."
+2. **Access key box**, if the test has keys: the key, and "This key doesn't work". A key reported as not working shows crossed out; the developer may send another one in a message.
 3. **Live box:** every change except new terms.
-4. **Switch / Keep offer**, when the developer offers new terms: "<dev> updated the listing: <changes>." with folds for a changed NDA or questions.
-5. **State lines:** why presses are refused (e.g. "You left this test."), the paused line, "<test> closes in …".
+4. **Switch / Keep offer**, when the developer offers new terms: "<dev> updated the listing: <changes>." A changed NDA shows as "Before" and "Offered" in two scroll boxes about 12 lines tall, and changed questions as a list of 3, then "+N more".
+5. **State lines:** why presses are refused (e.g. "You left this test."), the paused banner, "<test> closes in …".
 6. **Header card:** the developer (hover card with "Chat with <name>"), badges (Stopped when stopped), Chat (unread count), the description, the deadline ("Due …", a countdown under 24 hours, "late" after), "Open the product", "<dev> updated the listing since you joined: see it now", the NDA accepted date.
 7. **Stopped line**, when stopped (Every page).
 8. **Rating box** and **rejoin card** when they apply.
 9. **Your agreed scope** and **Terms history** (earlier terms, questions, answers, NDAs, offers and choices).
-10. **Your parts:** each part's Required or Not required, in the contract or not ("Not listed" when not), sent or not, "Paid so far $Y" (with the developer's note, and for a call the rate when one was typed), and status: draft, sent, under review, paid, not accepted, payment delayed. Each part repeats its term at the top ("Written answers: $8 · Required"). Charge or Let it go, and Dispute, sit on the part. A part that isn't listed is paid at the developer's choice (up to $1000, or $200 an hour for a call), can't be rejected and never opens Charge; paid $0, it reads "<dev> paid $0 for this" plus the note.
+10. **Your parts:** each part's Required or Not required, in the contract or not ("Not listed" when not), sent or not, "Paid so far $Y" (with the developer's note, and for a call the rate when one was typed), and status: draft, sent, under review, paid, not accepted, payment delayed. Each part repeats its term at the top ("Written answers: $8 · Required"). Charge or Let it go, and Dispute, sit on the part. A part that isn't listed is paid at the developer's choice (up to $2000 for written answers or a recording; $200 an hour for a call, within $1000 for all their unlisted calls on the test), can't be rejected and never opens Charge; paid $0, it reads "<dev> paid $0 for this" plus the note. Any part the developer reviewed can be disputed. If the developer deleted their account, work still under review reads "<dev> deleted their account, so this can't be paid." A paid written part (above $0) of a test with no NDA has "Show an excerpt on your profile".
 11. **Live session** (the developer's panel, tester side): their rate ("Live call: $40/h"), or "Not listed" when a live call isn't a listed part or isn't in their contract, requests, booked calls, Past calls, and the length the developer logged and why.
-12. **Your recordings** and **The written part.**
+12. **The written part** and **the Recording part.** The written form shows the current questions only, with a fold per previous set below it ("Previous questions and answers (until <date>)", newest first, read-only, at most 3). All its answers together can be up to 50,000 characters ("N / 50,000"), with a small toolbar for Bold, Italic and Code block, and up to 5 attachments (25 MB each: images, PDF, plain text, zip) plus recordings. The Recording part takes up to 5 recordings, 500 MB each, uploaded or recorded on the page with Record (the screen, and the microphone if allowed, with a timer and Stop); each shows a preview, its length and size, and Remove (with a confirm).
 13. **Can't finish?** with Leave.
 
 ### Buttons
 
-- **This key doesn't work:** always goes through. The developer's yellow keys box and bell get it; they may assign a free key.
-- **Switch / Keep:** Switch moves the tester to the new terms (work already sent keeps its price); Keep stays on the current ones. The developer's live box shows "<name> switched to the new terms" or "…kept their current terms".
-- **Send my answers / Send my recording**, then "Send my updated answers / recording": sends the work ("Sent late" after the deadline). Required questions must be answered. A paid part can't be changed ("Your written answers were already paid for, so they can't be changed. Send anything new in the chat."). Recordings: at most 5, 500 MB each. While the test is paused, Send is refused and drafts can still be saved. Bells: "Work sent: …" to the tester; "<name> sent / updated …" to the developer, whose Needs you gets the piece.
-- **Charge / Let it go** on a contract part left unreviewed, once Charge opens (Rules). Charge takes a typed amount up to the listing minus what was paid for that part, with the tick "charge <dev> $X now". Let it go is a confirm pop-up ("Let it go? This closes with nothing more paid."). Works after leaving too, and while the test is paused: during the developer's payment or chargeback hold the charge is recorded and paid when the developer pays what they owe ("Charged $X. Payment may be delayed until the test resumes."). Never for a call outside the tester's contract. The developer sees "<name> charged $X for their <part>" or "<name> let their <part> go: nothing charged" and can no longer Pay or Reject it. A declined charge starts the developer's hold; the tester sees "Payment for your work on <test> may be delayed".
-- **Dispute** a rejected or underpaid contract part, once, with a reason (at least a sentence). The developer's Needs you and bell get it, and admins get "Dispute on <test>: …". Not for work outside the contract or paid at the listing or more.
+- **This key doesn't work:** always goes through. The key shows crossed out in the developer's tester row and in Edit, and their live box gets one quiet line, "Ana reported their key doesn't work" (no bell). They may send another key in a message.
+- **Switch / Keep:** Switch moves the tester to the new terms (work already sent keeps its price); Keep stays on the current ones. The developer's live box shows a quiet "<name> switched to the new terms"; a Keep tells them nothing.
+- **Send my answers / Send my recording**, then "Send my updated answers / recording": sends the work ("Sent late" after the deadline). Required questions must be answered. A paid part can't be changed ("Your written answers were already paid for, so they can't be changed. Send anything new in the chat."). The Recording part's recordings (up to 5) are sent together as one piece; a 6th add is refused ("You can add at most 5 recordings. Remove one first."), and Send while one is still uploading is refused ("A recording is still uploading. Send once it's done."). Until the developer pays or rejects, recordings can be removed or added and sent again. Written answers send the current set of questions and replace the sent version until paid. After a switch to changed questions, the whole earlier set is kept as a previous set, answers to unchanged questions (drafts included) stay filled in, and changed or new questions start empty. While the test is paused, Send is hidden and drafts can still be saved. Bells: "Work sent: …" to the tester; "<name> sent / updated …" to the developer, whose Needs you gets the piece.
+- **Charge / Let it go** on a contract part left unreviewed, once Charge opens (Rules). Charge takes a typed amount up to the listing minus what was paid for that part, with the tick "charge <dev> $X now". Let it go is a confirm pop-up ("Let it go? This closes with nothing more paid."). Works after leaving too, and while the test is paused: during the developer's payment or chargeback hold the charge is recorded and paid when the developer pays what they owe ("Charged $X. Payment may be delayed until the test resumes."). Never for a call outside the tester's contract. The developer sees "<name> charged $X for their <part>" or "<name> let their <part> go: nothing charged" and can no longer Pay or Reject it. A declined charge starts the developer's hold; the tester sees "Payment for your work on <test> may be delayed". If the developer's bank wants them to confirm, the charge waits ("Payment may be delayed") until they confirm within 3 days, or it counts as declined. If the developer deleted their account, Charge still works on parts already open to charging, charged to their saved card.
+- **Dispute** any part the developer reviewed, once (a Pay of any amount, $0 included, or a Reject; an unlisted part's Pay too), with a reason (at least a sentence). The developer's Needs you and bell get it, and admins get "Dispute on <test>: …". Not for a part they settled themselves with Charge or Let it go.
 - **Live session:** Request a time (up to 3 rows, Once, Daily or Weekly with 2–8 calls or Forever, one length), Accept, Decline or Withdraw requests, Join (10 minutes before to 30 after), Add to calendar, Cancel ▾ (reason required under 24 hours), cancel the remaining calls of a set, Report a problem (No-show, Late) after the start. Calls can be requested whether or not a live call is a listed part. The developer is told each time.
 - **Leave** (confirm pop-up "Are you sure you want to leave “<test>”?"): sent work is still reviewed and paid; unsent parts close with no pay; calls ahead are cancelled; the page stays, with live updates. The developer: "<name> left <test>". They can ask to rejoin while the test is open.
 - **Ask to rejoin** (rejoin card): after leaving or being ended early, before the deadline, never after a stop or rating; the developer accepts and the tester comes back on the current listing with the time they had left (Tester dashboard, Find tests and the join page).
 - **Rate and finish** (confirm pop-up while still working; a plain Rate otherwise): 1–5 stars and an optional comment. Open once everything sent is decided or past the point where Charge opens, and no dispute is open. The warning lists unsent contract parts (required ones marked) and that calls ahead are cancelled. Rating ends their part; no rejoin afterwards; Charge, Let it go and Dispute stay. The developer: "<name> finished <test>. You can rate them for 14 days."
-- **Chat** opens the per-test chat, closed both ways while the test is paused (Shared pages). **Block** and **Report** the developer are on the developer's profile.
+- **Chat** opens the per-test chat, closed both ways while the test is paused, when its message box is hidden (Shared pages). **Block** and **Report** the developer are on the developer's profile.
+- **Show an excerpt on your profile** (on a written part the developer paid for, above $0, on a test with no NDA): pick one answer and trim it to 10–500 characters, shown as a plain quote with formatting stripped; "Don't name the product" is ticked by default. The developer allows or denies it, and the decision comes as a bell line only. At most 3 shown or pending ("You can show at most 3 excerpts. Remove one first."), and one pending request per part. Requests never stop once. If the test now has an NDA, the button is hidden, and a press from an older page is refused with "This test now has an NDA, so its work can't be shown as an excerpt."
 
 ### What can stop a press
 
 - **Stop-once** on every button for: new terms ("<dev> offered new terms: <changes>"; the page scrolls up to the offer; "Press again to send under your current terms, or switch first."); the developer paid or rejected your work; call changes (requested, withdrawn, declined, accepted, booked, cancelled, "The call time <time> is no longer available"); listing info changes; a delayed payment or its arrival; the team decided your dispute; the developer added their side; your own press in another tab. Spots and Open until never stop here; a title change is info only. "This key doesn't work" never stops. On a stopped or paused test every press still allowed stops once the same way: Charge, Let it go, Dispute, Rate, Leave and Cancel call.
 - **Always refused** (blue, under the button):
   - "You left this test."; "You rated this test, so your part is finished."; "<dev> stopped the test on <date>. Work you sent is still reviewed."; "This test ended on <date>. Work you sent is still reviewed."; "<dev> ended your session early on <date>."; "Your session on <test> ended." (after a block); "This test closed on <date>."
-  - Charge: "<dev> paid $X for this meanwhile." / "<dev> rejected this meanwhile."; "You can choose once 14 days have passed since you sent it and the test's Open until has passed…"; "This part is already paid in full."
-  - Dispute: "You already disputed this payment. A part can be disputed once."; "This wasn't in your contract, so the developer's amount is final."; "This part was paid the listing amount or more, so there's nothing to dispute."
+  - Charge: "<dev> paid $X for this meanwhile." / "<dev> rejected this meanwhile."; "You can choose once 7 days have passed since you sent it and the test's Open until has passed…"; "This part is already paid in full."; "A payment for this is being confirmed right now."
+  - Dispute: "You already disputed this payment. A part can be disputed once."; "You settled this part yourself (Charge or Let it go), so there's no developer decision to dispute."
   - Rate: "Rating opens once the developer has reviewed everything you sent…"; "Rating opens once the team has decided the open dispute."
   - Calls: "This time is no longer free."; "You already have 3 booked times in this test."; the Join refusals ("This call was cancelled.", "You can join from <time>.", "This call is over.").
 - The stop and work-ended lines also appear in the live box, and the Switch / Keep box disappears.
@@ -839,9 +858,9 @@ From Every page: the live box, stop-once, pop-ups, kept drafts, long lists, stop
 ### How it looks in each state
 
 - **Open, working:** as above.
-- **Paused** (the developer is on any hold or suspension, or the team paused this test): a paused line that says what still works, and "Payment for your work may be delayed." Send is refused ("This test is paused right now. You can send this once it resumes."), but drafts can still be written and saved. Dispute, Charge or Let it go, Rate and Leave work, and booked calls can be cancelled. Chat is closed both ways ("Chat is paused while the test is paused."). Call requests are hidden and calls can't be joined. When the pause lifts, the deadline moves later by the length of the pause.
+- **Paused** (the developer is on any hold or suspension, or the team paused this test): what doesn't work right now is hidden: Send, the call-request tools, Join call and chat's message box (the server still refuses them). A blue banner at the top lists what still works, built from what is actually available, e.g. "This test is paused right now. For now you can save drafts of your parts, charge or let go of work left unreviewed, dispute, rate, leave the test, and cancel booked calls. Sending work, requesting calls and chat come back when it resumes." When their deadline moves with pauses, it adds "Your deadline is paused too: it moves later by however long the pause lasts." Payment for their work may be delayed. When the pause lifts, the deadline moves later by the length of the pause.
 - **Calls during a pause:** calls starting within 3 days are cancelled with no fault ("Your call on <day> was cancelled because the test is paused."); later ones stay booked (Rules).
-- **Stopped or closed:** the page shows only what still works. Send and the call-request tools are hidden. It shows the live-box line, the Stopped label and the still-allowed line, their agreed scope, every part with its status (sent, under review, paid with the amount, not accepted, payment delayed), the work they sent (readable) and Terms history. Charge or Let it go, Dispute, Rate, Leave (if still in) and chat work; other presses from an old page are refused; the offer disappears. A paused test is different: it can resume, so Send stays visible and is refused.
+- **Stopped or closed:** the page shows only what still works. Send and the call-request tools are hidden. It shows the live-box line, the Stopped label and the still-allowed line, their agreed scope, every part with its status (sent, under review, paid with the amount, not accepted, payment delayed), the work they sent (readable) and Terms history. Charge or Let it go, Dispute, Rate, Leave (if still in) and chat work; other presses from an old page are refused; the offer disappears. A paused test hides what doesn't work too, under its banner (above).
 - **The tester left, was ended early or rated:** the page shows the same read-only view as a stopped test, with the matching line; the rejoin card when it applies.
 - **The tester is suspended:** they were removed from the test, and the page is closed: opening it moves them to the dashboard top. A tester whose developer is suspended or on hold keeps this page, with the paused rules above.
 
@@ -849,8 +868,7 @@ From Every page: the live box, stop-once, pop-ups, kept drafts, long lists, stop
 
 - "You're in…", "You're back in…", "<test> is running again", "<test> was stopped", "…ended early", "<test> ended", "Your session on <test> ended.", Open until heads-up, chat → the top.
 - "<dev> updated the listing: …" → the Switch / Keep offer.
-- "You have a new access key…" → the key box.
-- "Work sent…", "You were paid…", "…wasn't accepted", "…is delayed…", "<dev> paid $X for your <part>", "…paid you $X extra…", "Your dispute … was decided", "…charge $X or let it go" and its reminders → that part.
+- "Work sent…", "<dev> paid you $X…", "…paid you $X more…", "…wasn't accepted", "…is delayed…", "<dev> paid $X for your <part>", "Your dispute … was decided", "…charge $X or let it go" and its reminders → that part.
 - "Rate <dev>…" and its reminders → the rating box.
 - Every call line → that call.
 
@@ -871,8 +889,8 @@ Pages both sides use. From Every page: notices, the live box, kept drafts, and t
 ### What's on them
 
 - **Developer profile** (as testers see it): "Posting tests since", Pays on average, Typical review, Rating ("4.6 ★ (12 ratings)"), comments without the rater's name, Open tests.
-- **Tester profile** (as developers see it): "Tester since", Accepted parts ("N of M sent · N sessions with accepted work"), Rating, About (bio, devices, languages), "Chat with <name>".
-- **Hover cards** on names: the Testers-panel hover card (developer side) and testers' hover cards on a developer's name. Each has "Chat with <name>".
+- **Tester profile** (as developers see it): "Tester since", Accepted parts ("N of M sent · N sessions with accepted work"), Rating, About (bio, devices, languages), up to 3 shown excerpts (plain quotes; the product is named only if the tester unticked "Don't name the product"), "Chat with <name>".
+- **Hover cards** on names: the Testers-panel hover card (developer side) and testers' hover cards on a developer's name. Each has "Chat with <name>", and a tester's card also shows their excerpts (up to 3). Excerpts from a test that now has an NDA are hidden from profiles and hover cards, and come back if the NDA is removed.
 - **Admins** also see admin-only boxes on profiles (Administrator console).
 - **During a hold or suspension** profiles are closed: a suspended tester, or a developer on hold or suspended, who opens one moves to their dashboard top.
 
@@ -891,6 +909,7 @@ Pages both sides use. From Every page: notices, the live box, kept drafts, and t
 
 - **Developer:** "Your developer profile" with "See it as testers do", name, the tester-limit card ("Can take up to N testers per test · Next: +10% after N more ratings"), and their ratings.
 - **Tester:** "Your tester profile" with "How developers see you", name, bio, devices and languages (at least one of each), and their ratings.
+- **Excerpts** (tester): their profile and Settings list their excerpts, pending, shown or denied, each with Remove (which never stops once); one from a test that now has an NDA is marked "Hidden while <test> has an NDA". A suspended tester can still Remove from Settings but can't make new requests. Blocks, holds and suspensions don't affect excerpts.
 - Names need at least 1 character. Saving changes what others see at once; a tester's new device or language updates open Join anyway and Invite anyway boxes.
 - Closed during a hold or suspension.
 
@@ -903,11 +922,11 @@ Pages both sides use. From Every page: notices, the live box, kept drafts, and t
   - "Pay already sent to your Stripe account stays there. Your Stripe account is separate from Playtest: you can still sign in to Stripe and withdraw it."
   - "$X is waiting for your payout setup. Finish it before deleting, or it can't reach you." with a "Set up payouts" link (only when some is waiting).
   - Delayed payments still reach their Stripe account when the developer pays, if payout setup is finished.
-  - "N parts you sent aren't paid yet (up to $X). After deleting, they can't be paid, charged or disputed." This counts work under review, parts where Charge is open, and open disputes.
+  - "Work you already sent can still be paid by the developer, to your Stripe account if it's set up. After deleting, you can't charge for it or dispute it."
   - "You leave every test you're in. Calls ahead are cancelled, and your invites and applications are cancelled. Open disputes are withdrawn."
   - "Your chats close. The ratings you gave and got stay."
   - "You can't sign in again, and this can't be undone."
-- **Deleting as a developer** is refused while sent work waits for Pay or Reject (parts where Charge is open included), a dispute is open, or a payment or chargeback hold is on. The Delete account section lists each one with a link, and the refusal reads "Pay or reject the work waiting for you first: <list>." Once none is left, deletion works as above; since nothing is left under review, Charge never opens later. For a subscriber the warning adds "Your subscription ends now, with no refund for the rest of the month."
+- **Deleting as a developer** always works. The warning lists, with counts, work waiting for review, parts testers can still charge, and open disputes, then: "Testers can still charge for parts already open to charging. Work you haven't reviewed can't be charged after you delete." What they owe stays owed. For a subscriber it adds "Your subscription ends now, with no refund for the rest of the month."
 - During a hold or suspension Settings stays open with Contact us, the email setting and Delete account; the profile editor and profile links are hidden.
 
 ## Notifications
@@ -919,7 +938,7 @@ Pages both sides use. From Every page: notices, the live box, kept drafts, and t
 ## Messages and chat
 
 - One chat per tester per test, only between the developer and testers who are or were in the test. Unread counts show on the Chat buttons.
-- Closed for a suspended tester and for a developer on hold or suspended: Messages and chat move them to the dashboard top. While a test is paused, its chat is closed both ways; testers see "Chat is paused while the test is paused." After a block, or when an account is deleted: "This chat is closed."
+- Closed for a suspended tester and for a developer on hold or suspended: Messages and chat move them to the dashboard top. While a test is paused, its chat is closed both ways, and the tester's message box is hidden. After a block, or when an account is deleted: "This chat is closed."
 - Each message reaches the other side's bell: "<name> · <test>: <first words>".
 
 ## Payments
@@ -927,8 +946,10 @@ Pages both sides use. From Every page: notices, the live box, kept drafts, and t
 ### What's on it
 
 - **Developer:** "Your card" (add or change it in Stripe) and "What you've paid" (receipts and history, paid so far per part). Pay and Reject are not here: they are in each test's Needs you, linked from the dashboard's Needs review.
-  - **During a payment hold only:** "Pay what you owe" with the exact amount. It pays exactly what it shows. More declines during the hold add to it, and so do testers' charges and disputes decided for them during the hold.
+  - **During a payment hold only:** "Pay what you owe" with the exact amount. It pays exactly what it shows. More declines during the hold add to it, and so do testers' charges and disputes decided for them during the hold. It updates live (about every 20 seconds) and disappears when nothing is owed. A chargeback's line reads "Your bank reversed a $X payment: $X + $15 chargeback fee". Automatic retries show "Last try: <date> · next try: <date>", or "No more automatic tries: press Pay what you owe".
   - **During a chargeback hold:** the three steps, each ✓ or ✗: verify a card with 3D Secure, pay what is owed, the team's Approve. "Verify a card" starts the check.
+  - **Waiting for your confirmation:** payments the bank wants confirmed (made while the developer wasn't there), each with Confirm, by the date in the bell line; after 3 days one counts as declined.
+  - **Refunds:** a chargeback the platform won gives a receipt line, "Refund: your bank's chargeback of $X was reversed".
 - **Subscription · $7/month** (developers; the plans are in Rules):
   - Not subscribed: the perks list and "Subscribe for $7/month", which needs a saved card.
   - Subscribed: active since, renews on, and "Cancel subscription".
@@ -941,7 +962,7 @@ Pages both sides use. From Every page: notices, the live box, kept drafts, and t
 
 ### Buttons and what can stop them
 
-- **Pay what you owe:** pays every owed charge. If another payment failed meanwhile, or the amount changed, it stops once: "What you owe changed: now $X. Press again to pay $X." When everything is paid the hold lifts at once ("Your tests are running again"; testers: "<test> is running again"), and payments that were waiting are charged; testers are paid the charges that were added for them. From the 4th hold on, admins must Approve first ("Hold lift waiting…"). Holds are in Rules.
+- **Pay what you owe:** pays every owed charge. It stops once for every change (another decline, a chargeback, a tester's Charge, a reversed chargeback, a payment in another tab): "What you owe changed: now $X. Press again to pay $X." When nothing is owed, the server refuses it, so another tab's payment is never charged twice. If the bank wants to confirm, its pop-up opens in the page; cancelled or failed: "Your bank didn't confirm the payment, so nothing was charged." (no hold). When everything is paid the hold lifts at once ("Your tests are running again"; testers: "<test> is running again"; while a suspension continues: "Your payment went through. Your tests stay paused while your account is suspended."), and payments that were waiting are charged; testers are paid the charges that were added for them. From the 4th hold on, admins must Approve first ("Hold lift waiting…"). Holds are in Rules.
 - **Verify a card:** the 3D Secure check for a chargeback hold.
 
 ### Bell lines that open this page
@@ -986,7 +1007,7 @@ From Every page: the bell (admin lines and the "Reported more than 3 times" labe
 
 Admin buttons have no confirm pop-up; each shows "Done." or the refusal.
 
-- **Decide a dispute:** the row shows the listing, paid for this piece, paid for this part so far, and the allowed range (from what was paid up to the listing minus what was paid on other pieces). Enter the total pay; blank keeps it. The decision and reason are recorded; both sides are told ("…was decided"); a raise is charged at once; during a payment or chargeback hold it is added to what the developer owes and paid to the tester when they pay; during a suspension with no hold it is charged at once, and a decline starts a payment hold.
+- **Decide a dispute:** the row shows the listing, paid for this piece, paid for this part so far, and the allowed range (from what was paid up to the listing minus what was paid on other pieces). Enter the total pay; blank keeps it. Any part the developer reviewed can be disputed, unlisted ones too: for an unlisted part the range runs up to its cap ($1000 for a written or recording piece, $200 an hour × logged minutes for a call) minus what was already paid. The decision and reason are recorded; both sides are told ("…was decided"); a raise is charged at once; during a payment or chargeback hold it is added to what the developer owes and paid to the tester when they pay; during a suspension with no hold it is charged at once, and a decline starts a payment hold.
 - **Suspend** (a reason is required; Preview shows the effects first):
   - a developer: all their tests pause; invites and applications wait; calls within 3 days are cancelled with no fault; they get "Your account is paused".
   - a tester: removed from every test (developers get "<name> left <test>"); pay for their sent work is still charged and their share is held.
@@ -998,7 +1019,7 @@ Admin buttons have no confirm pop-up; each shows "Done." or the refusal.
 - **Approve** a lift or a chargeback hold. A chargeback Approve is refused until the card is verified and what's owed is paid ("Not yet: the card isn't verified and $X is still owed."). The developer gets "The team approved lifting your hold", or "Your tests are running again" if that lifts it.
 - **Release / Refund** a held tester share; **Send** a waiting payout.
 - **Allow 3 more** for a test: every limited field at 0 gets 3 more changes (Edit test).
-- **Free during launch** (admin settings): "Free for everyone until <date>". Until then every developer has the subscription perks without paying; with no date set, it's free with no end. A date less than 30 days away is refused. Every developer is told 30 days and 7 days before the date, by bell and by email even with email Off. Moving the date later sends a new notice ("…now from <date>"); moving it earlier keeps the 30-day minimum and sends a new notice; clearing it sends "The extras stay free for now."
+- **Free during launch** (Settings, read only): "Free during launch: free for everyone until <date>" (or "…ended on <date>", or "free for everyone, no end date"), with "Set by FREE_UNTIL in the server configuration (at least 30 days ahead). Every developer is told 30 days and 7 days before (even with email Off)." Admins can't change it in the console.
 
 ### What can stop a press
 
@@ -1028,28 +1049,33 @@ The rules several pages share, with every number, cap and timer. How pages show 
 ### Test lifecycle and timers
 
 - **States:** Draft (a next round not opened yet; it opens in Post a test, not as a test page), Open, Paused (an admin pause or the developer's hold or suspension; nothing new can start; records kept), Stopped, Closed (after a long pause).
-- **A tester's deadline** starts when they join. Changing the default later never shortens a working tester's deadline. It's a guide: late work is accepted and labelled "Sent late".
-- **Open until** is the last day to join. It can only move later, and only before it passes. The deadline must leave 3 days before Open until.
-- **Charge opens** on unreviewed contract work at the later of 14 days after sending and the test's Open until. A stopped or closed test still waits for Open until. With no Open until, it opens when the test stops or closes or the tester's work ends (left, deadline passed, ended early). Rating, the "Charge or cancel" box and the refusals all use this same point. Nothing is charged automatically.
+- **A tester's deadline** is the test's Open until, the same for everyone, with no extension for late joiners. When Edit moves Open until later, every working tester's deadline moves with it. It's a guide: late work is accepted and labelled "Sent late".
+- **Open until** is required: the last day to join, at least 3 and at most 30 days after today on Post and Edit. It can only move later, only before it passes, and within 30 days of today; a pause lifting can still push it later than that.
+- **Charge opens** on unreviewed contract work at the later of 7 days after sending and the test's Open until, so the developer always has at least a week. A stopped or closed test still waits for Open until. With no Open until, it opens when the test stops or closes or the tester's work ends (left, deadline passed, ended early). Rating, the "Charge or cancel" box and the refusals all use this same point. Nothing is charged automatically. After a developer deletes their account, work still under review never opens Charge.
 - **Paused tests close after 7 days**, whatever the cause, unless an admin presses Extend or Close now. A paused test has one closing clock: 7 days from when it was first paused. A second cause starting doesn't restart or extend it, and neither does one cause lifting while another remains. The card shows every reason, e.g. "Paused: payment hold · paused by the team", and the daily paused reminder uses that one date. Closing works like a Stop: testers read "ended" with no reason, and the developer gets the reason by bell and a banner. Drafts never close.
 - **Pausing and resuming** moves every deadline and timer on by the length of the pause. When any pause lifts (a hold is paid off, an account is reinstated, or the team lifts its pause), every working tester's deadline and the test's Open until move later by that length.
 - **Outages:** with outage checks on, a gap over 15 minutes moves every running timer later and cancels calls inside it with no fault.
 
 ### Money
 
-- **Pay:** one box per piece. It starts at the listing (or, for a call, the rate × logged minutes); for an unlisted part it starts empty. The developer can pay less (with a reason) or more (extra pay). Every Pay box, Extra pay included, has an optional note, "Note to <tester> (optional)"; paying a listed part below the listing makes it required ("Say why you're paying less…"). The tester reads the note with the payment, on their session page and in the bell line. Reject needs a reason. The card is charged at once and nothing shows success before the result. The split is 80% to the tester, 20% to the platform.
-- **When Pay or Reject works:** until the tester presses Charge or Let it go, including after Open until, after a Stop and after a pause closure. Never during a hold or suspension.
-- **Over $200:** setting a part price over $200 needs "I confirm this part pays more than $200." Every Pay and Extra pay needs the tick "I understand this payment of $X can't be refunded and is charged now.", naming the exact amount (a changed amount unticks it); over $200 the tick "I confirm this payment is over $200." is needed too. Paying $0 needs no tick. There is no 3D Secure check on Pay.
-- **Any declined payment starts a payment hold at once:** a part Pay, the tester's Charge, a call charge or extra pay. There are no retries and no grace days. A declined subscription renewal is the one exception: it lapses with no hold (Plans and the subscription, below). More declines during the hold add to "Pay what you owe". Paying it all lifts the hold at once (from the 4th hold on, after an admin's Approve).
-- **Chargebacks:** a chargeback starts a chargeback hold with three steps: verify a card with 3D Secure, pay what is owed, then an admin's Approve. Paying alone never lifts it. A chargeback during a payment hold turns it into a chargeback hold. Every further chargeback adds to what is owed; a new chargeback clears an earlier card check.
+- **Pay:** one box per piece. It starts at the listing (or, for a call, the rate × logged minutes); for an unlisted part it starts empty. The developer can pay less (with a reason) or more (extra pay, within the caps below); after a piece is paid, its row keeps the same box as "Pay more" until the cap is reached. Every Pay box has an optional note, "Note to <tester> (optional)"; paying a listed part below the listing makes it required ("Say why you're paying less…"). The tester reads the note with the payment, on their session page and in the bell line. Reject needs a reason. The card is charged at once and nothing shows success before the result. The split is 80% to the tester, 20% to the platform.
+- **When Pay or Reject works:** until the tester presses Charge or Let it go, including after Open until, after a Stop, after a pause closure, and after the tester deleted their account (Pay reaches their Stripe account if their payout account was connected; if not, those rows leave Needs you with "<name> deleted their account before setting up payouts, so this can't be paid.", a DEFAULT). Never during a hold or suspension.
+- **Over $200:** setting a part price over $200 needs "I confirm this part pays more than $200." Every Pay and Pay more needs the tick "I understand this payment of $X can't be refunded and is charged now.", naming the exact amount (a changed amount unticks it); over $200 the tick "I confirm this payment is over $200." is needed too. Paying $0 needs no tick. There is no 3D Secure check on Pay.
+- **Any declined payment starts a payment hold at once:** a part Pay, the tester's Charge, a call charge or extra pay. There are no grace days, but what is owed is retried during the hold (below). A bank asking to confirm a payment isn't a decline (below). A declined subscription renewal is the one exception: it lapses with no hold (Plans and the subscription, below). More declines during the hold add to "Pay what you owe". Paying it all lifts the hold at once (from the 4th hold on, after an admin's Approve).
+- **Chargebacks:** a chargeback starts a chargeback hold with three steps: verify a card with 3D Secure, pay what is owed, then an admin's Approve. Paying alone never lifts it. A chargeback during a payment hold turns it into a chargeback hold. Every further chargeback adds to what is owed; a new chargeback clears an earlier card check. Each chargeback also adds a $15 chargeback fee ("Your bank reversed a $X payment: $X + $15 chargeback fee"). When the platform wins a chargeback, its amount and fee come off what is owed, or are refunded to the card if already paid (receipt: "Refund: your bank's chargeback of $X was reversed"); if that was all that was owed, the hold lifts as usual (from the 4th hold on, after Approve).
 - **Hold count:** the first 3 holds lift as soon as the developer pays. From the 4th hold on, an admin must Approve the lift (Lifts on Administrator console); the developer's box says the team will review after they pay.
 - **Charge cap:** the listing minus what was already paid for that part.
 - **Charge during a pause:** during a payment or chargeback hold, a tester's Charge (and a dispute decided for the tester) goes through as their choice but isn't charged yet: it is added to the developer's "Pay what you owe", and the tester is paid when the developer pays. The tester sees "Charged $X. Payment may be delayed until the test resumes." During an admin suspension with no hold, a Charge, or a dispute decided for the tester, is charged at once; if it's declined, a payment hold starts and the amount is added to what is owed.
-- **Dispute range:** from what this piece was paid up to the listing minus what was paid on other pieces. An admin decision can only raise pay. Each part can be disputed once; the developer adds their side once.
-- **Extra pay cap:** counted per piece, across its Pay and every Extra pay on it. Extra pay is everything paid above the base: the listing for a listed part, or the max for an unlisted one. The max is $1000 for written answers or a recording, and $200 an hour × logged minutes for a call. Unlisted part: the base Pay is at most the max, and extra pay can add up to 100% of the max on top (a written piece can total $2000; a 30-minute call $100 + $100). Listed part: extra pay can add up to 100% of the listing, but never more than the max (a $20 written listing allows $20 extra; a $50/h call allows $50/h × minutes extra). Blocked: "This is more than you can pay above the listing (up to $Y).", or "…above the max…" for an unlisted part.
-- **Calls that aren't a listed part:** either side can request a call even when a live call isn't a listed part of the test or isn't in that tester's contract. A call or any other part that isn't listed in the tester's contract carries the label "Not listed" on both sides. Pay for such a call is up to the developer: at most $200 an hour for the logged minutes, plus extra pay up to the same again (Extra pay cap above); the cap is said only when a Pay goes over it (the blocked line above). The Pay box and its rate start empty. Charge and Let it go never open for a call outside the tester's contract.
+- **Dispute range:** from what this piece was paid up to the listing minus what was paid on other pieces (for an unlisted part, up to its cap minus what was already paid). An admin decision can only raise pay. Any part the developer reviewed can be disputed: a Pay of any amount ($0 included) or a Reject, unlisted parts too; a part the tester settled with Charge or Let it go can't. Each part can be disputed once; the developer adds their side once.
+- **Extra pay cap:** counted per piece, across its Pay and every Pay more on it. Extra pay is everything paid above the base: the listing for a listed part, or the max for an unlisted one. The max is $1000 for written answers or a recording, and $200 an hour × logged minutes for a call. Unlisted written answers or a recording: the base Pay is at most $1000, and extra pay can add up to $1000 more ($2000 in all). Unlisted call: at most $200 an hour for its logged minutes, with no extra, and all of one tester's unlisted calls on a test together at most $1000 (5 hours at $200/h reaches it); the call's Pay box shows "up to $X more for unlisted calls". Listed part: extra pay can add up to 100% of the listing, but never more than the max (a $20 written listing allows $20 extra; a $50/h listed call allows $50/h × minutes extra, per call). Blocked: "This is more than you can pay above the listing (up to $Y).", or "…above the max…" for an unlisted part.
+- **Calls that aren't a listed part:** either side can request a call even when a live call isn't a listed part of the test or isn't in that tester's contract. A call or any other part that isn't listed in the tester's contract carries the label "Not listed" on both sides. Pay for such a call is up to the developer: at most $200 an hour for the logged minutes, with no extra, and $1000 in total for that tester's unlisted calls on the test; the cap is said only when a Pay goes over it (the blocked line above). The Pay box and its rate start empty. Charge and Let it go never open for a call outside the tester's contract.
 - **Paying for a call:** the developer logs the length first. The call's Pay box has a "Rate ($/h)" field: typing a rate fills the amount with rate × logged minutes, rounded to the cent; typing an amount clears the rate. A listed call's rate starts at the contract rate; an unlisted call's starts empty and can't go over $200/h. The tester sees the amount and, when one was typed, the rate.
-- **Unlisted parts in Needs you** have only Pay, no Reject. Paying $0 is allowed and closes the row; the tester reads "<dev> paid $0 for this" plus the note. Charge or Let it go never opens for them. The developer gets review reminders for 14 days after sending, then no more; the row stays until it's paid, even $0.
+- **Unlisted parts in Needs you** have only Pay, no Reject. Paying $0 is allowed and closes the row; the tester reads "<dev> paid $0 for this" plus the note. Charge or Let it go never opens for them. The developer gets review reminders for 7 days after sending, then no more; the row stays until it's paid, even $0.
+- **Your bank wants to confirm:** a bank's request to confirm a payment isn't a decline. On the developer's own press (Pay, Pay more, Pay what you owe, Subscribe, the chargeback steps) the stop-once check runs first, then the bank's pop-up opens in the page: confirmed, it goes through; cancelled or failed, "Your bank didn't confirm the payment, so nothing was charged." and no hold. While the confirmation is pending the piece is locked: a tester's Charge or Let it go on it is refused ("A payment for this is being confirmed right now.") until the bank confirms, refuses or times out (the pop-up is closed, or after 15 minutes). A charge made while the developer isn't there (a tester's Charge, a dispute decision, a retry, a renewal) waits as "needs your confirmation": they're asked to Confirm it in Payments within 3 days, or it counts as declined (a payment hold for a charge, a lapse for a renewal), and the tester sees "Payment may be delayed". A piece is never charged twice.
+- **Retries during a hold:** while a payment hold or chargeback hold lasts, what is owed is retried on the saved card once a day, at most 7 tries per hold, and at once when a new card is saved. A success pays the lines it covers (open pages stop once) and the developer gets "We charged your card $X for what you owed."; a payment hold with nothing left owed lifts as if they had pressed Pay (from the 4th hold on, after Approve); a chargeback hold still needs the card check and Approve. A failed retry sends no bell; Payments shows "Last try: <date> · next try: <date>", or "No more automatic tries: press Pay what you owe".
+- **Paying while suspended:** a payment never lifts an admin suspension. When what is owed is paid (or a chargeback hold lifts) while one continues, the developer gets "Your payment went through. Your tests stay paused while your account is suspended." (bell and email, even with email Off); "Your tests are running again" goes out only when nothing pauses their tests any more.
+- **Pay what you owe** updates live (about every 20 seconds), and the server refuses it when nothing is owed, so a payment from another tab is never charged twice.
+- **A deleted developer's card:** parts already open to Charge when they deleted stay open and charge their saved card, and so does a dispute decided for the tester. A decline leaves the payment delayed for the tester and listed for admins; there's no account left to hold, and the platform never covers it. What they owe stays owed.
 - **Prices:** written and recording $1–$1,000 each, calls $10–$200 an hour, or free. The smallest charge is $0.50; Stripe's largest is $999,999.99.
 - **A suspended tester's pay** is still charged; their share is held until they are reinstated. If they never are, an admin refunds or releases it.
 - **Wording for testers:** "paused" and "delayed" only.
@@ -1057,7 +1083,7 @@ The rules several pages share, with every number, cap and timer. How pages show 
 ### Plans and the subscription
 
 - **Free plan (every developer):** one open test at a time. A test counts as open while it is Open, Full or Paused; drafts, stopped and closed tests don't count.
-- **Subscription, $7 a month,** adds: several open tests at once, Approved-only testers (applications), Next round, and Invite testers.
+- **Subscription, $7 a month,** adds: up to 10 open tests at once (an 11th is refused: "You have 10 open tests, the most you can have at once. Stop or close one to post another."; the count is checked on the server at the press), Approved-only testers (applications), Next round, and Invite testers.
 - Testers never pay and never see any of this. The 20% platform share on payments is unchanged.
 - **Billing:** monthly from the sign-up day; a sign-up on the 31st renews on the last day of shorter months. Cancel any time: the subscription lasts until the end of the paid month, with no refunds. Each charge gets a receipt line on Payments.
 - **On the free plan** the perk buttons stay visible with a small "Subscribers" tag, and a press is refused with "<Perk> needs a subscription ($7/month)." and a Payments link (new tab). The perks are named "Inviting testers", "Next round", "Approved-only testers" and "Running several open tests" (Post a test, Edit test, Developer test page).
@@ -1065,14 +1091,14 @@ The rules several pages share, with every number, cap and timer. How pages show 
 - **A declined renewal lapses, with no hold.** The payment is retried for about a week, and the perks continue meanwhile. After the last retry fails, the subscription ends and the developer is on the free plan. Testers are never affected. A chargeback on a subscription payment starts a chargeback hold like any chargeback, and the amount is added to what is owed.
 - **During a payment hold, a chargeback hold or a suspension** billing pauses: no renewal is charged. The paid days left resume when it lifts, so the next renewal moves later by the time it was paused. The developer can still cancel from Payments, and Keep my subscription still works because it charges nothing; Subscribe is refused: "You can subscribe once your account is active again."
 - **Deleting the account**, or the team deleting it, ends the subscription at once with no refund.
-- **Free during launch:** until the date an admin sets, every developer has the perks without paying; with no date set, it's free with no end. Every developer is told 30 days and 7 days before the date. A developer who subscribes during the free period is first charged on that date. When the free period ends, it works like a lapse: running tests carry on, and only new uses of a perk are refused. If an admin moves the date later, developers get a new notice ("…now from <date>"); if they move it earlier, the 30-day minimum still applies and a new notice goes out; if they clear it: "The extras stay free for now."
+- **Free during launch:** until the date set in the server configuration (FREE_UNTIL, an ISO date; unset now, which means free with no end), every developer has the perks without paying. The daily job tells every developer 30 days and 7 days before that date, by bell and by email even with email Off. A developer who subscribes during the free period is first charged on that date. When the free period ends, it works like a lapse: running tests carry on, and only new uses of a perk are refused.
 
 ### Ratings
 
 - Testers rate the developer once everything they sent is decided or past the point where Charge opens, and no dispute is open. Rating ends their part (Charge, Let it go and Dispute stay). The Rate button has no end date.
 - Developers rate a tester after the tester rated, within 14 days (a Needs you item). Both ratings show together, or the tester's alone after 14 days.
 - 1–5 stars and an optional comment (up to 500 characters), shown without names. Only real work counts: some work sent or a call held.
-- A suspended or held person's tests can still be rated by the other side; the suspended person can't rate until it lifts.
+- A suspended or held person's tests can still be rated by the other side; the suspended person can't rate until it lifts: Rate is hidden while their pages are closed, a press from an old page is refused and routes them to the dashboard top, and Rate comes back when it lifts.
 - Reminders: once; after a stop or close, every 3 days for 2 weeks. Rate is refused while a dispute is open. Otherwise it stops once like any press: on a test still open, for every kind of change; after the test stops or closes, only for a Pay, Reject, Charge, Let it go or dispute.
 
 ### Holds and suspensions
@@ -1084,11 +1110,11 @@ The rules several pages share, with every number, cap and timer. How pages show 
 | They can | Pay what you owe, Change card, Cancel call (dashboard), Payments, Contact us | the three steps, Change card, Cancel call, Payments, Contact us | Cancel call (dashboard), Change card, Payments, Contact us (appeal) | Payments (payout setup), Contact us (appeal) |
 | Testers in those tests can | save drafts, cancel booked calls, dispute, Charge or Let it go, Rate, Leave | the same | the same | (not in any test) |
 | Waits until it lifts | sending work, chat, new calls, joins, invites and applications, Pay, Reject; testers' charges are paid when the developer pays what they owe | the same | everything else; testers' charges and disputes decided for them are charged at once | their held share of pay |
-| Lifts when | everything owed is paid (4th hold on: plus an admin's Approve) | card verified, owed paid, admin Approve | an admin lifts it | an admin reinstates them |
+| Lifts when | everything owed is paid, by a press or an automatic retry (4th hold on: plus an admin's Approve) | card verified, owed paid, admin Approve | an admin lifts it | an admin reinstates them |
 | On lifting | tests resume; deadlines move on; testers get "<test> is running again" | the same | the same | no automatic re-invite: the tests they were removed from stay at their dashboard top ("You were removed from this test", with Ask to rejoin while the test is open with a spot) until they ask or dismiss; the developer can invite them again |
 
 - **Calls:** calls starting within 3 days of a hold or suspension starting are cancelled with no fault, and both sides are told. Later calls stay booked; each is cancelled 3 days before it starts if the hold or suspension is still on.
-- **Testers in a paused test** (the developer is on any hold or suspension, or the team paused that one test): Send is refused ("This test is paused right now. You can send this once it resumes."), but drafts can be written and saved. They can still dispute, Charge or Let it go, rate and leave. Chat is closed both ways ("Chat is paused while the test is paused."). Invites and applications wait, and work again after the lift unless something else closed them. The 7-day close still applies; after it, Charge, Let it go, dispute and rate carry on, and charges added to what is owed stay owed.
+- **Testers in a paused test** (the developer is on any hold or suspension, or the team paused that one test): Send, the call-request tools, Join call and chat's message box are hidden (the server still refuses them), under a blue banner listing what still works; drafts can be written and saved. They can still dispute, Charge or Let it go, rate and leave. Chat is closed both ways. Invites and applications wait, and work again after the lift unless something else closed them. The 7-day close still applies; after it, Charge, Let it go, dispute and rate carry on, and charges added to what is owed stay owed.
 - **No Stop or End early** during a hold or suspension: the only press on their tests is Cancel call, from the dashboard's Calls box. Paused tests close after 7 days anyway, and stopping would cut off testers' unsent work.
 - **Daily paused reminder** for the developer: "<test> is paused and closes on <date> unless your account is cleared" (for a hold: "…unless you pay what you owe"). It stacks across tests and replaces their "paused" and "closes tomorrow" lines; testers keep theirs.
 - **A hold** limits only the developer side of an account; a suspension covers the whole account. While either lasts, every signed-in page except the dashboard, Payments, Settings and the bell list moves them to the dashboard top (details in Every page). A tester whose developer is suspended or on hold isn't restricted.
@@ -1101,49 +1127,56 @@ One row per change. A test is paused while its developer has any hold or suspens
 |---|---|---|---|
 | A suspension starts, with no hold | All their tests pause. Every signed-in page except the dashboard, Payments, Settings and the bell list moves to the dashboard top, where the blue box says how to appeal. The only press on their tests is Cancel call. Calls within 3 days are cancelled with no fault. It covers the whole account, tester side too. | The paused-test rules: Send is refused (drafts save), chat is closed, invites and applications wait; dispute, Charge, Let it go, Rate, Leave and cancelling calls work. A Charge, or a dispute decided for them, is charged at once. | Developer: "Your account is paused" (bell and email), then daily "<test> is paused and closes on <date> unless your account is cleared" (bell). Testers: the call line for a call cancelled because the test is paused (bell). |
 | A tester's Charge, or a dispute decided for them, is declined during a suspension | A payment hold starts on top of the suspension, and the amount goes into "Pay what you owe". Pay and Reject can't be pressed during a suspension, so a Pay can't be declined then. | Their payment is delayed; they are paid when the developer pays. | Developer: "Your tests are paused" (bell and email). Testers: "Payment for your work on <test> may be delayed" (bell). |
-| A payment hold becomes a chargeback hold | The three chargeback steps on Payments replace Pay what you owe: verify a card with 3D Secure, pay what is owed, then an admin's Approve. The chargeback adds to what is owed; paying alone never lifts it. | Nothing new: the test stays paused under the same rules, and Charges and disputes decided for them are still added to what is owed. | Developer: "…paused after a chargeback" (bell) and "…your payment hold is now a chargeback hold" (email). Admins: "Playtest: new chargeback of $X" (email), then the hold in their daily email. |
-| Another decline, or another chargeback, during a hold | A decline adds to "Pay what you owe". A chargeback adds to what is owed, turns a payment hold into a chargeback hold and clears an earlier card check. A Pay what you owe press for the old amount stops once ("What you owe changed: now $X. Press again to pay $X."). | The payment is delayed and paid when the developer pays. | Developer: "Another payment was declined: $X … was added to what you owe" or "Your bank reversed a $X payment …" (bell). Admins: "Playtest: new chargeback of $X" (email). Testers: "<dev>'s payment for your <part> ($X) is delayed. You'll be told when it arrives." (bell). |
-| The hold is paid while the suspension continues | The hold lifts (from the 4th hold on, after an admin's Approve). The tests stay paused and the pages stay closed while the suspension lasts. | The test stays paused. Charges added for them are paid. | Developer: "Receipt: you paid $X for …" (bell). Testers: "<dev> paid $X for your <part>" (bell). Whether the developer also gets "Your tests are running again": Open. |
+| A payment hold becomes a chargeback hold | The three chargeback steps on Payments replace Pay what you owe: verify a card with 3D Secure, pay what is owed, then an admin's Approve. The chargeback adds its amount plus the $15 fee to what is owed; paying alone never lifts it. | Nothing new: the test stays paused under the same rules, and Charges and disputes decided for them are still added to what is owed. | Developer: "…paused after a chargeback" (bell) and "…your payment hold is now a chargeback hold" (email). Admins: "Playtest: new chargeback of $X" (email), then the hold in their daily email. |
+| Another decline, or another chargeback, during a hold | A decline adds to "Pay what you owe". A chargeback adds its amount plus the $15 fee to what is owed, turns a payment hold into a chargeback hold and clears an earlier card check. A Pay what you owe press for the old amount stops once ("What you owe changed: now $X. Press again to pay $X."). | The payment is delayed and paid when the developer pays. | Developer: "Another payment was declined: $X … was added to what you owe" or "Your bank reversed a $X payment …" (bell). Admins: "Playtest: new chargeback of $X" (email). Testers: "<dev>'s payment for your <part> ($X) is delayed. You'll be told when it arrives." (bell). |
+| The hold is paid while the suspension continues | The hold lifts (from the 4th hold on, after an admin's Approve). The tests stay paused and the pages stay closed while the suspension lasts. | The test stays paused. Charges added for them are paid. | Developer: "Receipt: you paid $X for …" (bell). Testers: "<dev> paid $X for your <part>" (bell). Instead of "Your tests are running again": "Your payment went through. Your tests stay paused while your account is suspended." (bell and email). |
 | The suspension lifts while a hold continues | The tester side reopens, since a hold limits only the developer side. The developer side stays as in a hold: tests paused, pages closed, Pay what you owe or the chargeback steps on Payments. | The test stays paused. | Developer: "Your account is active again" (bell and email). Testers: nothing until the test runs again. |
 | Both have lifted | Tests resume as normal and the pages reopen. Every working tester's deadline and the test's Open until move later by the length of the pause. | Send, chat, call requests, invites and applications work again, unless something else closed them. Their deadline moves later by the length of the pause. | Developer: the line for whichever lifted last, "Your tests are running again" or "Your account is active again" (bell and email). Testers: "<test> is running again" (bell). |
 | A paused test reaches its 7-day close during a hold or suspension | The test closes like a Stop: the card says "Closed after 7 days paused" and a banner gives the reason. The hold or suspension goes on, and money owed stays owed. Pay and Reject open once it lifts. | "This test ended on <date>." with no reason. Charge, Let it go, dispute and rate carry on; charges added to what is owed stay owed. | Developer: the daily "<test> is paused and closes on <date> unless …" before it, then "<test> was closed. <reason>" (bell and email). Testers: "<test> ended" (bell). |
 | The team pauses one test during a hold | The test is paused by both, so it runs again only when the hold has lifted and the team has lifted its pause. It keeps its one closing date, 7 days from when it was first paused, and the card shows both reasons: "Paused: payment hold · paused by the team". | The same paused-test rules. | Developer: "The team paused <test>" (bell and email); later "The team lifted the pause on <test>" (bell). |
 | A tester is suspended while their developer is on hold | The tester leaves every test ("Left this test"). Their sent work stays, waiting for Pay or Reject once the hold lifts; pay for it is charged, and the tester's share is held until they are reinstated. | The suspended tester is removed from every test, and every page except the dashboard, Payments, Settings and the bell list closes. Charges already added to what the developer owes are paid when the developer pays, with their share held. | Developer: "<tester> left <test>" (bell). Tester: "Your account is paused" (bell and email). |
-| The developer tries to delete their account during a hold | Refused: "Pay or reject the work waiting for you first: <list>." The Delete account section lists the hold with a link. Deleting never clears a hold, a chargeback or money owed. | Nothing changes. | No one: the refusal shows under the button. |
+| The developer deletes their account during a hold | It goes through: a developer can always delete. Deleting never clears a hold, a chargeback or money owed. Parts already open to Charge stay open and charge the saved card; work still under review never opens Charge. | Their tests stop. Parts already open to Charge keep Charge and Let it go; work still under review reads "<dev> deleted their account, so this can't be paid."; open disputes are still decided. | As for any deletion; there is no hold line. |
 | The 4th hold or later is paid | The hold stays until an admin presses Approve (Lifts on the Administrator console); the blue box says the team will review the account after they pay. The tests stay paused until then. | The test stays paused until the Approve. Charges added for them are paid when the developer pays. | Admins: "Hold lift waiting: <dev> paid what they owe (More than 3 holds)" (bell) and the admin daily email. Developer: "The team approved lifting your hold", or "Your tests are running again" when the Approve lifts it (bell; "Your tests are running again" is also emailed). Testers: "<test> is running again" (bell). |
 | A subscription renewal is declined | No hold starts. The payment is retried for about a week and the perks continue. After the last retry fails, the subscription ends and they are on the free plan: running tests carry on, new uses of a perk are refused, and an open page gets "Your subscription ended." as a stop-once change. | Nothing changes. | Developer: "Your $7 subscription payment didn't go through. Update your card by <date> to keep it." (bell and email), then "Your subscription ended because the payment didn't go through." (bell and email). |
 | A chargeback arrives on a subscription payment | A chargeback hold starts, like any chargeback, and the amount is added to what is owed. | As for any chargeback hold: the developer's tests pause. | As for any chargeback hold (above). |
 | A hold or suspension starts while subscribed | Billing pauses: no renewal is charged while it lasts, and the paid days left are kept. They can still cancel or keep it from Payments; Subscribe is refused ("You can subscribe once your account is active again."). | Only the hold or suspension rules above. | The hold or suspension lines above. |
 | That hold or suspension lifts | The paid days left resume, so the next renewal moves later by the time it was paused. | Only the lifting rules above. | The lift lines above. |
 | A subscriber deletes their account, or the team deletes it | The subscription ends at once, with no refund. The delete warning says: "Your subscription ends now, with no refund for the rest of the month." | As for any deleted developer (Every page). | As for any deletion; there is no subscription line. |
+| An automatic retry during a hold goes through | The lines it covers are paid. A payment hold with nothing left owed lifts (from the 4th hold on, after Approve); a chargeback hold stays until the card check and Approve; a suspension stays. | Payments for those lines are no longer delayed; the test runs again only when nothing pauses it. | Developer: "We charged your card $X for what you owed." (bell), then the lift lines above. |
+| The platform wins a chargeback | Its amount and the $15 fee come off what is owed, or are refunded to the card if already paid ("Refund: your bank's chargeback of $X was reversed"). If that was all that was owed for a chargeback hold, it lifts as usual (from the 4th hold on, after Approve). Open test pages and Edit stop once: "Your bank's chargeback of $X was reversed: $Y refunded to your card." | Nothing changes, unless the hold lifts (above). | Developer: "Your bank's chargeback of $X was reversed in your favour." (bell and email). |
+| The bank wants a charge confirmed while the developer isn't there | The payment waits as "needs your confirmation", with Confirm on Payments. After 3 days without a confirmation it counts as declined: a payment hold for a charge, a lapse for a renewal. | "Payment may be delayed". | Developer: "Your bank wants you to confirm a $X payment. Confirm it in Payments by <date>." (bell and email, even with email Off). |
+| A tester deletes their account with sent work waiting | Their sent work stays in Needs you with Pay and Reject (Pay only for an unlisted part) and the usual reminders. Pay reaches their Stripe account if their payout account was connected; if not, those rows leave Needs you with "<name> deleted their account before setting up payouts, so this can't be paid." (DEFAULT). | Unsent work is gone, and so are Charge and Dispute. Their excerpt requests and shown excerpts are removed. | Developer: "<tester> left <test>" (bell). |
 
 ### Deletion
 
-- Deleting stops the account's tests, cancels invites and applications, keeps all history, and never clears holds, chargebacks or money owed. A developer can't delete while sent work waits for Pay or Reject (parts where Charge is open included), a dispute is open, or a payment or chargeback hold is on, so Charge never opens after a developer deletes. A tester who deletes leaves every test (calls ahead, invites and applications cancelled, open disputes withdrawn); their unpaid sent work can no longer be paid, charged or disputed, but delayed payments still reach their Stripe account when the developer pays, if their payout setup is finished.
+- Deleting stops the account's tests, cancels invites and applications, keeps all history, and never clears holds, chargebacks or money owed. A developer can always delete: parts already open to Charge stay open and charge their saved card (a decline leaves the payment delayed for the tester and listed for admins; the platform doesn't cover it); work still under review never opens Charge; open disputes are still decided; pending excerpt requests on their tests close, and shown excerpts stay. A tester who deletes leaves every test (calls ahead, invites and applications cancelled, open disputes withdrawn); work they already sent can still be paid by the developer, to their Stripe account if their payout account was connected (if not, those rows leave Needs you, a DEFAULT), but they can't charge for it or dispute it; their excerpt requests and shown excerpts are removed.
 
 ### Limits
 
 | What | Limit |
 |---|---|
 | Spots | 1–50 and the developer's tester limit (10 to start, +10% per 10 good ratings, at most 50) |
-| Open tests per developer | 1 at a time on the free plan (Open, Full and Paused count); several with the $7/month subscription |
-| Tester deadline | 1–90 days; must leave 3 days before Open until |
-| Open until | in the future, at most a year ahead, extend only |
+| Open tests per developer | 1 at a time on the free plan (Open, Full and Paused count); up to 10 with the $7/month subscription |
+| Tester deadline | the test's Open until, the same for everyone |
+| Open until | required; 3–30 days after today; extend only, within 30 days of today |
 | Product, test name | 60 characters each |
 | What should testers do | 1,000 characters |
+| NDA | 1,000 characters (an Edit Save that changes a longer old NDA must fit) |
+| Written part | 50,000 characters for all its answers together; up to 5 attachments, 25 MB each (images, PDF, plain text, zip), plus recordings |
+| Excerpts | 10–500 characters; at most 3 shown or pending per tester; one pending request per part |
 | Categories | at least 1 |
-| Written questions | 1–20 |
+| Written questions | 1–20, each up to 300 characters (DEFAULT) |
 | Part price | written and recording $1–$1,000, or free; over $200 needs a tick |
 | Call rate | $10–$200 an hour, or free |
 | Any charge | $0.50 to $999,999.99 |
-| Pay above the listing | per piece: up to 100% of the listing, never more than the max; an unlisted piece's Pay at most the max ($1000 for written answers or a recording, $200 an hour × logged minutes for a call), plus up to 100% of the max in extra pay |
-| Changes to the steps, NDA, questions, languages and devices | 3 per field after the first tester joins; one Save that changes two fields uses one change of each (an admin's Allow 3 more gives 3 more to every field at 0); prices, parts, the build link and access keys aren't limited |
+| Pay above the listing | per piece: up to 100% of the listing, never more than the max; unlisted written answers or a recording at most $1000 plus $1000 extra; an unlisted call at most $200 an hour for its logged minutes with no extra, and $1000 for all of one tester's unlisted calls on a test |
+| Changes to the steps, NDA, questions, languages, devices, build link, and parts and prices | 3 per field, counted from the first join, application or invite; one Save that changes two fields uses one change of each (an admin's Allow 3 more gives 3 more to every field at 0); access keys aren't limited |
 | Call length | 10–180 min; logged up to 150% of booked, within 24 hours |
 | Call requests | 3 time rows; repeats 2–8 or Forever; per tester 3 booked times and 3 waiting requests |
 | Joining a call | 10 minutes before to 30 minutes after the start; cancelled if nobody joins by halfway |
 | Cancelling a call | a reason is required under 24 hours; not after it starts |
 | Tests per tester | 10 at once |
-| Recordings | 500 MB each, 5 per session |
+| Recordings | 500 MB each; up to 5 on the Recording part, sent together; a written part's attachments count separately |
 | Names | at least 1 character |
 | Text | rating comment 500, dispute 2,000, bio 1,000, Contact us 10–3,000 characters; report reason at least 5 |
 | Contact us | 5 messages per account a day |
@@ -1151,13 +1184,16 @@ One row per change. A test is paused while its developer has any hold or suspens
 | Reports | one per person about another, ever |
 | Disputes | one per part |
 | Paused test | closes after 7 days; an admin can extend by 1–90 days |
-| Charge opens | the later of 14 days after sending and Open until |
-| Developer review reminders | 1 month, 1 week, 3 days, 1 day before Charge opens, then daily |
+| Charge opens | the later of 7 days after sending and Open until |
+| Developer review reminders | 1 week, 3 days, 1 day before Charge opens, then daily; unlisted parts for 7 days after sending (DEFAULT) |
 | Tester Charge reminders | every 3 days |
 | Invite reminders | daily until answered |
 | Rating | developer within 14 days of the tester; reminders every 3 days for 2 weeks after a stop |
 | Payout problem reminders | every 3 days until fixed |
 | Hold lifts | the 4th hold on needs an admin's Approve |
+| Retries during a hold | once a day, at most 7 per hold, and at once when a new card is saved |
+| Bank confirmation | 3 days to confirm a charge made while the developer wasn't there; a pending press locks the piece for up to 15 minutes |
+| Chargeback fee | $15 per chargeback, added to what is owed |
 | Calls near a hold or suspension | cancelled within 3 days |
 | Outage | over 15 minutes moves timers |
 | Long lists | 3 lines, then "Show N more" (scroll box about 8 lines); admin lists pages of 25 |
@@ -1169,27 +1205,32 @@ Open questions about these rules are in QA and open questions.
 
 ### Edge cases to test before launch
 
-- **Payments:** a declined Pay, Charge, call charge or extra pay starting a hold at once; another decline during the hold adding to what is owed; two tabs paying one part; a chargeback with work waiting; a chargeback during a payment hold; a tester or developer suspended mid-payment; a deleted developer with valid charges; a payout failure; an admin raising pay in a dispute; a held share released or refunded; the extra-pay cap with parts outside the contract and unlisted parts; a call that isn't a listed part paid from an empty box; a tester's Charge during a hold added to what is owed and paid when the developer pays; the per-piece extra-pay caps: an unlisted written piece totalling $2000, a 30-minute unlisted call at $100 + $100, a $20 written listing allowing $20 extra, a $50/h call allowing $50/h × minutes extra, and a listing above the max ($3000, or $300/h) allowing only the max ($1000, or $200/h × minutes) extra (such listings are outside today's price ranges); paying an unlisted part $0; the note on Pay and Extra pay (required below the listing); the call rate field (a rate, then an amount typed over it); the amount tick unticking when the amount changes, and the second tick over $200.
-- **Participation:** two testers for the last spot; joining just before Open until; Open until or the default deadline changed while testers join or work; leaving during a suspension; pausing mid-send; closing mid-review; an invite accepted in one tab after it was cancelled in another; invite plus rejoin ask in either order; the 10-test limit on every way in.
-- **Terms:** an offer replaced by a newer one before the tester answers; work sent during a change; reviewing at an old price; rejoining with the right terms; the per-field 3-change limit (one Save changing two fields) and Allow 3 more.
+- **Payments:** a declined Pay, Charge, call charge or extra pay starting a hold at once; another decline during the hold adding to what is owed; two tabs paying one part; a chargeback with work waiting; a chargeback during a payment hold; a tester or developer suspended mid-payment; a deleted developer with valid charges; a payout failure; an admin raising pay in a dispute; a held share released or refunded; the extra-pay cap with parts outside the contract and unlisted parts; a call that isn't a listed part paid from an empty box; a tester's Charge during a hold added to what is owed and paid when the developer pays; the per-piece extra-pay caps: an unlisted written piece totalling $2000, a 30-minute unlisted call at $100 with no extra, five hours of unlisted calls reaching the $1000 total, a $20 written listing allowing $20 extra, a $50/h call allowing $50/h × minutes extra, and a listing above the max ($3000, or $300/h) allowing only the max ($1000, or $200/h × minutes) extra (such listings are outside today's price ranges); paying an unlisted part $0; the note on Pay and Extra pay (required below the listing); the call rate field (a rate, then an amount typed over it); the amount tick unticking when the amount changes, and the second tick over $200.
+- **Participation:** two testers for the last spot; joining just before Open until; Open until moved later while testers work (every deadline moves with it); Open until under 3 or over 30 days refused; an 11th open test refused, and a post that goes through after another tab stopped a test; leaving during a suspension; pausing mid-send; closing mid-review; an invite accepted in one tab after it was cancelled in another; invite plus rejoin ask in either order; the 10-test limit on every way in.
+- **Terms:** an offer replaced by a newer one before the tester answers; work sent during a change; reviewing at an old price; rejoining with the right terms; the per-field 3-change limit on 7 fields (one Save changing two fields), counted from the first join, application or invite and still counting after the only applicant withdrew, and Allow 3 more; applications closed and invites re-sent, stacked across tests; a Switch shown as one quiet line and a Keep not at all; questions changed after a draft (a draft answer to Q1 kept, a changed Q2 empty, Q3 unchanged, and the previous set showing all three).
 - **Calls:** overlapping bookings; cancelling from another tab; a hold or suspension starting within 3 days of a call, and one starting later; joining a paused test's call; requesting a call on a test with no Live call part; booking while terms are edited; a Forever set adding its next call; nobody joining by halfway.
 - **Ratings:** complete and rate; the developer not rating in 14 days; leaving early; ended by the developer; closing with mixed paid, rejected and unreviewed work; rating while the other side is suspended or held; leave and rejoin without duplicate records.
-- **Restrictions:** a developer pressing on a test page as a hold starts (routed to the dashboard top, blue box naming the press); the same on Profile and Edit; Cancel call from the Calls box during a hold; suspended on the session or payout page; a deleted user on an open page; two admins on one account; a lifted suspension and Ask to rejoin; long pauses closing; repeated pauses; a tester sending, saving a draft, charging or chatting while a test is paused; deadlines and Open until moving later when a pause lifts; a 6th Contact us message; a restricted account opening each closed page, a bell line and Change card; deleting with work still waiting.
+- **Restrictions:** a developer pressing on a test page as a hold starts (routed to the dashboard top, blue box naming the press); the same on Profile and Edit; Cancel call from the Calls box during a hold; suspended on the session or payout page; a deleted user on an open page; two admins on one account; a lifted suspension and Ask to rejoin; long pauses closing; repeated pauses; a tester sending, saving a draft, charging or chatting while a test is paused, and the paused banner listing only what's available (with and without the deadline line); deadlines and Open until moving later when a pause lifts; a 6th Contact us message; a restricted account opening each closed page, a bell line and Change card; deleting with work still waiting.
 - **Cross-device:** a phone action refreshing a desktop tab; a hold reaching every tab; signing in as someone else in another tab; drafts kept after a refused press; sign-in expiring mid-send; network failure during upload or payment; an outage moving timers.
 - **Subscription:** a second test on the free plan (Open, Full and Paused count; drafts, stopped and closed don't), including a draft posted while another test is open; each perk on the free plan (Approved only on Post and Edit, Next round, Invite) refused with its "Subscribers" tag; Cancel, then Keep my subscription before the end; a page open when the subscription ends; running Approved-only tests and sent invites after it ends; a declined renewal (retries, perks during them, the lapse, no hold); a chargeback on a subscription payment; a hold or suspension starting and lifting mid-month (paid days resume, renewal moves later); cancelling during a hold; a sign-up on the 31st; deleting while subscribed; the free-during-launch date (under 30 days refused, the 30- and 7-day notices with email Off, no date set, subscribing during the free period and being charged first on that date).
+- **Reviews and payments:** a dispute on every kind of reviewed part (a $0 Pay, a Reject, an unlisted Pay), and an admin decision on an unlisted part up to its cap; Pay more on every paid piece until its cap; a bank confirmation on a press (confirmed, cancelled, the pop-up closed, 15 minutes) and a Charge pressed meanwhile; a charge made while the developer is away waiting for Confirm, and timing out after 3 days into a hold (or a lapse for a renewal); retries (a success lifting a payment hold, a chargeback hold staying, the 7-try limit, a new card retrying at once); the $15 fee; a won chargeback before and after paying; Pay what you owe updating live and refused when nothing is owed; paying while suspended.
+- **Written work:** the 50,000-character counter; Bold, Italic and Code block rendered safely; 5 attachments of 25 MB; Record (screen only when the microphone is refused); 5 recordings with Remove, a 6th refused, and Send while one is uploading; long answers in the developer's scroll box; previous question sets (at most 3) and By question grouping.
+- **Excerpts:** eligible parts only (paid above $0, no NDA); trimming to 10–500 characters; a 4th refused; one pending per part; an NDA added later hiding requests and shown excerpts, and removing it bringing them back; Allow from an old page after an NDA was added; blocks, holds (the dashboard box) and suspensions; deleting on either side; requests never stopping once.
+- **Deletion:** a tester deleting with sent work, with and without a payout account; a developer deleting with work under review, parts open to Charge (charged to the saved card, a decline staying delayed), an open dispute and money owed.
+- **Access keys:** the read-only notice updating live as keys are added, deleted or given; a reported key crossed out, with its quiet live-box line.
 
 ### Open questions
 
 **Waiting for the owner (tonight's list)**
 
 - Built with defaults, to confirm:
-  - The Rate button has no end date.
   - While a test is paused, testers can still write and save drafts.
   - When a pause lifts, every working tester's deadline and the test's Open until move later by the length of the pause.
   - Chat is closed both ways while a test is paused.
-  - A team pause of one test follows the same tester rules as a developer's hold or suspension.
-  - Subscription details (BATCH-8 §8).
-  - Unlisted parts: review reminders for 14 days after sending, then none; the row stays until paid, even $0 (BATCH-9 §2).
+  - Unlisted parts: review reminders for 7 days after sending, then none; the row stays until paid, even $0 (BATCH-9 §2).
+  - A deleted tester with no payout account: their sent work leaves Needs you with "<name> deleted their account before setting up payouts, so this can't be paid." (BATCH-11 §1).
+  - Questions: at most 300 characters each (BATCH-13 §9).
+  - Quiet Switch / Keep: a Keep tells the developer nothing, and a Switch is one quiet line that never stops a press (BATCH-14 §4).
 - Confirm large totals before posting ("Up to $8,000 could be charged if all spots send everything.")? Not built.
 - When a limit in Rules changes, tell developers in the bell and on the fields it affects?
 - Fraud: invite developers by hand at launch, a longer tester payout delay, and a new-developer spending limit or prepaid budgets before public developer sign-up?
@@ -1198,13 +1239,13 @@ Open questions about these rules are in QA and open questions.
 - Tests paused repeatedly, and repeated holds or suspensions: stop a test or escalate after several? (The old "third pause stops the test" idea was dropped.)
 - Tester suspensions: removing a suspended tester from all tests at once may be too harsh. Options: pause their contracts instead, or let developers choose.
 - UI for many rows and long text: long names, titles and reasons are cut with "…" (full text on hover). Revisit layouts for accounts with many rows and very long names.
-- Developer deletion: the owner suggested keeping open Charge rows and never opening Charge for work still under review. The app now refuses deletion until that work is paid or rejected instead. Confirm.
-- When a developer pays off a hold while their suspension continues, do they get "Your tests are running again", though their tests stay paused? (Rules, When account states change or combine.)
+- Written answers: are 50,000 characters per written part, and 5 attachments of 25 MB each, the right limits?
+- Which formats do developers want in written answers? Today: Bold, Italic and Code block.
 
 **Earlier questions**
 
-- **Timing:** which deadline rule wins (the individual deadline, the 3-day buffer, a 2-day late-joiner extension, a maximum recruitment period such as 30 days); shortening a tester's deadline with 24 hours' notice; the review window for extended tests; what happens to unreviewed work when a test closes on its own.
-- **Payments:** is a 10-day refund period workable with the payment provider's rules and payout timing; refund exceptions; unresolved charges when an account closes; pay when a developer ends work early.
+- **Timing:** what happens to unreviewed work when a test closes on its own.
+- **Payments:** is a 10-day refund period workable with the payment provider's rules and payout timing; refund exceptions; pay when a developer ends work early.
 - **Restrictions:** different escalation for different causes; stopping abusive re-registration without blocking people who share devices or networks; reports on paused tests.
 - **Business:** higher prices for higher-rated testers; charging for work that isn't accepted; which tester stats are public; forums or group tests.
 - **Ratings:** scales and categories; early departures; tests ending without full completion.
@@ -1212,7 +1253,7 @@ Open questions about these rules are in QA and open questions.
 
 ### Post-launch
 
-Tester notification preferences; admin outage recording; admin pay above the listing; notification muting; more rating filters; question-based forums; group tests; advanced recruitment; automated risk controls; Themes and moments (transcribed recordings grouped into themes); an admin "Payout problems" list; a spending limit or prepaid budgets; in-app messages between admins and users; a soft "Ana is looking at this" marker on disputes; link checks on the build link (block private network addresses, check for malware and phishing with Google Web Risk, warn about password-protected archives); if invalid or unreachable emails are found, require those accounts to change their email (and password) before continuing. Profile excerpts (testers request excerpts; developers approve or deny). If built: deleting the account closes pending requests; closing a test doesn't.
+Tester notification preferences; admin outage recording; admin pay above the listing; notification muting; more rating filters; question-based forums; group tests; advanced recruitment; automated risk controls; Themes and moments (transcribed recordings grouped into themes); an admin "Payout problems" list; a spending limit or prepaid budgets; in-app messages between admins and users; a soft "Ana is looking at this" marker on disputes; link checks on the build link (block private network addresses, check for malware and phishing with Google Web Risk, warn about password-protected archives); if invalid or unreachable emails are found, require those accounts to change their email (and password) before continuing.
 
 ### Launch priorities
 
