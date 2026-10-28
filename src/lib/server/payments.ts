@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money, toCents } from "@/lib/format";
-import { LET_GO_BY_TESTER, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, checkDisputeDecision, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkReject, checkExtraPay, extraCapCents, overListingLine, overMaxLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, NO_LISTING_CALLS_TOTAL_CENTS, overCallsLine, PAY_WAITS, testerShare } from "@/lib/rules";
+import { LET_GO_BY_TESTER, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, checkDisputeDecision, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, extraCapCents, overListingLine, overMaxLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare } from "@/lib/rules";
 import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { adminUsers, bell, notify } from "./notify";
@@ -16,6 +16,8 @@ import { logEvent } from "./live";
 import { testerGate } from "./testerGate";
 import { PAYMENT_CHECKING, pressKeyFor } from "./recovery";
 import { clientPressKey, serverKey } from "./pressKeys";
+import { amountFromRate, callMinutesOf, overCeilingLine, rateFromAmount } from "@/lib/callMeasure";
+import { callsLeftCents } from "./callMoney";
 
 type U = { id: string; email: string; name: string; pronoun: string; isAdmin?: boolean };
 
@@ -37,7 +39,10 @@ async function loadPiece(tx: Prisma.TransactionClient, kind: string, id: string)
     if (!c) return null;
     if (c.status === "cancelled") throw new HttpError(409, "cancelled", "This call was cancelled, so there's nothing to pay.");
     if (c.startsAt > new Date()) throw new HttpError(409, "not_yet", "You can pay for this call once it has started.");
-    return { contract: c.contract, review: c.review, listing: callReference(c.rateCents, c.actualMinutes ?? c.minutes).cents, label: "live call", where: { callId: c.id }, kind: "call" as const, minutes: c.actualMinutes ?? c.minutes };
+    // (Batch 15 section 40) Paid for its measured (or lowered) length, once that's final.
+    const minutes = callMinutesOf(c);
+    if (minutes == null) throw new HttpError(409, "measuring", (await import("./calls")).MEASURING_REFUSAL);
+    return { contract: c.contract, review: c.review, listing: callReference(c.rateCents, minutes).cents, label: "live call", where: { callId: c.id }, kind: "call" as const, minutes };
   }
   return null;
 }
@@ -49,21 +54,22 @@ async function loadPiece(tx: Prisma.TransactionClient, kind: string, id: string)
  * Pay reserves the piece, charges once (idempotent by payKey) and records the payment; Reject charges nothing.
  */
 export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { holdStartedAt?: Date | null; devSuspendedAt?: Date | null }, body: Record<string, unknown>) {
-  const reject = body.action === "reject";
+  // (Owner, Oct 30, batch 15 section 30) No Reject anywhere: the developer pays any amount from $0 up (a reason is required at $0). Old rejections stay as they are.
+  if (body.action === "reject") throw new HttpError(409, "no_reject", NO_REJECT);
   const kind = String(body.kind ?? ""), id = String(body.id ?? "");
   // (Batch 15 section 41, C1) The page's press id is a UUID, wrapped as "press:<developer>:<uuid>": it can never be a server key ("choice:", "dispute:" ...).
   const payKey = clientPressKey(dev.id, body.payKey);
   if (!payKey) throw new HttpError(400, "bad_request", "This page is out of date. Refresh to see the latest.");
   const done = await db.review.findUnique({ where: { payKey } });
   if (done) return { reviewId: done.id, amountCents: done.amountCents, rejected: done.rejected, repeated: true }; // the same press again: never twice
-  const amountCents = reject ? 0 : toCents(body.amount);
+  let amountCents = toCents(body.amount);
   const tickedCents = typeof body.tickedCents === "number" ? body.tickedCents : null;
   // (Batch 9) The optional note on every Pay (required below the listing): the same field as the reason.
   // (Batch 15 section 20) The note (required below the listing and at $0): at most 1,000 characters, refused at the box, never cut.
   const reason = readText(typeof body.reason === "string" ? body.reason : body.note, LIMITS.reason, "bad_reason");
   const over200 = body.over200 === true || body.understood === true;
-  // (Batch 9) A call's Pay: the rate typed ($/h), when one was.
-  const rateCents = body.rate === undefined || body.rate === null || body.rate === "" ? null : toCents(body.rate);
+  // (Batch 9) A call's Pay: the rate typed ($/h), when one was. (Batch 15 section 40) Rate and Amount fill each other; the one typed last wins and the other is recomputed here.
+  let rateCents = body.rate === undefined || body.rate === null || body.rate === "" ? null : toCents(body.rate);
 
   // (Owner, Oct 27) Pay and Reject are unavailable during ANY payment hold, chargeback hold or suspension (the route refuses first; this is the backstop).
   const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, devSuspendedAt: true } });
@@ -86,14 +92,11 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
       if (owedNow) throw new HttpError(409, "owed", `This ${money(already.amountCents)} is owed: pay it with “Pay what you owe” in Payments.`);
       throw new HttpError(409, "reviewed", already.rejected ? "You already rejected this." : `You already paid ${money(already.amountCents)} for this.`);
     }
-    if (!reject && (await devOwes(dev.id))) throw new HttpError(409, "owed_first", PAY_WAITS);
-    // (Owner, Oct 28 night, batch 9) A part that isn't listed has only Pay (any amount from $0, which closes it): never Reject.
-    if (reject && piece.listing == null) throw new HttpError(409, "not_listed", "A part that isn't listed can't be rejected: pay $0 to close it.");
+    if (await devOwes(dev.id)) throw new HttpError(409, "owed_first", PAY_WAITS);
     // Form mistakes (red at the field) come BEFORE the stop-once: a second press would only fail on them.
-    if (reject) {
-      const r = checkReject(reason);
-      if (!r.ok) throw new HttpError(400, "bad_reason", r.message);
-    } else {
+    {
+      if (piece.kind === "call" && body.typed === "rate" && rateCents != null && rateCents >= 0) amountCents = amountFromRate(rateCents, piece.minutes);
+      else if (piece.kind === "call" && amountCents != null && rateCents != null) rateCents = rateFromAmount(amountCents, piece.minutes);
       const check = checkPay(amountCents, piece.listing, reason, tickedCents, over200);
       if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
       if (piece.kind === "call" && rateCents != null) {
@@ -107,24 +110,16 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
       if (card) throw new HttpError(409, "no_card", card);
     }
     await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name });
-    const rev = await tx.review.create({ data: { ...piece.where, contractId: c.id, amountCents: amountCents!, agreedCents: piece.listing, reason, payKey, rejected: reject, rateCents: !reject && piece.kind === "call" ? rateCents : null } });
+    const rev = await tx.review.create({ data: { ...piece.where, contractId: c.id, amountCents: amountCents!, agreedCents: piece.listing, reason, payKey, rejected: false, rateCents: piece.kind === "call" ? rateCents : null } });
     // (Batch 15 section 9) The charge's key: an interrupted press on this piece in the last 24 hours lends its key, so nothing is ever charged twice.
-    const stripeKey = reject ? null : await pressKeyFor(piece.where, ["review", "call"], payKey, tx);
-    const payment = reject
-      ? null
-      : await tx.payment.create({
+    const stripeKey = await pressKeyFor(piece.where, ["review", "call"], payKey, tx);
+    const payment = await tx.payment.create({
           data: { kind: kind === "call" ? "call" : "review", submissionId: piece.where.submissionId ?? null, callId: piece.where.callId ?? null, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amountCents!, feeCents: 0, testerCents: 0, status: "pending", payKey: stripeKey, pressKey: payKey },
         });
-    if (reject) await recordEvent(tx, c.testId, "rejected", `You rejected ${name}'s ${piece.label}`, false, {}, c.id);
     return { rev, payment, c, piece, name };
   });
 
   const { rev, payment, c, piece, name } = reserved;
-  if (reject) {
-    // (Batch 10) Every reviewed part can be disputed once (only listed parts can be rejected).
-    await notify(c.tester.email, `Your ${piece.label} on “${c.title}” wasn't accepted`, [`${displayName(dev)} rejected your ${piece.label}: “${rev.reason}”`, "You can dispute this once from your session page."], `/app/sessions/${c.id}#${partAnchor(piece.label)}`, { payment: true, group: "trejected" });
-    return { reviewId: rev.id, amountCents: 0, rejected: true, paidSoFarCents: await paidSoFar(c.id) };
-  }
   let result;
   try {
     // (Owner, Oct 29, batch 11) The developer's own press: on-session, so the bank may ask them to confirm in the page.
@@ -226,12 +221,14 @@ export async function disputeBounds(d: { submissionId: string | null; callId: st
     const piece = await pieceOf(d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId });
     const cap = piece ? pieceMaxCents(piece.kind, piece.minutes) : 0;
     const other = Math.max(0, (paid._sum.amountCents ?? 0) - review.amountCents);
-    // (Batch 12 section 2) An unlisted call also stays within what is left of the tester's $1000 for unlisted calls.
-    const pool = piece?.kind === "call" ? review.amountCents + Math.max(0, NO_LISTING_CALLS_TOTAL_CENTS - (await unlistedCallsPaid(piece.contractId))) : Infinity;
-    return { review, listing: cap, unlisted: true, other, min: review.amountCents, max: Math.max(review.amountCents, Math.min(cap - other, pool)) };
+    // (Batch 15 section 34) A call also stays within what is left of the $1,000 for all of the tester's calls on the test.
+    const pool = piece?.kind === "call" ? review.amountCents + (await callsLeftCents(piece.contractId)) : Infinity;
+    return { review, listing: Math.min(cap, pool + other), unlisted: true, other, min: review.amountCents, max: Math.max(review.amountCents, Math.min(cap - other, pool)) };
   }
   const other = d.submissionId ? Math.max(0, (paid._sum.amountCents ?? 0) - review.amountCents) : 0;
-  const listing = review.agreedCents;
+  // (Batch 15 section 34) A listed call's decision is capped at what's left of the $1,000 too.
+  const pool = d.callId ? review.amountCents + (await callsLeftCents(review.contractId)) : Infinity;
+  const listing = Math.min(review.agreedCents, pool + other);
   return { review, listing, unlisted: false, other, min: review.amountCents, max: Math.max(review.amountCents, listing - other) };
 }
 
@@ -335,19 +332,16 @@ export async function waitingForReview(devId: string) {
 
 type PieceKey = { submissionId?: string | null; callId?: string | null };
 const COUNTED = ["charged", "not_set_up", "deferred", "pending", "owed", "needs_action", "needs_confirmation"];
-/** (Batch 12 section 2) What one tester's UNLISTED calls on this contract were paid in all (Pay, Pay more and dispute raises). */
-export async function unlistedCallsPaid(contractId: string, tx: Prisma.TransactionClient = db) {
-  const ids = (await tx.call.findMany({ where: { contractId, rateCents: null }, select: { id: true } })).map((c) => c.id);
-  if (!ids.length) return 0;
-  return (await tx.payment.aggregate({ where: { callId: { in: ids }, kind: { not: "chargeback" }, status: { in: COUNTED } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
-}
+/** (Owner, Oct 30, batch 15 section 30) The refusal for an old page's Reject (or an API call). */
+export const NO_REJECT = "There's no Reject: pay any amount, $0 included (say why at $0).";
 /**
  * What can still be paid on ONE piece, with ONE Pay box (owner, Oct 29: batch 11 section 6 merged Extra pay into Pay; batch 12 section 2 the call caps).
  *   - Listed: the listing plus up to 100% of it above (never more than the max: $1000, or $200/h × the logged minutes for a call).
  *   - Unlisted written answers or recording: the max ($1000) plus 100% of it ($2000 in all).
- *   - Unlisted call: at most $200/h × its logged minutes, nothing above; and all of the tester's unlisted calls on the test together at most $1000.
+ *   - Unlisted call: at most $200/h × its measured minutes, nothing above.
+ *   - (Batch 15 section 34) Any call, listed or not: all of the tester's calls on the test together at most $1,000 (extra pay counted).
  * `roomCents`: the most the next payment (the first Pay or a "Pay more") can be. `aboveRoomCents`: what is still left above the base (the listing, or the max), for the
- * blocked line. `callPoolRoomCents`: for an unlisted call, what is left of the tester's $1000 for unlisted calls (else null).
+ * blocked line. `callPoolRoomCents`: for a call, what is left of the $1,000 for the tester's calls (else null); `ceilingBinds`: that's what limits this payment.
  */
 export async function pieceRoom(piece: { where: PieceKey; listing: number | null; kind: "submission" | "call"; minutes: number; contractId?: string }, tx: Prisma.TransactionClient = db) {
   const key = piece.where.submissionId ? { submissionId: piece.where.submissionId } : { callId: piece.where.callId! };
@@ -362,15 +356,18 @@ export async function pieceRoom(piece: { where: PieceKey; listing: number | null
   const aboveRoomCents = Math.max(0, cap - Math.max(0, paidCents - base));
   let roomCents = Math.max(0, totalCapCents - paidCents);
   let callPoolRoomCents: number | null = null;
-  if (unlistedCall) {
+  let ceilingBinds = false;
+  if (piece.kind === "call") {
     const contractId = piece.contractId ?? (await tx.call.findUnique({ where: { id: key.callId! }, select: { contractId: true } }))?.contractId ?? "";
-    callPoolRoomCents = Math.max(0, NO_LISTING_CALLS_TOTAL_CENTS - (await unlistedCallsPaid(contractId, tx)));
+    callPoolRoomCents = await callsLeftCents(contractId, tx, key.callId!);
+    ceilingBinds = callPoolRoomCents < roomCents;
     roomCents = Math.min(roomCents, callPoolRoomCents);
   }
-  return { listed: piece.listing != null, maxCents, capCents: cap, paidCents, totalCapCents, roomCents, aboveRoomCents, callPoolRoomCents, aboveBaseCents: aboveRoomCents };
+  return { listed: piece.listing != null, maxCents, capCents: cap, paidCents, totalCapCents, roomCents, aboveRoomCents, callPoolRoomCents, ceilingBinds, aboveBaseCents: aboveRoomCents };
 }
-/** The blocked line for a payment over a piece's room (batch 9's wording; batch 12: unlisted calls name what is left of the tester's $1000). */
+/** The blocked line for a payment over a piece's room (batch 9's wording; batch 15 section 34: a call over what's left of the $1,000 says so). */
 export function overRoomLine(piece: { listing: number | null; kind: "submission" | "call" }, room: Awaited<ReturnType<typeof pieceRoom>>) {
+  if (room.ceilingBinds) return overCeilingLine(room.roomCents);
   if (piece.listing != null) return overListingLine(room.aboveRoomCents);
   if (piece.kind === "call") return overCallsLine(room.roomCents);
   return overMaxLine(room.aboveRoomCents);
@@ -383,7 +380,8 @@ export async function pieceOf(where: PieceKey, tx: Prisma.TransactionClient = db
     return sub ? { where: { submissionId: sub.id }, listing: sub.agreedCents, kind: "submission" as const, minutes: 0, contractId: sub.contractId, label: sub.kind === "recording" ? "recording" : "written answers" } : null;
   }
   const call = await tx.call.findUnique({ where: { id: where.callId ?? "" } });
-  return call ? { where: { callId: call.id }, listing: callReference(call.rateCents, call.actualMinutes ?? call.minutes).cents, kind: "call" as const, minutes: call.actualMinutes ?? call.minutes, contractId: call.contractId, label: "live call", startsAt: call.startsAt, status: call.status } : null;
+  const minutes = call ? callMinutesOf(call) ?? call.minutes : 0;
+  return call ? { where: { callId: call.id }, listing: callReference(call.rateCents, minutes).cents, kind: "call" as const, minutes, contractId: call.contractId, label: "live call", startsAt: call.startsAt, status: call.status } : null;
 }
 
 /**

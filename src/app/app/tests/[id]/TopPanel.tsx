@@ -85,7 +85,7 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
                     <p>{p.working.length ? <>The work of <strong className="text-white">{p.working.length === 1 ? "1 tester" : `${p.working.length} testers`}</strong> ends now.</> : "Nobody is working on it right now."}</p>
                     {p.working.length > 0 && (
                       <ul className="list-disc space-y-1 pl-5">
-                        <li>What they&apos;ve sent still waits for you to pay or reject.</li>
+                        <li>What they&apos;ve sent still waits for you to pay.</li>
                         {p.working.some((w) => w.toSend.length > 0) && <li>The parts they haven&apos;t sent close with no pay.</li>}
                         {ahead > 0 && <li>{ahead === 1 ? "The call still ahead is" : `The ${ahead} calls still ahead are`} cancelled.</li>}
                       </ul>

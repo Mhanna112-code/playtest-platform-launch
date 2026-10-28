@@ -74,9 +74,9 @@ describe("block", () => {
   it("the tester blocks the developer: told how to unblock when trying to join; Join call refused", async () => {
     const { dev, testId, tester, sessionId } = await withCall();
     const call = await db.call.findFirstOrThrow({ where: { contractId: sessionId } });
-    expect((await join(tester.cookie, call.id)).body.error.message).toMatch(/^You can join from /);
+    expect((await join(tester.cookie, call.id)).body.error.message).toMatch(/^Your Join call didn't go through: you can join from /);
     await block(tester.cookie, dev.user.id);
-    expect((await join(dev.cookie, call.id)).body.error.message).toBe("This call was cancelled.");
+    expect((await join(dev.cookie, call.id)).body.error.message).toBe("Your Join call didn't go through: this call was cancelled.");
     const s2 = await setup();
     await db.test.update({ where: { id: s2.testId }, data: { developerId: dev.user.id } });
     expect((await act(s2.testId, "join", tester.cookie, { listingVersion: 1 })).body.error.message).toBe("You blocked Nora Lane: unblock them in Account → Blocked people to join.");

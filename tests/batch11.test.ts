@@ -9,6 +9,7 @@ import { POST as owedPOST } from "@/app/api/payments/owed/route";
 import { POST as confirmPOST } from "@/app/api/payments/confirm/route";
 import { POST as webhookPOST } from "@/app/api/stripe/webhook/route";
 import * as R from "@/lib/rules";
+import { CALLS_TOTAL_CENTS, overCeilingLine } from "@/lib/callMeasure";
 import { parseFormatted, wrapSelection } from "@/lib/markdown";
 import { owed, owedLines, retryOwed, runDaily, startHold } from "@/lib/server/holds";
 import { expireActions } from "@/lib/server/confirm";
@@ -307,24 +308,26 @@ describe("batch 11 item 6 (with batch 12 section 2): one Pay box, Pay more", () 
     expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "500.00", tickedCents: 50_000, over200: true })).status).toBe(200);
   });
 
-  it("unlisted calls: $200/h for the logged minutes with nothing above, and $1000 in all per tester", async () => {
-    expect(R.NO_LISTING_CALLS_TOTAL_CENTS).toBe(100_000);
+  it("unlisted calls: $200/h for the measured minutes with nothing above, and (batch 15 section 34) $1,000 for all of a tester's calls", async () => {
+    expect(CALLS_TOTAL_CENTS).toBe(100_000);
     const s = await setup({ liveRateCents: null });
     const j = await joined(s.testId);
-    const calls = [];
-    for (const h of [48, 72, 96]) {
+    const took = async (h: number) => {
       const call = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie, h);
-      await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - h * 3_600_000), actualMinutes: 180 } });
-      calls.push(call);
-    }
-    // 3 hours at $200/h = $600 each; nothing above it.
-    expect((await pay(s.dev.cookie, { kind: "call", id: calls[0].id, amount: "600.01", tickedCents: 60_001, over200: true })).body.error.message).toBe("This is more than you can pay for this call (up to $600 more for unlisted calls).");
-    expect((await pay(s.dev.cookie, { kind: "call", id: calls[0].id, amount: "600.00", tickedCents: 60_000, over200: true })).status).toBe(200);
-    // $400 left of the tester's $1000 for unlisted calls.
-    expect((await pay(s.dev.cookie, { kind: "call", id: calls[1].id, amount: "400.01", tickedCents: 40_001, over200: true })).body.error.message).toBe("This is more than you can pay for this call (up to $400 more for unlisted calls).");
-    expect((await pay(s.dev.cookie, { kind: "call", id: calls[1].id, amount: "400.00", tickedCents: 40_000, over200: true })).status).toBe(200);
-    expect((await pay(s.dev.cookie, { kind: "call", id: calls[2].id, amount: "0.50", tickedCents: 50 })).body.error.message).toBe("This is more than you can pay for this call (up to $0 more for unlisted calls).");
-    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain("more for unlisted calls");
+      await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - h * 3_600_000), measuredMinutes: 180, measuredAt: new Date() } });
+      return call;
+    };
+    // 3 hours at $200/h = $600; nothing above it.
+    const first = await took(48);
+    expect((await pay(s.dev.cookie, { kind: "call", id: first.id, amount: "600.01", tickedCents: 60_001, over200: true })).body.error.message).toBe(R.overCallsLine(60_000));
+    expect((await pay(s.dev.cookie, { kind: "call", id: first.id, amount: "600.00", tickedCents: 60_000, over200: true })).status).toBe(200);
+    // $400 left of the $1,000 for this tester's calls.
+    const second = await took(72);
+    expect((await pay(s.dev.cookie, { kind: "call", id: second.id, amount: "400.01", tickedCents: 40_001, over200: true })).body.error.message).toBe(overCeilingLine(40_000));
+    expect((await pay(s.dev.cookie, { kind: "call", id: second.id, amount: "400.00", tickedCents: 40_000, over200: true })).status).toBe(200);
+    // Nothing left: another call can't even be booked.
+    const startsAt = new Date(Date.now() + 96 * 3_600_000); startsAt.setSeconds(0, 0);
+    expect((await act(s.testId, "request-time", s.dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [j.sessionId], startsAt: startsAt.toISOString() })).body.error.message).toBe("Calls with Ana Silva on this test can come to at most $1,000; $0.00 is left, so this call can't be booked.");
   });
 
   it("the tester rows keep a Pay more box on paid pieces; no separate Extra pay", () => {

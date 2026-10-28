@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { GET as cronGET } from "@/app/api/cron/daily/route";
 import * as R from "@/lib/rules";
+import { checkLower } from "@/lib/callMeasure";
 import { startHold } from "@/lib/server/holds";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
@@ -26,7 +27,8 @@ async function withCall(over: Record<string, unknown> = {}, heldAgo = false) {
   await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie, 48);
   const slots = [{ id: "" }, { id: "" }];
   const call = await db.call.findFirstOrThrow({ where: { contractId: j.sessionId } });
-  if (heldAgo) await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 3_600_000) } });
+  // (Batch 15 section 40) A call that took place: its measured length is final.
+  if (heldAgo) await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 3_600_000), measuredMinutes: 30, measuredAt: new Date() } });
   return { ...s, ...j, call, slots };
 }
 
@@ -38,8 +40,8 @@ describe("latest batch rules", () => {
     expect(renderTimes(R.callCancelledLine(d, "stopped"), Intl.DateTimeFormat().resolvedOptions().timeZone)).toMatch(/was cancelled because the test was stopped\.$/);
     expect(R.callReference(4000, 25)).toEqual({ cents: 1667, text: "Listing: $40/h × 25 min = $16.67" });
     expect(R.callReference(null, 25)).toEqual({ cents: null, text: "Not listed" });
-    expect(R.checkActualMinutes(25, 30).ok).toBe(true);
-    expect(R.checkActualMinutes(91, 30).ok).toBe(false);
+    expect(checkLower(25, 30, "We stopped early").ok).toBe(true);
+    expect(checkLower(31, 30, "Longer").ok).toBe(false);
     expect(R.declinedLine("Ana Silva", 1667, "live call")).toBe("Your card was declined, so Ana Silva wasn't paid $16.67 for the call. Update your card in Payments, then press Pay again.");
     expect(R.emailDecision("each", false)).toBe("summary"); // (Owner, Oct 26) no per-update emails any more: a leftover "each" counts as daily
     expect(R.emailDecision("off", false)).toBe("skip");
@@ -94,7 +96,7 @@ describe("email settings and the bell", () => {
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
-    await pay(dev.cookie, { kind: "submission", id: sub.id, action: "reject", reason: "Not what we asked" });
+    await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "0", reason: "Not what we asked" });
     await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question" });
     expect(await db.outboxEmail.count({ where: { to: adm.user.email } })).toBe(0);
     await cron();
@@ -146,12 +148,12 @@ describe("live calls blocked during holds and on stopped/closed tests", () => {
 });
 
 describe("call length and payment problems on a call", () => {
-  it("'How long was the call?' sets the Pay box reference (rate × entered minutes)", async () => {
+  it("Lower the length sets the Pay box reference (rate × the lowered minutes)", async () => {
     const { dev, testId, call } = await withCall({}, true);
-    expect((await act(testId, "call-length", dev.cookie, { callId: call.id, minutes: 25 })).status).toBe(200);
+    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 25, reason: "We stopped early.", seenAt: new Date().toISOString(), confirmed: true })).status).toBe(200);
     expect((await pay(dev.cookie, { kind: "call", id: call.id, amount: "10.00", tickedCents: 1000 })).body.error.message).toContain("listing's $12.50");
     expect((await pay(dev.cookie, { kind: "call", id: call.id, amount: "12.50", tickedCents: 1250 })).status).toBe(200);
-    expect((await act(testId, "call-length", dev.cookie, { callId: call.id, minutes: 30 })).body.error.message).toBe("This call was already paid, so its length can't change.");
+    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 20, reason: "Even shorter." })).body.error.message).toBe("This call was already paid, so its length can't change.");
   });
 
   it("a declined Pay shows the exact line; a chargeback on the call payment reads 'live call'", async () => {

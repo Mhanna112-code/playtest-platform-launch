@@ -277,7 +277,7 @@ describe("B3) Join call", () => {
     await db.call.update({ where: { id: call.id }, data: { status: "cancelled", cancelledBy: "developer", cancelNote: "Something came up" } });
     const r = await json(await joinCallPOST(req(`/api/calls/${call.id}/join`, { cookie: tester.cookie, body: {} }), { params: Promise.resolve({ id: call.id }) }));
     expect(r.status).toBe(409);
-    expect(r.body.error.message).toBe("This call was cancelled: Something came up.");
+    expect(r.body.error.message).toBe("Your Join call didn't go through: Nora Lane cancelled this call."); // (batch 15 section 38)
     expect(src("components/JoinCall.tsx")).toContain("setGone(true)");
   });
 });

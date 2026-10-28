@@ -16,6 +16,9 @@ import { receipt } from "./payments";
 import { testerTermsGate } from "./terms";
 import { recordEvent } from "./tests";
 import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
+import { callMinutesOf, chargeCappedLine } from "@/lib/callMeasure";
+import { callReference } from "@/lib/rules";
+import { callsLeftCents } from "./callMoney";
 
 // Payment hold (owner rule, Oct 27): starts AT ONCE when any payment is declined (part Pay, the tester's Charge, a call charge, extra pay), or when a chargeback opens
 // (a chargeback during a payment hold turns it into a chargeback hold). There is no owed window and no daily retry. While on hold all the developer's
@@ -145,6 +148,12 @@ export async function shiftAfterPause(tx: Prisma.TransactionClient, t: { id: str
   for (const x of await tx.submission.findMany({ where: { contract: { testId: t.id }, review: null, payBy: { not: null } } })) {
     const by = pauseShiftMs(x.updatedAt > start ? x.updatedAt : start, now, others); // only the part of the pause after it was sent
     if (by > 0) await tx.submission.update({ where: { id: x.id }, data: { payBy: later(x.payBy, by), choiceBy: later(x.choiceBy, by) } });
+  }
+  // (Batch 15 sections 15 and 40) A call's review clock moves the same way (only the part of the pause after its length was final).
+  for (const x of await tx.call.findMany({ where: { contract: { testId: t.id }, review: null, payBy: { not: null }, status: "booked" } })) {
+    const from = x.measuredAt && x.measuredAt > start ? x.measuredAt : start;
+    const by = pauseShiftMs(from, now, others);
+    if (by > 0) await tx.call.update({ where: { id: x.id }, data: { payBy: later(x.payBy, by), choiceBy: later(x.choiceBy, by) } });
   }
   return ms;
 }
@@ -527,6 +536,9 @@ export async function runDaily(now = new Date()) {
       continue;
     }
   }
+  // 1b. (Owner, Oct 30, batch 15 sections 15 and 40) A LISTED call left unpaid past its review date (the later of the tester's deadline and the call + 7 days): reviewed like
+  // any other part. The developer is reminded daily; the tester can Charge (the measured or lowered length × the contract rate, within the $1,000 for calls) or Let it go.
+  out.choices += await callCharges(now);
   // 3a. (Owner, Oct 27) ONE daily email per admin that can't be turned off, sent only when it has something in it (see adminDaily.ts).
   out.alerts = await (await import("./adminDaily")).adminDailyEmails(now);
   // 3c. (Owner, Oct 26) Paused tests close after 7 days, whatever the cause (the admin can extend a test's date or close it sooner).
@@ -562,6 +574,21 @@ export async function runDaily(now = new Date()) {
     const earlier = reviewMarksFor(s.updatedAt, reviewDate!).filter((x) => x.at.getTime() <= m.at.getTime()).map((x) => x.mark).filter((x) => !s.devMarks.includes(x));
     await db.submission.update({ where: { id: s.id }, data: { devMarks: { push: earlier } } });
   }
+  // 5b. (Batch 15 section 15) Listed calls get the same review reminders, counting to their review date.
+  const upcomingCalls = await db.call.findMany({ where: { review: null, status: "booked", rateCents: { not: null }, choiceOfferedAt: null, payBy: { not: null }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, take: 2000 });
+  for (const x of upcomingCalls) {
+    const reviewDate = chargeOpensAt(x, x.contract.test, x.contract, now);
+    const sent = x.measuredAt ?? x.startsAt;
+    const m = reviewDate ? reviewMarkDue(sent, reviewDate, now, x.devMarks) : null;
+    if (!m) continue;
+    const name = displayName(x.contract.tester);
+    const when = m.label === "tomorrow" ? "by tomorrow" : m.label.replace("in ", "within ");
+    await bell(x.contract.test.developerId, `“${x.contract.title}”: pay ${name}'s call on ${T(x.startsAt)} ${when}${x.contract.tester.deletedAt ? "" : ` (after that ${name} can charge or let it go)`}.`, `/app/tests/${x.contract.testId}#call-${x.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${x.id}` });
+    const earlier = reviewMarksFor(sent, reviewDate!).filter((y) => y.at.getTime() <= m.at.getTime()).map((y) => y.mark).filter((y) => !x.devMarks.includes(y));
+    await db.call.update({ where: { id: x.id }, data: { devMarks: { push: earlier } } });
+  }
+  // 5c. (Batch 15 sections 15 and 40) Calls that aren't listed: never charged; ONE weekly "Pay your calls" line per developer, stacked across tests, until each is paid ($0 counts).
+  await payYourCalls(now);
   // (Batch 15 section 18) Open until passed: pending applications and open invites close.
   await (await import("./tests")).closeJoiningAfterOpenUntil(now);
   // 7. (Owner, Oct 26) Invites: a bell reminder DAILY until the tester joins, says "No thanks", or the invite expires (all of a day's stack into one line across tests).
@@ -620,8 +647,67 @@ export async function owedForBox(devId: string) {
   return owedLines(devId);
 }
 
-/** The tester's choice on a contract part unreviewed for the review window: "charge" (the listing minus what is paid) or "letgo". */
+/** (Batch 15 section 34) What a tester can Charge for a listed call: its measured (or lowered) length × the contract rate, less what's paid, within what's left of the $1,000. */
+export async function callChargeCap(x: { id: string; contractId: string; rateCents: number | null; actualMinutes: number | null; measuredMinutes: number | null; measuredAt: Date | null }) {
+  const minutes = callMinutesOf(x);
+  if (x.rateCents == null || minutes == null) return { cents: 0, capped: false };
+  const paid = (await db.payment.aggregate({ where: { callId: x.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
+  const full = chargeAmount(callReference(x.rateCents, minutes).cents, paid);
+  const left = await callsLeftCents(x.contractId, db, x.id);
+  return { cents: Math.min(full, left), capped: left < full };
+}
+/** The tester's line when Charge opens for a call ("… charge $X or let it go"; cut by the ceiling: "Charge $X (the $1,000 limit for calls on this test)"). */
+export const callChoiceLine = (devName: string, startsAt: Date, cents: number, capped: boolean) =>
+  `${devName} didn't pay your call on ${T(startsAt)} in ${REVIEW_DAYS} days: ${capped ? chargeCappedLine(cents).replace(/^Charge/, "charge") : `charge ${money(cents)}`} or let it go`;
+
+async function callCharges(now: Date) {
+  let n = 0;
+  const due = await db.call.findMany({ where: { review: null, status: "booked", rateCents: { not: null }, payBy: { lt: now }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } }, take: 1000 });
+  for (const x of due) {
+    const c = x.contract, dev = c.test.developer;
+    if (callMinutesOf(x) == null || !chargeIsOpen(x, c.test, c, now)) continue;
+    const name = displayName(c.tester), gone = !!c.tester.deletedAt;
+    if (!x.devRemindedAt || now.getTime() - x.devRemindedAt.getTime() >= 23 * 3_600_000) {
+      await bell(dev.id, `“${c.title}”: ${name}'s call on ${T(x.startsAt)} waited over ${REVIEW_DAYS} days: pay it${gone ? "" : ` (${name} can now charge or let it go)`}.`, `/app/tests/${c.testId}#call-${x.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${x.id}` });
+      await db.call.update({ where: { id: x.id }, data: { devRemindedAt: now } });
+    }
+    if (gone) continue;
+    const cap = await callChargeCap(x);
+    if (cap.cents === 0) continue;
+    const line = callChoiceLine(displayName(dev), x.startsAt, cap.cents, cap.capped);
+    if (!x.choiceOfferedAt) {
+      await db.call.update({ where: { id: x.id }, data: { choiceOfferedAt: now, choiceBy: new Date(now.getTime() + REVIEW_DAYS * 86_400_000), remindedAt: now } });
+      await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${x.id}`, { group: "charge" });
+      await db.$transaction((tx) => recordEvent(tx, c.testId, "choice", `${name} can now charge or let go of their call on ${fmtDateTime(x.startsAt)}`, false, {}, c.id));
+      await (await import("./ratings")).maybePromptRating(c.id);
+      n++;
+    } else if (!x.remindedAt || now.getTime() - x.remindedAt.getTime() >= REMIND_DAYS * 86_400_000 - 3_600_000) {
+      await notify(c.tester.email, `Reminder: ${line}`, [line], `/app/sessions/${c.id}#call-${x.id}`, { group: "charge", reminder: `charge:${x.id}` });
+      await db.call.update({ where: { id: x.id }, data: { remindedAt: now } });
+    }
+  }
+  return n;
+}
+
+/** (Batch 15 sections 15 and 40) The weekly "Pay your calls" line: one per developer, stacked across tests ("3 calls to pay on 2 tests"), until each is paid. */
+async function payYourCalls(now: Date) {
+  const calls = await db.call.findMany({ where: { review: null, status: "booked", rateCents: null, payBy: { lt: now }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, take: 5000 });
+  const byDev = new Map<string, typeof calls>();
+  for (const x of calls) if (callMinutesOf(x) != null) byDev.set(x.contract.test.developerId, [...(byDev.get(x.contract.test.developerId) ?? []), x]);
+  for (const [devId, list] of byDev) {
+    const key = `paycalls:${devId}`;
+    // Weekly: the calls in the last line carry when it was sent.
+    if (list.some((x) => x.remindedAt && now.getTime() - x.remindedAt.getTime() < 7 * 86_400_000 - 3_600_000)) continue;
+    await db.call.updateMany({ where: { id: { in: list.map((x) => x.id) } }, data: { remindedAt: now } });
+    const tests = [...new Set(list.map((x) => x.contract.testId))];
+    const line = list.length === 1 ? `Pay your calls: your call with ${displayName(list[0].contract.tester)} on “${list[0].contract.title}” isn't paid yet (any amount, $0 included).` : `Pay your calls: ${list.length} calls to pay on ${tests.length === 1 ? `“${list[0].contract.title}”` : `${tests.length} tests`}.`;
+    await bell(devId, line, tests.length === 1 ? `/app/tests/${tests[0]}#needs-you` : "/app#needs-review", undefined, { reminder: key });
+  }
+}
+
+/** The tester's choice on a contract part (or, batch 15 section 15, a listed call) unreviewed for the review window: "charge" (the listing minus what is paid) or "letgo". */
 export async function chooseOutcome(tester: { id: string; email: string; name: string }, contractId: string, body: Record<string, unknown>) {
+  if (body.callId) return chooseCallOutcome(tester, contractId, body);
   const s = await db.submission.findUnique({ where: { id: String(body.submissionId ?? "") }, include: { review: true, contract: { include: { tester: true, test: { include: { developer: true } } } } } });
   if (!s || s.contractId !== contractId || s.contract.testerId !== tester.id) throw new HttpError(404, "not_found", "That work doesn't exist.");
   const c = s.contract, dev = c.test.developer, label = s.kind === "recording" ? "recording" : "written answers";
@@ -694,11 +780,76 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   return { choice, amountCents: amount, status, ...(status === "needs_confirmation" ? { message: `Charged ${money(amount)}. Payment may be delayed.` } : {}) };
 }
 
+/** (Batch 15 sections 15, 34 and 40) The tester's Charge / Let it go on a listed call left unpaid past its review date. */
+async function chooseCallOutcome(tester: { id: string; email: string; name: string }, contractId: string, body: Record<string, unknown>) {
+  const x = await db.call.findUnique({ where: { id: String(body.callId ?? "") }, include: { review: true, contract: { include: { tester: true, test: { include: { developer: true } } } } } });
+  if (!x || x.contractId !== contractId || x.contract.testerId !== tester.id) throw new HttpError(404, "not_found", "That call doesn't exist.");
+  const c = x.contract, dev = c.test.developer, label = "live call";
+  if (await (await import("./confirm")).pieceLocked({ callId: x.id })) throw new HttpError(409, "locked", PIECE_LOCKED);
+  if (x.review) {
+    if (byTesterChoice(x.review.reason)) throw new HttpError(409, "done", "You already chose for this.");
+    throw new HttpError(409, "done", `${displayName(dev)} paid ${money(x.review.amountCents)} for this meanwhile.`);
+  }
+  if (!x.choiceOfferedAt) throw new HttpError(409, "not_yet", `You can choose once ${REVIEW_DAYS} days have passed since the call and your deadline has passed.`);
+  await testerTermsGate(contractId, displayName(dev), body);
+  const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;
+  if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");
+  const cap = (await callChargeCap(x)).cents;
+  if (cap === 0 && choice === "charge") throw new HttpError(409, "paid_in_full", "There's nothing left to charge for this call (the $1,000 for calls on this test is used).");
+  const typed = body.amount === undefined || body.amount === "" ? cap : toCents(body.amount);
+  if (choice === "charge" && (typed == null || typed <= 0)) throw new HttpError(400, "bad_amount", "Enter an amount like 5.00.");
+  if (choice === "charge" && typed! > cap) throw new HttpError(400, "too_much", `At most ${money(cap)}.`);
+  if (choice === "charge" && typed! > 0 && typed! < 50) throw new HttpError(400, "too_small", "The smallest card charge is $0.50.");
+  const amount = choice === "charge" ? typed! : 0;
+  if (choice === "charge" && body.tickedCents !== amount) throw new HttpError(400, "tick", `Tick “charge ${displayName(dev)} ${money(amount)} now” to charge.`);
+  const payKey = serverKey("choice", x.id);
+  const minutes = callMinutesOf(x);
+  const review = await db.review.create({ data: { callId: x.id, contractId: c.id, amountCents: amount, agreedCents: x.rateCents != null && minutes != null ? callReference(x.rateCents, minutes).cents : null, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey } }).catch(() => null);
+  if (!review) throw new HttpError(409, "done", "This was already settled.");
+  if (choice === "letgo") {
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let their call on ${fmtDateTime(x.startsAt)} go: nothing charged`, false, {}, c.id));
+    return { choice, amountCents: 0 };
+  }
+  const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, holdReason: true } });
+  if (devNow.holdStartedAt) {
+    await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "owed" } });
+    await bell(dev.id, `${displayName(tester)} charged ${money(amount)} for their call on “${c.title}”: it was added to what you owe`, devNow.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { payment: true, group: "payhold" });
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their call`, false, {}, c.id));
+    return { choice, amountCents: amount, status: "owed", message: chargedDelayedLine(amount) };
+  }
+  const row = await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "pending", payKey } });
+  let status = "charged";
+  try {
+    const r = await charge(dev, c.tester, amount, payKey, `Playtest: ${label} on “${c.title}” (charged by the tester)`);
+    status = r.status;
+    if (r.status === "requires_action") {
+      await (await import("./confirm")).awayAction(row.id, r as NeedsAction);
+      await notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { payment: true, group: "tdelayed" });
+      status = "needs_confirmation";
+    } else {
+      return finishChoicePay(row.id, r);
+    }
+  } catch (e) {
+    if (e instanceof HttpError && e.code === "payment_unknown") throw new HttpError(502, "payment_unknown", (await import("./recovery")).PAYMENT_CHECKING);
+    if (!(e instanceof HttpError && e.code === "card_failed")) {
+      await db.payment.delete({ where: { id: row.id } });
+      await db.review.delete({ where: { id: review.id } });
+      throw e instanceof HttpError ? e : new HttpError(503, "payments_problem", PAYMENTS_PROBLEM);
+    }
+    status = "failed";
+    const failed = await db.payment.update({ where: { id: row.id }, data: { status: "failed", failure: (e as Error).message, owedUntil: new Date() } });
+    await notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { payment: true, group: "tdelayed" });
+    await declinedPayment(dev.id, failed.id, amount, `${displayName(tester)}'s call on “${c.title}”`);
+  }
+  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their call`, false, {}, c.id));
+  return { choice, amountCents: amount, status, ...(status === "needs_confirmation" ? { message: `Charged ${money(amount)}. Payment may be delayed.` } : {}) };
+}
+
 /** (Batch 15 section 9) A tester's Charge went through (at once, or found later by the stuck-payment check): recorded, the receipt sent. */
 export async function finishChoicePay(paymentId: string, r: { status: string; feeCents?: number; testerCents?: number; transferStatus?: string; stripePaymentIntentId: string | null }) {
   const p = await db.payment.update({ where: { id: paymentId }, data: { status: r.status, stripePaymentIntentId: r.stripePaymentIntentId, ...(r.feeCents != null ? { feeCents: r.feeCents, testerCents: r.testerCents, transferStatus: r.transferStatus } : {}) } });
   const c = await db.contract.findUniqueOrThrow({ where: { id: p.contractId! }, include: { tester: true, test: { include: { developer: true } } } });
-  const label = (await db.submission.findUnique({ where: { id: p.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers";
+  const label = p.callId ? "call" : (await db.submission.findUnique({ where: { id: p.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers";
   await receipt(c.test.developer.email, `${displayName(c.tester)}'s ${label} (charged by them after ${REVIEW_DAYS} days)`, p.amountCents, r.status, `/app/tests/${c.testId}`);
   await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(c.tester)} charged ${money(p.amountCents)} for their ${label}`, false, {}, c.id));
   return { choice: "charge" as const, amountCents: p.amountCents, status: r.status };

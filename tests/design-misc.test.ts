@@ -35,9 +35,9 @@ describe("Pay and Reject while the account is not clear (owner, Oct 26)", () => 
     const { dev, sessionId, tester } = await withWork();
     const second = await db.submission.create({ data: { contractId: sessionId, kind: "recording", agreedCents: 1000, sentAt: new Date(), updatedAt: new Date() } });
     await startHold(dev.user.id, "unpaid");
-    const rej = await pay(dev.cookie, { action: "reject", kind: "submission", id: second.id, reason: "Nothing usable in it" });
+    const rej = await pay(dev.cookie, { amount: "0", kind: "submission", id: second.id, reason: "Nothing usable in it" });
     expect(rej.status).toBe(403);
-    expect(rej.body.error).toMatchObject({ code: "held", failed: "Your Reject on Harbor Run didn't go through" });
+    expect(rej.body.error).toMatchObject({ code: "held", failed: "Your Pay on Harbor Run didn't go through" }); // (batch 15 section 30) $0 is a Pay
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId, kind: "written" } });
     const paid = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     expect(paid.body.error).toMatchObject({ code: "held", failed: "Your Pay on Harbor Run didn't go through" });
@@ -50,7 +50,7 @@ describe("Pay and Reject while the account is not clear (owner, Oct 26)", () => 
     const { dev, sub, tester } = await withWork();
     const a = await admin();
     await adm("suspend", a.cookie, { id: dev.user.id, note: "Spam" });
-    expect((await pay(dev.cookie, { action: "reject", kind: "submission", id: sub.id, reason: "Not good enough" })).body.error.failed).toMatch(/^Your Reject on Harbor Run didn't go through$/);
+    expect((await pay(dev.cookie, { amount: "0", kind: "submission", id: sub.id, reason: "Not good enough" })).body.error.failed).toMatch(/^Your Pay on Harbor Run didn't go through$/);
     const r = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     expect(r.status).toBe(403);
     expect(r.body.error).toMatchObject({ code: "suspended", failed: "Your Pay on Harbor Run didn't go through" });
@@ -75,7 +75,7 @@ describe("Pay and Reject while the account is not clear (owner, Oct 26)", () => 
     // Suspension and a hold: Pay / Reject still refused, 'Pay what you owe' goes through.
     await startHold(dev.user.id, "unpaid");
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).body.error.code).toBe("suspended");
-    expect((await pay(dev.cookie, { action: "reject", kind: "submission", id: sub.id, reason: "No" })).body.error.code).toBe("suspended");
+    expect((await pay(dev.cookie, { amount: "0", kind: "submission", id: sub.id, reason: "No" })).body.error.code).toBe("suspended");
     expect((await owedReq(dev.cookie)).status).toBe(200);
   });
 });

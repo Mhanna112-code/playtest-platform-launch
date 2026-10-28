@@ -72,7 +72,7 @@ describe("payment hold", () => {
     const waits = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     expect(waits.status).toBe(403);
     expect(waits.body.error).toMatchObject({ code: "held", failed: "Your Pay on Harbor Run didn't go through" });
-    expect((await pay(dev.cookie, { action: "reject", kind: "submission", id: sub.id, reason: "Not useful" })).body.error.code).toBe("held");
+    expect((await pay(dev.cookie, { amount: "0", kind: "submission", id: sub.id, reason: "Not useful" })).body.error.code).toBe("held");
     expect(await db.payment.count({ where: { submissionId: sub.id } })).toBe(0);
     const ben = await makeUser({ tester: true });
     expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test is paused right now.");

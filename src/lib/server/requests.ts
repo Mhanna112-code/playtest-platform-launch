@@ -12,6 +12,10 @@ import { LIMITS } from "@/lib/limits";
 import { notify } from "./notify";
 import { devGate, recordEvent } from "./tests";
 import { testerGate } from "./testerGate";
+import { ceilingRefusal, checkCeiling } from "./callMoney";
+
+/** (Batch 15 section 34) The calls a request books if accepted: the most of any one row (a "choose one" row books 1; a set books all of its calls). */
+const callsIfAccepted = (rows: CallRow[]) => Math.max(1, ...rows.map((r) => occurrences(r).length));
 
 // Calls are ALWAYS requests (owner rules). Every call starts as a request from one side and is booked only when the
 // other side accepts, or by auto-match. A request is ONE of:
@@ -235,6 +239,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
         const clash = await acceptClash(c, "developer", [hit], match.minutes);
         if (clash.length) throw new HttpError(409, "clash", clash[0]);
         if ((await bookedTimes(c.id)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit("developer", displayName(c.tester)));
+        await checkCeiling(c.id, bookRate(c.test, c), match.minutes, 1, displayName(c.tester));
         const call = await bookAt(c.id, hit, match.minutes, bookRate(c.test, c), null, true);
         await db.callRequest.update({ where: { id: match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
         const line = `Booked: you both picked ${T(hit)}`;
@@ -248,7 +253,10 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   for (const x of all) {
     const minutes = reqMinutes;
     const clash = await sendClash(x.c.id, requestTimes(kind), minutes, displayName(x.c.tester), undefined, all.length === 1 ? { side: "developer", otherPoss: pronouns(x.c.tester.pronoun).poss } : undefined);
+    // (Batch 15 section 34) Over the $1,000 for this tester's calls: refused for them (named with what's left).
+    const ceiling = await ceilingRefusal(x.c.id, bookRate(x.c.test, x.c), minutes, callsIfAccepted(kind.rows), displayName(x.c.tester));
     if (clash) blocked.push(clash);
+    else if (ceiling) blocked.push(ceiling);
     else if ((await pendingRequests(x.c.id)) >= MAX_REQUESTS) atLimit.push(displayName(x.c.tester));
     else ok.push(x);
   }
@@ -292,6 +300,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
       const clash = await acceptClash(c, "tester", [hit], m.minutes);
       if (clash.length) throw new HttpError(409, "clash", clash[0]);
       if ((await bookedTimes(contractId)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit("tester", displayName(c.tester)));
+      await checkCeiling(contractId, bookRate(c.test, c), m.minutes, 1, devName);
       const call = await bookAt(contractId, hit, m.minutes, bookRate(c.test, c));
       await db.callRequest.update({ where: { id: m.id }, data: { status: "booked", callId: call.id, decidedAt: new Date() } });
       await closeBatch(m.batchId, m.id);
@@ -303,6 +312,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   const clash = await sendClash(contractId, requestTimes(kind), minutes, devName, undefined, { side: "tester", otherPoss: pronouns(c.test.developer.pronoun).poss });
   if (clash) throw new HttpError(409, "clash", clash);
   if ((await pendingRequests(contractId)) >= MAX_REQUESTS) throw new HttpError(409, "limit", requestLimitLine(devName));
+  await checkCeiling(contractId, bookRate(c.test, c), minutes, callsIfAccepted(kind.rows), devName);
   const r = await db.callRequest.create({
     data: { testId: c.testId, contractId, fromSide: "tester", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes },
   });
@@ -358,6 +368,8 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
       if (clashes.length) throw new HttpError(409, "clash", clashes[0]);
     }
     if ((await bookedTimes(contractId)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit(side, displayName(c.tester)));
+    // (Batch 15 section 34) A pending request over the $1,000 for calls can't be accepted.
+    await checkCeiling(contractId, rate, r.minutes, times.length, side === "developer" ? displayName(c.tester) : displayName(c.test.developer));
     let first = null;
     // A repeating pick is one CallSet (it counts as 1 of the 3 booked times); Forever keeps the next 4 ahead.
     const set = row.repeat === "once" ? null : await db.callSet.create({ data: { testId: c.testId, contractId, repeat: row.repeat, count: row.count, minutes: r.minutes, rateCents: rate, nextAt: new Date(row.startsAt.getTime() + times.length * stepMs(row.repeat)) } });
@@ -434,6 +446,15 @@ export async function topUpForeverSets(now = new Date()) {
       nextAt = new Date(at.getTime() + stepMs(set.repeat));
       if (at.getTime() <= now.getTime()) continue; // (an old occurrence: never booked back in time)
       const clash = await acceptClash(c, "developer", [at], set.minutes);
+      // (Batch 15 section 34) Over the $1,000 for this tester's calls: skipped, both told.
+      const ceiling = clash.length ? "" : await ceilingRefusal(c.id, set.rateCents, set.minutes, 1, displayName(c.tester));
+      if (ceiling) {
+        skipped++;
+        const line = `The ${unitOf(set.repeat)} call on ${T(at)} was skipped: calls on this test can come to at most $1,000.`;
+        await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#calls`);
+        await notify(c.tester.email, line, [line], `/app/sessions/${c.id}`);
+        continue;
+      }
       if (clash.length) {
         skipped++;
         const line = `The ${unitOf(set.repeat)} call on ${T(at)} was skipped: ${displayName(c.tester)} or ${displayName(c.test.developer)} already has a call at that time.`;

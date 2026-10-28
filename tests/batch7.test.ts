@@ -117,16 +117,15 @@ describe("batch 7 item 4: stop-once on every press still allowed", () => {
     expect((await sact(b.sessionId, "dispute", b.tester.cookie, { kind: "submission", id: subB.id, reason: "I answered every question fully" })).status).toBe(200);
     const d = await db.dispute.findFirstOrThrow({ where: { submissionId: subB.id } });
     const call = await bookCall(testId, dev.cookie, a.sessionId, a.tester.cookie, 48);
-    await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 2 * 3_600_000) } });
+    await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 2 * 3_600_000), measuredMinutes: 30, measuredAt: new Date() } });
     await db.rating.create({ data: { testId, contractId: a.sessionId, side: "tester", raterId: a.tester.user.id, rateeId: dev.user.id, stars: 5 } });
     await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
     const loaded = seen();
     await settle();
     await db.testEvent.create({ data: { testId, kind: "paid", text: "Ben Carter charged $1.00 for their recording" } });
     stops(await pay(dev.cookie, { kind: "submission", id: subA.id, amount: "10.00", tickedCents: 1000, seenAt: loaded }), "pay");
-    stops(await pay(dev.cookie, { kind: "submission", id: subA.id, action: "reject", reason: "Not what I asked", seenAt: loaded }), "reject");
     stops(await act(testId, "pay-extra", dev.cookie, { contractId: b.sessionId, submissionId: subB.id, amount: "2.00", tickedCents: 200, seenAt: loaded }), "extra pay");
-    stops(await act(testId, "call-length", dev.cookie, { callId: call.id, minutes: 25, seenAt: loaded }), "call length");
+    stops(await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 25, reason: "We stopped early.", seenAt: loaded }), "lower the length");
     stops(await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "They skipped two answers", seenAt: loaded }), "dispute side");
     stops(await act(testId, "rate", dev.cookie, { contractId: a.sessionId, stars: 4, seenAt: loaded }), "rate");
   });

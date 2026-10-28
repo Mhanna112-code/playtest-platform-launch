@@ -6,6 +6,9 @@
 export function jumpTo(id: string) {
   const el = document.getElementById(id);
   if (!el) return;
+  // (Batch 15 section 42) A target inside a fold (a tester row's "Calls (N)", the tester's Call history) opens it first.
+  for (let p = el.parentElement; p; p = p.parentElement) if (p instanceof HTMLDetailsElement && !p.open) p.open = true;
+  if (el instanceof HTMLDetailsElement && !el.open) el.open = true;
   el.scrollIntoView({ block: "center", behavior: "smooth" });
   el.setAttribute("data-marked", "");
   setTimeout(() => el.removeAttribute("data-marked"), 4000);

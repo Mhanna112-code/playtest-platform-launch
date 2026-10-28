@@ -17,6 +17,7 @@ import { closedForSuspended, restrictedOn } from "@/lib/closedPages";
 import { restrictionKey } from "@/lib/restricted";
 import { SessionWatch } from "@/components/SessionWatch";
 import { TimeZoneSync } from "@/components/TimeZoneSync";
+import { HashJump } from "@/components/HashJump";
 
 // The full Playtest Platform's header (NEWEST+8): logo, the side's links with their icons, the bell, the account pill
 // and the log-out icon; the confirm-email strip under it; a wide main column.
@@ -107,6 +108,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <FieldChecks />
       <SessionWatch userId={u.id} name={name} restriction={restrictionKey(u, side)} />
       <TimeZoneSync stored={u.timeZone} />
+      <HashJump />
     </>
   );
 }

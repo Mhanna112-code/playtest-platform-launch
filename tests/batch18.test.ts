@@ -191,7 +191,7 @@ describe("Q) a declined payment starts the hold at once (no owed window)", () =>
     await startHold(dev.user.id, "unpaid");
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).body.error.code).toBe("held");
     expect((await act(testId, "pay-extra", dev.cookie, { seenAt: seen(), contractId: sessionId, submissionId: sub.id, amount: "2.00" })).body.error.code).toBe("held");
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, action: "reject", reason: "Not what I asked for" })).body.error.code).toBe("held");
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "0", reason: "Not what I asked for" })).body.error.code).toBe("held");
     const d = await sact(two.sessionId, "dispute", two.tester.cookie, { kind: "submission", id: sub2.id, reason: "I answered everything properly", seenAt: seen(), confirmed: true });
     expect(d.status).toBe(200);
     setStripeForTests(null);
@@ -370,8 +370,9 @@ describe("T) extra pay beside each sent part, (batch 9) capped per piece at 100%
     expect((await roomOf(sub.id)).aboveBaseCents).toBe(9000);
     // (Batch 11 section 6) The same Pay box, as "Pay more" on a paid piece.
     expect(src("app/app/tests/[id]/page.tsx")).toContain("r.sub && r.sub.review && !r.sub.review.rejected && !restricted");
-    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain("up to {money(p.roomCents)}");
-    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain("Paid so far for this part:");
+    // (Batch 15 section 31) The room beside the amount; no "Paid so far for this part" any more.
+    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain("up to ${money(room.aboveRoomCents)} above the listing");
+    expect(src("app/app/tests/[id]/PayBox.tsx")).not.toContain("Paid so far for this part:");
     // Pay above the cap is refused.
     const two = await sentAt(10_000, "Ben Carter");
     const tooMuch = await pay(two.dev.cookie, { kind: "submission", id: two.sub.id, amount: "250.00", tickedCents: 25_000, over200: true });

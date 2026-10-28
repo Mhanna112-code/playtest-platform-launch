@@ -55,7 +55,7 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     expect(R.canDispute(500, 1000, false, true)).toEqual({ ok: false, message: R.TESTER_CHOSE_LINE });
     expect(R.disputeLimitText(1000, "submission")).toBe("up to the listing amount");
     expect(R.disputeLimitText(null, "submission")).toBe("up to $1,000 for this piece");
-    expect(R.disputeLimitText(null, "call")).toBe("up to $200 an hour for the logged minutes");
+    expect(R.disputeLimitText(null, "call")).toBe("up to $200 an hour for the measured minutes");
     expect(src("lib/rules.ts")).not.toContain("so the developer's amount is final");
     expect(src("app/app/sessions/[id]/page.tsx")).not.toContain("the developer&apos;s amount is final");
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("limit={disputeLimitText(review.agreedCents, kind)}");
@@ -105,8 +105,8 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     expect(await disputeBounds((await db.dispute.findFirstOrThrow({ where: { submissionId: full.sub.id } })))).toMatchObject({ unlisted: false, min: 1000, max: 1000 });
 
     const rej = await sentWork("10.00");
-    expect((await pay(rej.dev.cookie, { kind: "submission", id: rej.sub.id, action: "reject", reason: "Not what I asked" })).status).toBe(200);
-    expect(await db.notification.count({ where: { userId: rej.tester.user.id, text: "Your written answers on “Harbor Run” wasn't accepted" } })).toBe(1);
+    // (Batch 15 section 30) Reject is gone: a rejection made before stays and can still be disputed.
+    await db.review.create({ data: { submissionId: rej.sub.id, contractId: rej.sessionId, amountCents: 0, agreedCents: 1000, reason: "Not what I asked", rejected: true, payKey: randomUUID() } });
     expect((await dispute(rej.sessionId, rej.tester.cookie, { kind: "submission", id: rej.sub.id })).status).toBe(200);
 
     const ch = await sentWork("10.00");
@@ -116,8 +116,8 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     expect((await dispute(ch.sessionId, ch.tester.cookie, { kind: "submission", id: ch.sub.id })).body.error.message).toBe(R.TESTER_CHOSE_LINE);
     // The Pay box says the tester can dispute, listed or not.
     const box = src("app/app/tests/[id]/PayBox.tsx");
-    expect(box).toContain("can dispute your decision once");
-    expect(box).toContain("can dispute the amount once");
+    expect(src("lib/rules.ts")).toContain("can dispute the amount once"); // (batch 15 section 30) payUnderLine, listed or not
+    expect(box).toContain("payUnderLine(p.name, listed)");
     expect(box).not.toContain("It can't be rejected or disputed.");
   });
 });
@@ -150,7 +150,7 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
     expect(page).toContain("sendable={!rulesPaused}");
     expect(page).toContain("(canRequestCall || (pendingReqs.length > 0 && !paused))");
     expect(page).toContain("const canRequestCall = !refusal && !blockedPair && !paused;");
-    expect(page).toContain("joinable: !blockedPair && !paused && callJoinable(x, now)");
+    expect(page).toContain("joinable: !paused && callJoinable(x, now)");
     expect(page).toContain("chat={!meOff ?");
     expect(src("app/app/chat/[id]/page.tsx")).toContain("closed={blocked || paused}");
     const actions = src("app/app/sessions/[id]/SessionActions.tsx");

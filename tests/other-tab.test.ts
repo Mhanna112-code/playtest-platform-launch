@@ -209,8 +209,8 @@ describe("Pay after a tester left (owner bug report)", () => {
   });
 });
 
-describe("Reject: a missing reason is red before the stop-once", () => {
-  it("reason checked first (400 at the field); with a reason, the stop-once; then it rejects", async () => {
+describe("$0: a missing reason is red before the stop-once (batch 15 section 30)", () => {
+  it("reason checked first (400 at the field); with a reason, the stop-once; then it pays $0", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -219,9 +219,9 @@ describe("Reject: a missing reason is red before the stop-once", () => {
     const pageLoaded = seen();
     await later();
     await joined(testId, "Ben Carter", "he"); // a stop-once reason
-    const base = { payKey: randomUUID(), action: "reject", kind: "submission", id: sub.id, seenAt: pageLoaded };
+    const base = { payKey: randomUUID(), amount: "0", kind: "submission", id: sub.id, seenAt: pageLoaded };
     const r1 = await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { ...base, reason: "" } })).then(json);
-    expect(r1).toMatchObject({ status: 400, body: { error: { code: "bad_reason" } } });
+    expect(r1).toMatchObject({ status: 400, body: { error: { code: "bad_amount", message: "Say why you're paying $0 (the tester reads it)." } } });
     const r2 = await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { ...base, reason: "Missing answers" } })).then(json);
     expect(r2.body.error.code).toBe("stop_once");
     expect((await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { ...base, reason: "Missing answers", confirmed: true } }))).status).toBe(200);

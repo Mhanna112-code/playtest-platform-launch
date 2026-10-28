@@ -33,7 +33,7 @@ export async function rateBlocker(contractId: string, side: Side, now = new Date
   if (await db.rating.findUnique({ where: { contractId_side: { contractId, side: "tester" } } })) return "rated";
   const done = c.calls.filter((x) => x.status === "booked" && x.startsAt <= now);
   if (!c.submissions.length && !done.length) return "Rating opens once some work was sent or a call took place.";
-  const waiting = c.submissions.some((s) => !s.review && !s.choiceOfferedAt && !chargeIsOpen(s, c.test, c, now)) || done.some((x) => !x.review && x.startsAt.getTime() + 14 * DAY > now.getTime());
+  const waiting = c.submissions.some((s) => !s.review && !s.choiceOfferedAt && !chargeIsOpen(s, c.test, c, now)) || done.some((x) => !x.review && !(x.payBy && chargeIsOpen(x, c.test, c, now))); // (batch 15 section 15) a call: paid, or its review date passed
   if (waiting) return "Rating opens once the developer has reviewed everything you sent (or Charge / Let it go has opened for it).";
   if (await db.dispute.count({ where: { contractId, status: "open" } })) return "Rating opens once the team has decided the open dispute.";
   return "";

@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtTime } from "@/lib/format";
 import { joinCallRefusal, testPaused } from "@/lib/rules";
 import { HttpError } from "./http";
+import { fmtFor } from "@/lib/tz";
 import { notify } from "./notify";
 import { roomUrl } from "./calls";
 
@@ -72,8 +73,13 @@ export async function joinCall(user: { id: string }, callId: string) {
     new Date(),
     fmtTime,
   );
-  // (Owner, Oct 27) A press after a cancellation: "This call was cancelled", with the reason.
-  if (refusal) throw new HttpError(409, "cant_join", call.status === "cancelled" && call.cancelNote ? `This call was cancelled: ${call.cancelNote.replace(/[.\s]+$/, "")}.` : refusal);
+  // (Owner, Oct 30, batch 15 section 38) A stale Join: "Your Join call didn't go through: Ana cancelled this call at 3:05 PM." (the row then leaves the page).
+  if (refusal) {
+    const by = call.cancelledBy === "developer" ? displayName(c.test.developer) : call.cancelledBy === "tester" ? displayName(await db.user.findUniqueOrThrow({ where: { id: c.testerId } })) : "";
+    const mine = (call.cancelledBy === "developer" && side === "developer") || (call.cancelledBy === "tester" && side === "tester");
+    const why = call.status !== "cancelled" ? refusal[0].toLowerCase() + refusal.slice(1).replace(/\.$/, "") : by ? `${mine ? "you" : by} cancelled this call${call.cancelledAt ? ` at ${fmtFor(await db.user.findUnique({ where: { id: user.id }, select: { timeZone: true } }), call.cancelledAt, "time")}` : ""}` : call.cancelNote ? `this call was cancelled: ${call.cancelNote.replace(/[.\s]+$/, "")}` : "this call was cancelled";
+    throw new HttpError(409, "cant_join", `Your Join call didn't go through: ${why}.`, { cancelled: call.status === "cancelled" });
+  }
   const now = new Date();
   if (side === "developer" && !call.devJoinedAt) await db.call.update({ where: { id: call.id }, data: { devJoinedAt: now } });
   if (side === "tester" && !call.testerJoinedAt) await db.call.update({ where: { id: call.id }, data: { testerJoinedAt: now } });

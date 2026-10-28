@@ -18,7 +18,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
 
 /**
  * The tester's calls inside the Live session panel: Booked (still ahead or running: Join call while it can be joined,
- * Cancel) and Past calls (over or cancelled). Cancel and Report a problem stop once for call changes since the page
+ * Cancel). (Batch 15 section 42) Calls that are over are in the page's "Call history". Cancel and Report a problem stop once for call changes since the page
  * loaded (box under the button).
  */
 export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mine[]; sets?: TesterSet[]; refusal: string; lateNote?: string; devName: string; noReport?: boolean }) {
@@ -33,7 +33,6 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
   const inSet = new Set(sets.flatMap((x) => x.callIds));
   // A booked set shows as one line (its calls inside "Show calls"); everything else as before.
   const booked = p.mine.filter((m) => !m.cancelled && !m.ended && !inSet.has(m.id));
-  const past = p.mine.filter((m) => m.cancelled || m.ended);
   const row = (m: Mine) => (
     <li key={m.id} id={`call-${m.id}`} data-call={m.cancelled || m.ended ? "past" : "booked"} className="flex flex-wrap items-center gap-2 py-2 text-sm">
       {m.ended || m.cancelled ? (
@@ -51,12 +50,8 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
       {!m.cancelled && !m.ended && <a href={`/api/calls/${m.id}/ics`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline"><CalendarPlus className="h-3.5 w-3.5" /> Add to calendar</a>}
       {!m.cancelled && !m.started && <CancelMenu needsReason={!m.canCancel} busy={busy} other={p.devName} onCancel={(why) => go("cancel-call", { callId: m.id, reason: why }, "cancel-" + m.id)} />}
       {!m.cancelled && m.started && !p.noReport && <ReportProblem path={`/api/sessions/${p.sessionId}/no-show`} callId={m.id} otherName={p.devName} seenAt={p.seenAt} reported={m.report ?? null} />}
-      {m.started && !m.cancelled && m.lengthText && (
-        <div className="w-full space-y-1 border-t border-white/10 pt-2">
-          <p className="text-xs font-medium text-white">How long was the call?</p>
-          <p className="text-xs text-slate-300">{m.lengthText}</p>
-        </div>
-      )}
+      {/* (Batch 15 section 40) The app measures the length while you're both in the call page; nobody enters it. */}
+      {m.started && !m.cancelled && m.lengthText && <span className="badge border-sky-300/40 text-sky-200" data-measuring="">{m.lengthText}</span>}
       {!m.cancelled && m.joinable && <div className="w-full"><CallPresence callId={m.id} startsAt={m.when} minutes={m.minutes} /></div>}
       {m.ended && !m.cancelled && <CallTimelineLine people={[{ name: p.devName, joinedAt: m.devJoinedAt ?? null }, { name: "You", joinedAt: m.testerJoinedAt ?? null }]} />}
       {!m.cancelled && m.joinable && <div className="w-full"><CallTimer startsAt={m.when} minutes={m.minutes} role="tester" label={`Call with ${p.devName}`} /></div>}
@@ -89,7 +84,6 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
           );
         })}
       </LiveSection>
-      <LiveSection title={LIVE_SECTIONS.past} show={past.length > 0}>{past.map(row)}</LiveSection>
     </div>
   );
 }

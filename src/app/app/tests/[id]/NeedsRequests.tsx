@@ -5,7 +5,7 @@ import { MARKABLE } from "@/lib/markJump";
 import type { RowJson } from "@/lib/callRows";
 import { acceptChoices, describeRows } from "@/components/RequestRows";
 
-export type NeedsRequest = { id: string; contractId: string; name: string; rows: RowJson[]; minutes: number; rate: string };
+export type NeedsRequest = { id: string; contractId: string; name: string; rows: RowJson[]; minutes: number; rate: string; warning?: string };
 
 /** Call requests waiting for the developer's answer (in "Needs you"): Accept (one button per time when there is a choice) / Decline. */
 export function NeedsRequests({ testId, seenAt, requests }: { testId: string; seenAt: string; requests: NeedsRequest[] }) {
@@ -24,6 +24,8 @@ export function NeedsRequests({ testId, seenAt, requests }: { testId: string; se
             <button key={x.label} className="btn" disabled={busy} onClick={() => go(r, { action: "accept", ...(x.time ? { time: x.time } : {}) }, "a-" + r.id)}>{x.label}</button>
           ))}
           <button className="btn-ghost" disabled={busy} onClick={() => go(r, { action: "decline" }, "d-" + r.id)}>Decline</button>
+          {/* (Batch 15 section 34) What's left of the $1,000 for this tester's calls, when it's under an hour. */}
+          {r.warning && <span className="basis-full text-xs text-amber-200" data-calls-warning="">{r.warning}</span>}
           {(at === "a-" + r.id || at === "d-" + r.id) && <div className="basis-full"><ChangesBox changes={changes} error={error} link={undefined} /></div>}
         </li>
       ))}

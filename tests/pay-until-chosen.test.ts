@@ -11,7 +11,8 @@ const DAY = 86_400_000;
 const cron = () => cronGET(new Request("http://localhost:3400/api/cron/daily", { headers: { authorization: "Bearer cron-test" } })).then((r) => r.json());
 const pay = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), seenAt: seen(), confirmed: true, ...body } })).then(json);
 const payBody = (id: string) => ({ kind: "submission", id, amount: "10.00", tickedCents: 1000 });
-const rejectBody = (id: string) => ({ kind: "submission", id, action: "reject", reason: "Not what I asked for" });
+// (Batch 15 section 30) Reject is gone: the other decision is a $0 payment with a reason.
+const rejectBody = (id: string) => ({ kind: "submission", id, amount: "0", reason: "Not what I asked for" });
 
 /** A tester (new, or the one given) with a piece of work waiting for the developer's Pay or Reject (made directly: one piece per tester). */
 async function piece(testId: string, name = "Ben Carter") {

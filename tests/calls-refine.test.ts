@@ -36,14 +36,12 @@ describe("calls / hold / block refinements", () => {
     const c = await db.call.findUniqueOrThrow({ where: { id: call.id } });
     expect(c.devJoinedAt && c.testerJoinedAt).toBeTruthy();
     expect((await status(dev.cookie, call.id)).body.bothJoinedAt).toBeTruthy();
-    expect(R.defaultCallMinutes(new Date("2026-11-05T15:00:00Z"), 30, new Date("2026-11-05T15:05:00Z"), new Date("2026-11-05T15:02:00Z"))).toBe(25);
-    expect(R.defaultCallMinutes(new Date("2026-11-05T15:00:00Z"), 30, null, null)).toBe(30);
   });
 
-  it("no length entry during a hold", async () => {
+  it("no Lower the length during a hold", async () => {
     const { dev, testId, call } = await booked(-60);
     await startHold(dev.user.id, "unpaid");
-    expect((await act(testId, "call-length", dev.cookie, { callId: call.id, minutes: 25 })).body.error.code).toBe("held"); // (Owner, Oct 27) every developer press is refused during a hold
+    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 25, reason: "We stopped early." })).body.error.code).toBe("held"); // (Owner, Oct 27) every developer press is refused during a hold
   });
 
   it("a cancel or a block closes the room (status line) for both", async () => {

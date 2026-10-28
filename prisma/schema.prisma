@@ -534,12 +534,42 @@ model Call {
   noShowAt      DateTime?
   /// Listed in an admin digest once
   noShowDigestedAt DateTime?
+  /// (Batch 15 section 40) The measured length: the whole minutes both people were in the call page at once (capped at 150% of the booked length), and that time span
+  measuredMinutes Int?
+  measuredFrom    DateTime?
+  measuredTo      DateTime?
+  /// When the measured length became final (both left, or 30 minutes after the latest allowed end); null = in progress / measuring
+  measuredAt      DateTime?
+  /// (Batch 15 sections 15 and 40) A listed call's review clock: the call's end + 7 days (the review date is the later of this and the tester's deadline); moves with pauses
+  payBy           DateTime?
+  /// A listed call left unreviewed by its review date: the tester can Charge or Let it go (as a sent part)
+  choiceOfferedAt DateTime?
+  choiceBy        DateTime?
+  /// The developer's review reminders already sent (REVIEW_MARKS) and the last daily / weekly one
+  devMarks        String[]  @default([])
+  remindedAt      DateTime?
+  devRemindedAt   DateTime?
   createdAt   DateTime  @default(now())
 
-  review  Review?
-  dispute Dispute?
+  review    Review?
+  dispute   Dispute?
+  presences CallPresence[]
 
   @@index([contractId])
+}
+
+/// (Batch 15 section 40) One stretch of time a person had the call page open: heartbeats every ~10 s extend it; a gap of 5 minutes or more starts a new one.
+model CallPresence {
+  id      String   @id @default(cuid())
+  callId  String
+  call    Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+  userId  String
+  /// "developer" | "tester"
+  side    String
+  startAt DateTime
+  endAt   DateTime
+
+  @@index([callId, userId])
 }
 
 /// Per-test chat between the developer and one tester (in the test, invited, applied, or a past participant).

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 
-/** The room: closes at once (for both, in every tab) when the call is cancelled or either side blocks the other. */
+/** The room (its heartbeats measure the call's length): closes at once (for both, in every tab) when the call is cancelled or either side blocks the other. */
 export function CallRoom({ callId, room, initialLine, initialBoth }: { callId: string; room: string; initialLine: string; initialBoth: string | null }) {
   const [line, setLine] = useState(initialLine);
   const [both, setBoth] = useState(initialBoth);
@@ -15,6 +15,14 @@ export function CallRoom({ callId, room, initialLine, initialBoth }: { callId: s
     }, 5000);
     return () => clearInterval(t);
   }, [callId]);
+  // (Batch 15 section 40) While this page is open it tells the site every ~10 seconds that this person is here: the call's length is measured from both people's presence.
+  useEffect(() => {
+    if (line) return;
+    const beat = () => void fetch(`/api/calls/${callId}/presence`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}", keepalive: true }).catch(() => null);
+    beat();
+    const t = setInterval(beat, 10_000);
+    return () => clearInterval(t);
+  }, [callId, line]);
   if (line) return <p className="info">{line}</p>;
   return (
     <div className="space-y-2">

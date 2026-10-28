@@ -60,21 +60,23 @@ describe("the one Pay box", () => {
     expect(await db.payment.count({ where: { submissionId: sub.id } })).toBe(1);
   });
 
-  it("Pay and Reject are mutually exclusive: the second (other tab) is refused for good", async () => {
+  it("one decision per piece: a second Pay (other tab) is refused for good; an old rejection stays final", async () => {
     const a = await sent();
     await payReq(a.dev.cookie, { kind: "submission", id: a.sub.id, amount: "8.00", tickedCents: 800, reason: "Short answers" });
-    const r = await payReq(a.dev.cookie, { kind: "submission", id: a.sub.id, action: "reject", reason: "Not useful", confirmed: true });
+    const r = await payReq(a.dev.cookie, { kind: "submission", id: a.sub.id, amount: "0", reason: "Not useful", confirmed: true });
     expect(r.body.error.message).toBe("You already paid $8.00 for this.");
     const b = await sent();
-    await payReq(b.dev.cookie, { kind: "submission", id: b.sub.id, action: "reject", reason: "Not useful at all" });
+    // (Batch 15 section 30) Reject is gone; a rejection made before stays.
+    await db.review.create({ data: { submissionId: b.sub.id, contractId: b.sessionId, amountCents: 0, agreedCents: 1000, reason: "Not useful at all", rejected: true, payKey: randomUUID() } });
     expect((await payReq(b.dev.cookie, { kind: "submission", id: b.sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.message).toBe("You already rejected this.");
+    expect((await payReq(b.dev.cookie, { kind: "submission", id: b.sub.id, action: "reject", reason: "Again" })).body.error.code).toBe("no_reject");
   });
 
-  it("reject: a reason is required, nothing is charged, and a contract part can be disputed once", async () => {
+  it("$0: a reason is required, nothing is charged, and a contract part can be disputed once", async () => {
     const { dev, sub, sessionId, tester } = await sent();
-    expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, action: "reject" })).body.error.message).toContain("Say why");
-    expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, action: "reject", reason: "Didn't play the build" })).status).toBe(200);
-    expect(await db.payment.count({ where: { submissionId: sub.id } })).toBe(0);
+    expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "0" })).body.error.message).toContain("Say why");
+    expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "0", reason: "Didn't play the build" })).status).toBe(200);
+    expect(await db.payment.count({ where: { submissionId: sub.id, status: { in: ["charged", "not_set_up"] }, amountCents: { gt: 0 } } })).toBe(0);
     expect((await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I played all three levels" })).status).toBe(200);
     expect((await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "Again please, I played it" })).body.error.message).toContain("once");
   });
@@ -160,7 +162,7 @@ describe("Stripe (test mode, faked)", () => {
     const second = await payReq(a.dev.cookie, { kind: "submission", id: b.sub.id, amount: "10.00", tickedCents: 1000 });
     expect(second.status).toBe(403);
     expect(second.body.error.code).toBe("held");
-    expect((await payReq(a.dev.cookie, { action: "reject", kind: "submission", id: b.sub.id, reason: "Not what I asked for" })).body.error.code).toBe("held");
+    expect((await payReq(a.dev.cookie, { amount: "0", kind: "submission", id: b.sub.id, reason: "Not what I asked for" })).body.error.code).toBe("held");
   });
 });
 
@@ -219,7 +221,7 @@ describe("(NEXT-UI 26) a suspended developer", () => {
     const { dev, sub, sessionId, testId, tester } = await sent();
     await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     const LINE = "Your account is suspended: your tests are paused. Contact us in Settings to appeal.";
-    expect((await payReq(dev.cookie, { action: "reject", kind: "submission", id: sub.id, amount: "0", reason: "Nothing usable here" })).body.error.message).toBe(LINE);
+    expect((await payReq(dev.cookie, { amount: "0", kind: "submission", id: sub.id, reason: "Nothing usable here" })).body.error.message).toBe(LINE);
     expect((await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe(LINE);
     expect((await act(testId, "message", dev.cookie, { contractId: sessionId, body: "hi" })).body.error.message).toBe(LINE);
     expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [tester.user.id] })).body.error.message).toBe(LINE);

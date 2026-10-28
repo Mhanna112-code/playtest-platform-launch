@@ -34,7 +34,7 @@ async function heldCall(listed: boolean, liveRate = "30.00") {
   const s = await setup(listed ? { liveRateCents: liveRate } : { liveRateCents: null });
   const j = await joined(s.testId);
   const call = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie, 48);
-  await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 2 * 3_600_000), actualMinutes: 30 } });
+  await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 2 * 3_600_000), measuredMinutes: 30, measuredAt: new Date() } });
   return { ...s, ...j, call };
 }
 
@@ -68,10 +68,11 @@ describe("batch 9 item 1 and 6: the caps", () => {
     const { dev, testId, sessionId, call } = await heldCall(false);
     // (Batch 12 section 2) An unlisted call: $200/h for its logged minutes and nothing above.
     const over = await pay(dev.cookie, { kind: "call", id: call.id, amount: "100.01", tickedCents: 10_001 });
-    expect(over.body.error.message).toBe("This is more than you can pay for this call (up to $100 more for unlisted calls).");
-    expect((await pay(dev.cookie, { kind: "call", id: call.id, rate: "201.00", amount: "100.00", tickedCents: 10_000 })).body.error.message).toBe("A call that isn't listed can be paid at most $200 an hour.");
+    expect(over.body.error.message).toBe(R.overCallsLine(10_000));
+    // (Batch 15 section 40) The rate typed last wins: $201/h × 30 min = $100.50.
+    expect((await pay(dev.cookie, { kind: "call", id: call.id, rate: "201.00", typed: "rate", amount: "100.00", tickedCents: 10_050 })).body.error.message).toBe("A call that isn't listed can be paid at most $200 an hour.");
     expect((await pay(dev.cookie, { kind: "call", id: call.id, rate: "200.00", amount: "100.00", tickedCents: 10_000 })).status).toBe(200);
-    expect((await extra(testId, dev.cookie, { contractId: sessionId, callId: call.id, amount: "0.50", tickedCents: 50 })).body.error.message).toBe("This is more than you can pay for this call (up to $0 more for unlisted calls).");
+    expect((await extra(testId, dev.cookie, { contractId: sessionId, callId: call.id, amount: "0.50", tickedCents: 50 })).body.error.message).toBe(R.overCallsLine(0));
   });
 
   it("a listed piece: what is paid above the listing (Pay plus extra pays) is at most 100% of the listing", async () => {
@@ -93,14 +94,14 @@ describe("batch 9 item 2: an unlisted part has only Pay", () => {
   it("no Reject; $0 closes the row with no tick and reads '<dev> paid $0 for this' plus the note; (batch 10) it can be disputed", async () => {
     const { dev, tester, sessionId, sub } = await sentWork(null);
     const rej = await pay(dev.cookie, { kind: "submission", id: sub.id, action: "reject", reason: "Not what I asked" });
-    expect(rej.body.error.message).toBe("A part that isn't listed can't be rejected: pay $0 to close it.");
+    expect(rej.body.error.code).toBe("no_reject"); // (batch 15 section 30) no Reject anywhere
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "0", reason: "Thanks, not needed after all" })).status).toBe(200);
     expect(await db.review.findFirstOrThrow({ where: { submissionId: sub.id } })).toMatchObject({ amountCents: 0, rejected: false, reason: "Thanks, not needed after all" });
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid $0 for your written answers on “Harbor Run”" } })).toBe(1); // (batch 15 section 20: no note in the bell)
     const d = await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question fully" });
     expect(d.status).toBe(200); // (Batch 10) every reviewed part can be disputed, unlisted ones too
-    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('{listed && !more && <button className="btn-danger"');
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("{dev} paid $0 for this");
+    expect(src("app/app/tests/[id]/PayBox.tsx")).not.toContain("go(\"reject\")"); // (batch 15 section 30) no Reject anywhere
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("paidZeroLine(review.reason)");
   });
 
   it("(batch 15 section 2) the developer's reminders follow the review marks to the review date, then stop; the row stays", async () => {
@@ -131,7 +132,7 @@ describe("batch 9 item 3: an optional note on every Pay", () => {
     expect(await db.payment.findFirstOrThrow({ where: { submissionId: sub.id, kind: "extra" } })).toMatchObject({ note: "For the bug list" });
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $2.00 more for your written answers on “Harbor Run”" } })).toBe(1);
     expect(src("app/app/tests/[id]/PayBox.tsx")).toContain("Note to {p.name}");
-    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('{more ? " (optional)"');
+    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('{needsReason ? "" : " (optional)"}');
     expect(src("app/app/sessions/[id]/page.tsx")).toContain('data-extra-line=""');
   });
 });
@@ -144,8 +145,9 @@ describe("batch 9 item 4: a rate on a call's Pay", () => {
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Nora Lane paid you $20.00 for your live call" } } })).toBe(1);
     const box = src("app/app/tests/[id]/PayBox.tsx");
     expect(box).toContain("Rate ($/h)");
-    expect(box).toContain("setAmount(r == null ? \"\" : (Math.round((r * minutes) / 60) / 100).toFixed(2));");
-    expect(box).toContain('const typeAmount = (v: string) => { setAmount(v); setRate("");');
+    // (Batch 15 section 40) Rate and Amount fill each other.
+    expect(box).toContain("setAmount(r == null ? \"\" : (amountFromRate(r, minutes) / 100).toFixed(2));");
+    expect(box).toContain("setRate(c == null ? \"\" : (rateFromAmount(c, minutes) / 100).toFixed(2));");
     expect(box).toContain("isCall && listed && p.rateCents != null ? (p.rateCents / 100).toFixed(2) : \"\"");
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("{review.rateCents != null && <> ({money(review.rateCents)}/h)</>}");
   });

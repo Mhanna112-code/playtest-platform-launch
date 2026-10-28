@@ -17,12 +17,12 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
   {
     title: "2. Posting a test (developers)",
     points: [
-      "A test states its terms up front: the parts you ask for (written answers, a screen recording, a live call), the price of each, your questions, the devices and languages it needs, Open until (every tester's deadline), how many testers (spots), and who can join (anyone who matches, people you approve, or invite only).",
+      "A test states its terms up front: the parts you ask for (written answers, a screen recording, a live call), the price of each, your questions, the devices and languages it needs, Open until (the last day to join; every tester gets the same number of days from when they join), how many testers (spots), and who can join (anyone who matches, people you approve, or invite only).",
       "A live call's hourly rate is at least $10 an hour (or free); each call request picks its own length (10 to 180 minutes). Each part can be marked Required or Not required: it is a label, it blocks nothing.",
       `Developers post tests for free and pay only for the work they accept. A developer can take up to a number of testers per test that starts at 10 and grows with good ratings and reviews (never more than 50). A tester can be in up to ${MAX_ACTIVE_TESTS} tests at once.`,
       "Developers pay by card when they press Pay on a piece of work. A card is needed before paying. A failed payment is owed and retried daily; an unpaid amount past its date pauses your tests until it is paid.",
       "Once a tester joins, the terms they agreed to are saved and are what their work is judged against, even if the test is edited later. If you change prices, parts, questions, devices or languages, or the description, each working tester is offered the new terms and chooses Switch or Keep; work already sent keeps the price it was sent under. Moving Open until later moves every working tester's deadline with it.",
-      "Tests can be stopped for good by the developer; the work already sent still waits to be paid or rejected, and calls ahead are cancelled.",
+      "Tests can be stopped for good by the developer; the work already sent still waits to be paid, and calls ahead are cancelled.",
     ],
   },
   {
@@ -39,9 +39,9 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
     title: "4. Reviews and payment",
     points: [
       "Payment is for the work you sent, judged against the listing, not for whether the feedback is positive.",
-      "A developer pays the listed amount (or another amount), or rejects with a reason. Paying less than the listing needs a reason.",
-      `Work not paid or rejected within ${REVIEW_DAYS} days is the tester's to decide: they can charge the developer the listed amount, or let it go.`,
-      "Live calls are paid for their real length at the contract's hourly rate. After the call the developer enters how long it was (up to 150% of the booked length); a shorter length needs a reason, which the tester reads. If it isn't entered within 24 hours of the call's start, the booked length is used.",
+      "A developer pays any amount from $0 up for each part; there is no reject. Paying less than the listing, or $0, needs a reason, which the tester reads.",
+      `A listed part (or a listed call) not paid by its review date (the later of the tester's deadline and ${REVIEW_DAYS} days after it was sent, or after the call) is the tester's to decide: they can charge the developer the listed amount, or let it go.`,
+      "Live calls are paid for their real length at the contract's hourly rate. The site measures it: the minutes both people had the call page open at the same time (up to 150% of the booked length). The developer can only lower it, with a reason the tester reads. A call that isn't listed is paid what the developer chooses, up to $200 an hour. All of one tester's calls on a test together can come to at most $1,000, extra pay included.",
       "Testers receive 80% of each price and of live call time; the platform keeps 20%.",
       "Ratings (1 to 5, and a note) are given both ways and shown once both sides have rated or after 14 days.",
     ],
@@ -49,7 +49,7 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
   {
     title: "5. Disputes",
     points: [
-      "A tester can dispute the developer's decision on any part they sent, once: a rejection or a payment of any amount, including $0 and parts that weren't listed. Our team decides and can read the work, the reason and the chat. A decision can only raise the pay: up to the listing amount, or for a part that wasn't listed up to $1,000 a piece ($200 an hour for a call), minus what was already paid.",
+      "A tester can dispute the developer's payment on any part they sent or call they had, once: a payment of any amount, including $0 and parts that weren't listed (and a rejection made before Reject was removed). Our team decides and can read the work, the reason and the chat. A decision can only raise the pay: up to the listing amount, or for a part that wasn't listed up to $1,000 a piece ($200 an hour for a call), minus what was already paid.",
       "A bank reversing a card payment (a chargeback) pauses the developer's tests until it is resolved and what is owed is paid.",
     ],
   },
@@ -72,7 +72,7 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
   {
     title: "8. Calls and recordings",
     points: [
-      "Calls run in a room on the site. Only the developer and tester of that call can join. Who joined and when is recorded; the team can read it when handling a report.",
+      "Calls run in a room on the site. Only the developer and tester of that call can join, from 10 minutes before the start until 30 minutes after the booked end. Who was in the call page and when is recorded (it measures the length); the team can read it when handling a report.",
       "Screen recordings are only seen by the developer and tester of that session, and by the team when handling a dispute or report.",
     ],
   },

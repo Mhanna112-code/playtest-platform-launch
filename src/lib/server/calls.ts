@@ -1,7 +1,8 @@
 import { db } from "@/lib/db";
 import { T } from "@/lib/tz";
 import { displayName, fmtDateTime, pronouns } from "@/lib/format";
-import { cancelLine, LENGTH_WAITS, checkActualMinutes, checkCancel, type TestEventLike, callClosed, NOBODY_JOINED } from "@/lib/rules";
+import { cancelLine, checkCancel, type TestEventLike, NOBODY_JOINED, JOIN_OPENS_MIN, PAY_WAITS, payByFrom } from "@/lib/rules";
+import { PRESENCE_GAP_MS, callMinutesOf, checkLower, measureDeadline, measureIsFinal, measureOverlap } from "@/lib/callMeasure";
 import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { notify } from "./notify";
@@ -105,40 +106,91 @@ export async function reportNoShow(user: U, callId: string, body: Record<string,
   return { reported: true };
 }
 
-/** "How long was the call?": after the call, the developer enters the actual length; it sets the Pay box reference. */
-export async function setCallLength(dev: U, testId: string, body: Record<string, unknown>) {
+/**
+ * (Owner, Oct 30, batch 15 section 40) The developer can only LOWER a call's measured length, with a reason the tester reads, in the call's Pay box ("Lower the length").
+ * Never raise it. Only once the length is final, and before the call is paid. The same stop-once and hold / suspension refusals as Pay.
+ */
+export async function lowerCallLength(dev: U, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
-  const call = await db.call.findUnique({ where: { id: String(body.callId ?? "") }, include: { contract: true, review: true } });
-  if (!call || call.contract.testId !== testId) throw new HttpError(404, "not_found", "That call doesn't exist.");
-  if (call.status !== "booked") throw new HttpError(409, "cancelled", "This call was cancelled.");
-  if (call.startsAt > new Date()) throw new HttpError(409, "not_yet", "You can enter the length once the call has started.");
-  if (call.review) throw new HttpError(409, "paid", "This call was already paid, so its length can't change.");
-  if (callClosed(call.startsAt)) throw new HttpError(409, "closed", "This call closed 24 hours after its start: the booked length is used.");
-  if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", LENGTH_WAITS);
-  const minutes = Number(body.minutes);
-  const ok = checkActualMinutes(Number.isFinite(minutes) ? minutes : null, call.minutes);
-  if (!ok.ok) throw new HttpError(400, "bad_minutes", ok.message);
-  await devGateIfSeen(testId, body);
-  // (The full app's "Why, if shorter") the reason the tester reads when it's shorter than booked.
-  const note = minutes < call.minutes && typeof body.note === "string" ? body.note.trim().slice(0, 500) : "";
-  await db.call.update({ where: { id: call.id }, data: { actualMinutes: minutes, lengthNote: note } });
-  return { minutes };
+  const reason = readText(body.reason, LIMITS.reason, "reason");
+  const minutes = typeof body.minutes === "number" ? body.minutes : typeof body.minutes === "string" && body.minutes.trim() ? Number(body.minutes) : null;
+  if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", PAY_WAITS);
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
+    const call = await tx.call.findUnique({ where: { id: String(body.callId ?? "") }, include: { contract: true, review: true } });
+    if (!call || call.contract.testId !== testId) throw new HttpError(404, "not_found", "That call doesn't exist.");
+    if (call.status !== "booked") throw new HttpError(409, "cancelled", "This call was cancelled.");
+    if (call.review) throw new HttpError(409, "paid", "This call was already paid, so its length can't change.");
+    const current = callMinutesOf(call);
+    if (current == null) throw new HttpError(409, "measuring", MEASURING_REFUSAL);
+    const ok = checkLower(minutes, current, reason);
+    if (!ok.ok) throw new HttpError(400, "bad_minutes", ok.message);
+    await devGate(tx, testId, body);
+    await tx.call.update({ where: { id: call.id }, data: { actualMinutes: minutes!, lengthNote: reason } });
+    await recordEvent(tx, testId, "lowered", `You lowered the length of the call on ${fmtDateTime(call.startsAt)} to ${minutes} min`, false, {}, call.contractId);
+    return { minutes };
+  });
+}
+export const MEASURING_REFUSAL = "This call is still being measured: you can pay it once its length is final.";
+
+/**
+ * (Batch 15 section 40) A heartbeat from the call page (every ~10 seconds while it's open): extends this person's current stretch, or starts a new one after a gap of 5
+ * minutes or more. Only from 10 minutes before the call until its length is final; never for a cancelled call.
+ */
+export async function heartbeat(user: { id: string }, callId: string, now = new Date()) {
+  const call = await db.call.findUnique({ where: { id: callId }, include: { contract: { include: { test: true } } } });
+  const side = call?.contract.testerId === user.id ? "tester" : call?.contract.test.developerId === user.id ? "developer" : null;
+  if (!call || !side) throw new HttpError(404, "not_found", "That call doesn't exist.");
+  if (call.status !== "booked" || call.measuredAt || call.actualMinutes != null) return { counted: false };
+  if (now.getTime() < call.startsAt.getTime() - JOIN_OPENS_MIN * 60_000 || now.getTime() > measureDeadline(call.startsAt, call.minutes).getTime()) return { counted: false };
+  const last = await db.callPresence.findFirst({ where: { callId, userId: user.id }, orderBy: { endAt: "desc" } });
+  if (last && now.getTime() - last.endAt.getTime() < PRESENCE_GAP_MS) await db.callPresence.update({ where: { id: last.id }, data: { endAt: now } });
+  else await db.callPresence.create({ data: { callId, userId: user.id, side, startAt: now, endAt: now } });
+  if (side === "developer" && !call.devJoinedAt) await db.call.update({ where: { id: call.id }, data: { devJoinedAt: now } });
+  if (side === "tester" && !call.testerJoinedAt) await db.call.update({ where: { id: call.id }, data: { testerJoinedAt: now } });
+  return { counted: true };
 }
 
 /**
- * (NEWEST+8) AUTO-CANCEL: a call nobody joined by its halfway point is cancelled ("Nobody joined, so the call was
- * cancelled."): no charge, never a no-show, both told. Checked on every page load / poll and by the daily job, so it
- * is minute-accurate while anyone has a page open.
+ * (NEWEST+8) AUTO-CANCEL: a call nobody joined by its halfway point is cancelled ("Nobody joined, so the call was cancelled."): no charge, never a no-show, both told.
+ * (Batch 15 section 40) Then each call's measured length is made final once both have left or 30 minutes after its latest allowed end; with no overlap at all the same
+ * "nobody joined" cancel applies. Checked on every page load / poll and by the daily job, so it is minute-accurate while anyone has a page open.
  */
 export async function sweepNobodyJoined(now = new Date()) {
-  const due = await db.$queryRaw<{ id: string }[]>`SELECT id FROM "Call" WHERE status = 'booked' AND "devJoinedAt" IS NULL AND "testerJoinedAt" IS NULL AND "noShowBy" IS NULL AND "startsAt" > (${new Date(now.getTime() - 7 * 86_400_000)}::timestamptz AT TIME ZONE 'UTC') AND "startsAt" + ("minutes" * interval '30 seconds') <= (${now}::timestamptz AT TIME ZONE 'UTC')`;
-  for (const { id } of due) {
-    const done = await db.call.updateMany({ where: { id, status: "booked", devJoinedAt: null, testerJoinedAt: null }, data: { status: "cancelled", cancelledBy: "system", cancelledAt: now, cancelNote: NOBODY_JOINED } });
-    if (done.count !== 1) continue;
-    const call = await db.call.findUniqueOrThrow({ where: { id }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } } });
-    const line = `Your call on ${T(call.startsAt)}: ${NOBODY_JOINED}`;
-    await notify(call.contract.tester.email, line, [line, "Nothing is charged."], `/app/sessions/${call.contractId}#call-${call.id}`);
-    await notify(call.contract.test.developer.email, line.replace("Your call", `Your call with ${displayName(call.contract.tester)}`), [line, "Nothing is charged."], `/app/tests/${call.contract.testId}#call-${call.id}`);
-  }
+  const due = await db.$queryRaw<{ id: string }[]>`SELECT id FROM "Call" WHERE status = 'booked' AND "devJoinedAt" IS NULL AND "testerJoinedAt" IS NULL AND "noShowBy" IS NULL AND "measuredAt" IS NULL AND "actualMinutes" IS NULL AND NOT EXISTS (SELECT 1 FROM "CallPresence" p WHERE p."callId" = "Call".id) AND "startsAt" > (${new Date(now.getTime() - 7 * 86_400_000)}::timestamptz AT TIME ZONE 'UTC') AND "startsAt" + ("minutes" * interval '30 seconds') <= (${now}::timestamptz AT TIME ZONE 'UTC')`;
+  for (const { id } of due) await cancelNobodyJoined(id, now);
+  await finishMeasuring(now);
   return due.length;
+}
+
+async function cancelNobodyJoined(id: string, now: Date) {
+  const done = await db.call.updateMany({ where: { id, status: "booked", measuredAt: null }, data: { status: "cancelled", cancelledBy: "system", cancelledAt: now, cancelNote: NOBODY_JOINED } });
+  if (done.count !== 1) return;
+  const call = await db.call.findUniqueOrThrow({ where: { id }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } } });
+  const line = `Your call on ${T(call.startsAt)}: ${NOBODY_JOINED}`;
+  // (Batch 15 section 42) A call that's over links to the tester's Call history / the developer's tester row (#call-<id> is there once it's over).
+  await notify(call.contract.tester.email, line, [line, "Nothing is charged."], `/app/sessions/${call.contractId}#call-${call.id}`);
+  await notify(call.contract.test.developer.email, line.replace("Your call", `Your call with ${displayName(call.contract.tester)}`), [line, "Nothing is charged."], `/app/tests/${call.contract.testId}#call-${call.id}`);
+}
+
+/** (Batch 15 section 40) Measured lengths that are final now are stored (and the call's 7-day review clock starts at its end). */
+export async function finishMeasuring(now = new Date()) {
+  const open = await db.call.findMany({ where: { status: "booked", measuredAt: null, actualMinutes: null, startsAt: { lte: now, gt: new Date(now.getTime() - 30 * 86_400_000) } }, include: { presences: true }, take: 500 });
+  let n = 0;
+  for (const call of open) {
+    const dev = call.presences.filter((p) => p.side === "developer"), tes = call.presences.filter((p) => p.side === "tester");
+    if (!measureIsFinal(call, dev, tes, now)) continue;
+    let m = measureOverlap(dev, tes, call.minutes);
+    // A call that started before measuring existed (both joined, no heartbeats kept): the booked length, the old rule.
+    if (!call.presences.length && call.devJoinedAt && call.testerJoinedAt) m = { minutes: call.minutes, ms: call.minutes * 60_000, from: null, to: null };
+    if (m.ms <= 0 && !call.noShowBy) {
+      await cancelNobodyJoined(call.id, now);
+      continue;
+    }
+    const minutes = m.ms > 0 ? Math.max(1, m.minutes) : 0;
+    const end = m.to ?? new Date(call.startsAt.getTime() + call.minutes * 60_000);
+    await db.call.updateMany({ where: { id: call.id, measuredAt: null }, data: { measuredMinutes: minutes, measuredFrom: m.from, measuredTo: m.to, measuredAt: now, payBy: payByFrom(end) } });
+    n++;
+  }
+  return n;
 }

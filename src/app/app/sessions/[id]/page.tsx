@@ -3,7 +3,13 @@ import { devDeletedLine, REVIEW_DAYS, NOT_LISTED, byTesterChoice, PAUSE_DEFAULTS
 import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, MessagesSquare, Users, XCircle } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
-import { callLengthText, callOutcome, joinedWords, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, callReference, cancelNeedsReason, canDispute, closesInLine, DELAYED_CALL_LINE, isLate, pausedForTesters, callListed, lateLabel, termsLine, testPaused, testerShare, canAskToRejoin, leftText } from "@/lib/rules";
+import { callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, callReference, cancelNeedsReason, canDispute, closesInLine, DELAYED_CALL_LINE, isLate, pausedForTesters, callListed, lateLabel, termsLine, testPaused, testerShare, canAskToRejoin, leftText, paidZeroLine } from "@/lib/rules";
+import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, callsLeftWarning, MEASURING_LINE } from "@/lib/callMeasure";
+import { callsLeftCents } from "@/lib/server/callMoney";
+import { callChargeCap, callChoiceLine } from "@/lib/server/holds";
+import { fmtTime } from "@/lib/format";
+import { renderTimes } from "@/lib/tz";
+import { ReasonQuote } from "@/components/ScrollText";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
@@ -47,6 +53,7 @@ const label = (inContract: boolean) => (inContract ? "In your contract" : NOT_LI
 /** Listing (or "Not listed") and what's been paid for this part. */
 const partLine = (listing: number | null, paid: number) =>
   `${listing == null ? NOT_LISTED : `Listing: ${money(listing)}`} · Paid so far for this part: ${money(paid)} (you get 80%)`;
+const TONE = { grey: "", amber: "border-amber-300/40 text-amber-200", green: "border-emerald-400/40 text-emerald-200", rose: "border-rose-400/40 text-rose-200" } as const;
 
 export default async function SessionPage({ params }: { params: Promise<{ id: string }> }) {
   await (await import("@/lib/server/calls")).sweepNobodyJoined();
@@ -133,11 +140,17 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
     </p>
   );
   const liveCalls = c.calls.filter((x) => x.status === "booked");
-  const heldCalls = liveCalls.filter((x) => x.startsAt <= now);
+  // (Batch 15 sections 31 and 40) "held" became "done": a call that took place (its length is final).
+  const heldCalls = liveCalls.filter((x) => callMinutesOf(x) != null);
   const aheadCalls = liveCalls.filter((x) => x.startsAt > now);
+  // (Batch 15 section 42) Calls that are over (took place, cancelled, nobody joined, missed …) go in "Call history"; the Live session keeps the ones ahead or in progress.
+  const overCalls = c.calls.filter((x) => callIsOver(x) || blockedPair).sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
+  const callsWarning = callsLeftWarning(await callsLeftCents(c.id), listedCall ? c.liveRateCents : null, "tester", displayName(u));
+  const callCaps = new Map(await Promise.all(c.calls.filter((x) => x.choiceOfferedAt && !x.review).map(async (x) => [x.id, await callChargeCap(x)] as const)));
   const infoChanged = (await db.testEvent.count({ where: { testId: c.testId, kind: "info", createdAt: { gt: c.joinedAt } } })) > 0;
   // (NEXT-UI 7) The calls, and the booked daily / weekly sets as one line each ("Weekly · Mon 3:00 PM (3 left)").
-  const mineCalls = c.calls.map((x) => ({ id: x.id, setId: x.setId, joinable: !blockedPair && !paused && callJoinable(x, now), when: x.startsAt.toISOString(), minutes: x.minutes, room: roomUrl(x, x.slot), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, ended: x.startsAt.getTime() + x.minutes * 60_000 <= now.getTime(), joined: joinedWords(x, "tester", dev, now), outcome: callOutcome({ ...x, cancelledBy: blockedPair && x.status !== "cancelled" ? "site" : x.cancelledBy, status: blockedPair ? "cancelled" : x.status, cancelNote: blockedPair && x.status !== "cancelled" ? "not available" : x.cancelNote }, dev, "tester"), logged: x.actualMinutes, report: x.noShowBy ? { byMe: x.noShowBy === "tester", note: x.noShowNote } : null, lengthText: callLengthText(x, dev, fmtDateTime, now), devJoinedAt: x.devJoinedAt?.toISOString() ?? null, testerJoinedAt: x.testerJoinedAt?.toISOString() ?? null, reported: !!x.noShowBy, cancelled: blockedPair && x.status !== "cancelled" ? "not available" : cancelledText(x), rate: rateLabel(x.rateCents, c.liveRateCents), late: isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined }));
+  // (Batch 15 section 42) The Live session: only calls ahead and calls in progress ("Call in progress / measuring" once started).
+  const mineCalls = c.calls.filter((x) => x.status === "booked" && !callIsOver(x) && !blockedPair).map((x) => ({ id: x.id, setId: x.setId, joinable: !paused && callJoinable(x, now), when: x.startsAt.toISOString(), minutes: x.minutes, room: roomUrl(x, x.slot), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, ended: false, report: x.noShowBy ? { byMe: x.noShowBy === "tester", note: x.noShowNote } : null, lengthText: x.startsAt <= now ? MEASURING_LINE : "", reported: !!x.noShowBy, cancelled: cancelledText(x), rate: rateLabel(x.rateCents, c.liveRateCents), late: isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined }));
   const callSets = await db.callSet.findMany({ where: { contractId: c.id } });
   const mineSets = [...new Set(c.calls.filter((x) => x.setId && x.status === "booked" && !x.review).map((x) => x.setId!))].flatMap((sid) => {
     const cs = c.calls.filter((x) => x.setId === sid && x.status === "booked" && !x.review).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
@@ -325,18 +338,27 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             <p className="flex flex-wrap items-center gap-2 text-white">
               <CircleDot className={`h-4 w-4 ${heldCalls.length ? "text-amber-300" : "text-slate-400"}`} />
               <strong>Live call:</strong>
-              <span className="text-slate-200">{heldCalls.length ? `${heldCalls.length} held` : aheadCalls.length ? `${aheadCalls.length} booked` : "Not booked yet"}</span>
+              <span className="text-slate-200">{heldCalls.length ? `${heldCalls.length} done` : aheadCalls.length ? `${aheadCalls.length} booked` : "Not booked yet"}</span>
               {c.liveRateCents != null && <span className={`badge ${c.liveRequired ? "border-amber-300/40 text-amber-200" : ""}`}>{c.liveRequired ? "Required" : "Not required"}</span>}
             </p>
             <p className="text-slate-400">{c.liveRateCents == null ? NOT_LISTED : `In your contract · ${c.liveRateCents === 0 ? "free" : `${money(testerShare(c.liveRateCents))}/h for you`}`}{` · Paid so far ${money(liveCalls.reduce((a, x) => a + (partPaid.get(x.id) ?? 0), 0))}`}</p>
-            {c.calls.filter((x) => !x.review && x.status === "booked" && x.startsAt <= now).map((x) => devGone ? <p key={x.id} className="info" data-dev-deleted="">Live call on {fmtDateTime(x.startsAt)}: {devDeletedLine(devRealName)}</p> : (
-              <p key={x.id} className="info">
-                Live call on {fmtDateTime(x.startsAt)}: waiting for {dev} to pay. {partLine(callReference(x.rateCents, x.actualMinutes ?? x.minutes).cents, partPaid.get(x.id) ?? 0)}{failedCalls.has(x.id) && ` ${DELAYED_CALL_LINE}`}
-              </p>
+            {callsWarning && <p className="text-xs text-amber-200" data-calls-warning="">{callsWarning}</p>}
+            {c.calls.filter((x) => !x.review && x.status === "booked" && callMinutesOf(x) != null).map((x) => devGone ? <p key={x.id} className="info" data-dev-deleted="">Live call on {fmtDateTime(x.startsAt)}: {devDeletedLine(devRealName)}</p> : (
+              <div key={x.id} className="space-y-1">
+                <p className="info">
+                  Live call on {fmtDateTime(x.startsAt)}: waiting for {dev} to pay. {partLine(callReference(x.rateCents, callMinutesOf(x)!).cents, partPaid.get(x.id) ?? 0)}{failedCalls.has(x.id) && ` ${DELAYED_CALL_LINE}`}
+                </p>
+                <p className="text-xs text-slate-400" data-call-length="">{callLengthLine(x, fmtTime)}</p>
+                {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
+                {/* (Batch 15 section 15) A listed call left unpaid past its review date: Charge or Let it go, as a sent part. */}
+                {x.choiceOfferedAt && !meOff && (callCaps.get(x.id)?.cents ?? 0) > 0 && (
+                  <ChoiceBox paused={rulesPaused} seenAt={seenAt} sessionId={c.id} callId={x.id} devName={dev} cents={callCaps.get(x.id)!.cents} line={renderTimes(callChoiceLine(dev, x.startsAt, callCaps.get(x.id)!.cents, callCaps.get(x.id)!.capped), u.timeZone)} />
+                )}
+              </div>
             ))}
             {c.calls.filter((x) => x.review).map((x) => (
               <div key={x.id} className="space-y-2">
-                <p className="text-slate-300">Live call on {fmtDateTime(x.startsAt)}</p>
+                <p className="text-slate-300">Live call on {fmtDateTime(x.startsAt)} · <span className="text-xs text-slate-400">{callLengthLine(x, fmtTime)}</span></p>
                 {owedCalls.has(x.id) ? <p className="info">{DELAYED_CALL_LINE}</p> : <TesterReview dev={dev} extras={extraRows.filter((p) => p.callId === x.id)} off={meOff} delayed={disputeOwed.has(x.id)} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} />}
               </div>
             ))}
@@ -349,6 +371,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         <LivePanel minutes={c.calls.filter((x) => x.status === "booked" && x.startsAt > now).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())[0]?.minutes ?? null}>
           {termLine("Live call", c.liveRateCents, c.liveRequired, true, liveCalls.reduce((a, x) => a + (partPaid.get(x.id) ?? 0), 0))}
           {!listedCall && c.liveRateCents != null && <p className="note" data-unlisted-call="">New calls: {NOT_LISTED}</p>}
+          {callsWarning && <p className="text-xs text-amber-200" data-calls-warning="">{callsWarning}</p>}
           <TesterCallPanel
             sessionId={c.id}
             seenAt={seenAt}
@@ -373,6 +396,29 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             </section>
           )}
         </LivePanel>
+      )}
+      {/* (Batch 15 section 42) Call history: every call that's over, newest first, with its outcome badge (the same badges as the developer's tester row). */}
+      {overCalls.length > 0 && (
+        <details className="card text-sm" id="call-history" data-call-history="">
+          <summary className="fold-chevron cursor-pointer font-semibold text-white">Call history ({overCalls.length})</summary>
+          <ul className="mt-2 max-h-96 space-y-2 overflow-y-auto pr-1">
+            {overCalls.map((x) => {
+              const shown = blockedPair && x.status !== "cancelled" ? { ...x, status: "cancelled", cancelledBy: "system", cancelNote: "not available" } : x;
+              const badge = callOverBadge(shown, { developer: dev, tester: displayName(u) }, "tester", fmtTime, partPaid.get(x.id) ?? 0, callMinutesOf(x));
+              return (
+                <li key={x.id} id={`call-${x.id}`} data-over-call={x.id} className="scroll-mt-24 space-y-1 rounded-lg border border-white/5 p-2 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-slate-200">{fmtDateTime(x.startsAt)}</span>
+                    <span className={`badge ${TONE[badge.tone]}`} data-call-badge="">{badge.label}</span>
+                  </div>
+                  {shown.status !== "cancelled" && <p className="text-xs text-slate-400">{callLengthLine(x, fmtTime)}</p>}
+                  {badge.reason && <ReasonQuote text={badge.reason} />}
+                  {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
+                </li>
+              );
+            })}
+          </ul>
+        </details>
       )}
       {/* The full app's "Your recordings" card, then "The written part" (a card of its own). */}
       <section className="card space-y-3" id="recording">
@@ -440,9 +486,12 @@ function TesterReview({ sessionId, kind, id, review, dispute, delayed = false, o
   return (
     <div className="space-y-2 rounded-lg bg-white/[0.03] p-3 text-sm">
       {review.rejected ? (
-        <p><b>Not accepted</b> ({fmtDateTime(review.createdAt)}): “{review.reason}”</p>
+        // (Batch 15 section 30) Old rejections stay, and read "Rejected".
+        <p><b>Rejected</b> ({fmtDateTime(review.createdAt)}): “{review.reason}”</p>
+      ) : review.amountCents === 0 && review.reason && !byTesterChoice(review.reason) ? (
+        <p data-paid-zero="">{paidZeroLine(review.reason)} ({fmtDateTime(review.createdAt)})</p>
       ) : review.amountCents === 0 ? (
-        <p data-paid-zero="">{dev} paid $0 for this ({fmtDateTime(review.createdAt)}){review.reason && <> · “{review.reason}”</>}</p>
+        <p data-paid-zero="">{dev} paid $0 for this ({fmtDateTime(review.createdAt)})</p>
       ) : (
         <p>
           <b>Paid {money(review.amountCents)}</b>{review.rateCents != null && <> ({money(review.rateCents)}/h)</>}: you get {money(testerShare(review.amountCents))} ({fmtDateTime(review.createdAt)})

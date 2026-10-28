@@ -138,7 +138,7 @@ describe("charge amount and a second failure", () => {
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).toBeNull();
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "didn't review" } } })).toBe(0);
     expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "letgo" })).status).toBe(409);
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, action: "reject", reason: "Not needed any more", confirmed: true })).status).toBe(200);
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "0", reason: "Not needed any more", confirmed: true })).status).toBe(200);
   });
 
   it("Charge any amount up to the cap; above the cap refused; the tick names the typed amount", async () => {

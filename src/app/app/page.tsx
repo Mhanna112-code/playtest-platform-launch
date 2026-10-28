@@ -21,6 +21,7 @@ import { pendingForDeveloper } from "@/lib/server/excerpts";
 import { devRestricted, restrictionsOf } from "@/lib/restricted";
 import { PayoutBanner } from "@/components/PayoutBanner";
 import { CallsBox } from "./CallsBox";
+import { JoinCall } from "@/components/JoinCall";
 import { DismissRemoved } from "./DismissRemoved";
 import { LongList } from "@/components/LongList";
 import { rejoinAskLine } from "@/lib/server/joining";
@@ -30,6 +31,7 @@ import { PAUSE_CLOSE_DAYS, pauseReasons } from "@/lib/pause";
 import { HOLD_APPROVAL_AFTER, REVIEW_DAYS, joiningClosedLine, testerPayable } from "@/lib/rules";
 
 export const metadata = { title: "Home · Playtest" };
+import { callMinutesOf } from "@/lib/callMeasure";
 export const dynamic = "force-dynamic";
 
 /** A card's one link, stretched over the whole card (the full app's CARD_LINK). */
@@ -136,7 +138,8 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
       // (Owner, Oct 29, batch 11) A tester who deleted their account: their sent work still waits for review when their payout account was connected.
       if (!testerPayable(c.tester)) continue;
       for (const s of c.submissions.filter((x) => !x.review)) items.push({ key: `s-${s.id}`, at: s.sentAt, href: `/app/tests/${t.id}#piece-${s.id}`, who, text: <>sent their {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white">{t.title}</b></>, cta: "Review" });
-      for (const x of c.calls.filter((y) => y.status === "booked" && y.startsAt <= now && !y.review)) items.push({ key: `c-${x.id}`, at: x.startsAt, href: `/app/tests/${t.id}#call-${x.id}`, who, text: <>held a live call for <b className="text-white">{t.title}</b>: enter its length and pay</>, cta: "Review" });
+      // (Batch 15 section 40) A call that took place, once its measured length is final: pay it.
+      for (const x of c.calls.filter((y) => y.status === "booked" && callMinutesOf(y) != null && !y.review)) items.push({ key: `c-${x.id}`, at: x.startsAt, href: `/app/tests/${t.id}#call-${x.id}`, who, text: <>had a live call for <b className="text-white">{t.title}</b>: pay it</>, cta: "Review" });
       for (const s of c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide)) items.push({ key: `d-${s.id}`, at: s.dispute!.createdAt, href: `/app/tests/${t.id}#item-dispute-${s.dispute!.id}`, who, text: <>disputed what you paid on <b className="text-white">{t.title}</b>: add your side</>, cta: "Answer" });
     }
   for (const a of apps) {
@@ -194,7 +197,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
             {reviewRows.map((r) => (
               <li key={r.id}>
                 <Link href={`/app/tests/${r.id}#needs-you`} className="card card-hover flex items-center gap-3 p-4 no-underline hover:no-underline">
-                  <p className="min-w-0 flex-1 truncate text-slate-300" title={`${r.title} · ${plural(r.n, "part")} to pay or reject`}><b className="text-white">{r.title}</b> · {plural(r.n, "part")} to pay or reject</p>
+                  <p className="min-w-0 flex-1 truncate text-slate-300" title={`${r.title} · ${plural(r.n, "part")} to pay`}><b className="text-white">{r.title}</b> · {plural(r.n, "part")} to pay</p>
                   <span className="flex shrink-0 items-center gap-1 text-sm text-indigo-300">Review <ArrowRight className="h-4 w-4" /></span>
                 </Link>
               </li>
@@ -520,6 +523,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               {upcoming.map(({ c, x }) => (
                 <li key={x.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
                   <Link href={`/app/sessions/${c.id}#live`} className="mr-auto min-w-0 truncate text-slate-200 no-underline hover:underline" title={`${displayName(c.test.developer)} · ${c.title}`}><b className="text-white">{displayName(c.test.developer)}</b> · {c.title} · {fmtDateTime(x.startsAt)} · {x.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></Link>
+                  {/* (Batch 15 sections 35 and 38) Join wherever a call is listed, from 10 minutes before to 30 minutes after its booked end. */}
+                  {callJoinable(x, now) && !testPaused(c.test.developer, c.test) && <JoinCall callId={x.id} />}
                 </li>
               ))}
             </LongList>

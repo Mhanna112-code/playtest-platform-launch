@@ -102,7 +102,7 @@ describe("batch 6 item 1: calls without a Live call part are allowed again", () 
     const q = await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId } });
     await sact(sessionId, "answer-request", tester.cookie, { requestId: q.id, action: "accept", seenAt: seen(), confirmed: true });
     const call = await db.call.findFirstOrThrow({ where: { contractId: sessionId } });
-    await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 20 * DAY) } });
+    await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 20 * DAY), measuredMinutes: 30, measuredAt: new Date(Date.now() - 20 * DAY) } });
     expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('const start = more ? null : p.listingCents;');
     expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('useState(start == null ? "" :');
     // Charge / Let it go never opens for it, however long it waits.

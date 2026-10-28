@@ -298,7 +298,7 @@ describe("batch 5 item 6: deleting an account", () => {
 
   it("tester deleted: open disputes are withdrawn; unpaid work can't be paid, charged or disputed and leaves the developer's review lists; Charge never opens for it", async () => {
     const { dev, testId, sessionId, tester, sub } = await sentWork();
-    expect((await pay(dev.cookie, { action: "reject", kind: "submission", id: sub.id, reason: "Not enough here" })).status).toBe(200);
+    expect((await pay(dev.cookie, { amount: "0", kind: "submission", id: sub.id, reason: "Not enough here" })).status).toBe(200);
     expect((await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question fully", seenAt: seen(), confirmed: true })).status).toBe(200);
     const rec = await db.submission.create({ data: { contractId: sessionId, kind: "recording", agreedCents: 1000, sentAt: new Date(), updatedAt: new Date(), payBy: new Date(Date.now() - 1000) } });
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } });

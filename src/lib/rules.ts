@@ -60,11 +60,23 @@ export const STRIPE_MAX_LINE = `Stripe can't take more than ${"$999,999.99"} in 
 export function checkPay(amountCents: number | null, listingCents: number | null, reason: string, tickedCents: number | null, over200 = false): Check {
   if (amountCents == null || !Number.isInteger(amountCents) || amountCents < 0) return no("Enter an amount like 7.50.");
   if (amountCents > STRIPE_MAX_CENTS) return no(STRIPE_MAX_LINE);
-  if (listingCents != null && amountCents < listingCents && reason.trim().length < 5)
+  // (Owner, Oct 30, batch 15 section 30) $0 always needs a reason, listed or not.
+  if (amountCents === 0 && reason.trim().length < 5) return no(ZERO_PAY_REASON);
+  if (REASON_WHEN_UNDER_LISTING && listingCents != null && amountCents < listingCents && reason.trim().length < 5)
     return no(`Say why you're paying less than the listing's ${money(listingCents)} (the tester reads it).`);
   if (amountCents > 0 && amountCents < MIN_CHARGE_CENTS) return no(`The smallest card charge is ${money(MIN_CHARGE_CENTS)}: pay $0.00 or at least ${money(MIN_CHARGE_CENTS)}.`);
   return payTicks(amountCents, tickedCents, over200);
 }
+
+/**
+ * (Owner, Oct 30, batch 15 section 30; owner update the same day) Paying LESS than the listing (above $0) still needs a reason. One switch, so it can be flipped back.
+ */
+export const REASON_WHEN_UNDER_LISTING = true;
+export const ZERO_PAY_REASON = "Say why you're paying $0 (the tester reads it).";
+/** (Batch 15 section 30) A $0 payment, on both sides: Paid $0: “<reason>”. */
+export const paidZeroLine = (reason: string) => `Paid $0: “${reason}”`;
+/** (Batch 15 section 30) The line under every Pay button. */
+export const payUnderLine = (name: string, listed: boolean) => (listed ? `${name} can dispute the amount once.` : `This part isn't listed: pay any amount, $0 included. ${name} can dispute the amount once.`);
 
 /** (Batch 9) The ticks on every Pay and Extra pay: the amount's own tick above $0, and the over-$200 tick above $200. */
 export function payTicks(amountCents: number, tickedCents: number | null, over200: boolean): Check {
@@ -97,7 +109,7 @@ export function canDispute(paidCents: number, listingCents: number | null, alrea
 export const TESTER_CHOSE_LINE = "You settled this part yourself (Charge or Let it go), so there's no developer decision to dispute.";
 /** (Batch 10) What an admin's decision can reach, for the dispute form's note: the listing, or the unlisted max for this piece. */
 export const disputeLimitText = (listingCents: number | null, kind: "submission" | "call") =>
-  listingCents != null ? "up to the listing amount" : kind === "call" ? `up to ${money(NO_LISTING_CALL_RATE_CAP_CENTS).replace(/\.00$/, "")} an hour for the logged minutes` : `up to ${money(NO_LISTING_WORK_CAP_CENTS).replace(/\.00$/, "")} for this piece`;
+  listingCents != null ? "up to the listing amount" : kind === "call" ? `up to ${money(NO_LISTING_CALL_RATE_CAP_CENTS).replace(/\.00$/, "")} an hour for the measured minutes` : `up to ${money(NO_LISTING_WORK_CAP_CENTS).replace(/\.00$/, "")} for this piece`;
 
 /**
  * An admin's decision can only raise pay. (Owner, item 28) MIN = what this piece was paid; MAX = the part's listing minus what
@@ -404,6 +416,7 @@ export const DEV_EXEMPT_KINDS: Record<string, string> = {
   terms: "(batch 14 section 4) a tester switched to the new terms: one quiet line in the live box (DEV_QUIET_KINDS), stacked per day; work already sent keeps its price, so nothing a press could change",
   paused: "a payment hold: every paused button refuses for good, and the page shows the hold",
   resumed: "the hold lifted because the developer paid (their own action, reason E)",
+  lowered: "(batch 15 section 40) the developer's own Lower the length (reason E from another tab)",
 };
 
 /** (Owner, NEWEST+3) A declined manual Pay, as the tester reads it (never "failed", "declined" or "card"). */
@@ -446,6 +459,7 @@ export const TESTER_EXEMPT_KINDS: Record<string, string> = {
   ended: "the session ends: every button refuses for good",
   next_round: "a new round never changes a working tester's contract",
   invited: "the developer's invites to others",
+  lowered: "(batch 15 section 40) read from the call itself: the lowered length and its reason show on the session page and in the paid line",
   key: "the developer's yellow keys box only",
   paused: "a hold shows as the paused banner and refusals",
   resumed: "the paused banner goes away",
@@ -713,14 +727,7 @@ export function callReference(rateCents: number | null, minutes: number, contrac
   return { cents, text: `${label}: ${money(rateCents).replace(/\.00$/, "")}/h × ${minutes} min = ${money(cents)}` };
 }
 
-/** "How long was the call?": whole minutes, 1 to 3 times the booked length. */
-export function checkActualMinutes(minutes: number | null, booked: number): Check {
-  if (minutes == null || !Number.isInteger(minutes) || minutes < 1) return no("Enter the call's length in whole minutes.");
-  // (NEWEST+8) Up to 150% of the booked length.
-  const max = Math.floor(booked * 1.5);
-  if (minutes > max) return no(`You can log up to ${max} min for this ${booked}-min call.`);
-  return yes;
-}
+// (Batch 15 section 40) "How long was the call?" is gone: the app measures each call's length (callMeasure.ts); the developer can only lower it, with a reason.
 
 /** (NEWEST+8) A call request's length, typed by the requester (the old listing field's limits). */
 export const CALL_MIN_MINUTES = 10, CALL_MAX_MINUTES = 180;
@@ -729,9 +736,7 @@ export function checkCallMinutes(v: unknown): { ok: true; minutes: number } | { 
   if (!Number.isInteger(n) || n < CALL_MIN_MINUTES || n > CALL_MAX_MINUTES) return { ok: false, message: `A live call lasts from ${CALL_MIN_MINUTES} to ${CALL_MAX_MINUTES} minutes.` };
   return { ok: true, minutes: n };
 }
-/** (NEWEST+8) A call closes 24 hours after its planned start: no joining, no length logged any more. */
-export const CALL_CLOSE_MS = 24 * 3_600_000;
-export const callClosed = (startsAt: Date, now = new Date()) => now.getTime() >= startsAt.getTime() + CALL_CLOSE_MS;
+
 /**
  * (Owner, Oct 28 afternoon) Calls can be requested and booked on ANY test, whether or not a live call is a listed part. A call is "listed" only when the listing has a Live call part
  * AND it is in this tester's contract; otherwise it is "not a listed part": its pay is up to the developer (the Pay box starts empty), (batch 9) at most $200 an hour for the minutes logged
@@ -1003,21 +1008,7 @@ export function callOutcome(x: { status: string; cancelledBy: string | null; can
   return out;
 }
 
-/** (The full app's CallLength, tester side) What became of a call's length, in one sentence. */
-export function callLengthText(x: { startsAt: Date; minutes: number; actualMinutes: number | null; lengthNote: string }, dev: string, fmt: (d: Date) => string, now = new Date()) {
-  if (x.actualMinutes != null) return `${dev} entered ${x.actualMinutes} minutes${x.actualMinutes !== x.minutes ? ` (booked ${x.minutes})` : ""}${x.lengthNote ? `: “${x.lengthNote}”` : ""}.`;
-  if (callClosed(x.startsAt, now)) return `${dev} didn't enter the call's length within 24 hours, so the booked length is used: ${x.minutes} minutes.`;
-  return `${dev} enters it after the call. If they don't by ${fmt(new Date(x.startsAt.getTime() + CALL_CLOSE_MS))}, the booked length (${x.minutes} minutes) is used.`;
-}
 
-/** The length's default: from when both joined to the booked end (at least 1 minute); else the booked length. */
-export function defaultCallMinutes(startsAt: Date, minutes: number, devJoinedAt: Date | null, testerJoinedAt: Date | null) {
-  if (!devJoinedAt || !testerJoinedAt) return minutes;
-  const both = Math.max(devJoinedAt.getTime(), testerJoinedAt.getTime(), startsAt.getTime());
-  const end = startsAt.getTime() + minutes * 60_000;
-  return Math.max(1, Math.round((end - both) / 60_000));
-}
-export const LENGTH_WAITS = "You can enter this once the hold is lifted.";
 
 /** The tester's deadline is a guide (never blocks). A call booked after it reads this on both sides. */
 export const bookedLateLabel = (name: string, dueAt: Date, fmt: (d: Date) => string) => `Booked after ${name}'s deadline (${fmt(dueAt)})`;
@@ -1081,10 +1072,9 @@ export const EXTRA_PAY_CAP_PERCENT = 100;
 /** (Batch 9 section 1) A part with no listed price: written answers or a recording at most $1000 per piece; a call at most $200 an hour for the minutes logged. */
 export const NO_LISTING_WORK_CAP_CENTS = 100_000;
 export const NO_LISTING_CALL_RATE_CAP_CENTS = 20_000;
-/** (Owner, Oct 29, batch 12 section 2) All of one tester's unlisted calls on a test together: at most $1000 (an unlisted call has no extra on top of its $200/h). */
-export const NO_LISTING_CALLS_TOTAL_CENTS = 100_000;
-/** The blocked line for an unlisted call over its room. */
-export const overCallsLine = (roomCents: number) => `This is more than you can pay for this call (up to ${money(roomCents).replace(/\.00$/, "")} more for unlisted calls).`;
+// (Owner, Oct 30, batch 15 section 34) NO_LISTING_CALLS_TOTAL_CENTS became CALLS_TOTAL_CENTS (callMeasure.ts): one $1,000 for ALL of a tester's calls on a test.
+/** The blocked line for an unlisted call over its own room ($200 an hour for its measured minutes; nothing above it). */
+export const overCallsLine = (roomCents: number) => `This is more than you can pay for this call (up to ${money(roomCents)} at ${money(NO_LISTING_CALL_RATE_CAP_CENTS).replace(/\.00$/, "")} an hour).`;
 /** A piece's max: $1000 for written answers or a recording; $200/h × the logged minutes for a call. */
 export const pieceMaxCents = (kind: "submission" | "call", minutes = 0) => (kind === "call" ? Math.round((NO_LISTING_CALL_RATE_CAP_CENTS * minutes) / 60) : NO_LISTING_WORK_CAP_CENTS);
 /** How much may be paid above the base on one piece in all (listed: the percent of the listing, at most the max; unlisted: the percent of the max). */

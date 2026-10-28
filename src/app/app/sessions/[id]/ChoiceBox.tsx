@@ -12,7 +12,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
  * Day 14 without a review: charge the developer (the lower of listing and asked, minus what's already been paid for this
  * part) or let it go. Charge needs its tick; Let it go asks once in place. (Never shown when the part is paid in full.)
  */
-export function ChoiceBox({ paused = false, sessionId, submissionId, line, devName, cents, seenAt }: { paused?: boolean; sessionId: string; submissionId: string; line: string; devName: string; cents: number; seenAt: string }) {
+export function ChoiceBox({ paused = false, sessionId, submissionId, callId, line, devName, cents, seenAt }: { paused?: boolean; sessionId: string; submissionId?: string; callId?: string; line: string; devName: string; cents: number; seenAt: string }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
@@ -24,7 +24,7 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, line, devNa
   const typed = toCents(amount);
   const go = (choice: string) => {
     setBusy(true);
-    api(`/api/sessions/${sessionId}/choose`, { submissionId, choice, amount, tickedCents: choice === "charge" && ticked ? typed : undefined, seenAt, confirmed, boxAt })
+    api(`/api/sessions/${sessionId}/choose`, { ...(callId ? { callId } : { submissionId }), choice, amount, tickedCents: choice === "charge" && ticked ? typed : undefined, seenAt, confirmed, boxAt })
       .then(() => window.location.reload())
       .catch((e) => {
         const sb = stopBox(e); if (sb) { setBox(sb); setBoxAt(sb.now); }

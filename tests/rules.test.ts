@@ -35,8 +35,9 @@ describe("the one Pay box", () => {
     expect(checkPay(500, 1000, "", 500)).toMatchObject({ ok: false, message: expect.stringContaining("Say why") });
     expect(checkPay(500, 1000, "Half the answers", 500).ok).toBe(true);
   });
-  it("extra work (not in the listing): any amount, no reason", () => {
-    expect(checkPay(0, null, "", 0).ok).toBe(true);
+  it("extra work (not in the listing): any amount, no reason above $0 (batch 15 section 30: $0 needs one)", () => {
+    expect(checkPay(0, null, "", 0).ok).toBe(false);
+    expect(checkPay(0, null, "Not needed after all", 0).ok).toBe(true);
     expect(checkPay(700, null, "", 700).ok).toBe(true);
   });
   it("(batch 9) the tick must name exactly the amount", () => {

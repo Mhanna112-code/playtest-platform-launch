@@ -68,6 +68,9 @@ describe("paying for a call and no-shows", () => {
     const pay = (body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie: dev.cookie, body: { payKey: randomUUID(), seenAt: seen(), kind: "call", id: call.id, ...body } })).then(json);
     expect((await pay({ amount: "15.00", tickedCents: 1500 })).body.error.message).toBe("You can pay for this call once it has started.");
     await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 3_600_000) } });
+    // (Batch 15 section 40) Not while its length is being measured; then the measured length × the rate.
+    expect((await pay({ amount: "15.00", tickedCents: 1500 })).body.error.message).toMatch(/still being measured/);
+    await db.call.update({ where: { id: call.id }, data: { measuredMinutes: 30, measuredAt: new Date() } });
     await later();
     expect((await pay({ amount: "10.00", tickedCents: 1000 })).body.error.message).toContain("listing's $15.00");
     expect((await pay({ amount: "15.00", tickedCents: 1500, confirmed: true })).status).toBe(200);

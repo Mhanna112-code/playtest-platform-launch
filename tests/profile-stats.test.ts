@@ -27,7 +27,7 @@ describe("profile tiles", () => {
     const charged = await send("Dee Moss", 20);
     expect((await pay(dev.cookie, { kind: "submission", id: full.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
     expect((await pay(dev.cookie, { kind: "submission", id: part.sub.id, amount: "4.00", tickedCents: 400, reason: "Short answers" })).status).toBe(200);
-    expect((await pay(dev.cookie, { kind: "submission", id: rej.sub.id, action: "reject", reason: "Not what we asked" })).status).toBe(200);
+    expect((await pay(dev.cookie, { kind: "submission", id: rej.sub.id, amount: "0", reason: "Not what we asked" })).status).toBe(200);
     await db.review.create({ data: { submissionId: charged.sub.id, contractId: charged.sessionId, amountCents: 1000, agreedCents: 1000, reason: CHARGED_BY_TESTER, payKey: randomUUID() } });
 
     const s = await developerStats(dev.user.id);

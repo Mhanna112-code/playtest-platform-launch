@@ -3,20 +3,23 @@ import { db } from "@/lib/db";
 import { sweepNobodyJoined } from "@/lib/server/calls";
 import { act, bookCall, joined, setup } from "./fixtures";
 
-// (Owner, Oct 23, NEWEST+8) Call length: logged up to 150%; the call closes 24 h after its start; nobody joined by the
-// halfway point -> auto-cancelled (no charge, never a no-show, both told).
+// (Owner, Oct 23, NEWEST+8) Nobody joined by the halfway point -> auto-cancelled (no charge, never a no-show, both told). (Batch 15 section 40) The length is measured
+// (up to 150% of the booked length); the developer can only lower it, with a reason.
 describe("call rules", () => {
-  it("the logged length can be up to 150% of the booked length; over it is red; after 24 h it can't be logged", async () => {
+  it("the measured length is capped at 150% of the booked length; it can only be lowered", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 48);
-    const start = new Date(Date.now() - 60 * 60_000);
+    const start = new Date(Date.now() - 3 * 60 * 60_000);
     await db.call.update({ where: { id: call.id }, data: { startsAt: start, devJoinedAt: start, testerJoinedAt: start } });
-    const over = await act(testId, "call-length", dev.cookie, { callId: call.id, minutes: 46 });
-    expect(over).toMatchObject({ status: 400, body: { error: { message: "You can log up to 45 min for this 30-min call." } } });
-    expect((await act(testId, "call-length", dev.cookie, { callId: call.id, minutes: 45 })).status).toBe(200);
-    await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 25 * 3_600_000) } });
-    expect((await act(testId, "call-length", dev.cookie, { callId: call.id, minutes: 40 })).body.error.message).toBe("This call closed 24 hours after its start: the booked length is used.");
+    await db.callPresence.createMany({ data: [
+      { callId: call.id, userId: dev.user.id, side: "developer", startAt: start, endAt: new Date(start.getTime() + 70 * 60_000) },
+      { callId: call.id, userId: tester.user.id, side: "tester", startAt: start, endAt: new Date(start.getTime() + 70 * 60_000) },
+    ] });
+    await sweepNobodyJoined();
+    expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).measuredMinutes).toBe(45);
+    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 46, reason: "It ran long" })).body.error.message).toBe("You can only lower the length: below 45 min.");
+    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 40, reason: "We chatted after.", seenAt: new Date().toISOString(), confirmed: true })).status).toBe(200);
   });
 
   it("nobody joined by the halfway point: cancelled, no charge, never a no-show, both told; one side joined: left alone", async () => {
@@ -26,7 +29,7 @@ describe("call rules", () => {
     const b = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 52);
     const past = new Date(Date.now() - 16 * 60_000); // past the halfway point of a 30-min call
     await db.call.update({ where: { id: a.id }, data: { startsAt: past } });
-    await db.call.update({ where: { id: b.id }, data: { startsAt: new Date(past.getTime() - 60 * 60_000), testerJoinedAt: past } });
+    await db.call.update({ where: { id: b.id }, data: { startsAt: new Date(past.getTime() - 30 * 60_000), testerJoinedAt: past } }); // (batch 15 section 40) its length isn't final yet
     await sweepNobodyJoined();
     expect(await db.call.findUniqueOrThrow({ where: { id: a.id } })).toMatchObject({ status: "cancelled", cancelledBy: "system", cancelNote: "Nobody joined, so the call was cancelled.", noShowBy: null });
     expect((await db.call.findUniqueOrThrow({ where: { id: b.id } })).status).toBe("booked");
@@ -111,22 +114,16 @@ describe("Add to calendar (.ics)", () => {
   });
 });
 
-describe("call length entry (the full app's, lean rules)", () => {
-  it("the reason is kept only when shorter than booked; the tester reads entered / pending / closed", async () => {
-    const { callLengthText } = await import("@/lib/rules");
+describe("the measured length, as both sides read it (batch 15 section 40)", () => {
+  it("a lowered length keeps its reason (the tester reads it); the line names the time both were in the call", async () => {
+    const { callLengthLine } = await import("@/lib/callMeasure");
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 1);
-    const start = new Date(Date.now() - 60 * 60_000);
-    await db.call.update({ where: { id: call.id }, data: { startsAt: start } });
-    expect((await act(testId, "call-length", dev.cookie, { callId: call.id, minutes: 20, note: "We finished early.", seenAt: new Date().toISOString(), confirmed: true })).status).toBe(200);
-    let c = await db.call.findUniqueOrThrow({ where: { id: call.id } });
+    await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 60 * 60_000), measuredMinutes: 30, measuredAt: new Date(), measuredFrom: new Date(Date.now() - 60 * 60_000), measuredTo: new Date(Date.now() - 30 * 60_000) } });
+    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 20, reason: "We finished early.", seenAt: new Date().toISOString(), confirmed: true })).status).toBe(200);
+    const c = await db.call.findUniqueOrThrow({ where: { id: call.id } });
     expect([c.actualMinutes, c.lengthNote]).toEqual([20, "We finished early."]);
-    expect(callLengthText(c, "Nora Lane", () => "x")).toBe("Nora Lane entered 20 minutes (booked 30): “We finished early.”.");
-    expect((await act(testId, "call-length", dev.cookie, { callId: call.id, minutes: 40, note: "ignored", seenAt: new Date().toISOString(), confirmed: true })).status).toBe(200);
-    c = await db.call.findUniqueOrThrow({ where: { id: call.id } });
-    expect([c.actualMinutes, c.lengthNote]).toEqual([40, ""]);
-    expect(callLengthText({ ...c, actualMinutes: null }, "Nora Lane", () => "Fri 3:00 PM")).toBe("Nora Lane enters it after the call. If they don't by Fri 3:00 PM, the booked length (30 minutes) is used.");
-    expect(callLengthText({ ...c, actualMinutes: null, startsAt: new Date(Date.now() - 25 * 3_600_000) }, "Nora Lane", () => "x")).toBe("Nora Lane didn't enter the call's length within 24 hours, so the booked length is used: 30 minutes.");
+    expect(callLengthLine(c, () => "2:00 PM")).toBe("Length: 20 min (lowered from 30 min; both in the call 2:00–2:00 PM)");
   });
 });

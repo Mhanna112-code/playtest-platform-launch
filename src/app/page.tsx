@@ -113,7 +113,7 @@ export default async function Home() {
           <div className="grid gap-4 md:grid-cols-2">
             <FairCard title="For makers" icon={BadgeDollarSign} tone="text-volt-300" points={[
               "Write your questions and prices up front, then pay what each piece of work was worth",
-              "Pay the listed amount, pay less with a reason, or reject with a reason",
+              "Pay the listed amount, or any amount with a reason ($0 included)",
               "Chat with testers, invite the best back for your next round",
             ]} />
             <FairCard title="For testers" icon={ShieldCheck} tone="text-punch-300" points={[
@@ -202,7 +202,7 @@ const PRODUCTS = [
 const STEPS = [
   { icon: Wand2, title: "Post your build", text: "Pick the parts and prices, write your questions, set the devices and languages it needs. Five minutes." },
   { icon: Video, title: "Matched testers try it", text: "People who fit your audience (devices, languages) join, then write, send a screen recording, or join a live call." },
-  { icon: Check, title: "Review, then decide", text: "One Pay box per piece of work: pay the listed amount, pay less with a reason, or reject with a reason." },
+  { icon: Check, title: "Review, then decide", text: "One Pay box per piece of work: pay the listed amount, or any amount from $0 up with a reason the tester reads." },
 ];
 
 const FORMATS = [

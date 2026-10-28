@@ -2,12 +2,17 @@ import { hasPerks } from "@/lib/server/subscription";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, pronouns } from "@/lib/format";
-import { chargeOpensAt, CALL_CLOSE_MS, callClosed, callOutcome, joinedWords, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, defaultCallMinutes, choiceNoteLine, closesInLine, lateLabel, termsLine } from "@/lib/rules";
+import { chargeOpensAt, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, choiceNoteLine, closesInLine, lateLabel, termsLine, paidZeroLine } from "@/lib/rules";
+import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, MEASURING_LINE } from "@/lib/callMeasure";
+import { callsLeftCents } from "@/lib/server/callMoney";
+import { callsLeftWarning } from "@/lib/callMeasure";
+import { fmtTime } from "@/lib/format";
+import { ReasonQuote } from "@/components/ScrollText";
 import { requireOpenDevPage } from "@/lib/server/page-auth";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
 import { unreadCount } from "@/lib/server/messages";
 import { DevCallPanel, type DevCall, type DevTester } from "./DevCallPanel";
-import { CallLength } from "./CallLength";
+
 import { InvitePanel } from "./InvitePanel";
 import { invitable, inviteExpired } from "@/lib/server/invites";
 import { owedForBox } from "@/lib/server/holds";
@@ -112,13 +117,17 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const cbSteps = await chargebackSteps(u.id);
   // (Owner, Oct 27) While a failed payment is owed, Pay (part Pay, extra pay) is disabled: "Pay what you owe first."; the room above the listing prices for extra pay.
   const owesNow = owedList.some((o) => o.retry);
-  // (Batch 9 section 6) Extra pay's "up to $Y", per piece: every sent part and every held call.
-  const pieceKeys: { submissionId?: string; callId?: string }[] = t.contracts.flatMap((c) => [...c.submissions.map((x) => ({ submissionId: x.id })), ...c.calls.filter((x) => x.status === "booked" && x.startsAt <= new Date()).map((x) => ({ callId: x.id }))]);
+  // (Batch 9 section 6) Extra pay's "up to $Y", per piece: every sent part and every call that took place (batch 15 section 40: its length is final).
+  const tookPlace = (x: { status: string; actualMinutes: number | null; measuredMinutes: number | null; measuredAt: Date | null }) => x.status === "booked" && callMinutesOf(x) != null;
+  const pieceKeys: { submissionId?: string; callId?: string }[] = t.contracts.flatMap((c) => [...c.submissions.map((x) => ({ submissionId: x.id })), ...c.calls.filter(tookPlace).map((x) => ({ callId: x.id }))]);
   const rooms = new Map(await Promise.all(pieceKeys.map(async (k) => {
     const piece = (await pieceOf(k))!;
     const r = await pieceRoom(piece);
-    return [k.submissionId ?? k.callId!, { room: r.roomCents, listed: r.listed, pool: r.callPoolRoomCents }] as const;
+    return [k.submissionId ?? k.callId!, { room: r.roomCents, listed: r.listed, pool: r.callPoolRoomCents, box: { roomCents: r.roomCents, aboveRoomCents: r.aboveRoomCents, ceilingBinds: r.ceilingBinds } }] as const;
   })));
+  // (Batch 15 section 34) What's left of the $1,000 for each tester's calls, and the small warning when under an hour (or under $200 unlisted).
+  const callsWarn = new Map(await Promise.all(t.contracts.map(async (c) => [c.id, callsLeftWarning(await callsLeftCents(c.id), callListed(t, c) ? c.liveRateCents : null, "developer", displayName(c.tester))] as const)));
+  const lengthOf = (x: Parameters<typeof callLengthLine>[0]) => callLengthLine(x, fmtTime);
   const lateOf = (c: { dueAt: Date; tester: { name: string; email: string } }, x: { createdAt: Date }) => (isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(c.tester), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined);
   const partPaid = (id: string) => payments.filter((p) => (p.submissionId === id || p.callId === id) && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
   const payments = await db.payment.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
@@ -139,8 +148,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       // (Owner, Oct 28 afternoon) A call that isn't a listed part (not in the listing, or not in this tester's contract) can still be requested: its pay is up to the developer.
       callListed(t, c) ? `Live call ${whole(c.liveRateCents)}/h, ${whole(callPaid)} paid so far` : `Live call: ${NOT_LISTED}`,
     ].filter(Boolean).join(" · ");
-    const toCall = (x: (typeof c.calls)[number]): DevCall => ({ id: x.id, joinable: callJoinable(x, now), report: x.noShowBy ? { byMe: x.noShowBy === "developer", note: x.noShowNote } : null, when: x.startsAt.toISOString(), minutes: x.minutes, rate: rateLabel(x.rateCents, c.liveRateCents), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, late: lateOf(c, x) });
-    const live = c.calls.filter((x) => x.status === "booked" && !x.review);
+    const toCall = (x: (typeof c.calls)[number]): DevCall => ({ id: x.id, joinable: callJoinable(x, now), report: x.noShowBy ? { byMe: x.noShowBy === "developer", note: x.noShowNote } : null, when: x.startsAt.toISOString(), minutes: x.minutes, rate: rateLabel(x.rateCents, c.liveRateCents), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, late: lateOf(c, x), measuring: x.startsAt <= now ? MEASURING_LINE : undefined });
+    // (Batch 15 section 42) The Live session shows only calls ahead and calls in progress; a call that's over moves to the tester's row.
+    const live = c.calls.filter((x) => x.status === "booked" && !callIsOver(x));
     const setIds = [...new Set(live.filter((x) => x.setId).map((x) => x.setId!))];
     // (NEXT-UI 7) A set's line: "Weekly · Mon 3:00 PM (3 left)", or no count for Forever.
     const sets = setIds.flatMap((sid) => {
@@ -154,7 +164,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     });
     const booked = new Set(c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => x.setId ?? x.id)).size;
     return {
-      contractId: c.id, name: displayName(c.tester), terms, booked,
+      contractId: c.id, name: displayName(c.tester), terms, booked, warning: callsWarn.get(c.id) ?? "",
       calls: live.filter((x) => !x.setId).map(toCall),
       sets,
       // (NEXT-UI 21) The testers' requests wait in Needs you; here only the developer's own.
@@ -176,12 +186,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     .filter((c) => testerPayable(c.tester))
     .flatMap((c) => [
       ...c.submissions.filter((x) => !x.review).map((x) => ({ kind: "sub" as const, id: x.id, c, s: x, x: null, at: x.sentAt })),
-      ...c.calls.filter((x) => x.status === "booked" && x.startsAt <= now && !x.review).map((x) => ({ kind: "call" as const, id: x.id, c, s: null, x, at: x.startsAt })),
+      ...c.calls.filter((x) => tookPlace(x) && !x.review).map((x) => ({ kind: "call" as const, id: x.id, c, s: null, x, at: x.startsAt })),
     ])
     .sort((a, b) => a.at.getTime() - b.at.getTime());
   const needsRequests = reqs.filter((r) => r.fromSide === "tester").flatMap((r) => {
     const c = t.contracts.find((x) => x.id === r.contractId);
-    return c ? [{ id: r.id, contractId: c.id, name: displayName(c.tester), rows: toJson(rowsOf(r)), minutes: r.minutes, rate: rateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents) }] : [];
+    return c ? [{ id: r.id, contractId: c.id, name: displayName(c.tester), rows: toJson(rowsOf(r)), minutes: r.minutes, rate: rateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents), warning: callsWarn.get(c.id) }] : [];
   });
   const disputesWaiting = t.contracts.flatMap((c) => [
     ...c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), what: x.kind === "written" ? "their written answers" : "their recording", reason: x.dispute!.reason })),
@@ -226,25 +236,25 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           toSend: [...(c.writtenCents != null && !c.submissions.some((x) => x.kind === "written") ? ["written answers"] : []), ...(c.recordingCents != null && !c.submissions.some((x) => x.kind === "recording") ? ["recording"] : [])],
           ahead: c.calls.filter((x) => x.status === "booked" && x.startsAt > now).length,
           // (Owner, Oct 28) Everything still waiting for Pay or Reject: unreviewed parts and held calls (started, not paid).
-          waiting: [...c.submissions.filter((x) => !x.review).map((x) => (x.kind === "recording" ? "recording" : "written answers")), ...(c.calls.some((x) => x.status === "booked" && x.startsAt <= now && !x.review) ? ["live call"] : [])],
+          waiting: [...c.submissions.filter((x) => !x.review).map((x) => (x.kind === "recording" ? "recording" : "written answers")), ...(c.calls.some((x) => tookPlace(x) && !x.review) ? ["live call"] : [])],
         }))}
       />
       {t.pauseClosedAt && <p role="alert" className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100" data-pause-closed="">{t.pauseClosedReason}</p>}
       {/* (Design doc 6) A stopped test: one short line saying what can still be done. */}
-      {t.status === "stopped" && <p className="note" data-stopped-line="">This test is stopped. You can still pay or reject work testers already sent, chat with them, rate testers, and read their answers.</p>}
+      {t.status === "stopped" && <p className="note" data-stopped-line="">This test is stopped. You can still pay for work testers already sent, chat with them, rate testers, and read their answers.</p>}
       {/* (Design doc 6) The team stopped or paused this test: a permanent banner at the top of the overview, naming any press that failed. */}
       {(t.adminStoppedAt || t.adminPausedAt) && (
         <section role="alert" data-admin-banner={t.adminStoppedAt ? "stopped" : "paused"} className="rounded-2xl border border-rose-400/50 bg-rose-500/10 p-4 text-sm text-rose-100">
           <p className="font-semibold">{t.adminStoppedAt ? "The team stopped this test." : "The team paused this test: it behaves like a stop, and you can only stop it."}</p>
           {t.adminNote && <ClampText text={t.adminNote} />}
           {failed && <p className="mt-1">{failed}.</p>}
-          <p className="mt-1 text-rose-100/80">What testers sent still waits for you to pay or reject. If you think this is a mistake, use Contact us in Settings.</p>
+          <p className="mt-1 text-rose-100/80">What testers sent still waits for you to pay. If you think this is a mistake, use Contact us in Settings.</p>
         </section>
       )}
       {/* (Design doc 6) The order: overview, the live updates box, the yellow keys notice, then the panels. */}
       <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" />
       <KeysNotice testId={t.id} keys={keysView.uses && !restricted ? keysView : null} />
-      {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay / Reject box for sent work lives here. */}
+      {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay box for sent work and calls that took place lives here. */}
       {needsCount > 0 && !restricted && (
         <NeedsYou count={needsCount}>
           <Applications testId={t.id} seenAt={seenAt} apps={apps} />
@@ -269,7 +279,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             const who = displayName(mine[0].c.tester);
             return (
               <details key={cid} open className="rounded-xl border border-white/10 p-2" data-needs-person={who}>
-                <summary className="fold-chevron flex cursor-pointer items-center gap-2 text-sm font-medium text-white">{who} <span className="font-normal text-slate-400">· {mine.length} part{mine.length === 1 ? "" : "s"} to pay or reject</span></summary>
+                <summary className="fold-chevron flex cursor-pointer items-center gap-2 text-sm font-medium text-white">{who} <span className="font-normal text-slate-400">· {mine.length} part{mine.length === 1 ? "" : "s"} to pay</span></summary>
                 <div className="mt-2 space-y-3">
           {mine.map((x) => (
             <div key={x.id} id={x.kind === "sub" ? `piece-${x.id}` : `call-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 scroll-mt-24">
@@ -288,23 +298,19 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     {x.s!.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><Formatted text={x.s!.notes} /></div>}
                     <AttachmentList items={x.s!.recordings.filter((r) => r.uploadedAt)} />
                   </AnswersBox>
-                  <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} partPaidCents={partPaid(x.s!.id)} roomCents={rooms.get(x.s!.id)?.room}
+                  <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.s!.id)?.box}
                     note={x.s!.agreedCents != null && chargeOpensAt(x.s!, t, x.c, now) && !x.s!.choiceOfferedAt ? choiceNoteLine(fmtDate(chargeOpensAt(x.s!, t, x.c, now)!).replace(/, \d{4}$/, ""), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
                     listingCents={x.s!.agreedCents} listingText={`${money(x.s!.agreedCents)} for ${x.s!.kind === "written" ? "written answers" : "a recording"}`} />
                 </>
               ) : (
                 <>
-                  {x.x!.devJoinedAt && x.x!.testerJoinedAt && <p className="note">Both joined at {fmtDateTime(new Date(Math.max(x.x!.devJoinedAt.getTime(), x.x!.testerJoinedAt.getTime())))}</p>}
-                  <CallLength
-                    seenAt={seenAt} testId={t.id} callId={x.x!.id} tester={displayName(x.c.tester)}
-                    minutes={x.x!.actualMinutes ?? x.x!.minutes} booked={x.x!.minutes} entered={x.x!.actualMinutes} note={x.x!.lengthNote}
-                    measured={x.x!.devJoinedAt && x.x!.testerJoinedAt ? defaultCallMinutes(x.x!.startsAt, x.x!.minutes, x.x!.devJoinedAt, x.x!.testerJoinedAt) : null}
-                    max={Math.floor(x.x!.minutes * 1.5)} closesAt={new Date(x.x!.startsAt.getTime() + CALL_CLOSE_MS).toISOString()} closed={callClosed(x.x!.startsAt, now)}
-                  />
-                  <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} partPaidCents={partPaid(x.x!.id)} roomCents={rooms.get(x.x!.id)?.room} callPoolRoomCents={rooms.get(x.x!.id)?.pool ?? null}
-                    minutes={x.x!.actualMinutes ?? x.x!.minutes} rateCents={x.x!.rateCents}
-                    listingCents={callReference(x.x!.rateCents, x.x!.actualMinutes ?? x.x!.minutes, x.c.liveRateCents).cents}
-                    listingText={callReference(x.x!.rateCents, x.x!.actualMinutes ?? x.x!.minutes, x.c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
+                  {/* (Batch 15 section 40) The measured length: "Length: 29 min (both in the call 2:21–2:50 PM)"; a lowered one says so, with the reason. */}
+                  <p className="text-sm text-slate-200" data-call-length="">{lengthOf(x.x!)}</p>
+                  {x.x!.actualMinutes != null && x.x!.lengthNote && <ReasonQuote text={x.x!.lengthNote} />}
+                  <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.x!.id)?.box}
+                    minutes={callMinutesOf(x.x!)!} rateCents={x.x!.rateCents} lower={{ testId: t.id }} warning={callsWarn.get(x.c.id)}
+                    listingCents={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).cents}
+                    listingText={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
                 </>
               )}
             </div>
@@ -344,8 +350,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             const unreadN = unread.get(c.id) ?? 0;
             const callPaid = payments.filter((p) => p.contractId === c.id && p.callId && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
             const bookedAhead = c.calls.filter((x) => x.status === "booked" && x.startsAt > now).length;
-            const held = c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).length;
+            // (Batch 15 section 31) "held" became "done": a call that took place.
+            const done = c.calls.filter(tookPlace).length;
             const cancelledN = c.calls.filter((x) => x.status === "cancelled").length;
+            // (Batch 15 section 42) Every call that's over, newest first (oldest last).
+            const overCalls = c.calls.filter(callIsOver).sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
             const partRows = [
               { name: "Written answers", on: c.writtenCents != null, required: c.writtenRequired, sub: c.submissions.find((s) => s.kind === "written"), cents: c.writtenCents },
               { name: "Recording", on: c.recordingCents != null, required: c.recordingRequired, sub: c.submissions.find((s) => s.kind === "recording"), cents: c.recordingCents },
@@ -370,34 +379,56 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       {r.sub && <span className="text-slate-300">· paid {money(partPaid(r.sub.id))} of {r.sub.agreedCents != null ? money(r.sub.agreedCents) : `(${NOT_LISTED.toLowerCase()})`}</span>}
                       {/* (Owner, Oct 29, batch 11 section 6 / batch 12 section 3) A paid piece keeps its Pay box as "Pay more" until its cap is reached. */}
                       {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
-                        <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} partPaidCents={partPaid(r.sub.id)}
-                          roomCents={rooms.get(r.sub.id)?.room} listingCents={r.sub.agreedCents} listingText={`${money(r.sub.agreedCents)} for ${r.name === "Recording" ? "a recording" : "written answers"}`} />
+                        <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)}
+                          room={rooms.get(r.sub.id)?.box} listingCents={r.sub.agreedCents} listingText={`${money(r.sub.agreedCents)} for ${r.name === "Recording" ? "a recording" : "written answers"}`} />
                       )}
+                      {r.sub?.review && r.sub.review.amountCents === 0 && !r.sub.review.rejected && r.sub.review.reason && <span className="w-full text-sm text-slate-300" data-paid-zero="">{paidZeroLine(r.sub.review.reason)}</span>}
+                      {r.sub?.review?.rejected && <span className="badge border-rose-400/40 text-rose-200">Rejected</span>}
                     </li>
                   ))}
-                  {c.liveRateCents != null && (
-                    <li className="flex flex-wrap items-center gap-2">
+                  {/* (Batch 15 section 31) The Live call part: the total paid for all calls on the right, like the other parts; "held" is now "done". */}
+                  {(c.liveRateCents != null || c.calls.length > 0) && (
+                    <li className="flex flex-wrap items-center gap-2" data-live-part="">
                       <b className="text-white">Live call</b>
                       <span className={`badge ${c.liveRequired ? "border-amber-300/40 text-amber-200" : ""}`}>{c.liveRequired ? "Required" : "Not required"}</span>
-                      <span className={held ? "text-emerald-200" : "text-slate-400"}>{held ? `${held} held` : "None held yet"}</span>
-                      <span className="text-slate-300">· paid {money(callPaid)}</span>
+                      <span className={done ? "text-emerald-200" : "text-slate-400"}>{done ? `${done} done` : "None done yet"}</span>
+                      <span className="ml-auto text-slate-300">paid {money(callPaid)}</span>
                     </li>
                   )}
-                  {/* (Batch 9) Each call that took place, listed or not; (batch 11 / 12) once paid, "Pay more" until its cap (an unlisted call: $200/h, and the tester's $1000 for unlisted calls). */}
-                  {!restricted && c.calls.filter((x) => x.status === "booked" && x.startsAt <= now).map((x) => (
-                    <li key={x.id} className="flex flex-wrap items-center gap-2" data-held-call={x.id}>
-                      <b className="text-white">Call on {fmtDateTime(x.startsAt)}</b>
-                      <span className="text-slate-300">· {x.rateCents == null ? NOT_LISTED : "In their contract"} · paid {money(partPaid(x.id))}</span>
-                      {x.review && !x.review.rejected && (rooms.get(x.id)?.room ?? 0) > 0 && (
-                        <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} partPaidCents={partPaid(x.id)}
-                          roomCents={rooms.get(x.id)?.room} callPoolRoomCents={rooms.get(x.id)?.pool ?? null} minutes={x.actualMinutes ?? x.minutes} rateCents={x.rateCents}
-                          listingCents={callReference(x.rateCents, x.actualMinutes ?? x.minutes, c.liveRateCents).cents}
-                          listingText={callReference(x.rateCents, x.actualMinutes ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
-                      )}
-                    </li>
-                  ))}
                 </ul>
-                <p className="text-sm"><b>Paid in all:</b> {money(paidSoFar(c.id))}{(bookedAhead || held || cancelledN) ? ` · Calls: ${[bookedAhead ? `${bookedAhead} booked ahead` : "", held ? `${held} held` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}` : ""}</p>
+                {/* (Batch 15 sections 31 and 42) "Calls (N)": every call that's over, newest first, with its outcome badge; each call that took place has its own Pay more box. */}
+                {overCalls.length > 0 && (
+                  <details className="rounded-lg border border-white/10 p-2 text-sm" data-calls-fold={c.id}>
+                    <summary className="fold-chevron cursor-pointer font-medium text-white">Calls ({overCalls.length})</summary>
+                    <ul className="mt-2 max-h-96 space-y-2 overflow-y-auto pr-1" data-calls-history="">
+                      {overCalls.map((x) => {
+                        const m = callMinutesOf(x);
+                        const badge = callOverBadge(x, { developer: displayName(u), tester: name }, "developer", fmtTime, partPaid(x.id), m);
+                        const inNeeds = tookPlace(x) && !x.review && !restricted && testerPayable(c.tester);
+                        return (
+                          <li key={x.id} id={inNeeds ? `callrow-${x.id}` : `call-${x.id}`} className={`space-y-1 rounded-lg border border-white/5 p-2 ${"scroll-mt-24 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300"}`} data-over-call={x.id}>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-slate-200">{fmtDateTime(x.startsAt)}</span>
+                              <span className={`badge ${badge.tone === "green" ? "border-emerald-400/40 text-emerald-200" : badge.tone === "amber" ? "border-amber-300/40 text-amber-200" : badge.tone === "rose" ? "border-rose-400/40 text-rose-200" : ""}`} data-call-badge="">{badge.label}</span>
+                              <span className="ml-auto text-slate-300">{tookPlace(x) ? `paid ${money(partPaid(x.id))}` : ""}</span>
+                            </div>
+                            {tookPlace(x) && <p className="text-xs text-slate-400" data-call-length="">{lengthOf(x)} · {x.rateCents == null ? NOT_LISTED : "In their contract"}</p>}
+                            {badge.reason && <ReasonQuote text={badge.reason} />}
+                            {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
+                            {inNeeds && <a href={`#call-${x.id}`} className="text-xs">Pay it in Needs you ↑</a>}
+                            {x.review && !x.review.rejected && !restricted && (rooms.get(x.id)?.room ?? 0) > 0 && (
+                              <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)}
+                                room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
+                                listingCents={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).cents}
+                                listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </details>
+                )}
+                <p className="text-sm"><b>Paid in all:</b> {money(paidSoFar(c.id))}{(bookedAhead || done || cancelledN) ? ` · Calls: ${[bookedAhead ? `${bookedAhead} booked ahead` : "", done ? `${done} done` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}` : ""}</p>
                 {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}
                 {/* (Batch 13 section 8) Earlier SENT sets this tester replaced after switching to changed questions. */}
                 <PrevSetFolds sets={prevSetsOf(c.submissions.find((s) => s.kind === "written")?.prevSets)} />
@@ -409,7 +440,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   </div>
                 ))}
                 {/* (Batch 11, DEFAULT) A tester who deleted their account with no payout account: their unreviewed work left Needs you. */}
-                {!testerPayable(c.tester) && (c.submissions.some((x) => !x.review) || c.calls.some((x) => x.status === "booked" && x.startsAt <= now && !x.review)) && <p className="note" data-deleted-no-payouts="">{deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null }))}</p>}
+                {!testerPayable(c.tester) && (c.submissions.some((x) => !x.review) || c.calls.some((x) => tookPlace(x) && !x.review)) && <p className="note" data-deleted-no-payouts="">{deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null }))}</p>}
                 {ri?.avg && <p className="note">{name}: {ri.avg}</p>}
                 {ri?.tester && (
                   <>
@@ -440,13 +471,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         canRequest={t.status !== "stopped" && t.status !== "draft" && !u.holdStartedAt && !restricted}
         noRequestReason={t.status === "stopped" ? "" : restricted ? "Your account is suspended: you can only cancel booked calls here." : u.holdStartedAt ? "Your tests are paused until you pay what you owe: calls wait meanwhile." : ""}
         testers={restricted ? devTesters.map((x) => ({ ...x, requests: [] })) : devTesters}
-        past={t.contracts
-          .flatMap((c) => c.calls.filter((x) => x.status === "cancelled" || x.review).map((x) => ({
-            id: x.id, who: displayName(c.tester), when: x.startsAt.toISOString(), minutes: x.minutes, logged: x.actualMinutes, cancelled: x.status === "cancelled",
-            joined: joinedWords(x, "developer", displayName(c.tester), now), outcome: callOutcome(x, displayName(u), "developer"),
-            devJoinedAt: x.devJoinedAt?.toISOString() ?? null, testerJoinedAt: x.testerJoinedAt?.toISOString() ?? null,
-          })))
-          .sort((a, b) => b.when.localeCompare(a.when))}
       />
       {t.status !== "stopped" && !restricted && (
         <InvitePanel

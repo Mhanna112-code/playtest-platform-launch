@@ -6,21 +6,19 @@ import { JoinCall } from "@/components/JoinCall";
 import { CalendarPlus } from "lucide-react";
 import { usePress } from "@/lib/usePress";
 import { MARKABLE } from "@/lib/markJump";
-import { LIVE_SECTIONS, LivePanel, LiveSection } from "@/components/LivePanel";
+import { LivePanel } from "@/components/LivePanel";
 import { CallTimer } from "@/components/CallTimer";
 import { ReportProblem } from "@/components/ReportProblem";
-import { CallPresence, CallTimelineLine } from "@/components/CallPresence";
+import { CallPresence } from "@/components/CallPresence";
 import { CancelMenu } from "@/components/CancelMenu";
 import type { RowJson } from "@/lib/callRows";
 import { acceptChoices, describeRows, newRow, RequestRows, rowsPayload, type RowState } from "@/components/RequestRows";
 
-export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string; joinable?: boolean; report?: { byMe: boolean; note: string } | null };
+export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string; joinable?: boolean; report?: { byMe: boolean; note: string } | null; measuring?: string };
 /** A booked daily / weekly set: its line ("Weekly · Mon 3:00 PM (3 left)", or no count for Forever), and whether Cancel needs a reason. */
 export type DevSet = { id: string; label: string; minutes: number; rate: string; needsReason: boolean; calls: DevCall[] };
 export type DevReq = { id: string; rows: RowJson[]; mine: boolean; rate: string; minutes?: number };
-export type DevPast = { id: string; who: string; when: string; minutes: number; logged: number | null; joined: string; outcome: { label: string; tone: "grey" | "amber" | "green" | "rose" }[]; devJoinedAt: string | null; testerJoinedAt: string | null; cancelled: boolean };
-const TONE = { grey: "", amber: "border-amber-300/40 text-amber-200", green: "border-emerald-400/40 text-emerald-200", rose: "border-rose-400/40 text-rose-200" } as const;
-export type DevTester = { contractId: string; name: string; terms: string; booked: number; calls: DevCall[]; sets: DevSet[]; requests: DevReq[] };
+export type DevTester = { contractId: string; name: string; terms: string; booked: number; calls: DevCall[]; sets: DevSet[]; requests: DevReq[]; warning?: string };
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const short = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
@@ -30,7 +28,7 @@ const short = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: 
  * "N of 3 booked"; [Request a time] to everyone ticked; then per-tester blocks (ticked testers, or everyone with a call or
  * request when nothing is ticked): booked calls, daily/weekly sets as one line, waiting requests. Boxes under the button.
  */
-export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestReason = "", past = [] }: { testId: string; seenAt: string; testers: DevTester[]; canRequest: boolean; noRequestReason?: string; past?: DevPast[] }) {
+export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestReason = "" }: { testId: string; seenAt: string; testers: DevTester[]; canRequest: boolean; noRequestReason?: string }) {
   const { press, changes, error, busy, at, errData } = usePress(seenAt);
   const [ticked, setTicked] = useState<string[]>([]);
   const [rows, setRows] = useState<RowState[]>([newRow()]);
@@ -51,7 +49,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
 
   const callRow = (t: DevTester, c: DevCall) => (
     <li key={c.id} id={`call-${c.id}`} className="flex flex-wrap items-center gap-2">
-      <span className="mr-auto">{t.name} · {fmt(c.when)} · {c.minutes} min · {c.rate}{c.late && <span className="ml-2 badge">{c.late}</span>}</span>
+      <span className="mr-auto">{t.name} · {fmt(c.when)} · {c.minutes} min · {c.rate}{c.late && <span className="ml-2 badge">{c.late}</span>}{c.measuring && <span className="ml-2 badge border-sky-300/40 text-sky-200" data-measuring="">{c.measuring}</span>}</span>
       {c.joinable && <JoinCall callId={c.id} />}
       {!c.started && <a href={`/api/calls/${c.id}/ics`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline"><CalendarPlus className="h-3.5 w-3.5" /> Add to calendar</a>}
       {!c.started && <CancelMenu needsReason={!c.canCancel} busy={busy} other={t.name} onCancel={(why) => go("cancel-call", { callId: c.id, reason: why }, "cancel-" + c.id)} />}
@@ -78,6 +76,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           {testers.map((t) => (
             <label key={t.contractId} className="block">
               <input type="checkbox" checked={ticked.includes(t.contractId)} onChange={(e) => setTicked(e.target.checked ? [...ticked, t.contractId] : ticked.filter((x) => x !== t.contractId))} /> <b>{t.name}</b> · {t.terms} · {t.booked} of 3 booked
+              {t.warning && <span className="block pl-5 text-xs text-amber-200" data-calls-warning="">{t.warning}</span>}
             </label>
           ))}
         </fieldset>
@@ -100,13 +99,16 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
         </div>
       )}
       {shown.length === 0 && canRequest && <p className="note">No calls or requests yet.</p>}
-      <div className="max-h-[36rem] space-y-2 overflow-y-auto pr-1" data-testers-calls="">
+      {/* (Batch 15 section 33) The whole list of tester cards scrolls on its own once it's taller than about 2 screens; the tick list and the request form stay above it. */}
+      <div className="max-h-[200vh] space-y-2 overflow-y-auto pr-1" data-testers-calls="">
       {shown.map((t) => (
         <div key={t.contractId} className="space-y-1 rounded-lg border border-white/10 p-3 text-sm">
           <h3>{t.name}</h3>
           {!t.calls.length && !t.sets.length && !t.requests.length && <p className="note">No calls or requests</p>}
+          {t.warning && <p className="text-xs text-amber-200" data-calls-warning="">{t.warning}</p>}
           {(t.calls.length > 0 || t.sets.length > 0) && <p className="font-medium">Booked</p>}
-          <ul className="space-y-1">
+          {/* (Batch 15 sections 33 and 42) Calls ahead and in progress, soonest first, in a scroll box about 3 calls tall; calls that are over are in the tester's row. */}
+          <ul className="max-h-40 space-y-1 overflow-y-auto pr-1" data-booked-scroll="">
             {t.calls.map((c) => callRow(t, c))}
             {t.sets.map((s) => (
               <li key={s.id} className="space-y-1" data-call-set="">
@@ -151,19 +153,6 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
       ))}
       </div>
     </section>
-    {/* Past calls (the full app's PastRow): when · who · length · who joined · outcome badges, and the room timeline. */}
-    <LiveSection title={LIVE_SECTIONS.past} show={past.length > 0}>
-      {past.map((x) => (
-        <li key={x.id} id={`call-${x.id}`} data-call="past" className="flex flex-wrap items-center gap-2 py-2 text-sm">
-          <span className="text-slate-200">{fmt(x.when)}</span>
-          <span className="text-slate-400">· {x.who}</span>
-          <span className="text-slate-400">· {x.logged ?? x.minutes} min{x.logged != null && x.logged !== x.minutes ? ` (booked ${x.minutes})` : ""}</span>
-          {x.joined && !x.cancelled && <span className="text-xs text-slate-400">{x.joined}</span>}
-          {x.outcome.map((o) => <span key={o.label} className={`badge ${TONE[o.tone]}`}>{o.label}</span>)}
-          {!x.cancelled && <CallTimelineLine people={[{ name: x.who, joinedAt: x.testerJoinedAt }, { name: "You", joinedAt: x.devJoinedAt }]} />}
-        </li>
-      ))}
-    </LiveSection>
     </LivePanel>
   );
 }
