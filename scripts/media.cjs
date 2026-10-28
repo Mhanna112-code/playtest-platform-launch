@@ -1373,11 +1373,14 @@ group("outage", async () => {
   await T.goto(`/app/sessions/${sA}`);
   const fromD = at(D), fromT = at(T);
   await pause(D, 1500);
-  // The last heartbeat was 20 minutes ago; the checker's next ping finds the gap.
-  sql(`delete from "Heartbeat" where "at" > (now() at time zone 'utc') - interval '25 minutes'`);
-  sql(`insert into "Heartbeat" (id, "at") values ('media' || md5(random()::text), (now() at time zone 'utc') - interval '20 minutes')`);
-  const h = await fetch(`${BASE}/api/health?key=${HEALTH_KEY}`).then((r) => r.json());
-  if (!h.ok) throw new Error("health check failed");
+  // (Batch 15 section 10) Outages come from the uptime service's own alerts: a "down" (alertType 1) and, 20 minutes later, an "up" (alertType 2), each on the
+  // server's clock. The down's stored time is moved 20 minutes back so the recording needn't wait.
+  const alert = (type) => fetch(`${BASE}/api/health/alert`, { method: "POST", headers: { "content-type": "application/json", "x-health-key": HEALTH_KEY }, body: JSON.stringify({ alertType: type, alertDateTime: Math.floor(Date.now() / 1000) }) }).then((r) => r.json());
+  const down = await alert(1);
+  if (!down.ok) throw new Error("down alert refused: " + JSON.stringify(down));
+  sql(`update "AppState" set value = to_char((now() at time zone 'utc') - interval '20 minutes', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') where key = 'outage-down'`);
+  const up = await alert(2);
+  if (!up.ok || !up.outage) throw new Error("up alert: " + JSON.stringify(up));
   await Promise.all([waitLive(D, "[data-live-top]:has-text('The site was down')"), waitLive(T, "[data-live-top]:has-text('The site was down')")]);
   await pause(D, 3000);
   await shot(D, "outage-live-dev", "After: the developer's page | The live box: “The site was down from <a> to <b>. Deadlines and payment dates moved 20 min later.”", "[data-live-top]");
@@ -1397,7 +1400,11 @@ group("outage", async () => {
   await openBell(ana);
   await shot(ana, "outage-bell-tester", "The tester's bell | The same two lines for Ana", bellList(ana));
   await openBell(admin);
-  await shot(admin, "outage-bell-admin", "The admin's view | Admins have no outage page (not built, per the guide): an admin who runs a test gets the same bell line as everyone affected", bellList(admin));
+  await shot(admin, "outage-bell-admin", "The admin's bell | An admin who runs a test gets the same bell line as everyone affected", bellList(admin));
+  // (Batch 15 section 10) The admin console's Outages: the latest outages from the alerts (one over 24 hours would wait for Approve).
+  await admin.goto("/admin#outages");
+  await admin.waitForSelector("#outages");
+  await shot(admin, "outage-admin", "The admin's Outages | The console lists the outages recorded from the uptime service's down and up alerts, with their length", "#outages");
 }, { section: "Outages", fake: true, optIn: true });
 
 // ---------- Account states: holds, suspensions, deletion ----------

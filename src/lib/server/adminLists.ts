@@ -206,7 +206,8 @@ async function users(cursor: string | null): Promise<Page<UserVM>> {
 
 export async function testRow(t: Awaited<ReturnType<typeof db.test.findMany<{ include: { developer: true; _count: { select: { contracts: true } } } }>>>[number]): Promise<TestVM> {
   // (Batch 15 section 21) Which admin did what to this test, by email.
-  const acted = (await lastActions([t.id], ["pause-test", "unpause-test", "stop-test", "extend-pause", "close-paused", "allow-critical-changes"])).get(t.id) ?? [];
+  // (The state already names who stopped or paused it: the list adds the other actions.)
+  const acted = (await lastActions([t.id], ["unpause-test", "extend-pause", "close-paused", "allow-critical-changes", ...(t.adminStoppedAt ? [] : ["stop-test"]), ...(t.adminPausedAt ? [] : ["pause-test"])])).get(t.id) ?? [];
   const name = await adminEmails([t.adminStoppedById, t.adminPausedById]);
   const state = t.adminStoppedAt ? `stopped by ${name(t.adminStoppedById) || "the team"}` : t.adminPausedAt ? `paused by ${name(t.adminPausedById) || "the team"}` : t.status;
   return {
