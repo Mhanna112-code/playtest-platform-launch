@@ -16,7 +16,8 @@ export const setStripeForTests = (s: Stripe | null) => {
 export const fakeOn = () => process.env.STRIPE_FAKE === "1" && !process.env.STRIPE_SECRET_KEY?.trim() && /^http:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(process.env.APP_URL ?? "");
 let fakeN = 0;
 /** (Batch 11) The fake's PaymentIntents that wait for the cardholder: "requires_action" until the page's simulated pop-up says yes or no. */
-const fakePis = new Map<string, string>();
+// (Kept on globalThis: the dev server may load this module once per route, and the confirm route must see what the Pay route created.)
+const fakePis: Map<string, string> = ((globalThis as { __fakePis?: Map<string, string> }).__fakePis ??= new Map<string, string>());
 export const fakeConfirm = (id: string, ok: boolean) => { if (fakePis.has(id)) fakePis.set(id, ok ? "succeeded" : "canceled"); };
 const fakeStripe = {
   paymentIntents: {

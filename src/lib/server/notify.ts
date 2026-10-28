@@ -77,9 +77,9 @@ export async function adminUsers() {
  * lines (and the must-send ones); the rest wait for their normal email. On Off, only the few must-send lines (mustEmail) go, in ONE end-of-day email.
  * The daily job runs this once a day, after every notification of the day exists.
  */
-export async function sendSummaries(now = new Date()) {
+export async function sendSummaries(now = new Date(), only?: string[]) {
   const users = await db.user.findMany({
-    where: { notifications: { some: { summarizedAt: null, ...({ OR: [{ mustEmail: true }, { user: { emailPref: { in: ["daily", "weekly", "monthly"] } } }] } as object) } } },
+    where: { ...(only ? { id: { in: only } } : {}), notifications: { some: { summarizedAt: null, ...({ OR: [{ mustEmail: true }, { user: { emailPref: { in: ["daily", "weekly", "monthly"] } } }] } as object) } } },
     select: { id: true, email: true, emailPref: true, lastSummaryAt: true },
   });
   const line = (n: { text: string; link: string }) => `• ${n.text}${n.link ? ` ${appUrl()}${n.link}` : ""}`;

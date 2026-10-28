@@ -246,9 +246,9 @@ async function renewed(devId: string, now: Date, periodEndAt?: Date | null) {
 }
 
 /** The daily job (manual billing): cancels that ran out end; due renewals are charged; declined ones are retried daily and lapse after RETRY_DAYS. Paused billing waits. */
-export async function renewSubscriptions(now = new Date()) {
+export async function renewSubscriptions(now = new Date(), only?: string[]) {
   let renewedN = 0, failed = 0, ended = 0;
-  const due = await db.user.findMany({ where: { subscriptionStatus: { in: ["active", "past_due"] }, subscriptionPausedAt: null, subscriptionRenewsAt: { lte: now } } });
+  const due = await db.user.findMany({ where: { ...(only ? { id: { in: only } } : {}), subscriptionStatus: { in: ["active", "past_due"] }, subscriptionPausedAt: null, subscriptionRenewsAt: { lte: now } } });
   for (const u of due) {
     if (u.subscriptionCanceling) {
       if (u.subscriptionId === "manual" || !billingOn()) { await endSubscription(u.id, "cancelled", now); ended++; }
