@@ -16,7 +16,7 @@ One account can be a developer, a tester or both; a switch in the header changes
 
 ## How to read this guide
 
-- One tab per page, in the order people meet them: Developer dashboard, Post a test, Edit test, Developer test page, Tester dashboard, Find tests and the join page, Tester session page, Shared pages and Administrator console.
+- One tab per page, in the order people meet them: Developer dashboard, Post a test, Developer test page, Edit test, Tester dashboard, Find tests and the join page, Tester session page, Shared pages and Administrator console.
 - Each page uses the same headings, skipping empty ones: what it's for and who sees it; what's on it; each button, and what it changes elsewhere; what can stop a press; how it looks in each state; the bell lines that open it.
 - Every page explains once, with examples, what holds everywhere: notices, how state stays consistent (with a state map of tests, accounts, parts and calls), long lists, pop-ups, suspensions and holds, the bell and emails.
 - Rules holds every number, cap and timer: test lifecycle, money, ratings, holds and suspensions, limits.
@@ -39,7 +39,7 @@ These rules hold on every signed-in page. Each page tab says which of them apply
 
 - **The server checks every press.** Before doing anything it re-checks what is true now: the tester's place in the test (working, left, ended, rated), the test (open, paused, stopped), holds, suspensions, blocks, spots, Open until, deadlines and limits. More in Why an old tab can't act on stale information.
 - **Live box.** Changes made by other people, or by you in another tab, appear in a blue box at the top of the page as they happen: "Updated · 3:10 PM: Ana sent her written answers", newest first, with Dismiss. The page scrolls to it once, on its first update, never because of a press.
-- **Stop-once.** The first press after a change you haven't seen stops once. A blue box under the button says "Since you opened this page:", lists the changes with their times, and ends "Press again to go ahead." The next press goes ahead unless something newer happened. Rate works the same way: on a test still open it stops once for every kind of change; after the test stops or closes, only for a Pay, Reject, Charge, Let it go or dispute.
+- **Stop-once.** The first press after a change you haven't seen stops once. A blue box under the button says "Since you opened this page:", lists the changes with their times, and ends "Press again to go ahead." The next press goes ahead unless something newer happened. Rate works the same way: on a test still open it stops once for every kind of change; after the test stops or closes, only for a Pay, Reject, Charge, Let it go or dispute. Every kind of change, for developers and testers, and the kinds that never stop: Why a press stops.
   - Example: the developer presses Pay on Ana's answers just as Ana disputes her recording. Pay stops once with "Ana disputed the pay for her recording".
 - **Always refused.** A change that makes the press impossible refuses it every time, not once: the test stopped, the work ended, the request was already taken, the offer was replaced.
   - Example: "Ben stopped the test on Oct 12. Work you sent is still reviewed."
@@ -281,6 +281,82 @@ Part of Every page.
 - So an old tab can't rejoin, accept a replaced offer, accept a request someone else took, book a call on a stopped test, or pay twice: each payment carries a one-time key, and a repeated press returns the first result instead of charging again.
 - Rejoining needs a current ask that the developer accepts. An old page's Join or Accept is checked against today's state and refused if it no longer applies.
 
+## Why a press stops
+
+Part of Every page.
+
+A press stops once when something changed since the page last showed it, so nobody acts on stale information. The blue box under the button says "Since you opened this page:", lists the changes with their times, and ends "Press again to go ahead." Below is every kind of change that stops a press, for each side, then the kinds that never do.
+
+### Developer
+
+Buttons that stop: Stop, End early, Next round, Pay, Pay more, Reject, a call's length, a dispute's side, Rate, the call buttons (Request a time, Accept, Decline, Withdraw, Cancel ▾), Invite, Save on Edit, and Cancel call in the dashboard's Calls box. Each change kind belongs to an Alerts type, which the developer can switch off (below).
+
+| Change | What triggers it | Alerts type | Line in the blue notice |
+|---|---|---|---|
+| A tester joined | a join, a rejoin, or an accepted application or invite | Joins and applications | "Ana joined" / "Ana joined again" |
+| An application | a tester applies, asks to rejoin, or withdraws an application | Joins and applications | "Ana applied to join" / "Ana asks to rejoin" / "Ana withdrew their application" |
+| An invite answer | a tester turns down an invite | Joins and applications | "Ana said no thanks to your invite" |
+| The test filled | the last spot was taken | Joins and applications | "<test> is full" |
+| A tester left | Leave, or finishing with a rating | Testers leaving | "Ana left the test" / "Ana finished <test> and rated you" |
+| Work sent | written answers or a recording sent or updated | Work sent | "Ana sent her written answers" / "Ana updated her recording" |
+| Call changes | a call booked, cancelled, requested, withdrawn or declined | Call changes | "Ana booked a call for <time>" / "Ana cancelled her call on <time>" / "Ana requested a call for <time>" |
+| A tester's Charge or Let it go | Charge opens, or the tester chooses | Payments | "Ana can now charge or let go of their written answers" / "Ana charged $X for their recording" / "Ana let their recording go: nothing charged" |
+| Payments | a payment went through or failed, or the bank's chargeback was reversed | Payments | "Payment failed on <test>: …" / "Your bank's chargeback of $X was reversed: $Y refunded to your card." |
+| A dispute | a tester disputes a decision | Disputes | "Ana disputed the pay for her recording" |
+| The team decided | an admin decides a dispute | Decisions by the team | "The team decided Ana's dispute: …" |
+| Listing info | the description, devices, languages or similar changed in another tab | Listing changes | "<dev> changed the description" |
+| Your own press in another tab | the same press or a Save made in another tab | Your saves and presses in another tab | "You also did this in another tab: …" |
+| A chargeback | the bank reverses a payment | none: always stops | "Your bank reversed your $X payment for <what>" |
+| The subscription ended | a cancel reached its end, or a renewal lapsed | none: always stops | "Your subscription ended." |
+
+[image: Work sent: Ben sent his answers since the page loaded, so Pay stops once and lists it under the button.]
+
+[image: A tester left: Cam left while the Stop pop-up was open; the press didn't go through and the change shows under Stop.]
+
+[image: Joins and work sent on Edit: Ana sent answers and Ben joined while Edit was open, so Save stops once with the list.]
+
+[image: The subscription ended while the test page was open: "Your subscription ended." in the live box; a press stops once for it.]
+
+### Tester
+
+Buttons that stop: Switch / Keep, Send (written answers and recording), Charge, Let it go, Dispute, Leave, Block, Rate, Request a time, Accept, Decline, Withdraw and Cancel call. Testers have no Alerts menu. After a test stops or closes, Rate stops only for a Pay, Reject, Charge, Let it go or dispute. The join page has its own short list (Tester dashboard, Find tests and the join page).
+
+| Change | What triggers it | Line in the blue notice |
+|---|---|---|
+| New terms | the developer offered new terms; the page scrolls up to the offer | "<dev> offered new terms: <changes>", ending "Press again to send under your current terms, or switch first." |
+| Your work was reviewed | the developer paid or rejected it | "<dev> paid $X for your written answers" / "<dev> rejected your recording" |
+| Call changes | the developer's requests, a booking, a decline or a cancelled call | "<dev> requested a call for <time>" / "<dev> withdrew the request for …" / "The call time <time> is no longer available: another tester took it" / "<dev> accepted your call request: <time>" / "<dev> declined your call request for <time>" / "Your call on <time> was cancelled" |
+| A delayed payment, or its arrival | the developer's payment was declined, then went through | "<dev>'s payment for your <part> ($X) is delayed. You'll be told when it arrives." |
+| Your dispute | the developer added their side, or the team decided | "<dev> added their side to your dispute" / "The team decided your dispute: the pay was raised to $X" |
+| Listing info | the description, devices, languages or similar changed | "<dev> changed the description" |
+| Your own press in another tab | the same press made in another tab | "You also did this in another tab: …" |
+
+### Changes that never stop a press
+
+- **A tester switching terms:** one quiet line in the developer's live box, "Ana switched to the new terms" (several in a day: "3 testers switched to the new terms"), because work already sent keeps its price, so nothing a press could change. A Keep shows nothing.
+- **Renames:** a title change is info only. The press goes through with "Done. Also: the test was renamed to <title> at <time>."
+- **A key reported broken:** one quiet line in the developer's live box, "Ana reported their key doesn't work", with no bell.
+- **Excerpt requests:** asking, Allow, Deny, Remove and Take down go through whatever changed; only a request that no longer exists is refused.
+- **Your own edits:** what you do on the page never stops you; only the same press already made in another tab does (above). Spots and Open until never stop a tester either.
+
+### How it works
+
+- **One stop per change.** Each change stops a press once, and the blue box lists every change since the page last showed one.
+- **The second press goes through** unless something new happened after the box appeared; then it stops again, listing only the new changes.
+- **Alerts can switch kinds off** (developers only). A ticked type no longer stops a press and shows greyed in the live box. Holds and pauses, a closed tester account, a stopped test, a chargeback, the subscription ending and refusals always stop.
+
+[image: Ticked types no longer stop your buttons; they still show, greyed, in the live box.]
+
+[image: A ticked type still shows in the live box, greyed ("You turned these stops off in Alerts" on hover).]
+
+- **Red comes before blue.** A red field stops the press in the page, before it reaches the server, so a blue notice can only show on the next press, once the red is fixed.
+
+[image: Open until 40 days ahead on the free plan with a test already open: the red at the field stops Post in the page, so the server's blue notice can't show yet.]
+
+[image: With the date fixed, the next press reaches the server and the blue notice appears under Post the test.]
+
+- **A refusal is not a stop.** A change that makes the press impossible (the test stopped, the work ended, the request was already taken, the offer was replaced) refuses it every time, with no "Press again". Those refusals are listed on each page.
+
 ## Why going Back is safe
 
 Part of Every page.
@@ -340,6 +416,7 @@ From Every page: the live box, long lists, number format, and the blue box when 
 ### What can stop a press
 
 - Cancel stops once for any change to that call, with the change under the button.
+- Which changes stop a press, and the notice text: Why a press stops.
 - Always refused, in blue under the button: "The call with <name> was already cancelled."; "The call has started, so it can't be cancelled. Report a no-show instead if someone didn't come."; "The call is less than 24 hours away: say why you're cancelling (the other side sees it)."
 - Join checks the call live and disappears when it's cancelled. A press after a cancellation shows "This call was cancelled" with the reason, under Join.
 
@@ -428,9 +505,7 @@ All numbers are in Rules.
 
   [image: Red when you leave the field: required fields empty, a price under $1, spots over the limit.]
 
-  [image: Red: a 10-day deadline needs Open until later, and there are fewer keys than spots.]
-
-  Updated: there's no deadline field any more; Open until is required, 3 to 30 days ahead, and is every tester's deadline.
+  [image: Red when you leave the field: Open until only 2 days ahead (it must be 3 to 30), and fewer keys than spots.]
   - A required field left empty.
   - A price outside its range, or over $200 without the tick.
   - Open until missing, or less than 3 or more than 30 days after today.
@@ -438,106 +513,30 @@ All numbers are in Rules.
   - Fewer access keys than spots; a key typed twice ("<key> is typed more than once. Each key goes in once."); a key that's too long.
   - A link not starting with https:// ("The build link must start with https://").
   - Above the button: "Fix the N mistakes above…".
+
+    [image: Every red at once: empty required fields, a price under $1, 60 spots, Open until 45 days ahead, an NDA over 1,000 characters, a question over 300 characters and fewer keys than spots, with the list above Post the test.]
 - **Blue, under the button:** "Confirm your email first. We sent a link to <email>." with "Resend the link" under the button.
 - **Blue, under the button, on the free plan:** with an open test already (Open, Full or Paused), Post is refused: "You already have an open test. Subscribe ($7/month) to run several at once." with a link to Payments (new tab). The form keeps what was typed. The same applies when a draft is posted.
+
+  [image: A second open test on the free plan: Post is refused under the button, and the form keeps what was typed.]
 - **Blue, under the button, at 10 open tests** (subscribers): "You have 10 open tests, the most you can have at once. Stop or close one to post another." This covers posting a draft too. The count is checked on the server at the press: if another tab stopped a test meanwhile, the post simply goes through.
+
+  [image: At 10 open tests, Post is refused under the button and the form keeps its text.]
+- **Red comes first:** a red field stops Post in the page, so the server's blue notice shows only on the next press, once the red is fixed.
+
+  [image: Open until 40 days ahead on the free plan with a test already open: the red at the field stops Post in the page, so the blue notice can't show yet.]
+
+  [image: With the date fixed, the next press reaches the server and the blue notice appears under Post the test.]
+- How presses stop and are refused across the app: Why a press stops.
 
 ### How it looks in each state
 
 - **Account active:** the form.
 - **Payment hold, chargeback hold or suspended:** the page is closed; opening it moves the developer to the dashboard top, and Post a test leaves the header.
 - **A draft** (a Next round not opened yet) isn't a test page: it opens here, filled in with its saved details. Its card, its link, its Edit page and Next round all land here. Post the test opens it for testers. The draft can also be deleted here (confirm pop-up).
+
+  [image: The subscription ended and the developer has an open test: posting the round-2 draft is refused with "You already have an open test. Subscribe ($7/month) to run several at once." and Open Payments.]
 - A new test starts Open. Later changes go through Edit test.
-
-## Edit test
-
-### What it's for and who sees it
-
-The developer changes a test's listing. Edits apply to new testers; working testers get an offer to Switch or Keep. The fields and red checks are the same as on Post a test. Only the test's developer sees it.
-
-From Every page: the live box, stop-once, red field checks, kept drafts, long lists, and the blue box when suspended or on hold.
-
-### What's on it
-
-- "← Back to the test", the title "Edit “<title>”", the Alerts menu (Developer test page), and a note that Edit changes the listing for new testers only.
-- The Post form, filled in.
-- **Access keys** in two boxes:
-  - **In use** (read only): keys given to working testers. Keys reported as not working are greyed and crossed out. It follows changes live.
-  - **Free:** add keys, or remove them while the free keys still cover the open spots. Free keys go to new testers automatically.
-- **"Changes left: N of 3"** next to the label of each limited field (the steps, NDA, questions, languages, devices, build link, and parts and prices), once anyone is affected (the first join, application or invite).
-- **Save**, faded and doing nothing while nothing changed.
-- **The live box** sits under Save.
-
-  [image: Edit's live box sits under Save: Ana sent her written answers while Edit was open.]
-
-### Buttons
-
-- **Save** changes the listing for new testers. Elsewhere:
-  - **Working testers whose own terms change** (work, parts, prices, Required labels, requirements, NDA) get an offer at the top of their session page, Switch or Keep (Tester session page), and the bell line "<dev> updated the listing: <changes>". A tester whose terms don't change gets no offer. Work already sent keeps its price. A newer Save replaces a waiting offer.
-  - **A changed NDA** is always a new offer, never applied silently.
-  - **Earlier questions, answers and NDAs** stay in the tester's Terms history.
-  - **Waiting applications** close when prices, parts, questions, devices, languages, the description, the build link or the NDA change, or when the test becomes Invite only. The tester is told ("<test>'s listing changed, so your application was closed. You can apply again on the current listing.", stacked across tests as "3 tests you applied to changed: your applications were closed" / "<test> is now invite only, so your application was closed.").
-  - **Open invites** are sent again on the new listing ("<dev> updated <test>: your invite was sent again on the new listing.", stacked across tests the same way).
-  - **Switching to Anyone can join** lets waiting applicants in ("You're in: <test>") or tells them "<test> changed since you applied".
-  - **More spots** tells invited testers "A spot opened on <test>…"; filling the test closes applications and keeps invites open.
-  - **Title only** changes are info for everyone and never stop a press.
-  - Under Save: "Saved. Offered the new terms to N…". When a tester later Switches, the top box shows one quiet line, "Ana switched to the new terms" with "See their contract", which opens the test page at that tester's row in a new tab; several in a day stack into "3 testers switched to the new terms". A Keep tells the developer nothing. Neither stops a press, because work already sent keeps its price.
-- **3 changes per field, counted once anyone is affected.** The count starts when the first tester joins, the first application arrives or the first invite is sent, whichever comes first, and keeps counting even if that applicant later withdraws. Before that, edits are free and nobody is told. From then on each of these 7 fields has its own 3 changes: what to do (the steps), the NDA, questions, required languages, required devices and technology, the build link, and parts and prices (one counter for the part ticks, prices, Required and Free ticks, the live rate and call length). One Save that changes two of them uses one change of each. Each field shows "Changes left: N of 3" next to its label, and the counts update live when another tab saves. A field at 0 locks on its own, with the note "You've changed the <field> 3 times since testers joined. Contact us in Settings to change it again."; the other fields stay editable. Changing parts or prices still sends working testers the Switch / Keep offer. Access keys aren't limited: a key given to a tester stays theirs, so adding keys never changes anyone's terms. An admin's "Allow 3 more" gives every field at 0 three more changes (Administrator console).
-
-  [image: After 3 saves that changed the steps, the steps field locks with its note; every other limited field shows its own “Changes left: N of 3”.]
-- **Dates.**
-  - Open until is required and can only move later, before it passes, and never more than 30 days after today: "Open until can only be extended: it's <date> now." Once passed: "Joining closed on <date> (Open until), so it can't be extended." Moving it later moves every working tester's deadline with it.
-
-    [image: Open until can only move later: an earlier date is red.]
-  - There's no separate deadline field: every tester's deadline is Open until.
-
-    [image: A 30-day deadline needs Open until 3 days later: red under both fields.]
-
-    Updated: there's no deadline field any more; every tester's deadline is Open until.
-- **Access keys.** A key that's in use, was given to a tester who left, or was reported as not working can't be added again (red). Testers whose key doesn't work never get a new one automatically: the developer deletes a free key here and sends it to them in a message; the Access keys notice on Developer test page links here. When such a tester leaves, the key leaves In use; it comes back only if they confirm it works when they rejoin.
-
-  [image: A key in use can't be added again (red).]
-
-  [image: Keys reported as not working, or given to a tester who left, can't be added again.]
-
-### What can stop a press
-
-- **Changed in another tab or device.** Save stops once. Each field changed elsewhere updates here with a blue note under it, "Changed in another tab or device at <time>", saying what changed (an expand arrow when it's over two lines: keys, questions, instructions). Fields not changed there keep what you typed. Under Save: "This test changed since you opened Edit. Press Save again to save your changes on top."
-
-  [video: Two tabs on Edit; the right one saves new instructions and keys, then the left one's Save stops once and its fields update with blue notes.]
-
-  [image: Another tab saved new instructions: the field updates with a blue note under it.]
-
-  [image: Keys added in another tab: the blue note under the key boxes.]
-
-  [image: Save stops once: “Since you opened this page” lists the other tab's saves; press Save again to save on top.]
-- **Other changes** (joins, work sent, calls and so on, as set in Alerts) stop Save once, listed under it.
-- **A field can be red and blue at once**, e.g. fewer access keys than open spots after another tab added spots.
-
-  [image: You ticked a key to remove; another tab added a spot (blue): now fewer free keys than open spots (red).]
-
-  [image: You typed a 40-day deadline; another tab moved Open until later (blue), still too early for it (red).]
-
-  Updated: there's no deadline field any more, so this case can't happen; Open until on its own can still be red and blue at once.
-
-  [image: You ticked one key to remove; another tab removed another (blue): the free keys no longer cover the open spots (red).]
-- **Always refused:** "This test was stopped." If an admin stops or pauses the test while it's being edited, Save is refused and the developer goes back to the test page, whose banner names the press that didn't go through.
-
-  [video: The team stops the test while Edit is open; Save is refused and the test page's banner names the Save that didn't go through.]
-- **Subscriber perk:** on the free plan, Approved only under Who can join shows a small "Subscribers" tag, and a Save that switches to it is refused: "Approved-only testers need a subscription ($7/month)." with a Payments link (new tab). A test that is already Approved only stays so when a subscription ends, and its applications can still be accepted or declined.
-
-### How it looks in each state
-
-- **Open:** the form. **Draft:** a draft's Edit page opens Post a test, filled in with its details.
-- **Paused by an admin:** Save is refused ("The team paused this test: you can only stop it.").
-- **Stopped or closed:** red "This test was stopped." and no form.
-- **Payment hold, chargeback hold or suspended:** the page is closed; the developer moves to the dashboard top.
-
-### Bell lines that open this page
-
-None; bell lines about a test open the test page.
-
-New-tester side: what changed shows on the join page and in Find tests (Tester dashboard, Find tests and the join page).
 
 ## Developer test page
 
@@ -557,6 +556,8 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
 
    [video: Ana (right, phone) sends her answers and switches to the new terms; the developer's live box updates and See their contract scrolls to her row.]
 4. **Access keys** (read only, shown only when the test uses keys; never stops a press): "Free (not given to anyone yet)", the free keys as small chips with the count and the open spots ("4 free · 2 open spots: each new tester gets one."), and "Given", each assigned key with its tester ("KEY-1111 · Ana Silva"); a key reported as not working shows crossed out. Each part sits in its own scroll box about 4 lines tall, and they stack on phones. One line: "If a tester's key doesn't work, delete a free key in Edit and send it to them in a message." ("in Edit" opens Edit's access keys in a new tab). It updates live when keys are added or deleted and when a joining tester is given one. Key rules are in Edit test.
+
+   [image: The read-only Access keys notice: free keys as chips with the open spots, and each given key with its tester.]
 5. **Needs you**, grouped per person, each with a fold for their sent parts: Pay or Reject for each sent piece (only Pay for an unlisted part); applications (Accept, Decline); rejoin asks (with the time they'd get back); call requests; calls waiting for a length or for Pay; disputes waiting for the developer's side; excerpt requests (Allow, Deny); testers waiting to be rated. A piece's written answers, shown formatted with their attachments and recordings (each downloadable or playable), sit in a scroll box about 16 lines tall when they're longer, with the question labels inside; the Pay box stays under it. A part sent for earlier questions is labelled "Sent for the questions until <date>" and is reviewed at the price it was sent at.
 
    [image: Needs you, grouped per person: Pay or Reject for sent work, a call waiting for its length, a dispute waiting for the developer's side.]
@@ -638,7 +639,7 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
 
 ### What can stop a press
 
-- **Stop-once** on every button (Stop, End early, Next round, Pay, Reject, Pay more, call buttons, Invite) for any unseen change: a tester joined, left, applied, sent or updated work, booked, requested or cancelled a call, charged or let go, disputed, said no thanks; the team decided; the test filled; payments went through or failed; a chargeback reversed ("Your bank's chargeback of $X was reversed: $Y refunded to your card.", or "…taken off what you owe."); your own press in another tab. A tester switching terms and a key reported as not working never stop a press, and nor do excerpt requests: Allow, Deny and Take down go through whatever changed. The changes are listed under the button. On a stopped test every press still allowed stops once the same way: Pay, Reject, Pay more, a call's length, a dispute's side and Rate.
+- **Stop-once** on every button (Stop, End early, Next round, Pay, Reject, Pay more, the call buttons, Invite) for any change the page hasn't shown yet, listed under the button. Every kind of change, its Alerts type and the notice text are in Why a press stops. On a stopped test every press still allowed stops once the same way: Pay, Reject, Pay more, a call's length, a dispute's side and Rate.
 
   [video: Ben (right, phone) sends his answers while the developer presses Pay for Ana; Pay stops once and lists the change, the second press goes ahead.]
 
@@ -684,6 +685,90 @@ From Every page: the live box, stop-once, long lists, pop-ups, number format, st
 - Open until heads-up and chat lines → the test page.
 
 What testers see of all this is in Tester session page and Tester dashboard, Find tests and the join page; profiles and chat are in Shared pages.
+
+## Edit test
+
+### What it's for and who sees it
+
+The developer changes a test's listing. Edits apply to new testers; working testers get an offer to Switch or Keep. The fields and red checks are the same as on Post a test. Only the test's developer sees it.
+
+From Every page: the live box, stop-once, red field checks, kept drafts, long lists, and the blue box when suspended or on hold.
+
+### What's on it
+
+- "← Back to the test", the title "Edit “<title>”", the Alerts menu (Developer test page), and a note that Edit changes the listing for new testers only.
+- The Post form, filled in.
+- **Access keys** in two boxes:
+  - **In use** (read only): keys given to working testers. Keys reported as not working are greyed and crossed out. It follows changes live.
+  - **Free:** add keys, or remove them while the free keys still cover the open spots. Free keys go to new testers automatically.
+- **"Changes left: N of 3"** next to the label of each limited field (the steps, NDA, questions, languages, devices, build link, and parts and prices), once anyone is affected (the first join, application or invite).
+- **Save**, faded and doing nothing while nothing changed.
+- **The live box** sits under Save.
+
+  [image: Edit's live box sits under Save: Ana sent her written answers while Edit was open.]
+
+### Buttons
+
+- **Save** changes the listing for new testers. Elsewhere:
+  - **Working testers whose own terms change** (work, parts, prices, Required labels, requirements, NDA) get an offer at the top of their session page, Switch or Keep (Tester session page), and the bell line "<dev> updated the listing: <changes>". A tester whose terms don't change gets no offer. Work already sent keeps its price. A newer Save replaces a waiting offer.
+  - **A changed NDA** is always a new offer, never applied silently.
+  - **Earlier questions, answers and NDAs** stay in the tester's Terms history.
+  - **Waiting applications** close when prices, parts, questions, devices, languages, the description, the build link or the NDA change, or when the test becomes Invite only. The tester is told ("<test>'s listing changed, so your application was closed. You can apply again on the current listing.", stacked across tests as "3 tests you applied to changed: your applications were closed" / "<test> is now invite only, so your application was closed.").
+  - **Open invites** are sent again on the new listing ("<dev> updated <test>: your invite was sent again on the new listing.", stacked across tests the same way).
+  - **Switching to Anyone can join** lets waiting applicants in ("You're in: <test>") or tells them "<test> changed since you applied".
+  - **More spots** tells invited testers "A spot opened on <test>…"; filling the test closes applications and keeps invites open.
+  - **Title only** changes are info for everyone and never stop a press.
+  - Under Save: "Saved. Offered the new terms to N…". When a tester later Switches, the top box shows one quiet line, "Ana switched to the new terms" with "See their contract", which opens the test page at that tester's row in a new tab; several in a day stack into "3 testers switched to the new terms". A Keep tells the developer nothing. Neither stops a press, because work already sent keeps its price.
+- **3 changes per field, counted once anyone is affected.** The count starts when the first tester joins, the first application arrives or the first invite is sent, whichever comes first, and keeps counting even if that applicant later withdraws. Before that, edits are free and nobody is told. From then on each of these 7 fields has its own 3 changes: what to do (the steps), the NDA, questions, required languages, required devices and technology, the build link, and parts and prices (one counter for the part ticks, prices, Required and Free ticks, the live rate and call length). One Save that changes two of them uses one change of each. Each field shows "Changes left: N of 3" next to its label, and the counts update live when another tab saves. A field at 0 locks on its own, with the note "You've changed the <field> 3 times since testers joined. Contact us in Settings to change it again."; the other fields stay editable. Changing parts or prices still sends working testers the Switch / Keep offer. Access keys aren't limited: a key given to a tester stays theirs, so adding keys never changes anyone's terms. An admin's "Allow 3 more" gives every field at 0 three more changes (Administrator console).
+
+  [image: After 3 saves that changed the steps, the steps field locks with its note; every other limited field shows its own “Changes left: N of 3”.]
+- **Dates.**
+  - Open until is required and can only move later, before it passes, and never more than 30 days after today: "Open until can only be extended: it's <date> now." Once passed: "Joining closed on <date> (Open until), so it can't be extended." Moving it later moves every working tester's deadline with it.
+
+    [image: Open until can only move later: an earlier date is red.]
+  - There's no separate deadline field: every tester's deadline is Open until.
+- **Access keys.** A key that's in use, was given to a tester who left, or was reported as not working can't be added again (red). Testers whose key doesn't work never get a new one automatically: the developer deletes a free key here and sends it to them in a message; the Access keys notice on Developer test page links here. When such a tester leaves, the key leaves In use; it comes back only if they confirm it works when they rejoin.
+
+  [image: A key in use can't be added again (red).]
+
+  [image: Keys reported as not working, or given to a tester who left, can't be added again.]
+
+### What can stop a press
+
+- **Changed in another tab or device.** Save stops once. Each field changed elsewhere updates here with a blue note under it, "Changed in another tab or device at <time>", saying what changed (an expand arrow when it's over two lines: keys, questions, instructions). Fields not changed there keep what you typed. Under Save: "This test changed since you opened Edit. Press Save again to save your changes on top."
+
+  [video: Two tabs on Edit; the right one saves new instructions and keys, then the left one's Save stops once and its fields update with blue notes.]
+
+  [image: Another tab saved new instructions: the field updates with a blue note under it.]
+
+  [image: Keys added in another tab: the blue note under the key boxes.]
+
+  [image: Save stops once: “Since you opened this page” lists the other tab's saves; press Save again to save on top.]
+- **Other changes** (joins, work sent, calls and so on, as set in Alerts) stop Save once, listed under it. Every kind, with its notice text, is in Why a press stops.
+
+  [image: Ana sent written answers and Ben joined while Edit was open: Save stops once with the blue list, and the key boxes and open spots are already up to date (K-2 is now Ben's).]
+- **A field can be red and blue at once**, e.g. fewer access keys than open spots after another tab added spots.
+
+  [image: You ticked a key to remove; another tab added a spot (blue): now fewer free keys than open spots (red).]
+
+  [image: You ticked one key to remove; another tab removed another (blue): the free keys no longer cover the open spots (red).]
+- **Always refused:** "This test was stopped." If an admin stops or pauses the test while it's being edited, Save is refused and the developer goes back to the test page, whose banner names the press that didn't go through.
+
+  [video: The team stops the test while Edit is open; Save is refused and the test page's banner names the Save that didn't go through.]
+- **Subscriber perk:** on the free plan, Approved only under Who can join shows a small "Subscribers" tag, and a Save that switches to it is refused: "Approved-only testers need a subscription ($7/month)." with a Payments link (new tab). A test that is already Approved only stays so when a subscription ends, and its applications can still be accepted or declined.
+
+### How it looks in each state
+
+- **Open:** the form. **Draft:** a draft's Edit page opens Post a test, filled in with its details.
+- **Paused by an admin:** Save is refused ("The team paused this test: you can only stop it.").
+- **Stopped or closed:** red "This test was stopped." and no form.
+- **Payment hold, chargeback hold or suspended:** the page is closed; the developer moves to the dashboard top.
+
+### Bell lines that open this page
+
+None; bell lines about a test open the test page.
+
+New-tester side: what changed shows on the join page and in Find tests (Tester dashboard, Find tests and the join page).
 
 ## Tester dashboard
 
@@ -784,7 +869,7 @@ From Every page: the live box, stop-once, Join anyway, kept drafts, email confir
 
 ### What can stop a press
 
-- **Stop-once:** "The listing was edited: <fields>"; an info change (description, devices, languages, link, categories, who can join, product, Mature); an application closed ("<test> is full: your application was closed"); a new invite on the updated listing; your own press in another tab. Spots stop only when the test is now full, Open until only when it passes; a title change is info only. The box ends "Press again to join on the current listing."
+- **Stop-once:** "The listing was edited: <fields>"; an info change (description, devices, languages, link, categories, who can join, product, Mature); an application closed ("<test> is full: your application was closed"); a new invite on the updated listing; your own press in another tab. Spots stop only when the test is now full, Open until only when it passes; a title change is info only. The box ends "Press again to join on the current listing." How stop-once works everywhere: Why a press stops.
 - **Needs changed** while Join anyway is open: "<dev> added <X> to the devices this test needs" and "Your press didn't go through. Check what this test needs now, then press again."
 - **Always refused** (blue, under the button): "This test was stopped."; "This test isn't taking new testers any more."; "This test is paused, so it isn't taking new testers right now."; "This test is full."; "You've already joined this test."; "You rated this test, so you can't join it again."; "You left this test, so you ask to rejoin and the developer accepts."; "This test takes applications: press Apply to join."; "This test is invite only."; "Accept the NDA to join."; "No access key is free right now, so this test can't take another tester until the developer adds one."; "You blocked <dev>: unblock them in Account → Blocked people to join."; "Confirm your email first. We sent a link to <email>." (with "Resend the link" under the button)
 
@@ -846,7 +931,7 @@ From Every page: the live box, stop-once, pop-ups, kept drafts, long lists, stop
 
 ### What can stop a press
 
-- **Stop-once** on every button for: new terms ("<dev> offered new terms: <changes>"; the page scrolls up to the offer; "Press again to send under your current terms, or switch first."); the developer paid or rejected your work; call changes (requested, withdrawn, declined, accepted, booked, cancelled, "The call time <time> is no longer available"); listing info changes; a delayed payment or its arrival; the team decided your dispute; the developer added their side; your own press in another tab. Spots and Open until never stop here; a title change is info only. "This key doesn't work" never stops. On a stopped or paused test every press still allowed stops once the same way: Charge, Let it go, Dispute, Rate, Leave and Cancel call.
+- **Stop-once** on every button for any change the page hasn't shown yet: new terms (the page scrolls up to the offer, and the box ends "Press again to send under your current terms, or switch first."), a review of your work, call changes, listing info, payments, your dispute, and your own press in another tab. Every kind, with its notice text, is in Why a press stops. On a stopped or paused test every press still allowed stops once the same way: Charge, Let it go, Dispute, Rate, Leave and Cancel call. "This key doesn't work" never stops.
 - **Always refused** (blue, under the button):
   - "You left this test."; "You rated this test, so your part is finished."; "<dev> stopped the test on <date>. Work you sent is still reviewed."; "This test ended on <date>. Work you sent is still reviewed."; "<dev> ended your session early on <date>."; "Your session on <test> ended." (after a block); "This test closed on <date>."
   - Charge: "<dev> paid $X for this meanwhile." / "<dev> rejected this meanwhile."; "You can choose once 7 days have passed since you sent it and the test's Open until has passed…"; "This part is already paid in full."; "A payment for this is being confirmed right now."
