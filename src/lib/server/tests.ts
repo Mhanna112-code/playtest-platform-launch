@@ -5,7 +5,7 @@ import { overLimitText } from "@/lib/capacity";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
 import { applyKeyChange, assignKeyAtJoin, checkTypedKeys, planKeyChange } from "./accessKeys";
-import { keyNeedLine, parseKeys } from "@/lib/keys";
+import { givenDeletedLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
 import { testerCapacity } from "./capacity";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -343,10 +343,37 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const keyErrs = [...plan.errors, ...(plan.need ? [plan.need] : [])];
     errs.push(...keyErrs);
     const keysChanged = plan.toAdd.length > 0 || plan.removable.length > 0 || plan.toReuse.length > 0;
-    const stop = dc.length ? dc.map((c) => devLine(c, false)) : !gate.go ? gate.changes.map((c) => ({ text: c.text, at: c.createdAt })) : null;
+    // (Owner, Oct 28, batch 16 sections 17 and 18) Another tab's (or device's) save is a reason to stop only for the fields where what this press holds
+    // differs from what's saved now. Its lines are replaced by one line naming just those fields ("You changed the description in another tab", carrying
+    // the fields for the box's Before / What you typed) and, ALWAYS (keys decide what can still be added), the keys' "Added: …" / "Removed: …" lines since
+    // the page loaded (or its last stop box). A page that doesn't send what it loaded and holds (an older page) keeps every line.
+    let dcN: (TestEventLike & { fields?: string[] })[] = dc;
+    let gateChanges = gate.go ? [] : gate.changes;
+    const news = seen ? await editNews(tx, testId, body, current) : null;
+    // (Batch 16 section 20) A key this press deletes that a joining tester was given meanwhile (the page hadn't shown it): not a mistake, a stop with the
+    // warning; the second press saves the rest of the key edits.
+    if (seen) {
+      const given = await tx.accessKey.findMany({ where: { testId, value: { in: keysRemove }, status: { in: ["inuse", "broken"] } }, include: { contract: { include: { tester: true } } } });
+      if (given.length) dcN = [...dcN, { kind: "own", text: givenDeletedLine(given.map((k) => ({ name: k.contract ? displayName(k.contract.tester) : "A tester", value: k.value }))), createdAt: given.reduce((a, k) => ((k.assignedAt ?? k.createdAt) > a ? k.assignedAt ?? k.createdAt : a), given[0].assignedAt ?? given[0].createdAt) }];
+    }
+    if (news) {
+      const isEdit = (e: TestEventLike) => (e.kind === "own" && OTHER_TAB_EDIT.test(e.text)) || e.kind === "edited" || e.kind === "edited_spots";
+      const dropped = [...dc, ...gateChanges].filter(isEdit);
+      dcN = dcN.filter((e) => !isEdit(e));
+      gateChanges = gateChanges.filter((e) => !isEdit(e));
+      const at = dropped.reduce((a, e) => (e.createdAt > a ? e.createdAt : a), dropped[0]?.createdAt ?? new Date());
+      const lines: (TestEventLike & { fields?: string[] })[] = [
+        ...(news.fields.length ? [{ kind: "own", text: `You changed the ${andList(news.fields.map((f) => FIELD_NAMES[f]))} in another tab`, createdAt: at, fields: news.fields as string[] }] : []),
+        ...(news.added.length ? [{ kind: "own", text: keysAddedLine(news.added), createdAt: at }] : []),
+        ...(news.removed.length ? [{ kind: "own", text: keysRemovedLine(news.removed), createdAt: at }] : []),
+      ];
+      if (lines.length) dcN = [...dcN, ...lines];
+    }
+    dcN = [...dcN].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    const stop = dcN.length ? dcN.map((c) => ({ ...devLine(c, false), ...(c.fields ? { fields: c.fields } : {}) })) : gateChanges.length ? gateChanges.map((c) => ({ text: c.text, at: c.createdAt })) : null;
     if (stop) {
       // Both together: the blue stop and any red mistakes (red wins: the next press still saves nothing while red remains).
-      throw new HttpError(409, "changed", dc.length ? "Press Save again to save." : "This test changed since you opened Edit. Press Save again to save your changes on top.", {
+      throw new HttpError(409, "changed", dcN.length ? "Press Save again to save." : "This test changed since you opened Edit. Press Save again to save your changes on top.", {
         changes: stop, version: t.version, criticalCounts: counts, current, listingEdited, errors: errs, keys: await keysState(tx, testId), critical: critical.length ? critical : undefined,
       });
     }
@@ -460,6 +487,43 @@ function testerDaysFor(openUntil: Date | string | null, dev: { timeZone?: string
  * (seenAt) any tester joined, left or sent work, a call was booked/confirmed/cancelled, times were offered/removed, or a
  * payment/rejection was made, the first press stops and returns the list; the second press (confirmed) goes ahead.
  */
+/** The developer's own listing save in another tab, as the action log says it ("You changed the description and access keys in another tab"). */
+const OTHER_TAB_EDIT = /^You changed the (?!listing in another tab:).+ in another tab$/;
+/** Fields the form never sends as typed (kept from an older page, or set by the server). */
+const NOT_COMPARED = new Set<keyof Listing>(["deadlineDays", "liveMinutes"]);
+/** Two values of one field are the same (Open until by its day: a pause shift moves it by the minute). */
+const sameValue = (k: keyof Listing, a: unknown, b: unknown) =>
+  k === "openUntil" ? (a ? String(a).slice(0, 10) : null) === (b ? String(b).slice(0, 10) : null) : JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+/**
+ * (Owner, Oct 28, batch 16 sections 17 and 18) What another tab or device saved that THIS tab doesn't have: the fields it loaded (`base`) that differ from
+ * what's saved now and where what it holds (`has`, typed or not) differs too. Keys are always news (the owner's exception): every free key added and
+ * removed since the keys it loaded (`keysLoaded`), even one this tab also added or removed (a key given to a joining tester is a join, not a removal).
+ * null when the page didn't send them (nothing is dropped then).
+ */
+export async function editNews(tx: Tx, testId: string, body: Record<string, unknown>, current: Listing) {
+  const obj = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
+  const b = obj(body.base), h = obj(body.has);
+  if (!b || !h) return null;
+  let base: Partial<Listing>, has: Partial<Listing>;
+  try {
+    base = parseListing(b, true);
+    has = parseListing(h, true);
+  } catch {
+    return null; // a box this press can't read (its own mistake is said elsewhere): every line stays
+  }
+  const fields = LISTING_FIELDS.filter((k) => !NOT_COMPARED.has(k) && k in base && k in has && !sameValue(k, base[k], current[k]) && !sameValue(k, has[k], current[k]));
+  let added: string[] = [], removed: string[] = [];
+  if (Array.isArray(body.keysLoaded)) {
+    const loaded = parseKeys(body.keysLoaded);
+    const keys = await tx.accessKey.findMany({ where: { testId }, select: { value: true, status: true } });
+    const free = keys.filter((k) => k.status === "free").map((k) => k.value);
+    const used = keys.filter((k) => k.status === "inuse" || k.status === "broken").map((k) => k.value);
+    added = free.filter((v) => !loaded.includes(v));
+    removed = loaded.filter((v) => !free.includes(v) && !used.includes(v));
+  }
+  return { fields, added, removed };
+}
+
 /**
  * One line of a developer's stop-once box. (Owner, Oct 28) A tester's Switch / Keep line carries its contract, so the box under the button shows "See their contract" like the top box.
  */

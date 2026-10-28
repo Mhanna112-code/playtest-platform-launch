@@ -11,7 +11,7 @@ import { ContractLink } from "@/components/ContractLink";
 import { lastPressLabel } from "@/lib/client";
 import { pressVerb, refusalLine } from "@/lib/pressLabels";
 
-export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string };
+export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string; /** (Batch 16 section 19) the fields another tab changed (API names) */ fields?: string[] };
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const DEFAULT_TAILS = new Set(["Press again to go ahead.", "Press again to go ahead"]);
@@ -22,7 +22,7 @@ const DEFAULT_TAILS = new Set(["Press again to go ahead.", "Press again to go ah
  * toggle wording on the tester side); and last, in bold, "Press <button> again to go ahead.". A refusal names the press first: "Your Pay didn't go through: <reason>".
  * `press` is the button's label; without one, the label of the press that was just stopped or refused (from its API path).
  */
-export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link, didntGo = false, press, side = "developer" }: { changes: Change[] | null; error?: string; tail?: string; link?: string; didntGo?: boolean; press?: string; side?: "developer" | "tester" }) {
+export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link, didntGo = false, press, side = "developer", detail }: { changes: Change[] | null; error?: string; tail?: string; link?: string; didntGo?: boolean; press?: string; side?: "developer" | "tester"; /** (Batch 16 section 19) more under a line (Edit: Before / What you typed) */ detail?: (c: Change) => React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const shown = !!(changes || error);
   const [label, setLabel] = useState(press ?? "");
@@ -52,6 +52,7 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
                 {c.text.startsWith("You also did this in another tab") ? `${c.text} at ${time(c.at)}` : `${c.text} · ${time(c.at)}`}
                 {/* (Owner, Oct 28) "Ana switched to the new terms" / "kept their current terms": the same "See their contract" as the top box (scrolls on the test page; a new tab from Edit). */}
                 {c.kind === "terms" && c.contract && <> <ContractLink contract={c.contract} /></>}
+                {(() => { const d = detail?.(c); return d ? <div className="mt-0.5 text-xs" data-stop-detail="">{d}</div> : null; })()}
               </li>
             ))}
           </LongList>

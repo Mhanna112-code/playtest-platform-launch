@@ -28,8 +28,7 @@ export function freeBoxCheck(text: string, loaded: string[], data: KeysData | nu
     if (!k.gone) errors.push(`${v} is in use by ${k.tester}, so it can't be added.`);
     else warnings.push(reusedKeyLine(v, k.tester, k.broken));
   }
-  // A deleted line whose key a joining tester was given since the page loaded.
-  for (const v of removed) if (inUse.some((x) => x.value === v && !x.gone)) errors.push(`${v} was given to a tester since you opened this page, so it's in use now and can't be removed.`);
+  // (Batch 16 section 20) A deleted line whose key a joining tester was given meanwhile is no mistake: the page shows the blue warning and drops the deletion.
   return { lines, added, removed, errors, warnings };
 }
 

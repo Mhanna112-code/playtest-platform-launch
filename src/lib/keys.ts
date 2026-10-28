@@ -27,8 +27,23 @@ export function keyNeedLine(openSpots: number, freeKeys: number) {
   return short > 0 ? `Add ${short} more key${short === 1 ? "" : "s"}: ${plural(openSpots, "open spot")}, ${plural(freeKeys, "free key")}.` : "";
 }
 
-/** (Owner, Oct 30, batch 15 section 19) A key deleted from the Free box that a joining tester was given since the page loaded: it's in use now, and the Save says so. */
-export const tickedInUseLine = (value: string) => `${value} was given to a tester since you opened this page, so it's in use now and can't be removed.`;
+/**
+ * (Owner, Oct 28, batch 16 section 18) Keys another tab or device changed: one line per kind, the keys comma-separated, the same under Edit's key boxes and
+ * in Save's stop-once box. A key given to a joining tester is its own line ("Ana Silva joined and was given HR-4444"), never under Removed.
+ */
+export const keysAddedLine = (values: string[]) => `Added: ${values.join(", ")}`;
+export const keysRemovedLine = (values: string[]) => `Removed: ${values.join(", ")}`;
+export const keyGivenLine = (name: string, value: string) => `${name} joined and was given ${value}`;
+
+const both = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+/**
+ * (Owner, Oct 28, batch 16 section 20) A key this tab deleted (not saved yet) that a joining tester was given: a warning, never a mistake. "Ben Okafor joined
+ * and was given K-2, which you had deleted here." Several stack: "Ben Okafor and Cam Lee joined and were given K-2 and K-3, which you had deleted here."
+ */
+export function givenDeletedLine(given: { name: string; value: string }[]) {
+  const names = [...new Set(given.map((g) => g.name))], keys = given.map((g) => g.value);
+  return `${both(names)} joined and ${names.length === 1 ? "was" : "were"} given ${both(keys)}, which you had deleted here.`;
+}
 
 /**
  * Why a typed key can't be added ("" when it can). `status` is the state of the same key already on this test, if any. (Owner, Oct 30, batch 15 sections 19 and 44)

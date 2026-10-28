@@ -13,7 +13,7 @@ import { api, ApiError, isFieldError } from "@/lib/client";
 import { NotSentTag, useKept } from "@/lib/useKept";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
-import { keyNeedLine, parseKeys, tickedInUseLine } from "@/lib/keys";
+import { givenDeletedLine, keyGivenLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
 import { OPEN_UNTIL_MAX_LINE, editTesterDaysHint, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, testerDaysHint, type Listing } from "@/lib/rules";
 /** The browser's own date (YYYY-MM-DD) and zone. */
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
@@ -21,7 +21,7 @@ const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions()
 import { ScrollText } from "@/components/ScrollText";
 import { toCents } from "@/lib/format";
 import { KeyBoxes, freeBoxCheck, type KeysData } from "./KeyBoxes";
-import { ExpandNote } from "@/components/ExpandNote";
+import { FieldNote, NoteItems, type NoteItem } from "@/components/FieldNote";
 import { ShieldCheck } from "lucide-react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 
@@ -67,22 +67,25 @@ const API_FIELDS: Record<keyof F, string[]> = {
   recordingPrice: ["recordingCents"], live: ["liveRateCents", "liveMinutes"], liveRate: ["liveRateCents"], liveMinutes: ["liveMinutes"], writtenRequired: ["writtenRequired"], recordingRequired: ["recordingRequired"], liveRequired: ["liveRequired"], questions: ["questions"], optionalQs: ["questions"], openUntil: ["openUntil"], joinMode: ["joinMode"],
 };
 
-/** What a field is called in a note ("Changed in another tab: the instructions"). */
+/** (Owner, Oct 28, batch 16 section 19) What a field is called in a note: the form label's short name, capitalised ("Spots: 4 → 5", "Instructions:"). */
 const NAMES: Partial<Record<keyof F, string>> = {
-  productName: "the product name", title: "the test title", description: "the instructions", buildUrl: "the link", categories: "the categories", devices: "the technology requirements", languages: "the language requirements",
-  mature: "the Mature (18+) box", matureWhy: "the Mature (18+) note", ndaText: "the NDA", spots: "the spots", deadlineDays: "the tester deadline", openUntil: "Open until", joinMode: "who can join",
-  written: "the written report", writtenPrice: "the written report price", recording: "the recording", recordingPrice: "the recording price", live: "the live session", liveRate: "the live session rate",
-  writtenRequired: "the written report Required tick", recordingRequired: "the recording Required tick", liveRequired: "the live session Required tick", questions: "the questions", optionalQs: "the questions' Not required ticks",
+  productName: "Product", title: "Name of this test", description: "Instructions", buildUrl: "Link", categories: "Categories", devices: "Devices", languages: "Languages",
+  mature: "Mature (18+)", matureWhy: "Why it's mature", ndaText: "NDA", spots: "Spots", deadlineDays: "Tester deadline", openUntil: "Open until", joinMode: "How testers join",
+  written: "Written report", writtenPrice: "Price for written answers", recording: "Recorded session", recordingPrice: "Price for a recording", live: "Live session", liveRate: "Live call rate",
+  writtenRequired: "Written report required", recordingRequired: "Recorded session required", liveRequired: "Live session required", questions: "Questions", optionalQs: "Questions not required",
 };
-/** The note's words for a new value. */
-function describe(k: keyof F, v: unknown) {
-  if (typeof v === "boolean") return v ? "turned on" : "turned off";
-  if (Array.isArray(v)) return v.length ? `now ${v.join(", ")}` : "now none";
+/** (Batch 16 section 19) A field's value as a note shows it ("$8.00", "Windows PC, iPad"); the questions as a list. */
+function valueText(k: keyof F, v: unknown): string | string[] {
+  if (typeof v === "boolean") return v ? "on" : "off";
+  if (k === "questions") return String(v ?? "").split("\n").map((q) => q.trim()).filter(Boolean);
+  if (k === "optionalQs") return (v as string[]) ?? [];
+  if (Array.isArray(v)) return v.length ? v.join(", ") : "none";
   const s = String(v ?? "");
-  if (!s) return "now empty";
-  if (k === "writtenPrice" || k === "recordingPrice" || k === "liveRate") return `now $${s}`;
-  return `now: ${s}`;
+  if (!s) return "empty";
+  if (k === "writtenPrice" || k === "recordingPrice" || k === "liveRate") return `$${s}`;
+  return s;
 }
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 // Where each form field's note shows (parts and prices share one place).
 const NOTE_AT: Partial<Record<keyof F, string>> = { written: "parts", writtenPrice: "parts", recording: "parts", recordingPrice: "parts", live: "parts", liveRate: "parts", writtenRequired: "parts", recordingRequired: "parts", liveRequired: "parts", questions: "questions", optionalQs: "questions" };
 
@@ -144,7 +147,15 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
   const [blurred, setBlurred] = useState<Set<string>>(new Set());
   const [pressed, setPressed] = useState(false);
   // (Design doc 5) Notes under each field changed in another tab or device: { field: { at, text } }.
-  const [notes, setNotes] = useState<Record<string, { at: string; lines: string[]; label?: string }>>({});
+  const [notes, setNotes] = useState<Record<string, { at: string; items: NoteItem[]; label?: string }>>({});
+  // (Owner, Oct 28, batch 16 sections 17 and 19) What this tab loaded (until a stop box shows the newer values), what it held in each field another tab
+  // changed (before taking the newer value), and each such field's note, for Save's stop box: the server stops only for what this tab doesn't have.
+  const seenBase = useRef<F>(toForm(init));
+  const prior = useRef<Partial<Record<keyof F, { had: unknown; took: unknown }>>>({});
+  const details = useRef<Partial<Record<keyof F, NoteItem>>>({});
+  // (Batch 16 section 18) The free keys as of the page load (or its last stop box): Save's stop always lists what changed in them since.
+  const keysSeen = useRef<string[]>(edit?.keys.free.map((k) => k.value) ?? []);
+  const [stopDetails, setStopDetails] = useState<Record<string, NoteItem[]>>({});
   // (NEXT-UI 10) The form typed and not sent is kept on the server ("Not sent yet"), for Post and for each Edit.
   const fb = freeBoxCheck(keysText, freeLoaded, keysData);
   const keysChanged = edit ? fb.added.length > 0 || fb.removed.length > 0 : parseKeys(keysText).length > 0;
@@ -216,40 +227,78 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
   }
   const keysBad = (showOn("keys") || pressed) && !!keyLine;
 
-  /** Apply what another tab or device saved: the fields it changed take its value here; the others stay as typed. */
-  function applyElsewhere(listing: Listing, at: string, keys: { free: string[]; inUse?: KeysData["inUse"] } | null) {
+  /**
+   * Apply what another tab or device saved: the fields it changed take its value here; the others stay as typed. (Owner, Oct 28, batch 16 sections 17-19) A
+   * field where this tab already has the saved value isn't news: its base just moves, with no note. Otherwise the note names the field and what it replaced ("Spots: 4 → 5"; long text: "Instructions:" and the old text)
+   * and, when this tab had typed something different, "What you typed (not saved):" in full with Copy. Keys: "Added: …" / "Removed: …", joins their own line.
+   */
+  function applyElsewhere(listing: Listing, at: string) {
     const now = toForm(listing);
-    const fresh: Record<string, { at: string; lines: string[] }> = {};
+    const fresh: Record<string, { at: string; items: NoteItem[]; label?: string }> = {};
     const takeover: Partial<F> = {};
     for (const k of Object.keys(now) as (keyof F)[]) {
-      if (JSON.stringify(now[k]) === JSON.stringify(base[k])) continue;
-      const mine = JSON.stringify(f[k]) !== JSON.stringify(base[k]);
+      if (same(now[k], base[k])) continue;
       (takeover as Record<string, unknown>)[k] = now[k];
+      if (!prior.current[k]) prior.current[k] = { had: f[k], took: now[k] };
+      if (same(f[k], now[k])) continue; // this tab already has it: not news
+      const typed = !same(f[k], base[k]);
+      const item: NoteItem = { name: NAMES[k] ?? k, before: valueText(k, base[k]), after: valueText(k, now[k]), ...(typed ? { typed: valueText(k, f[k]) } : {}) };
+      if (!details.current[k]) details.current[k] = item;
       const where = NOTE_AT[k] ?? k;
-      const line = `${NAMES[k] ?? k}: ${describe(k, now[k])}${mine && JSON.stringify(f[k]) !== JSON.stringify(now[k]) ? ` (you had typed ${Array.isArray(f[k]) ? (f[k] as string[]).join(", ") : String(f[k]).slice(0, 80)}; the newer value is kept)` : ""}`;
-      fresh[where] = { at, lines: [...(fresh[where]?.lines ?? []), line] };
+      fresh[where] = { at, items: [...(fresh[where]?.items ?? []), item] };
     }
-    if (keys && keysData) {
-      const before = keysData.free.map((k) => k.value);
-      const added = keys.free.filter((v) => !before.includes(v)), gone = before.filter((v) => !keys.free.includes(v));
-      // (Batch 15 section 32) A key given to a joining tester says so: "Ana Silva joined and was given HR-4444"; a save in another tab: "HR-7777 added in another tab".
-      const givenTo = (v: string) => keys.inUse?.find((k) => k.value === v && !k.gone)?.tester;
-      const lines = [...added.map((v) => `${v} added in another tab`), ...gone.map((v) => (givenTo(v) ? `${givenTo(v)} joined and was given ${v}` : `${v} is no longer free`))];
-      if (lines.length) fresh.keys = { at, lines, ...(gone.length && gone.every((v) => givenTo(v)) && !added.length ? { label: lines.length === 1 ? lines[0] : `${lines.length} testers joined and were given keys` } : {}) };
+    if (Object.keys(takeover).length) {
+      setF((o) => ({ ...o, ...takeover }));
+      setBase((o) => ({ ...o, ...takeover }));
+      setTouched((t) => new Set([...t].filter((k) => !(k in takeover))));
     }
-    if (!Object.keys(fresh).length) return;
-    setF((o) => ({ ...o, ...takeover }));
-    setBase((o) => ({ ...o, ...takeover }));
-    setTouched((t) => new Set([...t].filter((k) => !(k in takeover))));
-    setNotes((n) => ({ ...n, ...fresh }));
+    if (Object.keys(fresh).length) setNotes((n) => ({ ...n, ...fresh }));
   }
+  /**
+   * (Owner, Oct 28, batch 16 sections 18 and 20) The keys another tab, device or joining tester changed, as soon as the page sees them: the Free box becomes
+   * the current free keys with this tab's own additions and deletions still applied (a key typed here that was added elsewhere shows once; a key deleted
+   * elsewhere leaves the box: it never comes back by itself). The note always says so, even for a change this tab also made: "Added: …", "Removed: …", a join
+   * on its own line, and for a key this tab had deleted that a joining tester was given, the warning (it simply leaves this tab's pending deletions).
+   */
+  function applyKeys(next: { free: string[]; inUse: KeysData["inUse"] }, at: string) {
+    const nowFree = next.free;
+    const addedElse = nowFree.filter((v) => !freeLoaded.includes(v));
+    const goneElse = freeLoaded.filter((v) => !nowFree.includes(v));
+    if (!addedElse.length && !goneElse.length) return;
+    const mine = freeBoxCheck(keysText, freeLoaded, null);
+    const givenTo = (v: string) => next.inUse.find((k) => k.value === v && !k.gone)?.tester;
+    const joined = goneElse.filter((v) => givenTo(v));
+    const deletedHere = joined.filter((v) => mine.removed.includes(v));
+    const joinedOnly = joined.filter((v) => !mine.removed.includes(v));
+    const removed = goneElse.filter((v) => !givenTo(v));
+    const lines = [
+      ...(addedElse.length ? [keysAddedLine(addedElse)] : []),
+      ...(removed.length ? [keysRemovedLine(removed)] : []),
+      ...joinedOnly.map((v) => keyGivenLine(givenTo(v)!, v)),
+      ...(deletedHere.length ? [givenDeletedLine(deletedHere.map((v) => ({ name: givenTo(v)!, value: v })))] : []),
+    ];
+    setFreeLoaded(nowFree);
+    setKeysText([...nowFree.filter((v) => !mine.removed.includes(v)), ...mine.added.filter((v) => !nowFree.includes(v) && !givenTo(v))].join("\n"));
+    setNotes((n) => {
+      const old = n.keys && n.keys.at === at ? n.keys.items[0]?.lines ?? [] : [];
+      const all = [...old, ...lines.filter((l) => !old.includes(l))];
+      const joinsOnly = !addedElse.length && !removed.length && !deletedHere.length && !old.length;
+      return { ...n, keys: { at, items: [{ lines: all }], ...(joinsOnly ? { label: all.length === 1 ? all[0] : `${all.length} testers joined and were given keys` } : {}) } };
+    });
+  }
+  /** (Batch 16 section 17) What this tab holds, for the server: a field another tab changed counts with the value this tab had then (unless typed in since). */
+  const holding = (): F => {
+    const out = { ...f } as Record<string, unknown>;
+    for (const [k, p] of Object.entries(prior.current)) if (p && same(f[k as keyof F], p.took)) out[k] = p.had;
+    return out as F;
+  };
 
   // (Design doc 5) While Edit is open, what other tabs and devices save shows up here, live: the field takes the new value
   // and a blue note under it says what changed; the In use / Free boxes follow too.
   const versionRef = useRef(version);
   versionRef.current = version;
-  const live = useRef({ applyElsewhere, f, base, keysData });
-  live.current = { applyElsewhere, f, base, keysData };
+  const live = useRef({ applyElsewhere, applyKeys, f, base, keysData });
+  live.current = { applyElsewhere, applyKeys, f, base, keysData };
   useEffect(() => {
     if (!edit) return;
     let alive = true;
@@ -259,9 +308,11 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
       if (r.criticalCounts) setCritCounts(countsOf(r.criticalCounts));
       if (typeof r.everJoined === "boolean") setEverJoined(r.everJoined);
       if (r.version !== versionRef.current) {
-        live.current.applyElsewhere(r.listing, r.at, { free: r.keys.free.map((k) => k.value), inUse: r.keys.inUse });
+        live.current.applyElsewhere(r.listing, r.at);
         setVersion(r.version);
       }
+      // (Batch 16 sections 18 and 20) Keys change without a new version too (a join): every refresh compares them.
+      live.current.applyKeys({ free: r.keys.free.map((k) => k.value), inUse: r.keys.inUse }, r.at);
       setKeysData(r.keys);
     };
     const t = setInterval(tick, 20_000);
@@ -279,12 +330,8 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
     if (!edit) return;
     const r = await api<{ keys: KeysData }>(`/api/tests/${edit.id}/listing`).catch(() => null);
     if (!r) return;
-    const now = r.keys.free.map((k) => k.value);
-    const mine = freeBoxCheck(keysText, freeLoaded, r.keys);
-    const inUseNow = (v: string) => r.keys.inUse.some((k) => k.value === v && !k.gone);
     setKeysData(r.keys);
-    setFreeLoaded(now);
-    setKeysText([...now.filter((v) => !mine.removed.includes(v)), ...mine.added.filter((v) => !now.includes(v) && !inUseNow(v))].join("\n"));
+    live.current.applyKeys({ free: r.keys.free.map((k) => k.value), inUse: r.keys.inUse }, new Date().toISOString());
   }
 
   async function submit(e: React.FormEvent) {
@@ -309,6 +356,8 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
       const r = await api<{ offered: number; notReinvited?: string[]; resent?: string[]; closedApps?: string[]; spotClosed?: string[]; spots?: number }>(`/api/tests/${edit.id}/edit`, {
         version, fields, confirmHigh: confirmHigh(), seenAt: edit.seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}), timeZone: browserZone(),
         keysAdd: fb.added, keysRemove: fb.removed,
+        // (Batch 16 section 17) What this tab loaded and what it holds: another tab's save of the same values is no reason to stop.
+        base: toApi(seenBase.current), has: toApi(holding()), keysLoaded: keysSeen.current,
       });
       await keep.clear();
       const q = (k: string, v?: string[]) => (v?.length ? `&${k}=${encodeURIComponent(v.join(", "))}` : "");
@@ -325,7 +374,15 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
         // The In use / Free boxes and the open spots follow at once (not at the next 20-second refresh); (batch 15 section 19) the Free box shows the current free keys
         // with this page's own edits still applied.
         if (edit) void rebaseKeys();
-        if (err.data.current) applyElsewhere(err.data.current as Listing, typeof err.data.now === "string" ? err.data.now : new Date().toISOString(), err.data.keys ? { free: (err.data.keys as { free: string[] }).free } : null);
+        if (err.data.current) applyElsewhere(err.data.current as Listing, typeof err.data.now === "string" ? err.data.now : new Date().toISOString());
+        // (Batch 16 section 19) The stop box shows each field's Before / What you typed (from the notes); the next press counts from what it showed.
+        const byApi: Record<string, NoteItem[]> = {};
+        for (const [k, item] of Object.entries(details.current) as [keyof F, NoteItem][]) for (const a of API_FIELDS[k]) byApi[a] = [...(byApi[a] ?? []), item];
+        setStopDetails((o) => ({ ...o, ...byApi }));
+        details.current = {};
+        prior.current = {};
+        if (err.data.current) seenBase.current = toForm(err.data.current as Listing);
+        if (err.data.keys) keysSeen.current = (err.data.keys as { free: string[] }).free;
       }
       else if (err instanceof ApiError && !isFieldError(err)) {
         // A refusal (e.g. "Confirm your email first."): blue, under the button.
@@ -355,11 +412,17 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
       {note(k)}
     </div>
   );
-  /** The blue note under a field changed in another tab or device (an expand arrow only when it runs over two lines). */
+  /** The blue note under a field changed in another tab or device (batch 16 section 19: what it replaced, and what this tab had typed). */
   const note = (k: string) => {
     const n = notes[k];
     if (!n) return null;
-    return <ExpandNote key={n.at + n.lines.join()} label={n.label ? `${n.label} · ${clock(n.at)}` : `Changed in another tab or device at ${clock(n.at)}`} lines={n.lines} />;
+    const items = n.label ? n.items.map((i) => ({ ...i, lines: i.lines?.filter((l) => l !== n.label) })) : n.items;
+    return <FieldNote key={n.at + JSON.stringify(n.items)} label={n.label ? `${n.label} · ${clock(n.at)}` : `Changed in another tab or device at ${clock(n.at)}`} items={items} />;
+  };
+  /** Save's stop box: under "You changed the … in another tab", each field's Before / What you typed. */
+  const stopDetail = (c: Change) => {
+    const items = [...new Set((c.fields ?? []).flatMap((a) => stopDetails[a] ?? []))];
+    return items.length ? <NoteItems items={items} /> : null;
   };
   const tomorrow = useLocalMin(24 * 60, true), in3 = useLocalMin(3 * 24 * 60, true), monthOut = useLocalMin(30 * 24 * 60, true);
   const minOpen = edit ? tomorrow : in3;
@@ -584,7 +647,7 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
             Delete the draft
           </ConfirmButton>
         )}
-        <ChangesBox changes={changes} tail={listingEdited ? "Press Save again to save your changes (fields you didn't touch keep the newer values)." : "Press Save again to save."} />
+        <ChangesBox changes={changes} detail={stopDetail} tail={listingEdited ? "Press Save again to save your changes (fields you didn't touch keep the newer values)." : "Press Save again to save."} />
       </div>
     </form>
   );

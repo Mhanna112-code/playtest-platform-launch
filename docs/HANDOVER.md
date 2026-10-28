@@ -417,6 +417,14 @@ Batch 16 adds one hand-written migration, `20261031220000_drop_waitlist`: it dro
 waitlist; the site launches with open sign-up). It is already applied to the local `playtest_lite` database; no hosted
 database has the table. Batch 16's per-tester deadline reminders need no migration (they reuse `Test.notifiedMarks`).
 
+Batch 16's new pieces, for finding them: field mistakes on every form (`components/FieldChecks.tsx`: server marks,
+`MistakeList`; `components/FormMistakes.tsx`; Post/Edit's message-to-field map in `lib/listingFields.ts`), blocks hiding a
+developer's other tests (`server/blocks.ts`: `hiddenByBlock`), the invite search (`server/invites.ts`: `invitePanel`), the
+tester dashboard's "Search by developer" (`lib/devSearch.ts`, `app/app/DevSearch.tsx`), the plain scroll boxes
+(`components/ScrollList.tsx`), "Your tests with <name>" (`lib/testerTests.ts`, `components/TesterTests.tsx`), the Open until
+cap (`openUntilCapDay` in `lib/rules.ts`) and Edit's cross-tab notes (`components/FieldNote.tsx`, `editNews` in
+`server/tests.ts`).
+
 On a fresh, healthy Postgres cluster (a new machine, Docker, Neon) none of this is needed: `npm run db:migrate`
 (`prisma migrate dev`) works as normal, and the hand-written migrations stay valid.
 

@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { keyBoxes } from "@/lib/server/accessKeys";
-import { FREE_KEYS_RULE, keyRefusal, reusedKeyLine, tickedInUseLine } from "@/lib/keys";
+import { FREE_KEYS_RULE, keyRefusal, reusedKeyLine } from "@/lib/keys";
 import { freeBoxCheck, type KeysData } from "@/app/app/tests/KeyBoxes";
 import { act, joined, sact, seen, settle, setup } from "./fixtures";
 
@@ -27,9 +27,9 @@ describe("the Free box (section 19)", () => {
     const r = freeBoxCheck("HR-5555\nHR-1111\nHR-2222\nHR-3333\nHR-6666", ["HR-4444", "HR-5555"], data);
     expect(r.added).toEqual(["HR-1111", "HR-2222", "HR-3333", "HR-6666"]);
     expect(r.removed).toEqual(["HR-4444"]);
-    expect(r.errors).toEqual(["HR-1111 is in use by Ana Silva, so it can't be added.", tickedInUseLine("HR-4444")]);
+    // (Batch 16 section 20) HR-4444, deleted here and given to Dee meanwhile, is no red mistake (the page shows a blue warning instead).
+    expect(r.errors).toEqual(["HR-1111 is in use by Ana Silva, so it can't be added."]);
     expect(r.warnings).toEqual(["HR-2222: reported as broken by Ben Okafor.", "HR-3333: reused, previously given to Cam Lee."]);
-    expect(tickedInUseLine("HR-4444")).toBe("HR-4444 was given to a tester since you opened this page, so it's in use now and can't be removed.");
     expect(freeBoxCheck("A\nA", [], data).errors[0]).toMatch(/typed more than once/);
     expect(keyRefusal("HR-9", "held", { working: false, name: "Ben" })).toBe("");
     expect(keyRefusal("HR-9", "broken", { working: true, name: "Ben Okafor" })).toBe("HR-9 is in use by Ben Okafor, so it can't be added.");

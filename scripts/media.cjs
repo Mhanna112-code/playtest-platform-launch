@@ -594,9 +594,12 @@ group("edit", async () => {
   await pause(A, 2500);
   await A.locator("#keysFree").scrollIntoViewIfNeeded();
   await pause(A, 2500);
-  await shot(A, "edit-elsewhere-field", "Blue note on a field | Another tab saved new instructions: the field updates with a blue note under it", field(A, "description"));
-  await shot(A, "edit-elsewhere-keys", "Blue note on keys | Keys added in another tab: the blue note under the key boxes", "#keys");
-  await shotSpan(A, "edit-elsewhere-save", "Save stops once | Save stops once: “This test changed since you opened Edit. Press Save again…”", saveBtn(A), A.locator("text=/Press Save again/").locator("xpath=ancestor::*[contains(@class,'info')][1]"), 16, 12);
+  // (Batch 16 sections 18 and 19) The note names the field and what it replaced ("Instructions:" and the old text); the keys are one line per kind ("Added: …").
+  await A.waitForSelector("[data-field-note] >> text=Instructions:");
+  await A.waitForSelector("text=Added: HR-7777, HR-8888, HR-9999");
+  await shot(A, "edit-elsewhere-field", "Blue note on a field | Another tab saved new instructions: the field updates, and the blue note under it names it and what it replaced (“Instructions:” and the old text)", field(A, "description"));
+  await shot(A, "edit-elsewhere-keys", "Blue note on keys | Keys added in another tab: one line under the key boxes, “Added: HR-7777, HR-8888, HR-9999”", "#keys");
+  await shotSpan(A, "edit-elsewhere-save", "Save stops once | Save stops once for what this tab didn't have: “You changed the description in another tab” with what it replaced, and “Added: HR-7777, HR-8888, HR-9999”", saveBtn(A), A.locator("text=/Press Save again/").locator("xpath=ancestor::*[contains(@class,'info')][1]"), 16, 12);
   finishVideo([{ file: await saveVideo(A, "edit-else-a.webm"), from: fromA }, { file: await saveVideo(B, "edit-else-b.webm"), from: fromB }], "edit-changed-elsewhere",
     "Two tabs on Edit (race) | Two tabs on Edit: the right tab saves new instructions and keys; the left tab's fields update with blue notes, and its Save stops once");
 
@@ -1834,15 +1837,17 @@ group("keysrace", async () => {
   await saveBtn(B).click();
   await B.waitForURL(/saved=1/, { timeout: 15000 });
   await pause(B, 2000);
-  // Tab A presses Save: the blue notice lists what changed; red marks K-2 (ticked, now in use) and too few free keys for the open spots.
+  // Tab A presses Save: the blue notice lists what changed (B's keys, always, and the joins) with the warning for K-2, which A had deleted and Ben was
+  // given (batch 16 section 20: blue, not red; the page may already show it live); red only for too few free keys for the open spots.
   await A.locator("#keys").scrollIntoViewIfNeeded();
   await saveBtn(A).click();
   await A.waitForSelector("text=/Press Save again/", { timeout: 15000 });
+  await A.waitForSelector("text=/joined and was given K-2, which you had deleted here/", { timeout: 15000 });
   await pause(A, 3000);
   await A.locator("#keys").scrollIntoViewIfNeeded();
   await pause(A, 2000);
-  await shot(A, "keysrace-a-keys", "Tab A: the key boxes after the race | The blue notes name what changed (“Ben Okafor joined and was given K-2”); red marks K-2 (deleted here, given to Ben meanwhile) and too few free keys; the box already shows the current keys with A's own edits", "#keys");
-  await shotSpan(A, "keysrace-a-notice", "Tab A: the notice under Save | The red mistakes and the blue “since you opened this page” list: the joins and the other tab's key changes", A.locator("p.err-field", { hasText: /^Fix the/ }).first(), A.locator("text=/Press Save again/").last(), 16, 16);
+  await shot(A, "keysrace-a-keys", "Tab A: the key boxes after the race | The blue note names what changed (“Added: B-1”, “Removed: K-4, K-5, K-8”, the joins) and warns “Ben Okafor joined and was given K-2, which you had deleted here.” (blue, never red); red only for too few free keys; the box already shows the current keys with A's own edits", "#keys");
+  await shotSpan(A, "keysrace-a-notice", "Tab A: the notice under Save | The red mistake (too few free keys) and the blue “since you opened this page” list: the joins, the K-2 warning and the other tab's key changes", A.locator("p.err-field", { hasText: /^Fix the/ }).first(), A.locator("text=/Press Save again/").last(), 16, 16);
   // A's second Save, red unfixed: refused, nothing saved.
   await saveBtn(A).click();
   await pause(A, 2500);
@@ -1855,7 +1860,7 @@ group("keysrace", async () => {
   await A.waitForURL(/saved=1/, { timeout: 15000 });
   await pause(A, 3000);
   finishVideo([{ file: await saveVideo(A, "keysrace-a.webm"), from: fromA }, { file: await saveVideo(B, "keysrace-b.webm"), from: fromB }], "keysrace",
-    "Access keys race (two tabs) | Tab A (left) deletes K-2, K-6, K-7 and types N-1 in the Free box; Ben and Cam join and get K-2 and K-3; tab B (right) deletes K-4, K-5, K-8, adds B-1 and saves after its own blue notice; A's Save shows the blue notice and the red marks, the box refreshes with A's own edits, and A saves after adding a key");
+    "Access keys race (two tabs) | Tab A (left) deletes K-2, K-6, K-7 and types N-1 in the Free box; Ben and Cam join and get K-2 and K-3; tab B (right) deletes K-4, K-5, K-8, adds B-1 and saves after its own blue notice; A's Save shows the blue notice (with the K-2 warning, not red) and the red mark for too few keys, the box refreshes with A's own edits, and A saves after adding a key");
   await nora.goto(`/app/tests/${t}`);
   await nora.waitForSelector("[data-keys-notice]");
   sec("Developer test page");

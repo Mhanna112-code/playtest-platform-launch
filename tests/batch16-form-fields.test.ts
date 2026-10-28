@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import * as R from "@/lib/rules";
 import { overLimitText } from "@/lib/capacity";
-import { keyNeedLine, keyRefusal, tickedInUseLine } from "@/lib/keys";
+import { keyNeedLine, keyRefusal } from "@/lib/keys";
 import { CRITICAL_KEYS, criticalLine } from "@/lib/limits";
 import { LISTING_MISTAKES, fieldOfMistake } from "@/lib/listingFields";
 
@@ -62,7 +62,6 @@ describe("every Post / Edit field mistake lands on its field (section 10)", () =
       ...allListingMessages(),
       overLimitText(5),
       keyNeedLine(3, 1),
-      tickedInUseLine("HR-1111"),
       keyRefusal("HR-1111", "free"),
       keyRefusal("HR-1111", "inuse", { working: true, name: "Ana Silva" }),
       R.openUntilShortened(new Date(Date.now() + 10 * DAY).toISOString(), new Date(Date.now() + 5 * DAY).toISOString(), (d) => d.toISOString().slice(0, 10)),

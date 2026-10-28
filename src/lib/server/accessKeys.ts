@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
-import { keyNeedLine, keyRefusal, keyReportedLine, KEY_MAX_LENGTH, parseKeys, repeatedKeys, reusedKeyLine, tickedInUseLine } from "@/lib/keys";
+import { keyNeedLine, keyRefusal, keyReportedLine, KEY_MAX_LENGTH, parseKeys, repeatedKeys, reusedKeyLine } from "@/lib/keys";
 import { HttpError } from "./http";
 import { logEvent } from "./live";
 
@@ -139,6 +139,8 @@ export async function planKeyChange(tx: Tx, testId: string, add: string[], remov
   for (const v of add) {
     const e = existing.find((k) => k.value === v);
     if (!e) toAdd.push(v);
+    // (Batch 16 section 17) Already free (another tab added the same key meanwhile): what this tab wanted is there, so it's neither a mistake nor added twice.
+    else if (e.status === "free") continue;
     else {
       const name = e.contract ? displayName(e.contract.tester) : "";
       const why = keyRefusal(v, e.status, { working: e.contract?.status === "working", name });
@@ -150,8 +152,8 @@ export async function planKeyChange(tx: Tx, testId: string, add: string[], remov
       }
     }
   }
-  // A key deleted here that a tester was given since the page loaded is red, never dropped silently.
-  for (const v of remove) if (existing.some((k) => k.value === v && (k.status === "inuse" || k.status === "broken"))) errors.push(tickedInUseLine(v));
+  // (Owner, Oct 28, batch 16 section 20) A key deleted here that a joining tester was given meanwhile is no mistake: Save stops once with the warning
+  // (givenDeletedLine, in the edit route) and the key simply stays in use.
   const removable = existing.filter((k) => k.status === "free" && remove.includes(k.value));
   const alreadyGone = remove.filter((v) => !existing.some((k) => k.value === v && k.status === "free"));
   const free = existing.filter((k) => k.status === "free").length - removable.length + toAdd.length + toReuse.length;
