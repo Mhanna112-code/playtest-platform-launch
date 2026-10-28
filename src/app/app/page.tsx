@@ -34,7 +34,8 @@ import { PAUSE_CLOSE_DAYS, pauseReasons } from "@/lib/pause";
 import { HOLD_APPROVAL_AFTER, REVIEW_DAYS, joiningClosedLine, testerPayable } from "@/lib/rules";
 
 export const metadata = { title: "Home · Playtest" };
-import { callMinutesOf } from "@/lib/callMeasure";
+import { callIsOver, callMinutesOf, callOverBadge } from "@/lib/callMeasure";
+import { fmtTime } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 /** A card's one link, stretched over the whole card (the full app's CARD_LINK). */
@@ -377,6 +378,9 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const byId = new Map(contracts.map((c) => [c.id, c]));
   const working = contracts.filter((c) => c.status === "working");
   const history = contracts.filter((c) => c.status !== "working");
+  // (Batch 15 sections 24, 42 and 43) Each ended test's deal history also lists its calls that are over (with their outcome) and renames.
+  const histCalls = history.length ? await db.call.findMany({ where: { contractId: { in: history.map((c) => c.id) } }, include: { review: true }, orderBy: { startsAt: "asc" } }) : [];
+  const histNotes = history.length ? await db.contractNote.findMany({ where: { contractId: { in: history.map((c) => c.id) } }, orderBy: { createdAt: "asc" } }) : [];
   const pausedTest = (t: { adminPausedAt: Date | null; developer: { holdStartedAt: Date | null; devSuspendedAt: Date | null } }) => testPaused(t.developer, t);
   const byEnd = (a: (typeof contracts)[number], b: (typeof contracts)[number]) => (b.endedAt ?? b.joinedAt).getTime() - (a.endedAt ?? a.joinedAt).getTime();
   // (Owner, Oct 28) Tests the team's suspension removed the tester from: while suspended a read-only list; after reinstatement (no automatic re-invite) they sit at the top with
@@ -648,8 +652,12 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                     {/* (Design doc 5) The deal history: the terms joined on, every offer and what was chosen, and the payments. */}
                     <ul className="mt-3 space-y-1 border-l border-white/10 pl-3 text-sm text-slate-300" data-deal-history="">
                       <li>{fmtDate(c.joinedAt)}: joined on {termsLine(c, true)}{c.ndaAcceptedAt ? ` · NDA accepted ${fmtDate(c.ndaAcceptedAt)}` : ""}</li>
-                      {mine.map((o) => <li key={o.id}>{fmtDate(o.createdAt)}: new terms offered ({o.diff}): {o.status === "switched" ? "you switched" : o.status === "kept" ? "you kept yours" : o.status === "open" ? "waiting for your answer" : "replaced by a newer offer"}</li>)}
-                      {pays.map((p) => <li key={p.id}>{fmtDate(p.createdAt)}: paid {money(testerShare(p.amountCents))} to you</li>)}
+                      {[
+                        ...mine.map((o) => ({ at: o.createdAt, node: <li key={o.id}>{fmtDate(o.createdAt)}: new terms offered ({o.diff}): {o.status === "switched" ? "you switched" : o.status === "kept" ? "you kept yours" : o.status === "open" ? "waiting for your answer" : "replaced by a newer offer"}</li> })),
+                        ...histNotes.filter((n) => n.contractId === c.id).map((n) => ({ at: n.createdAt, node: <li key={n.id}>{fmtDate(n.createdAt)}: {n.text}</li> })),
+                        ...histCalls.filter((x) => x.contractId === c.id && callIsOver(x)).map((x) => ({ at: x.startsAt, node: <li key={x.id} data-history-call="">{fmtDateTime(x.startsAt)}: call · {callOverBadge(x, { developer: displayName(c.test.developer), tester: "you" }, "tester", fmtTime, pays.filter((p) => p.callId === x.id).reduce((a, p) => a + p.amountCents, 0), callMinutesOf(x)).label}</li> })),
+                        ...pays.map((p) => ({ at: p.createdAt, node: <li key={p.id}>{fmtDate(p.createdAt)}: paid {money(testerShare(p.amountCents))} to you</li> })),
+                      ].sort((a, b) => a.at.getTime() - b.at.getTime()).map((x) => x.node)}
                     </ul>
                     {!suspended && <p className="mt-2 text-sm"><Link href={`/app/sessions/${c.id}#parts`}>Open the session</Link></p>}
                   </details>
