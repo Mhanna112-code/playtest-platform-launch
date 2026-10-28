@@ -320,11 +320,11 @@ describe("G, H) Charge opening and the cap", () => {
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).toBeNull();
     const refused = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000 });
     expect(refused.status).toBe(409);
-    expect(refused.body.error.message).toMatch(/14 days have passed since you sent it and the test's Open until has passed/);
+    expect(refused.body.error.message).toMatch(/7 days have passed since you sent it and the test's Open until has passed/);
   });
 
   it("the dashboard 'Charge or cancel' text and the session texts name both conditions", () => {
-    expect(src("app/app/page.tsx")).toMatch(/14 days have passed since you sent them and the test&apos;s Open until has passed/);
+    expect(src("app/app/page.tsx")).toMatch(/\{REVIEW_DAYS\} days have passed since you sent them and the test&apos;s Open until has passed/);
     expect(src("lib/server/ratings.ts")).toMatch(/chargeIsOpen/);
   });
 });

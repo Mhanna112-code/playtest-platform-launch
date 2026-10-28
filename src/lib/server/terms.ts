@@ -77,7 +77,8 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
       db.contract.update({
         where: { id: contractId },
         // Switching to terms with an NDA means accepting it now.
-        data: { ...termsOf(target), questions: target.questions as Prisma.InputJsonValue, listingVersion: target.listingVersion, dueAt: newDueAt(c.dueAt, c.joinedAt, target.deadlineDays), termsSwitchedAt: now, ndaAcceptedAt: target.ndaText ? (target.ndaText === c.ndaText ? c.ndaAcceptedAt ?? now : now) : null },
+        data: { ...termsOf(target), questions: target.questions as Prisma.InputJsonValue, listingVersion: target.listingVersion, // (Batch 12 section 6) With an Open until, the deadline is Open until for everyone (Edit already moved it): switching never moves it.
+        dueAt: c.test.openUntil ? c.dueAt : newDueAt(c.dueAt, c.joinedAt, target.deadlineDays), termsSwitchedAt: now, ndaAcceptedAt: target.ndaText ? (target.ndaText === c.ndaText ? c.ndaAcceptedAt ?? now : now) : null },
       }),
       db.termsOffer.update({ where: { id: target.id }, data: { status: "switched", decidedAt: now } }),
     ]);

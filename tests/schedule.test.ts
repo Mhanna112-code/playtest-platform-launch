@@ -9,7 +9,8 @@ import { act, bookCall, joined, sact, seen, setup } from "./fixtures";
 const DAY = 86_400_000;
 const cron = () => cronGET(new Request("http://localhost:3400/api/cron/daily", { headers: { authorization: "Bearer cron-test" } }));
 
-describe("notification schedule", () => {
+// Each test here runs the whole daily job several times over the shared test database (which only grows): give them room.
+describe("notification schedule", { timeout: 120_000 }, () => {
   it("countdown: 1 month (only if it started over a month away), 1 week, 3 days, 1 day; never twice, never late", () => {
     const now = new Date("2026-11-01T12:00:00Z");
     const at = (d: number) => new Date(now.getTime() + d * DAY);
@@ -53,21 +54,22 @@ describe("notification schedule", () => {
     expect(await n("review Ana Silva's written answers by tomorrow")).toBe(1);
     expect((await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, text: { contains: "by tomorrow" } } })).groupKey).toBe("unreviewed");
     // 14 days have passed but Open until has not: Charge has not opened (no offer to the tester, no daily reminder).
-    expect(await n("waited over 14 days")).toBe(0);
+    expect(await n("waited over 7 days")).toBe(0);
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).toBeNull();
     // Open until passes: it opens, and the developer is reminded daily.
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } });
     await cron(); // opens: offer to the tester + first daily reminder to the developer
     await cron(); // same day: not again
-    expect(await n("waited over 14 days")).toBe(1);
+    expect(await n("waited over 7 days")).toBe(1);
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).not.toBeNull();
     await db.submission.update({ where: { id: sub.id }, data: { devRemindedAt: new Date(Date.now() - DAY) } });
     await cron();
-    expect(await n("waited over 14 days")).toBe(2);
+    expect(await n("waited over 7 days")).toBe(2);
   });
 
-  it("with no Open until, Charge opens when the test stops (or the tester's work ends), 14 days after sending", async () => {
+  it("with no Open until (an old test), Charge opens when the test stops (or the tester's work ends), 7 days after sending", async () => {
     const { dev, testId } = await setup();
+    await db.test.update({ where: { id: testId }, data: { openUntil: null } }); // (batch 12) only old tests have none
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
@@ -79,6 +81,7 @@ describe("notification schedule", () => {
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).not.toBeNull();
     // The tester's own work ending (they left) opens it too.
     const two = await setup();
+    await db.test.update({ where: { id: two.testId }, data: { openUntil: null } });
     const j = await joined(two.testId, "Ben Carter", "he");
     await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] });
     const s2 = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });

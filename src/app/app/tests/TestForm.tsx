@@ -13,7 +13,7 @@ import { NotSentTag, useKept } from "@/lib/useKept";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, countsOf, criticalLine, isCritical, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { keyNeedLine, parseKeys } from "@/lib/keys";
-import { HIGH_PART_CENTS, HIGH_PART_TICK, openUntilNeeded, type Listing } from "@/lib/rules";
+import { HIGH_PART_CENTS, HIGH_PART_TICK, type Listing } from "@/lib/rules";
 import { toCents } from "@/lib/format";
 import { KeyBoxes, type KeysData } from "./KeyBoxes";
 import { ExpandNote } from "@/components/ExpandNote";
@@ -167,13 +167,8 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
   /** The lock note under a field that used its 3 changes. */
   const lockNote = (f: CriticalField) => (fieldLocked(f) ? <p className="info mt-1" data-critical-locked={f}>{criticalLine(f)}</p> : null);
 
-  // (4/11.5) The deadline must leave 3 days inside Open until, counted from when the test opened.
-  const dl = Number(f.deadlineDays);
-  const openedAt = edit ? new Date(edit.openedAt) : new Date();
-  const need = f.openUntil && Number.isInteger(dl) && dl >= 1 ? openUntilNeeded(openedAt, dl) : null;
-  const needDay = need ? need.toISOString().slice(0, 10) : "";
-  const needLabel = need ? need.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "";
-  const dlLine = need && f.openUntil < needDay ? `${edit ? "Extend" : "Set"} Open until to ${needLabel} or later to allow a ${dl}-day deadline.` : "";
+  // (Owner, Oct 29, batch 12 section 6) No "days after joining" field: Open until is required and is every tester's deadline (3 to 30 days from today on Post).
+  const dlLine = "";
   // (5) Open until can only be extended.
   const ouNow = init.openUntil ? init.openUntil.slice(0, 10) : "";
   const shortened = !!edit && !!ouNow && !!f.openUntil && f.openUntil < base.openUntil && f.openUntil < ouNow;
@@ -320,8 +315,8 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
     if (!n) return null;
     return <ExpandNote key={n.at + n.lines.join()} label={`Changed in another tab or device at ${clock(n.at)}`} lines={n.lines} />;
   };
-  const tomorrow = useLocalMin(24 * 60, true), yearOut = useLocalMin(366 * 24 * 60, true);
-  const minOpen = need && needDay > tomorrow ? needDay : tomorrow;
+  const tomorrow = useLocalMin(24 * 60, true), in3 = useLocalMin(3 * 24 * 60, true), monthOut = useLocalMin(30 * 24 * 60, true);
+  const minOpen = edit ? tomorrow : in3;
   const limit = spotsLimit ?? LIMITS.spots.max;
   const redLine = (t: string) => (t ? <p className="err-field mt-1" role="alert">{t}</p> : null);
   const hasMore = errs.length > 0 || critical.length > 0;
@@ -462,11 +457,7 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
             {spotsLimit != null && <p className="mt-1 text-xs text-slate-500">{limitHint(spotsLimit)}</p>}
           </div>
           <div>
-            {text("deadlineDays", "How long do new testers have? (days after joining)", { req: true, type: "number", cls: "max-w-[8rem]", hint: "1–90 days", attrs: { "data-min": "1", "data-max": "90", "data-whole": "", "data-msg": "Testers' deadline must be from 1 to 90 days after they join." } })}
-            {showOn("deadlineDays") && redLine(dlLine)}
-          </div>
-          <div>
-            {text("openUntil", "Open until (recruitment cutoff; blank = no end)", { type: "date", cls: "max-w-[12rem]", hint: need ? `${needLabel} or later for a ${dl}-day deadline; up to a year ahead` : "from tomorrow, up to a year ahead", attrs: { min: minOpen, max: yearOut, "data-msg": dlLine || "Open until must be a date in the future.", "data-max-msg": "Open until can be at most a year ahead." } })}
+            {text("openUntil", "Open until (every tester's deadline)", { req: true, type: "date", cls: "max-w-[12rem]", hint: edit ? "only later, up to 30 days from today" : "3 to 30 days from today", attrs: { min: minOpen, max: monthOut, "data-msg": edit ? "Open until must be a date in the future." : "Set Open until 3 to 30 days from today: it's every tester's deadline too.", "data-max-msg": "Open until can be at most 30 days from today." } })}
             {showOn("openUntil") && redLine(ouLine)}
           </div>
         </div>

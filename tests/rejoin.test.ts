@@ -91,7 +91,7 @@ describe("rejoining restores the session", () => {
     expect(back.status).toBe(200);
     expect(back.body.sessionId).toBe(sessionId);
     const c = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });
-    expect(c).toMatchObject({ status: "working", writtenCents: 1200, deadlineDays: 3, endedAt: null });
+    expect(c).toMatchObject({ status: "working", writtenCents: 1200, endedAt: null }); // (batch 12) the days field is gone: Edit ignores it
     expect(Math.round((c.dueAt.getTime() - Date.now()) / 86_400_000)).toBe(5); // the time they had left, not the new 3 days
     expect(await db.contract.count({ where: { testId, testerId: tester.user.id } })).toBe(1);
     expect(await db.contract.count({ where: { testerId: tester.user.id, status: "working" } })).toBe(1);
@@ -146,7 +146,7 @@ describe("owner corrections 2 and 3", () => {
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const pageLoaded = seen();
     await new Promise((r) => setTimeout(r, 30));
-    await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { title: "Harbor Run 2", openUntil: "" } });
+    await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { title: "Harbor Run 2" } });
     expect((await db.application.findFirstOrThrow({ where: { testId, testerId: ben.user.id } })).status).toBe("pending");
     // The tester's top box has the line; a press goes through with the note.
     const { GET: liveGET } = await import("@/app/api/live/route");

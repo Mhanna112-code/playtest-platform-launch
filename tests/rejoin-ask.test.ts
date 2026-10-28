@@ -81,7 +81,10 @@ describe("10 tests at once (design doc 7.3)", () => {
     const LINE = "You can't join more tests right now.";
     const tester = await makeUser({ tester: true, name: "Ana Silva", pronoun: "she" });
     const dev = await makeUser({ dev: true, name: "Nora Lane", pronoun: "she" });
-    const post = async (over: Record<string, unknown> = {}) => (await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: listingBody({ spots: 10, ...over }) })))).body.id as string;
+    // (Batch 12 section 4) A developer has at most 10 open tests: a second developer posts the rest.
+    const dev2 = await makeUser({ dev: true, name: "Omar Reed" });
+    let posted = 0;
+    const post = async (over: Record<string, unknown> = {}) => (await json(await testsPOST(req("/api/tests", { cookie: (posted++ < 8 ? dev : dev2).cookie, body: listingBody({ spots: 10, ...over }) })))).body.id as string;
     // The tester asks to join an apply-mode test while still free, and leaves one test (to ask to rejoin later).
     const applyTest = await post({ joinMode: "apply" });
     expect((await act(applyTest, "apply", tester.cookie, { listingVersion: await lv(applyTest), seenAt: seen(), confirmed: true, anyway: true })).body.applied).toBe(true);

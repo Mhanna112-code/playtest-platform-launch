@@ -8,7 +8,8 @@ import { json, makeUser, req } from "./helpers";
 export const listingBody = (over: Record<string, unknown> = {}) => ({
   productName: "Harbor Run", title: "Harbor Run", description: "Sail", buildUrl: "https://example.com/b", categories: ["Game"], devices: [], languages: [],
   spots: 3, writtenCents: "10.00", recordingCents: null, liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7,
-  questions: ["What did you like?", "Where did you get stuck?"], openUntil: "", ...over,
+  // (Batch 12 section 6) Open until is required (3 to 30 days ahead) and is every tester's deadline.
+  questions: ["What did you like?", "Where did you get stuck?"], openUntil: new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10), ...over,
 });
 
 export async function setup(over: Record<string, unknown> = {}) {

@@ -25,17 +25,18 @@ describe("new terms offered to working testers", () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
+    // (Batch 12) No days field any more: the deadline is Open until.
     const r = await edit(testId, dev.cookie, { writtenCents: "12.00", recordingCents: "15.00", deadlineDays: 10 });
     expect(r.body.offered).toBe(1);
     const offer = await db.termsOffer.findFirstOrThrow({ where: { contractId: sessionId } });
-    expect(offer.diff).toBe("written $10 → $12, added a recording ($15), 7 → 10 days");
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane updated the listing: written $10 → $12, added a recording ($15), 7 → 10 days" } })).toBe(1);
+    expect(offer.diff).toBe("written $10 → $12, added a recording ($15)");
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane updated the listing: written $10 → $12, added a recording ($15)" } })).toBe(1);
     expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).writtenCents).toBe(1000); // not until they switch
     const before = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });
     expect((await sact(sessionId, "terms", tester.cookie, { offerId: offer.id, choice: "switch" })).status).toBe(200);
     const after = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });
-    expect(after).toMatchObject({ writtenCents: 1200, recordingCents: 1500, deadlineDays: 10 });
-    expect(after.dueAt.getTime() - before.dueAt.getTime()).toBe(3 * 86_400_000);
+    expect(after).toMatchObject({ writtenCents: 1200, recordingCents: 1500 });
+    expect(after.dueAt.getTime()).toBe(before.dueAt.getTime()); // the deadline stays Open until
     expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId, kind: "written" } })).agreedCents).toBe(1000); // sent work keeps its price
   });
 

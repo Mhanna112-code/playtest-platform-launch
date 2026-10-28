@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarClock, Languages, Monitor, SearchX } from "lucide-react";
+import { Languages, Monitor, SearchX } from "lucide-react";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { CategoryBadges } from "@/components/Category";
@@ -44,7 +44,8 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
     .filter((t) => !sp.part || (sp.part === "written" ? t.writtenCents != null : sp.part === "recording" ? t.recordingCents != null : sp.part === "live" ? t.liveRateCents != null : true))
     .filter((t) => !matchMine || needsLines(t, profile).length === 0);
   if (sp.sort === "pay") shown.sort((a, b) => topPrice(b) - topPrice(a));
-  else if (sp.sort === "deadline") shown.sort((a, b) => b.deadlineDays - a.deadlineDays);
+  // (Batch 12 section 6) The deadline is Open until: the latest first.
+  else if (sp.sort === "deadline") shown.sort((a, b) => (b.openUntil?.getTime() ?? 0) - (a.openUntil?.getTime() ?? 0));
   return (
     <div className="space-y-6">
       <div>
@@ -124,7 +125,6 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
                       <PartBadges written={t.writtenCents != null} recording={t.recordingCents != null} live={t.liveRateCents != null} />
                       {t.devices.length > 0 && <span className="badge" title={t.devices.join(" · ")}><Monitor className="h-3.5 w-3.5" /> {t.devices.slice(0, 3).join(" · ")}{t.devices.length > 3 ? ` +${t.devices.length - 3} more` : ""}</span>}
                       {t.languages.length > 0 && <span className="badge" title={t.languages.join(" · ")}><Languages className="h-3.5 w-3.5" /> {t.languages.slice(0, 3).join(" · ")}{t.languages.length > 3 ? ` +${t.languages.length - 3} more` : ""}</span>}
-                      <span className="badge"><CalendarClock className="h-3.5 w-3.5" /> {t.deadlineDays} day{t.deadlineDays === 1 ? "" : "s"} to finish</span>
                       <span className="badge">{t.joinMode === "invite" ? "Invitation only" : t.joinMode === "apply" ? "Approved only" : "Anyone can join"}</span>
                       {t.openUntil && <span className="badge">Open until {fmtDate(t.openUntil)}</span>}
                       {t.mature && <span className="badge border-rose-300/40 text-rose-200">Mature (18+)</span>}

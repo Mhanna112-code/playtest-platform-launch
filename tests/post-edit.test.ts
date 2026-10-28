@@ -31,14 +31,14 @@ describe("Post a test (design doc 4)", () => {
     expect(await db.test.findUniqueOrThrow({ where: { id: ok.body.id } })).toMatchObject({ mature: true, matureWhy: "Gore in the boss fights" });
   });
 
-  it("the deadline must leave 3 days inside Open until, and keys must cover the spots", async () => {
+  it("(batch 12) Open until is required, 3 to 30 days ahead, and keys must cover the spots", async () => {
     const dev = await makeUser({ dev: true });
-    const soon = new Date(Date.now() + 6 * day).toISOString().slice(0, 10);
-    const r = await post(dev.cookie, { deadlineDays: 7, openUntil: soon });
+    const soon = new Date(Date.now() + 2 * day).toISOString().slice(0, 10);
+    const r = await post(dev.cookie, { openUntil: soon });
     expect(r.status).toBe(400);
-    expect(r.body.error.message).toMatch(/^Set Open until to .+ or later to allow a 7-day deadline\.$/);
+    expect(r.body.error.message).toBe("Set Open until 3 to 30 days from today: it's every tester's deadline too.");
     const far = new Date(Date.now() + 12 * day).toISOString().slice(0, 10);
-    expect((await post(dev.cookie, { deadlineDays: 7, openUntil: far })).status).toBe(200);
+    expect((await post(dev.cookie, { openUntil: far })).status).toBe(200);
     expect((await post(dev.cookie, { spots: 3, accessKeys: "A1\nA2" })).body.error.message).toBe("Add 1 more key: 3 open spots, 2 free keys.");
     expect((await post(dev.cookie, { spots: 3, accessKeys: "A1\nA1\nA2" })).body.error.message).toMatch(/typed more than once/);
     const withKeys = await post(dev.cookie, { spots: 2, accessKeys: "K1\nK2\nK3" });
@@ -48,13 +48,13 @@ describe("Post a test (design doc 4)", () => {
 });
 
 describe("Edit (design doc 5)", () => {
-  it("lengthening the deadline past Open until is red with the date to extend to; Open until can only be extended", async () => {
-    const { dev, testId } = await setup({ deadlineDays: 3, openUntil: new Date(Date.now() + 20 * day).toISOString().slice(0, 10) });
-    const r = await edit(testId, dev.cookie, { deadlineDays: 30 });
+  it("(batch 12) Open until moves only later, within 30 days of today", async () => {
+    const { dev, testId } = await setup({ openUntil: new Date(Date.now() + 20 * day).toISOString().slice(0, 10) });
+    const r = await edit(testId, dev.cookie, { openUntil: new Date(Date.now() + 40 * day).toISOString().slice(0, 10) });
     expect(r.status).toBe(400);
-    expect(r.body.error.message).toMatch(/^Extend Open until to .+ or later to allow a 30-day deadline\.$/);
-    expect((await edit(testId, dev.cookie, { deadlineDays: 30, openUntil: new Date(Date.now() + 60 * day).toISOString().slice(0, 10) })).status).toBe(200);
-    const shorter = await edit(testId, dev.cookie, { openUntil: new Date(Date.now() + 40 * day).toISOString().slice(0, 10) });
+    expect(r.body.error.message).toBe("Open until can be at most 30 days from today.");
+    expect((await edit(testId, dev.cookie, { openUntil: new Date(Date.now() + 25 * day).toISOString().slice(0, 10) })).status).toBe(200);
+    const shorter = await edit(testId, dev.cookie, { openUntil: new Date(Date.now() + 15 * day).toISOString().slice(0, 10) });
     expect(shorter.status).toBe(400);
     expect(shorter.body.error.message).toMatch(/^Open until can only be extended/);
   });

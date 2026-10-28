@@ -255,7 +255,9 @@ describe("R, W) the 4th payment hold needs an admin's Approve (in the Lifts box)
     const told = (await lines(a.user.id)).filter((l) => l.text.startsWith("Hold lift waiting:") && l.text.includes("More than 3 holds") && l.text.includes(fourth.user.name));
     expect(told.length).toBeGreaterThanOrEqual(1);
     expect(told[0]).toMatchObject({ groupKey: "disputes", own: false, link: `/admin#lift-${fourth.user.id}` });
-    // The Lifts box (newest first), with the hold number.
+    // The Lifts box (newest first), with the hold number. (Rows left in the test schema by earlier runs, some dated ahead by outage tests, are approved first so the
+    // first page holds this one.)
+    await db.user.updateMany({ where: { id: { not: fourth.user.id }, holdStartedAt: { not: null }, holdCount: { gt: 3 }, holdApprovedAt: null }, data: { holdApprovedAt: new Date() } });
     const box = (await adminPage("lifts", a.user.id, null)) as { rows: { id: string; head: string; holdNumber: number }[] };
     expect(box.rows.find((r) => r.id === fourth.user.id)).toMatchObject({ head: expect.stringContaining("More than 3 holds") });
     expect(box.rows.some((r) => r.id === third.user.id)).toBe(false);

@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
 import {
-  HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, chargedDelayedLine, countdownDue, INVITE_REMIND_DAYS, choiceLine, failedLine, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, UNLISTED_REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
+  HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, INVITE_REMIND_DAYS, choiceLine, failedLine, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, UNLISTED_REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, sendSummaries } from "./notify";
@@ -18,10 +18,11 @@ import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
 // Payment hold (owner rule, Oct 27): starts AT ONCE when any payment is declined (part Pay, the tester's Charge, a call charge, extra pay), or when a chargeback opens
 // (a chargeback during a payment hold turns it into a chargeback hold). There is no owed window and no daily retry. While on hold all the developer's
 // tests are paused, exactly like an admin suspension (see lib/restricted.ts); paying everything owed (and the admin resolving chargebacks) lifts it, and
-// every working tester's deadline, Open until and the 14-day review clock move on by the pause.
+// every working tester's deadline, Open until and the 7-day review clock (batch 12) move on by the pause.
 
 /** A test that is not paused (no payment hold, no suspension, no team pause): reminders tied to a test wait while it is paused and restart when it resumes. */
-const PAUSE_FREE = { adminPausedAt: null, developer: { holdStartedAt: null, suspendedAt: null } } as const;
+// (Batch 12 section 1) A deleted developer's work under review never opens Charge, and they get no reminders.
+const PAUSE_FREE = { adminPausedAt: null, developer: { holdStartedAt: null, suspendedAt: null, deletedAt: null } } as const;
 const admins = () => (process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
 
 export async function onHold(devId: string) {
@@ -63,6 +64,9 @@ export async function owed(devId: string) {
  */
 export async function declinedPayment(devId: string, paymentId: string, cents: number, what: string) {
   await db.payment.update({ where: { id: paymentId }, data: { status: "failed", owedUntil: new Date() } });
+  // (Owner, Oct 29, batch 12 section 1) A deleted developer has no account left to hold: the payment stays "delayed" for the tester and is listed for the admins
+  // (the platform doesn't cover it).
+  if ((await db.user.findUnique({ where: { id: devId }, select: { deletedAt: true } }))?.deletedAt) return false;
   const started = await startHold(devId, "unpaid");
   if (!started) {
     const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
@@ -102,7 +106,7 @@ export async function startHold(devId: string, reason: string) {
 }
 
 /**
- * A pause ended (a payment hold paid off, or a developer's suspension lifted): every working tester's deadline, Open until and the 14-day review clocks move on by its length
+ * A pause ended (a payment hold paid off, or a developer's suspension lifted): every working tester's deadline, Open until and the 7-day review clocks (batch 12) move on by its length
  * (PAUSE_DEFAULTS.shiftDeadlines; a pause that overlapped another one still on counts only up to when that one started, see pauseShiftMs), and each test that is no longer
  * paused says it is running again. `others`: the starts of the developer's OTHER pauses still on (a hold left after a reinstatement, a suspension left after a hold lift).
  * Returns the ids of the tests that run again.
@@ -468,14 +472,14 @@ export async function chargebackWon(paymentIntentId: string) {
   return true;
 }
 
-/** The daily job: auto-pay after 14 days, closing tests paused for 7 days, the paused reminders, Open until heads-ups. (No retries and no owed window any more: a declined payment is a hold at once.) */
+/** The daily job: auto-pay after the review window, closing tests paused for 7 days, the paused reminders, Open until heads-ups. (No retries and no owed window any more: a declined payment is a hold at once.) */
 export async function runDaily(now = new Date()) {
   const out = { autoPaid: 0, holds: 0, alerts: 0, headsUps: 0, choices: 0, retried: 0, closed: 0 };
   await (await import("./calls")).sweepNobodyJoined(now);
   // (Batch 11) Bank confirmations that timed out, then the automatic retries of what is owed during a hold.
   await (await import("./confirm")).expireActions(now);
   if (stripeOn()) for (const u of await db.user.findMany({ where: { holdStartedAt: { not: null }, deletedAt: null, stripePaymentMethodId: { not: null } }, select: { id: true } })) await retryOwed(u.id, now).catch((e) => console.error("[retry]", (e as Error).message));
-  // 1. Sent work not paid or rejected within 14 days: the listing amount is paid automatically (clock paused in holds).
+  // 1. Sent work not paid or rejected within the review window (REVIEW_DAYS, 7): the listing amount is paid automatically (clock paused in holds).
   const due = await db.submission.findMany({
     // (Owner, Oct 29, batch 11) A deleted tester's sent work is still reviewed (and reminded) when their payout account was connected; Charge never opens for it.
     where: { review: null, payBy: { lt: now }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } },
@@ -487,12 +491,12 @@ export async function runDaily(now = new Date()) {
     const c = s.contract, dev = c.test.developer;
     const auto = autoPayFor(s.agreedCents);
     if (auto == null) continue; // outside the contract: its own reminder every 3 days (below)
-    // (Owner, Oct 26) Charge / Let it go opens only when 14 days have passed AND the test's Open until has passed (or, with none, the test or the tester's work ended).
+    // (Owner, Oct 26) Charge / Let it go opens only when REVIEW_DAYS (7) have passed AND the test's Open until has passed (or, with none, the test or the tester's work ended).
     if (!chargeIsOpen(s, c.test, c, now)) continue;
     // Once it opens: the developer is reminded daily until it's paid, rejected, charged or let go.
     const gone = !!c.tester.deletedAt;
     if (!s.devRemindedAt || now.getTime() - s.devRemindedAt.getTime() >= 23 * 3_600_000) {
-      await bell(dev.id, `“${c.title}”: ${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} waited over 14 days: pay or reject it${gone ? "" : ` (${displayName(c.tester)} can now charge or let it go)`}.`, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
+      await bell(dev.id, `“${c.title}”: ${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} waited over ${REVIEW_DAYS} days: pay or reject it${gone ? "" : ` (${displayName(c.tester)} can now charge or let it go)`}.`, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
       await db.submission.update({ where: { id: s.id }, data: { devRemindedAt: now } });
     }
     if (gone) continue; // the tester can't sign in: Charge and Let it go never open
@@ -539,15 +543,15 @@ export async function runDaily(now = new Date()) {
   // 5. (Owner, Oct 27) The developer's unreviewed contract work: reminders before Charge would open (the daily ones once it has opened are in 1 above).
   const upcoming = await db.submission.findMany({ where: { review: null, choiceOfferedAt: null, agreedCents: { not: null }, payBy: { not: null }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, orderBy: { payBy: "asc" }, take: 2000 });
   for (const s of upcoming) {
-    // 1 month, 1 week, 3 days and 1 day before Charge opens (skipping any already past); the daily ones after it opens are in 1 above.
+    // (Batch 12 section 6) 1 week, 3 days and 1 day before Charge opens (skipping any already past); the daily ones after it opens are in 1 above.
     const opens = chargeOpensAt(s, s.contract.test, s.contract, now);
-    const m = opens && opens.getTime() > now.getTime() ? countdownDue(opens, now, s.devMarks, s.updatedAt) : null;
+    const m = opens && opens.getTime() > now.getTime() ? countdownDue(opens, now, s.devMarks, s.updatedAt, true) : null;
     if (!m) continue;
     const name = displayName(s.contract.tester);
     await bell(s.contract.test.developerId, `“${s.contract.title}”: review ${name}'s ${s.kind === "recording" ? "recording" : "written answers"} ${m.label === "tomorrow" ? "by tomorrow" : m.label.replace("in ", "within ")}${s.contract.tester.deletedAt ? "" : ` (after that ${name} can charge or let it go)`}.`, `/app/tests/${s.contract.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
     await db.submission.update({ where: { id: s.id }, data: { devMarks: { push: m.mark } } });
   }
-  // 6. Work outside the contract: no deadline, a bell to the developer every 3 days; (batch 9, DEFAULT UNLISTED_REMIND_DAYS) only for 14 days after it was sent (the row stays).
+  // 6. Work outside the contract: no deadline, a bell to the developer every 3 days; (batch 9, DEFAULT UNLISTED_REMIND_DAYS) only for UNLISTED_REMIND_DAYS (7, batch 12) after it was sent (the row stays).
   const outside = await db.submission.findMany({ where: { review: null, agreedCents: null, updatedAt: { lt: new Date(now.getTime() - REMIND_DAYS * 86_400_000 + 3_600_000), gt: new Date(now.getTime() - UNLISTED_REMIND_DAYS * 86_400_000) }, OR: [{ remindedAt: null }, { remindedAt: { lt: new Date(now.getTime() - REMIND_DAYS * 86_400_000 + 3_600_000) } }], contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true } } }, take: 500 });
   for (const s of outside) {
     await bell((await db.test.findUniqueOrThrow({ where: { id: s.contract.testId } })).developerId, `“${s.contract.title}”: ${displayName(s.contract.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} still waits for you to pay or reject.`, `/app/tests/${s.contract.testId}#piece-${s.id}`, undefined, { reminder: `outside:${s.id}` });
@@ -603,7 +607,7 @@ export async function owedForBox(devId: string) {
   return owedLines(devId);
 }
 
-/** The tester's choice on a contract part unreviewed 14 days: "charge" (the listing minus what is paid) or "letgo". */
+/** The tester's choice on a contract part unreviewed for the review window: "charge" (the listing minus what is paid) or "letgo". */
 export async function chooseOutcome(tester: { id: string; email: string; name: string }, contractId: string, body: Record<string, unknown>) {
   const s = await db.submission.findUnique({ where: { id: String(body.submissionId ?? "") }, include: { review: true, contract: { include: { tester: true, test: { include: { developer: true } } } } } });
   if (!s || s.contractId !== contractId || s.contract.testerId !== tester.id) throw new HttpError(404, "not_found", "That work doesn't exist.");
@@ -611,10 +615,10 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   // (Owner, Oct 29, batch 12 section 5) While the developer's bank confirms a payment for this piece, Charge and Let it go wait.
   if (await (await import("./confirm")).pieceLocked({ submissionId: s.id })) throw new HttpError(409, "locked", PIECE_LOCKED);
   if (s.review) {
-    if (s.review.reason === CHARGED_BY_TESTER || s.review.reason === LET_GO_BY_TESTER) throw new HttpError(409, "done", "You already chose for this.");
+    if (byTesterChoice(s.review.reason)) throw new HttpError(409, "done", "You already chose for this.");
     throw new HttpError(409, "done", s.review.rejected ? `${displayName(dev)} rejected this meanwhile.` : `${displayName(dev)} paid ${money(s.review.amountCents)} for this meanwhile.`);
   }
-  if (!s.choiceOfferedAt) throw new HttpError(409, "not_yet", "You can choose once 14 days have passed since you sent it and the test's Open until has passed (with no Open until: once the test or your work has ended).");
+  if (!s.choiceOfferedAt) throw new HttpError(409, "not_yet", `You can choose once ${REVIEW_DAYS} days have passed since you sent it and the test's Open until has passed (with no Open until: once the test or your work has ended).`);
   await testerTermsGate(contractId, displayName(dev), body);
   const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;
   if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");
@@ -657,7 +661,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
       status = "needs_confirmation";
     } else {
       await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, ...r } });
-      await receipt(dev.email, `${displayName(tester)}'s ${label} (charged by them after 14 days)`, amount, r.status, `/app/tests/${c.testId}`);
+      await receipt(dev.email, `${displayName(tester)}'s ${label} (charged by them after ${REVIEW_DAYS} days)`, amount, r.status, `/app/tests/${c.testId}`);
     }
   } catch (e) {
     status = "failed";

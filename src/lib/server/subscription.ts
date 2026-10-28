@@ -6,7 +6,7 @@ import { chargePlatform, getStripe, stripeOn, type NeedsAction } from "./stripe"
 import { receipt } from "./payments";
 import { recordEvent } from "./tests";
 import {
-  DELETE_ENDS_SUBSCRIPTION, FREE_NOTICE_DAYS, RETRY_DAYS, SECOND_TEST_LINE, SUBSCRIBE_WAITS, SUBSCRIPTION_CENTS, SUBSCRIPTION_ENDED, SUBSCRIPTION_PRICE,
+  DELETE_ENDS_SUBSCRIPTION, FREE_NOTICE_DAYS, MAX_OPEN_TESTS, TOO_MANY_OPEN_LINE, RETRY_DAYS, SECOND_TEST_LINE, SUBSCRIBE_WAITS, SUBSCRIPTION_CENTS, SUBSCRIPTION_ENDED, SUBSCRIPTION_PRICE,
   fmtSubDay, launchFrom, perkLine, periodEnd, subscribed, type Launch, type Perk,
 } from "@/lib/subscription";
 
@@ -53,10 +53,17 @@ export async function requirePerk(devId: string, perk: Perk) {
 
 /** Tests that count as open: Open, Full or Paused (status "open"). Drafts, Stopped and Closed don't. */
 export const openTestCount = (devId: string, exceptId = "") => db.test.count({ where: { developerId: devId, status: "open", ...(exceptId ? { id: { not: exceptId } } : {}) } });
-/** (Section 2) The free plan runs one open test at a time. */
+/**
+ * (Section 2) The free plan runs one open test at a time. (Owner, Oct 29, batch 12 section 4) Subscribers (and everyone during a free launch) at most MAX_OPEN_TESTS (10).
+ * Counted on the server at the press: a test stopped in another tab meanwhile simply lets the post through (a drop in the count is never a stop-once reason).
+ */
 export async function canOpenAnother(devId: string, exceptId = "") {
-  if (await hasPerks(await userOf(devId))) return;
-  if ((await openTestCount(devId, exceptId)) >= 1) throw new HttpError(409, "subscription", SECOND_TEST_LINE, { perk: "several" });
+  const open = await openTestCount(devId, exceptId);
+  if (await hasPerks(await userOf(devId))) {
+    if (open >= MAX_OPEN_TESTS) throw new HttpError(409, "too_many_open", TOO_MANY_OPEN_LINE);
+    return;
+  }
+  if (open >= 1) throw new HttpError(409, "subscription", SECOND_TEST_LINE, { perk: "several" });
 }
 
 async function tell(dev: Dev, line: string, always = false) {

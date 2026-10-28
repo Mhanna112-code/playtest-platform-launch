@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { NOT_LISTED, CHAT_PAUSED, CHARGED_BY_TESTER, LET_GO_BY_TESTER, PAUSE_DEFAULTS, chargedDelayedLine, disputeLimitText, testerPaused } from "@/lib/rules";
+import { devDeletedLine, REVIEW_DAYS, NOT_LISTED, CHAT_PAUSED, byTesterChoice, PAUSE_DEFAULTS, chargedDelayedLine, disputeLimitText, testerPaused } from "@/lib/rules";
 import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, MessagesSquare, Users, XCircle } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
@@ -55,6 +55,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   });
   if (!c || c.testerId !== u.id) notFound();
   const dev = displayName(c.test.developer);
+  // (Batch 12 section 1) A developer who deleted their account.
+  const devGone = !!c.test.developer.deletedAt;
+  const devRealName = displayName({ ...c.test.developer, deletedAt: null });
   const refusal = sessionRefusal(c, c.test, dev);
   const written = c.submissions.find((s) => s.kind === "written");
   const recording = c.submissions.find((s) => s.kind === "recording");
@@ -132,7 +135,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   // (Owner, Oct 29, batch 10) A paused test hides what doesn't work right now (Send, the call-request tools, Join call, chat's message box) and says at the top what still
   // works, built from what is actually on the page (the server refusals stay as a backstop).
   const choiceOpen = (sub: typeof written) => !!(sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && !meOff && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0);
-  const disputable = (r: { amountCents: number; agreedCents: number | null; reason: string } | null | undefined, d: unknown) => !!r && !meOff && canDispute(r.amountCents, r.agreedCents, !!d, r.reason === CHARGED_BY_TESTER || r.reason === LET_GO_BY_TESTER).ok;
+  const disputable = (r: { amountCents: number; agreedCents: number | null; reason: string } | null | undefined, d: unknown) => !!r && !meOff && canDispute(r.amountCents, r.agreedCents, !!d, byTesterChoice(r.reason)).ok;
   const unpaidPart = !written?.review || !recording?.review;
   const pausedBanner = rulesPaused ? pausedForTesters({
     drafts: draftsShown && !refusal && !meOff && unpaidPart,
@@ -217,7 +220,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
 
       </section>
 
-      {c.test.status === "stopped" && <p className="note" data-stopped-line="">This test is stopped. You can still charge or let go of unreviewed work after 14 days, dispute a decision, rate the developer, and chat.</p>}
+      {c.test.status === "stopped" && <p className="note" data-stopped-line="">This test is stopped. You can still charge or let go of unreviewed work after {REVIEW_DAYS} days, dispute a decision, rate the developer, and chat.</p>}
       {myRating && !rated.testerRevealed && <p className="note">You rated {dev}.</p>}
       {myRating && rated.testerRevealed && <p className="note">You rated {dev}: {myRating.stars} ★{myRating.comment ? ` · “${myRating.comment}”` : ""}</p>}
       {rated.developer && <p className="note">{dev} rated you: {rated.developer.stars} ★{rated.developer.comment ? ` · “${rated.developer.comment}”` : ""}</p>}
@@ -246,7 +249,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         <ul className="mt-3 space-y-1 text-sm text-slate-300">
           <li>Deliverables: {[c.writtenCents != null ? "written answers" : "", c.recordingCents != null ? "screen recording" : "", c.liveRateCents != null ? "live call" : ""].filter(Boolean).join(", ") || "none in your contract"}</li>
           <li>Prices (what you get): {termsLine(c, true)}</li>
-          <li>Time: {c.deadlineDays} day{c.deadlineDays === 1 ? "" : "s"} · due {fmtDate(c.dueAt)}</li>
+          <li>Due {fmtDate(c.dueAt)}{c.test.openUntil ? " (the test's Open until)" : ""}</li>
           {writtenQuestions(c).length > 0 && <li>Questions: {writtenQuestions(c).map((q) => `“${qText(q)}”`).join(", ")}</li>}
           <li>Agreed {fmtDate(c.joinedAt)}. Everything above is fixed in your contract; if {dev} changes the listing later you choose Switch or Keep.</li>
         </ul>
@@ -294,6 +297,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
               {sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && !meOff && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0 && (
                 <ChoiceBox paused={rulesPaused} seenAt={seenAt} sessionId={c.id} submissionId={sub.id} devName={dev} cents={chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0)} line={choiceLine(dev, key, chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0))} />
               )}
+              {/* (Batch 12 section 1) The developer deleted their account before Charge opened: this part can't be paid. */}
+              {sub && !sub.review && !sub.choiceOfferedAt && devGone && <p className="info" data-dev-deleted="">{devDeletedLine(devRealName)}</p>}
               {sub && chargedOwed.has(sub.id) ? <p className="info" data-charged-delayed="">{chargedDelayedLine(chargedOwed.get(sub.id)!)}</p> : sub && delayedSubs.has(sub.id) ? <p className="info">Payment for this part may be delayed.</p> : sub?.review && <TesterReview dev={dev} extras={extraRows.filter((p) => p.submissionId === sub.id)} off={meOff} delayed={disputeOwed.has(sub.id)} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} />}
             </li>
           ))}
@@ -305,7 +310,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
               {c.liveRateCents != null && <span className={`badge ${c.liveRequired ? "border-amber-300/40 text-amber-200" : ""}`}>{c.liveRequired ? "Required" : "Not required"}</span>}
             </p>
             <p className="text-slate-400">{c.liveRateCents == null ? NOT_LISTED : `In your contract · ${c.liveRateCents === 0 ? "free" : `${money(testerShare(c.liveRateCents))}/h for you`}`}{` · Paid so far ${money(liveCalls.reduce((a, x) => a + (partPaid.get(x.id) ?? 0), 0))}`}</p>
-            {c.calls.filter((x) => !x.review && x.status === "booked" && x.startsAt <= now).map((x) => (
+            {c.calls.filter((x) => !x.review && x.status === "booked" && x.startsAt <= now).map((x) => devGone ? <p key={x.id} className="info" data-dev-deleted="">Live call on {fmtDateTime(x.startsAt)}: {devDeletedLine(devRealName)}</p> : (
               <p key={x.id} className="info">
                 Live call on {fmtDateTime(x.startsAt)}: waiting for {dev} to pay. {partLine(callReference(x.rateCents, x.actualMinutes ?? x.minutes).cents, partPaid.get(x.id) ?? 0)}{failedCalls.has(x.id) && ` ${DELAYED_CALL_LINE}`}
               </p>
@@ -410,7 +415,7 @@ type Disp = { status: string; decidedCents: number | null; decisionNote: string;
 /** What the developer did with a piece, as the tester reads it (they see what they get; never holds or chargebacks). */
 function TesterReview({ sessionId, kind, id, review, dispute, delayed = false, off = false, dev = "The developer", extras = [] }: { dev?: string; /** (Batch 9) extra pays on this piece, with their notes */ extras?: { amountCents: number; note: string; createdAt: Date }[]; off?: boolean; /** A raise decided while the developer was on a hold: owed, paid when they pay it. */ delayed?: boolean; sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
   // (Batch 10) Every part the developer reviewed can be disputed once, listed or not (not the tester's own Charge or Let it go).
-  const may = canDispute(review.amountCents, review.agreedCents, !!dispute, review.reason === CHARGED_BY_TESTER || review.reason === LET_GO_BY_TESTER).ok;
+  const may = canDispute(review.amountCents, review.agreedCents, !!dispute, byTesterChoice(review.reason)).ok;
   return (
     <div className="space-y-2 rounded-lg bg-white/[0.03] p-3 text-sm">
       {review.rejected ? (

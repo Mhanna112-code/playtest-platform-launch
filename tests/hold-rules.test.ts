@@ -4,10 +4,10 @@ import * as R from "@/lib/rules";
 describe("payment hold, auto-pay and Open until rules", () => {
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
   const now = new Date("2026-11-10T12:00:00Z");
-  it("auto-pay pays the listing amount; extra work $0; 14 days after sending; 3 days to pay a failed charge", () => {
+  it("auto-pay pays the listing amount; extra work $0; (batch 12) 7 days after sending; 3 days to pay a failed charge", () => {
     expect(R.autoPayAmount(1000)).toBe(1000);
     expect(R.autoPayAmount(null)).toBe(0);
-    expect(R.payByFrom(new Date("2026-11-01T00:00:00Z")).toISOString()).toBe("2026-11-15T00:00:00.000Z");
+    expect(R.payByFrom(new Date("2026-11-01T00:00:00Z")).toISOString()).toBe("2026-11-08T00:00:00.000Z");
     expect(R.owedUntilFrom(new Date("2026-11-01T00:00:00Z")).toISOString()).toBe("2026-11-04T00:00:00.000Z");
   });
   it("a hold moves dates on by the length of the pause", () => {

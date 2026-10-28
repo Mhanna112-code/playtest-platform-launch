@@ -24,7 +24,7 @@ import { rejoinAskLine } from "@/lib/server/joining";
 import { pronouns } from "@/lib/format";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PAUSE_CLOSE_DAYS, pauseReasons } from "@/lib/pause";
-import { HOLD_APPROVAL_AFTER, testerPayable } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, REVIEW_DAYS, testerPayable } from "@/lib/rules";
 
 export const metadata = { title: "Home · Playtest" };
 export const dynamic = "force-dynamic";
@@ -256,7 +256,6 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
                         <div className="flex flex-wrap gap-2">
                           <PartBadges written={t.writtenCents != null} recording={t.recordingCents != null} live={t.liveRateCents != null} />
                           <span className="badge">{t.joinMode === "invite" ? "Invite only" : t.joinMode === "apply" ? "Approved only" : "Anyone can join"}</span>
-                          <span className="badge" title="Each tester's deadline counts from when they join"><CalendarClock className="h-3.5 w-3.5" /> {t.deadlineDays} days per tester</span>
                           {t.openUntil && <span className="badge">Open until {fmtDate(t.openUntil)}</span>}
                           {t._count.accessKeys > 0 && <span className="badge"><KeyRound className="h-3.5 w-3.5" /> {plural(keysFree.get(t.id) ?? 0, "key")} left</span>}
                           {nInvited > 0 && <span className="badge">{plural(nInvited, "invite")} waiting</span>}
@@ -345,7 +344,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const pendingCents = waiting.reduce((n, { s }) => n + (s.agreedCents != null ? testerShare(s.agreedCents) : 0), 0);
   // "To do": every part not sent yet (newest test first), each with a Send work button that opens the part. A test can be here and in Charge or cancel at once.
   const todoParts = working.flatMap((c) => toSend(c).map((p) => ({ c, p })));
-  // "Charge or cancel": unreviewed parts where Charge has opened (14 days and the test's Open until), by test, newest first; hidden while suspended.
+  // "Charge or cancel": unreviewed parts where Charge has opened (7 days and the test's Open until), by test, newest first; hidden while suspended.
   const paidFor = (sid: string) => payments.filter((p) => p.submissionId === sid && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
   const chargeable = suspended ? [] : contracts
     .map((c) => ({ c, parts: c.submissions.filter((s) => !s.review && s.choiceOfferedAt && chargeAmount(s.agreedCents, paidFor(s.id)) > 0) }))
@@ -409,7 +408,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       {chargeable.length > 0 && (
         <section className="space-y-3" id="charge-or-cancel">
           {sectionTitle(<Banknote className="h-5 w-5 text-amber-300" />, "Charge or cancel", chargeable.length)}
-          <p className="note">Parts the developer hasn&apos;t reviewed once 14 days have passed since you sent them and the test&apos;s Open until has passed: charge for them, or let them go.</p>
+          <p className="note">Parts the developer hasn&apos;t reviewed once {REVIEW_DAYS} days have passed since you sent them and the test&apos;s Open until has passed: charge for them, or let them go.</p>
           <LongList shown={3} tall="max-h-72" className="space-y-2">
             {chargeable.map(({ c, parts }) => (
               <li key={c.id}>

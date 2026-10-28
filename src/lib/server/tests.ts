@@ -84,7 +84,9 @@ export function parseListing(body: Record<string, unknown>, partial = false): Pa
   if (has("liveRequired")) out.liveRequired = body.liveRequired === true;
   if (has("liveRateCents")) out.liveRateCents = price(body.liveRateCents, "live call rate");
   if (has("liveMinutes")) out.liveMinutes = body.liveMinutes === null || body.liveMinutes === "" ? null : int(body.liveMinutes);
-  if (has("deadlineDays")) out.deadlineDays = int(body.deadlineDays);
+  // (Batch 12 section 6) No "days after joining" field any more: a value sent by an old page is kept, unused for new joins.
+  // Post stores a value (an old page's, or 7) that new joins never use; Edit ignores it.
+  if (!partial) { const d = int(body.deadlineDays); out.deadlineDays = Number.isInteger(d) && d >= 1 && d <= 90 ? d : 7; }
   if (has("joinMode")) out.joinMode = ["anyone", "apply", "invite"].includes(body.joinMode as string) ? (body.joinMode as string) : "anyone";
   if (has("openUntil")) {
     const v = str(body.openUntil, 40);
@@ -333,6 +335,11 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     });
     if (keysChanged) {
       await applyKeyChange(tx, testId, plan.toAdd, plan.removable);
+    }
+    // (Owner, Oct 29, batch 12 section 6) Open until is every tester's deadline: moving it later moves every working tester's deadline with it.
+    if (fields.includes("openUntil") && next.openUntil) {
+      const ou = new Date(next.openUntil);
+      await tx.contract.updateMany({ where: { testId, status: "working", dueAt: { lt: ou } }, data: { dueAt: ou } });
     }
     // (F) Listing info (description, devices, languages): shown to working testers and on the join page; stops once.
     const info = fields.filter((f) => INFO_FIELDS.includes(f));

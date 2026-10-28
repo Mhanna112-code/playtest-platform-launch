@@ -24,6 +24,9 @@ export const PERK_LIST = ["Several open tests at once (free: one at a time)", "A
 /** "Next round needs a subscription ($7/month)." / "Approved-only testers need a subscription ($7/month)." */
 export const perkLine = (perk: Perk) => `${PERKS[perk]} ${perk === "approved" ? "need" : "needs"} a subscription (${SUBSCRIPTION_PRICE}).`;
 /** (Section 2) Posting a second open test on the free plan. */
+/** (Owner, Oct 29, batch 12 section 4) The most open tests (Open, Full or Paused) a developer can have at once. */
+export const MAX_OPEN_TESTS = 10;
+export const TOO_MANY_OPEN_LINE = "You have 10 open tests, the most you can have at once. Stop or close one to post another.";
 export const SECOND_TEST_LINE = `You already have an open test. Subscribe (${SUBSCRIPTION_PRICE}) to run several at once.`;
 export const SUBSCRIPTION_ENDED = "Your subscription ended.";
 export const SUBSCRIBE_WAITS = "You can subscribe once your account is active again.";

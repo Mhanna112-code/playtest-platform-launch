@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money } from "@/lib/format";
-import { CHARGED_BY_TESTER, LET_GO_BY_TESTER, stopOnce, type TestEventLike } from "@/lib/rules";
+import { TESTER_CHOICE_REASONS, stopOnce, type TestEventLike } from "@/lib/rules";
 import { rowsOf } from "@/lib/callRows";
 import { HttpError } from "./http";
 import { asLines, ownChanges, seenOf, tabOf, testerPaymentChanges, withRenamed } from "./live";
@@ -24,7 +24,7 @@ export async function testerChanges(testerId: string, contractId: string, testId
   const [offers, reviews, calls, devReqs, mine] = await Promise.all([
     // (Owner, reason A) An offer still waiting (or replaced by a newer one) stops the press even when the top box already showed it; one the tester already decided on does not.
     db.termsOffer.findMany({ where: { contractId, createdAt: { gt: termsFrom < seenAt ? termsFrom : seenAt }, status: { in: ["open", "superseded"] } } }),
-    db.review.findMany({ where: { contractId, createdAt: { gt: seenAt }, reason: { notIn: [CHARGED_BY_TESTER, LET_GO_BY_TESTER] } }, include: { submission: true } }),
+    db.review.findMany({ where: { contractId, createdAt: { gt: seenAt }, reason: { notIn: TESTER_CHOICE_REASONS } }, include: { submission: true } }),
     db.call.findMany({ where: { contractId, cancelledAt: { gt: seenAt }, cancelledBy: { not: "tester" } } }),
     db.callRequest.findMany({ where: { contractId, fromSide: "developer", updatedAt: { gt: seenAt } } }),
     db.callRequest.findMany({ where: { contractId, fromSide: "tester", status: { in: ["booked", "declined"] }, decidedAt: { gt: seenAt } } }),

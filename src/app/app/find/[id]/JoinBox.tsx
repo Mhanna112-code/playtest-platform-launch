@@ -13,7 +13,7 @@ import { noGaps, PROFILE_COVERS, type GapAsk, type Gaps } from "@/lib/gaps";
  * Join or Apply to join. Stops once (box under the button) if anything about the listing changed since the page loaded;
  * the second press goes ahead on the current listing. No offers or counter-offers here.
  */
-export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; brokenKey?: boolean; testId: string; seenAt: string; mode: string; invited: boolean; inviteId?: string | null; application: { status: string; changed: boolean; kind?: string } | null; missing: Gaps; needs: { devices: string[]; languages: string[] }; devName: string; spotsLeft: number; days: number; dueIfNow: string }) {
+export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; brokenKey?: boolean; testId: string; seenAt: string; mode: string; invited: boolean; inviteId?: string | null; application: { status: string; changed: boolean; kind?: string } | null; missing: Gaps; needs: { devices: string[]; languages: string[] }; devName: string; spotsLeft: number; dueIfNow: string }) {
   const router = useRouter();
   // (Design doc 7.3) The NDA is accepted before joining or applying; a returning tester says whether the key they had works again.
   const [nda, setNda] = useState(false);
@@ -168,7 +168,8 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       {rejoining ? (
         <p className="text-sm text-slate-300">If {p.devName} accepts, your session comes back on the current listing with the time you had left{p.timeBack ? `: ${p.timeBack}` : ""}.</p>
       ) : (
-        <p className="text-sm text-slate-300">You&apos;ll have {p.days} day{p.days === 1 ? "" : "s"}{applying ? " from when you're approved" : ""} (until {p.dueIfNow} if {applying ? "you're approved" : "you join"} now).</p>
+        // (Batch 12 section 6) Every tester's deadline is Open until.
+        <p className="text-sm text-slate-300" data-join-deadline="">Your deadline: {p.dueIfNow}</p>
       )}
     </div>
   );

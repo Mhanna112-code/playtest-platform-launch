@@ -1,10 +1,10 @@
 import { notFound, redirect } from "next/navigation";
-import { ArrowRight, BarChart3, CalendarClock, CheckCircle2, Clock, FileSignature, FileText, HelpCircle, Languages, Lock, Monitor, Radio, Timer, Users, Video } from "lucide-react";
+import { ArrowRight, BarChart3, CheckCircle2, Clock, FileSignature, FileText, HelpCircle, Languages, Lock, Monitor, Radio, Timer, Users, Video } from "lucide-react";
 import { CategoryBadges } from "@/components/Category";
 import { CategoryTile, mainCategory, PartBadges } from "@/components/Ui";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, money } from "@/lib/format";
-import { termsLine, testerShare, testPaused } from "@/lib/rules";
+import { REVIEW_DAYS, termsLine, testerShare, testPaused } from "@/lib/rules";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { asListing, needsLines } from "@/lib/server/tests";
 import { JoinBox } from "./JoinBox";
@@ -65,7 +65,9 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   }
   const closed = paused || t.status !== "open" || testersIn >= t.spots || (t.openUntil && t.openUntil < new Date());
   const dev = displayName(t.developer);
-  const dueIfNow = fmtDate(new Date(Date.now() + t.deadlineDays * 86_400_000));
+  // (Owner, Oct 29, batch 12 section 6) Every tester's deadline is Open until: "Your deadline: <date> (in 2 days 5 h)".
+  const dueAt = t.openUntil ?? new Date(Date.now() + t.deadlineDays * 86_400_000);
+  const dueIfNow = `${fmtDate(dueAt)} (in ${leftText(dueAt.getTime() - Date.now(), true)})`;
   const parts = [
     { key: "written" as const, on: t.writtenCents != null, cents: t.writtenCents, required: t.writtenRequired, title: "Written answers", icon: <FileText className="h-4 w-4" /> },
     { key: "recording" as const, on: t.recordingCents != null, cents: t.recordingCents, required: t.recordingRequired, title: "Screen recording", icon: <Video className="h-4 w-4" /> },
@@ -104,7 +106,6 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           {t.ndaText && <span className="badge"><FileSignature className="h-3.5 w-3.5" /> NDA</span>}
           {t.devices.length > 0 && <span className="badge"><Monitor className="h-3.5 w-3.5" /> {t.devices.join(" · ")}</span>}
           {t.languages.length > 0 && <span className="badge"><Languages className="h-3.5 w-3.5" /> {t.languages.join(", ")}</span>}
-          {t.status === "open" && <span className="badge"><CalendarClock className="h-3.5 w-3.5" /> {t.deadlineDays} day{t.deadlineDays === 1 ? "" : "s"} to finish</span>}
           <span className="badge"><Users className="h-3.5 w-3.5" /> {plural(testersIn, "tester")} on this test</span>
         </div>
         {t.description && <p className="whitespace-pre-wrap text-slate-300">{t.description}</p>}
@@ -122,7 +123,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         <section className="card flex flex-wrap items-start gap-3 border-emerald-400/30">
           <div className="min-w-0 flex-1 space-y-1">
             <p className="font-semibold text-white">{dev} invited you</p>
-            <p className="text-sm text-slate-300">You&apos;ll have {t.deadlineDays} day{t.deadlineDays === 1 ? "" : "s"} (until {dueIfNow} if you accept now).</p>
+            <p className="text-sm text-slate-300" data-join-deadline="">Your deadline: {dueIfNow}</p>
             <p className="text-xs text-slate-400">Join below straight away{t.joinMode === "apply" ? ", no need to apply" : ""}.</p>
           </div>
           <NoThanksButton inviteId={invite.id} seenAt={seenAt} />
@@ -174,9 +175,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           <b>What you get:</b> {termsLine(l, true)}. You&apos;re paid for each part you deliver.
         </p>
         <div className="flex flex-wrap gap-2 text-xs text-slate-300">
-          {t.status === "open" && <span className="chip" title="Your clock starts when you're in"><Clock className="h-3.5 w-3.5" /> {t.deadlineDays} day{t.deadlineDays === 1 ? "" : "s"} to finish, counted from when you join</span>}
-          {t.openUntil && <span className="chip"><CalendarClock className="h-3.5 w-3.5" /> New testers can join until {fmtDate(t.openUntil)}</span>}
-          <span className="chip" title="If the developer doesn't review it in time, you choose: charge them, or let it go"><Timer className="h-3.5 w-3.5" /> Not reviewed in 14 days? You choose</span>
+          {t.status === "open" && <span className="chip" title="Every tester's deadline is the test's Open until"><Clock className="h-3.5 w-3.5" /> Your deadline: {dueIfNow}</span>}
+          <span className="chip" title="If the developer doesn't review it in time, you choose: charge them, or let it go"><Timer className="h-3.5 w-3.5" /> Not reviewed in {REVIEW_DAYS} days? You choose</span>
           <span className="chip" title="Later edits to the test come to you as a request: switch to the new terms or keep yours"><Lock className="h-3.5 w-3.5" /> Locked in when you join</span>
           <span className="chip"><CheckCircle2 className="h-3.5 w-3.5" /> {t.spots - testersIn} spot{t.spots - testersIn === 1 ? "" : "s"} left</span>
         </div>
@@ -232,7 +232,6 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             needs={{ devices: t.devices, languages: t.languages }}
             devName={dev}
             spotsLeft={t.spots - testersIn}
-            days={t.deadlineDays}
             dueIfNow={dueIfNow}
             application={await db.application.findUnique({ where: { testId_testerId: { testId: t.id, testerId: u.id } } }).then((a) => (a ? { status: a.status, changed: !!a.changedAt, kind: a.kind } : null))}
           />

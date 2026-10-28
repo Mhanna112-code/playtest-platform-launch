@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { CHARGED_BY_TESTER, LET_GO_BY_TESTER } from "@/lib/rules";
+import { byTesterChoice } from "@/lib/rules";
 import { earnedLimit, type SentPiece } from "@/lib/capacity";
 
 const DAY = 86_400_000;
@@ -19,7 +19,7 @@ export async function testerCapacity(developerId: string) {
     db.submission.findMany({ where: { contractId: { in: contractIds } }, include: { review: true } }),
     db.call.findMany({ where: { contractId: { in: contractIds }, review: { isNot: null } }, include: { review: true } }),
   ]);
-  const byTester = (reason: string, auto: boolean) => auto || reason === CHARGED_BY_TESTER || reason === LET_GO_BY_TESTER;
+  const byTester = (reason: string, auto: boolean) => auto || byTesterChoice(reason);
   const pieces: SentPiece[] = [];
   // Paid work only (free parts aren't counted, as in the full app).
   for (const s of subs) {

@@ -17,11 +17,11 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
   {
     title: "2. Posting a test (developers)",
     points: [
-      "A test states its terms up front: the parts you ask for (written answers, a screen recording, a live call), the price of each, your questions, the devices and languages it needs, how many days each tester has, how many testers (spots), and who can join (anyone who matches, people you approve, or invite only).",
+      "A test states its terms up front: the parts you ask for (written answers, a screen recording, a live call), the price of each, your questions, the devices and languages it needs, Open until (every tester's deadline), how many testers (spots), and who can join (anyone who matches, people you approve, or invite only).",
       "A live call's hourly rate is at least $10 an hour (or free); each call request picks its own length (10 to 180 minutes). Each part can be marked Required or Not required: it is a label, it blocks nothing.",
       `Developers post tests for free and pay only for the work they accept. A developer can take up to a number of testers per test that starts at 10 and grows with good ratings and reviews (never more than 50). A tester can be in up to ${MAX_ACTIVE_TESTS} tests at once.`,
       "Developers pay by card when they press Pay on a piece of work. A card is needed before paying. A failed payment is owed and retried daily; an unpaid amount past its date pauses your tests until it is paid.",
-      "Once a tester joins, the terms they agreed to are saved and are what their work is judged against, even if the test is edited later. If you change prices, parts, questions, the deadline, devices or languages, or the description, each working tester is offered the new terms and chooses Switch or Keep; work already sent keeps the price it was sent under.",
+      "Once a tester joins, the terms they agreed to are saved and are what their work is judged against, even if the test is edited later. If you change prices, parts, questions, devices or languages, or the description, each working tester is offered the new terms and chooses Switch or Keep; work already sent keeps the price it was sent under. Moving Open until later moves every working tester's deadline with it.",
       "Tests can be stopped for good by the developer; the work already sent still waits to be paid or rejected, and calls ahead are cancelled.",
     ],
   },

@@ -103,8 +103,8 @@ describe("batch 9 item 2: an unlisted part has only Pay", () => {
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("{dev} paid $0 for this");
   });
 
-  it("(DEFAULT) the developer's reminders stop 14 days after it was sent; the row stays", async () => {
-    expect(R.UNLISTED_REMIND_DAYS).toBe(14);
+  it("(DEFAULT) the developer's reminders stop 7 days (batch 12) after it was sent; the row stays", async () => {
+    expect(R.UNLISTED_REMIND_DAYS).toBe(7);
     const { dev, sub } = await sentWork(null);
     await db.submission.update({ where: { id: sub.id }, data: { updatedAt: new Date(Date.now() - 4 * DAY) } });
     await runDaily();

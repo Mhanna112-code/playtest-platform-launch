@@ -9,7 +9,6 @@ import { closeRequests } from "./requests";
 import { chargeDeferred, markPaused, resumeTests, shiftAfterPause } from "./holds";
 import { sendWaitingTransfer } from "./stripe";
 import { accountEvent } from "./reports";
-import { devDeleteBlockers, devDeleteRefusal } from "./deletion";
 
 // (Design doc 2 and 11.4; owner, Oct 27) Suspensions and deletion.
 //   Developer suspended (or on a payment / chargeback hold: ONE state, see lib/restricted.ts): all their tests are paused (testers stay in them; (owner, Oct 28 afternoon) under
@@ -145,16 +144,14 @@ export async function reinstateAccount(userId: string) {
  * History stays; holds, chargebacks and obligations are never cleared. `by`: "self" | "admin".
  * (Owner, Oct 28) A tester: they leave every test, calls ahead are cancelled, invites and applications are cancelled and open disputes are withdrawn; work they sent that
  * isn't paid yet can no longer be paid, charged or disputed (delayed payments still reach their Stripe account when the developer pays).
- * (DEFAULT) A developer deleting their own account is refused while devDeleteBlockers lists anything (work to pay or reject, an open dispute, a hold).
+ * (Owner, Oct 29, batch 12 section 1) A developer can always delete their own account: parts already open to charging stay open, work under review never opens Charge,
+ * open disputes are still decided, and what they owe stays owed.
  */
 export async function deleteAccount(userId: string, by: "self" | "admin", reason = "") {
   const u = await db.user.findUnique({ where: { id: userId } });
   if (!u) throw new HttpError(404, "not_found", "That account doesn't exist.");
   if (u.deletedAt) throw new HttpError(409, "deleted", "That account was already deleted.");
-  if (by === "self" && u.isDeveloper) {
-    const blockers = await devDeleteBlockers(userId);
-    if (blockers.length) throw new HttpError(409, "delete_blocked", devDeleteRefusal(blockers), { blockers });
-  }
+  // (Owner, Oct 29, batch 12 section 1) A developer can always delete their account (the warning lists what is left; nothing blocks it).
   // (Batch 8) The subscription ends at once, with no refund.
   if (u.isDeveloper) await (await import("./subscription")).endOnDelete(userId);
   await db.user.update({ where: { id: userId }, data: { deletedAt: new Date(), deletedBy: by, deleteReason: reason.slice(0, 500) } });

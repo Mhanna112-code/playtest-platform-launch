@@ -7,7 +7,7 @@ import {
 const listing = (over: Partial<Listing> = {}): Listing => ({
   productName: "Harbor Run", mature: false, matureWhy: "", ndaText: "", title: "Harbor Run", description: "A boat game", buildUrl: "https://example.com/build", categories: ["Game"],
   devices: ["Windows PC"], languages: ["English"], spots: 5, writtenCents: 1000, recordingCents: 1500,
-  liveRateCents: 3000, liveMinutes: 30, deadlineDays: 7, questions: ["What did you like?"], openUntil: null, joinMode: "anyone", ...over,
+  liveRateCents: 3000, liveMinutes: 30, deadlineDays: 7, questions: ["What did you like?"], openUntil: new Date(Date.now() + 12 * 86_400_000).toISOString(), joinMode: "anyone", ...over,
 });
 const at = (min: number) => new Date(Date.UTC(2026, 10, 5, 15, min));
 const ev = (kind: string, min: number, text = kind, version?: number) => ({ kind, text, createdAt: at(min), version });
@@ -123,14 +123,17 @@ describe("listing checks", () => {
     expect(checkListing(listing({ openUntil: "2020-01-01" }))).toContain("Open until must be a date in the future.");
     expect(checkListing(listing({ openUntil: new Date(Date.now() + 12 * 86_400_000).toISOString() }))).toEqual([]);
   });
-  it("(design doc 11.5) the deadline must leave 3 days inside Open until, counted from when the test opened", () => {
+  it("(batch 12 section 6) Open until is required, 3 to 30 days ahead on Post; within 30 days on Edit", () => {
     const now = new Date("2026-11-01T12:00:00Z");
-    const l = (openUntil: string, deadlineDays = 7) => listing({ openUntil, deadlineDays });
-    expect(checkListing(l("2026-11-10T23:59:59Z"), 0, now, { openedAt: now })).toEqual(["Set Open until to Nov 11 or later to allow a 7-day deadline."]);
-    expect(checkListing(l("2026-11-11T23:59:59Z"), 0, now, { openedAt: now })).toEqual([]);
-    expect(checkListing(l("2026-11-10T23:59:59Z"), 0, now, { openedAt: now, edit: true })).toEqual(["Extend Open until to Nov 11 or later to allow a 7-day deadline."]);
-    // Edit only checks it when the deadline or Open until changed.
-    expect(checkListing(l("2026-11-10T23:59:59Z"), 0, now, { openedAt: now, edit: true, changed: new Set(["description"]) })).toEqual([]);
+    const l = (openUntil: string | null) => listing({ openUntil });
+    expect(checkListing(l(null), 0, now)).toEqual(["Set Open until 3 to 30 days from today: it's every tester's deadline too."]);
+    expect(checkListing(l("2026-11-03T23:59:59Z"), 0, now)).toEqual(["Set Open until 3 to 30 days from today: it's every tester's deadline too."]);
+    expect(checkListing(l("2026-11-04T23:59:59Z"), 0, now)).toEqual([]);
+    expect(checkListing(l("2026-12-01T23:59:59Z"), 0, now)).toEqual([]);
+    expect(checkListing(l("2026-12-02T23:59:59Z"), 0, now)).toEqual(["Open until can be at most 30 days from today."]);
+    expect(checkListing(l("2026-11-03T23:59:59Z"), 0, now, { edit: true })).toEqual([]);
+    // Edit only checks it when Open until changed (old tests keep working).
+    expect(checkListing(l(null), 0, now, { edit: true, changed: new Set(["description"]) })).toEqual([]);
   });
   it("(design doc 4) product, title, instructions and the Mature note", () => {
     const now = new Date();
@@ -148,11 +151,12 @@ describe("listing checks", () => {
 });
 
 describe("contract snapshot at join", () => {
-  it("copies every term and counts the deadline from the join", () => {
+  it("copies every term; (batch 12) the deadline is the test's Open until (an old test with none keeps its days)", () => {
     const joined = new Date("2026-11-01T10:00:00Z");
-    const c = contractSnapshot({ ...listing(), listingVersion: 3 }, joined, true);
-    expect(c).toMatchObject({ listingVersion: 3, writtenCents: 1000, recordingCents: 1500, liveRateCents: 3000, liveMinutes: null, deadlineDays: 7, keepPrivate: true });
-    expect(c.dueAt.toISOString()).toBe("2026-11-08T10:00:00.000Z");
+    const c = contractSnapshot({ ...listing({ openUntil: "2026-11-20T23:59:59.000Z" }), listingVersion: 3 }, joined, true);
+    expect(c).toMatchObject({ listingVersion: 3, writtenCents: 1000, recordingCents: 1500, liveRateCents: 3000, liveMinutes: null, keepPrivate: true });
+    expect(c.dueAt.toISOString()).toBe("2026-11-20T23:59:59.000Z");
+    expect(contractSnapshot({ ...listing({ openUntil: null }), listingVersion: 3 }, joined, true).dueAt.toISOString()).toBe("2026-11-08T10:00:00.000Z");
   });
   it("is a copy: changing the listing afterwards doesn't change it", () => {
     const l = { ...listing(), listingVersion: 1 };
@@ -162,8 +166,8 @@ describe("contract snapshot at join", () => {
     expect(c.questions).toEqual(["What did you like?"]);
     expect(c.writtenCents).toBe(1000);
   });
-  it("terms line", () => expect(termsLine(listing())).toBe("Written $10.00 · Recording $15.00 · Live call $30.00/h · 7 days"));
-  it("testers see what they get (80%)", () => expect(termsLine(listing(), true)).toBe("Written $8.00 · Recording $12.00 · Live call $24.00/h · 7 days"));
+  it("terms line", () => expect(termsLine(listing())).toBe("Written $10.00 · Recording $15.00 · Live call $30.00/h"));
+  it("testers see what they get (80%)", () => expect(termsLine(listing(), true)).toBe("Written $8.00 · Recording $12.00 · Live call $24.00/h"));
 });
 
 describe("stop once", () => {

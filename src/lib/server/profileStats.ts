@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { compact } from "@/lib/format";
-import { CHARGED_BY_TESTER, LET_GO_BY_TESTER } from "@/lib/rules";
+import { LET_GO_BY_TESTER, chargedByTester } from "@/lib/rules";
 import { ratingSummary } from "./ratings";
 
 const DAY = 86_400_000;
@@ -42,7 +42,7 @@ export async function developerStats(developerId: string) {
   const share = (f: (x: number) => boolean) => (shares.length ? shares.filter(f).length / shares.length : null);
   const avg = shares.length ? shares.reduce((a, x) => a + x, 0) / shares.length : null;
   // Typical review: by hand only (not the testers' charges), from sending (or the call's end) to the decision.
-  const byTester = (r: (typeof reviews)[number]) => r.reason === CHARGED_BY_TESTER || r.auto;
+  const byTester = (r: (typeof reviews)[number]) => chargedByTester(r.reason) || r.auto;
   const days = decided
     .filter((r) => !byTester(r))
     .map((r) => {

@@ -29,7 +29,7 @@ describe("Charge / Let it go at day 14", () => {
   it("offers the tester the choice (bell + email), then they charge the listing amount", async () => {
     const { tester, sessionId, sub, dev } = await waiting14();
     await cron();
-    const line = "Nora Lane didn't review your written answers in 14 days: charge $10.00 or let it go";
+    const line = "Nora Lane didn't review your written answers in 7 days: charge $10.00 or let it go";
     expect(await db.notification.count({ where: { userId: tester.user.id, text: line } })).toBe(1);
     // (Owner, Oct 26) One email lists everything new: the daily job's summary carries the line.
     expect((await db.outboxEmail.findFirstOrThrow({ where: { to: tester.user.email, subject: { startsWith: "Your Playtest summary" } } })).text).toContain(line);

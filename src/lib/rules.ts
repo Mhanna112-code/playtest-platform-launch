@@ -190,6 +190,8 @@ export const TERM_FIELDS = LISTING_FIELDS.filter((f) => f !== "spots");
 
 export const MAX_SPOTS = LIMITS.spots.max;
 
+/** (Batch 12 section 6) Open until's range on Post. */
+export const OPEN_UNTIL_RANGE = "Set Open until 3 to 30 days from today: it's every tester's deadline too.";
 /** The day a deadline needs Open until to reach: the test's opening + the deadline's days + the buffer (11.5: "must leave 3 days inside Open until"). */
 export function openUntilNeeded(openedAt: Date, deadlineDays: number) {
   return new Date(openedAt.getTime() + (deadlineDays + LIMITS.deadlineBufferDays) * 86_400_000);
@@ -214,16 +216,16 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
   const errs: string[] = [];
   const isNew = (f: string) => !ctx.changed || ctx.changed.has(f);
   if (!["anyone", "apply", "invite"].includes(l.joinMode ?? "anyone")) errs.push("Choose who can join: anyone, apply, or invite only.");
-  if (l.openUntil != null) {
-    const d = new Date(l.openUntil);
-    if (isNaN(d.getTime())) errs.push("Enter the Open until date like 2026-12-01.");
+  // (Owner, Oct 29, batch 12 section 6) Open until is required and is every tester's deadline: on Post 3 to 30 days after today; Edit moves it only later, within 30 days of
+  // today (a pause lifting can still push it further). Old tests are only checked when Edit touches it.
+  if (isNew("openUntil")) {
+    const d = l.openUntil != null ? new Date(l.openUntil) : null;
+    const day = (n: number) => new Date(now.getTime() + n * 86_400_000).toISOString().slice(0, 10);
+    if (!d) errs.push(OPEN_UNTIL_RANGE);
+    else if (isNaN(d.getTime())) errs.push("Enter the Open until date like 2026-12-01.");
     else if (d.getTime() <= now.getTime()) errs.push("Open until must be a date in the future.");
-    else if (d.getTime() > now.getTime() + LIMITS.openUntilMaxDays * 86_400_000) errs.push("Open until can be at most a year ahead.");
-    // (11.5) The tester deadline must leave 3 days inside Open until, counted from when the test opened.
-    else if (Number.isInteger(l.deadlineDays) && l.deadlineDays >= 1 && (isNew("openUntil") || isNew("deadlineDays"))) {
-      const need = openUntilNeeded(ctx.openedAt ?? now, l.deadlineDays);
-      if (d.toISOString().slice(0, 10) < need.toISOString().slice(0, 10)) errs.push(`${ctx.edit ? "Extend" : "Set"} Open until to ${shortDay(need)} or later to allow a ${l.deadlineDays}-day deadline.`);
-    }
+    else if (d.toISOString().slice(0, 10) > day(LIMITS.openUntilMaxDays)) errs.push(`Open until can be at most ${LIMITS.openUntilMaxDays} days from today.`);
+    else if (!ctx.edit && d.toISOString().slice(0, 10) < day(LIMITS.openUntilMinDays)) errs.push(OPEN_UNTIL_RANGE);
   }
   // (4) Product name and the test's own name: 60 characters each; the instructions 1,000, required.
   if (!l.productName?.trim()) { if (isNew("productName")) errs.push("Enter the product name."); }
@@ -237,7 +239,6 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
   if (!l.categories?.length) errs.push("Tick at least one category.");
   if (!Number.isInteger(l.spots) || l.spots < LIMITS.spots.min || l.spots > MAX_SPOTS) errs.push(`Spots must be a whole number from 1 to ${MAX_SPOTS}.`);
   else if (l.spots < testersIn) errs.push(`Spots can't go below the ${testersIn} tester${testersIn === 1 ? "" : "s"} already in.`);
-  if (!Number.isInteger(l.deadlineDays) || l.deadlineDays < LIMITS.deadlineDays.min || l.deadlineDays > LIMITS.deadlineDays.max) errs.push("Testers' deadline must be from 1 to 90 days after they join.");
   if (l.writtenCents == null && l.recordingCents == null && l.liveRateCents == null) errs.push("Choose at least one kind of feedback.");
   const part = (c: number | null, name: string, field: "writtenCents" | "recordingCents", key: "written" | "recording") => {
     if (c == null || c === 0) return;
@@ -278,19 +279,20 @@ export function contractSnapshot(test: Listing & { listingVersion: number }, joi
     questions: [...test.questions],
     keepPrivate,
     joinedAt,
-    dueAt: new Date(joinedAt.getTime() + test.deadlineDays * 86_400_000),
+    // (Owner, Oct 29, batch 12 section 6) Every tester's deadline is the test's Open until (no extension for late joiners). An old test with no Open until keeps its days.
+    dueAt: test.openUntil ? new Date(test.openUntil) : new Date(joinedAt.getTime() + test.deadlineDays * 86_400_000),
   };
 }
 
 /** One-line summary of terms: "Written $7.50 · Recording $12.00 · Live call $30.00/h (30 min) · 7 days". */
-export function termsLine(t: Pick<Listing, "writtenCents" | "recordingCents" | "liveRateCents" | "liveMinutes" | "deadlineDays">, forTester = false) {
+export function termsLine(t: Pick<Listing, "writtenCents" | "recordingCents" | "liveRateCents" | "liveMinutes"> & { deadlineDays?: number }, forTester = false) {
   // Testers see what they get (80% of each price); the developer's side never shows the tester's share.
   const p = (c: number) => (c === 0 ? "free" : money(forTester ? testerShare(c) : c));
   const parts: string[] = [];
   if (t.writtenCents != null) parts.push(`Written ${p(t.writtenCents)}`);
   if (t.recordingCents != null) parts.push(`Recording ${p(t.recordingCents)}`);
   if (t.liveRateCents != null) parts.push(`Live call ${t.liveRateCents === 0 ? "free" : p(t.liveRateCents) + "/h"}`);
-  parts.push(`${t.deadlineDays} day${t.deadlineDays === 1 ? "" : "s"}`);
+  // (Batch 12 section 6) No "N days" any more: the deadline is Open until.
   return parts.join(" · ");
 }
 
@@ -458,14 +460,14 @@ export function joinCheck(t: JoinState, seenListingVersion: number, confirmed: b
 
 // ---------- Payment hold, auto-pay, Open until, invites (owner, Oct 22, newest) ----------
 
-export const REVIEW_DAYS = 14; // unpaid sent work is paid automatically after this
+export const REVIEW_DAYS = 7; // (Owner, Oct 29, batch 12 section 6) the review window: Charge opens at the later of Open until and this many days after a part was sent
 export const HOLD_APPROVAL_AFTER = 3;
 /** The label that replaces an exact hold count outside the profile totals (admin only). */
 export const MANY_HOLDS_LABEL = "More than 3 holds"; // (Owner, Oct 27) after a developer's 3rd payment hold, every later hold needs an admin's Approve to lift
 export const OWED_DAYS = 3; // (no longer used since Oct 27: a declined payment starts the hold at once)
 const DAY = 86_400_000;
 
-/** What gets paid automatically after 14 days: the listing amount (older rule; see autoPayFor). */
+/** What gets paid automatically after the review window: the listing amount (older rule; see autoPayFor). */
 export const autoPayAmount = (listingCents: number | null) => listingCents ?? 0;
 export const payByFrom = (sentAt: Date) => new Date(sentAt.getTime() + REVIEW_DAYS * DAY);
 export const owedUntilFrom = (failedAt: Date) => new Date(failedAt.getTime() + OWED_DAYS * DAY);
@@ -564,6 +566,8 @@ export function checkWrittenLength(texts: string[]): Check {
 export const testerPayable = (t: { deletedAt: Date | null; stripeAccountId: string | null; payoutsReady: boolean }) => !t.deletedAt || (!!t.stripeAccountId && t.payoutsReady);
 /** The same rule as a Prisma filter on a tester. */
 export const PAYABLE_TESTER: Prisma.UserWhereInput = { OR: [{ deletedAt: null }, { stripeAccountId: { not: null }, payoutsReady: true }] };
+/** (Owner, Oct 29, batch 12 section 1) The tester's part still under review when the developer deleted their account. */
+export const devDeletedLine = (dev: string) => `${dev} deleted their account, so this can't be paid.`;
 export const deletedNoPayoutsLine = (name: string) => `${name} deleted their account before setting up payouts, so this can't be paid.`;
 /** (Owner, Oct 29, batch 10) A hold lifted (paid, or a chargeback hold cleared) while an admin suspension is still on: bell and email, sent even with email Off. */
 /** (Owner, Oct 29, batch 10) The platform won a chargeback: the developer's bell and email, and (when they had already paid it back) the receipt line for the refund. */
@@ -700,11 +704,11 @@ export function emailDecision(pref: string, always: boolean): "send" | "summary"
 // (Owner, Oct 26) The tester's "Ask $" is gone: the Pay box always starts at the listing (or the call's agreed rate × length), and the Charge cap
 // is the listing minus what is already paid for that part. Old asks stay in the database, unused.
 
-/** Auto-pay at 14 days: contract parts only, the listing amount; null = never auto-paid. */
+/** Auto-pay after the review window: contract parts only, the listing amount; null = never auto-paid. */
 export const autoPayFor = (listingCents: number | null) => (listingCents == null ? null : listingCents);
 export const REMIND_DAYS = 3;
 /** (Owner, Oct 28 night, batch 9, DEFAULT) A part that isn't listed: the developer's review reminders stop this many days after it was sent (the Needs you row stays until paid, even $0). */
-export const UNLISTED_REMIND_DAYS = 14;
+export const UNLISTED_REMIND_DAYS = 7; // (batch 12 section 6)
 
 /** Cancel a call any time; within 24 hours of it a reason is required (the other side sees it). */
 export const cancelNeedsReason = (startsAt: Date, now: Date) => startsAt.getTime() - now.getTime() < CANCEL_HOURS * 3_600_000;
@@ -751,11 +755,11 @@ export function checkDevSide(text: string, already: boolean): Check {
   return yes;
 }
 
-/** Day 14 on an unreviewed contract part: the tester chooses. */
+/** The review window passed on an unreviewed contract part: the tester chooses. */
 export const choiceLine = (devName: string, kind: string, cents: number) =>
-  `${devName} didn't review your ${kind === "recording" ? "recording" : "written answers"} in 14 days: charge ${money(cents)} or let it go`;
+  `${devName} didn't review your ${kind === "recording" ? "recording" : "written answers"} in ${REVIEW_DAYS} days: charge ${money(cents)} or let it go`;
 /**
- * (Owner, Oct 26) When Charge / Let it go opens for a contract part sent and left unreviewed: only once BOTH (1) 14 days have passed since it was sent (payBy, which
+ * (Owner, Oct 26) When Charge / Let it go opens for a contract part sent and left unreviewed: only once BOTH (1) REVIEW_DAYS (7; batch 12) have passed since it was sent (payBy, which
  * outages and pauses move on) and (2) the test's Open until has passed. With no Open until, (2) is met when the test stops or closes, or the tester's work ends
  * (they left, their deadline passed, or their work was ended early). Returns when it opens (null while that is not known yet).
  */
@@ -769,8 +773,15 @@ export const chargeIsOpen = (...a: Parameters<typeof chargeOpensAt>) => {
   const at = chargeOpensAt(...a);
   return !!at && at.getTime() <= (a[3] ?? new Date()).getTime();
 };
-export const CHARGED_BY_TESTER = "Charged by the tester after 14 days without a review.";
+export const CHARGED_BY_TESTER = `Charged by the tester after ${REVIEW_DAYS} days without a review.`;
+/** (Batch 12 section 6) The reason stored on tester charges made before the review window dropped to 7 days. */
+export const CHARGED_BY_TESTER_14 = "Charged by the tester after 14 days without a review.";
 export const LET_GO_BY_TESTER = "Let go by the tester: nothing charged.";
+/** A review the tester made with Charge (any review window). */
+export const chargedByTester = (reason: string) => reason === CHARGED_BY_TESTER || reason === CHARGED_BY_TESTER_14;
+/** A review the tester made with Charge or Let it go. */
+export const byTesterChoice = (reason: string) => chargedByTester(reason) || reason === LET_GO_BY_TESTER;
+export const TESTER_CHOICE_REASONS = [CHARGED_BY_TESTER, CHARGED_BY_TESTER_14, LET_GO_BY_TESTER];
 export const CHARGED_AUTOMATICALLY = "Charged automatically: no choice within 14 more days.";
 
 // ---------- Notification schedule (owner) ----------
@@ -784,14 +795,16 @@ export const MARKS = [
 
 /**
  * Countdown pattern: 1 month before (only if it started more than a month away), 1 week, 3 days, 1 day before.
- * Returns the one mark due now (never one already sent; skipped marks aren't sent late), or null.
+ * Returns the one mark due now (never one already sent; skipped marks aren't sent late), or null. (Batch 12 section 6) `noMonth`: the review reminders count only
+ * 1 week, 3 days and 1 day before Charge opens.
  */
-export function countdownDue(deadline: Date | null, now: Date, sent: string[], startedAt: Date) {
+export function countdownDue(deadline: Date | null, now: Date, sent: string[], startedAt: Date, noMonth = false) {
   if (!deadline) return null;
   const left = deadline.getTime() - now.getTime();
   if (left <= 0) return null;
-  for (let i = MARKS.length - 1; i >= 0; i--) {
-    const m = MARKS[i], next = MARKS[i + 1];
+  const marks = noMonth ? MARKS.filter((m) => m.mark !== "1m") : MARKS;
+  for (let i = marks.length - 1; i >= 0; i--) {
+    const m = marks[i], next = marks[i + 1];
     if (left <= m.ms && (!next || left > next.ms)) {
       if (sent.includes(m.mark)) return null;
       if (m.mark === "1m" && deadline.getTime() - startedAt.getTime() <= m.ms) return null;
@@ -923,10 +936,12 @@ export const isBookedLate = (bookedAt: Date, dueAt: Date) => bookedAt.getTime() 
 // ---------- Ask to rejoin (design doc 7.3, 8) ----------
 
 /** "3 days 4 h", "5 h 10 min", "40 min": how long a returning tester had left. */
-export function leftText(ms: number) {
+export function leftText(ms: number, words = false) {
   const mins = Math.max(0, Math.round(ms / 60_000));
   const d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60), m = mins % 60;
-  if (d > 0) return h ? `${d} day${d === 1 ? "" : "s"} ${h} h` : `${d} day${d === 1 ? "" : "s"}`;
+  // (Batch 12 section 6) `words`: the join page's "in 2 days 5 hours".
+  if (d > 0) return h ? `${d} day${d === 1 ? "" : "s"} ${h} ${words ? (h === 1 ? "hour" : "hours") : "h"}` : `${d} day${d === 1 ? "" : "s"}`;
+  if (words && h > 0) return `${h} hour${h === 1 ? "" : "s"}`;
   if (h > 0) return m ? `${h} h ${m} min` : `${h} h`;
   return `${Math.max(m, 1)} min`;
 }

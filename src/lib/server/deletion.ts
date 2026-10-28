@@ -4,42 +4,33 @@ import { NO_LISTING_WORK_CAP_CENTS, PAYABLE_TESTER, callReference, pieceMaxCents
 
 // (Owner, Oct 28) Deleting an account: what the confirm pop-up tells a tester (with their real numbers), and what blocks a developer.
 
-export type DeleteBlocker = { key: string; text: string; href: string };
-
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
-/**
- * (Owner, Oct 28; DEFAULT) A developer can't delete their account while any of these is left: sent work waiting for Pay or Reject (including parts where Charge is open),
- * an open dispute, a payment hold or a chargeback hold. Once none is left nothing is under review, so Charge never opens later. Work from a tester who deleted their own
- * account can't be paid any more, so it doesn't block. This ONE function decides it, so the rule can be swapped (the owner's alternative: keep open Charge rows and never
- * open Charge for work still under review).
- */
-export async function devDeleteBlockers(userId: string, now = new Date()): Promise<DeleteBlocker[]> {
-  const u = await db.user.findUnique({ where: { id: userId }, select: { isDeveloper: true, holdStartedAt: true, holdReason: true } });
-  if (!u?.isDeveloper) return [];
-  const live = { tester: PAYABLE_TESTER }; // (batch 11) a deleted tester's sent work is still payable when their payout account was connected
-  const [subs, calls, disputes] = await Promise.all([
-    db.submission.findMany({ where: { review: null, contract: { ...live, test: { developerId: userId } } }, select: { contract: { select: { testId: true, test: { select: { title: true } } } } } }),
-    db.call.findMany({ where: { review: null, status: "booked", startsAt: { lte: now }, contract: { ...live, test: { developerId: userId } } }, select: { contract: { select: { testId: true, test: { select: { title: true } } } } } }),
-    db.contract.findMany({ where: { ...live, test: { developerId: userId } }, select: { id: true, testId: true, tester: true, test: { select: { title: true } } } }).then(async (cs) => {
-      const byId = new Map(cs.map((c) => [c.id, c]));
-      const open = await db.dispute.findMany({ where: { status: "open", contractId: { in: cs.map((c) => c.id) } }, select: { id: true, contractId: true } });
-      return open.map((d) => ({ id: d.id, contract: byId.get(d.contractId)! }));
-    }),
-  ]);
-  const out: DeleteBlocker[] = [];
-  const byTest = new Map<string, { title: string; n: number }>();
-  for (const x of [...subs, ...calls]) byTest.set(x.contract.testId, { title: x.contract.test.title, n: (byTest.get(x.contract.testId)?.n ?? 0) + 1 });
-  for (const [testId, t] of byTest) out.push({ key: `review-${testId}`, text: `${t.title} · ${plural(t.n, "part")} to pay or reject`, href: `/app/tests/${testId}#needs-you` });
-  for (const d of disputes) out.push({ key: `dispute-${d.id}`, text: `${d.contract.test.title} · ${displayName(d.contract.tester)}'s open dispute`, href: `/app/tests/${d.contract.testId}#item-dispute-${d.id}` });
-  if (u.holdStartedAt) out.push(u.holdReason === "chargeback"
-    ? { key: "hold", text: "your chargeback hold: follow the steps in Payments", href: "/app/payments#chargeback-steps" }
-    : { key: "hold", text: "your payment hold: pay what you owe in Payments", href: "/app/payments#owed" });
-  return out;
-}
+/** (Owner, Oct 29, batch 12 section 1) What happens to testers' work when a developer deletes their account (said last in the warning). */
+export const DEV_DELETE_LINE = "Testers can still charge for parts already open to charging. Work you haven't reviewed can't be charged after you delete.";
 
-/** "Pay or reject the work waiting for you first: Harbor Run · 2 parts to pay or reject; your payment hold: pay what you owe in Payments." */
-export const devDeleteRefusal = (blockers: DeleteBlocker[]) => `Pay or reject the work waiting for you first: ${blockers.map((b) => b.text).join("; ")}.`;
+/**
+ * (Owner, Oct 29, batch 12 section 1: the owner's version, replacing batch 5's blockers) A developer can always delete their account. Their warning lists, with counts: work
+ * waiting for their review, parts testers can still charge, and open disputes; then DEV_DELETE_LINE. Work still under review never opens Charge after they delete; parts
+ * already open to charging stay open (the charge goes to the saved card); open disputes are still decided; what they owe stays owed.
+ */
+export async function devDeleteLines(userId: string, now = new Date()) {
+  const u = await db.user.findUnique({ where: { id: userId }, select: { isDeveloper: true } });
+  if (!u?.isDeveloper) return [];
+  const mine = { contract: { test: { developerId: userId }, tester: PAYABLE_TESTER } };
+  const [review, calls, charge, disputes] = await Promise.all([
+    db.submission.count({ where: { review: null, choiceOfferedAt: null, ...mine } }),
+    db.call.count({ where: { review: null, status: "booked", startsAt: { lte: now }, ...mine } }),
+    db.submission.count({ where: { review: null, choiceOfferedAt: { not: null }, ...mine } }),
+    db.contract.findMany({ where: { test: { developerId: userId } }, select: { id: true } }).then((cs) => db.dispute.count({ where: { status: "open", contractId: { in: cs.map((c) => c.id) } } })),
+  ]);
+  const lines: { key: string; text: string }[] = [];
+  if (review + calls > 0) lines.push({ key: "review", text: `${plural(review + calls, "part")} waiting for your review` });
+  if (charge > 0) lines.push({ key: "charge", text: `${plural(charge, "part")} testers can still charge` });
+  if (disputes > 0) lines.push({ key: "disputes", text: plural(disputes, "open dispute") });
+  lines.push({ key: "after", text: DEV_DELETE_LINE });
+  return lines;
+}
 
 export type TesterDeleteFacts = {
   /** Pay already charged but not sent yet: waiting for their payout setup. */

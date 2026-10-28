@@ -3,7 +3,8 @@ export const LIMITS = {
   spots: { min: 1, max: 50 }, // and the developer's own tester limit (10 to start, +10% per 10 good ratings, max 50)
   deadlineDays: { min: 1, max: 90 }, // a tester's deadline; it must also leave `deadlineBufferDays` inside Open until
   deadlineBufferDays: 3,
-  openUntilMaxDays: 366, // future, at most a year ahead, extend only
+  openUntilMaxDays: 30, // (Owner, Oct 29, batch 12) required, 3 to 30 days after today on Post; Edit moves it only later, within 30 days of today
+  openUntilMinDays: 3,
   productName: 60,
   testName: 60,
   whatToDo: 1000,

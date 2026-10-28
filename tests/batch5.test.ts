@@ -14,7 +14,7 @@ import { closedForSuspended, openForRestricted, restrictedOn } from "@/lib/close
 import { restrictionKey } from "@/lib/restricted";
 import { RATE_AFTER_CLOSE_KINDS, rateStops, testClosedForRate } from "@/lib/rules";
 import { contractLinkModeFor } from "@/components/ContractLink";
-import { devDeleteBlockers, devDeleteRefusal, testerDeleteFacts, testerDeleteLines } from "@/lib/server/deletion";
+import { devDeleteLines, testerDeleteFacts, testerDeleteLines } from "@/lib/server/deletion";
 import { runDaily, startHold } from "@/lib/server/holds";
 import { json, makeUser, req } from "./helpers";
 import { act, joined, sact, seen, settle, setup } from "./fixtures";
@@ -310,7 +310,6 @@ describe("batch 5 item 6: deleting an account", () => {
     expect(r.body.error).toMatchObject({ code: "gone", message: "Ana Silva deleted their account before setting up payouts, so this can't be paid." });
     await runDaily(new Date());
     expect((await db.submission.findUniqueOrThrow({ where: { id: rec.id } })).choiceOfferedAt).toBeNull();
-    expect(await devDeleteBlockers(dev.user.id)).toEqual([]); // nothing of theirs blocks the developer
     expect(src("app/app/page.tsx")).toContain("if (!testerPayable(c.tester)) continue;");
     expect(src("app/app/tests/[id]/page.tsx")).toContain(".filter((c) => testerPayable(c.tester))");
   });
@@ -331,35 +330,14 @@ describe("batch 5 item 6: deleting an account", () => {
     expect(await db.payment.findUniqueOrThrow({ where: { id: owedPay.id } })).toMatchObject({ status: "charged", transferStatus: "sent" });
   });
 
-  it("(DEFAULT) developer: refused while work waits for Pay or Reject, a dispute is open or a hold is on; listed with links; deletes once none is left", async () => {
-    const { dev, testId, sessionId, tester, sub } = await sentWork();
-    let b = await devDeleteBlockers(dev.user.id);
-    expect(b).toEqual([{ key: `review-${testId}`, text: "Harbor Run · 1 part to pay or reject", href: `/app/tests/${testId}#needs-you` }]);
-    let r = await del(dev.cookie);
-    expect(r.status).toBe(409);
-    expect(r.body.error).toMatchObject({ code: "delete_blocked", message: "Pay or reject the work waiting for you first: Harbor Run · 1 part to pay or reject." });
-    // Rejected, then disputed: the open dispute blocks.
-    expect((await pay(dev.cookie, { action: "reject", kind: "submission", id: sub.id, reason: "Not enough here" })).status).toBe(200);
-    expect((await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question fully", seenAt: seen(), confirmed: true })).status).toBe(200);
-    const d = await db.dispute.findFirstOrThrow({ where: { contractId: sessionId } });
-    b = await devDeleteBlockers(dev.user.id);
-    expect(b).toEqual([{ key: `dispute-${d.id}`, text: "Harbor Run · Ana Silva's open dispute", href: `/app/tests/${testId}#item-dispute-${d.id}` }]);
-    await db.dispute.update({ where: { id: d.id }, data: { status: "decided", decidedAt: new Date() } });
-    // A hold blocks too.
-    await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: new Date(), holdReason: "unpaid" } });
-    b = await devDeleteBlockers(dev.user.id);
-    expect(b.map((x) => x.key)).toEqual(["hold"]);
-    expect(devDeleteRefusal(b)).toBe("Pay or reject the work waiting for you first: your payment hold: pay what you owe in Payments.");
-    await db.user.update({ where: { id: dev.user.id }, data: { holdReason: "chargeback" } });
-    expect((await devDeleteBlockers(dev.user.id))[0].href).toBe("/app/payments#chargeback-steps");
-    await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: null, holdReason: "" } });
-    // None left: deletion works as today.
-    r = await del(dev.cookie);
+  it("(batch 12 section 1, replacing the blockers) developer: always deletes; the warning lists the counts", async () => {
+    const { dev, testId } = await sentWork();
+    expect((await devDeleteLines(dev.user.id)).map((l) => l.key)).toEqual(["review", "after"]);
+    const r = await del(dev.cookie);
     expect(r.status).toBe(200);
     expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).status).toBe("stopped");
-    const ui = src("app/app/account/DeleteAccount.tsx");
-    expect(ui).toContain("data-delete-blockers");
-    expect(src("app/app/account/page.tsx")).toContain("blockers={dev ? await devDeleteBlockers(u.id) : []}");
-    expect(src("lib/server/restrictions.ts")).toContain('if (by === "self" && u.isDeveloper)');
+    expect(src("app/app/account/DeleteAccount.tsx")).toContain("data-dev-delete-warning");
+    expect(src("app/app/account/page.tsx")).toContain("devLines={dev ? await devDeleteLines(u.id) : []}");
+    expect(src("lib/server/restrictions.ts")).not.toContain("devDeleteBlockers");
   });
 });

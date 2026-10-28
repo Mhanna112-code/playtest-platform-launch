@@ -3,7 +3,7 @@ import { SubscribersTag } from "@/components/SubscribeLink";
 import { useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
-import { CalendarClock, KeyRound, Pencil, Play, Repeat } from "lucide-react";
+import { KeyRound, Pencil, Play, Repeat } from "lucide-react";
 import { checkFields } from "@/components/FieldChecks";
 import { CategoryBadges } from "@/components/Category";
 import { PartBadges, StatusPill } from "@/components/Ui";
@@ -61,7 +61,6 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
                   {p.joinMode === "apply" ? "You approve each tester" : p.joinMode === "invite" ? "Invite only" : "Anyone who matches joins instantly"}
                 </a>
               )}
-              {p.deadlineDays != null && <span className="badge" title="Each tester's deadline counts from when they join (change it in Edit)"><CalendarClock className="h-3.5 w-3.5" /> {p.deadlineDays} day{p.deadlineDays === 1 ? "" : "s"} per tester</span>}
             </div>
           </div>
           {/* The full app's header: the buttons at the top right (Edit, Next round, End early, Stop the test). */}
