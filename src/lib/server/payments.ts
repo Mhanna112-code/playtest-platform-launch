@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, fmtTime, money, toCents } from "@/lib/format";
-import { LET_GO_BY_TESTER, payMoreClosedLine, payMoreState, testEndedAt, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, checkDisputeDecision, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, extraCapCents, overListingLine, overMaxLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare } from "@/lib/rules";
+import { LET_GO_BY_TESTER, payClosedLine, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, checkDisputeDecision, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, extraCapCents, overListingLine, overMaxLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare } from "@/lib/rules";
 import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { adminUsers, bell, notify } from "./notify";
@@ -19,6 +19,7 @@ import { clientPressKey, serverKey } from "./pressKeys";
 import { amountFromRate, callMinutesOf, overCeilingLine, rateFromAmount } from "@/lib/callMeasure";
 import { callsLeftCents } from "./callMoney";
 import { PAY_ACTS } from "./live";
+import { closedOut, payMoreClosesAt, pieceCloseOut } from "./closeOut";
 
 type U = { id: string; email: string; name: string; pronoun: string; isAdmin?: boolean };
 
@@ -87,7 +88,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     if (!testerPayable(c.tester) && !(await tx.review.findFirst({ where: piece.where }))) throw new HttpError(409, "gone", deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null })));
     const already = await tx.review.findFirst({ where: piece.where });
     // (Batch 16 section 21) Another tab's Pay on this piece stops this press once, BEFORE it is refused as already done.
-    const payPress = { acts: [...PAY_ACTS], keys: [piece.where.callId ? `call:${piece.where.callId}` : `sub:${piece.where.submissionId}`] };
+    const payPress = { acts: [...PAY_ACTS], keys: [piece.where.callId ? `call:${piece.where.callId}` : `sub:${piece.where.submissionId}`], stopCheck: c.id };
     if (already) {
       await devGate(tx, c.testId, body, {}, [], undefined, payPress);
       if (chargedByTester(already.reason)) throw new HttpError(409, "reviewed", `${name} already charged ${money(already.amountCents)} for this.`);
@@ -95,6 +96,12 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
       const owedNow = !already.rejected && (await tx.payment.findFirst({ where: { ...piece.where, status: "failed", owedUntil: { not: null }, settledAt: null } }));
       if (owedNow) throw new HttpError(409, "owed", `This ${money(already.amountCents)} is owed: pay it with “Pay what you owe” in Payments.`);
       throw new HttpError(409, "reviewed", already.rejected ? "You already rejected this." : `You already paid ${money(already.amountCents)} for this.`);
+    }
+    // (Batch 17 §19) Pay closes on the piece's own closing date (the test's close-out, or 14 days after its Charge opened if later; final: it stays unpaid).
+    // Until then Pay works, also after the tester's Charge opened.
+    {
+      const at = await pieceCloseOut(piece.where, "developer");
+      if (closedOut(at)) throw new HttpError(409, "pay_closed", payClosedLine(fmtDate(at!)));
     }
     if (await devOwes(dev.id)) throw new HttpError(409, "owed_first", PAY_WAITS);
     // Form mistakes (red at the field) come BEFORE the stop-once: a second press would only fail on them.
@@ -419,11 +426,10 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   // (Batch 11 section 6) "Pay more" is the same Pay box after a piece is paid: it needs that first payment (a rejected piece has none).
   const paidReview = await db.review.findFirst({ where: piece.where });
   if (!paidReview || paidReview.rejected) throw new HttpError(409, "not_paid", "Pay this part first: Pay more is for a part you've already paid.");
-  // (Owner, Oct 28, batch 16 section 22) Pay more closes 30 days after the test ended.
+  // (Batch 17 §19, replacing batch 16 section 22) Pay more closes together with the last Pay / Charge on the test (payMoreClosesAt).
   {
-    const contracts = await db.contract.findMany({ where: { testId }, select: { status: true, dueAt: true, endedAt: true } });
-    const pm = payMoreState(testEndedAt(c.test, contracts), new Date(), fmtDate);
-    if (!pm.open && pm.closes) throw new HttpError(409, "pay_more_closed", payMoreClosedLine(pm.closes, fmtDate));
+    const at = await payMoreClosesAt(testId);
+    if (closedOut(at)) throw new HttpError(409, "pay_more_closed", payClosedLine(fmtDate(at!), true));
   }
   // (Owner, Oct 27) Unavailable during ANY payment hold, chargeback hold or suspension (the route refuses first; this is the backstop).
   const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { devSuspendedAt: true } });
@@ -450,7 +456,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     if (again) await tx.payment.update({ where: { id: again.id }, data: { pressKey: null } });
     // (Batch 9 section 6) Per piece: listed, 100% of the listing at most (never more than the max); unlisted, 100% of the max on top of the Pay.
     const room = await pieceRoom(piece, tx);
-    const morePress = { acts: [...PAY_ACTS], keys: [at.callId ? `call:${at.callId}` : `sub:${at.submissionId}`] };
+    const morePress = { acts: [...PAY_ACTS], keys: [at.callId ? `call:${at.callId}` : `sub:${at.submissionId}`], stopCheck: c.id };
     if (amount! > room.roomCents) {
       await devGate(tx, testId, body, {}, [], undefined, morePress); // (batch 16 section 21) another tab's Pay on it first stops once
       throw new HttpError(400, "over_cap", overRoomLine(piece, room));

@@ -522,7 +522,10 @@ export function endedLine(c: { status: string; endKind: string; endedAt: Date | 
 // ---------- (Owner, Oct 28, batch 16 section 24) The tester's page after the test stops, closes, or their work is ended early ----------
 
 /** (Owner, Oct 28, batch 16 section 28) The top line of the limited view a suspended tester gets of a test they were removed from. */
-export const LIMITED_VIEW_LINE = "Your account is paused. You can still dispute, charge or let go of unreviewed work, and rate.";
+// (Owner, Oct 28, batch 17 section 10) Dispute is the only press there: Charge and Let it go wait for the reinstatement (nothing is lost: Charge never happens on its own).
+export const LIMITED_VIEW_LINE = "Your account is paused. You can still dispute a payment.";
+/** (Batch 17 section 10) Charge or Let it go pressed from the limited view (an old page). */
+export const LIMITED_CHOICE_REFUSAL = "You can do this once your account is active again.";
 /** The work is over for this tester (the developer or the team stopped the test, it closed, or their work was ended early): never a block, a rating or a leave. */
 export const workOver = (c: { status: string; endKind: string; endedAt: Date | null }) => c.status === "ended" && !!c.endedAt && !["blocked", "rated"].includes(c.endKind);
 /** The first half of the stopped line, as endedLine says it: "Nora Lane stopped the test on Nov 3" / "This test ended on Nov 3" / "Nora Lane ended your session early on Nov 3". */
@@ -1187,6 +1190,36 @@ export function canAskToRejoin(c: { status: string; endKind: string; endedAt: Da
   return !!c.endedAt && c.endedAt.getTime() < c.dueAt.getTime();
 }
 
+// ---------- (Owner, Oct 28, batch 17 sections 1, 2, 12, 14 and 16) When Rate is open, and what stops it ----------
+
+/** (Batch 17 section 2) Your own side suspended (or, for a developer, on a hold): Rate is hidden and an old page's press is refused. */
+export const RATE_INACTIVE = "You can rate once your account is active again.";
+/** (Batch 17 section 1) The tester's Rate is disabled, with the first of these lines that applies. */
+export const RATE_CHARGE_FIRST = "Charge or let go of your unreviewed work first.";
+export const RATE_MY_DISPUTE = "Rating opens once the team decides your dispute.";
+export const rateOpensOnLine = (date: string, devName: string) => `Rating opens on ${date}, or sooner if ${devName} reviews everything you sent.`;
+/** A piece in its review window with no review date yet (a call still being measured). */
+export const rateOpensReviewLine = (devName: string) => `Rating opens once ${devName} reviews everything you sent.`;
+/** (Batch 17 section 1) The developer's Rate is disabled while a dispute with that tester on this test is open. */
+export const rateTheirDisputeLine = (name: string) => `Rating opens once the team decides ${name}'s dispute.`;
+/** (Batch 17 section 16) The developer's Rate is hidden until the tester has rated and everything they sent is settled; an old page's press reads this. */
+export const ratePendingLine = (name: string) => `You can rate ${name} once they've rated you and everything they sent is settled.`;
+/** (Batch 17 section 12) A Cancel call pressed on a page opened before the test stopped (its calls ahead were cancelled by the stop). */
+export const CALL_CANCELLED_BY_STOP = "This call was cancelled when the test stopped.";
+/** "3:10 PM" when it happened in the last 12 hours, else "Tue, Nov 3, 3:10 PM". */
+const stopAt = (d: Date, now: Date, fmtTime: (d: Date) => string, fmtDateTime: (d: Date) => string) => (now.getTime() - d.getTime() < 12 * 3_600_000 ? fmtTime(d) : fmtDateTime(d));
+/**
+ * (Batch 17 section 12) The stop as the one change a page opened before it reads. Testers: "Nora Lane stopped this test at 3:10 PM." (the developer's Stop), "This test was
+ * stopped at 3:10 PM." (the team's: never who or why), "This test closed at 3:10 PM.", "Nora Lane ended your work early at 3:10 PM.". The developer: "You stopped this test
+ * at …", "The team stopped this test at …" (the reason is on the banner), "This test closed at …", "You ended Ana's work early at …".
+ */
+export function stopMomentLine(side: "tester" | "developer", kind: "dev" | "team" | "closed" | "early", at: Date, names: { dev: string; tester: string }, fmtTime: (d: Date) => string, fmtDateTime: (d: Date) => string, now = new Date()) {
+  const t = stopAt(at, now, fmtTime, fmtDateTime);
+  if (kind === "closed") return `This test closed at ${t}.`;
+  if (side === "tester") return kind === "team" ? `This test was stopped at ${t}.` : kind === "early" ? `${names.dev} ended your work early at ${t}.` : `${names.dev} stopped this test at ${t}.`;
+  return kind === "team" ? `The team stopped this test at ${t}.` : kind === "early" ? `You ended ${names.tester}'s work early at ${t}.` : `You stopped this test at ${t}.`;
+}
+
 // ---------- Rate's stop-once lines (owner, Oct 27-28) ----------
 
 /** The stop-once kinds that still apply to Rate after the test closed (stopped or closed): pay, reject, charge, let go, a dispute filed or decided. */
@@ -1206,29 +1239,49 @@ export function rateStops(e: TestEventLike, closed: boolean) {
   return (RATE_AFTER_CLOSE_KINDS as readonly string[]).includes(e.kind);
 }
 
-// ---------- (Owner, Oct 28, batch 16 section 22) Pay more closes 30 days after the test ends ----------
+// ---------- (Owner, Oct 28, batch 17 section 19) Close-out: 14 days after the last tester's deadline, money and ratings end ----------
 
-export const PAY_MORE_DAYS = 30;
+export const CLOSE_OUT_DAYS = 14;
 /**
- * When the test ended: stopped or closed (its stop time), or done (joining closed and the last working tester's deadline passed: the latest of Open until, the
- * working testers' deadlines and the others' ends). null while it still runs. A Next round is its own test, with its own clock.
+ * (Owner, final) Where a test's close-out counts from: the last tester's deadline (every contract's, working or not), and no earlier than Open until (or the stop).
+ * null while testers can still join or work (an open test before Open until, or a working tester's deadline ahead). The close-out itself (server/closeOut) adds 14
+ * days, moved later by pauses and outages after this point; each piece keeps Charge and Pay at least 14 days after its own Charge opened (pieceCloseOut).
  */
-export function testEndedAt(t: { status: string; stoppedAt: Date | null; openUntil: Date | null }, contracts: { status: string; dueAt: Date; endedAt: Date | null }[], now = new Date()) {
-  if (t.status === "stopped") return t.stoppedAt ?? now;
-  if (t.status === "draft" || !t.openUntil || t.openUntil.getTime() > now.getTime()) return null;
-  if (contracts.some((c) => c.status === "working" && c.dueAt.getTime() > now.getTime())) return null;
-  return new Date(Math.max(t.openUntil.getTime(), ...contracts.map((c) => (c.status === "working" ? c.dueAt : c.endedAt ?? c.dueAt).getTime())));
+export function closeOutBase(t: { status: string; stoppedAt: Date | null; openUntil: Date | null }, contracts: { status: string; dueAt: Date }[], now = new Date()): Date | null {
+  if (t.status === "draft") return null;
+  const stopped = t.status === "stopped";
+  if (!stopped && (!t.openUntil || t.openUntil.getTime() > now.getTime())) return null;
+  if (!stopped && contracts.some((c) => c.status === "working" && c.dueAt.getTime() > now.getTime())) return null;
+  const from = stopped ? (t.stoppedAt ?? now) : t.openUntil!;
+  return new Date(Math.max(from.getTime(), ...contracts.map((c) => c.dueAt.getTime())));
 }
-/** The day Pay more closes (null while the test runs). */
-export const payMoreClosesAt = (endedAt: Date | null) => (endedAt ? new Date(endedAt.getTime() + PAY_MORE_DAYS * 86_400_000) : null);
-/** Pay more: open, closed, and the grey line in its last 7 days ("Pay more closes on Dec 6."). */
-export function payMoreState(endedAt: Date | null, now: Date, fmt: (d: Date) => string) {
-  const closes = payMoreClosesAt(endedAt);
-  const open = !closes || now.getTime() <= closes.getTime();
-  return { open, closes, line: open && closes && closes.getTime() - now.getTime() <= 7 * 86_400_000 ? `Pay more closes on ${fmt(closes)}.` : "" };
-}
-/** A press from an old page after it closed. */
-export const payMoreClosedLine = (closes: Date, fmt: (d: Date) => string) => `Pay more closed on ${fmt(closes)}, ${PAY_MORE_DAYS} days after the test ended.`;
+/** "Rating closed on Dec 6." (the tester's Rate after close-out). */
+export const ratingClosedLine = (date: string) => `Rating closed on ${date}.`;
+
+// ---------- (Owner, Oct 28, Batch 17 §19, final) Close-out, the money half: Pay more with the test's last Pay / Charge; Pay, Charge and Let it go per piece ----------
+// (Batch 17 §19 replaces batch 16 section 22: Pay more no longer closes 30 days after the test ended, but together with the last Pay / Charge on the test: server/closeOut payMoreClosesAt.)
+// Each piece's Charge / Let it go and the developer's Pay close on that piece's own date (server/closeOut pieceCloseOut: the test's close-out, or 14 days after its Charge
+// opened if later; the tester's side adds the time their tester side was suspended). Unpaid work stays unpaid. Disputes are unchanged.
+
+/** The last days before close-out in which the boxes and Needs you rows say when they close. */
+export const CLOSE_OUT_WARN_DAYS = 7;
+/** The bell reminders before close-out (3 days and 1 day before), each sent once. */
+export const CLOSE_OUT_REMINDER_DAYS = [3, 1] as const;
+/** Is the close-out within its last CLOSE_OUT_WARN_DAYS (and not passed yet)? */
+export const closeOutSoon = (at: Date | null, now = new Date()) => !!at && at.getTime() > now.getTime() && at.getTime() - now.getTime() <= CLOSE_OUT_WARN_DAYS * 86_400_000;
+/** The developer's Pay (more) pressed after close-out: "Pay closed on Dec 6." / "Pay more closed on Dec 6.". */
+export const payClosedLine = (date: string, more = false) => `${more ? "Pay more" : "Pay"} closed on ${date}.`;
+/** The tester's Charge or Let it go pressed after their close-out. */
+export const chargeClosedLine = (date: string) => `Charge and Let it go closed on ${date}.`;
+/** The grey line in the last 7 days: under the Charge box, on Needs you's rows, and under a Pay more box. */
+export const chargeClosesLine = (date: string) => `Charge closes on ${date}.`;
+export const payClosesLine = (date: string, more = false) => `${more ? "Pay more" : "Pay"} closes on ${date}.`;
+/** Where an unpaid piece was: the developer's test page, and the tester's part. */
+export const closedNotPaidLine = (date: string) => `Closed on ${date}: not paid.`;
+export const notPaidClosedLine = (date: string) => `Not paid (closed on ${date})`;
+/** The bell reminders 3 days and 1 day before close-out (money: they ignore the email setting). */
+export const chargeByLine = (test: string, date: string) => `Charge or let go of your work on “${test}” by ${date}`;
+export const payByLine = (tester: string, test: string, date: string) => `Pay ${tester}'s work on “${test}” by ${date}`;
 
 // ---------- Extra pay from the Testers panel (owner, Oct 26) ----------
 

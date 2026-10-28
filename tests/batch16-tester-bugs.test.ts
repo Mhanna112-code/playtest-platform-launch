@@ -98,7 +98,7 @@ describe("B. every call change stops every tester press once (Alerts On), never 
       ["written", { answers: ["c", "d"] }],
       ["choose", { submissionId: s.rec.id, choice: "charge" }],
       ["choose", { submissionId: s.rec.id, choice: "letgo" }],
-      ["rate", { stars: 4 }],
+      // (Batch 17 section 14) Rate isn't here: it never stops for calls (and is disabled while a piece can be charged).
       ["cancel-call", { callId: s.call.id, reason: "Something came up at work." }],
       ["request-time", { startsAt: atHours(120) }],
       ["terms", { offerId: s.offer.id, choice: "keep" }],
@@ -139,7 +139,7 @@ describe("section 40: the tester's live call part has no blue box per call", () 
   it("each held call is one short grey line: time · length · waiting / paid $X / charged / let go; blue only for a real notice", () => {
     const page = src("app/app/sessions/[id]/page.tsx");
     expect(page).not.toContain("Live call on {fmtDateTime(x.startsAt)}: waiting for {dev} to pay.");
-    expect(page).toContain('<p className="text-xs text-slate-400" data-call-row="" data-call-length="">{fmtDateTime(x.startsAt)} · {callMinutesOf(x)} min · waiting for {dev} to pay</p>');
+    expect(page).toContain('<p className="text-xs text-slate-400" data-call-row="" data-call-length="">{fmtDateTime(x.startsAt)} · {callMinutesOf(x)} min · {chargeShut(x.id) ? notPaidClosedLine(shutOn(x.id)) : <>waiting for {dev} to pay</>}</p>'); // (batch 17 §19: after close-out it reads "Not paid (closed on <date>)")
     expect(page).toContain('{failedCalls.has(x.id) && <p className="info">{DELAYED_CALL_LINE}</p>}');
     expect(page).toContain("{fmtDateTime(x.startsAt)} · {callMinutesOf(x) ?? x.minutes} min · {callOutcome(x.review!)}");
     expect(page).toContain('r.rejected ? "rejected" : r.reason === LET_GO_BY_TESTER ? "let go" : chargedByTester(r.reason) ? "charged" : `paid ${money(r.amountCents)}`');

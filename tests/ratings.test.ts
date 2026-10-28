@@ -16,7 +16,7 @@ describe("the tester rates the developer", () => {
     const { tester, sessionId } = await joined(testId);
     expect((await sact(sessionId, "rate", tester.cookie, { stars: 5 })).body.error.message).toBe("Rating opens once some work was sent or a call took place.");
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
-    expect((await sact(sessionId, "rate", tester.cookie, { stars: 5 })).body.error.message).toBe("Rating opens once the developer has reviewed everything you sent (or Charge / Let it go has opened for it).");
+    expect((await sact(sessionId, "rate", tester.cookie, { stars: 5 })).body.error.message).toMatch(/^Rating opens on .+, or sooner if Nora Lane reviews everything you sent\.$/); // (batch 17 section 1)
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Rate Nora Lane" } } })).toBe(1);
@@ -36,13 +36,13 @@ describe("the tester rates the developer", () => {
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400, reason: "Short answers" });
     await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question", confirmed: true });
-    expect((await sact(sessionId, "rate", tester.cookie, { stars: 3 })).body.error.message).toBe("Rating opens once the team has decided the open dispute.");
+    expect((await sact(sessionId, "rate", tester.cookie, { stars: 3 })).body.error.message).toBe("Rating opens once the team decides your dispute.");
     // Another tester, whose work waited 14 days (no review): available.
     const b = await joined(testId, "Ben Carter", "he");
     await sact(b.sessionId, "written", b.tester.cookie, { answers: ["a", "b"] });
     await db.submission.updateMany({ where: { contractId: b.sessionId }, data: { payBy: new Date(Date.now() - 60_000) } });
     // 14 days alone is not enough: Charge also needs the test's Open until to have passed.
-    expect((await sact(b.sessionId, "rate", b.tester.cookie, { stars: 2 })).body.error.message).toContain("Rating opens once the developer has reviewed everything");
+    expect((await sact(b.sessionId, "rate", b.tester.cookie, { stars: 2 })).body.error.message).toMatch(/^Rating opens on /); // (batch 17 section 1)
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 60_000) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() - 60_000) } }); // (batch 15 section 18: the tester's own deadline)
     expect((await sact(b.sessionId, "rate", b.tester.cookie, { stars: 2 })).status).toBe(200);
   });
@@ -52,25 +52,24 @@ describe("the tester rates the developer", () => {
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
-    await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 60_000), choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 14 * 86_400_000) } });
+    // (Batch 17 section 1) Everything sent must be settled first: paid under the listing (with a reason).
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400, reason: "Short" })).status).toBe(200);
     await bookCall(testId, dev.cookie, sessionId, tester.cookie, 72);
     const w = await rateWarning(sessionId);
     expect(w).toEqual({ working: true, lines: ["Not sent yet from your contract: recording ($12) — it won't be paid.", "All your upcoming calls will be cancelled."] });
-    // Rate is a button like the others: stops once for a change since the page loaded.
+    // (Batch 17 section 14) Rate stops only for changes about this person's work: a listing edit goes straight through.
     const pageLoaded = seen();
     await new Promise((r) => setTimeout(r, 30));
     await act(testId, "edit", dev.cookie, { version: (await db.test.findUniqueOrThrow({ where: { id: testId } })).version, fields: { description: "New words" } });
-    expect((await sact(sessionId, "rate", tester.cookie, { stars: 5, seenAt: pageLoaded })).body.error.code).toBe("stop_once");
-    expect((await sact(sessionId, "rate", tester.cookie, { stars: 5, seenAt: pageLoaded, confirmed: true })).status).toBe(200);
+    expect((await sact(sessionId, "rate", tester.cookie, { stars: 5, seenAt: pageLoaded })).status).toBe(200);
     const c = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });
     expect(c).toMatchObject({ status: "left", endKind: "rated" });
     expect(await db.call.count({ where: { contractId: sessionId, status: "booked", startsAt: { gt: new Date() } } })).toBe(0);
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"] })).body.error.message).toBe("You rated this test, so your part is finished.");
     // No rejoin, ever.
     expect((await act(testId, "join", tester.cookie, { listingVersion: c.listingVersion })).body.error.message).toBe("You rated this test, so you can't join it again.");
-    // Charge stays available after rating.
-    const ch = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000 });
-    expect(ch.status).toBe(200);
+    // Dispute stays available after rating.
+    expect((await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered all", confirmed: true })).status).toBe(200);
   });
 
   it("averages count revealed ratings only; '4.5 ★ (2 ratings)'; comments without names", async () => {
@@ -102,7 +101,7 @@ describe("the developer rates a tester (after the tester rated; blind reveal)", 
 
   it("not before the tester rated; then a bell; the tester's rating is hidden until the developer rates, then both show", async () => {
     const { dev, testId, tester, sessionId } = await ratedByTester();
-    expect((await act(testId, "rate", dev.cookie, { contractId: sessionId, stars: 4, seenAt: seen(), confirmed: true })).body.error.message).toBe("You can rate Ana Silva once she has rated you.");
+    expect((await act(testId, "rate", dev.cookie, { contractId: sessionId, stars: 4, seenAt: seen(), confirmed: true })).body.error.message).toBe("You can rate Ana Silva once they've rated you and everything they sent is settled.");
     expect((await sact(sessionId, "rate", tester.cookie, { stars: 3, comment: "Slow replies" })).status).toBe(200);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: "Ana Silva finished Harbor Run. You can rate her for 14 days." } })).toBe(1);
     const { contractRatings } = await import("@/lib/server/ratings");
@@ -122,6 +121,7 @@ describe("the developer rates a tester (after the tester rated; blind reveal)", 
     const { dev, testId, tester, sessionId } = await ratedByTester();
     await sact(sessionId, "rate", tester.cookie, { stars: 4 });
     await db.rating.updateMany({ where: { contractId: sessionId, side: "tester" }, data: { createdAt: new Date(Date.now() - 15 * 86_400_000) } });
+    await db.review.updateMany({ where: { contractId: sessionId }, data: { createdAt: new Date(Date.now() - 16 * 86_400_000) } }); // (batch 17 section 16) the window counts from the later of the two
     expect((await ratingSummary(dev.user.id)).line).toBe("4.0 ★ (1 rating)");
     expect((await act(testId, "rate", dev.cookie, { contractId: sessionId, stars: 5, seenAt: seen(), confirmed: true })).body.error.message).toBe("The 14 days to rate Ana Silva have passed.");
   });

@@ -12,7 +12,7 @@ import { bigOwnGate } from "@/lib/server/tests";
 import { json, req } from "./helpers";
 import { act, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 
-// Batch 16 sections 22, 25 (developer), 26, plus 23 and 29: Pay more closes 30 days after the test ends; in a stopped / paused state what still works goes
+// Batch 16 sections 22 (now Batch 17 §19: Pay more closes with the test's last Pay / Charge), 25 (developer), 26, plus 23 and 29: in a stopped / paused state what still works goes
 // through on the first press; no Lower the length; no excerpts on hover cards; the invite search's results under its box.
 const DAY = 86_400_000;
 const src = (f: string) => readFileSync(path.resolve(__dirname, "../src", f), "utf8");
@@ -30,34 +30,33 @@ async function paidWork(over: Record<string, unknown> = {}) {
   return { ...s, ...j, sub };
 }
 
-describe("Pay more closes 30 days after the test ends (section 22)", () => {
-  it("the rule: when the test ended (stopped, or done when the last deadline passed); a Next round's draft has its own clock; the grey line in the last 7 days", () => {
+describe("Pay more closes with the test's last Pay / Charge (Batch 17 §19 replaces section 22's 30 days after the test ended)", () => {
+  it("the rule: the grey line in its last 7 days; the refusal line", () => {
     const now = new Date("2026-12-01T12:00:00Z");
-    const stopped = new Date("2026-11-02T12:00:00Z");
-    expect(R.testEndedAt({ status: "stopped", stoppedAt: stopped, openUntil: null }, [], now)).toEqual(stopped);
-    const ou = new Date("2026-11-10T23:59:59Z");
-    expect(R.testEndedAt({ status: "open", stoppedAt: null, openUntil: ou }, [{ status: "working", dueAt: new Date("2026-11-20T23:59:59Z"), endedAt: null }], now)).toEqual(new Date("2026-11-20T23:59:59Z"));
-    expect(R.testEndedAt({ status: "open", stoppedAt: null, openUntil: ou }, [{ status: "working", dueAt: new Date("2026-12-05T23:59:59Z"), endedAt: null }], now)).toBeNull();
-    expect(R.testEndedAt({ status: "draft", stoppedAt: null, openUntil: ou }, [], now)).toBeNull();
-    const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    const at = (days: number) => new Date(stopped.getTime() + days * DAY);
-    expect(R.payMoreState(stopped, at(20), fmt)).toEqual({ open: true, closes: at(30), line: "" });
-    expect(R.payMoreState(stopped, at(29), fmt)).toEqual({ open: true, closes: at(30), line: "Pay more closes on 2026-12-02." });
-    expect(R.payMoreState(stopped, at(31), fmt).open).toBe(false);
-    expect(R.payMoreClosedLine(at(30), fmt)).toBe("Pay more closed on 2026-12-02, 30 days after the test ended.");
+    const at = (days: number) => new Date(now.getTime() + days * DAY);
+    expect(R.closeOutSoon(null, now)).toBe(false); // not known yet: the test still runs
+    expect(R.closeOutSoon(at(8), now)).toBe(false);
+    expect(R.closeOutSoon(at(6), now)).toBe(true);
+    expect(R.closeOutSoon(at(-1), now)).toBe(false); // closed
+    expect(R.payClosesLine("Dec 2, 2026", true)).toBe("Pay more closes on Dec 2, 2026.");
+    expect(R.payClosedLine("Dec 2, 2026", true)).toBe("Pay more closed on Dec 2, 2026.");
   });
 
-  it("(server) open at day 29, refused at day 31; the page hides the box once closed and shows the line before", async () => {
+  it("(server) open until the test's last Pay / Charge closes, refused after it; the page hides the box once closed and shows the line before", async () => {
+    await db.outage.deleteMany({}); // (site-wide: an earlier file's outage would move the date)
     const w = await paidWork();
     const body = { contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100, seenAt: seen(), confirmed: true };
-    await db.test.update({ where: { id: w.testId }, data: { status: "stopped", stoppedAt: new Date(Date.now() - 29 * DAY) } });
+    // Every deadline 20 days ago (close-out 6 days ago), but the piece was sent late: its Charge opened 13 days ago, so its window (and Pay more) ends tomorrow.
+    await db.contract.updateMany({ where: { testId: w.testId }, data: { dueAt: new Date(Date.now() - 20 * DAY) } });
+    await db.test.update({ where: { id: w.testId }, data: { openUntil: new Date(Date.now() - 20 * DAY) } });
+    await db.submission.update({ where: { id: w.sub.id }, data: { payBy: new Date(Date.now() - 13 * DAY) } });
     expect((await act(w.testId, "pay-extra", w.dev.cookie, body)).status).toBe(200);
-    const stoppedAt = new Date(Date.now() - 31 * DAY);
-    await db.test.update({ where: { id: w.testId }, data: { stoppedAt } });
+    const payBy = new Date(Date.now() - 15 * DAY);
+    await db.submission.update({ where: { id: w.sub.id }, data: { payBy } });
     const r = await act(w.testId, "pay-extra", w.dev.cookie, { ...body, amount: "0.50", tickedCents: 50 });
-    expect(r.body.error.message).toBe(`Pay more closed on ${fmtDate(new Date(stoppedAt.getTime() + 30 * DAY))}, 30 days after the test ended.`);
+    expect(r.body.error.message).toBe(`Pay more closed on ${fmtDate(new Date(payBy.getTime() + 14 * DAY))}.`);
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page).toContain("const payMore = payMoreState(testEndedAt(t, t.contracts, now), now, fmtDate);");
+    expect(page).toContain("const payMoreAt = await payMoreClosesAt(t.id, now);");
     expect(page.match(/payMore\.open && \(rooms\.get/g)).toHaveLength(2);
     expect(page.match(/note=\{payMore\.line \|\| undefined\}/g)).toHaveLength(2);
   });
@@ -85,11 +84,9 @@ describe("developer, stopped / closed or paused / held: what still works goes th
     expect((await act(w.testId, "dispute-side", w.dev.cookie, { disputeId: d.id, text: "They skipped two answers", ...B })).status).toBe(200);
     // Rate Ben: the payment about Ben arrived since the page loaded (from this tab's Pay above, as the page didn't show it): stops once, then goes ahead.
     await db.testEvent.create({ data: { testId: w.testId, kind: "paid", text: "Ben Carter charged $1.00 for their recording", contractId: b.sessionId } });
+    // (Batch 17 sections 14 and 16) Everything was settled before the developer's Rate opened: a Charge line no longer stops it.
     const rate = await act(w.testId, "rate", w.dev.cookie, { contractId: b.sessionId, stars: 4, ...B });
-    expect(rate.body.error.code).toBe("stop_once");
-    expect(rate.body.error.changes.map((c: { text: string }) => c.text)).toContain("Ben Carter charged $1.00 for their recording");
-    expect(rate.body.error.changes.some((c: { text: string }) => /another tab|Cara Diaz/.test(c.text))).toBe(false);
-    expect((await act(w.testId, "rate", w.dev.cookie, { contractId: b.sessionId, stars: 4, ...B, confirmed: true, boxAt: new Date().toISOString() })).status).toBe(200);
+    expect(rate.status, JSON.stringify(rate.body)).toBe(200);
     // Next round on the stopped test: through at once.
     expect((await act(w.testId, "next-round", w.dev.cookie, B)).status).toBe(200);
     // Repeats are plain refusals.

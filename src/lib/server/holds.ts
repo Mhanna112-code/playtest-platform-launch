@@ -3,7 +3,7 @@ import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
 import {
-  CHARGE_TICK_CENTS, chargeTickLine, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, choiceLine, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
+  CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, chargeByLine, payByLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, choiceLine, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, sendSummaries } from "./notify";
@@ -19,6 +19,7 @@ import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
 import { callMinutesOf, chargeCappedLine } from "@/lib/callMeasure";
 import { callReference } from "@/lib/rules";
 import { callsLeftCents } from "./callMoney";
+import { closedOut, pieceCloseOut } from "./closeOut";
 
 // Payment hold (owner rule, Oct 27): starts AT ONCE when any payment is declined (part Pay, the tester's Charge, a call charge, extra pay), or when a chargeback opens
 // (a chargeback during a payment hold turns it into a chargeback hold). There is no owed window and no daily retry. While on hold all the developer's
@@ -497,6 +498,8 @@ export const VERIFY_FIRST = "Verify your card first.";
 /** The daily job: auto-pay after the review window, closing tests paused for 7 days, the paused reminders, Open until heads-ups and each tester's own deadline reminders. (No retries and no owed window any more: a declined payment is a hold at once.) */
 export async function runDaily(now = new Date()) {
   const out = { autoPaid: 0, holds: 0, alerts: 0, headsUps: 0, choices: 0, retried: 0, closed: 0 };
+  // (Batch 17 §19) Each piece's closing dates (the developer's Pay, the tester's Charge), looked up once per run.
+  const co = closeOutMemo(now);
   await (await import("./calls")).sweepNobodyJoined(now);
   // (Batch 11) Bank confirmations that timed out, then the automatic retries of what is owed during a hold.
   await (await import("./confirm")).expireActions(now);
@@ -515,13 +518,16 @@ export async function runDaily(now = new Date()) {
     if (auto == null) continue; // outside the contract: its own reminder every 3 days (below)
     // (Owner, Oct 26; batch 15 section 18) Charge / Let it go opens only when REVIEW_DAYS (7) have passed since it was sent AND the tester's own deadline has passed.
     if (!chargeIsOpen(s, c.test, c, now)) continue;
+    // (Batch 17 §19) Once the piece's Pay closed there's no "pay it" line; once its Charge closed (the tester's side) Charge is never offered or reminded.
+    const payShut = await co.payClosed({ submissionId: s.id }), chargeShut = await co.chargeClosed({ submissionId: s.id });
+    if (payShut && chargeShut) continue;
     // Once it opens: the developer is reminded daily until it's paid, rejected, charged or let go.
     const gone = !!c.tester.deletedAt;
-    if (!s.devRemindedAt || now.getTime() - s.devRemindedAt.getTime() >= 23 * 3_600_000) {
+    if (!payShut && (!s.devRemindedAt || now.getTime() - s.devRemindedAt.getTime() >= 23 * 3_600_000)) {
       await bell(dev.id, `“${c.title}”: ${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} waited over ${REVIEW_DAYS} days: pay it${gone ? "" : ` (${displayName(c.tester)} can now charge or let it go)`}.`, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
       await db.submission.update({ where: { id: s.id }, data: { devRemindedAt: now } });
     }
-    if (gone) continue; // the tester can't sign in: Charge and Let it go never open
+    if (gone || chargeShut) continue; // the tester can't sign in: Charge and Let it go never open (or, batch 17 §19, they closed)
     // Contract price already paid in full for this part: no Charge / Let it go, no day-14 notice, no reminders.
     const paidPart = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
     if (chargeAmount(s.agreedCents, paidPart) === 0) continue;
@@ -546,7 +552,9 @@ export async function runDaily(now = new Date()) {
   }
   // 1b. (Owner, Oct 30, batch 15 sections 15 and 40) A LISTED call left unpaid past its review date (the later of the tester's deadline and the call + 7 days): reviewed like
   // any other part. The developer is reminded daily; the tester can Charge (the measured or lowered length × the contract rate, within the $1,000 for calls) or Let it go.
-  out.choices += await callCharges(now);
+  out.choices += await callCharges(now, co);
+  // 1c. (Batch 17 §19) The reminders 3 days and 1 day before close-out, to whoever still has something open.
+  await closeOutReminders(now, co);
   // 3a. (Owner, Oct 27) ONE daily email per admin that can't be turned off, sent only when it has something in it (see adminDaily.ts).
   out.alerts = await (await import("./adminDaily")).adminDailyEmails(now);
   // 3c. (Owner, Oct 26) Paused tests close after 7 days, whatever the cause (the admin can extend a test's date or close it sooner).
@@ -585,7 +593,7 @@ export async function runDaily(now = new Date()) {
   for (const s of upcoming) {
     const reviewDate = chargeOpensAt(s, s.contract.test, s.contract, now);
     const m = reviewDate ? reviewMarkDue(s.updatedAt, reviewDate, now, s.devMarks) : null;
-    if (!m) continue;
+    if (!m || (await co.payClosed({ submissionId: s.id }))) continue; // (batch 17 §19) Pay closed: no reminders
     const name = displayName(s.contract.tester);
     const part = s.kind === "recording" ? "recording" : "written answers";
     const when = m.label === "tomorrow" ? "by tomorrow" : m.label.replace("in ", "within ");
@@ -601,7 +609,7 @@ export async function runDaily(now = new Date()) {
     const reviewDate = chargeOpensAt(x, x.contract.test, x.contract, now);
     const sent = x.measuredAt ?? x.startsAt;
     const m = reviewDate ? reviewMarkDue(sent, reviewDate, now, x.devMarks) : null;
-    if (!m) continue;
+    if (!m || (await co.payClosed({ callId: x.id }))) continue; // (batch 17 §19) Pay closed: no reminders
     const name = displayName(x.contract.tester);
     const when = m.label === "tomorrow" ? "by tomorrow" : m.label.replace("in ", "within ");
     await bell(x.contract.test.developerId, `“${x.contract.title}”: pay ${name}'s call on ${T(x.startsAt)} ${when}${x.contract.tester.deletedAt ? "" : ` (after that ${name} can charge or let it go)`}.`, `/app/tests/${x.contract.testId}#call-${x.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${x.id}` });
@@ -609,7 +617,7 @@ export async function runDaily(now = new Date()) {
     await db.call.update({ where: { id: x.id }, data: { devMarks: { push: earlier } } });
   }
   // 5c. (Batch 15 sections 15 and 40) Calls that aren't listed: never charged; ONE weekly "Pay your calls" line per developer, stacked across tests, until each is paid ($0 counts).
-  await payYourCalls(now);
+  await payYourCalls(now, co);
   // (Batch 15 section 18) Open until passed: pending applications and open invites close.
   await (await import("./tests")).closeJoiningAfterOpenUntil(now);
   // 7. (Owner, Oct 26) Invites: a bell reminder DAILY until the tester joins, says "No thanks", or the invite expires (all of a day's stack into one line across tests).
@@ -668,6 +676,80 @@ export async function owedForBox(devId: string) {
   return owedLines(devId);
 }
 
+/** (Batch 17 §19) Each piece's closing date for the developer's Pay and for the tester's Charge (pieceCloseOut), looked up once per daily run. */
+function closeOutMemo(now: Date) {
+  type Piece = { submissionId?: string; callId?: string };
+  const seen = new Map<string, Promise<Date | null>>();
+  const at = (k: Piece, side: "tester" | "developer") => {
+    const key = `${side}:${k.submissionId ?? k.callId}`;
+    return seen.get(key) ?? seen.set(key, pieceCloseOut(k, side, now)).get(key)!;
+  };
+  return { at, payClosed: async (k: Piece) => closedOut(await at(k, "developer"), now), chargeClosed: async (k: Piece) => closedOut(await at(k, "tester"), now) };
+}
+type CloseOuts = ReturnType<typeof closeOutMemo>;
+/** (Batch 17 §19) The reminder mark due before a closing date: 3 (days) once within 3 days, 1 once within a day; none before, or once it passed. */
+export function closeOutMark(at: Date | null, now: Date) {
+  if (!at || at.getTime() <= now.getTime()) return null;
+  const left = at.getTime() - now.getTime();
+  return [...CLOSE_OUT_REMINDER_DAYS].sort((a, b) => a - b).find((d) => left <= d * 86_400_000) ?? null;
+}
+
+/**
+ * (Batch 17 §19, DEFAULT) Bell reminders 3 days and 1 day before a piece closes, to whoever still has something open on it, counted to each piece's own closing date: the
+ * tester with work they can still Charge or let go ("Charge or let go of your work on “<test>” by <date>"), the developer with work still unpaid ("Pay <tester>'s work on
+ * “<test>” by <date>"). One line per person, tester and closing day (pieces closing the same day share it). Money lines: they ignore the email setting (`always`). Each is
+ * sent once (its reminderKey names the mark, the tester's contract and the day; a mark that passed unsent isn't sent late). They wait while the test is paused, or while
+ * the tester side is suspended (their Charge is hidden then), as the closing dates move on meanwhile.
+ */
+async function closeOutReminders(now: Date, co: CloseOuts) {
+  const held = { review: null, status: "booked", startsAt: { lte: now } };
+  const contracts = await db.contract.findMany({
+    where: { test: { status: { not: "draft" }, ...PAUSE_FREE }, OR: [{ submissions: { some: { review: null } } }, { calls: { some: held } }] },
+    include: { tester: true, test: { include: { developer: true } }, submissions: { where: { review: null } }, calls: { where: held } },
+    take: 5000,
+  });
+  const sent = async (userId: string, key: string) => !!(await db.notification.findFirst({ where: { userId, reminderKey: key }, select: { id: true } }));
+  /** The pieces whose mark is due now, one entry per closing day: its date, the mark and the first piece's anchor. */
+  const due = async (list: { k: { submissionId?: string; callId?: string }; anchor: string }[], side: "tester" | "developer") => {
+    const days = new Map<string, { at: Date; mark: number; anchor: string }>();
+    for (const x of list) {
+      const at = await co.at(x.k, side);
+      const mark = closeOutMark(at, now);
+      const day = at ? at.toISOString().slice(0, 10) : "";
+      if (mark && !days.has(day)) days.set(day, { at: at!, mark, anchor: x.anchor });
+    }
+    return [...days.entries()].map(([day, v]) => ({ day, ...v }));
+  };
+  for (const c of contracts) {
+    const calls = c.calls.filter((x) => callMinutesOf(x) != null);
+    // The developer: anything of this tester's still unpaid (a deleted tester's only when their payout account was connected).
+    if (testerPayable(c.tester)) {
+      const unpaid = [...c.submissions.map((s) => ({ k: { submissionId: s.id }, anchor: `#piece-${s.id}` })), ...calls.map((x) => ({ k: { callId: x.id }, anchor: `#call-${x.id}` }))];
+      for (const d of await due(unpaid, "developer")) {
+        const key = `closeout:${d.mark}d:dev:${c.id}:${d.day}`;
+        if (await sent(c.test.developerId, key)) continue;
+        const line = payByLine(displayName(c.tester), c.title, T(d.at, "date"));
+        await notify(c.test.developer.email, line, [line + "."], `/app/tests/${c.testId}${d.anchor}`, { always: true, payment: true, group: "closeout", reminder: key });
+      }
+    }
+    // The tester: a part or a listed call they can still Charge or let go.
+    if (c.tester.deletedAt || c.tester.testerSuspendedAt) continue;
+    const open: { k: { submissionId?: string; callId?: string }; anchor: string }[] = [];
+    for (const s of c.submissions) {
+      if (!s.choiceOfferedAt) continue;
+      const paid = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
+      if (chargeAmount(s.agreedCents, paid) > 0) open.push({ k: { submissionId: s.id }, anchor: `#part-${s.kind}` });
+    }
+    for (const x of calls) if (x.choiceOfferedAt && (await callChargeCap(x)).cents > 0) open.push({ k: { callId: x.id }, anchor: `#call-${x.id}` });
+    for (const d of await due(open, "tester")) {
+      const key = `closeout:${d.mark}d:tester:${c.id}:${d.day}`;
+      if (await sent(c.testerId, key)) continue;
+      const line = chargeByLine(c.title, T(d.at, "date"));
+      await notify(c.tester.email, line, [line + "."], `/app/sessions/${c.id}${d.anchor}`, { always: true, payment: true, group: "closeout", reminder: key });
+    }
+  }
+}
+
 /** (Batch 15 section 34) What a tester can Charge for a listed call: its measured (or lowered) length × the contract rate, less what's paid, within what's left of the $1,000. */
 export async function callChargeCap(x: { id: string; contractId: string; rateCents: number | null; actualMinutes: number | null; measuredMinutes: number | null; measuredAt: Date | null }) {
   const minutes = callMinutesOf(x);
@@ -681,18 +763,21 @@ export async function callChargeCap(x: { id: string; contractId: string; rateCen
 export const callChoiceLine = (devName: string, startsAt: Date, cents: number, capped: boolean) =>
   `${devName} didn't pay your call on ${T(startsAt)} in ${REVIEW_DAYS} days: ${capped ? chargeCappedLine(cents).replace(/^Charge/, "charge") : `charge ${money(cents)}`} or let it go`;
 
-async function callCharges(now: Date) {
+async function callCharges(now: Date, co: CloseOuts) {
   let n = 0;
   const due = await db.call.findMany({ where: { review: null, status: "booked", rateCents: { not: null }, payBy: { lt: now }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } }, take: 1000 });
   for (const x of due) {
     const c = x.contract, dev = c.test.developer;
     if (callMinutesOf(x) == null || !chargeIsOpen(x, c.test, c, now)) continue;
+    // (Batch 17 §19) As for sent parts: no "pay it" once the call's Pay closed, no Charge offered or reminded once its Charge closed.
+    const payShut = await co.payClosed({ callId: x.id }), chargeShut = await co.chargeClosed({ callId: x.id });
+    if (payShut && chargeShut) continue;
     const name = displayName(c.tester), gone = !!c.tester.deletedAt;
-    if (!x.devRemindedAt || now.getTime() - x.devRemindedAt.getTime() >= 23 * 3_600_000) {
+    if (!payShut && (!x.devRemindedAt || now.getTime() - x.devRemindedAt.getTime() >= 23 * 3_600_000)) {
       await bell(dev.id, `“${c.title}”: ${name}'s call on ${T(x.startsAt)} waited over ${REVIEW_DAYS} days: pay it${gone ? "" : ` (${name} can now charge or let it go)`}.`, `/app/tests/${c.testId}#call-${x.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${x.id}` });
       await db.call.update({ where: { id: x.id }, data: { devRemindedAt: now } });
     }
-    if (gone) continue;
+    if (gone || chargeShut) continue;
     const cap = await callChargeCap(x);
     if (cap.cents === 0) continue;
     const line = callChoiceLine(displayName(dev), x.startsAt, cap.cents, cap.capped);
@@ -711,10 +796,10 @@ async function callCharges(now: Date) {
 }
 
 /** (Batch 15 sections 15 and 40) The weekly "Pay your calls" line: one per developer, stacked across tests ("3 calls to pay on 2 tests"), until each is paid. */
-async function payYourCalls(now: Date) {
+async function payYourCalls(now: Date, co: CloseOuts) {
   const calls = await db.call.findMany({ where: { review: null, status: "booked", rateCents: null, payBy: { lt: now }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, take: 5000 });
   const byDev = new Map<string, typeof calls>();
-  for (const x of calls) if (callMinutesOf(x) != null) byDev.set(x.contract.test.developerId, [...(byDev.get(x.contract.test.developerId) ?? []), x]);
+  for (const x of calls) if (callMinutesOf(x) != null && !(await co.payClosed({ callId: x.id }))) byDev.set(x.contract.test.developerId, [...(byDev.get(x.contract.test.developerId) ?? []), x]);
   for (const [devId, list] of byDev) {
     const key = `paycalls:${devId}`;
     // Weekly: the calls in the last line carry when it was sent.
@@ -738,6 +823,8 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
     if (byTesterChoice(s.review.reason)) throw new HttpError(409, "done", "You already chose for this.");
     throw new HttpError(409, "done", s.review.rejected ? `${displayName(dev)} rejected this meanwhile.` : `${displayName(dev)} paid ${money(s.review.amountCents)} for this meanwhile.`);
   }
+  // (Batch 17 §19) After the piece closed nothing is offered any more (even a piece whose Charge never opened).
+  await chargeCloseOutGate({ submissionId: s.id });
   if (!s.choiceOfferedAt) throw new HttpError(409, "not_yet", `You can choose once ${REVIEW_DAYS} days have passed since you sent it and your deadline has passed.`);
   await testerTermsGate(contractId, displayName(dev), body);
   const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;
@@ -802,6 +889,12 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   return { choice, amountCents: amount, status, ...(status === "needs_confirmation" ? { message: `Charged ${money(amount)}. Payment may be delayed.` } : {}) };
 }
 
+/** (Batch 17 §19) Charge and Let it go close on the piece's own closing date for the tester (final: the piece stays unpaid). */
+async function chargeCloseOutGate(where: { submissionId: string } | { callId: string }) {
+  const at = await pieceCloseOut(where, "tester");
+  if (closedOut(at)) throw new HttpError(409, "charge_closed", chargeClosedLine(fmtDate(at!)));
+}
+
 /** (Batch 15 sections 15, 34 and 40) The tester's Charge / Let it go on a listed call left unpaid past its review date. */
 async function chooseCallOutcome(tester: { id: string; email: string; name: string }, contractId: string, body: Record<string, unknown>) {
   const x = await db.call.findUnique({ where: { id: String(body.callId ?? "") }, include: { review: true, contract: { include: { tester: true, test: { include: { developer: true } } } } } });
@@ -812,6 +905,8 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
     if (byTesterChoice(x.review.reason)) throw new HttpError(409, "done", "You already chose for this.");
     throw new HttpError(409, "done", `${displayName(dev)} paid ${money(x.review.amountCents)} for this meanwhile.`);
   }
+  // (Batch 17 §19) After the piece closed nothing is offered any more (even a piece whose Charge never opened).
+  await chargeCloseOutGate({ callId: x.id });
   if (!x.choiceOfferedAt) throw new HttpError(409, "not_yet", `You can choose once ${REVIEW_DAYS} days have passed since the call and your deadline has passed.`);
   await testerTermsGate(contractId, displayName(dev), body);
   const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;

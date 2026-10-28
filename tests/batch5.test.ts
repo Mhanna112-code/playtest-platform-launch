@@ -224,55 +224,30 @@ describe("batch 5 item 5: Rate's stop-once lines", () => {
     expect(testClosedForRate({ status: "closed" })).toBe(true);
   });
 
-  it("tester: on an open test a listing change stops Rate; once the test is stopped it doesn't, but a payment does", async () => {
+  it("tester (batch 17 section 14): a listing change never stops Rate; a payment about their work does, once", async () => {
     const { dev, testId, sessionId, tester, sub } = await sentWork();
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    let pageLoaded = seen();
+    const pageLoaded = seen();
     await settle();
     await db.testEvent.create({ data: { testId, kind: "info", text: "Nora Lane changed the description" } });
-    const open = await sact(sessionId, "rate", tester.cookie, { stars: 4, seenAt: pageLoaded });
-    expect(open.body.error.code).toBe("stop_once");
-    expect(open.body.error.changes.map((c: { text: string }) => c.text)).toContain("Nora Lane changed the description");
-    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
-    pageLoaded = seen();
-    await settle();
-    await db.testEvent.create({ data: { testId, kind: "info", text: "Nora Lane changed the description again" } });
     const rec = await db.submission.create({ data: { contractId: sessionId, kind: "recording", agreedCents: 1000, sentAt: new Date(Date.now() - 60_000), updatedAt: new Date() } });
     await db.review.create({ data: { submissionId: rec.id, contractId: sessionId, amountCents: 1000, agreedCents: 1000, payKey: randomUUID() } });
-    const closed = await sact(sessionId, "rate", tester.cookie, { stars: 4, seenAt: pageLoaded });
-    expect(closed.body.error.code).toBe("stop_once");
-    expect(closed.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane paid $10.00 for your recording"]);
-    // Nothing else new: the listing line alone never stops Rate after the close.
+    const r = await sact(sessionId, "rate", tester.cookie, { stars: 4, seenAt: pageLoaded });
+    expect(r.body.error.code).toBe("stop_once");
+    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane paid $10.00 for your recording"]);
     await settle();
-    const later = seen();
-    await settle();
-    await db.testEvent.create({ data: { testId, kind: "info", text: "Nora Lane changed the steps" } });
-    expect((await sact(sessionId, "rate", tester.cookie, { stars: 4, seenAt: later })).status).toBe(200);
+    expect((await sact(sessionId, "rate", tester.cookie, { stars: 4, seenAt: pageLoaded, confirmed: true, boxAt: seen() })).status).toBe(200);
   });
 
-  it("developer: on an open test a tester joining stops Rate; once the test is stopped only pay / reject / charge / let go / dispute lines do", async () => {
+  it("developer (batch 17 sections 14 and 16): a tester joining or a Charge line never stops Rate", async () => {
     const { dev, testId, sessionId, tester, sub } = await sentWork();
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
     expect((await sact(sessionId, "rate", tester.cookie, { stars: 4 })).status).toBe(200);
-    let pageLoaded = seen();
+    const pageLoaded = seen();
     await settle();
     await joined(testId, "Ben Carter", "he");
-    const open = await act(testId, "rate", dev.cookie, { contractId: sessionId, stars: 5, seenAt: pageLoaded });
-    expect(open.body.error.code).toBe("stop_once");
-    expect(open.body.error.changes.map((c: { text: string }) => c.text).join(" ")).toMatch(/Ben Carter joined/);
-    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
-    pageLoaded = seen();
-    await settle();
-    await db.testEvent.create({ data: { testId, kind: "joined", text: "Cara Diaz joined" } });
     await db.testEvent.create({ data: { testId, kind: "choice", text: "Ana Silva can now charge or let go of their recording", contractId: sessionId } });
-    const closed = await act(testId, "rate", dev.cookie, { contractId: sessionId, stars: 5, seenAt: pageLoaded });
-    expect(closed.body.error.code).toBe("stop_once");
-    expect(closed.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Ana Silva can now charge or let go of their recording"]);
-    await settle();
-    const later = seen();
-    await settle();
-    await db.testEvent.create({ data: { testId, kind: "joined", text: "Dee Moss joined" } });
-    expect((await act(testId, "rate", dev.cookie, { contractId: sessionId, stars: 5, seenAt: later })).status).toBe(200);
+    expect((await act(testId, "rate", dev.cookie, { contractId: sessionId, stars: 5, seenAt: pageLoaded })).status).toBe(200);
   });
 });
 

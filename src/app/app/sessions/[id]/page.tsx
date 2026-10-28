@@ -7,6 +7,8 @@ import { callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, 
 import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, callsLeftWarning, MEASURING_LINE } from "@/lib/callMeasure";
 import { callsLeftCents } from "@/lib/server/callMoney";
 import { callChargeCap, callChoiceLine } from "@/lib/server/holds";
+import { chargeClosesLine, closeOutSoon, notPaidClosedLine } from "@/lib/rules";
+import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
 import { fmtTime } from "@/lib/format";
 import { renderTimes } from "@/lib/tz";
 import { ReasonQuote } from "@/components/ScrollText";
@@ -31,7 +33,7 @@ import { ChatWithButton } from "@/components/ChatWithButton";
 import { LiveTop } from "@/components/LiveTop";
 import { qText } from "@/lib/questions";
 import { RateBox } from "@/components/RateBox";
-import { contractRatings, rateBlocker, rateWarning, ratingSummary } from "@/lib/server/ratings";
+import { contractRatings, rateWarning, ratingSummary, testerRateState } from "@/lib/server/ratings";
 import { openOffer } from "@/lib/server/terms";
 import { keyOf } from "@/lib/server/accessKeys";
 import { KeyBox } from "./KeyBox";
@@ -128,7 +130,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (NEWEST+5) Rating the developer.
   const rated = await contractRatings(c.id);
   const myRating = rated.tester;
-  const rateBlock = myRating ? "rated" : await rateBlocker(c.id, "tester");
+  // (Batch 17 sections 1, 2 and 19) The Rate box: open, disabled with its grey line, "Rating closed on <date>." after close-out, or hidden (incl. while suspended).
+  const rateState = myRating ? { kind: "rated" as const, line: "" } : await testerRateState(c.id);
+  const rateBlock = rateState.kind === "open" ? "" : rateState.kind === "rated" ? "rated" : rateState.line;
   const rateWarn = await rateWarning(c.id);
   // Live calls: the request panel shows only when there's something to do or see.
   const paused = testPaused(c.test.developer, c.test);
@@ -140,6 +144,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const meOff = !!u.testerSuspendedAt;
   // What a suspended tester can still press in the limited view (section 28): Dispute, Charge, Let it go, Rate.
   const canAct = !meOff || limited;
+  // (Batch 17 section 10) In the limited view Dispute is the only press: Charge and Let it go wait for the reinstatement (Rate is hidden too).
+  const canChoose = !meOff;
   // (Owner, Oct 28 afternoon) Calls can be requested whether or not a live call is a listed part (one that isn't says so: its pay is up to the developer).
   const canRequestCall = !refusal && !blockedPair && !paused;
   const listedCall = callListed(c.test, c);
@@ -165,6 +171,13 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const overCalls = c.calls.filter((x) => callIsOver(x) || blockedPair).sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
   const callsWarning = callsLeftWarning(await callsLeftCents(c.id), listedCall ? c.liveRateCents : null, "tester", displayName(u));
   const callCaps = new Map(await Promise.all(c.calls.filter((x) => x.choiceOfferedAt && !x.review).map(async (x) => [x.id, await callChargeCap(x)] as const)));
+  // (Batch 17 §19) Each unpaid piece's own closing date for the tester (the test's close-out, or 14 days after its Charge opened if later, plus the time their tester side
+  // was suspended): Charge and Let it go end then and the piece reads "Not paid (closed on <date>)"; its Charge box says when in its last 7 days.
+  const openKeys: { submissionId?: string; callId?: string }[] = [...c.submissions.filter((x) => !x.review).map((x) => ({ submissionId: x.id })), ...c.calls.filter((x) => !x.review && x.status === "booked").map((x) => ({ callId: x.id }))];
+  const chargeCloses = new Map(await Promise.all(openKeys.map(async (k) => [k.submissionId ?? k.callId!, await pieceCloseOut(k, "tester", now)] as const)));
+  const chargeShut = (pieceId?: string) => !!pieceId && closedOut(chargeCloses.get(pieceId) ?? null, now);
+  const shutOn = (pieceId: string) => fmtDate(chargeCloses.get(pieceId)!);
+  const chargeSoon = (pieceId?: string) => (pieceId && closeOutSoon(chargeCloses.get(pieceId) ?? null, now) ? chargeClosesLine(fmtDate(chargeCloses.get(pieceId)!)) : "");
   const infoChanged = (await db.testEvent.count({ where: { testId: c.testId, kind: "info", createdAt: { gt: c.joinedAt } } })) > 0;
   // (NEXT-UI 7) The calls, and the booked daily / weekly sets as one line each ("Weekly · Mon 3:00 PM (3 left)").
   // (Batch 15 section 42) The Live session: only calls ahead and calls in progress ("Call in progress / measuring" once started).
@@ -181,7 +194,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   });
   // (Owner, Oct 29, batch 10) A paused test hides what doesn't work right now (Send, the call-request tools, Join call, chat's message box) and says at the top what still
   // works, built from what is actually on the page (the server refusals stay as a backstop).
-  const choiceOpen = (sub: typeof written) => !!(sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && canAct && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0);
+  const choiceOpen = (sub: typeof written) => !!(sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && canChoose && !chargeShut(sub.id) && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0);
   const disputable = (r: { amountCents: number; agreedCents: number | null; reason: string } | null | undefined, d: unknown) => !!r && canAct && canDispute(r.amountCents, r.agreedCents, !!d, byTesterChoice(r.reason)).ok;
   const unpaidPart = !written?.review || !recording?.review;
   const pausedBanner = rulesPaused ? pausedForTesters({
@@ -198,7 +211,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   }) : "";
   // (Batch 16 section 24) What still works once the work is over, built from what is actually on the page (as the paused banner does).
   const stillWorks = {
-    charge: !meOff && !devGone && ([written, recording].some((x) => !!x && !x.review && (x.agreedCents ?? 0) > 0 && chargeAmount(x.agreedCents, partPaid.get(x.id) ?? 0) > 0) || c.calls.some((x) => !x.review && x.status === "booked" && callMinutesOf(x) != null && callListed(c.test, c))),
+    charge: !meOff && !devGone && ([written, recording].some((x) => !!x && !x.review && !chargeShut(x.id) && (x.agreedCents ?? 0) > 0 && chargeAmount(x.agreedCents, partPaid.get(x.id) ?? 0) > 0) || c.calls.some((x) => !x.review && !chargeShut(x.id) && x.status === "booked" && callMinutesOf(x) != null && callListed(c.test, c))),
     dispute: [written, recording].some((x) => x && !chargedOwed.has(x.id) && !delayedSubs.has(x.id) && disputable(x.review, x.dispute)) || c.calls.some((x) => !owedCalls.has(x.id) && disputable(x.review, x.dispute)),
     rate: rateBlock === "" && !meOff,
     excerpt: excerptPicks.length > 0,
@@ -292,8 +305,10 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       {myRating && !rated.testerRevealed && <p className="note">You rated {dev}.</p>}
       {myRating && rated.testerRevealed && <p className="note">You rated {dev}: {myRating.stars} ★{myRating.comment ? ` · “${myRating.comment}”` : ""}</p>}
       {rated.developer && <p className="note">{dev} rated you: {rated.developer.stars} ★{rated.developer.comment ? ` · “${rated.developer.comment}”` : ""}</p>}
-      {rateBlock === "" && canAct && (
+      {rateState.kind === "closed" && !meOff && <p className="note" data-rating-closed="">{rateState.line}</p>}
+      {(rateState.kind === "open" || rateState.kind === "disabled") && !meOff && (
         <RateBox
+          disabledLine={rateState.kind === "disabled" ? rateState.line : ""}
           path={`/api/sessions/${c.id}/rate`}
           seenAt={seenAt}
           name={dev}
@@ -367,15 +382,18 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                 {sub && !sub.review && !chargedOwed.has(sub.id) && (devGone && !sub.choiceOfferedAt
                   // (Batch 15 section 32) The developer deleted their account: not "Under review" any more.
                   ? <span className="badge border-rose-300/40 text-rose-200" data-part-status="gone">Can&apos;t be paid: {devRealName} deleted their account</span>
+                  : chargeShut(sub.id) ? <span className="badge" data-part-status="closed">{notPaidClosedLine(shutOn(sub.id))}</span> // (Batch 17 §19)
                   : <span className="badge border-amber-300/40 text-amber-200" data-part-status="review">Under review</span>)}
                 <span className="text-slate-200">{sub ? <>Sent {fmtDateTime(sub.updatedAt)}{sub.late && <span className="ml-2 badge">{lateLabel(c.dueAt, fmtDate)}</span>}</> : "Not sent yet"}</span>
                 {cents != null && <span className={`badge ${required ? "border-amber-300/40 text-amber-200" : ""}`}>{required ? "Required" : "Not required"}</span>}
               </p>
               <p className="text-slate-400">{cents == null ? NOT_LISTED : `In your contract · ${cents === 0 ? "free" : `${money(testerShare(cents))} for you`}`}{` · Paid so far ${money(sub ? partPaid.get(sub.id) ?? 0 : 0)}`}</p>
               {sub && <p className="text-xs text-slate-500">{partLine(sub.agreedCents, partPaid.get(sub.id) ?? 0)}</p>}
-              {sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && canAct && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0 && (
+              {sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && canChoose && !chargeShut(sub.id) && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0 && (
                 <ChoiceBox paused={rulesPaused} seenAt={seenAt} sessionId={c.id} submissionId={sub.id} devName={dev} cents={chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0)} line={choiceLine(dev, key, chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0))} />
               )}
+              {/* (Batch 17 §19) Its last 7 days before close-out. */}
+              {chargeSoon(sub?.id) && choiceOpen(sub) && <p className="note" data-charge-closes="">{chargeSoon(sub?.id)}</p>}
               {/* (Batch 12 section 1) The developer deleted their account before Charge opened: this part can't be paid. */}
               {sub && !sub.review && !sub.choiceOfferedAt && devGone && <p className="info" data-dev-deleted="">{devDeletedLine(devRealName)}</p>}
               {sub && chargedOwed.has(sub.id) ? <p className="info" data-charged-delayed="">{chargedDelayedLine(chargedOwed.get(sub.id)!)}</p> : sub && delayedSubs.has(sub.id) ? <p className="info">Payment for this part may be delayed.</p> : sub?.review && <TesterReview dev={dev} extras={extraRows.filter((p) => p.submissionId === sub.id)} off={meOff && !limited} delayed={disputeOwed.has(sub.id)} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} />}
@@ -393,13 +411,14 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             {c.calls.filter((x) => !x.review && x.status === "booked" && callMinutesOf(x) != null).map((x) => devGone ? <p key={x.id} className="info" data-dev-deleted="">Live call on {fmtDateTime(x.startsAt)}: {devDeletedLine(devRealName)}</p> : (
               <div key={x.id} className="space-y-1">
                 {/* (Owner, Oct 28, batch 16 section 40) One short grey line per call (the part line above has the rate and what's paid so far); blue only for a real notice. */}
-                <p className="text-xs text-slate-400" data-call-row="" data-call-length="">{fmtDateTime(x.startsAt)} · {callMinutesOf(x)} min · waiting for {dev} to pay</p>
+                <p className="text-xs text-slate-400" data-call-row="" data-call-length="">{fmtDateTime(x.startsAt)} · {callMinutesOf(x)} min · {chargeShut(x.id) ? notPaidClosedLine(shutOn(x.id)) : <>waiting for {dev} to pay</>}</p>
                 {failedCalls.has(x.id) && <p className="info">{DELAYED_CALL_LINE}</p>}
                 {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
                 {/* (Batch 15 section 15) A listed call left unpaid past its review date: Charge or Let it go, as a sent part. */}
-                {x.choiceOfferedAt && canAct && (callCaps.get(x.id)?.cents ?? 0) > 0 && (
+                {x.choiceOfferedAt && canChoose && !chargeShut(x.id) && (callCaps.get(x.id)?.cents ?? 0) > 0 && (
                   <ChoiceBox paused={rulesPaused} seenAt={seenAt} sessionId={c.id} callId={x.id} devName={dev} cents={callCaps.get(x.id)!.cents} line={renderTimes(callChoiceLine(dev, x.startsAt, callCaps.get(x.id)!.cents, callCaps.get(x.id)!.capped), u.timeZone)} />
                 )}
+                {chargeSoon(x.id) && x.choiceOfferedAt && canChoose && (callCaps.get(x.id)?.cents ?? 0) > 0 && <p className="note" data-charge-closes="">{chargeSoon(x.id)}</p>}
               </div>
             ))}
             {c.calls.filter((x) => x.review).map((x) => (

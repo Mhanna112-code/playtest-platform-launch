@@ -153,6 +153,7 @@ describe("B) reminders", () => {
     expect((await sact(sessionId, "rate", tester.cookie, { stars: 4 })).status).toBe(200);
     expect((await lines(dev.user.id)).find((l) => /You can rate/.test(l.text))?.own).toBe(true);
     await db.rating.updateMany({ where: { contractId: sessionId, side: "tester" }, data: { createdAt: new Date(Date.now() - 4 * DAY) } });
+    await db.review.updateMany({ where: { contractId: sessionId }, data: { createdAt: new Date(Date.now() - 5 * DAY) } }); // (batch 17 section 16) the window counts from the later of the two
     await db.notification.updateMany({ where: { userId: tester.user.id, text: { startsWith: "Reminder: rate" } }, data: { createdAt: new Date(Date.now() - 4 * DAY) } });
     await cron();
     expect((await lines(tester.user.id)).filter((l) => /^Reminder: rate/.test(l.text)).length).toBe(1);

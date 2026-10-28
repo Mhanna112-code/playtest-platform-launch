@@ -35,7 +35,8 @@ describe("after the test is stopped", () => {
     const first = await pay(dev.cookie, { kind: "submission", id: rec.id, amount: "10.00", tickedCents: 1000, seenAt: opened });
     expect(first.status).toBe(409);
     expect(first.body.error.code).toBe("stop_once");
-    expect(texts(first).join(" ")).toMatch(/disputed the pay/);
+    // (Batch 17 section 12) A page opened before the stop: Pay stops once with the stop as the change.
+    expect(texts(first)).toEqual([expect.stringMatching(/^You stopped this test at /)]);
     // The second press goes ahead (nothing newer happened).
     const second = await pay(dev.cookie, { kind: "submission", id: rec.id, amount: "10.00", tickedCents: 1000, seenAt: opened, confirmed: true, boxAt: first.body.error.now });
     expect(second.status).toBe(200);
@@ -85,6 +86,6 @@ describe("after the test is stopped", () => {
     await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: written.id, reason: "I answered everything properly", seenAt: seen(), confirmed: true });
     const r = await sact(sessionId, "rate", tester.cookie, { stars: 4, comment: "ok", seenAt: seen(), confirmed: true });
     expect(r.status).toBe(409);
-    expect(r.body.error.message).toBe("Rating opens once the team has decided the open dispute.");
+    expect(r.body.error.message).toBe("Rating opens once the team decides your dispute.");
   });
 });

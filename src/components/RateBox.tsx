@@ -13,8 +13,10 @@ import { NotSentTag, useKept } from "@/lib/useKept";
  * (NEWEST+5) Rate, as the full app's rating box: 1-5 and an optional note (500 max). A rating that finishes the part
  * asks first (its in-page confirm, with what it ends). Same button rules as every other: stop once under the button,
  * refusals blue, a missing rating red. (Batch 16 section 10) Red at its box (the stars or the note) and listed under the button.
+ * (Batch 17 section 1) `disabledLine`: something is still open (unreviewed work to charge or let go, a dispute, a review window): the button is disabled, with that one
+ * short grey line under it; the page's poll updates both as things are decided. `anchor`: the box's id (a developer's page has one per tester: "rate-<contract>").
  */
-export function RateBox(p: { path: string; seenAt: string; name: string; body?: Record<string, unknown>; headline: string; lines: string[]; working: boolean }) {
+export function RateBox(p: { path: string; seenAt: string; name: string; body?: Record<string, unknown>; headline: string; lines: string[]; working: boolean; disabledLine?: string; anchor?: string }) {
   const [stars, setStars] = useState("");
   const [comment, setComment] = useState("");
   const { press, changes, error, busy } = usePress(p.seenAt);
@@ -30,7 +32,7 @@ export function RateBox(p: { path: string; seenAt: string; name: string; body?: 
     }
   };
   return (
-    <div ref={box} className="space-y-2 rounded-xl border border-amber-300/25 bg-amber-300/[0.04] p-3 text-sm text-ink-200" id="rate" data-mistakes-root="">
+    <div ref={box} className="space-y-2 rounded-xl border border-amber-300/25 bg-amber-300/[0.04] p-3 text-sm text-ink-200" id={p.anchor ?? "rate"} data-mistakes-root="">
       <p className="flex items-center gap-1.5 font-medium text-white"><Star className="h-4 w-4 text-amber-300" /> Rate {p.name}</p>
       <p className="text-xs text-ink-400">1 to 5, and a note if you like (shown without your name).{p.working ? ` ${p.headline}` : ""}</p>
       <div className="flex flex-wrap items-end gap-2">
@@ -40,14 +42,15 @@ export function RateBox(p: { path: string; seenAt: string; name: string; body?: 
         </select>
         <input className="input min-w-0 flex-1" maxLength={500} data-match="comment" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="A note" aria-label="A note" />
         {p.working ? (
-          <ConfirmButton live className="btn-secondary" disabled={busy} title="Rate and finish?" confirmLabel="Rate and finish" onConfirm={send}
+          <ConfirmButton live className="btn-secondary" disabled={busy || !!p.disabledLine} title="Rate and finish?" confirmLabel="Rate and finish" onConfirm={send}
             body={<>{[p.headline, ...p.lines].map((l) => <p key={l}>{l}</p>)}</>}>
             Rate and finish
           </ConfirmButton>
         ) : (
-          <button className="btn-secondary" disabled={busy} onClick={send}>Rate</button>
+          <button className="btn-secondary" disabled={busy || !!p.disabledLine} onClick={send}>Rate</button>
         )}
       </div>
+      {p.disabledLine && <p className="text-xs text-ink-400" data-rate-disabled="">{p.disabledLine}</p>}
       {keep.restored && <p><NotSentTag /></p>}
       <ChangesBox changes={changes} error={error.startsWith(FIELD) ? "" : error} didntGo={p.working} />
       <FormMistakes text={error.startsWith(FIELD) ? error : ""} press={p.working ? "Rate and finish" : "Rate"} />

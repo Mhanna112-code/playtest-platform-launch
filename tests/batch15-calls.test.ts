@@ -194,7 +194,7 @@ describe("Charge for a listed call, the weekly line for unlisted ones, rating (s
     await withCard(dev.user.id);
     const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie);
     await tookPlace(call.id, 20); // $30/h × 20 min = $10
-    expect(await rateBlocker(sessionId, "tester")).toMatch(/^Rating opens once/);
+    expect(await rateBlocker(sessionId, "tester")).toMatch(/^Rating opens on /); // (batch 17 section 1)
     const c = await db.call.findUniqueOrThrow({ where: { id: call.id } });
     await db.contract.update({ where: { id: sessionId }, data: { dueAt: new Date(Date.now() - DAY) } });
     await runDaily(new Date(c.payBy!.getTime() + 60_000));

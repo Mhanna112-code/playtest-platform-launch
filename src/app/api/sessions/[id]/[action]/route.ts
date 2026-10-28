@@ -9,8 +9,9 @@ import { openDispute } from "@/lib/server/payments";
 import { reportKeyBroken } from "@/lib/server/accessKeys";
 import { db } from "@/lib/db";
 import { displayName, fmtDate } from "@/lib/format";
-import { PAUSE_DEFAULTS, PAUSED_SEND, WORK_OVER_ACTIONS, testPaused, testerPaused, testerRefusal, workOver, workOverLine, workOverPress } from "@/lib/rules";
+import { CALL_CANCELLED_BY_STOP, LIMITED_CHOICE_REFUSAL, RATE_INACTIVE, PAUSE_DEFAULTS, PAUSED_SEND, WORK_OVER_ACTIONS, testPaused, testerPaused, testerRefusal, workOver, workOverLine, workOverPress } from "@/lib/rules";
 import { markQuiet } from "@/lib/server/testerGate";
+import { loadedOf, stopBox, testerStopSince } from "@/lib/server/stopMoment";
 import { requireUser } from "@/lib/server/session";
 import { leaveTest, sendWritten } from "@/lib/server/tests";
 import { requireActive, requireConfirmed } from "@/lib/server/users";
@@ -36,6 +37,8 @@ async function finalRefusal(userId: string, contractId: string, action: string, 
   if (!c || c.testerId !== userId || c.status === "working") return;
   const dev = displayName(c.test.developer);
   if (workOver(c)) {
+    // (Batch 17 section 12) Cancel call from a page opened before the stop: the stop already cancelled the calls ahead.
+    if (action === "cancel-call" || action === "cancel-set") throw new HttpError(409, "call_cancelled", CALL_CANCELLED_BY_STOP);
     const press = workOverPress(action, body);
     throw new HttpError(409, "work_over", workOverLine(c, dev, fmtDate, press), { failed: press, top: true });
   }
@@ -79,8 +82,14 @@ async function markQuietPress(userId: string, contractId: string, action: string
  * (Owner, Oct 28, batch 16 section 28) A suspended tester side: the tests they were removed from open in a limited view, where Dispute, Charge, Let it go and Rate still
  * work (on the first press). Every other press stays refused while suspended (excerpt requests too, through their own route, until the suspension lifts).
  */
-const LIMITED_ACTIONS = new Set(["choose", "dispute", "rate"]);
+// (Owner, Oct 28, batch 17 section 10) Dispute is the only press in the limited view; Charge, Let it go and Rate are hidden there and refused here (nothing is lost:
+// Charge never happens on its own, so what was open is still open after the reinstatement).
+const LIMITED_ACTIONS = new Set(["dispute"]);
 async function limitedUser(req: Request, contractId: string, action: string) {
+  if (action === "choose" || action === "rate") {
+    const me = await requireUser(req);
+    if (me.testerSuspendedAt) throw new HttpError(409, "inactive", action === "rate" ? RATE_INACTIVE : LIMITED_CHOICE_REFUSAL);
+  }
   if (!LIMITED_ACTIONS.has(action)) return null;
   const u = await requireUser(req);
   if (!u.testerSuspendedAt) return null;
@@ -97,6 +106,12 @@ export async function POST(req: Request, { params }: Ctx) {
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
     await finalRefusal(u.id, id, action, body);
     await pausedRefusal(u.id, id, action);
+    // (Batch 17 section 12) Charge / Let it go on a page opened before the test stopped, closed or this tester's work ended early: it stops once with the stop as the
+    // change (the second press goes ahead). Rate checks the same in its own gate (section 14); Dispute never stops for it.
+    if (action === "choose") {
+      const stop = await testerStopSince(id, loadedOf(body));
+      if (stop) stopBox([stop]);
+    }
     await markQuietPress(u.id, id, action, body);
     const res0 = await run(u, id, action, body);
     const data = await res0.clone().json().catch(() => null);

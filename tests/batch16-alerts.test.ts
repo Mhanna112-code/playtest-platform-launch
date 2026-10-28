@@ -42,9 +42,9 @@ describe("big changes from another tab stop every press once (section 21)", () =
     await later();
     expect((await pay(dev.cookie, { kind: "submission", id: a.sub.id, amount: "10.00", tickedCents: 1000, tab: "A" })).status).toBe(200);
     expect(await devLive(dev.cookie, testId, loaded, "B")).toContain(PAID);
+    // (Batch 17 sections 14 and 16) The developer's Rate stops only for a dispute about that tester decided or a stop: a Pay in another tab goes straight through.
     const r = await act(testId, "rate", dev.cookie, { contractId: a.sessionId, stars: 4, seenAt: loaded, tab: "B" });
-    expect(texts(r)).toEqual([PAID]);
-    expect((await act(testId, "rate", dev.cookie, { contractId: a.sessionId, stars: 4, seenAt: loaded, tab: "B", ...again() })).status).toBe(200);
+    expect(r.status).toBe(200);
     // Rating again (here or in another tab) is a plain refusal, no stop box.
     const twice = await act(testId, "rate", dev.cookie, { contractId: a.sessionId, stars: 4, seenAt: loaded, tab: "A" });
     expect(twice.body.error).toMatchObject({ message: "You already rated Ana Silva." });
@@ -150,6 +150,7 @@ describe("big changes from another tab stop every press once (section 21)", () =
     const r = await act(testId, "next-round", dev.cookie, { seenAt: loaded, tab: "B" });
     expect(r.body.error.code).toBe("stop_once");
     expect(r.body.error.changes).toEqual([expect.objectContaining({ text: "You started a new round in another tab", link: `/app/tests/new?draft=${made.body.id}` })]);
+    await later(); // (Windows' clock can lag: the box's time must clearly follow the other tab's draft)
     expect((await act(testId, "next-round", dev.cookie, { seenAt: loaded, tab: "B", ...again() })).body.error.message).toMatch(/^This test already has a next round\./);
     expect(src("components/ChangesBox.tsx")).toContain('<a href={c.link} data-stop-link="">{c.text}</a>');
   });

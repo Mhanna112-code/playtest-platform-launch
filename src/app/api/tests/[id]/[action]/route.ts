@@ -40,7 +40,8 @@ export async function GET(req: Request, { params }: Ctx) {
 export async function POST(req: Request, { params }: Ctx) {
   return handle(async () => {
     const { id, action } = await params;
-    const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action), devSide: !TESTER_SIDE.has(action) });
+    // (Batch 17 section 2) Rate reaches its own refusal ("You can rate once your account is active again.") while the developer is suspended or on a hold.
+    const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action) || action === "rate", devSide: !TESTER_SIDE.has(action) });
     const body = await readJson(req, 900_000); // (batch 15 sections 3 and 17) an Edit with 20 questions and the steps at 20,000 characters each
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
     await adminRefusal(req, u.id, id, action);

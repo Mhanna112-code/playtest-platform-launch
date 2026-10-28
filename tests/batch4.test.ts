@@ -412,8 +412,10 @@ describe("follow-up 2, 3) the team stopping a test", () => {
       expect(r.body.error.code, action).toBe("admin_stopped");
       expect(r.body.error.failed, action).toMatch(/didn't go through$/);
     }
-    // Pay was allowed before and still is: no "Press again to go ahead" for the team's stop.
-    const p = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded, confirmed: false });
+    // Pay was allowed before and still is. (Batch 17 section 12) From a page opened before the team's stop it stops once with it, then goes ahead.
+    const p0 = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded, confirmed: false });
+    expect(p0.body.error.changes.map((x: { text: string }) => x.text)).toEqual([expect.stringMatching(/^The team stopped this test at /)]);
+    const p = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded, confirmed: true, boxAt: new Date().toISOString() });
     expect(p.status).toBe(200);
     expect((await act(testId, "message", dev.cookie, { contractId: sessionId, body: "Thanks all" })).status).toBe(200);
     // The pulse tells the open page (and Edit) the team stopped it.
@@ -457,7 +459,7 @@ describe("follow-up 5, 7, 8, 9, 10) cards, the mistakes line, End early, profile
 
   it("the End early pop-up counts held calls and every unreviewed part", () => {
     expect(src("app/app/tests/[id]/page.tsx")).toContain('"live call"');
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("waiting: [");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("waiting: [...c.submissions.filter((x) => !x.review && !payShut(x.id))"); // (batch 17 §19) a piece whose Pay closed doesn't wait
     expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain("Nothing they&apos;ve sent or held is waiting for review.");
   });
 

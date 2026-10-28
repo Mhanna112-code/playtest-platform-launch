@@ -27,6 +27,12 @@ export async function GET(req: Request) {
       const full = open.filter((i) => (working.find((w) => w.testId === i.testId)?._count._all ?? 0) >= i.test.spots).map((i) => i.id);
       return ok({ v: [invs.map((i) => `${i.id}:${i.status}:${i.updatedAt.getTime()}:${i.test.status}`).join(","), full.join(",")].join("|"), restricted: false });
     }
+    // (Batch 17 section 17) "Ratings to give" on a dashboard: a row appearing or going (a dispute opening, a rating given, a window ending) refreshes it.
+    const rates = q.get("rates");
+    if (rates === "tester" || rates === "developer") {
+      const { ratingsToGive } = await import("@/lib/server/ratings");
+      return ok({ v: (await ratingsToGive(u, rates)).map((r) => `${r.id}:${r.text}`).join(","), restricted: false });
+    }
     // (Batch 17 §18) The tester dashboard's "Tests visited": a listed test's state changing (filling, pausing, stopping, an invite or application of theirs…), a card
     // removed in another tab or a test joined refreshes it.
     if (q.get("visited")) {
@@ -70,8 +76,11 @@ export async function GET(req: Request) {
     const keyRows = sessionId ? [] : await db.accessKey.groupBy({ by: ["status"], where: { testId }, _count: { _all: true } });
     const keysV = keyRows.map((k) => `${k.status}:${k._count._all}`).sort().join(",");
     const pay = { n: payCount, last: (payLast?.createdAt.getTime() ?? 0) + (payLast?.status ?? "") };
+    // (Batch 17 sections 1 and 16) A Rate box opening, greying or going as things are decided: ratings given, and (a session) the tester's own Rate state.
+    const ratingsN = await db.rating.count({ where: { testId } });
+    const rateV = sessionId ? (await (await import("@/lib/server/ratings")).testerRateState(sessionId)).line : "";
     // (Batch 10) The developer's suspension and the team's pause are in it too, so a tester's session page shows (or drops) the paused banner live.
-    const v = [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0].join("|");
+    const v = [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0, ratingsN, rateV].join("|");
     // (Owner, Oct 28) Whether the team stopped the test: an open test page or Edit moves to the top of the test page at once.
     // (Batch 10) A tester's session page isn't restricted by the developer's hold (only the developer's own pages are): it keeps refreshing, so the paused banner shows live.
     // (Batch 15 section 16) Each side's own suspension: the tester side on a session page, the developer side on a test page.

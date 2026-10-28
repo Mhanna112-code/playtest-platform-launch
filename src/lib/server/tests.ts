@@ -1,3 +1,4 @@
+import { devStopSince, loadedOf } from "./stopMoment";
 import { CALL_ACTS, PAY_ACTS, bigOwnLines, devChanges, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { qOptional } from "@/lib/questions";
 import { itemsFor, itemsOf, prevSetsOf, pushPrev, sameQuestions } from "@/lib/answerSets";
@@ -541,6 +542,12 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
   const boxAt = seenOf(body.boxAt);
   if (body.confirmed === true && !boxAt) return;
   const seenAt = body.confirmed === true && boxAt ? boxAt : seenDate(body.seenAt);
+  // (Owner, Oct 28, batch 17 section 12) Pay / Pay more on a page opened BEFORE the test stopped, closed or this tester's work ended early: it stops once with the stop as the
+  // one change; the second press (its box shown after the stop) goes ahead, as on a page opened after it.
+  if (press.stopCheck !== undefined) {
+    const stop = await devStopSince(testId, press.stopCheck || null, loadedOf(body));
+    if (stop) throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [devLine(stop)], ...extra });
+  }
   // (Owner, Oct 28, batch 16 section 25) The test stopped or closed, paused (any cause), or the developer held or suspended, as the page showed it: every press still
   // allowed goes through on the FIRST press (no stop-once, no other-tab stops; repeats are plain refusals). The one exception: Rate on a stopped test stops once
   // for a payment, Charge, Let it go or dispute decision about that person since the page loaded.
@@ -567,7 +574,10 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
  * or null. A state that began after the page loaded doesn't count (the press then stops once for it as usual).
  */
 export async function quietState(tx: Tx | typeof db, testId: string, body: Record<string, unknown>): Promise<"stopped" | "paused" | null> {
-  const loaded = seenOf(body.pageSeenAt) ?? seenOf(body.seenAt);
+  const page = seenOf(body.pageSeenAt) ?? seenOf(body.seenAt);
+  // (Batch 17 section 12) A second press whose stop box was shown after the state began counts as a page opened in that state.
+  const box = body.confirmed === true ? seenOf(body.boxAt) : null;
+  const loaded = page && box && box > page ? box : page ?? box;
   if (!loaded) return null;
   const t = await tx.test.findUnique({ where: { id: testId }, select: { status: true, stoppedAt: true, adminPausedAt: true, developer: { select: { holdStartedAt: true, devSuspendedAt: true } } } });
   if (!t) return null;

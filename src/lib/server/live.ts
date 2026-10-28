@@ -31,6 +31,8 @@ export type Press = {
   rate?: string;
   /** (Batch 16 sections 21 and 25) Stop on a test another tab stopped after this page loaded: it still stops once, then it's refused. */
   inState?: boolean;
+  /** (Batch 17 section 12) Pay / Pay more on this contract: a stop (or that tester's work ended early) since the page loaded stops it once ("" = test-wide only). */
+  stopCheck?: string;
 };
 export type OwnEvent = TestEventLike & { about?: OwnAbout; live?: string };
 export const CALL_ACTS = ["request-time", "answer-request", "cancel-call", "cancel-set", "no-show"] as const;
@@ -171,10 +173,11 @@ export async function devPaymentChanges(devId: string, testId: string, since: Da
  * on any of their sessions with this developer, naming the test; the team's decision on their dispute (this session).
  * Never the words "failed", "hold" or "chargeback"; never other testers' payments.
  */
-export async function testerPaymentChanges(testerId: string, contractId: string, since: Date): Promise<TestEventLike[]> {
+/** (Batch 17 section 14) `onlyHere`: only payments on this contract (what Rate stops for: the developer's pay on this shared work). */
+export async function testerPaymentChanges(testerId: string, contractId: string, since: Date, onlyHere = false): Promise<TestEventLike[]> {
   const me = await db.contract.findUniqueOrThrow({ where: { id: contractId }, select: { test: { select: { developerId: true, developer: true } } } });
   const [pays, disputes] = await Promise.all([
-    db.payment.findMany({ where: { testerId, developerId: me.test.developerId, contractId: { not: null }, OR: [{ status: "failed", owedUntil: { not: null }, createdAt: { gt: since } }, { status: { in: ["deferred", "owed"] }, createdAt: { gt: since } }, { settledAt: { gt: since } }] }, orderBy: { createdAt: "asc" }, take: 50 }),
+    db.payment.findMany({ where: { testerId, developerId: me.test.developerId, contractId: onlyHere ? contractId : { not: null }, OR: [{ status: "failed", owedUntil: { not: null }, createdAt: { gt: since } }, { status: { in: ["deferred", "owed"] }, createdAt: { gt: since } }, { settledAt: { gt: since } }] }, orderBy: { createdAt: "asc" }, take: 50 }),
     db.dispute.findMany({ where: { contractId, decidedAt: { gt: since } } }),
   ]);
   const titles = new Map((await db.contract.findMany({ where: { id: { in: pays.map((p) => p.contractId!) } }, select: { id: true, title: true } })).map((c) => [c.id, c.title]));

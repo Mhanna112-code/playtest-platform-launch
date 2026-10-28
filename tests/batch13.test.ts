@@ -152,10 +152,10 @@ describe("batch 13 section 4: Rate and suspensions", () => {
     await act(s.testId, "stop", s.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     await db.user.update({ where: { id: s.tester.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     const r = await sact(s.sessionId, "rate", s.tester.cookie, { stars: 4 });
-    expect(r.status).toBe(403);
-    expect(r.body.error).toMatchObject({ code: "suspended", suspended: true });
-    // (Batch 16 section 28) Hidden while suspended, except in the limited view of a test they were removed from (canAct).
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain('{rateBlock === "" && canAct && (');
+    // (Batch 17 section 2) Refused with its own line; hidden while suspended (the limited view too).
+    expect(r.status).toBe(409);
+    expect(r.body.error).toMatchObject({ code: "inactive", message: "You can rate once your account is active again." });
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain('{(rateState.kind === "open" || rateState.kind === "disabled") && !meOff && (');
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("const canAct = !meOff || limited;");
     await db.user.update({ where: { id: s.tester.user.id }, data: { devSuspendedAt: null, testerSuspendedAt: null } });
     expect((await sact(s.sessionId, "rate", s.tester.cookie, { stars: 4 })).status).toBe(200);

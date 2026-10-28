@@ -130,9 +130,8 @@ describe("batch 7 item 4: stop-once on every press still allowed", () => {
     expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 25, reason: "We stopped early.", seenAt: loaded })).status).toBe(404);
     // (Batch 15 section 27) The side of a dispute never stops.
     expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "They skipped two answers", seenAt: loaded })).status).toBe(200);
-    // Rate Ana: the payment about Ben doesn't stop it; a payment about Ana does (Pay above was about Ana, from this tab: not news), so add one.
-    await db.testEvent.create({ data: { testId, kind: "paid", text: "Ana Silva charged $1.00 for their recording", contractId: a.sessionId } });
-    stops(await act(testId, "rate", dev.cookie, { contractId: a.sessionId, stars: 4, seenAt: loaded }), "rate");
+    // (Batch 17 section 16) Rate Ana: her call isn't paid yet, so the developer's Rate is still pending (refused with its line).
+    expect((await act(testId, "rate", dev.cookie, { contractId: a.sessionId, stars: 4, seenAt: loaded })).body.error.message).toBe("You can rate Ana Silva once they've rated you and everything they sent is settled.");
   });
 
   it("developer, restricted: Cancel call from the dashboard's Calls box goes through on the first press (batch 16 section 25)", async () => {
@@ -164,10 +163,12 @@ describe("batch 7 item 4: stop-once on every press still allowed", () => {
       await settle();
       const rec = await paidLater(sessionId);
       const press = (action: string, body: Record<string, unknown>) => sact(sessionId, action, tester.cookie, { seenAt: loaded, ...body });
-      stops(await press("rate", { stars: 4 }), "rate"); // the DEFAULT exception: a payment about the work arrived since the page loaded
+      // (Batch 17 section 1) Rate waits while a piece can be charged.
+      expect((await press("rate", { stars: 4 })).body.error.message).toBe("Charge or let go of your unreviewed work first.");
       const charged = await press("choose", { submissionId: sub.id, choice: "charge", tickedCents: 1000 });
       expect(charged.status, JSON.stringify(charged.body)).toBe(200);
       expect((await press("choose", { submissionId: sub.id, choice: "letgo" })).body.error.message).toBe("You already chose for this."); // refusals unchanged
+      stops(await press("rate", { stars: 4 }), "rate"); // a payment about the work arrived since the page loaded
       const disputed = await press("dispute", { kind: "submission", id: rec.id, reason: "I recorded the whole session" });
       expect(disputed.status, JSON.stringify(disputed.body)).toBe(200);
       if (call) {

@@ -89,10 +89,52 @@ When the bank asks the developer to confirm a payment (3D Secure), its check ope
 - A dispute opened meanwhile isn't a stop: Rate becomes disabled with its line (§1).
 - Tests: each stopping change for each side; an ignored change going straight through; Rate on a team-paused test for both sides.
 
+## 15. Stop the test needs a reason testers read (owner, Oct 28)
+The developer's Stop pop-up ("Are you sure you want to stop “<test>”?") gets a required "Why?" box, like End early: up to 10,000 characters with "N / 10,000", Stop disabled ("Say why first") until it has text; the server refuses an empty or too-long reason. Testers read it in italics in a scroll box on their session page (under the stopped line) and in full in the email; never in the bell line. Also in the developer's Contract changes / History and the admin timeline. A paused or restricted developer's Stop needs it too. The team's Stop keeps its own reason, shown only to the developer (§12).
+
+## 16. The developer rates a tester only after the tester has rated (owner, Oct 28)
+The developer's Rate for a tester opens only when **everything that tester sent is settled** (paid, charged or let go; any dispute decided) **and the tester has rated** the developer. Until then the developer's Rate box is **hidden** (owner); a press from an old page is refused: "You can rate Ana once they've rated you and everything they sent is settled." The developer's 14 days (and the reminders "<tester> finished <test>. You can rate them for 14 days.") start then.
+- **No tester deadline for rating (owner, final):** the tester's Rate keeps no end date (as today). The developer's Rate stays pending until the tester has rated and everything is settled, however long that takes; a tester who never rates is never rated by that developer. The developer's 14 days start when the tester rates.
+- §14's developer-side stops for Charge / Let it go no longer apply (everything is settled before the developer can rate); a dispute opened after the tester rated still disables the developer's Rate until decided (§1), and its decision stops the developer's Rate once.
+- Update ratings reminders, the dashboard "testers waiting to be rated" rows and the profile rating counts accordingly; tests for each path.
+
+## 17. "Ratings to give" on both dashboards (owner, Oct 28)
+A small box on each dashboard listing every rating the person can give right now, newest first, in a plain scroll box (batch 16 §14); each row links to the rating box (developer: that tester's row on the test page; tester: the session page's Rate box), highlighted for a few seconds.
+- **Tester:** a row appears once everything they sent on that test is settled and no dispute of theirs is open (Rate available): "Rate Nora Lane on “Harbor Run”".
+- **Developer:** a row appears once that tester has rated and everything they sent is settled (§16): "Rate Ana Silva on “Harbor Run” · 12 days left".
+- Rows follow every Rate rule: they disappear live when Rate becomes unavailable (a dispute opens, the person's own side is suspended, a developer hold, already rated) and reappear when it's available again; a stale click lands on the page with the usual refusal.
+- Hidden entirely while the viewer's own side is suspended (and for a developer on a hold).
+- Replaces the developer's "testers waiting to be rated" rows and the tester's Rate rows in To do, so a rating is listed in one place.
+
+## 18. "Tests visited" on the tester dashboard (owner, Oct 28)
+A section listing every test the tester has **opened the join page of but never joined**, most recent visit first, in a plain scroll box (batch 16 §14). Each card shows the test, the developer and its state now, and opens the join page, which shows the matching state and refusal:
+- Open ("Accepting testers"), Full, Joining closed ("Closed to new testers on <date>"), Paused, Stopped / Closed, Applied (waiting), Invited (links to the invitation).
+- **Invite only and not invited:** the card says "Invite only"; the page shows only "This test isn't available right now." (the same as a paused test for someone not involved), nothing of the listing.
+- A test from a developer blocked either way is left out (batch 16 §11).
+- Each card has a small "Remove" (×) that drops it from the list (no confirm); opening the join page again brings it back.
+- States update live (the dashboard poll).
+- Storage: record (tester, test, last visited) when a signed-in tester opens a join page for a test they're not in. This needs a small table: hand-write the migration, check it with `prisma migrate diff … --shadow-database-url …playtest_lite_shadow --exit-code`, apply it only to the local playtest_lite DB, and say in the report that the 3400 server needs a restart.
+- Tests: each state, invite-only not invited, Remove, a visit then joining (it leaves the list), blocked.
+
+## 19. Close-out: 14 days after the last tester's deadline (owner, Oct 28; final)
+Each test gets one **close-out date: 14 days after the last tester's deadline has passed** (moves later with pauses and outages, like deadlines). On that date:
+- (Pay more: see below.)
+- **Testers can no longer rate:** "Rating closed on <date>."
+- **Charge / Let it go and the developer's Pay close**, except for pieces whose Charge opened less than 14 days before: **each piece gets at least 14 days of Charge** from when its Charge opened (Charge opens at the later of the tester's deadline and 7 days after sending), so such a piece keeps Charge / Let it go and the developer's Pay until 14 days after its Charge opened. When a piece closes unpaid: the developer's row leaves Needs you with "Closed on <date>: not paid."; the tester's part reads "Not paid (closed on <date>)".
+- **The developer can rate a tester who never rated**, for 14 days from the close-out date (or from when that tester's last open piece settles or closes, if later), only if everything that tester sent was settled (paid, charged or let go). If anything closed unpaid, there's no rating of that tester.
+- **Disputes are unchanged** (a dispute filed before its piece closed is still decided; a decision raising pay still charges the developer).
+- Until a piece closes, the developer can still Pay it after its Charge opens (whichever comes first settles it).
+- **Pay more closes together with the last Pay / Charge on the test (owner, final):** on the close-out date, or, if a piece's Charge window runs later (14 days after its Charge opened), on that later date. One date for the test; it replaces batch 16 §22's "30 days after the test ends". Its last-7-days line: "Pay more closes on <date>."
+**Protections (DEFAULT, owner to confirm):**
+- The Charge box and Needs you rows show "Charge closes on <date>" / "Pay closes on <date>" in their last 7 days; bell reminders 3 days and 1 day before close-out to whoever still has something open ("Charge or let go of your work on “<test>” by <date>" / "Pay <tester>'s work on “<test>” by <date>"); these emails ignore the email setting (money).
+- A tester whose tester side is suspended during the window gets the suspended time added to their pieces' Charge windows (their Charge is hidden while suspended, §10), so a suspension never eats their Charge window.
+- The "closes on" lines and reminders use each piece's own closing date (Charge, Pay) the test's last money date for Pay more, and the close-out date for Rate.
+- Tests: close-out date with late joiners, pause shift, a suspended tester's extension, Pay / Pay more / Charge / Rate refused after close-out, the developer's rating after close-out, a dispute decided after close-out.
+
 ## Check and report
 - Tests for each rule, both sides.
 - Run `NEXT_DIST_DIR=.next-build npm run check`; it must be green.
-- No migration expected; if one is needed, hand-write it, check it with `prisma migrate diff … --shadow-database-url …playtest_lite_shadow --exit-code`, and apply it only to the local playtest_lite DB.
+- §18 needs a migration; for it (and any other), hand-write it, check it with `prisma migrate diff … --shadow-database-url …playtest_lite_shadow --exit-code`, and apply it only to the local playtest_lite DB.
 - Don't touch port 3400. Don't edit docs/DESIGN-DOC.md (it's updated after you report).
 - Commit on master and never push. End the commit message with:
   Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

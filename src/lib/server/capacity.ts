@@ -31,7 +31,10 @@ export async function testerCapacity(developerId: string) {
     if (!c.review || (!c.rateCents && !c.review.amountCents)) continue;
     pieces.push(byTester(c.review.reason, c.review.auto) ? { reviewedAt: null, missedAt: c.review.createdAt } : { reviewedAt: c.review.createdAt, missedAt: null });
   }
-  const shown = ratings.map((r) => ({ stars: r.stars, at: r.revealedAt ?? new Date(r.createdAt.getTime() + WINDOW_DAYS * DAY) }));
+  // (Batch 17 section 16) A tester's rating shows when the developer rates back or their window ends (it can run past 14 days): still-hidden ones don't count yet.
+  const { revealTimes } = await import("./ratings");
+  const times = await revealTimes(ratings);
+  const shown = ratings.map((r, i) => ({ stars: r.stars, at: times[i] })).filter((r) => r.at.getTime() <= Date.now());
   const cap = earnedLimit(shown, pieces, dev.testerLimit);
   if (cap.limit > dev.testerLimit) await db.user.updateMany({ where: { id: developerId, testerLimit: { lt: cap.limit } }, data: { testerLimit: cap.limit } });
   return cap;

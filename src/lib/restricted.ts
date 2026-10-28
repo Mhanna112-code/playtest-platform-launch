@@ -53,7 +53,8 @@ export function testerRestricted(u: Restrictable & { isDeveloper?: boolean; isTe
  */
 export const RESTRICTED_OK_ACTIONS = new Set(["cancel-call", "stop", "end-early", "dispute-side"]);
 /** (Batch 15 section 23) What still works on a test the team paused (the same pair, plus chat and the side of a dispute). */
-export const TEAM_PAUSED_OK_ACTIONS = new Set(["stop", "end-early", "cancel-call", "message", "dispute-side"]);
+// (Owner, Oct 28, batch 17 section 14) Rate too: both sides rate a test the team paused, straight through (not while the developer is held or suspended).
+export const TEAM_PAUSED_OK_ACTIONS = new Set(["stop", "end-early", "cancel-call", "message", "dispute-side", "rate"]);
 
 /** What a refused press tells the developer (the blue box at the dashboard top says the rest). */
 export const RESTRICTED_LINE: Record<DevRestriction, string> = {

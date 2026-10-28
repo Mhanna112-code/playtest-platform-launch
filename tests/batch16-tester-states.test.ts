@@ -57,6 +57,11 @@ describe("what still works goes through on the first press (section 25, tester)"
       expect(again.status).toBe(409);
       const b = await scene(state, "charge-open");
       const c = await sact(b.sessionId, "choose", b.tester.cookie, { submissionId: b.sub.id, choice: "letgo", seenAt: b.opened });
+      if (state === "removed") {
+        // (Batch 17 section 10) In the suspended tester's limited view Dispute is the only press: Charge and Let it go wait for the reinstatement.
+        expect(c.body.error.message).toBe("You can do this once your account is active again.");
+        return;
+      }
       expect(c.status, JSON.stringify(c.body)).toBe(200);
       expect((await sact(b.sessionId, "choose", b.tester.cookie, { submissionId: b.sub.id, choice: "letgo", seenAt: b.opened })).body.error.message).toBe("You already chose for this.");
     }, 60_000);
@@ -71,7 +76,7 @@ describe("what still works goes through on the first press (section 25, tester)"
     expect(r2.status, JSON.stringify(r2.body)).toBe(200);
   }, 60_000);
 
-  it("Rate with nothing about the work since the page loaded: the first press goes through (stopped)", async () => {
+  it("Rate with nothing about the work since the page loaded: the stop itself stops it once (batch 17 section 12), then it goes through", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: [ANSWER, "Smooth."], seenAt: seen(), confirmed: true });
@@ -83,7 +88,9 @@ describe("what still works goes through on the first press (section 25, tester)"
     await settle();
     expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200); // cancels the call: not news for Rate
     const r = await sact(sessionId, "rate", tester.cookie, { stars: 5, comment: "", seenAt: opened });
-    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.error.changes.map((x: { text: string }) => x.text), JSON.stringify(r.body)).toEqual([expect.stringMatching(/^Nora Lane stopped this test at /)]);
+    await settle();
+    expect((await sact(sessionId, "rate", tester.cookie, { stars: 5, comment: "", seenAt: opened, confirmed: true, boxAt: seen() })).status).toBe(200);
   });
 
   it("paused: Cancel call and Leave go through on the first press", async () => {
@@ -151,13 +158,14 @@ describe("a suspended tester's limited view of tests they were removed from (sec
     expect(closedForSuspended("/app/sessions/abc", u, "tester")).toBe(false); // the page decides
     expect(closedForSuspended("/app/find", u, "tester")).toBe(true); // Find stays closed
     expect(closedForSuspended("/app/testers/x", u, "tester")).toBe(true); // profiles too
-    expect(R.LIMITED_VIEW_LINE).toBe("Your account is paused. You can still dispute, charge or let go of unreviewed work, and rate.");
+    expect(R.LIMITED_VIEW_LINE).toBe("Your account is paused. You can still dispute a payment."); // (batch 17 section 10)
     const page = src("app/app/sessions/[id]/page.tsx");
     expect(page).toContain('const limited = !!u.testerSuspendedAt && c.status !== "working" && c.endKind === "suspended";');
     expect(page).toContain('if (u.testerSuspendedAt && !limited) redirect("/app");');
     expect(page).toContain('{limited && <p className="info" data-limited-view="">{LIMITED_VIEW_LINE}</p>}');
     expect(page).toContain("{!limited && (c.calls.length > 0 || canRequestCall || pendingReqs.length > 0) && (");
-    expect(page).toContain('{rateBlock === "" && canAct && (');
+    expect(page).toContain('{(rateState.kind === "open" || rateState.kind === "disabled") && !meOff && ('); // (batch 17 section 2) no Rate there
+    expect(page).toContain("const canChoose = !meOff;"); // (batch 17 section 10) no Charge / Let it go there
     expect(page).toContain("off={meOff && !limited}");
     // Hidden there: chat, the key box (not working), Leave (not working), excerpt requests (excerptPicks need an active tester side).
     expect(page).toContain("!excerptPending && !u.testerSuspendedAt ? await excerptChoices(written)");

@@ -23,7 +23,7 @@ import { owedForBox } from "@/lib/server/holds";
 import { termsRowLines } from "@/lib/server/terms";
 import { rejoinAskLine } from "@/lib/server/joining";
 import { RateBox } from "@/components/RateBox";
-import { contractRatings, rateBlocker, ratingSummary } from "@/lib/server/ratings";
+import { contractRatings, devRateStates, ratingSummary } from "@/lib/server/ratings";
 import { LiveTop } from "@/components/LiveTop";
 import { MessagesSquare } from "lucide-react";
 import { Applications } from "./Applications";
@@ -33,10 +33,11 @@ import { rowsOf, toJson } from "@/lib/callRows";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
-import { HOLD_APPROVAL_AFTER, NOT_LISTED, callListed, deletedNoPayoutsLine, joiningClosedLine, payMoreState, testEndedAt, testerPayable, STOP_NOTE_KIND, stopReasonOf } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, NOT_LISTED, callListed, deletedNoPayoutsLine, joiningClosedLine, closeOutSoon, closedNotPaidLine, payClosesLine, testerPayable, STOP_NOTE_KIND, stopReasonOf } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
+import { closedOut, payMoreClosesAt, pieceCloseOut } from "@/lib/server/closeOut";
 import { BankWaiting } from "@/components/BankWaiting";
 import { bankWaitingOnTest } from "@/lib/server/confirm";
 import { ContractChanges, type ChangeEntry } from "./ContractChanges";
@@ -127,8 +128,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const expired = inviteExpired(t);
   const soon = t.openUntil && t.openUntil > new Date() && t.openUntil.getTime() - Date.now() < 3 * 86_400_000;
   const now = new Date();
-  // (Owner, Oct 28, batch 16 section 22) Pay more closes 30 days after the test ended; the box says so in its last 7 days.
-  const payMore = payMoreState(testEndedAt(t, t.contracts, now), now, fmtDate);
+  // (Batch 17 §19, replacing batch 16 section 22) Pay more closes together with the last Pay / Charge on the test (payMoreClosesAt); in its
+  // last 7 days the box says "Pay more closes on <date>.".
+  const payMoreAt = await payMoreClosesAt(t.id, now);
+  const payMore = { open: !closedOut(payMoreAt, now), line: closeOutSoon(payMoreAt, now) ? payClosesLine(fmtDate(payMoreAt!), true) : "" };
   // (Owner, Oct 26) A chargeback hold's steps. (A paused test's closing date is told by bell and shown to the admin, not on the page.)
   const cbSteps = await chargebackSteps(u.id);
   // (Batch 17 §11) Charges made while the developer was away that their bank wants confirmed: "Confirm with your bank" under the affected piece (Payments and the bell link here).
@@ -146,6 +149,13 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   })));
   // (Batch 15 section 34) What's left of the $1,000 for each tester's calls, and the small warning when under an hour (or under $200 unlisted).
   const callsLeft = new Map(await Promise.all(t.contracts.map(async (c) => [c.id, await callsLeftCents(c.id)] as const)));
+  // (Batch 17 §19) Each unpaid piece's Pay closes on its own date (the test's close-out, or 14 days after its Charge opened if later): then it leaves Needs you and its
+  // place reads "Closed on <date>: not paid."; in its last 7 days its Needs you row says "Pay closes on <date>.".
+  const unpaidKeys: { submissionId?: string; callId?: string }[] = t.contracts.flatMap((c) => [...c.submissions.filter((x) => !x.review).map((x) => ({ submissionId: x.id })), ...c.calls.filter((x) => tookPlace(x) && !x.review).map((x) => ({ callId: x.id }))]);
+  const payCloses = new Map(await Promise.all(unpaidKeys.map(async (k) => [k.submissionId ?? k.callId!, await pieceCloseOut(k, "developer", now)] as const)));
+  const payShut = (pieceId: string) => closedOut(payCloses.get(pieceId) ?? null, now);
+  const shutOn = (pieceId: string) => fmtDate(payCloses.get(pieceId)!);
+  const paySoon = (pieceId: string) => (closeOutSoon(payCloses.get(pieceId) ?? null, now) ? fmtDate(payCloses.get(pieceId)!) : "");
   const callsWarn = new Map(t.contracts.map((c) => [c.id, callsLeftWarning(callsLeft.get(c.id) ?? 0, callListed(t, c) ? c.liveRateCents : null, "developer", displayName(c.tester))] as const));
   // (Owner, Oct 28, batch 16 section 33) The developer's other booked calls still ahead (any tester, any test), for the clash checks while Request a time is filled.
   const otherCalls = (await db.call.findMany({ where: { status: "booked", startsAt: { gt: new Date(now.getTime() - 6 * 3_600_000) }, contract: { test: { developerId: u.id } } }, include: { contract: { include: { tester: true } } } }))
@@ -199,9 +209,18 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     };
   });
   // (NEWEST+5) Rating a tester: only after they rated you (14 days); their rating shows once you rate (or the window closes).
+  // (Batch 17 sections 1, 14, 16 and 19) The developer's Rate box per tester: shown once the tester rated and everything they sent is settled (or, for a tester who never
+  // rated, from the close-out), disabled while a dispute with them is open, hidden while the developer is held or suspended.
+  const rateStates = await devRateStates(t.contracts.map((c) => c.id), now);
+  const rateBoxOf = (c: { id: string; tester: Parameters<typeof displayName>[0] }) => {
+    const st = rateStates.get(c.id);
+    if (!st || (st.kind !== "open" && st.kind !== "disabled")) return null;
+    const name = displayName(c.tester);
+    return <RateBox key={`rate-${c.id}`} anchor={`rate-${c.id}`} path={`/api/tests/${t.id}/rate`} body={{ contractId: c.id }} seenAt={seenAt} name={name} working={false} disabledLine={st.kind === "disabled" ? st.line : ""} headline={`Your rating of ${name} is final. Both ratings show once you rate.`} lines={[]} />;
+  };
   const rateInfo = new Map(
     await Promise.all(
-      t.contracts.map(async (c) => [c.id, { ...(await contractRatings(c.id)), blocker: await rateBlocker(c.id, "developer"), avg: (await ratingSummary(c.testerId)).line }] as const),
+      t.contracts.map(async (c) => [c.id, { ...(await contractRatings(c.id, now)), state: rateStates.get(c.id)!, avg: (await ratingSummary(c.testerId)).line }] as const),
     ),
   );
   // (NEXT-UI 21) Needs you: sent work and held calls waiting for Pay / Reject, the testers' call requests, disputes waiting for the developer's side.
@@ -212,6 +231,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       ...c.submissions.filter((x) => !x.review).map((x) => ({ kind: "sub" as const, id: x.id, c, s: x, x: null, at: x.sentAt })),
       ...c.calls.filter((x) => tookPlace(x) && !x.review).map((x) => ({ kind: "call" as const, id: x.id, c, s: null, x, at: x.startsAt })),
     ])
+    .filter((x) => !payShut(x.id)) // (Batch 17 §19) its Pay closed: nothing left to pay
     .sort((a, b) => a.at.getTime() - b.at.getTime());
   const needsRequests = reqs.filter((r) => r.fromSide === "tester").flatMap((r) => {
     const c = t.contracts.find((x) => x.id === r.contractId);
@@ -261,7 +281,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             sent: [...(c.submissions.some((x) => x.kind === "written") ? ["written answers"] : []), ...(c.submissions.some((x) => x.kind === "recording") ? ["recording"] : [])],
             toSend: [...(c.writtenCents != null && !c.submissions.some((x) => x.kind === "written") ? ["written answers"] : []), ...(c.recordingCents != null && !c.submissions.some((x) => x.kind === "recording") ? ["recording"] : [])],
             ahead: c.calls.filter((x) => x.status === "booked" && x.startsAt > now).length,
-            waiting: [...c.submissions.filter((x) => !x.review).map((x) => (x.kind === "recording" ? "recording" : "written answers")), ...(c.calls.some((x) => tookPlace(x) && !x.review) ? ["live call"] : [])],
+            waiting: [...c.submissions.filter((x) => !x.review && !payShut(x.id)).map((x) => (x.kind === "recording" ? "recording" : "written answers")), ...(c.calls.some((x) => tookPlace(x) && !x.review && !payShut(x.id)) ? ["live call"] : [])],
           }))}
         />
         <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" />
@@ -291,6 +311,13 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 <ExcerptRemove excerptId={e.id} label="Take down" body="It leaves the tester's profile at once, and they're told." />
               </div>
             ))}
+          </section>
+        )}
+        {/* (Batch 17 section 14) A test the team paused (nobody held or suspended): the developer still rates, straight through. */}
+        {!accountPaused && t.contracts.some((c) => rateBoxOf(c)) && (
+          <section className="card space-y-2" data-restricted-rate="">
+            <h2 className="font-semibold text-white">Rate your testers</h2>
+            {t.contracts.map((c) => rateBoxOf(c))}
           </section>
         )}
         {/* (Batch 15 section 27) The developer's side of a dispute: optional, never stopped, works while paused or restricted. */}
@@ -348,7 +375,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           toSend: [...(c.writtenCents != null && !c.submissions.some((x) => x.kind === "written") ? ["written answers"] : []), ...(c.recordingCents != null && !c.submissions.some((x) => x.kind === "recording") ? ["recording"] : [])],
           ahead: c.calls.filter((x) => x.status === "booked" && x.startsAt > now).length,
           // (Owner, Oct 28) Everything still waiting for Pay or Reject: unreviewed parts and held calls (started, not paid).
-          waiting: [...c.submissions.filter((x) => !x.review).map((x) => (x.kind === "recording" ? "recording" : "written answers")), ...(c.calls.some((x) => tookPlace(x) && !x.review) ? ["live call"] : [])],
+          waiting: [...c.submissions.filter((x) => !x.review && !payShut(x.id)).map((x) => (x.kind === "recording" ? "recording" : "written answers")), ...(c.calls.some((x) => tookPlace(x) && !x.review && !payShut(x.id)) ? ["live call"] : [])],
         }))}
       />
       {t.pauseClosedAt && <p role="alert" className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100" data-pause-closed="">{t.pauseClosedReason}</p>}
@@ -390,6 +417,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 <a href={`/app/testers/${x.c.testerId}`}>{displayName(x.c.tester)}</a> · {x.kind === "sub" ? (x.s!.kind === "written" ? "Written answers" : "Recording") : "Live call"} · {x.kind === "sub" ? `sent ${fmtDateTime(x.s!.updatedAt)}` : `${fmtDateTime(x.x!.startsAt)} · ${x.x!.minutes} min booked`} · {(x.kind === "sub" ? x.s!.agreedCents : x.x!.rateCents) == null ? NOT_LISTED : "In their contract"}
                 {x.kind === "sub" && x.s!.late && <span className="ml-2 badge">{lateLabel(x.c.dueAt, fmtDate)}</span>}
               </p>
+              {/* (Batch 17 §19) The last 7 days before close-out. */}
+              {paySoon(x.id) && <p className="note" data-pay-closes="">{payClosesLine(paySoon(x.id))}</p>}
               {x.kind === "sub" ? (
                 <>
                   {/* (Owner, Oct 29, batch 10) One piece's answers in their own scroll box (about 16 lines) when longer; the Pay box below stays outside it. */}
@@ -480,6 +509,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       <span className={`badge ${r.required ? "border-amber-300/40 text-amber-200" : ""}`}>{r.required ? "Required" : "Not required"}</span>
                       <span className={r.sub ? "text-emerald-200" : "text-slate-400"}>{r.sub ? `Sent ${fmtDate(r.sub.sentAt)}` : "Not sent yet"}</span>
                       {r.sub && <span className="text-slate-300">· paid {money(partPaid(r.sub.id))} of {r.sub.agreedCents != null ? money(r.sub.agreedCents) : `(${NOT_LISTED.toLowerCase()})`}</span>}
+                      {/* (Batch 17 §19) Unpaid at close-out: it stays unpaid. */}
+                      {r.sub && !r.sub.review && payShut(r.sub.id) && testerPayable(c.tester) && <span className="w-full text-sm text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(r.sub.id))}</span>}
                       {/* (Owner, Oct 29, batch 11 section 6 / batch 12 section 3) A paid piece keeps its Pay box as "Pay more" until its cap is reached. */}
                       {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && payMore.open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
                         <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
@@ -509,7 +540,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       {overCalls.map((x) => {
                         const m = callMinutesOf(x);
                         const badge = callOverBadge(x, { developer: displayName(u), tester: name }, "developer", fmtTime, partPaid(x.id), m);
-                        const inNeeds = tookPlace(x) && !x.review && !restricted && testerPayable(c.tester);
+                        const inNeeds = tookPlace(x) && !x.review && !restricted && testerPayable(c.tester) && !payShut(x.id);
                         return (
                           <li key={x.id} id={inNeeds ? `callrow-${x.id}` : `call-${x.id}`} className={`space-y-1 rounded-lg border border-white/5 p-2 ${"scroll-mt-24 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300"}`} data-over-call={x.id}>
                             <div className="flex flex-wrap items-center gap-2">
@@ -521,6 +552,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                             {badge.reason && <ReasonQuote text={badge.reason} />}
                             {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
                             {inNeeds && <a href={`#call-${x.id}`} className="text-xs">Pay it in Needs you ↑</a>}
+                            {tookPlace(x) && !x.review && payShut(x.id) && testerPayable(c.tester) && <p className="text-xs text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(x.id))}</p>}
                             {bankAt(x.id)}
                             {x.review && !x.review.rejected && !restricted && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
                               <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
@@ -558,19 +590,13 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {/* (Batch 11, DEFAULT) A tester who deleted their account with no payout account: their unreviewed work left Needs you. */}
                 {!testerPayable(c.tester) && (c.submissions.some((x) => !x.review) || c.calls.some((x) => tookPlace(x) && !x.review)) && <p className="note" data-deleted-no-payouts="">{deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null }))}</p>}
                 {ri?.avg && <p className="note">{name}: {ri.avg}</p>}
-                {ri?.tester && (
-                  <>
-                    {ri.testerRevealed ? (
-                      <p className="note">{name} rated you: {ri.tester.stars} ★{ri.tester.comment ? ` · “${ri.tester.comment}”` : ""}</p>
-                    ) : (
-                      <p className="note">{name} rated you: you&apos;ll see it after you rate {pronouns(c.tester.pronoun).obj} (or on {fmtDate(ri.revealOn!)}).</p>
-                    )}
-                    {ri.developer && <p className="note">You rated {name}: {ri.developer.stars} ★</p>}
-                    {ri.blocker === "" && !restricted && (
-                      <RateBox path={`/api/tests/${t.id}/rate`} body={{ contractId: c.id }} seenAt={seenAt} name={name} working={false} headline={`Your rating of ${name} is final. Both ratings show once you rate.`} lines={[]} />
-                    )}
-                  </>
-                )}
+                {ri?.tester && (ri.testerRevealed ? (
+                  <p className="note">{name} rated you: {ri.tester.stars} ★{ri.tester.comment ? ` · “${ri.tester.comment}”` : ""}</p>
+                ) : (
+                  <p className="note">{name} rated you: you&apos;ll see it after you rate {pronouns(c.tester.pronoun).obj} (or on {fmtDate(ri.revealOn!)}).</p>
+                ))}
+                {ri?.developer && <p className="note">You rated {name}: {ri.developer.stars} ★</p>}
+                {!restricted && rateBoxOf(c)}
                 {blockedIds.has(c.testerId) && <p className="note">You blocked {name}. Unblock in Account → Blocked people.</p>}
               </div>
             );
