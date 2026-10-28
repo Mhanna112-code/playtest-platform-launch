@@ -6,7 +6,7 @@ import { HttpError } from "./http";
 import { notify } from "./notify";
 import { testerGate } from "./testerGate";
 import { logEvent } from "./live";
-import { carryOver, itemsFor, itemsOf, prevSetsOf, pushPrev } from "@/lib/answerSets";
+import { carryOver, itemsFor, itemsOf, prevSetsOf, pushPrev, restoreDraft } from "@/lib/answerSets";
 import { qText } from "@/lib/questions";
 
 const nameOf = async (id: string) => displayName(await db.user.findUniqueOrThrow({ where: { id } }));
@@ -106,10 +106,10 @@ async function questionSetsOnSwitch(c: { id: string; testerId: string; questions
   if (JSON.stringify(old) === JSON.stringify(next)) return [];
   const sub = await db.submission.findUnique({ where: { contractId_kind: { contractId: c.id, kind: "written" } }, include: { review: true } });
   const kept = await db.keptForm.findUnique({ where: { userId_key: { userId: c.testerId, key: `written:${c.id}` } } });
-  const draft = (kept?.data ?? null) as { answers?: unknown; notes?: unknown } | null;
+  const draft = (kept?.data ?? null) as { answers?: unknown; notes?: unknown; questions?: unknown } | null;
   const sent = sub ? itemsOf(sub.answers, old) : [];
   const oldQs = old.length ? old : ["Your feedback"];
-  const fromDraft = Array.isArray(draft?.answers) ? (draft!.answers as unknown[]).map((a) => (typeof a === "string" ? a : "")) : null;
+  const fromDraft = Array.isArray(draft?.answers) ? restoreDraft(oldQs, [], draft!) : null;
   const byText = new Map(sent.map((x) => [x.question, x.answer]));
   const items = itemsFor(oldQs, fromDraft ?? oldQs.map((q) => byText.get(qText(q)) ?? ""));
   const ops: Prisma.PrismaPromise<unknown>[] = [];
@@ -117,7 +117,7 @@ async function questionSetsOnSwitch(c: { id: string; testerId: string; questions
   const nextQs = next.length ? next : ["Your feedback"];
   if (!sub?.review) {
     const notes = typeof draft?.notes === "string" ? draft.notes : sub?.notes ?? "";
-    ops.push(db.keptForm.upsert({ where: { userId_key: { userId: c.testerId, key: `written:${c.id}` } }, update: { data: { answers: carryOver(items, nextQs), notes } }, create: { userId: c.testerId, key: `written:${c.id}`, data: { answers: carryOver(items, nextQs), notes } } }));
+    ops.push(db.keptForm.upsert({ where: { userId_key: { userId: c.testerId, key: `written:${c.id}` } }, update: { data: { answers: carryOver(items, nextQs), notes, questions: nextQs } }, create: { userId: c.testerId, key: `written:${c.id}`, data: { answers: carryOver(items, nextQs), notes, questions: nextQs } } }));
     if (sub && !sub.setUntil) ops.push(db.submission.update({ where: { id: sub.id }, data: { setUntil: now } }));
   }
   return ops;

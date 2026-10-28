@@ -51,5 +51,19 @@ export function carryOver(prev: SetItem[], questions: string[]): string[] {
   return questions.map((q) => byText.get(qText(q)) ?? "");
 }
 
+/**
+ * (Report pass) A kept draft of the written form, put back into the form for `questions`. A draft that says which questions it was typed for is matched by question
+ * text, so answers to a question that changed since (a switch to new terms) never land under the new question; an older draft without them is matched by position.
+ * A question with no kept answer starts from `initial`.
+ */
+export function restoreDraft(questions: string[], initial: string[], kept: { answers?: unknown; questions?: unknown }) {
+  const answers = Array.isArray(kept.answers) ? kept.answers.map((a) => (typeof a === "string" ? a : "")) : [];
+  const typedFor = Array.isArray(kept.questions) ? kept.questions.map((q) => qText(String(q))) : null;
+  return questions.map((q, i) => {
+    const j = typedFor ? typedFor.indexOf(qText(q)) : i;
+    return (j >= 0 ? answers[j] : undefined) ?? initial[i] ?? "";
+  });
+}
+
 /** Add a previous set at the front, keeping at most MAX_PREV_SETS. */
 export const pushPrev = (sets: PrevSet[], set: PrevSet) => [set, ...sets].slice(0, MAX_PREV_SETS);

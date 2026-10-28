@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { api, errOf } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { NotSentTag, useKept } from "@/lib/useKept";
+import { restoreDraft } from "@/lib/answerSets";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { qOptional, qText } from "@/lib/questions";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -55,8 +56,10 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // (NEXT-UI 10) Typed and not sent: kept on the server, back after a reload or on another device, with "Not sent yet".
   const same = answers.every((a, i) => a === (initial[i] ?? "")) && notes === initialNotes;
-  const keep = useKept(`written:${sessionId}`, { answers, notes }, same, (v) => {
-    setAnswers(questions.map((_, i) => v.answers?.[i] ?? initial[i] ?? ""));
+  // The draft says which questions it was typed for: after a switch to changed questions, an answer never lands under a different question.
+  const [typedFor] = useState(questions); // the questions the boxes were made for (a refresh after a switch doesn't re-pair them)
+  const keep = useKept(`written:${sessionId}`, { answers, notes, questions: typedFor }, same, (v) => {
+    setAnswers(restoreDraft(questions, initial, v));
     setNotes(v.notes ?? initialNotes);
   });
 
