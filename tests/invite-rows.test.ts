@@ -10,7 +10,8 @@ describe("invite rows", () => {
     expect(doesntListTag({ devices: ["iPhone", "Android phone"], languages: [] }, { devices: ["Mac"], languages: [] })).toBe("Doesn't list iPhone or Android phone");
     expect(doesntListTag({ devices: ["Mac"], languages: ["English"] }, { devices: [], languages: [] })).toBe("Doesn't list English, or Mac");
     expect(doesntListTag({ devices: ["Mac"], languages: ["English"] }, { devices: ["Mac"], languages: ["English"] })).toBe("");
-    expect(shortList(["English", "Spanish", "French", "German"], "language")).toBe("English, Spanish or 2 more languages");
+    expect(shortList(["English", "Spanish", "French", "German", "Dutch"], "language")).toBe("English, Spanish, French +2 more"); // (batch 15 section 35)
+    expect(shortList(["English", "Spanish", "French"], "language")).toBe("English, Spanish or French");
     expect(withYouText(5, 1)).toBe("you rated 5.0/5 · 1 test with you");
     expect(withYouText(null, 4)).toBe("not rated by you · 4 tests with you");
   });

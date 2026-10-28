@@ -46,7 +46,7 @@ async function sentWork(writtenCents: string | null) {
 const dispute = (sessionId: string, cookie: string, body: Record<string, unknown>) => sact(sessionId, "dispute", cookie, { reason: "I answered every question fully", seenAt: seen(), confirmed: true, ...body });
 
 describe("batch 10 item 1: every reviewed part can be disputed", () => {
-  it("the rule: any amount, $0 included, listed or not, and a Reject; once; never the tester's own Charge or Let it go", () => {
+  it("the rule: any amount, $0 included, listed or not, and an old Reject; once; never the tester's own Charge or Let it go", () => {
     expect(R.canDispute(1000, 1000, false)).toEqual({ ok: true });
     expect(R.canDispute(1500, 1000, false)).toEqual({ ok: true });
     expect(R.canDispute(0, null, false)).toEqual({ ok: true });
@@ -97,7 +97,7 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     expect((await owed(s.dev.user.id)).map((p) => p.amountCents)).toEqual([9000]);
   });
 
-  it("a listed part paid the listing (or more) and a Reject can be disputed; the tester's own Charge can't", async () => {
+  it("a listed part paid the listing (or more) and an old rejection can be disputed; the tester's own Charge can't", async () => {
     const full = await sentWork("10.00");
     expect((await pay(full.dev.cookie, { kind: "submission", id: full.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
     expect((await dispute(full.sessionId, full.tester.cookie, { kind: "submission", id: full.sub.id })).status).toBe(200);

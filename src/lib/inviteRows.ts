@@ -1,11 +1,18 @@
 // The full app's invite-row text (lib/devices.ts doesntListTag and the rows' grey detail), on lean data.
-export const TAG_NAMES = 2;
+// (Batch 15 section 35) The pill names 3 items, then "+N more", which opens to show the rest.
+export const TAG_NAMES = 3;
 
-/** "Spanish or French"; past 2: "English, Spanish or 9 more languages". */
+/** "Spanish or French"; past 3: "English, Spanish, French +2 more" (the rest open in place on the page). */
 export function shortList(names: string[], noun: "language" | "device") {
+  void noun;
   if (names.length <= TAG_NAMES) return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
-  const more = names.length - TAG_NAMES;
-  return `${names.slice(0, TAG_NAMES).join(", ")} or ${more} more ${noun}${more === 1 ? "" : "s"}`;
+  return `${names.slice(0, TAG_NAMES).join(", ")} +${names.length - TAG_NAMES} more`;
+}
+/** Every item the pill can name (for its "+N more" to open). */
+export function doesntListItems(test: { devices: string[]; languages: string[] }, p: { devices: string[]; languages: string[] } | null) {
+  const langs = test.languages.length && !test.languages.some((l) => p?.languages.includes(l)) ? test.languages : [];
+  const devs = test.devices.length && !test.devices.some((d) => p?.devices.includes(d)) ? test.devices : [];
+  return [...langs, ...devs];
 }
 
 /** The amber pill: the test's needs the tester doesn't list ("Doesn't list iOS or Android"), or "". */

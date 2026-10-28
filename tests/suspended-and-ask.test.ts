@@ -24,7 +24,7 @@ async function admin() {
   return a;
 }
 
-describe("a suspended developer keeps Cancel call, End early and Stop, with or without a payment hold (owner, Oct 26)", () => {
+describe("a suspended developer keeps Cancel call, End early and Stop, with or without a payment hold (batch 15 section 29: from the restricted view)", () => {
   it.each([["suspension only", false], ["suspension and a payment hold", true]])("%s", async (_name, hold) => {
     const s = await setup();
     const { tester, sessionId } = await joined(s.testId);

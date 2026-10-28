@@ -21,7 +21,7 @@ const stops = (r: { status: number; body: { error?: { code?: string; changes?: u
 };
 
 describe("batch 7 item 1: 'Not listed'", () => {
-  it("a call or part that isn't listed reads 'Not listed' on both sides; the $100 cap is said only when a Pay goes over it", () => {
+  it("a call or part that isn't listed reads 'Not listed' on both sides; its cap is said only when a Pay goes over it", () => {
     expect(R.NOT_LISTED).toBe("Not listed");
     expect(rateLabel(null, 3000)).toBe("Not listed");
     expect(R.callReference(null, 30).text).toBe("Not listed");
@@ -105,7 +105,7 @@ async function paidLater(contractId: string) {
 }
 
 describe("batch 7 item 4: stop-once on every press still allowed", () => {
-  it("developer, stopped test: Pay, Reject, Extra pay, call length, dispute side and Rate stop once", async () => {
+  it("developer, stopped test: Pay, Pay more, Lower the length and Rate stop once; the side of a dispute never stops", async () => {
     const { dev, testId } = await setup({ recordingCents: "5.00" });
     const a = await joined(testId);
     const b = await joined(testId, "Ben Carter", "he");

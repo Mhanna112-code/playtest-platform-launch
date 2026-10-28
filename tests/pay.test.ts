@@ -147,7 +147,7 @@ describe("Stripe (test mode, faked)", () => {
     expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).body.error.code).toBe("held");
   });
 
-  it("a second Pay while one is owed is refused (the hold started with the first decline); Reject is refused too", async () => {
+  it("a second Pay while one is owed is refused (the hold started with the first decline); $0 is refused too", async () => {
     fake(true);
     const a = await sent();
     const b = await sent();
@@ -217,7 +217,7 @@ describe("(NEXT-UI 27) Payments: Waiting for your review", () => {
 });
 
 describe("(NEXT-UI 26) a suspended developer", () => {
-  it("cannot Pay or Reject (both wait until the suspension is lifted); everything else (invite, Edit, chat, next round, calls) is refused with the suspended line", async () => {
+  it("cannot Pay, $0 included (it waits until the suspension is lifted); everything else (invite, Edit, chat, next round, calls) is refused with the suspended line", async () => {
     const { dev, sub, sessionId, testId, tester } = await sent();
     await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     const LINE = "Your account is suspended: your tests are paused. Contact us in Settings to appeal.";

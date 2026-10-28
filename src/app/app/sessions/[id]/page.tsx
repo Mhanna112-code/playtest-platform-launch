@@ -205,7 +205,10 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         id: offer.id, diff: offer.diff, ndaText: offer.ndaText, fromNdaText: c.ndaText, questions: ((offer.questions as string[]) ?? []).map(qText), fromQuestions: ((c.questions as string[]) ?? []).map(qText),
         answers: sentItems.map((x) => x.answer),
       } : null} />
-      {refusal && <p className="info">{refusal}</p>}
+      {refusal && <div className="info space-y-1"><p>{refusal}</p>
+        {/* (Batch 15 sections 20 and 22) The developer's End early reason, in italics, scrolling when long (never in the bell line). */}
+        {c.status === "ended" && c.endKind === "early" && c.endReason && <ReasonQuote text={c.endReason} />}
+      </div>}
       {!refusal && c.test.openUntil && c.test.openUntil > now && c.test.openUntil.getTime() - now.getTime() < 3 * 86_400_000 && (
         <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(c.title, c.test.openUntil, now)}</p>
       )}
@@ -332,7 +335,10 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
               <p className="flex flex-wrap items-center gap-2 text-white">
                 {sub?.review ? (sub.review.rejected ? <XCircle className="h-4 w-4 text-rose-300" /> : <CheckCircle2 className="h-4 w-4 text-emerald-300" />) : <CircleDot className={`h-4 w-4 ${sub ? "text-amber-300" : "text-slate-400"}`} />}
                 <strong>{name}:</strong>
-                {sub && !sub.review && !chargedOwed.has(sub.id) && <span className="badge border-amber-300/40 text-amber-200" data-part-status="review">Under review</span>}
+                {sub && !sub.review && !chargedOwed.has(sub.id) && (devGone && !sub.choiceOfferedAt
+                  // (Batch 15 section 32) The developer deleted their account: not "Under review" any more.
+                  ? <span className="badge border-rose-300/40 text-rose-200" data-part-status="gone">Can&apos;t be paid: {devRealName} deleted their account</span>
+                  : <span className="badge border-amber-300/40 text-amber-200" data-part-status="review">Under review</span>)}
                 <span className="text-slate-200">{sub ? <>Sent {fmtDateTime(sub.updatedAt)}{sub.late && <span className="ml-2 badge">{lateLabel(c.dueAt, fmtDate)}</span>}</> : "Not sent yet"}</span>
                 {cents != null && <span className={`badge ${required ? "border-amber-300/40 text-amber-200" : ""}`}>{required ? "Required" : "Not required"}</span>}
               </p>

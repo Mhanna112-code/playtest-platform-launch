@@ -29,7 +29,7 @@ describe("a listing change re-sends open invites", () => {
     const fresh = await db.invite.findFirstOrThrow({ where: { testId, testerId: ana.user.id, status: "sent" } });
     expect(fresh.id).not.toBe(oldAna.id);
     expect(fresh.remindedAt).toBeNull();
-    expect(await db.notification.count({ where: { userId: ana.user.id, text: "Nora Lane updated Harbor Run: your invite was sent again on the new listing." } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: ana.user.id, text: "Nora Lane updated “Harbor Run”: your invite was sent again on the new listing." } })).toBe(1);
     expect(await db.invite.count({ where: { testId, testerId: dee.user.id, status: "sent" } })).toBe(0);
     // Accept (Join) on the old invite: refused under the button, with the new invite.
     const old = await act(testId, "join", ana.cookie, { listingVersion: await listingVersion(testId), inviteId: oldAna.id });
@@ -54,7 +54,7 @@ describe("applications close on a listing change", () => {
     const appA = await db.application.findFirstOrThrow({ where: { testId, testerId: ana.user.id } });
     expect(appA.status).toBe("closed");
     expect(await db.invite.count({ where: { testId } })).toBe(0);
-    const told = "Harbor Run's listing changed, so your application was closed. You can apply again on the current listing.";
+    const told = "“Harbor Run”'s listing changed, so your application was closed. You can apply again on the current listing.";
     expect(await db.notification.count({ where: { userId: ana.user.id, text: told } })).toBe(1);
     // The developer's Accept from a page that hadn't refreshed: refused; the line stops other buttons once.
     const a = await act(testId, "application", dev.cookie, { applicationId: appA.id, action: "accept", seenAt: pageLoaded, confirmed: true, tab: "tab-2" });
@@ -194,7 +194,7 @@ describe("owner corrections 2 and 3", () => {
     expect(await db.invite.count({ where: { testId, testerId: dee.user.id, status: "sent" } })).toBe(1);
     const app = await db.application.findFirstOrThrow({ where: { testId, testerId: ana.user.id } });
     expect(app.status).toBe("closed");
-    expect(await db.notification.count({ where: { userId: ana.user.id, text: "Harbor Run is now invite only, so your application was closed." } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: ana.user.id, text: "“Harbor Run” is now invite only, so your application was closed." } })).toBe(1);
     const acc = await act(testId, "application", dev.cookie, { applicationId: app.id, action: "accept", seenAt: pageLoaded, confirmed: true, tab: "tab-2" });
     expect(acc.body.error.message).toMatch(/^Ana Silva's application closed when the test became invite only at .+\.$/);
     const stop = await act(testId, "stop", dev.cookie, { seenAt: pageLoaded, tab: "tab-2" });

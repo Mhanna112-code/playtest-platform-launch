@@ -5,7 +5,7 @@ import { HttpError } from "./http";
 import { notify } from "./notify";
 import { asListing, devGate, devGateIfSeen, needsGap, ownTest, recordEvent, stampCounting } from "./tests";
 import { revealedRatingsWhere } from "./ratings";
-import { doesntListTag, withYouText } from "@/lib/inviteRows";
+import { doesntListItems, doesntListTag, withYouText } from "@/lib/inviteRows";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -72,6 +72,7 @@ export async function invitable(devId: string, testId: string) {
         // (NEXT-UI 14) Still tickable: a re-invite is how an ended tester can come back.
         was: ((s) => (s === "left" ? "Left this test" : s === "ended" ? "You ended their work" : ""))(past.find((c) => c.testerId === t.id)?.status),
         tag: doesntListTag(test, t.profile),
+        tagItems: doesntListItems(test, t.profile),
         detail: withYouText(mineAvg, withDev.filter((c) => c.testerId === t.id).length),
         gap: missingNeed(test, t.profile),
         section: workedWith.has(t.id) ? "worked" : "other",
@@ -212,7 +213,7 @@ export async function inviteGaps(devId: string, testId: string, testerIds: strin
  * can't be invited any more are not re-invited and are named for the Save result.
  */
 /** (Batch 14 section 3) "<dev> updated <test>: your invite was sent again on the new listing." */
-export const reinvitedLine = (dev: string, test: string) => `${dev} updated ${test}: your invite was sent again on the new listing.`;
+export const reinvitedLine = (dev: string, test: string) => `${dev} updated “${test}”: your invite was sent again on the new listing.`; // (batch 15 section 32) quoted
 
 export async function reinviteAfterEdit(testId: string) {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });

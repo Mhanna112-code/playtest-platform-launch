@@ -64,7 +64,7 @@ describe("batch 9 item 1 and 6: the caps", () => {
     expect((await extra(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "1000.00", tickedCents: 100_000, over200: true })).status).toBe(200);
   });
 
-  it("an unlisted call: at most $200/h for the logged minutes, then the same again as extra pay", async () => {
+  it("an unlisted call: at most $200/h for the measured minutes, nothing above it", async () => {
     const { dev, testId, sessionId, call } = await heldCall(false);
     // (Batch 12 section 2) An unlisted call: $200/h for its logged minutes and nothing above.
     const over = await pay(dev.cookie, { kind: "call", id: call.id, amount: "100.01", tickedCents: 10_001 });
@@ -91,7 +91,7 @@ describe("batch 9 item 1 and 6: the caps", () => {
 });
 
 describe("batch 9 item 2: an unlisted part has only Pay", () => {
-  it("no Reject; $0 closes the row with no tick and reads '<dev> paid $0 for this' plus the note; (batch 10) it can be disputed", async () => {
+  it("no Reject; $0 (with a reason) closes the row with no tick; (batch 10) it can be disputed", async () => {
     const { dev, tester, sessionId, sub } = await sentWork(null);
     const rej = await pay(dev.cookie, { kind: "submission", id: sub.id, action: "reject", reason: "Not what I asked" });
     expect(rej.body.error.code).toBe("no_reject"); // (batch 15 section 30) no Reject anywhere

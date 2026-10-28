@@ -38,7 +38,8 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
   if (!cancelled) return { closed: false };
   await tellCancelled(cancelled, "closed");
   for (const c of cs) await notify(c.tester.email, `“${c.title}” ended`, [`“${c.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
-  await notify(t.developer.email, `“${t.title}” was closed. ${reason}`, [`“${t.title}” was closed. ${reason}`, "What testers already sent still waits for you to pay or reject. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
+  // (A system explanation, never a typed reason: it stays in the line.)
+  await notify(t.developer.email, `“${t.title}” was closed. ${reason}`, [`“${t.title}” was closed. ${reason}`, "What testers already sent still waits for you to pay. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
   return { closed: true, testers: cs.length };
 }
 

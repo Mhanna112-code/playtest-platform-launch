@@ -11,7 +11,7 @@ import { ContractLink } from "@/components/ContractLink";
 import { lastPressLabel } from "@/lib/client";
 import { pressVerb, refusalLine } from "@/lib/pressLabels";
 
-export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string };
+export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string };
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const DEFAULT_TAILS = new Set(["Press again to go ahead.", "Press again to go ahead"]);

@@ -80,7 +80,7 @@ describe("batch 14 section 3: applicants and invited testers are told, stacked",
       expect((await edit(testId, dev.cookie, { buildUrl: "https://example.com/new" })).status).toBe(200);
     }
     const lines = await db.notification.findMany({ where: { userId: ana.user.id, groupKey: "appclosed" } });
-    expect(lines.map((l) => l.text).sort()).toEqual(["Harbor Run's listing changed, so your application was closed. You can apply again on the current listing.", "Reef Dash's listing changed, so your application was closed. You can apply again on the current listing."]);
+    expect(lines.map((l) => l.text).sort()).toEqual(["“Harbor Run”'s listing changed, so your application was closed. You can apply again on the current listing.", "“Reef Dash”'s listing changed, so your application was closed. You can apply again on the current listing."]);
     expect(groupTitle("appclosed", 2)).toBe("2 tests you applied to changed: your applications were closed");
     expect(groupTitle("reinvited", 3)).toBe("3 tests you were invited to changed: your invites were sent again");
     // Re-sent invites.
@@ -89,7 +89,7 @@ describe("batch 14 section 3: applicants and invited testers are told, stacked",
     await act(testId, "invite", dev.cookie, { testerIds: [ben.user.id], seenAt: seen(), confirmed: true });
     await settle();
     expect((await edit(testId, dev.cookie, { buildUrl: "https://example.com/v2" })).status).toBe(200);
-    expect(await db.notification.findFirstOrThrow({ where: { userId: ben.user.id, groupKey: "reinvited" } })).toMatchObject({ text: "Nora Lane updated Harbor Run: your invite was sent again on the new listing." });
+    expect(await db.notification.findFirstOrThrow({ where: { userId: ben.user.id, groupKey: "reinvited" } })).toMatchObject({ text: "Nora Lane updated “Harbor Run”: your invite was sent again on the new listing." });
   });
 });
 

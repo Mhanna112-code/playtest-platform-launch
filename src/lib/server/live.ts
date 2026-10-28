@@ -135,8 +135,8 @@ export async function testerPaymentChanges(testerId: string, contractId: string,
 }
 
 /** A line on the test's event list (what the developer's stop-once reasons and live top box read). */
-export async function logEvent(testId: string, kind: string, text: string, contractId: string | null = null) {
-  await db.testEvent.create({ data: { testId, kind, text, contractId } });
+export async function logEvent(testId: string, kind: string, text: string, contractId: string | null = null, link = "") {
+  await db.testEvent.create({ data: { testId, kind, text, contractId, link } });
 }
 
 /**
@@ -151,4 +151,4 @@ export function withRenamed(changes: TestEventLike[], body: Record<string, unkno
   return [];
 }
 
-export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: e.text, at: e.createdAt, ...(e.kind === "info" || e.kind === "renamed" ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));
+export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: e.text, at: e.createdAt, ...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "info" || e.kind === "renamed" ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));

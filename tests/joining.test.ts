@@ -61,7 +61,7 @@ describe("joining: Anyone / Apply / Invite only", () => {
     await edit(s2.testId, s2.dev.cookie, { writtenCents: "12.00" });
     await edit(s2.testId, s2.dev.cookie, { joinMode: "anyone" });
     expect(await db.contract.count({ where: { testId: s2.testId, testerId: ben.user.id } })).toBe(0);
-    expect(await db.notification.count({ where: { userId: ben.user.id, text: "Harbor Run's listing changed, so your application was closed. You can apply again on the current listing." } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: ben.user.id, text: "“Harbor Run”'s listing changed, so your application was closed. You can apply again on the current listing." } })).toBe(1);
     expect((await act(s2.testId, "join", ben.cookie, { confirmed: true })).status).toBe(200); // Join on the current listing
   });
 

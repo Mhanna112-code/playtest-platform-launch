@@ -1,4 +1,5 @@
 "use client";
+import { MARKABLE } from "@/lib/markJump";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
 import { ClampText } from "@/components/ClampText";
@@ -18,7 +19,7 @@ export function Applications({ testId, seenAt, apps }: { testId: string; seenAt:
       <h2>{apps.every((a) => a.kind === "rejoin") ? "Asks to rejoin" : apps.some((a) => a.kind === "rejoin") ? "Applications and asks to rejoin" : "Applications"}</h2>
       <ul className="space-y-3 text-sm">
         {apps.map((a) => (
-          <li key={a.id} className="space-y-1">
+          <li key={a.id} id={`item-app-${a.id}`} className={`space-y-1 ${MARKABLE}`}>
             {a.line ? <p><a href={`/app/testers/${a.userId}`}><b>{a.name}</b></a> {a.line.replace(a.name, "").trim()}</p> : <p><a href={`/app/testers/${a.userId}`}><b>{a.name}</b></a> · <PlusMore items={a.profile ? a.profile.split(", ") : []} /></p>}
             {a.note && <ClampText text={`“${a.note}”`} />}
             <div className="flex flex-wrap gap-2">

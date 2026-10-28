@@ -200,7 +200,8 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   const ok = canDispute(review.amountCents, review.agreedCents, !!existing, byTesterChoice(review.reason));
   if (!ok.ok) throw new HttpError(409, "no_dispute", ok.message);
   const d = await db.dispute.create({ data: { ...where, contractId, testerId: tester.id, reason } });
-  await logEvent(c.testId, "dispute", `${displayName(tester)} disputed the pay for their ${kind === "call" ? "live call" : (await db.submission.findUnique({ where: { id } }))?.kind === "recording" ? "recording" : "written answers"}`, contractId);
+  // (Batch 15 section 35) The live line opens its Needs you row, like the bell line.
+  await logEvent(c.testId, "dispute", `${displayName(tester)} disputed the pay for their ${kind === "call" ? "live call" : (await db.submission.findUnique({ where: { id } }))?.kind === "recording" ? "recording" : "written answers"}`, contractId, `item-dispute-${d.id}`);
   await notify(c.test.developer.email, `${displayName(tester)} disputed a payment on “${c.title}”`, [`${displayName(tester)} thinks the pay should be higher: “${reason}”`, `Our team decides. A decision can only raise the pay, ${disputeLimitText(review.agreedCents, kind === "call" ? "call" : "submission")}.`], `/app/tests/${c.testId}#item-dispute-${d.id}`, { group: "disputefiled" });
   // (Owner, Oct 26) Admins are told too: new-dispute lines on the same day stack into one line across tests, linking to the disputes.
   const flagged = await reportedOver3([tester.id, c.test.developerId]);

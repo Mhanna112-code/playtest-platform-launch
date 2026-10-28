@@ -5,6 +5,7 @@ import type { Change } from "@/components/ChangesBox";
 import { announce, clearShown, setShown, wasShownInBox } from "@/lib/live";
 import { LongList } from "@/components/LongList";
 import { ContractLink } from "@/components/ContractLink";
+import { jumpTo } from "@/lib/markJump";
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const key = (c: Change) => `${c.at}|${c.text}`;
@@ -80,7 +81,8 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
       <LongList className="space-y-0.5" tall="max-h-52">
         {show.map((l) => (
           <li key={key(l)} className={l.ignored ? "text-sky-100/50" : ""} title={l.ignored ? "You turned these stops off in Alerts" : undefined}>
-            <b>Updated · {time(l.at)}:</b> {l.text}
+            {/* (Batch 15 section 35) A line about a row on this page opens it (a new dispute: its Needs you row). */}
+            <b>Updated · {time(l.at)}:</b> {l.link ? <a href={`#${l.link}`} onClick={(e) => { e.preventDefault(); jumpTo(l.link!); }}>{l.text}</a> : l.text}
             {/* (Owner, Oct 27) A tester switched to or kept after new terms: "See their contract" scrolls to their row on the test page; on Edit it opens the test page at that row in a new tab. */}
             {l.kind === "terms" && l.contract && contractLink && (
               <>

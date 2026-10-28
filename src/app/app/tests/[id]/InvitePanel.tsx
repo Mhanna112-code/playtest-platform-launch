@@ -1,4 +1,6 @@
 "use client";
+import { PlusMore } from "@/components/PlusMore";
+import { TAG_NAMES } from "@/lib/inviteRows";
 import { SubscribersTag } from "@/components/SubscribeLink";
 import { useEffect, useMemo, useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -10,7 +12,7 @@ import { bringInView } from "@/lib/markJump";
 import { LongList } from "@/components/LongList";
 import { LiveNotices } from "@/components/LiveNotices";
 
-type Tester = { id: string; name: string; rating?: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; detail?: string; together?: { id: string; title: string }[] };
+type Tester = { id: string; name: string; rating?: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; tagItems?: string[]; detail?: string; together?: { id: string; title: string }[] };
 type Sent = { id: string; name: string; status: string };
 
 
@@ -113,7 +115,10 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
       <input type="checkbox" id={`${key}-${t.id}`} aria-label={t.name} disabled={!!t.grey} checked={!t.grey && ticked.includes(t.id)} onChange={(e) => { setNone(false); setTicked(e.target.checked ? [...ticked, t.id] : ticked.filter((x) => x !== t.id)); }} />
       <span className="min-w-[8rem] flex-1 truncate" title={t.name}><a href={`/app/testers/${t.id}`} target="_blank" rel="noopener" className="text-inherit underline-offset-2 hover:underline">{t.name}</a></span>
       {t.was && !t.grey && <span className="badge max-w-[14rem] shrink truncate whitespace-nowrap" title={t.was}>{t.was}</span>}
-      {t.tag && !t.grey && <span className="badge max-w-[14rem] shrink truncate whitespace-nowrap border-amber-300/40 text-amber-200" title={t.tag}>{t.tag}</span>}
+      {/* (Batch 15 section 35) 3 items, then "+N more" which opens the rest in place. */}
+      {t.tag && !t.grey && (t.tagItems && t.tagItems.length > TAG_NAMES
+        ? <span className="badge shrink border-amber-300/40 text-amber-200" data-tag-more="">Doesn&apos;t list <PlusMore items={t.tagItems} shown={TAG_NAMES} /></span>
+        : <span className="badge max-w-[14rem] shrink truncate whitespace-nowrap border-amber-300/40 text-amber-200" title={t.tag}>{t.tag}</span>)}
       <label htmlFor={`${key}-${t.id}`} className="shrink-0 cursor-pointer text-xs text-slate-500">{t.grey ?? t.detail}</label>
       {/* "In tests with you": how many, and links to them. */}
       {key === "w" && t.together && t.together.length > 0 && (

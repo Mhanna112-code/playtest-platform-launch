@@ -29,7 +29,7 @@ describe("the tester rates the developer", () => {
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Rate Nora Lane" } } })).toBe(1);
   });
 
-  it("an open dispute holds rating back; the point where Charge opens (14 days and Open until) counts as decided", async () => {
+  it("an open dispute holds rating back; the point where Charge opens (the review date) counts as decided", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -118,7 +118,7 @@ describe("the developer rates a tester (after the tester rated; blind reveal)", 
     expect((await act(testId, "rate", dev.cookie, { contractId: sessionId, stars: 1, seenAt: seen(), confirmed: true })).body.error.message).toBe("You already rated Ana Silva.");
   });
 
-  it("after 14 days without the developer's rating: the tester's rating shows and the window is closed", async () => {
+  it("after the rating window without the developer's rating: the tester's rating shows and the window is closed", async () => {
     const { dev, testId, tester, sessionId } = await ratedByTester();
     await sact(sessionId, "rate", tester.cookie, { stars: 4 });
     await db.rating.updateMany({ where: { contractId: sessionId, side: "tester" }, data: { createdAt: new Date(Date.now() - 15 * 86_400_000) } });

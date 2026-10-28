@@ -58,7 +58,7 @@ describe("invites", () => {
 });
 
 describe("payment hold", () => {
-  it("pauses everything, the testers' sending too (batch 6); Pay and Reject wait; lifting it shifts deadlines and Open until by the pause", async () => {
+  it("pauses everything, the testers' sending too (batch 6); Pay waits; lifting it shifts deadlines and Open until by the pause", async () => {
     const { dev, testId } = await setup({ openUntil: new Date(Date.now() + 20 * DAY).toISOString().slice(0, 10) });
     const { tester, sessionId } = await joined(testId);
     const before = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });

@@ -257,7 +257,8 @@ export async function closeApplicationsAfterEdit(testId: string, why: "listing" 
     const tester = await db.user.findUnique({ where: { id: a.testerId } });
     if (!tester) continue;
     names.push(displayName(tester));
-    const line = why === "invite_only" ? `${t.title} is now invite only, so your application was closed.` : `${t.title}'s listing changed, so your application was closed. You can apply again on the current listing.`;
+    // (Batch 15 section 32) The test's title quoted, like every other line.
+    const line = why === "invite_only" ? `“${t.title}” is now invite only, so your application was closed.` : `“${t.title}”'s listing changed, so your application was closed. You can apply again on the current listing.`;
     // (Batch 14 section 3) Several tests in a day stack into one entry.
     await notify(tester.email, line, [line], `/app/find/${testId}`, { group: why === "invite_only" ? undefined : "appclosed", testId });
   }

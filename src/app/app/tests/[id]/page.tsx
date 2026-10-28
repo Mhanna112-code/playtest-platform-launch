@@ -349,7 +349,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           {disputesWaiting.map((d) => (
             <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
               <p className="text-slate-300"><b className="text-white">{d.name}</b> disputed what you paid for {d.what} · waiting for the team:</p>
-              <ClampText text={`“${d.reason}”`} className="text-slate-300" />
+              <ReasonQuote text={d.reason} />
               <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
             </div>
           ))}

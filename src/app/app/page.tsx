@@ -172,9 +172,11 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
     const name = x ? displayName(x) : "A tester";
     if (a.kind === "rejoin") {
       const old = await oldOf(a);
-      items.push({ key: `a-${a.id}`, at: a.createdAt, href: `/app/tests/${t.id}#needs-you`, who: name, text: <>{old && x ? rejoinAskLine(name, pronouns(x.pronoun), old).replace(`${name} asks`, "asks") : "asks to rejoin"} · <b className="text-white">{t.title}</b></>, cta: "Answer" });
-    } else items.push({ key: `a-${a.id}`, at: a.createdAt, href: `/app/tests/${t.id}#needs-you`, who: name, text: <>applied to join <b className="text-white">{t.title}</b></>, cta: "Answer" });
+      items.push({ key: `a-${a.id}`, at: a.createdAt, href: `/app/tests/${t.id}#item-app-${a.id}`, who: name, text: <>{old && x ? rejoinAskLine(name, pronouns(x.pronoun), old).replace(`${name} asks`, "asks") : "asks to rejoin"} · <b className="text-white">{t.title}</b></>, cta: "Answer" });
+    } else items.push({ key: `a-${a.id}`, at: a.createdAt, href: `/app/tests/${t.id}#item-app-${a.id}`, who: name, text: <>applied to join <b className="text-white">{t.title}</b></>, cta: "Answer" });
   }
+  // (Batch 15 section 35) Excerpt requests wait in Needs you too (Allow / Deny on the test page), not only in the restricted box.
+  if (!restricted) for (const x of await pendingForDeveloper(userId)) items.push({ key: `e-${x.id}`, at: new Date(), href: `/app/tests/${x.testId}#excerpt-${x.id}`, who: x.tester, text: <>would like to show an excerpt from <b className="text-white">{x.testTitle}</b> on their profile</>, cta: "Allow or Deny" });
   for (const r of reqs) {
     const x = contractTest.get(r.contractId);
     if (x) items.push({ key: `r-${r.id}`, at: r.createdAt, href: `/app/tests/${x.t.id}#calls`, who: displayName(x.c.tester), text: <>asked for a live call · <b className="text-white">{x.t.title}</b></>, cta: "Answer" });
@@ -369,7 +371,9 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   ]);
   const unread = new Map(unreadList);
   const rated = new Set(ratedIds.map((r) => r.contractId));
-  const appTests = new Map((await db.test.findMany({ where: { id: { in: apps.map((a) => a.testId) } }, include: { developer: true } })).map((t) => [t.id, t]));
+  // (Owner, Oct 30, batch 15 section 38) A test the tester applied to that became invite only stays here, marked "Closed to new testers (invite only)" (an open invite of theirs still works).
+  const inviteOnlyApps = (await db.application.findMany({ where: { testerId: userId, status: "closed", closedReason: "invite_only", decidedAt: { gt: new Date(now.getTime() - 30 * DAY) } }, orderBy: { decidedAt: "desc" }, take: 20 })).filter((a) => !apps.some((x) => x.testId === a.testId));
+  const appTests = new Map((await db.test.findMany({ where: { id: { in: [...apps, ...inviteOnlyApps].map((a) => a.testId) } }, include: { developer: true } })).map((t) => [t.id, t]));
   const byId = new Map(contracts.map((c) => [c.id, c]));
   const working = contracts.filter((c) => c.status === "working");
   const history = contracts.filter((c) => c.status !== "working");
@@ -510,7 +514,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         )}
       </section>
 
-      {(waiting.length > 0 || apps.length > 0) && (
+      {(waiting.length > 0 || apps.length > 0 || inviteOnlyApps.length > 0) && (
         <section className="space-y-3">
           {sectionTitle(<Hourglass className="h-5 w-5 text-amber-300" />, "Waiting for the developer")}
           <LongList shown={3} tall="max-h-72" className="space-y-2">
@@ -519,6 +523,14 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 <Link href={`/app/find/${a.testId}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">
                   <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={appTests.get(a.testId)?.title ?? "A test"}>{appTests.get(a.testId)?.title ?? "A test"} {appTests.get(a.testId) && pausedTest(appTests.get(a.testId)!) && <PausedTag />}</p>
                   <span className="badge text-amber-300"><Clock className="h-3.5 w-3.5" /> {a.kind === "rejoin" ? "Ask to rejoin waiting" : "Application waiting"}</span>
+                </Link>
+              </li>
+            ))}
+            {inviteOnlyApps.map((a) => (
+              <li key={a.id}>
+                <Link href={`/app/find/${a.testId}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-invite-only="">
+                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white">{appTests.get(a.testId)?.title ?? "A test"}</p>
+                  <span className="badge border-slate-400/40 text-slate-300">Closed to new testers (invite only)</span>
                 </Link>
               </li>
             ))}

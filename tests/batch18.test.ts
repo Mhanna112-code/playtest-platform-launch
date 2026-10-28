@@ -179,7 +179,7 @@ describe("Q) a declined payment starts the hold at once (no owed window)", () =>
     expect(await db.payment.count({ where: { contractId: e.sessionId, kind: "extra", status: "failed" } })).toBe(1);
   });
 
-  it("while on a hold Pay, Reject and extra pay are refused; (batch 6) the tester's Dispute still works", async () => {
+  it("while on a hold Pay and Pay more are refused; (batch 6) the tester's Dispute still works", async () => {
     const { dev, sessionId, testId, sub } = await owing();
     const two = await joined(testId, "Ben Carter", "he");
     await sact(two.sessionId, "written", two.tester.cookie, { answers: ["a", "b"] });

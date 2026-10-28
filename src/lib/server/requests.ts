@@ -9,7 +9,7 @@ import { NOT_LISTED, PAUSED_RIGHT_NOW, callListed, testPaused } from "@/lib/rule
 import { DEV_SUSPENDED } from "./users";
 import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
-import { notify } from "./notify";
+import { bell, notify } from "./notify";
 import { devGate, recordEvent } from "./tests";
 import { testerGate } from "./testerGate";
 import { ceilingRefusal, checkCeiling } from "./callMoney";
@@ -317,6 +317,9 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
     data: { testId: c.testId, contractId, fromSide: "tester", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes },
   });
   await db.$transaction((tx) => recordEvent(tx, c.testId, "requested", `${displayName(c.tester)} requested ${kind.rows.length === 1 && kind.rows[0].repeat !== "once" ? `${kindWords(kind.rows)} from` : "a call for"} ${fmtDateTime(kind.startsAt)}`, false, {}, contractId));
+  // (Batch 15 section 35) The developer's bell: "<name> asked for a call: <time(s)>", stacked with the day's other request lines; each time in the reader's own zone.
+  const when = kind.rows.map((x) => `${T(x.startsAt)}${x.repeat === "once" ? "" : x.repeat === "daily" ? " (daily)" : " (weekly)"}`).join(" or ");
+  await bell(c.test.developerId, `${displayName(c.tester)} asked for a call: ${when}`, `/app/tests/${c.testId}#needs-you`, c.testerId, { group: "callrequests" });
   return { requested: true, id: r.id };
 }
 

@@ -129,7 +129,7 @@ describe("charge amount and a second failure", () => {
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
   });
 
-  it("paid in full: no day-14 choice, notice or reminders; the developer can still Pay or Reject", async () => {
+  it("paid in full: no Charge choice, notice or reminders; the developer can still Pay ($0 with a reason)", async () => {
     const { tester, sessionId, sub, dev } = await waiting14();
     await db.payment.create({ data: { kind: "review", submissionId: sub.id, contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 1000, feeCents: 200, testerCents: 800, status: "charged" } });
     await cron();

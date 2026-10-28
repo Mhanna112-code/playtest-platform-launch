@@ -163,7 +163,7 @@ describe("every bell line opens the exact place", () => {
 });
 
 describe("the admin dashboard lists", () => {
-  it("lists are 20 at a time, newest first, by keyset: no overlap and no gaps, and only admins can load more", async () => {
+  it("lists load a page at a time, newest first, by keyset: no overlap and no gaps, and only admins can load more", async () => {
     const tag = randomUUID().slice(0, 6);
     for (let i = 0; i < 25; i++) await db.waitlistEntry.create({ data: { email: `w-${tag}-${i}@test.playtest.test`, role: "tester", createdAt: new Date(Date.now() + i * 1000) } }).catch(() => null);
     const a = await admin();

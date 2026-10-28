@@ -29,7 +29,7 @@ async function withWork() {
 }
 
 describe("a suspended developer (design doc 2 and 11.4)", () => {
-  it("names the press that failed; Pay and Reject are refused too, only Cancel call goes through", async () => {
+  it("names the press that failed; Pay is refused too; (batch 15 section 29) Cancel call, Stop and End early go through", async () => {
     const { dev, testId, sub, sessionId, tester } = await withWork();
     const a = await admin();
     const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 24 * 6);

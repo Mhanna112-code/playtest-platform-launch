@@ -314,7 +314,7 @@ describe("G, H) Charge opening and the cap", () => {
     expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "6.00", tickedCents: 600 })).body).toMatchObject({ choice: "charge", amountCents: 600 });
   });
 
-  it("Charge is refused until BOTH 14 days have passed and Open until has passed (the refusal says so)", async () => {
+  it("Charge is refused until its review date has passed (the refusal says so)", async () => {
     const { tester, sessionId, sub, testId } = await sentUnreviewed();
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() + 2 * DAY) } }); // (batch 15 section 18: the tester's own deadline)
     await cron();

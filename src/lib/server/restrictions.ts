@@ -272,9 +272,14 @@ export async function unpauseTest(testId: string) {
 export async function adminStopTest(testId: string, note: string, adminId: string | null = null) {
   const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
-  if (t.status === "stopped") throw new HttpError(409, "stopped", "That test was already stopped.");
-  const cs = await db.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } });
+  if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was already stopped.");
+  let cs: Awaited<ReturnType<typeof db.contract.findMany<{ include: { tester: true } }>>> = [];
   const cancelled = await db.$transaction(async (tx) => {
+    // (Batch 15 section 35) The same test lock as the developer's Stop: a developer Stop and an admin Stop at once can't both run; the second is refused.
+    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
+    const now = await tx.test.findUniqueOrThrow({ where: { id: testId }, select: { status: true } });
+    if (now.status === "stopped") throw new HttpError(409, "stopped", "This test was already stopped.");
+    cs = await tx.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } });
     await tx.contract.updateMany({ where: { testId, status: "working" }, data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The test was stopped." } });
     const list = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
     await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test was stopped", decidedAt: new Date() } });
@@ -286,7 +291,7 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
   });
   await tellCancelled(cancelled, "stopped");
   for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
-  await notify(t.developer.email, `The team stopped “${t.title}”`, [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay or reject. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
+  await notify(t.developer.email, `The team stopped “${t.title}”`, [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
   return { ok: true };
 }
 

@@ -30,8 +30,8 @@ async function withWork() {
   return { ...s, ...j, sub };
 }
 
-describe("Pay and Reject while the account is not clear (owner, Oct 26)", () => {
-  it("a payment hold: Pay and Reject are both unavailable (owner, Oct 27); each names itself, nothing is recorded and the tester is told nothing", async () => {
+describe("Pay ($0 included) while the account is not clear (owner, Oct 26; batch 15: no Reject)", () => {
+  it("a payment hold: Pay ($0 included) is unavailable (owner, Oct 27); each press names itself, nothing is recorded and the tester is told nothing", async () => {
     const { dev, sessionId, tester } = await withWork();
     const second = await db.submission.create({ data: { contractId: sessionId, kind: "recording", agreedCents: 1000, sentAt: new Date(), updatedAt: new Date() } });
     await startHold(dev.user.id, "unpaid");
@@ -46,7 +46,7 @@ describe("Pay and Reject while the account is not clear (owner, Oct 26)", () => 
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "paid you" } } })).toBe(0);
   });
 
-  it("a suspended developer can neither Pay nor Reject (each names itself, nothing is recorded); once lifted they can", async () => {
+  it("a suspended developer can't Pay, $0 included (each names itself, nothing is recorded); once lifted they can", async () => {
     const { dev, sub, tester } = await withWork();
     const a = await admin();
     await adm("suspend", a.cookie, { id: dev.user.id, note: "Spam" });
@@ -62,7 +62,7 @@ describe("Pay and Reject while the account is not clear (owner, Oct 26)", () => 
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "paid you $10.00 for your written answers" } } })).toBe(1);
   });
 
-  it("a suspended developer WITH a payment hold is still refused Pay and Reject; 'Pay what you owe' (hold only) works, and a suspension alone never offers it", async () => {
+  it("a suspended developer WITH a payment hold is still refused Pay; 'Pay what you owe' (hold only) works, and a suspension alone never offers it", async () => {
     const { POST: owedPOST } = await import("@/app/api/payments/owed/route");
     const owedReq = (cookie: string) => owedPOST(req("/api/payments/owed", { cookie, body: {} })).then(json);
     const { dev, sub } = await withWork();
@@ -227,7 +227,7 @@ describe("chat after a block (owner, Oct 26)", () => {
   });
 });
 
-describe("a suspended developer's test page (owner, Oct 26)", () => {
+describe("a suspended developer's test page: its restricted view (batch 15 section 29)", () => {
   it("(batch 15 section 29) Cancel call, End early and Stop go through; everything else is refused and names the press", async () => {
     const { dev, testId, sessionId } = await withWork();
     const a = await admin();

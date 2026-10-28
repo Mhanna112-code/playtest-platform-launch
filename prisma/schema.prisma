@@ -261,6 +261,8 @@ model TestEvent {
   contractId String?
   /// The test's version after this event (when it changed the version)
   version   Int?
+  /// (Batch 15 section 35) The row on the page this line opens (an anchor id, e.g. "item-dispute-<id>"), when there is one
+  link      String   @default("")
   createdAt DateTime @default(now())
 
   @@index([testId, createdAt])
