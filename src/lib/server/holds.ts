@@ -580,6 +580,8 @@ export async function runDaily(now = new Date()) {
   // 10. (Owner, Oct 26) The reminders that need their own rules, then the emails last (one email lists everything new; payment lines also go out end of day).
   await dailyReminders(now);
   await (await import("./ratings")).ratingReminders(now);
+  // (Batch 15 section 9) Payments stuck "in progress" for over 15 minutes are finished or cleared.
+  await (await import("./recovery")).checkStuck({}, now);
   // (Batch 15 section 7) Sign-in attempts older than a day are deleted.
   await (await import("./passwords")).cleanLoginAttempts(now);
   await sendSummaries(now);
@@ -651,29 +653,40 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
     await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their ${label}`, false, {}, c.id));
     return { choice, amountCents: amount, status: "owed", message: chargedDelayedLine(amount) };
   }
+  // (Batch 15 section 9) The payment row is reserved (pending) before the charge, so a lost answer from Stripe can be found and finished or cleared later.
+  const row = await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "pending", payKey } });
   let status = "charged";
   try {
     const r = await charge(dev, c.tester, amount, payKey, `Playtest: ${label} on “${c.title}” (charged by the tester)`);
     status = r.status;
     if (r.status === "requires_action") {
       // (Batch 11) The developer's bank wants them to confirm: it waits 3 days for their Confirm in Payments; the tester reads "Payment may be delayed".
-      const row = await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "needs_confirmation" } });
       await (await import("./confirm")).awayAction(row.id, r as NeedsAction);
       await notify(c.tester.email, `Payment for your work on “${c.title}” may be delayed`, ["Payment for your work may be delayed."], `/app/sessions/${c.id}#part-${s.kind}`, { payment: true, group: "tdelayed" });
       status = "needs_confirmation";
     } else {
-      await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, ...r } });
-      await receipt(dev.email, `${displayName(tester)}'s ${label} (charged by them after ${REVIEW_DAYS} days)`, amount, r.status, `/app/tests/${c.testId}`);
+      return finishChoicePay(row.id, r);
     }
   } catch (e) {
+    if (e instanceof HttpError && e.code === "payment_unknown") throw new HttpError(502, "payment_unknown", (await import("./recovery")).PAYMENT_CHECKING);
     status = "failed";
     // (Owner, Oct 27) A declined Charge starts the payment hold at once (the tester reads only "delayed").
-    const failed = await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "failed", failure: (e as Error).message, owedUntil: new Date() } });
+    const failed = await db.payment.update({ where: { id: row.id }, data: { status: "failed", failure: (e as Error).message, owedUntil: new Date() } });
     await notify(c.tester.email, `Payment for your work on “${c.title}” may be delayed`, ["Payment for your work may be delayed."], `/app/sessions/${c.id}#part-${s.kind}`, { payment: true, group: "tdelayed" });
     await declinedPayment(dev.id, failed.id, amount, `${displayName(tester)}'s ${label} on “${c.title}”`);
   }
   await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their ${label}`, false, {}, c.id));
   return { choice, amountCents: amount, status, ...(status === "needs_confirmation" ? { message: `Charged ${money(amount)}. Payment may be delayed.` } : {}) };
+}
+
+/** (Batch 15 section 9) A tester's Charge went through (at once, or found later by the stuck-payment check): recorded, the receipt sent. */
+export async function finishChoicePay(paymentId: string, r: { status: string; feeCents?: number; testerCents?: number; transferStatus?: string; stripePaymentIntentId: string | null }) {
+  const p = await db.payment.update({ where: { id: paymentId }, data: { status: r.status, stripePaymentIntentId: r.stripePaymentIntentId, ...(r.feeCents != null ? { feeCents: r.feeCents, testerCents: r.testerCents, transferStatus: r.transferStatus } : {}) } });
+  const c = await db.contract.findUniqueOrThrow({ where: { id: p.contractId! }, include: { tester: true, test: { include: { developer: true } } } });
+  const label = (await db.submission.findUnique({ where: { id: p.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers";
+  await receipt(c.test.developer.email, `${displayName(c.tester)}'s ${label} (charged by them after ${REVIEW_DAYS} days)`, p.amountCents, r.status, `/app/tests/${c.testId}`);
+  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(c.tester)} charged ${money(p.amountCents)} for their ${label}`, false, {}, c.id));
+  return { choice: "charge" as const, amountCents: p.amountCents, status: r.status };
 }
 
 /**

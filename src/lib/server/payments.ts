@@ -13,6 +13,7 @@ import { cardRefusal, charge, type NeedsAction } from "./stripe";
 import { devGate, devGateIfSeen, devOwes, recordEvent } from "./tests";
 import { logEvent } from "./live";
 import { testerGate } from "./testerGate";
+import { PAYMENT_CHECKING, pressKeyFor } from "./recovery";
 
 type U = { id: string; email: string; name: string; pronoun: string; isAdmin?: boolean };
 
@@ -103,10 +104,12 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     }
     await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name });
     const rev = await tx.review.create({ data: { ...piece.where, contractId: c.id, amountCents: amountCents!, agreedCents: piece.listing, reason, payKey, rejected: reject, rateCents: !reject && piece.kind === "call" ? rateCents : null } });
+    // (Batch 15 section 9) The charge's key: an interrupted press on this piece in the last 24 hours lends its key, so nothing is ever charged twice.
+    const stripeKey = reject ? null : await pressKeyFor(piece.where, ["review", "call"], payKey, tx);
     const payment = reject
       ? null
       : await tx.payment.create({
-          data: { kind: kind === "call" ? "call" : "review", submissionId: piece.where.submissionId ?? null, callId: piece.where.callId ?? null, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amountCents!, feeCents: 0, testerCents: 0, status: "pending" },
+          data: { kind: kind === "call" ? "call" : "review", submissionId: piece.where.submissionId ?? null, callId: piece.where.callId ?? null, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amountCents!, feeCents: 0, testerCents: 0, status: "pending", payKey: stripeKey },
         });
     if (reject) await recordEvent(tx, c.testId, "rejected", `You rejected ${name}'s ${piece.label}`, false, {}, c.id);
     return { rev, payment, c, piece, name };
@@ -121,8 +124,18 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
   let result;
   try {
     // (Owner, Oct 29, batch 11) The developer's own press: on-session, so the bank may ask them to confirm in the page.
-    result = await charge(dev, c.tester, rev.amountCents, payKey, `Playtest: ${piece.label} on “${c.title}”`, "press");
+    const charging = (key: string) => charge(dev, c.tester, rev.amountCents, key, `Playtest: ${piece.label} on “${c.title}”`, "press");
+    try {
+      result = await charging(payment!.payKey ?? payKey);
+    } catch (e) {
+      // (Batch 15 section 9) A reused key that Stripe already saw with other details: that earlier press reached Stripe and wasn't charged, so a fresh key is safe.
+      if (!(e instanceof HttpError && e.code === "idempotency")) throw e;
+      await db.payment.update({ where: { id: payment!.id }, data: { payKey } });
+      result = await charging(payKey);
+    }
   } catch (e) {
+    // (Batch 15 section 9) Stripe's answer was lost: the payment stays pending (in progress) and is checked after 15 minutes. Nothing is freed, so it can't be paid twice.
+    if (e instanceof HttpError && e.code === "payment_unknown") throw new HttpError(502, "payment_unknown", PAYMENT_CHECKING);
     if (!(e instanceof HttpError && e.code === "card_failed")) {
       // Not a card decline (nothing was tried): free the piece so the developer can press Pay again.
       await db.$transaction([db.payment.update({ where: { id: payment!.id }, data: { status: "failed", failure: (e as Error).message } }), db.review.delete({ where: { id: rev.id } })]);
@@ -403,12 +416,25 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   const name = displayName(c.tester);
   const label = piece.label;
   const at = piece.kind === "call" ? { callId: piece.where.callId! } : { submissionId: piece.where.submissionId! };
+  // (Batch 15 section 13) The same press again (its answer was lost): never twice.
+  const again = await db.payment.findFirst({ where: { kind: "extra", ...at, payKey: { in: [`extra-${payKey}`] } } });
+  if (again && again.status !== "failed" && again.status !== "cancelled") return { paid: true, amountCents: again.amountCents, status: again.status, repeated: true };
+  // (Batch 15 section 9) An interrupted Pay more on this piece in the last 24 hours lends its key.
+  const stripeKey = await pressKeyFor(at, ["extra"], `extra-${payKey}`);
   // (Batch 11) The row exists before the charge (pending), so a payment the bank wants confirmed counts toward the piece's cap while it waits.
-  const row = await db.payment.create({ data: { kind: "extra", contractId: c.id, ...at, note, developerId: dev.id, testerId: c.testerId, amountCents: amount!, feeCents: 0, testerCents: 0, status: "pending" } });
+  const row = await db.payment.create({ data: { kind: "extra", contractId: c.id, ...at, note, developerId: dev.id, testerId: c.testerId, amountCents: amount!, feeCents: 0, testerCents: 0, status: "pending", payKey: stripeKey } });
   let result;
   try {
-    result = await charge(dev, c.tester, amount!, `extra-${payKey}`, `Playtest: extra pay for ${name} on “${c.test.title}”`, "press");
+    const charging = (key: string) => charge(dev, c.tester, amount!, key, `Playtest: extra pay for ${name} on “${c.test.title}”`, "press");
+    try {
+      result = await charging(stripeKey);
+    } catch (e) {
+      if (!(e instanceof HttpError && e.code === "idempotency")) throw e;
+      await db.payment.update({ where: { id: row.id }, data: { payKey: `extra-${payKey}` } });
+      result = await charging(`extra-${payKey}`);
+    }
   } catch (e) {
+    if (e instanceof HttpError && e.code === "payment_unknown") throw new HttpError(502, "payment_unknown", PAYMENT_CHECKING);
     if (!(e instanceof HttpError && e.code === "card_failed")) {
       await db.payment.update({ where: { id: row.id }, data: { status: "cancelled", failure: (e as Error).message } });
       throw e;

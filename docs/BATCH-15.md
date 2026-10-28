@@ -471,6 +471,27 @@ Refusals (not stops) keep their own wording, but also start by naming the press:
 
 **Also (Oct 30, added later), a proof:** a "tester-stop-once" group (desktop + phone): the tester has the session page open with a written answer typed; the developer pays another piece or edits the listing; Send stops once with the blue list; the second press goes through. Plus a still of a tester's Charge stopping once after the developer paid something, and a still with Alerts Off where Send goes through while a terms offer still stops it.
 
+## 37. One rule for every pause, and one banner shape for pauses and stops (owner, Oct 30, added later)
+**Any pause is treated the same**, whatever its cause: the team paused the test, a payment hold, a chargeback hold, or a developer-side suspension.
+- The test page shows item 29's restricted view: the overview, plus Booked calls with Cancel.
+- Only Stop the test, End early and Cancel call work.
+- Stop and End early go through silently. Cancel call keeps its stop-once.
+- Item 23's separate team-pause view merges into this. The only difference by cause is the banner's title and reason.
+
+**The red banner, top to bottom, for paused AND stopped tests** (the team stop/pause banner the owner likes, generalised):
+1. The title, by cause:
+   - "The team paused this test." / "The team stopped this test."
+   - "Your tests are paused until you pay what you owe."
+   - "Your account is suspended: your tests are paused."
+   - "This test is stopped."
+2. The reason, in italics in a scroll box (item 20), when there is one.
+3. The updates: the failed-press lines ("Your Save on <test> didn't go through.") and any other live lines for this banner.
+4. At the BOTTOM, what's still allowed:
+   - **paused (any cause):** "For now you can stop this test, end testers' work early, or cancel calls."
+   - **stopped:** "You can still pay for work testers already sent, chat with them, rate testers, and read their answers." Add "and start a Next round" only when Next round is actually allowed. The owner is deciding about team stops, so build it from what is actually available.
+
+Build the allowed line from the buttons actually shown, so it can never list something hidden. Re-record the paused and stopped banners (team, hold, suspension, own stop), desktop and phone.
+
 ## Check and report
 - Migrations: `LoginAttempt`, `User.timeZone`, the stored "down" alert (or reuse `AppState`). Write them by hand and check them with the `prisma migrate diff ... --exit-code` command from BATCH-10. A stale Prisma client is then the only acceptable failure.
 - Run `NEXT_DIST_DIR=.next-build npm run check` until it's green.

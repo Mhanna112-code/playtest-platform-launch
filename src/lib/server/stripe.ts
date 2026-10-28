@@ -19,11 +19,15 @@ let fakeN = 0;
 // (Kept on globalThis: the dev server may load this module once per route, and the confirm route must see what the Pay route created.)
 const fakePis: Map<string, string> = ((globalThis as { __fakePis?: Map<string, string> }).__fakePis ??= new Map<string, string>());
 export const fakeConfirm = (id: string, ok: boolean) => { if (fakePis.has(id)) fakePis.set(id, ok ? "succeeded" : "canceled"); };
+/** (Batch 15 section 9) The fake's PaymentIntents by their metadata payKey, for its search. */
+const fakeByKey: Map<string, string> = ((globalThis as { __fakeByKey?: Map<string, string> }).__fakeByKey ??= new Map<string, string>());
 const fakeStripe = {
   paymentIntents: {
-    create: async (p: { payment_method?: string; amount: number; off_session?: boolean }) => {
+    create: async (p: { payment_method?: string; amount: number; off_session?: boolean; metadata?: { payKey?: string } }) => {
       if (p.payment_method === "pm_card_declined" || (p.payment_method === "pm_card_partial" && p.amount === 1500)) throw new Error("Your card was declined.");
       const id = `pi_fake_${Date.now()}_${++fakeN}`;
+      if (p.metadata?.payKey) fakeByKey.set(p.metadata.payKey, id);
+      if (!fakePis.has(id)) fakePis.set(id, "succeeded");
       // (Batch 11) pm_card_authenticationRequired: the bank wants the cardholder to confirm (off-session, Stripe refuses with authentication_required).
       if (p.payment_method === "pm_card_authenticationRequired") {
         fakePis.set(id, "requires_action");
@@ -33,6 +37,11 @@ const fakeStripe = {
       return { id, status: "succeeded", amount: p.amount };
     },
     retrieve: async (id: string) => ({ id, status: fakePis.get(id) ?? "succeeded", client_secret: `${id}_secret_fake` }),
+    search: async (q: { query: string }) => {
+      const key = /metadata\['payKey'\]:'([^']+)'/.exec(q.query)?.[1] ?? "";
+      const id = fakeByKey.get(key);
+      return { data: id ? [{ id, status: fakePis.get(id) ?? "succeeded" }] : [] };
+    },
     cancel: async (id: string) => { fakePis.set(id, "canceled"); return { id, status: "canceled" }; },
   },
   refunds: { create: async () => ({ id: `re_fake_${++fakeN}` }) },
@@ -130,9 +139,20 @@ export async function charge(dev: Party, tester: Party, amountCents: number, pay
     const na = needsActionOf(e);
     if (na) return { ...split, transferStatus: destination ? "sent" : held ? "held" : "waiting", ...na };
     const msg = (e as { message?: string }).message ?? "unknown";
+    unknownOutcome(e);
     console.error("[stripe] charge failed:", msg);
     throw new HttpError(402, "card_failed", "Your card couldn't be charged. Update your card in Payments and press Pay again.", { stripe: msg });
   }
+}
+
+/**
+ * (Batch 15 section 9) Stripe's answer was lost (a dropped connection, Stripe's own error): the charge may or may not have happened, so it is NOT a decline. The press's
+ * payment stays pending and is checked after 15 minutes (recovery.ts). A key reused with other details (a new amount after an interrupted press) is its own code.
+ */
+function unknownOutcome(e: unknown) {
+  const t = (e as { type?: string }).type ?? "";
+  if (t === "StripeIdempotencyError" || t === "idempotency_error") throw new HttpError(409, "idempotency", "The payment key was used with other details.");
+  if (t === "StripeConnectionError" || t === "StripeAPIError" || t === "api_error") throw new HttpError(502, "payment_unknown", "We didn't hear back from the payment service.");
 }
 
 /**

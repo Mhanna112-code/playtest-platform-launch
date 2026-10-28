@@ -50,6 +50,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   await (await import("@/lib/server/calls")).sweepNobodyJoined();
   const { id } = await params;
   const u = await requireOpenPage("/app/sessions"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
+  await (await import("@/lib/server/recovery")).checkStuck({ contractId: id }); // (batch 15 section 9) payments stuck "in progress"
   const c = await db.contract.findUnique({
     where: { id },
     include: {

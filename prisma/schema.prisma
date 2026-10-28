@@ -434,10 +434,15 @@ model Payment {
   /// while the developer wasn't there; "needs_action" while a press's confirmation pop-up is open; an owed payment keeps its status)
   actionPi     String?
   actionBy     DateTime?
+  /// (Batch 15 section 9) The Stripe idempotency key's press id (the charge's metadata payKey), so a payment stuck "pending" can be found and finished or cleared; a new
+  /// press on the same piece within 24 hours of an interrupted one reuses it, so nothing is charged twice. And when it was last checked (at most once a minute).
+  payKey       String?
+  checkedAt    DateTime?
   createdAt    DateTime @default(now())
 
   @@index([developerId])
   @@index([testerId])
+  @@index([status, createdAt])
 }
 
 /// Only for parts in the contract paid below the listing amount; once per part.

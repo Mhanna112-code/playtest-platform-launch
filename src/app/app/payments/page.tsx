@@ -31,6 +31,7 @@ const MESSAGES: Record<string, string> = {
 
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; pending?: string }> }) {
   const u = await requirePageUser();
+  await (await import("@/lib/server/recovery")).checkStuck({ developerId: u.id }); // (batch 15 section 9) payments stuck "in progress"
   const q = await searchParams;
   const on = stripeOn();
   // (NEXT-UI 6 / 15) Each side has its own payments page, as in the full app (Billing / Payments): the side in use.

@@ -57,6 +57,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const u = await requireOpenDevPage(); // first: a restricted developer is sent to the dashboard before anything else runs
   await (await import("@/lib/server/calls")).sweepNobodyJoined();
   const { id } = await params;
+  await (await import("@/lib/server/recovery")).checkStuck({ testId: id }); // (batch 15 section 9) payments stuck "in progress"
   const { saved, offered, skipped, closed, resent, failed } = await searchParams;
   const seenAt = new Date().toISOString();
   const t = await db.test.findUnique({
