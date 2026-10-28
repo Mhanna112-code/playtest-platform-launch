@@ -331,13 +331,18 @@ export function stopOnce(events: TestEventLike[], seenAt: Date, confirmed: boole
  */
 export const DEV_STOP_KINDS = [
   ...STOP_ONCE_KINDS, "paid", "rejected", "chargeback", "choice", "requested", "withdrew_req", "declined_req",
-  // (NEWEST+3) the full set: applications, a tester's Switch/Keep, disputes, invite answers, admin decisions, listing info (F).
-  "applied", "terms", "dispute", "invite", "admin", "info", "full",
+  // (NEWEST+3) the full set: applications, disputes, invite answers, admin decisions, listing info (F). (Batch 14 section 4: a tester's Switch / Keep no longer stops.)
+  "applied", "dispute", "invite", "admin", "info", "full",
   // (Batch 8) "Your subscription ended." (or the free launch ended): a page open at that moment stops once.
   "subscription",
   // (Batch 11) A payments-kind line on the developer's own pages ("Your bank's chargeback of $X was reversed: ..."); Alerts can ignore it under Payments.
   "payment",
 ] as const;
+
+/** (Owner, Oct 29, batch 14) Kinds the developer's live box shows quietly (never a stop-once reason, never in the under-button notice, no bell). */
+export const DEV_QUIET_KINDS = ["terms", "key"] as const;
+/** "Ana switched to the new terms"; several in a day stack: "3 testers switched to the new terms". */
+export const switchedLine = (n: number, name = "") => (n === 1 ? `${name} switched to the new terms` : `${n} testers switched to the new terms`);
 
 /**
  * Every event kind the app records that does NOT stop the developer, and why. (Their own actions in another tab still
@@ -353,7 +358,8 @@ export const DEV_EXEMPT_KINDS: Record<string, string> = {
   ended: "the developer's own End early (reason E from another tab)",
   next_round: "the developer's own Next round (reason E from another tab)",
   invited: "the developer's own invites (reason E from another tab)",
-  key: "an access key reported as not working: shown quietly in the yellow keys box, never a stop (owner, Oct 26)",
+  key: "(batch 14 section 6) an access key reported as not working: one quiet line in the live box (DEV_QUIET_KINDS), never a stop, no bell",
+  terms: "(batch 14 section 4) a tester switched to the new terms: one quiet line in the live box (DEV_QUIET_KINDS), stacked per day; work already sent keeps its price, so nothing a press could change",
   paused: "a payment hold: every paused button refuses for good, and the page shows the hold",
   resumed: "the hold lifted because the developer paid (their own action, reason E)",
 };
@@ -556,7 +562,7 @@ export function retryStatusLine(u: { holdRetries: number; holdRetryAt: Date | nu
   return `Last try: ${fmt(u.holdRetryAt)} · next try: ${fmt(new Date(u.holdRetryAt.getTime() + 86_400_000))}`;
 }
 /** (Owner, Oct 29, batch 11) A written part (all its answers and notes together) is at most this many characters. */
-export const WRITTEN_MAX_CHARS = 10_000;
+export const WRITTEN_MAX_CHARS = 50_000; // (Owner, Oct 29, batch 14 section 5; was 10,000)
 export const writtenLength = (texts: string[]) => texts.reduce((a, t) => a + (t ?? "").length, 0);
 export function checkWrittenLength(texts: string[]): Check {
   const n = writtenLength(texts);

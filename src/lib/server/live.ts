@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, money } from "@/lib/format";
-import { DEV_STOP_KINDS, delayedPayLine, type TestEventLike } from "@/lib/rules";
+import { DEV_QUIET_KINDS, DEV_STOP_KINDS, delayedPayLine, switchedLine, type TestEventLike } from "@/lib/rules";
 import { alertOf } from "@/lib/alerts";
 
 type Tx = Prisma.TransactionClient;
@@ -36,7 +36,8 @@ export async function ownChanges(userId: string, testId: string, since: Date, ta
  * through the action log, so the tab that did them never stops for them.
  */
 export async function devChanges(devId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db, opts: { all?: boolean } = {}): Promise<TestEventLike[]> {
-  const events = await tx.testEvent.findMany({ where: { testId, createdAt: { gt: since }, kind: { in: [...DEV_STOP_KINDS, "renamed"] } }, orderBy: { createdAt: "asc" }, take: 100 });
+  // (Batch 14) The live box (`all`) also lists the quiet kinds: a tester's Switch (stacked per day) and a key reported as not working. They never stop a press.
+  const events = stackSwitches(await tx.testEvent.findMany({ where: { testId, createdAt: { gt: since }, kind: { in: [...DEV_STOP_KINDS, "renamed", ...(opts.all ? DEV_QUIET_KINDS : [])] } }, orderBy: { createdAt: "asc" }, take: 100 }));
   // (Owner, Oct 28) The developer's OWN listing edit (from another tab) is already said once, in their own voice, by the action log ("You changed the description and access keys in another tab"):
   // its listing-info event ("Nora Lane changed the description") is dropped, and a rename of their own reads "You renamed the test to ...".
   const me = displayName(await tx.user.findUniqueOrThrow({ where: { id: devId } }));
@@ -50,6 +51,19 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   if (opts.all) return all;
   const ignored = new Set((await tx.user.findUnique({ where: { id: devId }, select: { ignoredAlerts: true } }))?.ignoredAlerts ?? []);
   return ignored.size ? all.filter((c) => { const a = alertOf(c.kind); return !a || !ignored.has(a); }) : all;
+}
+
+/** (Batch 14 section 4) Several testers switching in one day: one line, "3 testers switched to the new terms" (at the latest one; no contract link). */
+function stackSwitches<T extends { kind: string; createdAt: Date; contractId: string | null; text: string }>(events: T[]): T[] {
+  const day = (d: Date) => d.toISOString().slice(0, 10);
+  const byDay = new Map<string, T[]>();
+  for (const e of events) if (e.kind === "terms") byDay.set(day(e.createdAt), [...(byDay.get(day(e.createdAt)) ?? []), e]);
+  return events.flatMap((e) => {
+    if (e.kind !== "terms") return [e];
+    const same = byDay.get(day(e.createdAt))!;
+    if (same.length === 1) return [e];
+    return e === same[same.length - 1] ? [{ ...e, contractId: null, text: switchedLine(same.length) }] : [];
+  });
 }
 
 async function subKinds(ids: (string | null)[], tx: Tx | typeof db = db) {

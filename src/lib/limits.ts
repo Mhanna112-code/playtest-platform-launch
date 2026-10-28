@@ -35,10 +35,11 @@ export const LIMITS = {
 } as const;
 
 /**
- * (Owner, Oct 28) The limited test fields: once a tester has joined, each of these fields may be changed by at most 3 Saves: what to do (the steps), the NDA, the questions,
- * the required languages and the required devices / technology. (Owner, Oct 28 afternoon) The limit is PER FIELD: each field has its own 3 changes, and one Save that changes two of
- * them uses one change of each. Part prices, parts and the build link are NOT limited (changing prices or parts still offers working testers Switch / Keep), and access keys stay out
- * of it (a key given to a tester stays theirs). The words are the ones used in messages.
+ * (Owner, Oct 28) The limited test fields: once anyone is affected (owner, Oct 29, batch 14: the first tester joins, the first application arrives or the first invite
+ * is sent, whichever comes first), each of these may be changed by at most 3 Saves: what to do (the steps), the NDA, the questions, the required languages, the required
+ * devices, (batch 14) the build link, and the parts and prices. The limit is PER FIELD: each has its own 3 changes, and one Save that changes two of them uses one change
+ * of each. "Parts and prices" is ONE counter for the part ticks, prices, Required ticks, Free ticks, the live rate and the call length. Access keys stay out of it.
+ * The words are the ones used in messages.
  */
 export const CRITICAL_FIELDS = {
   description: "steps",
@@ -46,23 +47,39 @@ export const CRITICAL_FIELDS = {
   questions: "questions",
   languages: "languages",
   devices: "devices",
+  buildUrl: "build link", // (batch 14)
+  parts: "parts and prices", // (batch 14) one counter for PART_FIELDS
 } as const;
 export type CriticalField = keyof typeof CRITICAL_FIELDS;
 export const CRITICAL_KEYS = Object.keys(CRITICAL_FIELDS) as CriticalField[];
+/** (Batch 14) The listing fields behind the one "parts and prices" counter. */
+export const PART_FIELDS = ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired"] as const;
 export const isCritical = (f: string): f is CriticalField => f in CRITICAL_FIELDS;
-/** "steps, NDA, questions, languages or devices": every limited field. */
+/** The counter a listing field uses, or null (not limited). */
+export const counterOf = (f: string): CriticalField | null => (isCritical(f) && f !== "parts" ? f : (PART_FIELDS as readonly string[]).includes(f) ? "parts" : null);
+/** The counters one Save of these listing fields uses (each once). */
+export const countersOf = (fields: readonly string[]): CriticalField[] => [...new Set(fields.map(counterOf).filter((x): x is CriticalField => !!x))];
+/** "steps, NDA, questions, languages, devices, build link or parts and prices": every limited field. */
 export const CRITICAL_WORDS = (() => {
   const names = [...new Set(Object.values(CRITICAL_FIELDS))];
   return `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
 })();
 
-/** Each limited field's count of changes since the first join (Test.criticalCounts, a Json object; a missing or bad value counts 0). */
+/** Each limited field's count of changes since the count started (Test.criticalCounts, a Json object; a missing or bad value counts 0). */
 export type CriticalCounts = Record<CriticalField, number>;
 export function countsOf(v: unknown): CriticalCounts {
   const o = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
   const n = (x: unknown) => (typeof x === "number" && Number.isFinite(x) && x > 0 ? Math.floor(x) : 0);
   return Object.fromEntries(CRITICAL_KEYS.map((k) => [k, n(o[k])])) as CriticalCounts;
 }
+/** (Batch 14) When the count started (stored in criticalCounts as "since"), or null while nobody is affected yet. */
+export function countingSince(v: unknown): Date | null {
+  const o = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+  const d = typeof o.since === "string" ? new Date(o.since) : null;
+  return d && !isNaN(d.getTime()) ? d : null;
+}
+/** The stored value: the counts, with when the count started. */
+export const storedCounts = (counts: CriticalCounts, since: Date | null) => ({ ...counts, ...(since ? { since: since.toISOString() } : {}) });
 /** The counts after one Save that changed these fields (each changed field uses one of its own changes). */
 export const countsAfter = (counts: CriticalCounts, changed: readonly CriticalField[]): CriticalCounts =>
   Object.fromEntries(CRITICAL_KEYS.map((k) => [k, counts[k] + (changed.includes(k) ? 1 : 0)])) as CriticalCounts;

@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { countsOf, lockedFields } from "@/lib/limits";
+import { countingSince, countsOf, lockedFields, storedCounts } from "@/lib/limits";
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { decideDispute } from "@/lib/server/payments";
 import { isAdmin, requireUser } from "@/lib/server/session";
@@ -58,7 +58,7 @@ export async function POST(req: Request, { params }: Ctx) {
         const t = await db.test.findUniqueOrThrow({ where: { id } });
         const counts = countsOf(t.criticalCounts);
         for (const f of lockedFields(counts)) counts[f] = 0;
-        await db.test.update({ where: { id }, data: { criticalCounts: counts } });
+        await db.test.update({ where: { id }, data: { criticalCounts: storedCounts(counts, countingSince(t.criticalCounts)) } }); // (batch 14) when the count started stays
       }
         return ok({ ok: true });
       // (Owner, Oct 26) A chargeback hold needs the admin's approval (id = the developer) once the card is verified and what is owed is paid.

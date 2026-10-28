@@ -1,17 +1,15 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
-import { keyNeedLine, keyRefusal, KEY_MAX_LENGTH, parseKeys, repeatedKeys } from "@/lib/keys";
+import { keyNeedLine, keyRefusal, keyReportedLine, KEY_MAX_LENGTH, parseKeys, repeatedKeys } from "@/lib/keys";
 import { HttpError } from "./http";
-import { notify } from "./notify";
 import { logEvent } from "./live";
-import { devGate } from "./tests";
 
 type Tx = Prisma.TransactionClient | typeof db;
 
-// (Design doc 5) Access keys. Free keys go to NEW testers first; a current tester whose key doesn't work gets a free key
-// only from the extras (enough must remain for the open spots). A key given to a tester who left is held for them: it
-// isn't free and can never be added again. A key reported as not working shows greyed and crossed out in "In use" until it is replaced.
+// (Design doc 5) Access keys. Free keys go to NEW testers (the oldest free key at join). (Owner, Oct 29, batch 14 section 6) Nothing ever replaces a key on its own
+// and there is no "Assign a free key": a tester whose key doesn't work is sent one by the developer in a message (a free key deleted in Edit). A key given to a tester
+// who left is held for them: it isn't free and can never be added again. A key reported as not working shows crossed out in "In use" and can't be added again.
 
 /** How many spots are open on a test right now (spots minus working testers). */
 export async function openSpotsOf(tx: Tx, testId: string, spots?: number) {
@@ -33,38 +31,6 @@ export async function keyBoxes(testId: string) {
   const spots = (await db.test.findUniqueOrThrow({ where: { id: testId }, select: { spots: true } })).spots;
   const open = await openSpotsOf(db, testId, spots);
   return { free, inUse, open, uses: keys.length > 0, now: new Date().toISOString() };
-}
-
-/** Testers whose key was reported as not working and not yet replaced. */
-export async function brokenKeyTesters(testId: string) {
-  const keys = await db.accessKey.findMany({ where: { testId, status: "broken", contract: { status: "working" } }, include: { contract: { include: { tester: true } } }, orderBy: { brokenAt: "asc" } });
-  return keys.map((k) => ({ keyId: k.id, contractId: k.contractId!, name: displayName(k.contract!.tester), at: k.brokenAt ?? k.createdAt }));
-}
-
-/**
- * (Owner, Oct 26) A key reported as not working is NOT replaced automatically: the developer is told quietly (the yellow box on
- * the test page) and presses "Assign a free key" on that tester's row. It gives them the next free key, only from the extras
- * (enough must remain for the open spots), and their broken key leaves "In use".
- */
-export async function assignFreeKey(dev: { id: string }, testId: string, contractId: string, body: Record<string, unknown> = {}) {
-  const t = await db.test.findUnique({ where: { id: testId } });
-  if (!t || t.developerId !== dev.id) throw new HttpError(404, "not_found", "That test doesn't exist or isn't yours.");
-  // Stop-once like every developer button (what changed since the page loaded).
-  await db.$transaction((tx) => devGate(tx, testId, body));
-  const out = await db.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
-    const broken = await tx.accessKey.findFirst({ where: { testId, contractId, status: "broken", contract: { status: "working" } }, include: { contract: { include: { tester: true } } } });
-    if (!broken) throw new HttpError(409, "gone", "That tester doesn't have a key reported as not working any more.");
-    const free = await tx.accessKey.findMany({ where: { testId, status: "free" }, orderBy: { createdAt: "asc" } });
-    const open = await openSpotsOf(tx, testId);
-    if (!free.length) throw new HttpError(409, "no_free_key", "You have no free keys. Add some in Edit first.");
-    if (free.length <= open) throw new HttpError(409, "no_extra_key", `Every free key is kept for the ${open} open spot${open === 1 ? "" : "s"}. Add more keys in Edit first.`);
-    await tx.accessKey.update({ where: { id: free[0].id }, data: { status: "inuse", contractId, assignedAt: new Date() } });
-    await tx.accessKey.update({ where: { id: broken.id }, data: { status: "retired" } });
-    return { email: broken.contract!.tester.email, title: broken.contract!.title, name: displayName(broken.contract!.tester) };
-  });
-  await notify(out.email, `You have a new access key for “${out.title}”`, [`The developer gave you a new access key for “${out.title}”. It shows on your session page.`], `/app/sessions/${contractId}`, { about: dev.id });
-  return { assigned: true, name: out.name };
 }
 
 /**
@@ -98,7 +64,7 @@ export async function heldBrokenKey(testId: string, testerId: string) {
   return db.accessKey.findFirst({ where: { testId, contractId: c.id, status: "broken" } });
 }
 
-/** "This key doesn't work": the key is marked, the developer is told, and a free extra replaces it at once when there is one. */
+/** "This key doesn't work": the key is marked (crossed out in the developer's row and Edit's "In use"), and the developer's live box gets one quiet line (no bell, never a stop). */
 export async function reportKeyBroken(tester: { id: string; name: string; email: string; pronoun?: string }, contractId: string) {
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== tester.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
@@ -111,11 +77,9 @@ export async function reportKeyBroken(tester: { id: string; name: string; email:
     await tx.accessKey.update({ where: { id: key.id }, data: { status: "broken", brokenAt: new Date() } });
     return { already: false, replaced: [] as { contractId: string }[] };
   });
-  if (result.already) return { reported: true, replaced: false, note: "The developer was already told. You'll see a new key here as soon as they add one." };
-  const name = displayName(tester);
-  await logEvent(c.testId, "key", `${name} says their access key doesn't work`, c.id);
-  await notify(c.test.developer.email, `${name} reports an access key not working on “${c.title}”`, [`${name} says the access key they were given for “${c.title}” doesn't work.`, "Press Assign a free key on their row in the yellow box on your test page."], `/app/tests/${c.testId}#keys-notice`, { about: tester.id });
-  return { reported: true, replaced: false, note: "Thanks. The developer was told; a new key shows here once they give you one." };
+  if (result.already) return { reported: true, replaced: false, note: "The developer was already told. They can send you another key in a message." };
+  await logEvent(c.testId, "key", keyReportedLine(displayName(tester)), c.id);
+  return { reported: true, replaced: false, note: "Thanks. The developer was told. They can send you another key in a message." };
 }
 
 /** Parse + check the keys typed on Post (a list; each once; length). Returns the keys or throws the first mistake. */

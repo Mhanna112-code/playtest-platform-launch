@@ -42,7 +42,7 @@ async function sentWork(over: Record<string, unknown> = {}) {
 }
 
 describe("batch 5 item 1: 'See their contract' under a pressed button", () => {
-  it("a developer's stop-once line for a tester's Switch / Keep carries the contract, and the box renders the link", async () => {
+  it("(batch 14) a tester's Switch is a quiet live-box line with the contract, never a stop; the boxes render the link", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     expect((await edit(testId, dev.cookie, { writtenCents: "12.00" })).status).toBe(200);
@@ -50,9 +50,10 @@ describe("batch 5 item 1: 'See their contract' under a pressed button", () => {
     const pageLoaded = seen();
     await settle();
     expect((await sact(sessionId, "terms", tester.cookie, { offerId: offer.id, choice: "switch", seenAt: seen(), confirmed: true })).status).toBe(200);
+    const { devChanges, asLines } = await import("@/lib/server/live");
+    expect(asLines(await devChanges(dev.user.id, testId, new Date(pageLoaded), "", db, { all: true }))).toContainEqual(expect.objectContaining({ text: "Ana Silva switched to the new terms", kind: "terms", contract: sessionId }));
     const r = await act(testId, "stop", dev.cookie, { seenAt: pageLoaded });
-    expect(r.body.error.code).toBe("stop_once");
-    expect(r.body.error.changes).toContainEqual(expect.objectContaining({ text: "Ana Silva switched to the new terms", kind: "terms", contract: sessionId }));
+    expect(r.status).toBe(200);
     const box = src("components/ChangesBox.tsx");
     expect(box).toContain('c.kind === "terms" && c.contract && <> <ContractLink contract={c.contract} /></>');
     expect(src("components/LiveTop.tsx")).toContain("<ContractLink contract={l.contract} mode={contractLink} />");
@@ -73,14 +74,14 @@ describe("batch 5 item 1: 'See their contract' under a pressed button", () => {
 
 describe("batch 5 item 2: the 3-change limit covers the steps, NDA, questions, languages and devices", () => {
   it("the fields, the words and the refusal line", () => {
-    expect(Object.keys(CRITICAL_FIELDS).sort()).toEqual(["description", "devices", "languages", "ndaText", "questions"]);
-    for (const f of ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "buildUrl"]) expect(isCritical(f), f).toBe(false);
-    expect(CRITICAL_WORDS).toBe("steps, NDA, questions, languages or devices");
+    // (Batch 14) Plus the build link and ONE counter for the parts and prices.
+    expect(Object.keys(CRITICAL_FIELDS).sort()).toEqual(["buildUrl", "description", "devices", "languages", "ndaText", "parts", "questions"]);
+    for (const f of ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired"]) expect(isCritical(f), f).toBe(false);
+    expect(CRITICAL_WORDS).toBe("steps, NDA, questions, languages, devices, build link or parts and prices");
     // (Batch 6 item 3) Per field: the line names the one field.
     expect(criticalLine("ndaText")).toBe("You've changed the NDA 3 times since testers joined. Contact us in Settings to change it again.");
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain("{criticalLine(f)}");
-    expect(form).not.toContain('attrs: limitReached ? { disabled: "true" } : {}'); // the build link stays editable
     expect(fs.readFileSync(path.resolve(__dirname, "../prisma/schema.prisma"), "utf8")).toContain("criticalCounts Json");
   });
 
@@ -94,7 +95,7 @@ describe("batch 5 item 2: the 3-change limit covers the steps, NDA, questions, l
     expect(fourth.body.error.message).toBe(criticalLine("devices"));
     // Keys stay out of the limit.
     expect((await edit(testId, dev.cookie, {}, { keysAdd: ["K1", "K2", "K3"] })).status).toBe(200);
-    // Prices are not limited, and working testers still get the offer.
+    // (Batch 14) Prices use the parts-and-prices counter, and working testers still get the offer.
     const r = await edit(testId, dev.cookie, { writtenCents: "14.00" });
     expect(r.status).toBe(200);
     expect(r.body.offered).toBe(1);

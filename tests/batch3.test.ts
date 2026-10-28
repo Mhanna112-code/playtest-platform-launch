@@ -10,7 +10,7 @@ import * as R from "@/lib/rules";
 import { startHold } from "@/lib/server/holds";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
-import { act, bookCall, joined, sact, seen, setup } from "./fixtures";
+import { act, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 
 const DAY = 86_400_000;
 const inHours = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString();
@@ -62,6 +62,7 @@ describe("email settings and the bell", () => {
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "joined" } } })).toBe(1);
     await db.user.update({ where: { id: tester.user.id }, data: { emailPref: "daily" } });
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
+    await settle(); // Windows' clock lag: the Pay below must load after the send, or it stops once for it
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await db.user.update({ where: { id: tester.user.id }, data: { emailPref: "none" } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });

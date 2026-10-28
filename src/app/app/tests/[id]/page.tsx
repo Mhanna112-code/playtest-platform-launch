@@ -35,7 +35,7 @@ import { pieceOf, pieceRoom } from "@/lib/server/payments";
 import { TopPanel } from "./TopPanel";
 import { NeedsYou } from "./NeedsYou";
 import { KeysNotice } from "./KeysNotice";
-import { brokenKeyTesters } from "@/lib/server/accessKeys";
+import { keyBoxes } from "@/lib/server/accessKeys";
 import { SavedNote } from "@/components/SavedNote";
 import { TestersJoined } from "./TestersJoined";
 import { ChatWithButton } from "@/components/ChatWithButton";
@@ -78,7 +78,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Batch 8) The free plan: the perk buttons show a "Subscribers" tag (a press is refused with a Payments link).
   const perks = await hasPerks(u);
   const next = await db.test.findFirst({ where: { previousId: id }, select: { id: true } });
-  const brokenKeys = await brokenKeyTesters(id);
+  // (Batch 14 section 6) The read-only Access keys notice (only when the test uses keys).
+  const keysView = await keyBoxes(id);
   // (Owner, Oct 26) A suspended developer sees only Cancel call, End early and Stop the test here; every other button is hidden.
   const restricted = !!u.suspendedAt;
   const keysEver = await db.accessKey.count({ where: { testId: id } });
@@ -240,7 +241,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       )}
       {/* (Design doc 6) The order: overview, the live updates box, the yellow keys notice, then the panels. */}
       <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" />
-      <KeysNotice testId={t.id} seenAt={seenAt} rows={restricted ? [] : brokenKeys.map((b) => ({ contractId: b.contractId, name: b.name, at: b.at.toISOString() }))} />
+      <KeysNotice testId={t.id} keys={keysView.uses && !restricted ? keysView : null} />
       {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay / Reject box for sent work lives here. */}
       {needsCount > 0 && !restricted && (
         <NeedsYou count={needsCount}>

@@ -5,7 +5,7 @@ import { HttpError } from "./http";
 // (NEXT-UI 10) Typed but not sent: kept per person and form on the server (so it follows them to any device and survives
 // signing out). ONLY these kinds of form (a key starts with one of them); never sign-in / sign-up.
 const KINDS = ["written:", "chat:", "dispute:", "rate:", "reject:", "test:"];
-const MAX_BYTES = 90_000;
+const MAX_BYTES = 400_000; // (batch 14) room for a 50,000-character written part
 
 function checkKey(key: unknown) {
   if (typeof key !== "string" || key.length > 160 || !/^[A-Za-z0-9:_.-]+$/.test(key) || !KINDS.some((k) => key.startsWith(k))) throw new HttpError(400, "bad_key", "That form isn't kept.");

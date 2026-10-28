@@ -11,7 +11,7 @@ import { Choices } from "@/components/Choices";
 import { api, ApiError, isFieldError } from "@/lib/client";
 import { NotSentTag, useKept } from "@/lib/useKept";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
-import { LIMITS, changesLeftLine, countsOf, criticalLine, isCritical, type CriticalCounts, type CriticalField } from "@/lib/limits";
+import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { keyNeedLine, parseKeys } from "@/lib/keys";
 import { HIGH_PART_CENTS, HIGH_PART_TICK, type Listing } from "@/lib/rules";
 import { toCents } from "@/lib/format";
@@ -161,9 +161,10 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
   const fieldLocked = (f: CriticalField) => limited && critCounts[f] >= LIMITS.criticalChanges;
   // A field changed here that another tab's Save locked meanwhile doesn't save: the field is red and its line says so.
   const apiOf = (ks: (keyof F)[]) => ks.flatMap((k) => API_FIELDS[k]);
-  const lockedNow = edit ? [...new Set(apiOf(changedKeys).filter(isCritical))].filter(fieldLocked) : [];
+  // (Batch 14) Each field's own counter: the build link, and ONE for the parts and prices (part ticks, prices, Required, Free, the live rate and call length).
+  const lockedNow = edit ? countersOf(apiOf(changedKeys)).filter(fieldLocked) : [];
   const locked = lockedNow.length > 0;
-  const lockedKey = (k: keyof F) => locked && changedKeys.includes(k) && API_FIELDS[k].some((a) => isCritical(a) && lockedNow.includes(a));
+  const lockedKey = (k: keyof F) => locked && changedKeys.includes(k) && API_FIELDS[k].some((a) => { const c = counterOf(a); return !!c && lockedNow.includes(c); });
   /** "Changes left: 2 of 3" next to a limited field's label (Edit, once a tester has joined). */
   const left = (f: CriticalField) => (limited ? <span className="ml-2 text-xs font-normal text-slate-500" data-changes-left={f}>{changesLeftLine(critCounts[f])}</span> : null);
   /** The lock note under a field that used its 3 changes. */
@@ -299,11 +300,11 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
   }
 
   // (Owner) Every box with a range says it next to it and is checked as soon as it's left (FieldChecks).
-  const text = (k: keyof F, label: string, opts: { req?: boolean; ph?: string; type?: string; cls?: string; attrs?: Record<string, string>; hint?: string; max?: number } = {}) => (
+  const text = (k: keyof F, label: string, opts: { req?: boolean; ph?: string; type?: string; cls?: string; attrs?: Record<string, string>; hint?: string; max?: number; disabled?: boolean; after?: React.ReactNode } = {}) => (
     <div>
-      <label className={"label" + (opts.req ? " req" : "")} htmlFor={k}>{label}</label>
+      <label className={"label" + (opts.req ? " req" : "")} htmlFor={k}>{label}{opts.after}</label>
       <div className="flex flex-wrap items-center gap-2">
-        <input id={k} type={opts.type ?? "text"} className={"input " + (opts.cls ?? "") + (bad(k) ? " field-bad" : "")} placeholder={opts.ph} value={f[k] as string} maxLength={opts.max}
+        <input id={k} type={opts.type ?? "text"} disabled={opts.disabled} className={"input " + (opts.cls ?? "") + (bad(k) ? " field-bad" : "")} placeholder={opts.ph} value={f[k] as string} maxLength={opts.max}
           onChange={(e) => set({ [k]: e.target.value } as Partial<F>)} onBlur={() => leave(k)} {...(opts.req ? { "data-required": "" } : {})} {...opts.attrs} />
         {opts.hint && <span className="text-xs text-slate-500">{opts.hint}</span>}
         {opts.max && <span className="ml-auto text-xs text-slate-500" aria-hidden>{(f[k] as string).length}/{opts.max}</span>}
@@ -337,7 +338,9 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
           {lockNote("description")}
           {note("description")}
         </div>
-        {text("buildUrl", "Link to the product or build", { ph: "https://…" })}
+        {/* (Batch 14) The build link is a limited field with its own 3 changes. */}
+        {text("buildUrl", "Link to the product or build", { ph: "https://…", after: left("buildUrl"), disabled: fieldLocked("buildUrl") })}
+        {lockNote("buildUrl")}
         {/* The full app's Categories: a row of tick boxes, at least one. */}
         <fieldset className={"space-y-2 " + (bad("categories") ? "rounded-xl p-2 ring-1 ring-rose-400" : "")}>
           <legend className="label req">Categories</legend>
@@ -383,27 +386,29 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
         <p className="note">Every term is fixed in each tester&apos;s contract when they join. Edits change the listing for new testers only.</p>
         {/* The full app's Parts and prices: one card per part (tick, title, what it is, Required, price, Free). Required is
             a label only (NEWEST+10): part of the terms, it blocks nothing. */}
-        {/* (Owner, Oct 28) Parts and prices are not limited: a change still offers working testers Switch / Keep. */}
         <fieldset className="space-y-2">
-          <legend className="label req">Parts and prices</legend>
+          {/* (Batch 14) Parts and prices: ONE limited counter for the part ticks, prices, Required and Free ticks, the live rate and call length. */}
+          <legend className="label req">Parts and prices{left("parts")}</legend>
+          {lockNote("parts")}
           {PARTS.map((part) => {
             const on = f[part.on] as boolean;
             const price = f[part.price] as string;
             const free = on && /^0+(\.0+)?$/.test(price.trim());
+            const pl = fieldLocked("parts");
             return (
               <div key={part.on} className={`space-y-1.5 rounded-xl border p-3 text-sm ${on ? "border-indigo-400/60 bg-indigo-500/10" : "border-white/10 bg-white/[0.03]"}`}>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                   <label className="flex min-w-[11rem] flex-1 cursor-pointer gap-2">
-                    <input type="checkbox" checked={on} onChange={(e) => set({ [part.on]: e.target.checked } as Partial<F>)} aria-label={`Include the ${part.title.toLowerCase()}`} />
+                    <input type="checkbox" disabled={pl} checked={on} onChange={(e) => set({ [part.on]: e.target.checked } as Partial<F>)} aria-label={`Include the ${part.title.toLowerCase()}`} />
                     <span><span className="block text-white">{part.title}</span><span className="text-xs text-slate-400">{part.help}</span></span>
                   </label>
                   <label className={`flex items-center gap-1.5 ${on ? "text-slate-200" : "text-slate-600"}`}>
-                    <input type="checkbox" disabled={!on} checked={on && (f[part.req] as boolean)} onChange={(e) => set({ [part.req]: e.target.checked } as Partial<F>)} aria-label={`${part.title}: required`} /> Required
+                    <input type="checkbox" disabled={!on || pl} checked={on && (f[part.req] as boolean)} onChange={(e) => set({ [part.req]: e.target.checked } as Partial<F>)} aria-label={`${part.title}: required`} /> Required
                   </label>
                   <span className="flex flex-wrap items-center gap-2">
                     <label className={`flex items-center gap-1 ${free || !on ? "text-slate-600" : "text-slate-300"}`}>
                       $
-                      <input id={part.price} className={"input w-24 py-1" + (bad(part.price) ? " field-bad" : "")} inputMode="decimal" disabled={!on || free} placeholder={part.ph} value={free ? "" : price}
+                      <input id={part.price} className={"input w-24 py-1" + (bad(part.price) ? " field-bad" : "")} inputMode="decimal" disabled={!on || free || pl} placeholder={part.ph} value={free ? "" : price}
                         onChange={(e) => set({ [part.price]: e.target.value } as Partial<F>)} aria-label={`Price for the ${part.title.toLowerCase()}`}
                         data-min={part.min} data-max={part.max} data-zero-ok="" data-msg={part.msg} />
                       {part.unit}
@@ -419,7 +424,7 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
                       ) : null;
                     })()}
                     <label className={`flex items-center gap-1 ${on ? "text-sky-200" : "text-slate-600"}`}>
-                      <input type="checkbox" disabled={!on} checked={free} onChange={(e) => set({ [part.price]: e.target.checked ? "0" : "" } as Partial<F>)} aria-label={`${part.title}: free`} /> Free
+                      <input type="checkbox" disabled={!on || pl} checked={free} onChange={(e) => set({ [part.price]: e.target.checked ? "0" : "" } as Partial<F>)} aria-label={`${part.title}: free`} /> Free
                     </label>
                   </span>
                 </div>

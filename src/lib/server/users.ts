@@ -18,7 +18,7 @@ const VERBS: Record<string, string> = {
   edit: "Save", stop: "Stop", "end-early": "End early", "next-round": "Next round", invite: "Invite", "cancel-invite": "Cancel invite", "request-time": "Call request", "answer-request": "Answer",
   application: "Answer", join: "Join", apply: "Apply", "rejoin-ask": "Ask to rejoin", message: "Message", written: "Send", "recording-start": "Send", "recording-send": "Send", "recording-done": "Send",
   leave: "Leave", rate: "Rating", terms: "Switch or Keep", choose: "Charge", dispute: "Dispute", "dispute-side": "Dispute reply", "call-length": "Call length", "no-show": "Report", "cancel-call": "Cancel call",
-  "cancel-set": "Cancel calls", "assign-key": "Assign a key", "pay-extra": "Pay", "key-broken": "Report", open: "Open", review: "Pay",
+  "cancel-set": "Cancel calls", "pay-extra": "Pay", "key-broken": "Report", open: "Open", review: "Pay",
 };
 
 /** "Your Pay on Harbor Run didn't go through": what the red box on the dashboard names. */

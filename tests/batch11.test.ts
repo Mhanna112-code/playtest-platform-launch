@@ -336,12 +336,12 @@ describe("batch 11 item 6 (with batch 12 section 2): one Pay box, Pay more", () 
 });
 
 describe("batch 11 item 7: the written part", () => {
-  it("at most 10,000 characters in all, counted live", async () => {
+  it("at most 50,000 characters in all (batch 14 section 5; was 10,000), counted live", async () => {
     const s = await setup({ questions: ["One?", "Two?"] });
     const j = await joined(s.testId);
-    const r = await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a".repeat(6000), "b".repeat(4000)], notes: "c" });
-    expect(r.body.error).toMatchObject({ code: "too_long", message: "Your written answers can be at most 10,000 characters in all (now 10,001)." });
-    expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a".repeat(6000), "b".repeat(4000)] })).status).toBe(200);
+    const r = await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a".repeat(30_000), "b".repeat(20_000)], notes: "c" });
+    expect(r.body.error).toMatchObject({ code: "too_long", message: "Your written answers can be at most 50,000 characters in all (now 50,001)." });
+    expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a".repeat(30_000), "b".repeat(20_000)] })).status).toBe(200);
     expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("data-written-count");
   });
 

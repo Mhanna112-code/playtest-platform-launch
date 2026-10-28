@@ -13,7 +13,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   return handle(async () => {
     const u = await requireUser(req);
-    const body = await readJson(req);
+    const body = await readJson(req, 450_000); // (batch 14) a 50,000-character written draft
     return ok(await setKept(u.id, body.key, body.data));
   });
 }

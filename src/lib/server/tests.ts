@@ -2,7 +2,7 @@ import { devChanges, seenOf, tabOf, withRenamed } from "./live";
 import { qOptional } from "@/lib/questions";
 import { itemsFor, itemsOf, prevSetsOf, pushPrev, sameQuestions } from "@/lib/answerSets";
 import { overLimitText } from "@/lib/capacity";
-import { countsAfter, countsOf, criticalLine, isCritical, lockedFields } from "@/lib/limits";
+import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
 import { applyKeyChange, assignKeyAtJoin, checkTypedKeys, planKeyChange } from "./accessKeys";
 import { keyNeedLine, parseKeys } from "@/lib/keys";
@@ -43,6 +43,28 @@ export const asListing = (t: { [K in keyof Listing]: unknown }): Listing => ({
 export const listingData = (l: Listing) => ({ ...l, openUntil: l.openUntil ? new Date(l.openUntil) : null, liveMinutes: l.liveRateCents == null ? null : l.liveMinutes });
 
 /** The written-answer questions in a contract; extra written work with no questions gets one open box. */
+/**
+ * (Owner, Oct 29, batch 14 section 2) The 3-change count starts once anyone is affected: the first tester joins, the first application arrives or the first invite is
+ * sent. Stored as "since" in criticalCounts (kept when the only applicant withdraws). Called where each of those happens; a test from before this keeps counting from
+ * its first such row (startedCounting reads them).
+ */
+export async function stampCounting(testId: string, tx: Prisma.TransactionClient | typeof db = db, at = new Date()) {
+  await tx.$executeRaw`UPDATE "Test" SET "criticalCounts" = COALESCE("criticalCounts", '{}'::jsonb) || jsonb_build_object('since', ${at.toISOString()}::text) WHERE id = ${testId} AND NOT jsonb_exists(COALESCE("criticalCounts", '{}'::jsonb), 'since')`;
+}
+/** When the count started (null: nobody affected yet, edits are free and nobody is told). */
+export async function startedCounting(t: { id: string; criticalCounts: unknown }, tx: Prisma.TransactionClient | typeof db = db): Promise<Date | null> {
+  const since = countingSince(t.criticalCounts);
+  if (since) return since;
+  const [c, a, i] = await Promise.all([
+    tx.contract.findFirst({ where: { testId: t.id }, orderBy: { joinedAt: "asc" }, select: { joinedAt: true } }),
+    tx.application.findFirst({ where: { testId: t.id }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
+    tx.invite.findFirst({ where: { testId: t.id }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
+  ]);
+  const first = [c?.joinedAt, a?.createdAt, i?.createdAt].filter((d): d is Date => !!d).sort((x, y) => x.getTime() - y.getTime())[0] ?? null;
+  if (first) await stampCounting(t.id, tx, first);
+  return first;
+}
+
 export const writtenQuestions = (c: { questions: unknown }) => {
   const qs = (c.questions as string[]) ?? [];
   return qs.length ? qs : ["Your feedback"];
@@ -304,8 +326,10 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (fields.includes("openUntil")) { const short = openUntilShortened(current.openUntil, next.openUntil, fmtDate); if (short) errs.push(short); }
     // (NEWEST+9) Raising spots above the capacity is refused; a test already above it keeps its spots.
     if (Number.isInteger(next.spots) && next.spots > current.spots && next.spots > cap.limit && !errs.some((e) => e.startsWith("Spots"))) errs.push(overLimitText(cap.limit));
-    const critical = fields.filter(isCritical);
-    const everJoined = (await tx.contract.count({ where: { testId } })) > 0;
+    // (Batch 14) Each limited field's counter (the parts and prices share one); the count runs once anyone is affected.
+    const critical = countersOf(fields);
+    const since = await startedCounting(t, tx);
+    const everJoined = !!since;
     // (Owner, Oct 28 afternoon) Each limited field has its OWN 3 changes: only a field that used all of them is refused (the others still save).
     const counts = countsOf(t.criticalCounts);
     const lockedNow = everJoined ? critical.filter((f) => lockedFields(counts).includes(f)) : [];
@@ -332,7 +356,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     await recordEvent(tx, testId, listingFields.length ? "edited" : "edited_spots", `The listing was edited: ${listingFields.length ? listingFields.map((f) => FIELD_NAMES[f]).join(", ") : what}`, true, {
       ...listingData(next), ...(fields.includes("openUntil") ? { notified3d: false, notified1d: false } : {}), ...(listingFields.length ? { listingVersion: { increment: 1 } } : {}),
       // (5; owner, Oct 28 afternoon) A save that changed limited fields after the first tester joined uses one change of EACH of them.
-      ...(critical.length && everJoined ? { criticalCounts: countsAfter(counts, critical) } : {}),
+      ...(critical.length && everJoined ? { criticalCounts: storedCounts(countsAfter(counts, critical), since) } : {}),
     });
     if (keysChanged) {
       await applyKeyChange(tx, testId, plan.toAdd, plan.removable);
@@ -380,7 +404,7 @@ async function keysState(tx: Tx, testId: string) {
 /** (F) The listing info a working tester sees change live: title, description, devices, languages. */
 export const INFO_FIELDS: (keyof Listing)[] = ["description", "devices", "languages", "buildUrl", "categories", "joinMode", "productName", "mature", "matureWhy"];
 /** (Correction 2) The changes that close applications and re-send invites: prices / parts / questions, deadline, devices, languages, description. */
-export const CLOSING_FIELDS: (keyof Listing)[] = ["ndaText", "writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "questions", "deadlineDays", "devices", "languages", "description"];
+export const CLOSING_FIELDS: (keyof Listing)[] = ["ndaText", "writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "questions", "deadlineDays", "devices", "languages", "description", "buildUrl"]; // (batch 14) the build link too
 
 const FIELD_NAMES: Record<keyof Listing, string> = {
   productName: "product name", mature: "Mature (18+) box", matureWhy: "Mature (18+) note", ndaText: "NDA",
@@ -629,6 +653,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     const contract = old
       ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, dueAt: rejoinDue(old.dueAt, old.endedAt, new Date()), status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null } })
       : await tx.contract.create({ data: { testId, testerId: tester.id, ...snap } });
+    await stampCounting(testId, tx); // (batch 14) the 3-change count starts
     if (old) await tx.termsOffer.updateMany({ where: { contractId: old.id, status: "open" }, data: { status: "superseded", decidedAt: new Date() } });
     // (Design doc 5) Each joining tester gets an access key (the key they had, if it still works, else the oldest free one).
     await assignKeyAtJoin(tx, testId, contract.id, body.keyStillWorks === true);

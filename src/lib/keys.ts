@@ -35,3 +35,9 @@ export function keyRefusal(value: string, status: string | null) {
   if (status === "held") return `${value} was given to a tester who left the test, so it can't be used again.`;
   return `${value} was reported as not working or was replaced, so it can't be used again.`;
 }
+
+/** (Owner, Oct 29, batch 14 section 6) The developer's quiet live-box line when a tester reports their key (not a stop-once kind, no bell). */
+export const keyReportedLine = (name: string) => `${name} reported their key doesn't work`;
+/** The Free keys notice's hint (its "in Edit" opens Edit's access keys section in a new tab). */
+export const FREE_KEYS_HINT = ["If a tester's key doesn't work, delete a free key ", "in Edit", " and send it to them in a message."] as const;
+export const openSpotsKeyLine = (open: number) => `${open} open spot${open === 1 ? "" : "s"}: each new tester gets one.`;

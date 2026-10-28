@@ -26,7 +26,7 @@ export function alertOf(kind: string): AlertKey | null {
     case "dispute": return "disputes";
     case "admin": return "admin";
     case "own": return "own";
-    case "terms": case "info": case "renamed": case "edited": return "listing";
+    case "info": case "renamed": case "edited": return "listing"; // (batch 14) a tester's Switch is a quiet line, not an alert type
     default: return null; // paused, chargeback, stopped, ...: always stop
   }
 }

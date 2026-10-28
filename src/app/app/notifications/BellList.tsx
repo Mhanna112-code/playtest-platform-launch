@@ -6,7 +6,7 @@ import { api } from "@/lib/client";
 import { LongList } from "@/components/LongList";
 
 export type BellLine = { id: string; text: string; href: string; read: boolean; ago: string };
-export type BellEntry = { key: string; title?: string; day?: string; lines: BellLine[] };
+export type BellEntry = { key: string; title?: string; day?: string; lines: BellLine[]; /** (batch 14) the title already counts: no "N updates" */ counted?: boolean };
 
 /**
  * (Design doc 9) The bell list. Lines about the same test on the same day stack into one entry ("Harbor Run · 4 updates today",
@@ -44,7 +44,7 @@ export function BellList({ entries }: { entries: BellEntry[] }) {
             <button type="button" className="flex w-full items-start gap-3 text-left" aria-expanded={!!open[e.key]} onClick={() => toggle(e)}>
               <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${e.lines.some((l) => !isRead(l)) ? "bg-indigo-400" : "bg-transparent"}`} />
               <span className="min-w-0 flex-1">
-                <span className="block font-medium text-slate-100">{e.title} · {e.lines.length} updates {e.day}</span>
+                <span className="block font-medium text-slate-100">{e.counted ? `${e.title} ${e.day}` : `${e.title} · ${e.lines.length} updates ${e.day}`}</span>
                 <span className="block truncate text-sm text-slate-400">{e.lines[0].text}</span>
               </span>
               {e.lines.some((l) => !isRead(l)) && <span className="rounded-full bg-indigo-500 px-2 py-0.5 text-xs text-white">{e.lines.filter((l) => !isRead(l)).length}</span>}

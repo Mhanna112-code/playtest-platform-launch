@@ -5,7 +5,7 @@ import { PAUSED_RIGHT_NOW, canAskToRejoin, leftText, MAX_ACTIVE_TESTS, termsDiff
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
-import { asListing, devGate, gapStop, joinTest, ownTest } from "./tests";
+import { asListing, devGate, gapStop, joinTest, ownTest, stampCounting } from "./tests";
 
 // Joining (owner rule): Who can join = Anyone (Join) / Apply (Apply to join → the developer Accepts or Declines) /
 // Invite only. No offers or counter-offers on the join page. Join and Apply stop once if ANYTHING about the listing
@@ -167,6 +167,7 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
     update: { note, listing: snap, status: "pending", changedAt: null, decidedAt: null, kind: "apply", ndaAcceptedAt },
     create: { testId, testerId: tester.id, note, listing: snap, ndaAcceptedAt },
   });
+  await stampCounting(testId); // (batch 14) the 3-change count starts with the first application
   await db.$transaction((tx) => tx.testEvent.create({ data: { testId, kind: "applied", text: `${displayName(tester)} applied to join` } }));
   await notify(t.developer.email, `${displayName(tester)} applied to join “${t.title}”`, [`${displayName(tester)} applied to join “${t.title}”.`, ...(note ? [`Their note: “${note}”`] : []), "Accept or decline on the test page."], `/app/tests/${testId}#needs-you`);
   return { applied: true };
@@ -256,7 +257,8 @@ export async function closeApplicationsAfterEdit(testId: string, why: "listing" 
     if (!tester) continue;
     names.push(displayName(tester));
     const line = why === "invite_only" ? `${t.title} is now invite only, so your application was closed.` : `${t.title}'s listing changed, so your application was closed. You can apply again on the current listing.`;
-    await notify(tester.email, line, [line], `/app/find/${testId}`);
+    // (Batch 14 section 3) Several tests in a day stack into one entry.
+    await notify(tester.email, line, [line], `/app/find/${testId}`, { group: why === "invite_only" ? undefined : "appclosed", testId });
   }
   return names;
 }

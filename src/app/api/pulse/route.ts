@@ -38,9 +38,12 @@ export async function GET(req: Request) {
     const msg = await db.message.findFirst({ where: { testId }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
     const inv = await db.invite.findFirst({ where: { testId }, orderBy: { updatedAt: "desc" }, select: { updatedAt: true } });
     const sus = sessionId ? 0 : await db.user.count({ where: { suspendedAt: { not: null } } });
+    // (Batch 14 section 6) The Access keys notice: keys added or deleted in Edit, or given at a join, refresh the page.
+    const keyRows = sessionId ? [] : await db.accessKey.groupBy({ by: ["status"], where: { testId }, _count: { _all: true } });
+    const keysV = keyRows.map((k) => `${k.status}:${k._count._all}`).sort().join(",");
     const pay = { n: payCount, last: (payLast?.createdAt.getTime() ?? 0) + (payLast?.status ?? "") };
     // (Batch 10) The developer's suspension and the team's pause are in it too, so a tester's session page shows (or drops) the paused banner live.
-    const v = [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.suspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0].join("|");
+    const v = [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.suspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV].join("|");
     // (Owner, Oct 28) Whether the team stopped the test: an open test page or Edit moves to the top of the test page at once.
     // (Batch 10) A tester's session page isn't restricted by the developer's hold (only the developer's own pages are): it keeps refreshing, so the paused banner shows live.
     return ok({ v, adminStopped: !!t.adminStoppedAt, restricted: !!(u.suspendedAt || (!sessionId && t.developer.holdStartedAt)) });

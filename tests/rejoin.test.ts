@@ -29,7 +29,7 @@ describe("a listing change re-sends open invites", () => {
     const fresh = await db.invite.findFirstOrThrow({ where: { testId, testerId: ana.user.id, status: "sent" } });
     expect(fresh.id).not.toBe(oldAna.id);
     expect(fresh.remindedAt).toBeNull();
-    expect(await db.notification.count({ where: { userId: ana.user.id, text: { startsWith: "Nora Lane updated Harbor Run, so here's a new invite: Written $9.60" } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: ana.user.id, text: "Nora Lane updated Harbor Run: your invite was sent again on the new listing." } })).toBe(1);
     expect(await db.invite.count({ where: { testId, testerId: dee.user.id, status: "sent" } })).toBe(0);
     // Accept (Join) on the old invite: refused under the button, with the new invite.
     const old = await act(testId, "join", ana.cookie, { listingVersion: await listingVersion(testId), inviteId: oldAna.id });

@@ -24,7 +24,17 @@ export const GROUP_TITLES: Record<string, string> = {
   textra: "Extra pay",
   tstopped: "Tests stopped or ended",
   suspendedreview: "Suspended accounts",
+  // (Owner, Oct 29, batch 14 section 3) An edit closed an application / re-sent an invite: these stack across tests too (their entry title counts the tests).
+  appclosed: "Applications closed",
+  reinvited: "Invites sent again",
 };
+
+/** (Batch 14) A stacked entry's title that says it all with its count ("3 tests you applied to changed: your applications were closed"); else GROUP_TITLES. */
+export const GROUP_COUNT_TITLES: Record<string, (n: number) => string> = {
+  appclosed: (n) => `${n} tests you applied to changed: your applications were closed`,
+  reinvited: (n) => `${n} tests you were invited to changed: your invites were sent again`,
+};
+export const groupTitle = (key: string, n: number) => GROUP_COUNT_TITLES[key]?.(n) ?? GROUP_TITLES[key];
 
 export function bellKey(n: { id: string; testId: string | null; own: boolean; groupKey?: string | null; createdAt: Date }) {
   if (n.own) return `solo|${n.id}`;

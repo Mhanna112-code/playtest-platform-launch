@@ -73,8 +73,9 @@ describe("Edit (design doc 5)", () => {
     expect(r.body.error.message).toBe("You've changed the steps 3 times since testers joined. Contact us in Settings to change it again.");
     expect(r.body.error.critical).toEqual(["description"]);
     expect((await edit(testId, dev.cookie, { languages: ["English"] })).status).toBe(200);
-    // Other fields still save: the build link is no longer limited.
-    expect((await edit(testId, dev.cookie, { title: "New name", buildUrl: "https://example.com/again" })).status).toBe(200);
+    // (Batch 14) The build link has its own 3 changes, used above; other fields still save.
+    expect((await edit(testId, dev.cookie, { buildUrl: "https://example.com/again" })).body.error.message).toBe("You've changed the build link 3 times since testers joined. Contact us in Settings to change it again.");
+    expect((await edit(testId, dev.cookie, { title: "New name" })).status).toBe(200);
   });
 
   it("an NDA change is a new offer the tester accepts (switch); the tester's terms history keeps the old text", async () => {
@@ -129,31 +130,17 @@ describe("Access keys (design doc 5)", () => {
     expect(await keyOf(b.sessionId)).toBe("K2");
   });
 
-  it("a reported key is greyed in In use and is NOT replaced automatically; the developer assigns a free key by hand, only from the extras", async () => {
+  it("a reported key is crossed out in In use and is NOT replaced: (batch 14) there is no Assign a free key", async () => {
     const { dev, testId } = await withKeys(["K1", "K2", "K3"], 2);
     const a = await joined(testId, "Ana Silva");
     const r = await sact(a.sessionId, "key-broken", a.tester.cookie, { seenAt: seen() });
     expect(r.status).toBe(200);
     expect(r.body.replaced).toBe(false);
     expect((await db.accessKey.findFirstOrThrow({ where: { value: "K1", testId } })).status).toBe("broken");
-    // Still broken: a free key is not handed out by itself.
+    // Still broken: nothing hands out a free key by itself, and the developer has no Assign button.
     expect(await db.accessKey.count({ where: { testId, status: "free" } })).toBe(2);
-    // 1 open spot + 2 free keys: one extra, so the developer can assign.
-    expect((await act(testId, "assign-key", dev.cookie, { contractId: a.sessionId, seenAt: seen(), confirmed: true })).status).toBe(200);
-    expect((await db.accessKey.findFirstOrThrow({ where: { value: "K1", testId } })).status).toBe("retired");
-    expect((await db.accessKey.findFirstOrThrow({ where: { contractId: a.sessionId, status: "inuse" } })).value).toBe("K2");
-    expect(await db.notification.count({ where: { userId: a.tester.user.id, text: { contains: "new access key" } } })).toBe(1);
-  });
-
-  it("no extra key: assigning is refused (blue) until more keys are added", async () => {
-    const { dev, testId } = await withKeys(["K1", "K2"], 2);
-    const a = await joined(testId, "Ana Silva");
-    await sact(a.sessionId, "key-broken", a.tester.cookie, { seenAt: seen() });
-    const r = await act(testId, "assign-key", dev.cookie, { contractId: a.sessionId, seenAt: seen(), confirmed: true });
-    expect(r.status).toBe(409);
-    expect(r.body.error.message).toMatch(/Every free key is kept for the 1 open spot/);
-    expect((await edit(testId, dev.cookie, {}, { keysAdd: ["K3"] })).status).toBe(200);
-    expect((await act(testId, "assign-key", dev.cookie, { contractId: a.sessionId, seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await act(testId, "assign-key", dev.cookie, { contractId: a.sessionId, seenAt: seen(), confirmed: true })).status).toBeGreaterThanOrEqual(400);
+    expect(await db.accessKey.count({ where: { testId, status: "free" } })).toBe(2);
   });
 
   it("Free keys can't drop below the open spots; used, left and broken keys can't be added again", async () => {

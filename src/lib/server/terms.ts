@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate } from "@/lib/format";
-import { newDueAt, termsDiff, type ContractTerms } from "@/lib/rules";
+import { newDueAt, switchedLine, termsDiff, type ContractTerms } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { testerGate } from "./testerGate";
@@ -86,11 +86,12 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
       }),
       db.termsOffer.update({ where: { id: target.id }, data: { status: "switched", decidedAt: now } }),
     ]);
-    await logEvent(c.testId, "terms", `${await nameOf(c.testerId)} switched to the new terms`, c.id);
+    // (Batch 14 section 4) One quiet line in the developer's live box (not a stop-once kind); several a day stack.
+    await logEvent(c.testId, "terms", switchedLine(1, await nameOf(c.testerId)), c.id);
     return { switched: true };
   }
   await db.termsOffer.update({ where: { id: target.id }, data: { status: "kept", decidedAt: now } });
-  await logEvent(c.testId, "terms", `${await nameOf(c.testerId)} kept their current terms`, c.id);
+  // (Batch 14 section 4) Keep: the developer is told nothing (the tester row still reads "On their terms from <date>").
   return { switched: false };
 }
 

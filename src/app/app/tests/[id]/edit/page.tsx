@@ -3,7 +3,7 @@ import { countsOf } from "@/lib/limits";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireOpenDevPage } from "@/lib/server/page-auth";
-import { asListing } from "@/lib/server/tests";
+import { asListing, startedCounting } from "@/lib/server/tests";
 import { TestForm } from "../../TestForm";
 import { testerCapacity } from "@/lib/server/capacity";
 import { LiveTop } from "@/components/LiveTop";
@@ -38,7 +38,7 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
           <p className="note">Edit changes the listing for new testers only. Testers already in keep the contract they joined on.</p>
           <TestForm
             init={asListing(t)}
-            edit={{ id, version: t.version, testersIn, draft: t.status === "draft", seenAt, keys: await keyBoxes(id), criticalCounts: countsOf(t.criticalCounts), everJoined: (await db.contract.count({ where: { testId: id } })) > 0, openedAt: t.createdAt.toISOString() }}
+            edit={{ id, version: t.version, testersIn, draft: t.status === "draft", seenAt, keys: await keyBoxes(id), criticalCounts: countsOf(t.criticalCounts), everJoined: !!(await startedCounting(t)) /* (batch 14) first join, application or invite */, openedAt: t.createdAt.toISOString() }}
             spotsLimit={(await testerCapacity(u.id)).limit}
             perks={await hasPerks(u)}
           />

@@ -8,8 +8,8 @@ import { answerRequest, cancelCallSet, devRequestTime } from "@/lib/server/reque
 import { apply, askToRejoin, decideApplication, join, withdrawApplication } from "@/lib/server/joining";
 import { addDevSide, payExtra } from "@/lib/server/payments";
 import { sendChat, sendMessage } from "@/lib/server/messages";
-import { asListing, deleteDraft, editTest, endEarly, nextRound, openDraft, ownTest, postDraft, stopTest } from "@/lib/server/tests";
-import { assignFreeKey, keyBoxes } from "@/lib/server/accessKeys";
+import { startedCounting, asListing, deleteDraft, editTest, endEarly, nextRound, openDraft, ownTest, postDraft, stopTest } from "@/lib/server/tests";
+import { keyBoxes } from "@/lib/server/accessKeys";
 import { getUserFromRequest } from "@/lib/server/session";
 import { failedLine, requireActive, requireConfirmed } from "@/lib/server/users";
 import { RESTRICTED_OK_ACTIONS } from "@/lib/restricted";
@@ -32,7 +32,7 @@ export async function GET(req: Request, { params }: Ctx) {
     if (!u) throw new HttpError(401, "signed_out", "You're signed out. Sign in again to keep going.");
     if (action !== "listing") throw new HttpError(404, "not_found", "That doesn't exist.");
     const t = await ownTest(u.id, id);
-    return ok({ version: t.version, listing: asListing(t), keys: await keyBoxes(id), at: new Date().toISOString(), criticalCounts: countsOf(t.criticalCounts), everJoined: (await db.contract.count({ where: { testId: id } })) > 0 });
+    return ok({ version: t.version, listing: asListing(t), keys: await keyBoxes(id), at: new Date().toISOString(), criticalCounts: countsOf(t.criticalCounts), everJoined: !!(await startedCounting(t)) }); // (batch 14) the count runs once anyone is affected
   });
 }
 
@@ -79,8 +79,6 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         const t = await editTest(u, id, body);
         return ok({ version: t.version, offered: (t as { offered?: number }).offered ?? 0, changed: (t as { changed?: string[] }).changed ?? [], notReinvited: (t as { notReinvited?: string[] }).notReinvited ?? [], resent: (t as { resent?: string[] }).resent ?? [], closedApps: (t as { closedApps?: string[] }).closedApps ?? [], spotClosed: (t as { spotClosed?: string[] }).spotClosed ?? [], spots: t.spots });
       }
-      case "assign-key":
-        return ok(await assignFreeKey(u, id, String(body.contractId ?? ""), body));
       case "open":
         await openDraft(u, id, body);
         return ok({ ok: true });

@@ -14,7 +14,7 @@ export function KeyBox({ sessionId, seenAt, value, broken, fresh, canReport = tr
         <KeyRound className="h-4 w-4 text-amber-300" /> <strong>Your access key:</strong>
         <code className={`rounded bg-white/[0.06] px-2 py-0.5 font-mono ${broken || said ? "text-slate-500 line-through" : "text-amber-100"}`}>{value}</code>
         {broken || said ? (
-          <span className="text-slate-400">You said it doesn&apos;t work. The developer was told; a new key shows here once they add one.</span>
+          <span className="text-slate-400">You said it doesn&apos;t work. The developer was told. They can send you another key in a message.</span>
         ) : !canReport ? null : (
           <button className="btn-ghost px-3 py-1 text-xs" disabled={busy} onClick={() => void press<{ replaced?: boolean }>(`/api/sessions/${sessionId}/key-broken`, {}, "key").then((r) => { if (!r) return; if (r.replaced) window.location.reload(); else setSaid(true); })}>This key doesn&apos;t work</button>
         )}

@@ -90,7 +90,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
         <label className="label" htmlFor="notes">Anything else (bugs, ideas)</label>
         <AnswerBox id="notes" rows={2} value={notes} onChange={setNotes} />
       </div>
-      {/* (Batch 11) At most 10,000 characters for the whole written part, counted live. */}
+      {/* (Batch 11) (Batch 14) At most 50,000 characters for the whole written part, counted live. */}
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
       <span>{canSend && <button className="btn" disabled={busy || length > WRITTEN_MAX_CHARS}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && <NotSentTag />}</span>
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}

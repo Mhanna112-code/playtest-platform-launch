@@ -3,7 +3,7 @@ import { displayName, fmtDate, pronouns } from "@/lib/format";
 import { andList, inviteTesterRefusal, inviteTestRefusal, MAX_ACTIVE_TESTS, termsLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
-import { asListing, devGate, devGateIfSeen, needsGap, ownTest, recordEvent } from "./tests";
+import { asListing, devGate, devGateIfSeen, needsGap, ownTest, recordEvent, stampCounting } from "./tests";
 import { revealedRatingsWhere } from "./ratings";
 import { doesntListTag, withYouText } from "@/lib/inviteRows";
 
@@ -169,6 +169,7 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
       }
       // (Correction 5) Invites never hold spots: any number can be open; the first to join gets a spot.
       await tx.invite.create({ data: { testId, testerId: p.id } });
+      await stampCounting(testId, tx); // (batch 14) the 3-change count starts with the first invite
       invited.push({ id: p.id, name, email: p.email });
     }
     if (invited.length) await recordEvent(tx, testId, "invited", `You invited ${andList(invited.map((i) => i.name))}`, false);
@@ -210,6 +211,9 @@ export async function inviteGaps(devId: string, testId: string, testerIds: strin
  * a NEW invite on the new listing to the same testers (bell + email; the 3-day reminder clock restarts). Testers who
  * can't be invited any more are not re-invited and are named for the Save result.
  */
+/** (Batch 14 section 3) "<dev> updated <test>: your invite was sent again on the new listing." */
+export const reinvitedLine = (dev: string, test: string) => `${dev} updated ${test}: your invite was sent again on the new listing.`;
+
 export async function reinviteAfterEdit(testId: string) {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
   const open = await db.invite.findMany({ where: { testId, status: "sent" }, orderBy: { createdAt: "asc" } });
@@ -227,8 +231,9 @@ export async function reinviteAfterEdit(testId: string) {
     if (active >= MAX_ACTIVE_TESTS) { skipped.push(`${name} (in ${MAX_ACTIVE_TESTS} tests)`); continue; }
     await db.invite.create({ data: { testId, testerId: p.id } });
     resent.push(name);
-    const line = `${displayName(t.developer)} updated ${t.title}, so here's a new invite: ${termsLine(asListing(t), true)}.`;
-    await notify(p.email, line, [line, "Open it and press Join to join on these terms."], `/app/find/${testId}`);
+    // (Owner, Oct 29, batch 14 section 3) Stacked across tests, one entry per day.
+    const line = reinvitedLine(displayName(t.developer), t.title);
+    await notify(p.email, line, [line, `The new listing: ${termsLine(asListing(t), true)}.`, "Open it and press Join to join on these terms."], `/app/find/${testId}`, { group: "reinvited", testId });
   }
   return { skipped, resent };
 }
