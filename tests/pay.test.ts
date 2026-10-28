@@ -180,7 +180,7 @@ describe("admin decides disputes", () => {
     const r = await admin("decide", owner.cookie, { id: d.id, total: "10.00", note: "Answers were complete" });
     expect(r.body).toEqual({ extraCents: 600 });
     expect(await db.payment.findFirstOrThrow({ where: { disputeId: d.id } })).toMatchObject({ kind: "dispute", amountCents: 600, testerCents: 480 });
-    expect((await admin("decide", owner.cookie, { id: d.id, total: "10.00" })).body.error.message).toMatch(/^This dispute was already decided by .+ at .+.$/);
+    expect((await admin("decide", owner.cookie, { id: d.id, total: "10.00" })).body.error.message).toMatch(/^.+ already decided this dispute at .+.$/); // (batch 15 section 21) named by email
   });
   it("(Item 28) MAX = the listing minus what was already paid for that part on other pieces; MIN = this piece's pay; blank keeps the pay", async () => {
     const { dev, sub, sessionId, tester } = await sent();

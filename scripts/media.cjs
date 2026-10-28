@@ -1,5 +1,7 @@
 // Records the screenshots and videos for the design doc and the owner's report into docs/media/, each at two sizes:
 // desktop (1280x900) as <name>.png / <name>.webm and phone (375x812) as <name>-phone.png / <name>-phone.webm.
+// (Batch 15) Run every group against ONE isolated server and database, never the owner's dev server: start the 3450 server below with
+// DATABASE_URL / DIRECT_URL pointing at playtest_lite_media, then: $env:BASE="http://localhost:3450"; $env:MEDIA_DB="playtest_lite_media"; node scripts/media.cjs
 // Needs the app running on BASE (default http://localhost:3400) with the dev outbox. The money, outage and plan groups need a
 // second dev server on FAKE_BASE (default http://localhost:3450) started with STRIPE_FAKE=1, OUTAGE_CHECKS=1,
 // HEALTH_KEY=media-health and FREE_UNTIL set to a past date (see FAKE_ENV below); they are skipped when it isn't running.
@@ -63,7 +65,9 @@ let SEC = "", GROUP = "", GORDER = 0, SEQ = 0;
 const sec = (s) => { SEC = s; };
 
 // ---------- database (only this run's own accounts) ----------
-const sql = (q) => execFileSync("psql", ["-h", "localhost", "-p", "5499", "-U", "postgres", "-d", "playtest_lite", "-t", "-A", "-c", q]).toString().split(String.fromCharCode(13)).join("").trim();
+// (Batch 15) The database the server under BASE uses (MEDIA_DB): the media server runs on its own copy, never the dev data.
+const MEDIA_DB = process.env.MEDIA_DB || "playtest_lite";
+const sql = (q) => execFileSync("psql", ["-h", "localhost", "-p", "5499", "-U", "postgres", "-d", MEDIA_DB, "-t", "-A", "-c", q]).toString().split(String.fromCharCode(13)).join("").trim();
 const lit = (s) => `'${String(s).replace(/'/g, "''")}'`;
 const userId = (email) => sql(`select id from "User" where email = ${lit(email)}`);
 /** Runs SQL only after checking that every user it names is one of this run's throwaway accounts. */
@@ -499,6 +503,18 @@ async function apiEdit(dev, id, fields, keys = {}) {
   const { version } = await r.json();
   return ok(await post(dev, `/api/tests/${id}/edit`, { version, fields, confirmed: true, keysAdd: keys.add ?? [], keysRemove: keys.remove ?? [] }), "edit");
 }
+
+/** (Batch 15 section 19) Edit's Free keys box holds every free key, one per line: add keys by typing new lines, remove one by deleting its line. */
+async function addKeys(page, lines) {
+  const box = page.locator("#keysFree");
+  const now = await box.inputValue();
+  await box.fill([now.trim(), lines].filter(Boolean).join("\n"));
+}
+async function removeKey(page, value) {
+  const box = page.locator("#keysFree");
+  const now = await box.inputValue();
+  await box.fill(now.split("\n").filter((l) => l.trim() !== value).join("\n"));
+}
 const saveBtn = (page) => page.locator("form button.btn", { hasText: /^(Save|Saving…)$/ });
 const panel = (page, heading) => page.locator("div.panel", { has: page.locator(`h2:has-text("${heading}")`) }).first();
 
@@ -537,25 +553,21 @@ group("edit", async () => {
 
   // Access keys that can't be added again.
   await dev.goto(`/app/tests/${t}/edit`);
-  await dev.locator("#keysAdd").fill("HR-1111");
-  await saveBtn(dev).click();
-  await dev.waitForSelector("text=/already in use by a tester/");
-  await shotSpan(dev, "edit-key-in-use", "Key in use | A key in use can't be added again (red)", "#keys", "text=/already in use by a tester/", 12, 20);
+  await addKeys(dev, "HR-1111");
+  await dev.locator("#spots").click();
+  await dev.waitForSelector("text=/is in use by Ana Silva/");
+  await shotSpan(dev, "edit-key-in-use", "Key in use | A key in use by a working tester can't be added (red, as you type): “HR-1111 is in use by Ana Silva, so it can't be added.”", "#keys", "text=/is in use by Ana Silva/", 12, 20);
   await dev.goto(`/app/tests/${t}/edit`);
-  await dev.locator("#keysAdd").fill("HR-2222\nHR-3333");
-  await saveBtn(dev).click();
-  await dev.waitForSelector("text=/reported as not working|given to a tester who left/");
-  await shotSpan(dev, "edit-key-reported-left", "Reported or left keys | Keys reported as not working or given to a tester who left can't be added again", "#keys", dev.locator("ul.err-field").first(), 12, 16);
+  await addKeys(dev, "HR-3333");
+  await dev.locator("#spots").click();
+  await dev.waitForSelector("[data-key-warnings]");
+  await shot(dev, "edit-key-reported-left", "A key from a tester who left | Cam left: his key HR-3333 can be typed back into Free, with a warning only (a “Reused” tag, never a mistake)", "#keys");
 
   // Changed in another tab or device: A has Edit open; B saves the instructions and new keys.
   const A = await rec(V, dev), B = await rec(V, dev);
   await A.goto(`/app/tests/${t}/edit`);
   await B.goto(`/app/tests/${t}/edit`);
   // (Edit keeps unsent typing per form: clear what the key checks above left in the Add keys box.)
-  for (const P of [A, B]) {
-    await P.locator("#keysAdd").fill("");
-    await P.locator("#keysAdd").blur();
-  }
   await A.evaluate(() => window.scrollTo(0, 0));
   const fromA = at(A), fromB = at(B);
   await A.locator("#title").click();
@@ -564,8 +576,8 @@ group("edit", async () => {
   await pause(A, 600);
   await B.locator("#description").fill("");
   await typeSlow(B, "#description", "Sail through all five harbors now, and tell us where the map or the controls get confusing.", 12);
-  await B.locator("#keysAdd").fill("HR-7777\nHR-8888\nHR-9999");
-  await B.locator("#keysAdd").scrollIntoViewIfNeeded();
+  await addKeys(B, "HR-7777\nHR-8888\nHR-9999");
+  await B.locator("#keysFree").scrollIntoViewIfNeeded();
   await pause(B, 600);
   await saveBtn(B).click();
   await B.waitForURL(/saved=1/);
@@ -576,7 +588,7 @@ group("edit", async () => {
   await pause(A, 2500);
   await A.locator("#description").scrollIntoViewIfNeeded();
   await pause(A, 2500);
-  await A.locator("#keysAdd").scrollIntoViewIfNeeded();
+  await A.locator("#keysFree").scrollIntoViewIfNeeded();
   await pause(A, 2500);
   await shot(A, "edit-elsewhere-field", "Blue note on a field | Another tab saved new instructions: the field updates with a blue note under it", field(A, "description"));
   await shot(A, "edit-elsewhere-keys", "Blue note on keys | Keys added in another tab: the blue note under the key boxes", "#keys");
@@ -588,14 +600,14 @@ group("edit", async () => {
   const t2 = await postTest(dev, { title: "Harbor Run: night sailing", spots: "4", openUntil: day(20), accessKeys: "NS-1\nNS-2\nNS-3\nNS-4\nNS-5" });
   await join(ana, t2);
   await dev.goto(`/app/tests/${t2}/edit`);
-  await dev.click("[aria-label='Remove NS-4']");
+  await removeKey(dev, "NS-4");
   await apiEdit(dev, t2, { spots: 5 });
   await tick(dev);
   await dev.waitForSelector("text=Changed in another tab or device");
-  await dev.locator("#keysAdd").click();
+  await dev.locator("#keysFree").click();
   await dev.locator("#spots").click();
   await pause(dev, 600);
-  await shotSpan(dev, "edit-red-blue-spots-keys", "Red and blue: spots and keys | You ticked a key to remove; another tab added a spot (blue): now fewer free keys than open spots (red)", field(dev, "spots"), "#keys");
+  await shotSpan(dev, "edit-red-blue-spots-keys", "Red and blue: spots and keys | You deleted a key's line; another tab added a spot (blue): now fewer free keys than open spots (red)", field(dev, "spots"), "#keys");
   await apiEdit(dev, t2, { spots: 4 });
   await dev.goto(`/app/tests/${t2}/edit`);
   await apiEdit(dev, t2, { openUntil: day(26) });
@@ -607,14 +619,14 @@ group("edit", async () => {
   await pause(dev, 600);
   await shot(dev, "edit-red-blue-open-until", "Red and blue: Open until | Another tab moved Open until later (blue); a date typed here before that one is now red, because Open until only moves later", panel(dev, "Who and how long"));
   await dev.goto(`/app/tests/${t2}/edit`);
-  await dev.click("[aria-label='Remove NS-4']");
+  await removeKey(dev, "NS-4");
   await apiEdit(dev, t2, {}, { remove: ["NS-5"] });
   await tick(dev);
   await dev.waitForSelector("text=Changed in another tab or device");
-  await dev.locator("#keysAdd").click();
+  await dev.locator("#keysFree").click();
   await dev.locator("#spots").click();
   await pause(dev, 600);
-  await shot(dev, "edit-red-blue-keys", "Red and blue: keys | You ticked one key to remove; another tab removed another (blue): the free keys no longer cover the open spots (red)", "#keys");
+  await shot(dev, "edit-red-blue-keys", "Red and blue: keys | You deleted one key's line; another tab removed another (blue): the free keys no longer cover the open spots (red)", "#keys");
 
   // 3 changes after the first join.
   const t3 = await postTest(dev, { title: "Harbor Run: storms", spots: "3" });
@@ -642,7 +654,8 @@ group("edit", async () => {
 }, { section: "Edit" });
 
 // ---------- Developer test page ----------
-const rejectPiece = (dev, subId, reason) => post(dev, "/api/review", { action: "reject", kind: "submission", id: subId, reason, payKey: `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, seenAt: nowIso(), confirmed: true }).then((r) => ok(r, "reject"));
+// (Batch 15 section 30) No Reject: the decision without money is a $0 Pay with a reason.
+const rejectPiece = (dev, subId, reason) => post(dev, "/api/review", { amount: "0", kind: "submission", id: subId, reason, payKey: `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, seenAt: nowIso(), confirmed: true }).then((r) => ok(r, "reject"));
 const subOf = (sessionId) => sql(`select id from "Submission" where "contractId" = '${sessionId}' order by "sentAt" desc limit 1`);
 /** The call timer's “Covered time is up” pop-ups (one per timer on the page) would cover the pictures: close them all. */
 async function closeTimerPopups(page) {
@@ -866,7 +879,7 @@ group("tpvideo", async () => {
     await D.fill("#reason", "Wrapping up this round early, thanks!");
     await D.click("[data-end-early] button:has-text('End their work now')");
     await D.click("dialog[open] button:has-text('End their work now')");
-    await D.waitForSelector("[data-admin-banner]", { timeout: 15000 });
+    await D.waitForSelector("[data-test-banner]", { timeout: 15000 });
     await pause(D, 3500);
     await D.screenshot({ path: path.join(VTMP, "tp-paused-after.png"), fullPage: true });
     finishVideo([{ file: await saveVideo(D, "tp-paused.webm"), from }], "tp-team-paused", "Team pauses the test | The team pauses the test: End early is refused (“you can only stop it”) and the banner explains");
@@ -894,7 +907,7 @@ group("tpstop", async () => {
   await pause(D, 800);
   // The page may already have moved to the top by itself (it follows a team stop live): then there is nothing left to press.
   await D.click("section[aria-label='Call requests'] >> text=Request a time", { timeout: 4000 }).catch(() => {});
-  await D.waitForSelector("[data-admin-banner]", { timeout: 15000 });
+  await D.waitForSelector("[data-test-banner]", { timeout: 15000 });
   await pause(D, 4000);
   await D.screenshot({ path: path.join(VTMP, "tp-stopped-team-after.png"), fullPage: true });
   finishVideo([{ file: await saveVideo(D, "tp-stopped-team.webm"), from }], "tp-team-stopped", "Team stops the test | The team stops the test while a call is being requested: the request is refused, the page moves to the top and the banner names the press that didn't go through");
@@ -1775,18 +1788,15 @@ group("keysrace", async () => {
   const A = await rec(V, nora), B = await rec(V, nora);
   await A.goto(`/app/tests/${t}/edit`);
   await B.goto(`/app/tests/${t}/edit`);
-  for (const P of [A, B]) {
-    await P.locator("#keys").scrollIntoViewIfNeeded();
-    await P.locator("#keysAdd").fill("");
-  }
+  for (const P of [A, B]) await P.locator("#keys").scrollIntoViewIfNeeded();
   const fromA = at(A), fromB = at(B);
   await pause(A, 800);
   // Tab A ticks K-2, K-6 and K-7 for removal and types N-1: 5 free keys for 5 open spots, fine so far.
   for (const k of ["K-2", "K-6", "K-7"]) {
-    await A.click(`[aria-label='Remove ${k}']`);
+    await removeKey(A, k);
     await pause(A, 300);
   }
-  await typeSlow(A, "#keysAdd", "N-1", 60);
+  await addKeys(A, "N-1");
   await A.locator("#spots").click();
   await pause(A, 800);
   // Meanwhile Ben and Cam join: each is given the oldest free key, K-2 (ticked in tab A) and K-3.
@@ -1795,10 +1805,10 @@ group("keysrace", async () => {
   await pause(B, 1200);
   // Tab B removes K-4, K-5 and K-8 and adds B-1: 3 free keys for the 3 open spots. Its Save stops once for the two joins it hadn't seen, then saves.
   for (const k of ["K-4", "K-5", "K-8"]) {
-    await B.click(`[aria-label='Remove ${k}']`);
+    await removeKey(B, k);
     await pause(B, 300);
   }
-  await typeSlow(B, "#keysAdd", "B-1", 60);
+  await addKeys(B, "B-1");
   await pause(B, 600);
   await saveBtn(B).click();
   await B.waitForSelector("text=/Press Save again/", { timeout: 15000 });
@@ -1814,22 +1824,21 @@ group("keysrace", async () => {
   await pause(A, 3000);
   await A.locator("#keys").scrollIntoViewIfNeeded();
   await pause(A, 2000);
-  await shot(A, "keysrace-a-keys", "Tab A: the key boxes after the race | The blue note says what the other tab changed; red marks K-2 (ticked here, given to Ben meanwhile) and too few free keys for the open spots", "#keys");
+  await shot(A, "keysrace-a-keys", "Tab A: the key boxes after the race | The blue notes name what changed (“Ben Okafor joined and was given K-2”); red marks K-2 (deleted here, given to Ben meanwhile) and too few free keys; the box already shows the current keys with A's own edits", "#keys");
   await shotSpan(A, "keysrace-a-notice", "Tab A: the notice under Save | The red mistakes and the blue “since you opened this page” list: the joins and the other tab's key changes", A.locator("p.err-field", { hasText: /^Fix the/ }).first(), A.locator("text=/Press Save again/").last(), 16, 16);
   // A's second Save, red unfixed: refused, nothing saved.
   await saveBtn(A).click();
   await pause(A, 2500);
   await shotSpan(A, "keysrace-a-second", "Tab A: the second Save | Pressed again with the red unfixed: refused, nothing saved", "#keys", saveBtn(A), 12, 16);
-  // A drops the K-2 tick (Keep) and adds a key: Save goes through.
-  await A.click("[aria-label='Keep K-2']");
-  await A.locator("#keysAdd").fill("N-1\nN-2");
+  // The box now shows the current free keys with A's own edits still applied (K-2 is Ben's now): A adds a key and Save goes through.
+  await addKeys(A, "N-2");
   await A.locator("#spots").click();
   await pause(A, 1200);
   await saveBtn(A).click();
   await A.waitForURL(/saved=1/, { timeout: 15000 });
   await pause(A, 3000);
   finishVideo([{ file: await saveVideo(A, "keysrace-a.webm"), from: fromA }, { file: await saveVideo(B, "keysrace-b.webm"), from: fromB }], "keysrace",
-    "Access keys race (two tabs) | Tab A (left) ticks K-2, K-6, K-7 and types N-1; Ben and Cam join and get K-2 and K-3; tab B (right) removes K-4, K-5, K-8, adds B-1 and saves after its own blue notice; A's Save shows the blue notice and the red marks, the second press is refused, and A saves after pressing Keep on K-2 and adding a key");
+    "Access keys race (two tabs) | Tab A (left) deletes K-2, K-6, K-7 and types N-1 in the Free box; Ben and Cam join and get K-2 and K-3; tab B (right) deletes K-4, K-5, K-8, adds B-1 and saves after its own blue notice; A's Save shows the blue notice and the red marks, the box refreshes with A's own edits, and A saves after adding a key");
   await nora.goto(`/app/tests/${t}`);
   await nora.waitForSelector("[data-keys-notice]");
   sec("Developer test page");
@@ -2061,7 +2070,9 @@ group("drafts", async () => {
 
 // ---------- Notifications and emails ----------
 /** The dev outbox (emails are written there instead of sent): the newest email to this address, as received. */
-async function outboxShot(page, email, name, caption, subject) {
+async function outboxShot(page0, email, name, caption, subject) {
+  // (Batch 15 section 41, M3) The dev outbox shows reset links, so only an admin can open it: read it as this run's admin.
+  const page = await adminAccount();
   await page.goto("/dev/outbox");
   const mail = page.locator("div.panel", { hasText: `To ${email}` }).filter(subject ? { hasText: subject } : {}).first();
   await mail.waitFor({ timeout: 15000 });
@@ -2110,7 +2121,8 @@ group("emails", async () => {
   await outboxShot(nora, nora.email, "emails-summary-dev", "Nora's daily email | One email listing every update since the last one, each with its link", "Your Playtest summary");
   await outboxShot(omar, omar.email, "emails-off-dev", "Omar's email with email Off | Only the must-send lines (here: his bank wants him to confirm a payment) in one end-of-day email", "account updates");
   await outboxShot(ana, ana.email, "emails-summary-tester", "Ana's daily email | Joined, paid, booked call and the other updates, once each", "Your Playtest summary");
-  const offMail = await ben.goto("/dev/outbox").then(() => ben.locator("div.panel", { hasText: `To ${ben.email}` }).count());
+  const adm = await adminAccount();
+  const offMail = await adm.goto("/dev/outbox").then(() => adm.locator("div.panel", { hasText: `To ${ben.email}` }).count());
   if (offMail) await outboxShot(ben, ben.email, "emails-off-tester", "Ben's email with email Off | Testers' must-send lines only; nothing else is emailed");
   else console.log("   (Ben, email Off, got no email: none of his lines is a must-send one)");
 }, { section: "Notifications and emails", fake: true });
