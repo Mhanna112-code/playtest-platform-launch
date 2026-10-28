@@ -37,6 +37,8 @@ import { HOLD_APPROVAL_AFTER, NOT_LISTED, callListed, deletedNoPayoutsLine, join
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
+import { BankWaiting } from "@/components/BankWaiting";
+import { bankWaitingOnTest } from "@/lib/server/confirm";
 import { ContractChanges, type ChangeEntry } from "./ContractChanges";
 import { AnswersBox } from "@/components/AnswersBox";
 import { Formatted } from "@/components/Formatted";
@@ -129,6 +131,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const payMore = payMoreState(testEndedAt(t, t.contracts, now), now, fmtDate);
   // (Owner, Oct 26) A chargeback hold's steps. (A paused test's closing date is told by bell and shown to the admin, not on the page.)
   const cbSteps = await chargebackSteps(u.id);
+  // (Batch 17 §11) Charges made while the developer was away that their bank wants confirmed: "Confirm with your bank" under the affected piece (Payments and the bell link here).
+  const bankRows = await bankWaitingOnTest(u.id, t.id);
+  const bankAt = (pieceId: string) => bankRows.filter((b) => b.pieceId === pieceId).map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} />);
   // (Owner, Oct 27) While a failed payment is owed, Pay (part Pay, extra pay) is disabled: "Pay what you owe first."; the room above the listing prices for extra pay.
   const owesNow = owedList.some((o) => o.retry);
   // (Batch 9 section 6) Extra pay's "up to $Y", per piece: every sent part and every call that took place (batch 15 section 40: its length is final).
@@ -258,6 +263,13 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         />
         <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" />
         <RestrictedCalls testId={t.id} seenAt={seenAt} calls={bookedAhead} />
+        {/* (Batch 17 §11) A charge made while away (e.g. a retry during the pause) that the bank wants confirmed: confirmed here, each line naming its piece. */}
+        {bankRows.length > 0 && (
+          <section className="card space-y-2" data-restricted-bank="">
+            <h2 className="font-semibold text-white">Your bank wants you to confirm</h2>
+            {bankRows.map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} />)}
+          </section>
+        )}
         {/* (Batch 15 section 39) Excerpts go through anything: Allow / Deny (hidden while the test has an NDA, as always) and Take down. */}
         {(excerptReqs.length > 0 || shownEx.length > 0) && (
           <section className="card space-y-2" data-restricted-excerpts="">
@@ -472,6 +484,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       )}
                       {r.sub?.review && r.sub.review.amountCents === 0 && !r.sub.review.rejected && r.sub.review.reason && <span className="w-full text-sm text-slate-300" data-paid-zero="">{paidZeroLine(r.sub.review.reason)}</span>}
                       {r.sub?.review?.rejected && <span className="badge border-rose-400/40 text-rose-200">Rejected</span>}
+                      {/* (Batch 17 §11) A charge on this part made while you were away, waiting for your bank. */}
+                      {r.sub && bankAt(r.sub.id)}
                     </li>
                   ))}
                   {/* (Batch 15 section 31) The Live call part: the total paid for all calls on the right, like the other parts; "held" is now "done". */}
@@ -486,7 +500,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 </ul>
                 {/* (Batch 15 sections 31 and 42) "Calls (N)": every call that's over, newest first, with its outcome badge; each call that took place has its own Pay more box. */}
                 {overCalls.length > 0 && (
-                  <details className="rounded-lg border border-white/10 p-2 text-sm" data-calls-fold={c.id}>
+                  <details open={overCalls.some((x) => bankRows.some((b) => b.pieceId === x.id)) || undefined} className="rounded-lg border border-white/10 p-2 text-sm" data-calls-fold={c.id}>
                     <summary className="fold-chevron cursor-pointer font-medium text-white">Calls ({overCalls.length})</summary>
                     <ul className="mt-2 max-h-96 space-y-2 overflow-y-auto pr-1" data-calls-history="">
                       {overCalls.map((x) => {
@@ -504,6 +518,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                             {badge.reason && <ReasonQuote text={badge.reason} />}
                             {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
                             {inNeeds && <a href={`#call-${x.id}`} className="text-xs">Pay it in Needs you ↑</a>}
+                            {bankAt(x.id)}
                             {x.review && !x.review.rejected && !restricted && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
                               <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                                 room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
@@ -517,6 +532,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   </details>
                 )}
                 <p className="text-sm"><b>Paid in all:</b> {money(paidSoFar(c.id))}{(bookedAhead || done || cancelledN) ? ` · Calls: ${[bookedAhead ? `${bookedAhead} booked ahead` : "", done ? `${done} done` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}` : ""}</p>
+                {/* (Batch 17 §11) A waiting charge whose piece isn't listed above (a dispute decision or retry with no part) sits under the tester's row. */}
+                {bankRows.filter((b) => b.contractId === c.id && !(b.pieceId && (partRows.some((r) => r.on && r.sub?.id === b.pieceId) || overCalls.some((x) => x.id === b.pieceId)))).map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} />)}
                 {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}
                 {/* (Batch 15 section 24) Renames are recorded in each tester's contract changes. */}
                 {notesByContract.some((n) => n.contractId === c.id) && (

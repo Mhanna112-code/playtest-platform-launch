@@ -1,9 +1,9 @@
 import { db } from "@/lib/db";
-import { displayName, money } from "@/lib/format";
-import { CONFIRM_DAYS, PRESS_ACTION_MS, bankConfirmLine, BANK_NOT_CONFIRMED } from "@/lib/rules";
+import { displayName, fmtDateTime, money } from "@/lib/format";
+import { CONFIRM_DAYS, PRESS_ACTION_MS, bankConfirmLine, bankConfirmTestLine, bankHref, bankWaitingLine, BANK_NOT_CONFIRMED } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
-import { fakeConfirm, fakeOn, getStripe, stripeOn, type NeedsAction } from "./stripe";
+import { bankReturnUrl, checkUrlOf, fakeConfirm, fakeOn, getStripe, stripeOn, type NeedsAction } from "./stripe";
 
 // (Owner, Oct 29, batch 11) "Your bank wants to confirm this payment": Stripe's requires_action is NOT a decline.
 //
@@ -13,6 +13,9 @@ import { fakeConfirm, fakeOn, getStripe, stripeOn, type NeedsAction } from "./st
 // - A charge made while the developer isn't there (a tester's Charge, a dispute decision, a retry during a hold, a renewal): it waits as "needs_confirmation" (an owed payment
 //   keeps its status) with actionBy = 3 days. The developer is told (bell and email, sent even with email Off) and Payments shows Confirm. Not confirmed in 3 days: it counts as
 //   declined (a payment hold for a charge, a lapse for a renewal). The tester reads "Payment may be delayed".
+// - (Batch 17 §11) The bank's check opens INLINE, under the button that was pressed (Pay, Pay more, Pay what you owe, Subscribe, Verify a card), never as a pop-up: the
+//   page shows the bank's check page (`checkUrl`, a PaymentIntent confirmed with return_url) in a frame, or, with the fake Stripe, a clearly-marked stand-in. A charge
+//   made while away on a test is confirmed on that TEST PAGE, under the piece ("Confirm with your bank"); Payments and the bell line link straight there (bankHome).
 
 const pk = () => process.env.STRIPE_PUBLISHABLE_KEY?.trim() ?? "";
 /** In the local fake (and in tests without Stripe.js) the page simulates the bank's pop-up. */
@@ -24,7 +27,13 @@ export async function pressAction(paymentId: string, r: NeedsAction & { feeCents
     where: { id: paymentId },
     data: { ...(keepStatus ? {} : { status: "needs_action" }), actionPi: r.stripePaymentIntentId, actionBy: new Date(Date.now() + PRESS_ACTION_MS), stripePaymentIntentId: r.stripePaymentIntentId, ...(r.feeCents != null ? { feeCents: r.feeCents, testerCents: r.testerCents, transferStatus: r.transferStatus } : {}) },
   });
-  return { requiresAction: true as const, paymentId, clientSecret: r.clientSecret, publishableKey: pk(), simulated: simulated() };
+  return { requiresAction: true as const, paymentId, clientSecret: r.clientSecret, publishableKey: pk(), simulated: simulated(), checkUrl: r.checkUrl ?? null };
+}
+
+/** (Batch 17 §11) Where a charge made while the developer was away is confirmed: its test page's "Confirm with your bank" (the piece marked), or null for Payments (a renewal). */
+export async function bankHome(p: { id: string; contractId: string | null }) {
+  const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, select: { testId: true } }) : null;
+  return c ? bankHref(c.testId, p.id) : null;
 }
 
 /** A charge made while the developer wasn't there needs them: it waits 3 days for their Confirm in Payments (told by bell and email, even with email Off). */
@@ -35,14 +44,49 @@ export async function awayAction(paymentId: string, r: NeedsAction & { feeCents?
     data: { ...(keepStatus ? {} : { status: "needs_confirmation" }), actionPi: r.stripePaymentIntentId, actionBy: by, stripePaymentIntentId: r.stripePaymentIntentId, ...(r.feeCents != null ? { feeCents: r.feeCents, testerCents: r.testerCents, transferStatus: r.transferStatus } : {}) },
   });
   const dev = await db.user.findUniqueOrThrow({ where: { id: p.developerId } });
-  const line = bankConfirmLine(p.amountCents, by);
-  await notify(dev.email, line, [line], "/app/payments#confirm", { always: true, payment: true, group: "payhold" });
+  // (Batch 17 §11) On a test: "Confirm this payment by <date>.", linking straight to its button on the test page.
+  const home = await bankHome(p);
+  const line = home ? bankConfirmTestLine(p.amountCents, by) : bankConfirmLine(p.amountCents, by);
+  await notify(dev.email, line, [line], home ?? "/app/payments#confirm", { always: true, payment: true, group: "payhold" });
   return p;
 }
 
-/** Payments waiting for the developer's confirmation (the Confirm list on Payments). */
-export async function waitingConfirmation(devId: string) {
-  return db.payment.findMany({ where: { developerId: devId, actionPi: { not: null }, actionBy: { gt: new Date() }, status: { in: ["needs_confirmation", "failed", "owed"] } }, orderBy: { createdAt: "asc" } });
+/** Payments waiting for the developer's confirmation (the Confirm list on Payments; with `contractIds`, one test's). */
+export async function waitingConfirmation(devId: string, contractIds?: string[]) {
+  return db.payment.findMany({ where: { developerId: devId, actionPi: { not: null }, actionBy: { gt: new Date() }, status: { in: ["needs_confirmation", "failed", "owed"] }, ...(contractIds ? { contractId: { in: contractIds } } : {}) }, orderBy: { createdAt: "asc" } });
+}
+
+/**
+ * (Batch 17 §11) Payments' list: each charge waiting for the bank, with the link to its test page's "Confirm with your bank" (`href`), or none (a renewal: confirmed
+ * right there).
+ */
+export async function confirmItems(devId: string) {
+  const waiting = await waitingConfirmation(devId);
+  const ids = [...new Set(waiting.map((p) => p.contractId).filter((x): x is string => !!x))];
+  const contracts = ids.length ? await db.contract.findMany({ where: { id: { in: ids } }, select: { id: true, testId: true, title: true } }) : [];
+  return waiting.map((p) => {
+    const c = contracts.find((x) => x.id === p.contractId);
+    const what = p.kind === "subscription" ? "Your subscription" : p.kind === "dispute" ? "A team decision" : p.kind === "chargeback" ? "A payment your bank had reversed" : "A payment";
+    return { id: p.id, text: `${what} ${money(p.amountCents)}${c ? ` on “${c.title}”` : ""} · confirm by ${fmtDateTime(p.actionBy!)}`, href: c ? bankHref(c.testId, p.id) : null };
+  });
+}
+
+/**
+ * (Batch 17 §11) The test page's "Confirm with your bank" rows: each charge made while the developer was away on this test that waits for their bank, with the piece it
+ * sits under (`pieceId`: the sent part or the call; null sits under the tester's row) and its line.
+ */
+export async function bankWaitingOnTest(devId: string, testId: string) {
+  const contracts = await db.contract.findMany({ where: { testId }, include: { tester: true, submissions: { select: { id: true, kind: true } }, calls: { select: { id: true, startsAt: true } } } });
+  const waiting = await waitingConfirmation(devId, contracts.map((c) => c.id));
+  return waiting.map((p) => {
+    const c = contracts.find((x) => x.id === p.contractId)!;
+    const name = displayName(c.tester);
+    const sub = p.submissionId ? c.submissions.find((x) => x.id === p.submissionId) : undefined;
+    const call = p.callId ? c.calls.find((x) => x.id === p.callId) : undefined;
+    const piece = sub ? `${name}'s ${sub.kind === "recording" ? "recording" : "written answers"}` : call ? `${name}'s call on ${fmtDateTime(call.startsAt)}` : `${name}'s work`;
+    const what = p.kind === "dispute" ? `the team's decision on ${name}'s dispute` : p.kind === "chargeback" ? `a payment your bank had reversed (${piece})` : piece;
+    return { id: p.id, contractId: c.id, pieceId: sub?.id ?? call?.id ?? null, line: bankWaitingLine(p.amountCents, what, fmtDateTime(p.actionBy!)) };
+  });
 }
 
 async function piStatus(id: string, simulate?: unknown) {
@@ -58,13 +102,26 @@ async function own(devId: string, paymentId: string) {
   return p;
 }
 
-/** Confirm (Payments) on a payment that waits: what the page's Stripe pop-up needs. */
+/**
+ * "Confirm with your bank" (the test page; Payments for a renewal) on a payment that waits: what the page's inline check needs. (Batch 17 §11) A charge made while away
+ * waits with no next step, so it is confirmed here with return_url: the bank's check page (`checkUrl`) then shows inline; "none" when it went through without one.
+ */
 export async function confirmStart(dev: { id: string }, paymentId: string) {
   const p = await own(dev.id, paymentId);
   const u = await db.user.findUniqueOrThrow({ where: { id: dev.id } });
-  if (!stripeOn() || fakeOn()) return { paymentId, clientSecret: `${p.actionPi}_secret_fake`, publishableKey: pk(), simulated: true, paymentMethod: u.stripePaymentMethodId };
-  const pi = await getStripe().paymentIntents.retrieve(p.actionPi!);
-  return { paymentId, clientSecret: pi.client_secret, publishableKey: pk(), simulated: simulated(), paymentMethod: u.stripePaymentMethodId, needs: pi.status === "requires_action" ? "action" : "confirm" };
+  if (!stripeOn() || fakeOn()) return { paymentId, clientSecret: `${p.actionPi}_secret_fake`, publishableKey: pk(), simulated: true, paymentMethod: u.stripePaymentMethodId, checkUrl: null };
+  const stripe = getStripe();
+  let pi = await stripe.paymentIntents.retrieve(p.actionPi!);
+  if ((pi.status === "requires_payment_method" || pi.status === "requires_confirmation") && u.stripePaymentMethodId && typeof stripe.paymentIntents.confirm === "function") {
+    try {
+      pi = await stripe.paymentIntents.confirm(pi.id, { payment_method: u.stripePaymentMethodId, return_url: bankReturnUrl() });
+    } catch (e) {
+      console.error("[stripe] confirm start:", (e as Error).message);
+      throw new HttpError(402, "not_confirmed", BANK_NOT_CONFIRMED);
+    }
+  }
+  const needs = pi.status === "succeeded" ? "none" : pi.status === "requires_action" ? "action" : "confirm";
+  return { paymentId, clientSecret: pi.client_secret, publishableKey: pk(), simulated: simulated(), paymentMethod: u.stripePaymentMethodId, needs, checkUrl: checkUrlOf(pi) ?? null };
 }
 
 const split = (p: { feeCents: number; testerCents: number; transferStatus: string; actionPi: string | null }) => ({ status: "charged", feeCents: p.feeCents, testerCents: p.testerCents, transferStatus: p.transferStatus, stripePaymentIntentId: p.actionPi });

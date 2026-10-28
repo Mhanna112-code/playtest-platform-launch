@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { splitFee } from "@/lib/rules";
 import { HttpError } from "./http";
 import { cardLabel, logAccountChange } from "./accountChanges";
+import { appUrl } from "./auth";
 
 // Stripe in test mode: developers save a card (Checkout in setup mode) and are charged off-session when they press Pay;
 // testers connect an Express account and get their share with the charge (destination charge, platform fee kept).
@@ -96,14 +97,20 @@ export function cardRefusal(dev: Party) {
  */
 export type ChargeMode = "press" | "away";
 /** (Batch 11) The bank wants the cardholder to confirm (Stripe's requires_action, or authentication_required off-session): NOT a decline. */
-export type NeedsAction = { status: "requires_action"; stripePaymentIntentId: string; clientSecret: string };
+export type NeedsAction = { status: "requires_action"; stripePaymentIntentId: string; clientSecret: string; /** (Batch 17 §11) the bank's check page, shown inline */ checkUrl?: string };
+/** (Batch 17 §11) Where the bank's check returns inside the page's inline frame (a tiny page that tells the page it finished). */
+export const bankReturnUrl = () => `${appUrl()}/api/payments/bank-return`;
+/** (Batch 17 §11) The bank's own check page, to show inline (a PaymentIntent or SetupIntent confirmed with return_url waits on "redirect_to_url"). */
+export const checkUrlOf = (x: { next_action?: { type?: string; redirect_to_url?: { url?: string | null } | null } | null }) =>
+  x.next_action?.type === "redirect_to_url" ? x.next_action.redirect_to_url?.url ?? undefined : undefined;
 function needsActionOf(e: unknown): NeedsAction | null {
   const x = e as { code?: string; raw?: { payment_intent?: { id?: string; client_secret?: string } }; payment_intent?: { id?: string; client_secret?: string } };
   const pi = x?.raw?.payment_intent ?? x?.payment_intent;
   if (x?.code === "authentication_required" && pi?.id) return { status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "" };
   return null;
 }
-const pressParams = (mode: ChargeMode) => (mode === "away" ? { off_session: true } : { payment_method_types: ["card"] });
+// (Batch 17 §11) A press is confirmed with return_url, so the bank's check (if it asks) is a page the developer's page can show inline, under the button.
+const pressParams = (mode: ChargeMode) => (mode === "away" ? { off_session: true } : { payment_method_types: ["card"], return_url: bankReturnUrl() });
 
 /**
  * Charge the developer for one Pay press. One charge per press: the idempotency key is the press's payKey.
@@ -133,7 +140,7 @@ export async function charge(dev: Party, tester: Party, amountCents: number, pay
       },
       { idempotencyKey: `pay-${payKey}` },
     );
-    if (pi.status === "requires_action") return { ...split, transferStatus: destination ? "sent" : held ? "held" : "waiting", status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "" };
+    if (pi.status === "requires_action") return { ...split, transferStatus: destination ? "sent" : held ? "held" : "waiting", status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "", checkUrl: checkUrlOf(pi) };
     if (pi.status !== "succeeded") throw new Error(`status ${pi.status}`);
     return { status: "charged", ...split, transferStatus: destination ? "sent" : held ? "held" : "waiting", stripePaymentIntentId: pi.id };
   } catch (e) {
@@ -182,7 +189,7 @@ function unknownOutcome(e: unknown) {
  * (Owner, Oct 27) Charge the developer's card for a payment their bank reversed (a chargeback adds its amount to what they owe). The money stays with the platform:
  * the tester already got their share with the first charge. A declined card throws a plain sentence, like charge().
  */
-export async function chargePlatform(dev: Party, amountCents: number, payKey: string, description: string, mode: ChargeMode = "away"): Promise<{ status: string; stripePaymentIntentId: string | null; clientSecret?: string }> {
+export async function chargePlatform(dev: Party, amountCents: number, payKey: string, description: string, mode: ChargeMode = "away"): Promise<{ status: string; stripePaymentIntentId: string | null; clientSecret?: string; checkUrl?: string }> {
   if (amountCents === 0) return { status: "charged", stripePaymentIntentId: null as string | null };
   if (!stripeOn()) return { status: "not_set_up", stripePaymentIntentId: null as string | null };
   try {
@@ -190,7 +197,7 @@ export async function chargePlatform(dev: Party, amountCents: number, payKey: st
       { amount: amountCents, currency: "usd", customer: dev.stripeCustomerId!, payment_method: dev.stripePaymentMethodId!, ...pressParams(mode), confirm: true, description, metadata: { developerId: dev.id, payKey } },
       { idempotencyKey: `pay-${payKey}` },
     );
-    if (pi.status === "requires_action") return { status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "" };
+    if (pi.status === "requires_action") return { status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "", checkUrl: checkUrlOf(pi) };
     if (pi.status !== "succeeded") throw new Error(`status ${pi.status}`);
     return { status: "charged", stripePaymentIntentId: pi.id as string | null };
   } catch (e) {

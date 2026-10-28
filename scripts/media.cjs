@@ -1013,22 +1013,20 @@ async function chargeUI(page, sessionId) {
   await btn.click();
 }
 /**
- * The fake's stand-in for the bank's confirmation pop-up is the browser's confirm box, which recordings can't show: answer it, then put a labelled marker on the page
- * for a moment so the video says what was answered (it is gone before any picture).
+ * (Batch 17 §11) The fake's stand-in for the bank's check is drawn INLINE, under the pressed button ("Stand-in for your bank's check · Confirm / Cancel"), so the video
+ * shows it: wait for it, run `before` while it is open, let it show a moment, then answer it. Start it before the press; await the result to know it was answered.
  */
 function bankPopup(page, yes, before) {
-  page.once("dialog", async (d) => {
+  const answered = (async () => {
+    const box = page.locator("[data-bank-check=stand-in]").first();
+    await box.waitFor({ state: "visible", timeout: 20000 });
+    await box.scrollIntoViewIfNeeded().catch(() => {});
     if (before) await before();
-    await page.waitForTimeout(700);
-    if (yes) await d.accept(); else await d.dismiss();
-    await page.evaluate((y) => {
-      const el = document.createElement("div");
-      el.textContent = `Fake Stripe: the bank's confirmation pop-up was answered “${y ? "Confirm" : "Cancel"}”`;
-      el.style.cssText = "position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:99999;background:#fde68a;color:#111;padding:8px 14px;border-radius:10px;font:600 14px system-ui;box-shadow:0 4px 18px #0008;max-width:90vw";
-      document.body.appendChild(el);
-      setTimeout(() => el.remove(), 2500);
-    }, yes).catch(() => {});
-  });
+    await page.waitForTimeout(1200);
+    await box.locator(yes ? "[data-bank-confirm]" : "[data-bank-cancel]").click();
+  })();
+  answered.catch((e) => console.error("[media] bank stand-in:", e.message));
+  return answered;
 }
 /** Waits until a selector is gone (the page's own refresh, nudged). */
 async function waitGone(page, selector, ms = 30000) {
@@ -1252,44 +1250,56 @@ group("bank", async () => {
     await D.waitForSelector(`#piece-${subA}`);
     const from = at(D);
     await pause(D, 800);
-    bankPopup(D, false);
+    const cancelled = bankPopup(D, false, () => shot(D, "bank-stand-in", "The stand-in for the bank's check | Pay opens it inline, right under the button: “Stand-in for your bank's check” with Confirm and Cancel (the fake Stripe; with Stripe live, the bank's own page shows in the same place)", D.locator(`#piece-${subA}`)));
     await payPiece(D, subA);
+    await cancelled;
     await D.waitForSelector(`#piece-${subA} [data-bank-not-confirmed]`, { timeout: 15000 });
     await pause(D, 2800);
     await shot(D, "bank-press-cancelled", "Not confirmed: nothing charged | The bank's pop-up was cancelled: “Your bank didn't confirm the payment, so nothing was charged.” No hold", D.locator(`#piece-${subA}`));
-    bankPopup(D, true);
+    const confirmed = bankPopup(D, true);
     await payPiece(D, subA);
+    await confirmed;
     await pause(D, 4000);
     finishVideo([{ file: await saveVideo(D, "bank-press.webm"), from }], "bank-press",
       "Pay with a bank check | Nora presses Pay and her bank asks her to confirm: cancelled, nothing is charged; pressed again and confirmed, Ana is paid");
   }
-  // 2. Made while she's away: Ben charges after the review window; the payment waits for her Confirm in Payments.
+  // 2. Made while she's away: Ben charges after the review window; the payment waits for her bank. (Batch 17 §11) It is confirmed on the test page, under Ben's answers:
+  //    the bell line and Payments link straight to that "Confirm with your bank".
   openCharge(sB, t);
   await chargeUI(ben, sB);
   await ben.waitForSelector("text=/may be delayed/i", { timeout: 15000 });
   await pause(ben, 800);
   await shot(ben, "bank-away-tester", "The tester's side | Ben charged for his unreviewed answers: “Charged $10.00. Payment may be delayed.”", ben.locator("#part-written"));
   await openBell(nora);
-  await shot(nora, "bank-away-bell", "Confirm it in Payments | Nora's bell (also emailed, even with email Off): “Your bank wants you to confirm a $10.00 payment. Confirm it in Payments by <date>.”", bellList(nora));
+  await shot(nora, "bank-away-bell", "Confirm this payment by | Nora's bell (also emailed, even with email Off): “Your bank wants you to confirm a $10.00 payment. Confirm this payment by <date>.” It opens the button on the test page", bellList(nora));
   await nora.goto("/app/payments");
   await nora.waitForSelector("[data-confirm-list]");
-  await shot(nora, "bank-confirm-list", "The Confirm button | Payments lists the payment waiting for her bank, with Confirm", "[data-confirm-list]");
-  bankPopup(nora, true);
-  await nora.locator("[data-confirm-list] button", { hasText: "Confirm" }).first().click();
+  await shot(nora, "bank-confirm-list", "The link on Payments | Payments lists the payment waiting for her bank, with a link to “Confirm with your bank” on the test page (no Confirm of its own)", "[data-confirm-list]");
+  await nora.locator("[data-confirm-list] [data-bank-link]").first().click();
+  const waiting = nora.locator("[data-bank-waiting]").first();
+  await waiting.waitFor({ state: "visible", timeout: 15000 });
+  await pause(nora, 900);
+  await shot(nora, "bank-away-button", "Confirm with your bank | The link opens the test page at Ben's written answers: the piece is marked, with “Confirm with your bank” under it", waiting);
+  const away = bankPopup(nora, true, () => shot(nora, "bank-away-stand-in", "The same inline check | “Confirm with your bank” opens the stand-in for the bank's check right under it", waiting));
+  await waiting.locator("button", { hasText: "Confirm with your bank" }).click();
+  await away;
+  await nora.waitForSelector("[data-bank-confirmed]", { timeout: 15000 });
+  await pause(nora, 1500);
+  await nora.goto("/app/payments");
   await waitGone(nora, "[data-confirm-list]", 15000);
-  await pause(nora, 1200);
   await shot(nora, "bank-confirmed", "Confirmed | After Confirm the list is gone and the payment shows in What you've paid", nora.locator("section", { hasText: "What you've paid" }).first());
   // 3. The lock: while Nora's bank pop-up for Cam's answers is open, Cam's Charge is refused.
   openCharge(sC, t);
   const subC = subOf(sC);
   await nora.goto(`/app/tests/${t}`);
   await nora.waitForSelector(`#piece-${subC}`);
-  bankPopup(nora, true, async () => {
+  const locked = bankPopup(nora, true, async () => {
     await chargeUI(cam, sC);
     await cam.waitForSelector("text=A payment for this is being confirmed right now.", { timeout: 10000 });
-    await shot(cam, "bank-locked", "Locked while the bank confirms | Cam presses Charge while Nora's bank pop-up for the same answers is open: “A payment for this is being confirmed right now.”", cam.locator("#part-written"));
+    await shot(cam, "bank-locked", "Locked while the bank confirms | Cam presses Charge while Nora's bank check for the same answers is open under her Pay: “A payment for this is being confirmed right now.”", cam.locator("#part-written"));
   });
   await payPiece(nora, subC);
+  await locked;
   await pause(nora, 3000);
 }, { section: "Payments", fake: true });
 
@@ -2260,15 +2270,19 @@ group("tester", async () => {
 }, { section: "Tester session page" });
 
 // ---------- The admin console: every power ----------
-/** An admin list (pages of 25, shared with every account in the database): press Next until the row shows. */
+/** An admin list (batch 17 §7: a scroll box that loads the next 25 near its end, shared with every account in the database): scroll it until the row shows. */
 async function pageTo(page, kind, selector, max = 40) {
+  const box = page.locator(`[data-scroll-box="${kind}"]`).first();
   for (let i = 0; i < max && !(await page.locator(selector).count()); i++) {
-    const next = page.locator(`[data-next="${kind}"]`);
-    if (await next.isDisabled().catch(() => true)) break;
-    const range = await page.locator(`[data-range="${kind}"]`).innerText();
-    await next.click();
-    // (Next is faded while the page loads: wait for the range to change.)
-    for (let w = 0; w < 30 && (await page.locator(`[data-range="${kind}"]`).innerText()) === range; w++) await page.waitForTimeout(300);
+    if (await page.locator(`[data-end-line="${kind}"]`).count()) break;
+    const n = await box.evaluate((b) => b.querySelectorAll("[id], [data-paused-test], [data-chargeback-hold], [data-mine-row], li").length).catch(() => 0);
+    await box.evaluate((b) => { b.scrollTop = b.scrollHeight; }).catch(() => {});
+    // ("Loading…" shows while the next 25 load: wait for more rows or the end line.)
+    for (let w = 0; w < 30; w++) {
+      await page.waitForTimeout(300);
+      const now = await box.evaluate((b) => b.querySelectorAll("[id], [data-paused-test], [data-chargeback-hold], [data-mine-row], li").length).catch(() => 0);
+      if (now > n || (await page.locator(`[data-end-line="${kind}"]`).count())) break;
+    }
   }
   await page.locator(selector).first().scrollIntoViewIfNeeded();
 }
@@ -2279,8 +2293,10 @@ async function adminPress(page, row, label, fields = {}) {
   await page.waitForTimeout(1200); // (the row's buttons work once the page has hydrated)
   await span.locator("button", { hasText: label }).click();
   // (A press that reloads the page leaves no line to read: the next step reloads anyway.)
-  if (!(await span.locator(".ok, .err").first().waitFor({ timeout: 15000 }).then(() => true, () => false))) return "";
-  return span.locator(".ok, .err").first().innerText().catch(() => "");
+  // (Batch 17 §6) An account's Suspend / Reinstate / Delete show a refusal under the row's buttons ([data-account-msg]), not next to the button.
+  const line = span.locator(".ok, .err").or(row.locator("[data-account-msg]")).first();
+  if (!(await line.waitFor({ timeout: 15000 }).then(() => true, () => false))) return "";
+  return line.innerText().catch(() => "");
 }
 /** A rejected piece disputed by the tester, with the developer's side added. Returns the dispute id. */
 async function disputed(dev, tester, testId, sessionId, rejectFirst = true, pay0 = false) {
@@ -2426,10 +2442,10 @@ group("admins2", async () => {
   await pause(L, 1500);
   const cases = [
     ["dispute", async (P) => { await P.locator(`#total-${d}`).fill("10.00"); await P.locator(`[data-dispute-row="${d}"] button`, { hasText: "Decide" }).click(); return P.locator(`[data-dispute-row="${d}"] .ok, [data-dispute-row="${d}"] .err`).first(); }, "A dispute already decided | Bo decides a dispute Ada decided a moment earlier: “This dispute was already decided by Ada Admin at <time>.”"],
-    ["suspension", async (P) => { const row = P.locator(`[data-user-row="${omar.uid}"]`); await row.scrollIntoViewIfNeeded(); await row.locator("button", { hasText: "Reinstate" }).click(); return row.locator(".ok, .err").first(); }, "A suspension already lifted | Bo presses Reinstate on a suspension Ada already lifted: “That account isn't suspended.”"],
+    ["suspension", async (P) => { const row = P.locator(`[data-user-row="${omar.uid}"]`); await row.scrollIntoViewIfNeeded(); await row.locator("button", { hasText: "Reinstate" }).click(); return row.locator(".ok, .err").first(); }, "A suspension already lifted | Bo presses Reinstate on a suspension Ada already lifted: “Since this page loaded, <Ada> reinstated that account's … side at <time>.” (batch 17 §6), and the row updates"],
     ["pause", async (P) => { const row = P.locator(`[data-test-row="${t}"]`); await row.scrollIntoViewIfNeeded(); await row.locator("button", { hasText: "Lift the pause" }).click(); return row.locator(".ok, .err").first(); }, "A pause already lifted | Bo lifts the team's pause Ada already lifted: “That test isn't paused by the team.”"],
     ["approve", async (P) => { const row = P.locator(`[data-lift-row="${nora.uid}"]`); await row.scrollIntoViewIfNeeded(); await row.locator("button", { hasText: "Approve" }).click(); return row.locator(".ok, .err").first(); }, "An Approve already pressed | Bo approves a lift Ada already approved: “This lift was already approved by Ada Admin at <time>.”"],
-    ["deleted", async (P) => { const row = P.locator(`[data-user-row="${dee.uid}"]`); await row.scrollIntoViewIfNeeded(); const span = row.locator("span", { has: P.locator("button", { hasText: "Suspend" }) }).last(); await span.locator("textarea").fill("Media pass check"); await span.locator("button", { hasText: "Suspend" }).click(); return span.locator(".ok, .err").first(); }, "An account already deleted | Ada deleted Dee's account; Bo suspends it from his older page: “That account was deleted.”"],
+    ["deleted", async (P) => { const row = P.locator(`[data-user-row="${dee.uid}"]`); await row.scrollIntoViewIfNeeded(); const span = row.locator("span", { has: P.locator("button", { hasText: "Suspend" }) }).last(); await span.locator("textarea").fill("Media pass check"); await span.locator("button", { hasText: "Suspend" }).click(); return row.locator("[data-account-msg], .ok").first(); }, "An account already deleted | Ada deleted Dee's account; Bo suspends it from his older page: “That account was deleted. <Ada> deleted it at <time>.” (batch 17 §6)"],
   ];
   for (const [key, press, caption] of cases) {
     if (key === "deleted") { const span = L.locator(`[data-user-row="${dee.uid}"] span`, { has: L.locator("button", { hasText: "Delete account" }) }).last(); await span.scrollIntoViewIfNeeded(); await span.locator("textarea").fill("Media pass check: asked by email"); await span.locator("button", { hasText: "Delete account" }).click(); await span.locator(".ok, .err").first().waitFor(); }

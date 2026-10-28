@@ -4,12 +4,16 @@ import { Check, X } from "lucide-react";
 import { Err } from "@/components/Err";
 import { api, errOf } from "@/lib/client";
 import { stepsLine } from "@/lib/pause";
+import { useBankCheck } from "@/components/BankCheck";
+import { CARD_NOT_VERIFIED } from "@/lib/rules";
+import type { Simulate } from "@/lib/bankConfirm";
 
 type Steps = { cardVerified: boolean; owedPaid: boolean; approved: boolean; remaining: string[] };
 
+type Elements = { create: (t: string) => { mount: (el: HTMLElement) => void }; submit: () => Promise<{ error?: { message?: string } }> };
 type StripeJs = {
-  elements: (o: { clientSecret: string }) => { create: (t: string) => { mount: (el: HTMLElement) => void }; submit?: () => Promise<unknown> };
-  confirmSetup: (o: { elements: unknown; confirmParams: { return_url: string }; redirect: "if_required" }) => Promise<{ error?: { message?: string }; setupIntent?: { id: string } }>;
+  elements: (o: { mode: "setup"; currency: string; paymentMethodCreation: "manual"; paymentMethodTypes: string[] }) => Elements;
+  createPaymentMethod: (o: { elements: Elements }) => Promise<{ error?: { message?: string }; paymentMethod?: { id: string } }>;
 };
 
 function loadStripe(): Promise<(pk: string) => StripeJs> {
@@ -31,7 +35,16 @@ function loadStripe(): Promise<(pk: string) => StripeJs> {
 export function ChargebackSteps({ steps }: { steps: Steps }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState<{ stripe: StripeJs; elements: unknown } | null>(null);
+  const [form, setForm] = useState<{ stripe: StripeJs; elements: Elements; setupIntentId: string } | null>(null);
+  const [done, setDone] = useState("");
+  // (Batch 17 §11) The bank's check (3D Secure) opens inline, under the button; with the fake Stripe, the clearly-marked stand-in.
+  const bank = useBankCheck();
+  const finish = (setupIntent: string) => (simulate?: Simulate) => api<{ verified: boolean }>("/api/payments/verify-card", { finish: true, setupIntent, ...(simulate ? { simulate } : {}) });
+  const check = async (setupIntent: string, checkUrl: string | null, simulated: boolean) => {
+    await bank.check({ requiresAction: true, paymentId: "", clientSecret: "", publishableKey: "", simulated, checkUrl }, finish(setupIntent));
+    setDone("Card verified.");
+    setTimeout(() => window.location.reload(), 1200);
+  };
   const mount = useRef<HTMLDivElement>(null);
   const row = (ok: boolean, text: string) => (
     <li className="flex items-center gap-2" data-step-ok={ok ? "yes" : "no"}>
@@ -42,7 +55,11 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
     setBusy(true);
     setErr("");
     try {
-      const r = await api<{ simulated: boolean; clientSecret?: string; publishableKey?: string }>("/api/payments/verify-card", {});
+      const r = await api<{ simulated: boolean; verified?: boolean; standIn?: boolean; clientSecret?: string; setupIntentId?: string; publishableKey?: string }>("/api/payments/verify-card", { check: true });
+      if (r.simulated && r.standIn) {
+        await check("", null, true);
+        return;
+      }
       if (r.simulated) {
         window.location.reload();
         return;
@@ -50,8 +67,9 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
       if (!r.publishableKey || !r.clientSecret) throw new Error("Card verification isn't set up yet. Contact us in Settings.");
       const Stripe = await loadStripe();
       const stripe = Stripe(r.publishableKey);
-      const elements = stripe.elements({ clientSecret: r.clientSecret });
-      setForm({ stripe, elements });
+      // (Batch 17 §11) The card form only makes the card; the server confirms it with return_url, so the bank's check comes back as a page shown inline.
+      const elements = stripe.elements({ mode: "setup", currency: "usd", paymentMethodCreation: "manual", paymentMethodTypes: ["card"] });
+      setForm({ stripe, elements, setupIntentId: r.setupIntentId ?? "" });
       setTimeout(() => mount.current && elements.create("payment").mount(mount.current), 0);
     } catch (e) {
       setErr(errOf(e));
@@ -62,11 +80,22 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
     if (!form) return;
     setBusy(true);
     setErr("");
-    const r = await form.stripe.confirmSetup({ elements: form.elements, confirmParams: { return_url: `${window.location.origin}/api/payments/verify-card/done` }, redirect: "if_required" });
-    if (r.error) {
-      setErr(r.error.message ?? "The card wasn't verified. Try again.");
-      setBusy(false);
-    } else window.location.href = `/api/payments/verify-card/done?setup_intent=${encodeURIComponent(r.setupIntent?.id ?? "")}`;
+    try {
+      const sub = await form.elements.submit();
+      if (sub.error) throw new Error(sub.error.message ?? CARD_NOT_VERIFIED);
+      const pm = await form.stripe.createPaymentMethod({ elements: form.elements });
+      if (pm.error || !pm.paymentMethod) throw new Error(pm.error?.message ?? CARD_NOT_VERIFIED);
+      const r = await api<{ setupIntentId: string; checkUrl: string | null }>("/api/payments/verify-card", { setupIntent: form.setupIntentId, paymentMethod: pm.paymentMethod.id });
+      if (r.checkUrl) await check(r.setupIntentId, r.checkUrl, false);
+      else {
+        await finish(r.setupIntentId)();
+        setDone("Card verified.");
+        setTimeout(() => window.location.reload(), 1200);
+      }
+    } catch (e) {
+      setErr(errOf(e));
+    }
+    setBusy(false);
   }
   return (
     <div id="chargeback-steps" data-chargeback-steps="" className="space-y-2 rounded-lg border border-rose-400/40 bg-rose-500/10 p-3 text-sm text-rose-100">
@@ -78,14 +107,16 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
       </ul>
       {steps.remaining.length > 0 && <p data-steps-line="">{stepsLine(steps.remaining)} Paying alone doesn&apos;t lift it.</p>}
       {!steps.cardVerified && !form && (
-        <button className="btn" disabled={busy} onClick={start}>Verify a card</button>
+        <button className="btn" disabled={busy || bank.open || !!done} onClick={start}>Verify a card</button>
       )}
       {form && (
         <div className="space-y-2">
           <div ref={mount} />
-          <button className="btn" disabled={busy} onClick={confirm}>Verify this card</button>
+          <button className="btn" disabled={busy || bank.open || !!done} onClick={confirm}>Verify this card</button>
         </div>
       )}
+      {bank.view}
+      {done && <p className="ok" data-card-verified="">{done}</p>}
       <Err text={err} />
     </div>
   );

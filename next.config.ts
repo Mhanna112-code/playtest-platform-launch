@@ -12,7 +12,8 @@ const csp = [
   `img-src 'self' data: blob: https://*.stripe.com${r2Host ? ` ${r2Host}` : ""}`,
   `media-src 'self' blob:${r2Host ? ` ${r2Host}` : ""}`,
   `connect-src 'self' https://api.stripe.com${r2Host ? ` ${r2Host}` : ""}${dev ? " ws: wss:" : ""}`,
-  `frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com ${CALLS}`,
+  // (Batch 17 §11) 'self': the bank's check shows inline (hooks.stripe.com in a frame) and returns to /api/payments/bank-return in the same frame.
+  `frame-src 'self' https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com ${CALLS}`,
   "frame-ancestors 'none'",
   "object-src 'none'",
   "base-uri 'self'",
@@ -33,7 +34,14 @@ const nextConfig: NextConfig = {
   ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   poweredByHeader: false,
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // (Batch 17 §11) The bank's check returns here inside this site's own inline frame: only this path may be framed, and only by this site (the later entry wins).
+      {
+        source: "/api/payments/bank-return",
+        headers: [{ key: "X-Frame-Options", value: "SAMEORIGIN" }, { key: "Content-Security-Policy", value: csp.replace("frame-ancestors 'none'", "frame-ancestors 'self'") }],
+      },
+    ];
   },
 };
 

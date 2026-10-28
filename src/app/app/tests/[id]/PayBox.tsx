@@ -6,7 +6,8 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { money, toCents } from "@/lib/format";
 import { FIELD, newPressId } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
-import { confirmWithBank, needsBank } from "@/lib/bankConfirm";
+import { needsBank } from "@/lib/bankConfirm";
+import { useBankCheck } from "@/components/BankCheck";
 import { MIN_CHARGE_CENTS, NOT_LISTED, NO_LISTING_CALL_RATE_CAP_CENTS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PAY_TICK_LINE, PAY_WAITS, REASON_WHEN_UNDER_LISTING, STRIPE_MAX_LINE, ZERO_PAY_REASON, overCallsLine, overListingLine, overMaxLine, payUnderLine } from "@/lib/rules";
 import { amountFromRate, overCeilingLine, rateFromAmount } from "@/lib/callMeasure";
 import { NotSentTag, useKept } from "@/lib/useKept";
@@ -45,6 +46,8 @@ export function PayBox(p: {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
   const [done, setDone] = useState("");
   const [bankErr, setBankErr] = useState("");
+  // (Batch 17 §11) The bank's check opens inline, under the button; the button stays disabled while it is open.
+  const bank = useBankCheck();
   // (NEXT-UI 10) The note typed and not sent is kept on the server ("Not sent yet").
   const keep = useKept(`${more ? "more" : "pay"}:${p.kind}:${p.id}`, { reason }, reason === "", (v) => setReason(v.reason ?? ""));
   const payKey = useMemo(() => newPressId(), []);
@@ -86,11 +89,11 @@ export function PayBox(p: {
         kind: p.kind, id: p.id, payKey, amount, reason, ...(isCall && rate ? { rate, typed } : {}), tickedCents: ticked ? cents : null, over200: over && over200,
       }, "pay");
     if (!r) return;
-    // (Batch 11) The bank wants to confirm: its pop-up, then the payment goes through, or nothing was charged (the blue notice under the button).
+    // (Batch 11) The bank wants to confirm: (batch 17 §11) its check opens inline under the button; then the payment goes through, or nothing was charged (the blue notice).
     let res: typeof r = r;
     if (needsBank(r)) {
       setBankErr("");
-      try { res = await confirmWithBank<typeof r>(r); } catch (e) { setBankErr((e as Error).message); return; }
+      try { res = await bank.check<typeof r>(r); } catch (e) { setBankErr((e as Error).message); return; }
     }
     await keep.clear();
     setDone(res.status === "not_set_up" ? `Recorded ${money(res.amountCents)}: payments aren't set up yet, so nothing was charged.` : res.amountCents === 0 ? "Paid $0." : `Paid ${money(res.amountCents)}${res.later ? ` · ${res.later}` : ""}.`);
@@ -139,10 +142,11 @@ export function PayBox(p: {
             <input type="checkbox" id={`over-${p.id}`} className="mt-1" data-match="^Tick “I confirm" checked={over200} onChange={(e) => setOver200(e.target.checked)} /> {OVER_PAY_TICK_LINE}
           </label>
         )}
-        <button className="btn-green" disabled={busy || cents == null || !tickOk || !!p.owes || overCap || reasonMissing || reason.length > LIMITS.reason || (!!more && cents === 0)} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go()}>{more ? "Pay more" : "Pay"}</button>
+        <button className="btn-green" disabled={busy || bank.open || cents == null || !tickOk || !!p.owes || overCap || reasonMissing || reason.length > LIMITS.reason || (!!more && cents === 0)} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go()}>{more ? "Pay more" : "Pay"}</button>
         {p.owes && <span className="text-xs text-amber-200" data-owes-note="">{PAY_WAITS} <a href="#owed">Pay what you owe ↑</a></span>}
         <span className="text-xs text-slate-500">at least $0.50 (or 0)</span>
       </div>
+      {bank.view}
       {at === "pay" && <ChangesBox changes={changes} error={error.startsWith(FIELD) ? "" : error} press={`${more ? "Pay more" : "Pay"} on ${p.name}'s ${p.kind === "call" ? "call" : /recording/.test(p.listingText) ? "recording" : "written answers"}`} />}
       <FormMistakes text={at === "pay" && error.startsWith(FIELD) ? error : ""} press={more ? "Pay more" : "Pay"} />
       {bankErr && <p className="info" data-bank-not-confirmed="">{bankErr}</p>}

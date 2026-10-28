@@ -5,7 +5,8 @@ import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { api, ApiError, errOf } from "@/lib/client";
 import { mergeChanges } from "@/lib/live";
 import { money } from "@/lib/format";
-import { confirmWithBank, type BankAction } from "@/lib/bankConfirm";
+import { type BankAction } from "@/lib/bankConfirm";
+import { useBankCheck } from "@/components/BankCheck";
 
 type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string };
 
@@ -22,6 +23,8 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
   const [changes, setChanges] = useState<Change[] | null>(null);
   const [done, setDone] = useState("");
   const [bankNote, setBankNote] = useState("");
+  // (Batch 17 §11) The bank's check opens inline, under Pay what you owe (one after another when several need it).
+  const bank = useBankCheck();
   const retry = owed.filter((o) => o.retry);
   const seenTotal = retry.reduce((s, o) => s + o.amountCents, 0);
   // What the page / the stop box showed last: every press (the second too) is checked against it.
@@ -54,10 +57,11 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
           try {
             const r = await api<{ stillFailing: string[]; lifted: boolean; confirm?: BankAction[] }>("/api/payments/owed", { seenTotalCents: total, seenIds: shownIds, confirmed: changes != null });
             setChanges(null);
-            // (Batch 11) Payments the bank wants confirmed: one pop-up each; any it refused stay owed (nothing was charged for them).
+            // (Batch 11) Payments the bank wants confirmed: one check each, inline under the button; any it refused stay owed (nothing was charged for them).
             let refused = "";
+            setBankNote("");
             for (const a of r.confirm ?? []) {
-              try { await confirmWithBank(a); } catch (e) { refused = (e as Error).message; }
+              try { await bank.check(a); } catch (e) { refused = (e as Error).message; }
             }
             if (refused) {
               setBankNote(refused);
@@ -87,6 +91,7 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
       >
         Pay what you owe ({money(changes ? total : seenTotal)})
       </button>}
+      {bank.view}
       {/* (Owner, Oct 28, batch 16 section 41) The chargeback steps in order: the card first. */}
       {verifyFirst && <p className="text-xs" data-verify-first="">Verify your card first (step 1): then you can pay what you owe.</p>}
       <ChangesBox changes={changes} />

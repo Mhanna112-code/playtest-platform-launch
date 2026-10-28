@@ -4,7 +4,8 @@ import { money } from "@/lib/format";
 import { HttpError } from "./http";
 import { logEvent } from "./live";
 import { notify } from "./notify";
-import { fakeOn, getStripe, stripeOn } from "./stripe";
+import { bankReturnUrl, checkUrlOf, fakeOn, getStripe, stripeOn } from "./stripe";
+import { CARD_NOT_VERIFIED } from "@/lib/rules";
 import { liftHoldIfClear, owed } from "./holds";
 
 // (Owner, Oct 26) A CHARGEBACK is a payment hold with extra steps. The developer's account goes on a payment hold (as for a failed payment). To lift it:
@@ -48,10 +49,12 @@ async function markVerified(userId: string, now = new Date()) {
  * Step (a), start: a SetupIntent that asks for 3D Secure on any card. Returns the client secret for Stripe's card form (the card details never reach
  * this site). Without Stripe (dev) or with the local fake, the verification is simulated and succeeds at once.
  */
-export async function startCardVerification(user: { id: string; email: string; stripeCustomerId: string | null }) {
+export async function startCardVerification(user: { id: string; email: string; stripeCustomerId: string | null }, opts: { standIn?: boolean } = {}) {
   const steps = await chargebackSteps(user.id);
   if (!steps) throw new HttpError(409, "no_chargeback_hold", "Your account isn't on a chargeback hold, so there's nothing to verify.");
   if (simulated()) {
+    // (Batch 17 §11) The page's "Verify a card" draws the stand-in for the bank's check under the button: verified only on its Confirm (finishCardCheck).
+    if (opts.standIn) return { simulated: true as const, verified: false, standIn: true };
     await markVerified(user.id);
     return { simulated: true as const, verified: true };
   }
@@ -72,6 +75,30 @@ export async function startCardVerification(user: { id: string; email: string; s
 }
 
 /**
+ * (Batch 17 §11) Step (a), the inline check: the card typed in the page's card form is confirmed on the SetupIntent here with return_url, so the bank's check (3D Secure)
+ * is a page the developer's page shows inline, under "Verify a card" (`checkUrl`); null when the card was verified without one.
+ */
+export async function confirmCardCheck(userId: string, setupIntentId: string, paymentMethodId: string) {
+  if (simulated()) throw new HttpError(409, "simulated", "There's no card form to confirm here.");
+  const stripe = getStripe();
+  const si = await stripe.setupIntents.retrieve(setupIntentId);
+  if (si.metadata?.userId !== userId || si.metadata?.purpose !== "chargeback-verify") throw new HttpError(403, "bad_setup", "That card check belongs to another account.");
+  try {
+    const done = await stripe.setupIntents.confirm(setupIntentId, { payment_method: paymentMethodId, return_url: bankReturnUrl() });
+    return { setupIntentId, checkUrl: checkUrlOf(done) ?? null };
+  } catch (e) {
+    console.error("[stripe] card check:", (e as Error).message);
+    throw new HttpError(409, "not_verified", CARD_NOT_VERIFIED);
+  }
+}
+
+/** (Batch 17 §11) The inline check ended: the stand-in's Confirm / Cancel (fake Stripe), or the bank's page finished (Stripe decides how). */
+export async function finishCardCheck(userId: string, setupIntentId: string, simulate?: unknown) {
+  if (simulated() && simulate !== "succeeded") throw new HttpError(409, "not_verified", CARD_NOT_VERIFIED);
+  return finishCardVerification(userId, setupIntentId);
+}
+
+/**
  * Step (a), finish: Stripe says the SetupIntent succeeded (and, when it shows how the card was checked, that 3D Secure authenticated it). The card
  * becomes the card on file. Only a check made after the hold began, for this account, counts.
  */
@@ -87,7 +114,7 @@ export async function finishCardVerification(userId: string, setupIntentId: stri
   if (si.metadata?.userId !== userId || si.metadata?.purpose !== "chargeback-verify" || (user.stripeCustomerId && si.customer !== user.stripeCustomerId))
     throw new HttpError(403, "bad_setup", "That card check belongs to another account.");
   if (si.created * 1000 < user.holdStartedAt.getTime() - 60_000) throw new HttpError(409, "old_setup", "That card check is from before the hold. Verify a card again.");
-  if (si.status !== "succeeded") throw new HttpError(409, "not_verified", "The card wasn't verified. Try again or use another card.");
+  if (si.status !== "succeeded") throw new HttpError(409, "not_verified", CARD_NOT_VERIFIED);
   const attempt = typeof si.latest_attempt === "object" ? (si.latest_attempt as Stripe.SetupAttempt | null) : null;
   const tds = attempt?.payment_method_details?.card?.three_d_secure;
   if (tds && tds.result !== "authenticated" && tds.result !== "attempt_acknowledged") throw new HttpError(409, "not_verified", "The bank didn't confirm it was you. Try again or use another card.");

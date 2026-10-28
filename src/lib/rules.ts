@@ -689,6 +689,23 @@ export const PRESS_ACTION_MS = 15 * 60_000;
 /** (Batch 15 section 11) The date is a time token: written in the developer's own time zone where the line is stored. */
 export const bankConfirmLine = (cents: number, by: Date) => `Your bank wants you to confirm a ${money(cents)} payment. Confirm it in Payments by ${T(by, "dateYear")}.`;
 export const BANK_NOT_CONFIRMED = "Your bank didn't confirm the payment, so nothing was charged.";
+/**
+ * (Batch 17 §11) The bank's check opens inline, under the button that charges. A charge made while the developer was away on a test is confirmed on that test page, under
+ * the piece ("Confirm with your bank"); its bell line links straight there. Charges that belong to no test (a renewal) keep bankConfirmLine and Payments.
+ */
+export const bankConfirmTestLine = (cents: number, by: Date) => `Your bank wants you to confirm a ${money(cents)} payment. Confirm this payment by ${T(by, "dateYear")}.`;
+export const CONFIRM_WITH_BANK = "Confirm with your bank";
+/** (Batch 17 §11) The fake Stripe (tests, recordings, dev without a publishable key) draws this clearly-marked stand-in where the bank's own check would be. */
+export const BANK_STAND_IN = "Stand-in for your bank's check";
+export const BANK_STAND_IN_NOTE = "Your bank's own page shows here when payments are live. Nothing is charged until it's confirmed.";
+export const BANK_CHECK_TITLE = "Your bank's check";
+export const BANK_CONFIRMED = "Your bank confirmed it: the payment went through.";
+export const CARD_NOT_VERIFIED = "The card wasn't verified. Try again or use another card.";
+/** (Batch 17 §11) The anchor of a charge's "Confirm with your bank" button on its test page (Payments and the bell line link to it; the jump marks it). */
+export const bankAnchor = (paymentId: string) => `bank-${paymentId}`;
+export const bankHref = (testId: string, paymentId: string) => `/app/tests/${testId}#${bankAnchor(paymentId)}`;
+/** (Batch 17 §11) The line above "Confirm with your bank" on the test page. */
+export const bankWaitingLine = (cents: number, what: string, by: string) => `Your bank wants you to confirm a ${money(cents)} payment for ${what}, made while you were away. Confirm it by ${by}.`;
 export const PIECE_LOCKED = "A payment for this is being confirmed right now.";
 /** (Owner, Oct 29, batch 11 section 4) Automatic retries of what is owed during a hold: once a day, at most this many a hold. */
 export const HOLD_RETRY_MAX = 7;
