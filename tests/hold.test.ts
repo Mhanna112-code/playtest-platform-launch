@@ -206,7 +206,7 @@ describe("daily job", () => {
     const hj = await joined(h.testId);
     await db.test.update({ where: { id: h.testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } }); await db.contract.updateMany({ where: { testId: h.testId }, data: { dueAt: new Date(Date.now() + 2 * DAY) } }); // (batch 15 section 18: the tester's own deadline)
     await cron();
-    const n = () => db.notification.count({ where: { userId: hj.tester.user.id, text: { contains: "closes on" } } });
+    const n = () => db.notification.count({ where: { userId: hj.tester.user.id, text: { startsWith: "Your deadline on" } } }); // (batch 15 section 18: each tester reads their own deadline)
     expect(await n()).toBe(1);
     await cron(); // not twice
     expect(await n()).toBe(1);
