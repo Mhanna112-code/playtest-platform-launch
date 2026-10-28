@@ -1,234 +1,4313 @@
 {
   "dash-card-game.png": {
     "caption": "A game test with written answers, a recording and live calls",
-    "kind": "image"
+    "kind": "image",
+    "title": "Game test card",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1001,
+    "size": "desktop"
   },
   "dash-card-free.png": {
     "caption": "A free web-app test (Finance, Productivity): its written answers pay nothing",
-    "kind": "image"
+    "kind": "image",
+    "title": "Free test card",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1002,
+    "size": "desktop"
   },
   "dash-card-invite.png": {
     "caption": "An invite-only test with access keys and an NDA",
-    "kind": "image"
+    "kind": "image",
+    "title": "Invite-only card",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1003,
+    "size": "desktop"
   },
   "dash-card-work-waiting.png": {
     "caption": "An open test with work waiting for review",
-    "kind": "image"
+    "kind": "image",
+    "title": "Work waiting",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1004,
+    "size": "desktop"
   },
   "dash-card-full.png": {
     "caption": "A full test: 2 of 2 spots taken",
-    "kind": "image"
+    "kind": "image",
+    "title": "Full",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1005,
+    "size": "desktop"
   },
   "dash-card-stopped.png": {
-    "caption": "A stopped test",
-    "kind": "image"
+    "caption": "A stopped test: no longer taking testers or work",
+    "kind": "image",
+    "title": "Stopped",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1006,
+    "size": "desktop"
   },
   "dash-card-draft.png": {
     "caption": "Draft: the next round, not open yet",
-    "kind": "image"
+    "kind": "image",
+    "title": "Draft",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1007,
+    "size": "desktop"
   },
   "dash-card-closed.png": {
     "caption": "Closed after 7 days paused",
-    "kind": "image"
+    "kind": "image",
+    "title": "Closed",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1008,
+    "size": "desktop"
   },
   "dash-blue-box.png": {
     "caption": "Payment hold: the blue box at the top of the developer dashboard",
-    "kind": "image"
+    "kind": "image",
+    "title": "Blue box on a hold",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1010,
+    "size": "desktop"
   },
   "dash-card-paused.png": {
     "caption": "A paused test (payment hold)",
-    "kind": "image"
+    "kind": "image",
+    "title": "Paused",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1011,
+    "size": "desktop"
   },
   "every-deleted-account.png": {
     "caption": "Kai deleted their account in another tab: this tab is signed out with the red notice",
-    "kind": "image"
+    "kind": "image",
+    "title": "Deleted in another tab",
+    "section": "Every page",
+    "group": "every",
+    "order": 2001,
+    "size": "desktop"
   },
   "every-hold-routing.webm": {
     "caption": "A payment hold starts while the test page (left) and Edit (right) are open: both move to the dashboard top, where the blue box explains",
-    "kind": "video"
+    "kind": "video",
+    "title": "Hold starts: pages move",
+    "section": "Every page",
+    "group": "every",
+    "order": 2002,
+    "size": "desktop"
   },
   "post-required-mark.png": {
     "caption": "The top of Post a test: “* marks the fields you have to fill in”",
-    "kind": "image"
+    "kind": "image",
+    "title": "Required fields",
+    "section": "Post a test",
+    "group": "post",
+    "order": 3001,
+    "size": "desktop"
   },
   "post-counters.png": {
     "caption": "Counters on Product (up to 60), Name of this test (up to 60) and What should testers do (up to 1,000)",
-    "kind": "image"
+    "kind": "image",
+    "title": "Counters",
+    "section": "Post a test",
+    "group": "post",
+    "order": 3002,
+    "size": "desktop"
   },
   "post-the-test.webm": {
     "caption": "Posting a test: fill in the four panels, press Post the test, land on the new test's page",
-    "kind": "video"
+    "kind": "video",
+    "title": "Posting a test",
+    "section": "Post a test",
+    "group": "post",
+    "order": 3003,
+    "size": "desktop"
   },
   "post-listed-find.png": {
     "caption": "Anyone can join: the new test shows in testers' Find tests",
-    "kind": "image"
+    "kind": "image",
+    "title": "Listed in Find tests",
+    "section": "Post a test",
+    "group": "post",
+    "order": 3004,
+    "size": "desktop"
   },
   "post-listed-invite.png": {
     "caption": "Invite only: not in Find tests; the invited tester sees it on their dashboard",
-    "kind": "image"
+    "kind": "image",
+    "title": "Invite only",
+    "section": "Post a test",
+    "group": "post",
+    "order": 3005,
+    "size": "desktop"
   },
   "post-red-required-price.png": {
     "caption": "Red at the field when you leave it: required fields empty, a price under $1, spots over the limit",
-    "kind": "image"
+    "kind": "image",
+    "title": "Red: required, price, spots",
+    "section": "Post a test",
+    "group": "post",
+    "order": 3006,
+    "size": "desktop"
   },
   "post-red-dates-keys.png": {
-    "caption": "Red when you leave the field: the deadline doesn't leave 3 days before Open until, and fewer keys than spots",
-    "kind": "image"
+    "caption": "Red when you leave the field: Open until only 2 days ahead (it must be 3 to 30), and fewer keys than spots",
+    "kind": "image",
+    "title": "Red: Open until and keys",
+    "section": "Post a test",
+    "group": "post",
+    "order": 3007,
+    "size": "desktop"
   },
   "post-red-checks.webm": {
     "caption": "Red at the field: each box is checked when you leave it, and Post checks everything again on the server",
-    "kind": "video"
+    "kind": "video",
+    "title": "Red checks, then the server",
+    "section": "Post a test",
+    "group": "post",
+    "order": 3008,
+    "size": "desktop"
   },
   "edit-live-box.png": {
     "caption": "Edit's live box sits under Save: Ana sent her written answers while Edit was open",
-    "kind": "image"
+    "kind": "image",
+    "title": "Live box under Save",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4001,
+    "size": "desktop"
   },
   "edit-open-until.png": {
     "caption": "Open until can only move later: an earlier date is red",
-    "kind": "image"
-  },
-  "edit-deadline.png": {
-    "caption": "A 30-day deadline needs Open until 3 days later: red under both fields",
-    "kind": "image"
+    "kind": "image",
+    "title": "Open until only moves later",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4002,
+    "size": "desktop"
   },
   "edit-key-in-use.png": {
     "caption": "A key in use can't be added again (red)",
-    "kind": "image"
+    "kind": "image",
+    "title": "Key in use",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4004,
+    "size": "desktop"
   },
   "edit-key-reported-left.png": {
     "caption": "Keys reported as not working or given to a tester who left can't be added again",
-    "kind": "image"
+    "kind": "image",
+    "title": "Reported or left keys",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4005,
+    "size": "desktop"
   },
   "edit-elsewhere-field.png": {
     "caption": "Another tab saved new instructions: the field updates with a blue note under it",
-    "kind": "image"
+    "kind": "image",
+    "title": "Blue note on a field",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4006,
+    "size": "desktop"
   },
   "edit-elsewhere-keys.png": {
     "caption": "Keys added in another tab: the blue note under the key boxes",
-    "kind": "image"
+    "kind": "image",
+    "title": "Blue note on keys",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4007,
+    "size": "desktop"
   },
   "edit-elsewhere-save.png": {
     "caption": "Save stops once: “This test changed since you opened Edit. Press Save again…”",
-    "kind": "image"
+    "kind": "image",
+    "title": "Save stops once",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4008,
+    "size": "desktop"
   },
   "edit-changed-elsewhere.webm": {
     "caption": "Two tabs on Edit: the right tab saves new instructions and keys; the left tab's fields update with blue notes, and its Save stops once",
-    "kind": "video"
+    "kind": "video",
+    "title": "Two tabs on Edit (race)",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4009,
+    "size": "desktop"
   },
   "edit-red-blue-spots-keys.png": {
     "caption": "You ticked a key to remove; another tab added a spot (blue): now fewer free keys than open spots (red)",
-    "kind": "image"
-  },
-  "edit-red-blue-deadline.png": {
-    "caption": "You typed a 40-day deadline; another tab moved Open until later (blue), still too early for it (red)",
-    "kind": "image"
+    "kind": "image",
+    "title": "Red and blue: spots and keys",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4010,
+    "size": "desktop"
   },
   "edit-red-blue-keys.png": {
     "caption": "You ticked one key to remove; another tab removed another (blue): the free keys no longer cover the open spots (red)",
-    "kind": "image"
+    "kind": "image",
+    "title": "Red and blue: keys",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4012,
+    "size": "desktop"
   },
   "edit-three-changes.png": {
     "caption": "After 3 saves that changed the steps, the steps field locks with its note; every other limited field shows its own “Changes left: N of 3”",
-    "kind": "image"
+    "kind": "image",
+    "title": "3 changes per field",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4013,
+    "size": "desktop"
   },
   "edit-team-stopped.webm": {
     "caption": "The team stops the test while Edit is open: Save is refused and the test page's banner names the press that didn't go through",
-    "kind": "video"
+    "kind": "video",
+    "title": "Team stops it during Edit",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4014,
+    "size": "desktop"
   },
   "tp-overview.png": {
     "caption": "Overview: title, status, badges, terms and spots, Open until, and the Edit, Alerts, Next round, End early and Stop buttons",
-    "kind": "image"
+    "kind": "image",
+    "title": "Overview",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5001,
+    "size": "desktop"
   },
   "tp-needs-you.png": {
     "caption": "Needs you, grouped per person: Pay or Reject for sent work, a call waiting for its length, a dispute waiting for your side",
-    "kind": "image"
+    "kind": "image",
+    "title": "Needs you",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5002,
+    "size": "desktop"
   },
   "tp-needs-dispute-call.png": {
     "caption": "A dispute waiting for the developer's side, and a call that happened waiting for its length",
-    "kind": "image"
+    "kind": "image",
+    "title": "A dispute and a call to log",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5003,
+    "size": "desktop"
   },
   "tp-testers.png": {
     "caption": "Testers: the avatar row with Ana's hover card, and one row per tester with parts sent, pay and their contract",
-    "kind": "image"
+    "kind": "image",
+    "title": "Testers panel",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5004,
+    "size": "desktop"
   },
   "tp-live-session.png": {
     "caption": "Live session: tick testers, request times, waiting requests, booked calls (Join shows near the start) and past calls",
-    "kind": "image"
+    "kind": "image",
+    "title": "Live session",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5005,
+    "size": "desktop"
   },
   "tp-alerts.png": {
     "caption": "Alerts: tick what should not stop your buttons",
-    "kind": "image"
+    "kind": "image",
+    "title": "Alerts menu",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5006,
+    "size": "desktop"
   },
   "tp-needs-applications.png": {
     "caption": "On an Approved-only test: applications to Accept or Decline, and a rejoin ask with the time they'd get back",
-    "kind": "image"
+    "kind": "image",
+    "title": "Applications and a rejoin ask",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5007,
+    "size": "desktop"
   },
   "tp-invite.png": {
     "caption": "Invite testers: People you've worked with, Suggested and Find testers, then Invited",
-    "kind": "image"
+    "kind": "image",
+    "title": "Invite testers",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5008,
+    "size": "desktop"
   },
   "tp-invite-find.png": {
     "caption": "Find testers by name: missing needs show as orange labels",
-    "kind": "image"
+    "kind": "image",
+    "title": "Find testers by name",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5009,
+    "size": "desktop"
   },
   "tp-invite-anyway.png": {
     "caption": "Invite anyway: the inline box lists the needs Dee doesn't meet",
-    "kind": "image"
+    "kind": "image",
+    "title": "Invite anyway",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5010,
+    "size": "desktop"
   },
   "tp-next-round.png": {
     "caption": "Next round: the draft “(round 2)” opens in Post a test, filled in; Post the test opens it for testers",
-    "kind": "image"
+    "kind": "image",
+    "title": "Next round",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5011,
+    "size": "desktop"
   },
   "tp-end-early.png": {
     "caption": "End early: tick testers, give one reason they read, then the confirm pop-up “End their work now”",
-    "kind": "image"
+    "kind": "image",
+    "title": "End early",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5012,
+    "size": "desktop"
   },
   "tp-stop-confirm.png": {
     "caption": "Stop: the confirm pop-up “Are you sure you want to stop …?”",
-    "kind": "image"
+    "kind": "image",
+    "title": "Stop: confirm",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5013,
+    "size": "desktop"
   },
   "tp-stopped.png": {
     "caption": "Stopped: the Stopped label and the stopped line; only what still works: Needs you, the Testers panel and past calls; Next round stays",
-    "kind": "image"
+    "kind": "image",
+    "title": "Stopped test page",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5014,
+    "size": "desktop"
   },
   "tp-stopped-tester.png": {
     "caption": "The tester's page after Stop: the stopped line says what they can still do (phone)",
-    "kind": "image"
+    "kind": "image",
+    "title": "Stopped: the tester's page",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5015,
+    "size": "desktop"
   },
   "tp-live-box.webm": {
     "caption": "The live box: Ana (right, phone) sends her answers and switches to the new terms; the developer's box updates and See their contract scrolls to her row",
-    "kind": "video"
+    "kind": "video",
+    "title": "Live box (race)",
+    "section": "Developer test page",
+    "group": "tpvideo",
+    "order": 6002,
+    "size": "desktop"
   },
   "tp-stop-once-pay.png": {
     "caption": "Stop-once on Pay: Ben sent his answers since the page loaded, listed under the button",
-    "kind": "image"
+    "kind": "image",
+    "title": "Pay stops once",
+    "section": "Developer test page",
+    "group": "tpvideo",
+    "order": 6003,
+    "size": "desktop"
   },
   "tp-stop-once.webm": {
     "caption": "Stop-once: Ben (right, phone) sends his answers while the developer presses Pay for Ana; Pay stops once and lists the change, the second press goes ahead",
-    "kind": "video"
+    "kind": "video",
+    "title": "Pay stops once (race)",
+    "section": "Developer test page",
+    "group": "tpvideo",
+    "order": 6004,
+    "size": "desktop"
   },
   "tp-stop-once-stop.png": {
     "caption": "Stop-once after a pop-up: Cam left while the Stop pop-up was open; the press didn't go through and the change shows under Stop",
-    "kind": "image"
+    "kind": "image",
+    "title": "Stop stops once",
+    "section": "Developer test page",
+    "group": "tpvideo",
+    "order": 6005,
+    "size": "desktop"
   },
   "tp-stop-once-invite.png": {
     "caption": "Invite stops once: Fay removed iPhone and iPad from her profile after the page loaded",
-    "kind": "image"
+    "kind": "image",
+    "title": "Invite stops once",
+    "section": "Developer test page",
+    "group": "tpvideo",
+    "order": 6006,
+    "size": "desktop"
   },
   "tp-team-paused.webm": {
     "caption": "The team pauses the test: End early is refused (“you can only stop it”) and the banner explains",
-    "kind": "video"
+    "kind": "video",
+    "title": "Team pauses the test",
+    "section": "Developer test page",
+    "group": "tpvideo",
+    "order": 6007,
+    "size": "desktop"
   },
   "tp-team-stopped.webm": {
     "caption": "The team stops the test while a call is being requested: the request is refused, the page moves to the top and the banner names the press that didn't go through",
-    "kind": "video"
+    "kind": "video",
+    "title": "Team stops the test",
+    "section": "Developer test page",
+    "group": "tpstop",
+    "order": 7001,
+    "size": "desktop"
   },
   "checks/dash-needs-review-and-calls.png": {
     "caption": "Visual check: Needs review and Calls boxes",
-    "kind": "image"
+    "kind": "image",
+    "title": "",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1009,
+    "size": "desktop"
   },
   "checks/live-box-switched-new-terms.png": {
     "caption": "Visual check: the live box line “Ana Silva switched to the new terms” with See their contract",
-    "kind": "image"
+    "kind": "image",
+    "title": "",
+    "section": "Developer test page",
+    "group": "tpvideo",
+    "order": 6001,
+    "size": "desktop"
+  },
+  "tester-dashboard-boxes.png": {
+    "caption": "The tester dashboard: To do, Charge or cancel, Tests you left, and a test paused by its developer (tagged Paused)",
+    "kind": "image",
+    "title": "Tester dashboard boxes",
+    "section": "Tester dashboard and Find",
+    "group": "check",
+    "order": 8001,
+    "size": "desktop"
+  },
+  "edit-open-until-30.png": {
+    "caption": "Open until can move later, but at most 30 days from today: a later date is red",
+    "kind": "image",
+    "title": "Open until at most 30 days ahead",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4003,
+    "size": "desktop"
+  },
+  "edit-red-blue-open-until.png": {
+    "caption": "Another tab moved Open until later (blue); a date typed here before that one is now red, because Open until only moves later",
+    "kind": "image",
+    "title": "Red and blue: Open until",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4011,
+    "size": "desktop"
+  },
+  "dash-card-game-phone.png": {
+    "caption": "A game test with written answers, a recording and live calls",
+    "kind": "image",
+    "title": "Game test card",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1001,
+    "size": "phone"
+  },
+  "dash-card-free-phone.png": {
+    "caption": "A free web-app test (Finance, Productivity): its written answers pay nothing",
+    "kind": "image",
+    "title": "Free test card",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1002,
+    "size": "phone"
+  },
+  "dash-card-invite-phone.png": {
+    "caption": "An invite-only test with access keys and an NDA",
+    "kind": "image",
+    "title": "Invite-only card",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1003,
+    "size": "phone"
+  },
+  "dash-card-work-waiting-phone.png": {
+    "caption": "An open test with work waiting for review",
+    "kind": "image",
+    "title": "Work waiting",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1004,
+    "size": "phone"
+  },
+  "dash-card-full-phone.png": {
+    "caption": "A full test: 2 of 2 spots taken",
+    "kind": "image",
+    "title": "Full",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1005,
+    "size": "phone"
+  },
+  "dash-card-stopped-phone.png": {
+    "caption": "A stopped test: no longer taking testers or work",
+    "kind": "image",
+    "title": "Stopped",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1006,
+    "size": "phone"
+  },
+  "dash-card-draft-phone.png": {
+    "caption": "Draft: the next round, not open yet",
+    "kind": "image",
+    "title": "Draft",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1007,
+    "size": "phone"
+  },
+  "dash-card-closed-phone.png": {
+    "caption": "Closed after 7 days paused",
+    "kind": "image",
+    "title": "Closed",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1008,
+    "size": "phone"
+  },
+  "checks/dash-needs-review-and-calls-phone.png": {
+    "caption": "Visual check: Needs review and Calls boxes",
+    "kind": "image",
+    "title": "",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1009,
+    "size": "phone"
+  },
+  "dash-blue-box-phone.png": {
+    "caption": "Payment hold: the blue box at the top of the developer dashboard",
+    "kind": "image",
+    "title": "Blue box on a hold",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1010,
+    "size": "phone"
+  },
+  "dash-card-paused-phone.png": {
+    "caption": "A paused test (payment hold)",
+    "kind": "image",
+    "title": "Paused",
+    "section": "Developer dashboard",
+    "group": "dash",
+    "order": 1011,
+    "size": "phone"
+  },
+  "every-deleted-account-phone.png": {
+    "caption": "Kai deleted their account in another tab: this tab is signed out with the red notice",
+    "kind": "image",
+    "title": "Deleted in another tab",
+    "section": "Every page",
+    "group": "every",
+    "order": 2001,
+    "size": "phone"
+  },
+  "every-hold-routing-phone.webm": {
+    "caption": "A payment hold starts while the test page (left) and Edit (right) are open: both move to the dashboard top, where the blue box explains",
+    "kind": "video",
+    "title": "Hold starts: pages move",
+    "section": "Every page",
+    "group": "every",
+    "order": 2002,
+    "size": "phone"
+  },
+  "post-required-mark-phone.png": {
+    "caption": "The top of Post a test: “* marks the fields you have to fill in”",
+    "kind": "image",
+    "title": "Required fields",
+    "section": "Post a test",
+    "group": "post",
+    "order": 3001,
+    "size": "phone"
+  },
+  "post-counters-phone.png": {
+    "caption": "Counters on Product (up to 60), Name of this test (up to 60) and What should testers do (up to 1,000)",
+    "kind": "image",
+    "title": "Counters",
+    "section": "Post a test",
+    "group": "post",
+    "order": 3002,
+    "size": "phone"
+  },
+  "post-the-test-phone.webm": {
+    "caption": "Posting a test: fill in the four panels, press Post the test, land on the new test's page",
+    "kind": "video",
+    "title": "Posting a test",
+    "section": "Post a test",
+    "group": "post",
+    "order": 3003,
+    "size": "phone"
+  },
+  "post-listed-find-phone.png": {
+    "caption": "Anyone can join: the new test shows in testers' Find tests",
+    "kind": "image",
+    "title": "Listed in Find tests",
+    "section": "Post a test",
+    "group": "post",
+    "order": 3004,
+    "size": "phone"
+  },
+  "post-listed-invite-phone.png": {
+    "caption": "Invite only: not in Find tests; the invited tester sees it on their dashboard",
+    "kind": "image",
+    "title": "Invite only",
+    "section": "Post a test",
+    "group": "post",
+    "order": 3005,
+    "size": "phone"
+  },
+  "post-red-required-price-phone.png": {
+    "caption": "Red at the field when you leave it: required fields empty, a price under $1, spots over the limit",
+    "kind": "image",
+    "title": "Red: required, price, spots",
+    "section": "Post a test",
+    "group": "post",
+    "order": 3006,
+    "size": "phone"
+  },
+  "post-red-dates-keys-phone.png": {
+    "caption": "Red when you leave the field: Open until only 2 days ahead (it must be 3 to 30), and fewer keys than spots",
+    "kind": "image",
+    "title": "Red: Open until and keys",
+    "section": "Post a test",
+    "group": "post",
+    "order": 3007,
+    "size": "phone"
+  },
+  "post-red-checks-phone.webm": {
+    "caption": "Red at the field: each box is checked when you leave it, and Post checks everything again on the server",
+    "kind": "video",
+    "title": "Red checks, then the server",
+    "section": "Post a test",
+    "group": "post",
+    "order": 3008,
+    "size": "phone"
+  },
+  "edit-live-box-phone.png": {
+    "caption": "Edit's live box sits under Save: Ana sent her written answers while Edit was open",
+    "kind": "image",
+    "title": "Live box under Save",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4001,
+    "size": "phone"
+  },
+  "edit-open-until-phone.png": {
+    "caption": "Open until can only move later: an earlier date is red",
+    "kind": "image",
+    "title": "Open until only moves later",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4002,
+    "size": "phone"
+  },
+  "edit-open-until-30-phone.png": {
+    "caption": "Open until can move later, but at most 30 days from today: a later date is red",
+    "kind": "image",
+    "title": "Open until at most 30 days ahead",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4003,
+    "size": "phone"
+  },
+  "edit-key-in-use-phone.png": {
+    "caption": "A key in use can't be added again (red)",
+    "kind": "image",
+    "title": "Key in use",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4004,
+    "size": "phone"
+  },
+  "edit-key-reported-left-phone.png": {
+    "caption": "Keys reported as not working or given to a tester who left can't be added again",
+    "kind": "image",
+    "title": "Reported or left keys",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4005,
+    "size": "phone"
+  },
+  "edit-elsewhere-field-phone.png": {
+    "caption": "Another tab saved new instructions: the field updates with a blue note under it",
+    "kind": "image",
+    "title": "Blue note on a field",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4006,
+    "size": "phone"
+  },
+  "edit-elsewhere-keys-phone.png": {
+    "caption": "Keys added in another tab: the blue note under the key boxes",
+    "kind": "image",
+    "title": "Blue note on keys",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4007,
+    "size": "phone"
+  },
+  "edit-elsewhere-save-phone.png": {
+    "caption": "Save stops once: “This test changed since you opened Edit. Press Save again…”",
+    "kind": "image",
+    "title": "Save stops once",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4008,
+    "size": "phone"
+  },
+  "edit-changed-elsewhere-phone.webm": {
+    "caption": "Two tabs on Edit: the right tab saves new instructions and keys; the left tab's fields update with blue notes, and its Save stops once",
+    "kind": "video",
+    "title": "Two tabs on Edit (race)",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4009,
+    "size": "phone"
+  },
+  "edit-red-blue-spots-keys-phone.png": {
+    "caption": "You ticked a key to remove; another tab added a spot (blue): now fewer free keys than open spots (red)",
+    "kind": "image",
+    "title": "Red and blue: spots and keys",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4010,
+    "size": "phone"
+  },
+  "edit-red-blue-open-until-phone.png": {
+    "caption": "Another tab moved Open until later (blue); a date typed here before that one is now red, because Open until only moves later",
+    "kind": "image",
+    "title": "Red and blue: Open until",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4011,
+    "size": "phone"
+  },
+  "edit-red-blue-keys-phone.png": {
+    "caption": "You ticked one key to remove; another tab removed another (blue): the free keys no longer cover the open spots (red)",
+    "kind": "image",
+    "title": "Red and blue: keys",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4012,
+    "size": "phone"
+  },
+  "edit-three-changes-phone.png": {
+    "caption": "After 3 saves that changed the steps, the steps field locks with its note; every other limited field shows its own “Changes left: N of 3”",
+    "kind": "image",
+    "title": "3 changes per field",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4013,
+    "size": "phone"
+  },
+  "edit-team-stopped-phone.webm": {
+    "caption": "The team stops the test while Edit is open: Save is refused and the test page's banner names the press that didn't go through",
+    "kind": "video",
+    "title": "Team stops it during Edit",
+    "section": "Edit",
+    "group": "edit",
+    "order": 4014,
+    "size": "phone"
+  },
+  "tp-overview-phone.png": {
+    "caption": "Overview: title, status, badges, terms and spots, Open until, and the Edit, Alerts, Next round, End early and Stop buttons",
+    "kind": "image",
+    "title": "Overview",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5001,
+    "size": "phone"
+  },
+  "tp-needs-you-phone.png": {
+    "caption": "Needs you, grouped per person: Pay or Reject for sent work, a call waiting for its length, a dispute waiting for your side",
+    "kind": "image",
+    "title": "Needs you",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5002,
+    "size": "phone"
+  },
+  "tp-needs-dispute-call-phone.png": {
+    "caption": "A dispute waiting for the developer's side, and a call that happened waiting for its length",
+    "kind": "image",
+    "title": "A dispute and a call to log",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5003,
+    "size": "phone"
+  },
+  "tp-testers-phone.png": {
+    "caption": "Testers: the avatar row with Ana's hover card, and one row per tester with parts sent, pay and their contract",
+    "kind": "image",
+    "title": "Testers panel",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5004,
+    "size": "phone"
+  },
+  "tp-live-session-phone.png": {
+    "caption": "Live session: tick testers, request times, waiting requests, booked calls (Join shows near the start) and past calls",
+    "kind": "image",
+    "title": "Live session",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5005,
+    "size": "phone"
+  },
+  "tp-alerts-phone.png": {
+    "caption": "Alerts: tick what should not stop your buttons",
+    "kind": "image",
+    "title": "Alerts menu",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5006,
+    "size": "phone"
+  },
+  "tp-needs-applications-phone.png": {
+    "caption": "On an Approved-only test: applications to Accept or Decline, and a rejoin ask with the time they'd get back",
+    "kind": "image",
+    "title": "Applications and a rejoin ask",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5007,
+    "size": "phone"
+  },
+  "tp-invite-phone.png": {
+    "caption": "Invite testers: People you've worked with, Suggested and Find testers, then Invited",
+    "kind": "image",
+    "title": "Invite testers",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5008,
+    "size": "phone"
+  },
+  "tp-invite-find-phone.png": {
+    "caption": "Find testers by name: missing needs show as orange labels",
+    "kind": "image",
+    "title": "Find testers by name",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5009,
+    "size": "phone"
+  },
+  "tp-invite-anyway-phone.png": {
+    "caption": "Invite anyway: the inline box lists the needs Dee doesn't meet",
+    "kind": "image",
+    "title": "Invite anyway",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5010,
+    "size": "phone"
+  },
+  "tp-next-round-phone.png": {
+    "caption": "Next round: the draft “(round 2)” opens in Post a test, filled in; Post the test opens it for testers",
+    "kind": "image",
+    "title": "Next round",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5011,
+    "size": "phone"
+  },
+  "tp-end-early-phone.png": {
+    "caption": "End early: tick testers, give one reason they read, then the confirm pop-up “End their work now”",
+    "kind": "image",
+    "title": "End early",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5012,
+    "size": "phone"
+  },
+  "tp-stop-confirm-phone.png": {
+    "caption": "Stop: the confirm pop-up “Are you sure you want to stop …?”",
+    "kind": "image",
+    "title": "Stop: confirm",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5013,
+    "size": "phone"
+  },
+  "tp-stopped-phone.png": {
+    "caption": "Stopped: the Stopped label and the stopped line; only what still works: Needs you, the Testers panel and past calls; Next round stays",
+    "kind": "image",
+    "title": "Stopped test page",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5014,
+    "size": "phone"
+  },
+  "tp-stopped-tester-phone.png": {
+    "caption": "The tester's page after Stop: the stopped line says what they can still do (phone)",
+    "kind": "image",
+    "title": "Stopped: the tester's page",
+    "section": "Developer test page",
+    "group": "testpage",
+    "order": 5015,
+    "size": "phone"
+  },
+  "checks/live-box-switched-new-terms-phone.png": {
+    "caption": "Visual check: the live box line “Ana Silva switched to the new terms” with See their contract",
+    "kind": "image",
+    "title": "",
+    "section": "Developer test page",
+    "group": "tpvideo",
+    "order": 6001,
+    "size": "phone"
+  },
+  "tp-live-box-phone.webm": {
+    "caption": "The live box: Ana (right, phone) sends her answers and switches to the new terms; the developer's box updates and See their contract scrolls to her row",
+    "kind": "video",
+    "title": "Live box (race)",
+    "section": "Developer test page",
+    "group": "tpvideo",
+    "order": 6002,
+    "size": "phone"
+  },
+  "tp-stop-once-pay-phone.png": {
+    "caption": "Stop-once on Pay: Ben sent his answers since the page loaded, listed under the button",
+    "kind": "image",
+    "title": "Pay stops once",
+    "section": "Developer test page",
+    "group": "tpvideo",
+    "order": 6003,
+    "size": "phone"
+  },
+  "tp-stop-once-phone.webm": {
+    "caption": "Stop-once: Ben (right, phone) sends his answers while the developer presses Pay for Ana; Pay stops once and lists the change, the second press goes ahead",
+    "kind": "video",
+    "title": "Pay stops once (race)",
+    "section": "Developer test page",
+    "group": "tpvideo",
+    "order": 6004,
+    "size": "phone"
+  },
+  "tp-stop-once-stop-phone.png": {
+    "caption": "Stop-once after a pop-up: Cam left while the Stop pop-up was open; the press didn't go through and the change shows under Stop",
+    "kind": "image",
+    "title": "Stop stops once",
+    "section": "Developer test page",
+    "group": "tpvideo",
+    "order": 6005,
+    "size": "phone"
+  },
+  "tp-stop-once-invite-phone.png": {
+    "caption": "Invite stops once: Fay removed iPhone and iPad from her profile after the page loaded",
+    "kind": "image",
+    "title": "Invite stops once",
+    "section": "Developer test page",
+    "group": "tpvideo",
+    "order": 6006,
+    "size": "phone"
+  },
+  "tp-team-paused-phone.webm": {
+    "caption": "The team pauses the test: End early is refused (“you can only stop it”) and the banner explains",
+    "kind": "video",
+    "title": "Team pauses the test",
+    "section": "Developer test page",
+    "group": "tpvideo",
+    "order": 6007,
+    "size": "phone"
+  },
+  "tp-team-stopped-phone.webm": {
+    "caption": "The team stops the test while a call is being requested: the request is refused, the page moves to the top and the banner names the press that didn't go through",
+    "kind": "video",
+    "title": "Team stops the test",
+    "section": "Developer test page",
+    "group": "tpstop",
+    "order": 7001,
+    "size": "phone"
+  },
+  "tester-dashboard-boxes-phone.png": {
+    "caption": "The tester dashboard: To do, Charge or cancel, Tests you left, and a test paused by its developer (tagged Paused)",
+    "kind": "image",
+    "title": "Tester dashboard boxes",
+    "section": "Tester dashboard and Find",
+    "group": "check",
+    "order": 8001,
+    "size": "phone"
+  },
+  "money-decline-hold.webm": {
+    "caption": "The card is declined on Pay: a payment hold starts at once and the page moves to the dashboard top, where the blue box says the press didn't go through and how to resume",
+    "kind": "video",
+    "title": "Declined Pay → hold",
+    "section": "Payments",
+    "group": "money",
+    "order": 9001,
+    "size": "desktop"
+  },
+  "money-hold-box.png": {
+    "caption": "The dashboard top during a payment hold: the press didn't go through, the tests are paused with testers still in them, and “Pay what you owe” opens Payments",
+    "kind": "image",
+    "title": "The blue box on a payment hold",
+    "section": "Payments",
+    "group": "money",
+    "order": 9002,
+    "size": "desktop"
+  },
+  "money-hold-tester.png": {
+    "caption": "Ana's page meanwhile: the test is paused and her payment may be delayed (never “hold” or “declined”)",
+    "kind": "image",
+    "title": "What the tester reads",
+    "section": "Payments",
+    "group": "money",
+    "order": 9003,
+    "size": "desktop"
+  },
+  "money-owed.png": {
+    "caption": "Payments during the hold: each declined payment listed, and one button pays them all",
+    "kind": "image",
+    "title": "Pay what you owe",
+    "section": "Payments",
+    "group": "money",
+    "order": 9004,
+    "size": "desktop"
+  },
+  "money-retry-failed.png": {
+    "caption": "The daily automatic retry was declined too: no bell, the box shows the last try and the next one",
+    "kind": "image",
+    "title": "A retry that fails",
+    "section": "Payments",
+    "group": "money",
+    "order": 9005,
+    "size": "desktop"
+  },
+  "money-retry-lift.webm": {
+    "caption": "With a working card the next day's retry pays what was owed: the open Payments box disappears by itself, and the dashboard is back to normal",
+    "kind": "video",
+    "title": "A retry pays, the hold lifts",
+    "section": "Payments",
+    "group": "money",
+    "order": 9006,
+    "size": "desktop"
+  },
+  "money-retry-bells.png": {
+    "caption": "“We charged your card $10.00 for what you owed.” and “Your tests are running again”",
+    "kind": "image",
+    "title": "The developer's bell",
+    "section": "Payments",
+    "group": "money",
+    "order": 9007,
+    "size": "desktop"
+  },
+  "money-retry-tester-bell.png": {
+    "caption": "Ana reads that the test paused and ran again, and that she was paid once the payment went through",
+    "kind": "image",
+    "title": "The tester's bell",
+    "section": "Payments",
+    "group": "money",
+    "order": 9008,
+    "size": "desktop"
+  },
+  "money-chargeback-starts.webm": {
+    "caption": "The bank reverses a $10 payment while the test page is open: a chargeback hold starts and the page moves to the dashboard top",
+    "kind": "video",
+    "title": "A chargeback arrives",
+    "section": "Payments",
+    "group": "money",
+    "order": 9009,
+    "size": "desktop"
+  },
+  "money-chargeback-fee.png": {
+    "caption": "Payments: the three steps of a chargeback hold, and what is owed: “Your bank reversed a $10 payment: $10 + $15 chargeback fee”",
+    "kind": "image",
+    "title": "$10 + the $15 fee",
+    "section": "Payments",
+    "group": "money",
+    "order": 9010,
+    "size": "desktop"
+  },
+  "admin-chargeback-open.png": {
+    "caption": "The admin's Chargeback holds list: the reversed payment, the card check and what is owed, and Approve (faded until both are done)",
+    "kind": "image",
+    "title": "Admin: a chargeback hold",
+    "section": "Admin console",
+    "group": "money",
+    "order": 9011,
+    "size": "desktop"
+  },
+  "money-chargeback-paid.png": {
+    "caption": "$25 paid: the chargeback hold stays until the card check and the team's Approve",
+    "kind": "image",
+    "title": "Paid, but still on hold",
+    "section": "Payments",
+    "group": "money",
+    "order": 9012,
+    "size": "desktop"
+  },
+  "money-chargeback-won.webm": {
+    "caption": "The platform wins the chargeback while Payments is open: the hold lifts and the $25 paid for it is refunded, shown in What you've paid",
+    "kind": "video",
+    "title": "The chargeback is won",
+    "section": "Payments",
+    "group": "money",
+    "order": 9013,
+    "size": "desktop"
+  },
+  "money-chargeback-refund.png": {
+    "caption": "What you've paid: the repaid chargeback marked “refunded (your bank's chargeback was reversed)”",
+    "kind": "image",
+    "title": "The refund line",
+    "section": "Payments",
+    "group": "money",
+    "order": 9014,
+    "size": "desktop"
+  },
+  "money-chargeback-bells.png": {
+    "caption": "The developer's bell from start to end: the hold, the receipt, the refund and “Your bank's chargeback of $10.00 was reversed in your favour.”",
+    "kind": "image",
+    "title": "Chargeback bell lines",
+    "section": "Payments",
+    "group": "money",
+    "order": 9015,
+    "size": "desktop"
+  },
+  "admin-chargeback-won.png": {
+    "caption": "The developer has left the Chargeback holds list",
+    "kind": "image",
+    "title": "Admin: after a won chargeback",
+    "section": "Admin console",
+    "group": "money",
+    "order": 9016,
+    "size": "desktop"
+  },
+  "cbhold-steps.png": {
+    "caption": "A card verified with 3D Secure, what is owed paid ($12 + the $15 fee), and the team's approval; paying alone doesn't lift it",
+    "kind": "image",
+    "title": "Chargeback hold: three steps",
+    "section": "Payments",
+    "group": "cbhold",
+    "order": 10001,
+    "size": "desktop"
+  },
+  "cbhold-admin-ready.png": {
+    "caption": "Card verified ✓ and owed paid ✓: Approve is now available",
+    "kind": "image",
+    "title": "Admin: ready to approve",
+    "section": "Admin console",
+    "group": "cbhold",
+    "order": 10003,
+    "size": "desktop"
+  },
+  "cbhold-lift.webm": {
+    "caption": "The developer (left) verifies a card and pays what is owed; the admin (right) approves; the hold lifts and the dashboard is back to normal",
+    "kind": "video",
+    "title": "Card check, pay, Approve",
+    "section": "Payments",
+    "group": "cbhold",
+    "order": 10004,
+    "size": "desktop"
+  },
+  "cbhold-bells.png": {
+    "caption": "The chargeback hold, the receipts and “Your tests are running again”",
+    "kind": "image",
+    "title": "Bell lines",
+    "section": "Payments",
+    "group": "cbhold",
+    "order": 10005,
+    "size": "desktop"
+  },
+  "cbhold-tester-bell.png": {
+    "caption": "Ana reads that the test paused and ran again, never “chargeback” or “hold”",
+    "kind": "image",
+    "title": "The tester's side",
+    "section": "Payments",
+    "group": "cbhold",
+    "order": 10006,
+    "size": "desktop"
+  },
+  "bank-press-cancelled.png": {
+    "caption": "The bank's pop-up was cancelled: “Your bank didn't confirm the payment, so nothing was charged.” No hold",
+    "kind": "image",
+    "title": "Not confirmed: nothing charged",
+    "section": "Payments",
+    "group": "bank",
+    "order": 11001,
+    "size": "desktop"
+  },
+  "bank-press.webm": {
+    "caption": "Nora presses Pay and her bank asks her to confirm: cancelled, nothing is charged; pressed again and confirmed, Ana is paid",
+    "kind": "video",
+    "title": "Pay with a bank check",
+    "section": "Payments",
+    "group": "bank",
+    "order": 11002,
+    "size": "desktop"
+  },
+  "bank-away-tester.png": {
+    "caption": "Ben charged for his unreviewed answers: “Charged $10.00. Payment may be delayed.”",
+    "kind": "image",
+    "title": "The tester's side",
+    "section": "Payments",
+    "group": "bank",
+    "order": 11003,
+    "size": "desktop"
+  },
+  "bank-away-bell.png": {
+    "caption": "Nora's bell (also emailed, even with email Off): “Your bank wants you to confirm a $10.00 payment. Confirm it in Payments by <date>.”",
+    "kind": "image",
+    "title": "Confirm it in Payments",
+    "section": "Payments",
+    "group": "bank",
+    "order": 11004,
+    "size": "desktop"
+  },
+  "bank-confirm-list.png": {
+    "caption": "Payments lists the payment waiting for her bank, with Confirm",
+    "kind": "image",
+    "title": "The Confirm button",
+    "section": "Payments",
+    "group": "bank",
+    "order": 11005,
+    "size": "desktop"
+  },
+  "bank-confirmed.png": {
+    "caption": "After Confirm the list is gone and the payment shows in What you've paid",
+    "kind": "image",
+    "title": "Confirmed",
+    "section": "Payments",
+    "group": "bank",
+    "order": 11006,
+    "size": "desktop"
+  },
+  "bank-locked.png": {
+    "caption": "Cam presses Charge while Nora's bank pop-up for the same answers is open: “A payment for this is being confirmed right now.”",
+    "kind": "image",
+    "title": "Locked while the bank confirms",
+    "section": "Payments",
+    "group": "bank",
+    "order": 11007,
+    "size": "desktop"
+  },
+  "plans-free-launch.png": {
+    "caption": "With FREE_UNTIL unset (today's setting) Payments says everything is included, with nothing to subscribe to yet",
+    "kind": "image",
+    "title": "Free during launch",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12001,
+    "size": "desktop"
+  },
+  "plans-free-plan.png": {
+    "caption": "After the free launch: one open test at a time, the perks a subscription adds, and Subscribe for $7/month",
+    "kind": "image",
+    "title": "The free plan",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12002,
+    "size": "desktop"
+  },
+  "plans-second-test.png": {
+    "caption": "Post is refused under the button: “You already have an open test. Subscribe ($7/month) to run several at once.” The form keeps what was typed",
+    "kind": "image",
+    "title": "A second open test",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12003,
+    "size": "desktop"
+  },
+  "plans-perk-refused.png": {
+    "caption": "Next round and Invite testers carry a “Subscribers” tag; a press is refused: “Next round needs a subscription ($7/month).”",
+    "kind": "image",
+    "title": "Perks on the free plan",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12004,
+    "size": "desktop"
+  },
+  "plans-subscribed.png": {
+    "caption": "Active since today, renews in a month, with Cancel subscription",
+    "kind": "image",
+    "title": "Subscribed",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12005,
+    "size": "desktop"
+  },
+  "plans-cancelled.png": {
+    "caption": "The perks last until the end of the paid month; Keep my subscription undoes it",
+    "kind": "image",
+    "title": "Cancelled",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12006,
+    "size": "desktop"
+  },
+  "plans-past-due.png": {
+    "caption": "“Your $7 subscription payment didn't go through. Update your card by <date> to keep it.” The perks continue meanwhile",
+    "kind": "image",
+    "title": "A declined renewal",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12007,
+    "size": "desktop"
+  },
+  "plans-lapsed-live.png": {
+    "caption": "The subscription lapsed while the test page was open: “Your subscription ended.” in the live box (a press would stop once for it)",
+    "kind": "image",
+    "title": "The open page is told",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12008,
+    "size": "desktop"
+  },
+  "plans-lapse.webm": {
+    "caption": "The last retry fails while the test page is open: the live box says “Your subscription ended.” The running test carries on; only new uses of a perk are refused",
+    "kind": "video",
+    "title": "The subscription lapses",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12009,
+    "size": "desktop"
+  },
+  "plans-lapsed.png": {
+    "caption": "Back on the free plan: “Your subscription ended because the payment didn't go through.” and Subscribe again",
+    "kind": "image",
+    "title": "Lapsed",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12010,
+    "size": "desktop"
+  },
+  "plans-bells.png": {
+    "caption": "Subscribed, cancelled, the declined renewal and the lapse (the last two also emailed with email Off)",
+    "kind": "image",
+    "title": "Subscription bell lines",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12011,
+    "size": "desktop"
+  },
+  "holds-suspend-routing.webm": {
+    "caption": "The team suspends the developer while the test page (left) and Messages (right) are open: both move to the dashboard top; Post a test, typed in afterwards, is closed too",
+    "kind": "video",
+    "title": "Suspended while pages are open",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14001,
+    "size": "desktop"
+  },
+  "holds-suspended-box.png": {
+    "caption": "All tests paused with testers still in them, what stays open, and how to appeal through Contact us",
+    "kind": "image",
+    "title": "The blue box: suspended",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14002,
+    "size": "desktop"
+  },
+  "holds-settings-open.png": {
+    "caption": "A suspended account keeps Settings (Contact us, email, delete account); the profile editor is hidden",
+    "kind": "image",
+    "title": "Settings stays open",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14003,
+    "size": "desktop"
+  },
+  "holds-tester-banner.png": {
+    "caption": "Ana's session page: the blue paused banner lists only what still works (never “suspended”)",
+    "kind": "image",
+    "title": "The tester's side",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14004,
+    "size": "desktop"
+  },
+  "holds-both.png": {
+    "caption": "Ana's Charge was declined during the suspension: the same blue box now also says how to pay what is owed",
+    "kind": "image",
+    "title": "Suspended and on hold",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14005,
+    "size": "desktop"
+  },
+  "holds-paid-still-suspended.png": {
+    "caption": "“Your payment went through. Your tests stay paused while your account is suspended.” instead of “running again”",
+    "kind": "image",
+    "title": "Paid, still suspended",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14006,
+    "size": "desktop"
+  },
+  "holds-reinstated.png": {
+    "caption": "The dashboard top after the team lifts the suspension: “Your account is active again”, and the tests run again",
+    "kind": "image",
+    "title": "Active again",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14007,
+    "size": "desktop"
+  },
+  "holds-tester-suspended.png": {
+    "caption": "Cam's dashboard: removed from their tests, pay for accepted work still reaches Stripe, how to appeal, and the tests they were removed from",
+    "kind": "image",
+    "title": "A suspended tester",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14008,
+    "size": "desktop"
+  },
+  "holds-tester-routing.webm": {
+    "caption": "Cam's session page moves to the dashboard top, where the blue box explains",
+    "kind": "video",
+    "title": "A tester is suspended",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14009,
+    "size": "desktop"
+  },
+  "holds-tester-reinstated.png": {
+    "caption": "The test Cam was removed from waits with “You were removed from this test” and Ask to rejoin",
+    "kind": "image",
+    "title": "Tester active again",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14010,
+    "size": "desktop"
+  },
+  "holds-dev-deleted-review.png": {
+    "caption": "Ben's answers were still under review: “Omar Reyes deleted their account, so this can't be paid.”",
+    "kind": "image",
+    "title": "The developer deleted their account",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14011,
+    "size": "desktop"
+  },
+  "holds-dev-deleted-charge.png": {
+    "caption": "Dee's part was already open to Charge before the deletion: she can still charge or let it go",
+    "kind": "image",
+    "title": "Charge stays open",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14012,
+    "size": "desktop"
+  },
+  "alerts-before.png": {
+    "caption": "Ben sent his answers after the page loaded: Pay stops once and lists it under the button",
+    "kind": "image",
+    "title": "Before: Work sent stops Pay",
+    "section": "Developer test page",
+    "group": "alerts",
+    "order": 15001,
+    "size": "desktop"
+  },
+  "alerts-menu-ticked.png": {
+    "caption": "Ticked types no longer stop your buttons; they still show, greyed, in the live box",
+    "kind": "image",
+    "title": "Alerts: Work sent ticked",
+    "section": "Developer test page",
+    "group": "alerts",
+    "order": 15002,
+    "size": "desktop"
+  },
+  "alerts-after.png": {
+    "caption": "Dee sent her answers after the page loaded, but Work sent is ticked: Pay for Cam went straight through",
+    "kind": "image",
+    "title": "After: no stop",
+    "section": "Developer test page",
+    "group": "alerts",
+    "order": 15003,
+    "size": "desktop"
+  },
+  "alerts-greyed.png": {
+    "caption": "A ticked type still shows in the live box, greyed (“You turned these stops off in Alerts” on hover)",
+    "kind": "image",
+    "title": "Still listed, greyed",
+    "section": "Developer test page",
+    "group": "alerts",
+    "order": 15004,
+    "size": "desktop"
+  },
+  "alerts-flow.webm": {
+    "caption": "With Work sent on, a tester's new answers stop Pay once; after ticking it in Alerts, the next Pay goes straight through and the line shows greyed",
+    "kind": "video",
+    "title": "Alerts stop one kind of stop",
+    "section": "Developer test page",
+    "group": "alerts",
+    "order": 15005,
+    "size": "desktop"
+  },
+  "excerpt-picker.png": {
+    "caption": "Ana picks one paid answer and trims it (10 to 500 characters); “Don't name the product” is ticked by default",
+    "kind": "image",
+    "title": "The picker",
+    "section": "Tester session page",
+    "group": "excerpts",
+    "order": 16001,
+    "size": "desktop"
+  },
+  "excerpt-ask.webm": {
+    "caption": "Ana opens the picker on a paid written part, trims her answer and asks Nora",
+    "kind": "video",
+    "title": "Asking for an excerpt",
+    "section": "Tester session page",
+    "group": "excerpts",
+    "order": 16002,
+    "size": "desktop"
+  },
+  "excerpt-needs-you.png": {
+    "caption": "The quote, whether it names the product, and Allow or Deny",
+    "kind": "image",
+    "title": "Excerpt request in Needs you",
+    "section": "Developer test page",
+    "group": "excerpts",
+    "order": 16003,
+    "size": "desktop"
+  },
+  "excerpt-hover.png": {
+    "caption": "Ana's shown excerpts on her hover card",
+    "kind": "image",
+    "title": "On the hover card",
+    "section": "Developer test page",
+    "group": "excerpts",
+    "order": 16004,
+    "size": "desktop"
+  },
+  "excerpt-row.png": {
+    "caption": "The excerpt shown from this test, with Take down",
+    "kind": "image",
+    "title": "In the tester's row",
+    "section": "Developer test page",
+    "group": "excerpts",
+    "order": 16005,
+    "size": "desktop"
+  },
+  "excerpt-profile.png": {
+    "caption": "Shown excerpts as plain quotes; the one that names the product says so",
+    "kind": "image",
+    "title": "On Ana's profile",
+    "section": "Tester session page",
+    "group": "excerpts",
+    "order": 16006,
+    "size": "desktop"
+  },
+  "excerpt-limit.png": {
+    "caption": "A 4th request while 3 are shown or pending: “You can show at most 3 excerpts. Remove one first.”",
+    "kind": "image",
+    "title": "At most 3",
+    "section": "Tester session page",
+    "group": "excerpts",
+    "order": 16007,
+    "size": "desktop"
+  },
+  "excerpt-nda-refused.png": {
+    "caption": "Ana's page loaded before the NDA: her press is refused, “This test now has an NDA, so its work can't be shown as an excerpt.”",
+    "kind": "image",
+    "title": "An NDA added meanwhile",
+    "section": "Tester session page",
+    "group": "excerpts",
+    "order": 16008,
+    "size": "desktop"
+  },
+  "excerpt-settings.png": {
+    "caption": "Pending, shown and denied excerpts with Remove; the one from a test that now has an NDA reads “Hidden while … has an NDA”",
+    "kind": "image",
+    "title": "Ana's list in Settings",
+    "section": "Tester session page",
+    "group": "excerpts",
+    "order": 16009,
+    "size": "desktop"
+  },
+  "excerpt-bells.png": {
+    "caption": "“Your excerpt from … is now on your profile.”, “Nora Lane prefers that work from … isn't shown on profiles.” and “Nora Lane took down the excerpt from …”",
+    "kind": "image",
+    "title": "Decisions as bell lines",
+    "section": "Tester session page",
+    "group": "excerpts",
+    "order": 16010,
+    "size": "desktop"
+  },
+  "excerpt-restricted-box.png": {
+    "caption": "Omar is on a payment hold: his test pages are closed, so Ana's request waits under the blue box with Allow and Deny",
+    "kind": "image",
+    "title": "Restricted developer: the excerpt box",
+    "section": "Developer dashboard",
+    "group": "excerpts",
+    "order": 16011,
+    "size": "desktop"
+  },
+  "long-find-card.png": {
+    "caption": "Find tests shows 3 lines of the steps, then Show more",
+    "kind": "image",
+    "title": "1,000-character steps on a card",
+    "section": "Tester dashboard and Find",
+    "group": "long",
+    "order": 17001,
+    "size": "desktop"
+  },
+  "long-join.png": {
+    "caption": "The 1,000-character steps in full, the 1,000-character NDA in its scroll box, and the deadline with the time left",
+    "kind": "image",
+    "title": "The join page with long text",
+    "section": "Join page",
+    "group": "long",
+    "order": 17002,
+    "size": "desktop"
+  },
+  "long-dev-card.png": {
+    "caption": "3 lines, then Show more",
+    "kind": "image",
+    "title": "Long steps on the developer's card",
+    "section": "Developer dashboard",
+    "group": "long",
+    "order": 17003,
+    "size": "desktop"
+  },
+  "long-questions-form.png": {
+    "caption": "The answer form shows every question in full, each with its own box and formatting bar",
+    "kind": "image",
+    "title": "20 questions of 300 characters",
+    "section": "Tester session page",
+    "group": "long",
+    "order": 17004,
+    "size": "desktop"
+  },
+  "many-overview.png": {
+    "caption": "The overview keeps the long title in full where it's the main content: 50 of 50 spots used",
+    "kind": "image",
+    "title": "A long title and 50 testers",
+    "section": "Developer test page",
+    "group": "many",
+    "order": 18001,
+    "size": "desktop"
+  },
+  "many-needs-you.png": {
+    "caption": "Needs you lists one fold per person; long names are cut with “…” and shown in full on hover",
+    "kind": "image",
+    "title": "12 people waiting",
+    "section": "Developer test page",
+    "group": "many",
+    "order": 18002,
+    "size": "desktop"
+  },
+  "many-testers.png": {
+    "caption": "The avatar row and the tester rows in their own scroll box, so 50 rows never push the page down",
+    "kind": "image",
+    "title": "50 testers",
+    "section": "Developer test page",
+    "group": "many",
+    "order": 18003,
+    "size": "desktop"
+  },
+  "many-live.png": {
+    "caption": "The tick list of testers stays a compact list",
+    "kind": "image",
+    "title": "50 testers in Live session",
+    "section": "Developer test page",
+    "group": "many",
+    "order": 18004,
+    "size": "desktop"
+  },
+  "many-dev-card.png": {
+    "caption": "Long titles are cut with “…”, the full text on hover",
+    "kind": "image",
+    "title": "A long title on a card",
+    "section": "Developer dashboard",
+    "group": "many",
+    "order": 18005,
+    "size": "desktop"
+  },
+  "many-tester-dash.png": {
+    "caption": "The developer's long name and the long title in the tester's dashboard rows",
+    "kind": "image",
+    "title": "Long names on the tester's side",
+    "section": "Tester dashboard and Find",
+    "group": "many",
+    "order": 18006,
+    "size": "desktop"
+  },
+  "long-offer-box.png": {
+    "caption": "The NDA before and offered, each in a 12-line scroll box, and the questions as 3 then “+N more”",
+    "kind": "image",
+    "title": "The offer box with long text",
+    "section": "Tester session page",
+    "group": "long",
+    "order": 17005,
+    "size": "desktop"
+  },
+  "long-terms-history.png": {
+    "caption": "“NDA then and now” as two scroll boxes and “Questions then and now” as 3 then “+N more”",
+    "kind": "image",
+    "title": "Terms history",
+    "section": "Tester session page",
+    "group": "long",
+    "order": 17006,
+    "size": "desktop"
+  },
+  "long-answer-counter.png": {
+    "caption": "The live counter “N / 50,000” and the Bold, Italic and Code block bar",
+    "kind": "image",
+    "title": "A long written answer",
+    "section": "Tester session page",
+    "group": "long",
+    "order": 17007,
+    "size": "desktop"
+  },
+  "long-answer-dev.png": {
+    "caption": "The developer reads it formatted inside the piece's scroll box (about 16 lines); the Pay box stays below, always visible",
+    "kind": "image",
+    "title": "50,000 characters, formatted",
+    "section": "Developer test page",
+    "group": "long",
+    "order": 17008,
+    "size": "desktop"
+  },
+  "keysrace-b-notice.png": {
+    "caption": "Tab B's Save stops once for the two joins it hadn't seen (K-2 and K-3 are no longer free); the second press saves",
+    "kind": "image",
+    "title": "Tab B: its own blue notice",
+    "section": "Edit",
+    "group": "keysrace",
+    "order": 19001,
+    "size": "desktop"
+  },
+  "keysrace-a-keys.png": {
+    "caption": "The blue note says what the other tab changed; red marks K-2 (ticked here, given to Ben meanwhile) and too few free keys for the open spots",
+    "kind": "image",
+    "title": "Tab A: the key boxes after the race",
+    "section": "Edit",
+    "group": "keysrace",
+    "order": 19002,
+    "size": "desktop"
+  },
+  "keysrace-a-notice.png": {
+    "caption": "The red mistakes and the blue “since you opened this page” list: the joins and the other tab's key changes",
+    "kind": "image",
+    "title": "Tab A: the notice under Save",
+    "section": "Edit",
+    "group": "keysrace",
+    "order": 19003,
+    "size": "desktop"
+  },
+  "keysrace-a-second.png": {
+    "caption": "Pressed again with the red unfixed: refused, nothing saved",
+    "kind": "image",
+    "title": "Tab A: the second Save",
+    "section": "Edit",
+    "group": "keysrace",
+    "order": 19004,
+    "size": "desktop"
+  },
+  "keysrace.webm": {
+    "caption": "Tab A (left) ticks K-2, K-6, K-7 and types N-1; Ben and Cam join and get K-2 and K-3; tab B (right) removes K-4, K-5, K-8, adds B-1 and saves after its own blue notice; A's Save shows the blue notice and the red marks, the second press is refused, and A saves after pressing Keep on K-2 and adding a key",
+    "kind": "video",
+    "title": "Access keys race (two tabs)",
+    "section": "Edit",
+    "group": "keysrace",
+    "order": 19005,
+    "size": "desktop"
+  },
+  "keysrace-notice-after.png": {
+    "caption": "The read-only box on the test page: free keys as chips with the open spots, and each given key with its tester",
+    "kind": "image",
+    "title": "The Access keys notice afterwards",
+    "section": "Developer test page",
+    "group": "keysrace",
+    "order": 19006,
+    "size": "desktop"
+  },
+  "changedq-dev-before.png": {
+    "caption": "Ana's sent answers under the three questions they answered",
+    "kind": "image",
+    "title": "Developer, before",
+    "section": "Developer test page",
+    "group": "changedq",
+    "order": 20001,
+    "size": "desktop"
+  },
+  "changedq-draft.png": {
+    "caption": "She rewrites her answer to Q1 and doesn't send it yet",
+    "kind": "image",
+    "title": "Ana's draft",
+    "section": "Tester session page",
+    "group": "changedq",
+    "order": 20002,
+    "size": "desktop"
+  },
+  "changedq-edit-before.png": {
+    "caption": "Before the change: “Changes left: 3 of 3” next to the questions",
+    "kind": "image",
+    "title": "Edit: questions, 3 changes left",
+    "section": "Edit",
+    "group": "changedq",
+    "order": 20003,
+    "size": "desktop"
+  },
+  "changedq-edit-after.png": {
+    "caption": "After saving the new Q2: “Changes left: 2 of 3”",
+    "kind": "image",
+    "title": "Edit: 2 changes left",
+    "section": "Edit",
+    "group": "changedq",
+    "order": 20004,
+    "size": "desktop"
+  },
+  "changedq-offer.png": {
+    "caption": "“Nora Lane updated the listing: questions changed.” Before and after, with Switch or Keep",
+    "kind": "image",
+    "title": "The offer",
+    "section": "Tester session page",
+    "group": "changedq",
+    "order": 20005,
+    "size": "desktop"
+  },
+  "changedq-form.png": {
+    "caption": "Q1 keeps her unsent draft, Q2 is the new question and empty, Q3 is unchanged and keeps its answer",
+    "kind": "image",
+    "title": "The form above Send",
+    "section": "Tester session page",
+    "group": "changedq",
+    "order": 20006,
+    "size": "desktop"
+  },
+  "changedq-previous.png": {
+    "caption": "The whole earlier set, all of Q1 to Q3, as it was: read-only, newest first",
+    "kind": "image",
+    "title": "Previous questions and answers",
+    "section": "Tester session page",
+    "group": "changedq",
+    "order": 20007,
+    "size": "desktop"
+  },
+  "changedq-switch.webm": {
+    "caption": "Ana switches: Q1's draft stays, the new Q2 starts empty, Q3 keeps its answer, and the earlier set waits in its fold",
+    "kind": "video",
+    "title": "Switching to changed questions",
+    "section": "Tester session page",
+    "group": "changedq",
+    "order": 20008,
+    "size": "desktop"
+  },
+  "changedq-dev-after-switch.png": {
+    "caption": "Still the set Ana last sent, labelled “Sent for the questions until <date>”, reviewed at the price it was sent at",
+    "kind": "image",
+    "title": "Developer, after the switch",
+    "section": "Developer test page",
+    "group": "changedq",
+    "order": 20009,
+    "size": "desktop"
+  },
+  "changedq-dev-after-send.png": {
+    "caption": "The new set under the current questions",
+    "kind": "image",
+    "title": "Developer, after she sends again",
+    "section": "Developer test page",
+    "group": "changedq",
+    "order": 20010,
+    "size": "desktop"
+  },
+  "changedq-dev-previous.png": {
+    "caption": "Ana's row keeps the earlier sent set in “Previous questions and answers”",
+    "kind": "image",
+    "title": "Developer: the earlier set",
+    "section": "Developer test page",
+    "group": "changedq",
+    "order": 20011,
+    "size": "desktop"
+  },
+  "paused-banner-full.png": {
+    "caption": "Ana's banner lists only what she can do now (drafts, charge or let go, rate, leave, cancel her booked call) and says her deadline is paused too",
+    "kind": "image",
+    "title": "The paused banner",
+    "section": "Tester session page",
+    "group": "paused",
+    "order": 21001,
+    "size": "desktop"
+  },
+  "paused-live.webm": {
+    "caption": "The blue banner appears; Send, the call-request tools, Join and the chat box are hidden until it resumes",
+    "kind": "video",
+    "title": "The test is paused while the page is open",
+    "section": "Tester session page",
+    "group": "paused",
+    "order": 21002,
+    "size": "desktop"
+  },
+  "paused-page.png": {
+    "caption": "Only what works is shown: the banner, Charge or Let it go (payment may be delayed), Cancel on the booked call, Rate and Leave; no Send, no call requests, “Chat is paused while the test is paused.”",
+    "kind": "image",
+    "title": "A paused session page",
+    "section": "Tester session page",
+    "group": "paused",
+    "order": 21003,
+    "size": "desktop"
+  },
+  "paused-banner-short.png": {
+    "caption": "Ben has nothing to charge and no calls: his banner offers only drafts, rate and leave",
+    "kind": "image",
+    "title": "A shorter banner",
+    "section": "Tester session page",
+    "group": "paused",
+    "order": 21004,
+    "size": "desktop"
+  },
+  "paused-dash-tag.png": {
+    "caption": "The tester's dashboard row keeps the test with a “Paused” tag",
+    "kind": "image",
+    "title": "The Paused tag",
+    "section": "Tester dashboard and Find",
+    "group": "paused",
+    "order": 21005,
+    "size": "desktop"
+  },
+  "paused-join.png": {
+    "caption": "Not listed in Find tests; opening the link says “This test isn't available right now.”",
+    "kind": "image",
+    "title": "Paused, for someone not in it",
+    "section": "Join page",
+    "group": "paused",
+    "order": 21006,
+    "size": "desktop"
+  },
+  "paused-bells.png": {
+    "caption": "The tester's bell: the test was paused by the team, then “… is running again” with the deadline moved on",
+    "kind": "image",
+    "title": "Paused and running again",
+    "section": "Tester session page",
+    "group": "paused",
+    "order": 21007,
+    "size": "desktop"
+  },
+  "stopped-live.webm": {
+    "caption": "The developer (left) stops the test; Ana's open page (right) says so, and both pages keep only what still works",
+    "kind": "video",
+    "title": "Stopping a test",
+    "section": "Developer test page",
+    "group": "stopped",
+    "order": 22001,
+    "size": "desktop"
+  },
+  "stopped-dev-page.png": {
+    "caption": "No Edit, Stop, End early, Invite or call requests; Needs you (Pay, Reject, the call's length), the Testers panel, past calls, Alerts and Next round stay",
+    "kind": "image",
+    "title": "The stopped test page",
+    "section": "Developer test page",
+    "group": "stopped",
+    "order": 22002,
+    "size": "desktop"
+  },
+  "stopped-tester-page.png": {
+    "caption": "Her agreed scope, each part with its status, the work she sent, and what still works: Charge or Let it go later, Dispute, Rate",
+    "kind": "image",
+    "title": "The tester's stopped page",
+    "section": "Tester session page",
+    "group": "stopped",
+    "order": 22003,
+    "size": "desktop"
+  },
+  "stopped-tester-calls.png": {
+    "caption": "Ben's booked call was cancelled by the stop; the call that already happened stays listed",
+    "kind": "image",
+    "title": "Calls after a stop",
+    "section": "Tester session page",
+    "group": "stopped",
+    "order": 22004,
+    "size": "desktop"
+  },
+  "stopped-dev-card.png": {
+    "caption": "Stopped, with what still needs the developer",
+    "kind": "image",
+    "title": "A stopped card",
+    "section": "Developer dashboard",
+    "group": "stopped",
+    "order": 22005,
+    "size": "desktop"
+  },
+  "stopped-tester-dash.png": {
+    "caption": "The stopped test with its parts still under review",
+    "kind": "image",
+    "title": "The tester's dashboard after a stop",
+    "section": "Tester dashboard and Find",
+    "group": "stopped",
+    "order": 22006,
+    "size": "desktop"
+  },
+  "stopped-bells.png": {
+    "caption": "“Nora Lane stopped …” and the cancelled call, as the testers read them",
+    "kind": "image",
+    "title": "Stop bell lines",
+    "section": "Notifications and emails",
+    "group": "stopped",
+    "order": 22007,
+    "size": "desktop"
+  },
+  "drafts-next-round.webm": {
+    "caption": "The draft “(round 2)” opens in Post a test, filled in from the test",
+    "kind": "video",
+    "title": "Next round makes a draft",
+    "section": "Post a test",
+    "group": "drafts",
+    "order": 23001,
+    "size": "desktop"
+  },
+  "drafts-card.png": {
+    "caption": "Draft: the next round, not open yet; clicking it opens Post a test",
+    "kind": "image",
+    "title": "A draft card",
+    "section": "Developer dashboard",
+    "group": "drafts",
+    "order": 23002,
+    "size": "desktop"
+  },
+  "drafts-post-page.png": {
+    "caption": "Its own test page and Edit redirect here; Post the test opens it for testers",
+    "kind": "image",
+    "title": "A draft opens in Post a test",
+    "section": "Post a test",
+    "group": "drafts",
+    "order": 23003,
+    "size": "desktop"
+  },
+  "drafts-delete.png": {
+    "caption": "The confirm pop-up: nobody has joined it, so nothing else changes",
+    "kind": "image",
+    "title": "Deleting a draft",
+    "section": "Post a test",
+    "group": "drafts",
+    "order": 23004,
+    "size": "desktop"
+  },
+  "drafts-posted.png": {
+    "caption": "Round 2 is open for testers, on its own test page",
+    "kind": "image",
+    "title": "Posted from the draft",
+    "section": "Post a test",
+    "group": "drafts",
+    "order": 23005,
+    "size": "desktop"
+  },
+  "settings-dev.png": {
+    "caption": "Developer, tester or both; the profile; Contact us; email; and Delete account",
+    "kind": "image",
+    "title": "Settings",
+    "section": "Settings and account",
+    "group": "settings",
+    "order": 25001,
+    "size": "desktop"
+  },
+  "settings-contact-sent.png": {
+    "caption": "The message goes to the team by email with the sender's name and address",
+    "kind": "image",
+    "title": "Contact us",
+    "section": "Settings and account",
+    "group": "settings",
+    "order": 25002,
+    "size": "desktop"
+  },
+  "settings-contact-limit.png": {
+    "caption": "The 6th press: “You've sent 5 messages today. We'll reply by email.”",
+    "kind": "image",
+    "title": "Contact us: 5 a day",
+    "section": "Settings and account",
+    "group": "settings",
+    "order": 25003,
+    "size": "desktop"
+  },
+  "admin-contact-email.png": {
+    "caption": "The email to the team's address, with the topic, the sender and the message",
+    "kind": "image",
+    "title": "Contact us, as the team receives it",
+    "section": "Admin console",
+    "group": "settings",
+    "order": 25004,
+    "size": "desktop"
+  },
+  "settings-delete-tester.png": {
+    "caption": "The warning with Ana's real numbers: work under review, a part open to Charge, what happens to sent work and calls",
+    "kind": "image",
+    "title": "Deleting a tester account",
+    "section": "Settings and account",
+    "group": "settings",
+    "order": 25005,
+    "size": "desktop"
+  },
+  "settings-delete-dev.png": {
+    "caption": "Work waiting for review, parts testers can still charge and open disputes, with counts; then what deleting does",
+    "kind": "image",
+    "title": "Deleting a developer account",
+    "section": "Settings and account",
+    "group": "settings",
+    "order": 25006,
+    "size": "desktop"
+  },
+  "tester-find.png": {
+    "caption": "Open tests with their pay, parts and deadline; ones missing a need of yours say so",
+    "kind": "image",
+    "title": "Find tests",
+    "section": "Tester dashboard and Find",
+    "group": "tester",
+    "order": 26001,
+    "size": "desktop"
+  },
+  "tester-join-deadline.png": {
+    "caption": "“Your deadline: <date> (in 2 days …)”: Open until is every tester's deadline",
+    "kind": "image",
+    "title": "The deadline before joining",
+    "section": "Join page",
+    "group": "tester",
+    "order": 26002,
+    "size": "desktop"
+  },
+  "tester-join.png": {
+    "caption": "The steps, each part and its pay, the NDA to accept, and Join",
+    "kind": "image",
+    "title": "The join page",
+    "section": "Join page",
+    "group": "tester",
+    "order": 26003,
+    "size": "desktop"
+  },
+  "tester-join-flow.webm": {
+    "caption": "Ana reads the listing, accepts the NDA and joins: she lands on her session page",
+    "kind": "video",
+    "title": "Joining",
+    "section": "Join page",
+    "group": "tester",
+    "order": 26004,
+    "size": "desktop"
+  },
+  "tester-session.png": {
+    "caption": "The live box, her agreed scope, each part, the recordings, the written part, calls and chat",
+    "kind": "image",
+    "title": "The session page",
+    "section": "Tester session page",
+    "group": "tester",
+    "order": 26005,
+    "size": "desktop"
+  },
+  "tester-written-form.png": {
+    "caption": "Bold, Italic and Code block, the live counter, and Send",
+    "kind": "image",
+    "title": "The written part",
+    "section": "Tester session page",
+    "group": "tester",
+    "order": 26006,
+    "size": "desktop"
+  },
+  "tester-recordings.png": {
+    "caption": "Record the screen here (with the microphone if allowed) or upload a file; up to 5, sent together as one piece",
+    "kind": "image",
+    "title": "Recordings",
+    "section": "Tester session page",
+    "group": "tester",
+    "order": 26007,
+    "size": "desktop"
+  },
+  "tester-dash.png": {
+    "caption": "To do (each part with Send work), the tests she's in, and invitations",
+    "kind": "image",
+    "title": "The tester dashboard",
+    "section": "Tester dashboard and Find",
+    "group": "tester",
+    "order": 26008,
+    "size": "desktop"
+  },
+  "admin-top.png": {
+    "caption": "The tiles (people, parts awaiting review, charged, the platform's share, owed to testers, waitlist), then open disputes first",
+    "kind": "image",
+    "title": "The admin dashboard",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27001,
+    "size": "desktop"
+  },
+  "admin-dispute-listed.png": {
+    "caption": "What was paid and the listing, what each side said, and the total to decide (up to the listing)",
+    "kind": "image",
+    "title": "A dispute on a listed part",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27002,
+    "size": "desktop"
+  },
+  "admin-dispute-unlisted.png": {
+    "caption": "Ben was paid $0 for written feedback that wasn't in his contract: the admin sets an amount up to the $1,000 cap",
+    "kind": "image",
+    "title": "A dispute on an unlisted part",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27003,
+    "size": "desktop"
+  },
+  "admin-decided.png": {
+    "caption": "Each decision with the amount, who decided and the note",
+    "kind": "image",
+    "title": "Decided disputes",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27004,
+    "size": "desktop"
+  },
+  "admin-dispute-bell.png": {
+    "caption": "“Your dispute on … was decided”, with the amount",
+    "kind": "image",
+    "title": "A decision as the tester reads it",
+    "section": "Notifications and emails",
+    "group": "admin",
+    "order": 27005,
+    "size": "desktop"
+  },
+  "admin-preview-suspension.png": {
+    "caption": "What suspending Nora would do right now, before pressing Suspend",
+    "kind": "image",
+    "title": "Preview a suspension",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27006,
+    "size": "desktop"
+  },
+  "admin-suspended-row.png": {
+    "caption": "The row says who suspended it, when and why, with Lift the suspension",
+    "kind": "image",
+    "title": "A suspended account",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27007,
+    "size": "desktop"
+  },
+  "admin-deleted-row.png": {
+    "caption": "The team deleted Dee's account: the row keeps who, when and why",
+    "kind": "image",
+    "title": "A deleted account",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27008,
+    "size": "desktop"
+  },
+  "admin-test-row.png": {
+    "caption": "Pause (with a reason), Stop (close), and Allow 3 more changes when a field used its 3",
+    "kind": "image",
+    "title": "A test row",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27009,
+    "size": "desktop"
+  },
+  "admins2-dispute.png": {
+    "caption": "Bo decides a dispute Ada decided a moment earlier: “This dispute was already decided by Ada Admin at <time>.”",
+    "kind": "image",
+    "title": "A dispute already decided",
+    "section": "Admin console",
+    "group": "admins2",
+    "order": 28001,
+    "size": "desktop"
+  },
+  "admins2-suspension.png": {
+    "caption": "Bo lifts a suspension Ada already lifted: “That account isn't suspended.”",
+    "kind": "image",
+    "title": "A suspension already lifted",
+    "section": "Admin console",
+    "group": "admins2",
+    "order": 28002,
+    "size": "desktop"
+  },
+  "admins2-pause.png": {
+    "caption": "Bo lifts the team's pause Ada already lifted: “That test isn't paused by the team.”",
+    "kind": "image",
+    "title": "A pause already lifted",
+    "section": "Admin console",
+    "group": "admins2",
+    "order": 28003,
+    "size": "desktop"
+  },
+  "admins2-approve.png": {
+    "caption": "Bo approves a lift Ada already approved: “This lift was already approved by Ada Admin at <time>.”",
+    "kind": "image",
+    "title": "An Approve already pressed",
+    "section": "Admin console",
+    "group": "admins2",
+    "order": 28004,
+    "size": "desktop"
+  },
+  "admins2-deleted.png": {
+    "caption": "Ada deleted Dee's account; Bo suspends it from his older page: “That account was deleted.”",
+    "kind": "image",
+    "title": "An account already deleted",
+    "section": "Admin console",
+    "group": "admins2",
+    "order": 28005,
+    "size": "desktop"
+  },
+  "admins2.webm": {
+    "caption": "Ada (left) acts first in each row; Bo (right) presses the same button on his older page and gets the refusal: a decided dispute, a lifted suspension, a lifted pause, an approved lift, a deleted account",
+    "kind": "video",
+    "title": "Two admins at once",
+    "section": "Admin console",
+    "group": "admins2",
+    "order": 28006,
+    "size": "desktop"
+  },
+  "admin-paused-tests.png": {
+    "caption": "Each paused test closes 7 days after it was first paused: Extend moves the date later, Close now closes it",
+    "kind": "image",
+    "title": "Paused tests",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27010,
+    "size": "desktop"
+  },
+  "admin-extended.png": {
+    "caption": "“extended by the team” next to the new closing date",
+    "kind": "image",
+    "title": "Extended",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27011,
+    "size": "desktop"
+  },
+  "admin-mine.png": {
+    "caption": "The tests this admin paused or stopped and the accounts they suspended, newest first",
+    "kind": "image",
+    "title": "Your actions",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27012,
+    "size": "desktop"
+  },
+  "admin-lift-dev-waiting.png": {
+    "caption": "From the 4th hold on: “You've paid what you owe. The team will review your account before your tests resume.”",
+    "kind": "image",
+    "title": "Paid, waiting for the team",
+    "section": "Payments",
+    "group": "admin",
+    "order": 27013,
+    "size": "desktop"
+  },
+  "admin-lift.png": {
+    "caption": "A 4th hold whose owed money is paid: Approve (with a note to the developer); the first press wins",
+    "kind": "image",
+    "title": "Approve a lift",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27014,
+    "size": "desktop"
+  },
+  "admin-held-shares.png": {
+    "caption": "A suspended tester's pay is charged but their share waits: Release to the tester, or Refund the developer",
+    "kind": "image",
+    "title": "Held tester shares",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27015,
+    "size": "desktop"
+  },
+  "admin-payouts.png": {
+    "caption": "Shares waiting for a payout account (Send now), and the latest payments",
+    "kind": "image",
+    "title": "Payouts and payments",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27016,
+    "size": "desktop"
+  },
+  "admin-needs-today.png": {
+    "caption": "The same list the daily admin email sends",
+    "kind": "image",
+    "title": "Needs the team today",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27017,
+    "size": "desktop"
+  },
+  "admin-history-person.png": {
+    "caption": "Opened from the admin console: payments, payouts, disputes, chargebacks, holds and suspensions, tests, reports and parts, each in pages of 25",
+    "kind": "image",
+    "title": "History of a person",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27018,
+    "size": "desktop"
+  },
+  "admin-history-test.png": {
+    "caption": "Its timeline, contracts and payments, as the admin sees the listing",
+    "kind": "image",
+    "title": "History of a test",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27019,
+    "size": "desktop"
+  },
+  "emails-setting.png": {
+    "caption": "Email Off, or one email a day, week or month listing everything new; a few lines are sent even with email Off",
+    "kind": "image",
+    "title": "How you're notified",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24001,
+    "size": "desktop"
+  },
+  "emails-bell-dev.png": {
+    "caption": "Every line as it arrived, stacked by kind and test, newest first",
+    "kind": "image",
+    "title": "Nora (developer, Daily): the bell",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24002,
+    "size": "desktop"
+  },
+  "emails-bell-dev-off.png": {
+    "caption": "Every line as it arrived, stacked by kind and test, newest first",
+    "kind": "image",
+    "title": "Omar (developer, email Off): the bell",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24003,
+    "size": "desktop"
+  },
+  "emails-bell-tester.png": {
+    "caption": "Every line as it arrived, stacked by kind and test, newest first",
+    "kind": "image",
+    "title": "Ana (tester, Daily): the bell",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24004,
+    "size": "desktop"
+  },
+  "emails-bell-tester-off.png": {
+    "caption": "Every line as it arrived, stacked by kind and test, newest first",
+    "kind": "image",
+    "title": "Ben (tester, email Off): the bell",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24005,
+    "size": "desktop"
+  },
+  "emails-summary-dev.png": {
+    "caption": "One email listing every update since the last one, each with its link",
+    "kind": "image",
+    "title": "Nora's daily email",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24006,
+    "size": "desktop"
+  },
+  "emails-off-dev.png": {
+    "caption": "Only the must-send lines (here: his bank wants him to confirm a payment) in one end-of-day email",
+    "kind": "image",
+    "title": "Omar's email with email Off",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24007,
+    "size": "desktop"
+  },
+  "emails-summary-tester.png": {
+    "caption": "Joined, paid, booked call and the other updates, once each",
+    "kind": "image",
+    "title": "Ana's daily email",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24008,
+    "size": "desktop"
+  },
+  "emails-off-tester.png": {
+    "caption": "Testers' must-send lines only; nothing else is emailed",
+    "kind": "image",
+    "title": "Ben's email with email Off",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24009,
+    "size": "desktop"
+  },
+  "money-decline-hold-phone.webm": {
+    "caption": "The card is declined on Pay: a payment hold starts at once and the page moves to the dashboard top, where the blue box says the press didn't go through and how to resume",
+    "kind": "video",
+    "title": "Declined Pay → hold",
+    "section": "Payments",
+    "group": "money",
+    "order": 9001,
+    "size": "phone"
+  },
+  "money-hold-box-phone.png": {
+    "caption": "The dashboard top during a payment hold: the press didn't go through, the tests are paused with testers still in them, and “Pay what you owe” opens Payments",
+    "kind": "image",
+    "title": "The blue box on a payment hold",
+    "section": "Payments",
+    "group": "money",
+    "order": 9002,
+    "size": "phone"
+  },
+  "money-hold-tester-phone.png": {
+    "caption": "Ana's page meanwhile: the test is paused and her payment may be delayed (never “hold” or “declined”)",
+    "kind": "image",
+    "title": "What the tester reads",
+    "section": "Payments",
+    "group": "money",
+    "order": 9003,
+    "size": "phone"
+  },
+  "money-owed-phone.png": {
+    "caption": "Payments during the hold: each declined payment listed, and one button pays them all",
+    "kind": "image",
+    "title": "Pay what you owe",
+    "section": "Payments",
+    "group": "money",
+    "order": 9004,
+    "size": "phone"
+  },
+  "money-retry-failed-phone.png": {
+    "caption": "The daily automatic retry was declined too: no bell, the box shows the last try and the next one",
+    "kind": "image",
+    "title": "A retry that fails",
+    "section": "Payments",
+    "group": "money",
+    "order": 9005,
+    "size": "phone"
+  },
+  "money-retry-lift-phone.webm": {
+    "caption": "With a working card the next day's retry pays what was owed: the open Payments box disappears by itself, and the dashboard is back to normal",
+    "kind": "video",
+    "title": "A retry pays, the hold lifts",
+    "section": "Payments",
+    "group": "money",
+    "order": 9006,
+    "size": "phone"
+  },
+  "money-retry-bells-phone.png": {
+    "caption": "“We charged your card $10.00 for what you owed.” and “Your tests are running again”",
+    "kind": "image",
+    "title": "The developer's bell",
+    "section": "Payments",
+    "group": "money",
+    "order": 9007,
+    "size": "phone"
+  },
+  "money-retry-tester-bell-phone.png": {
+    "caption": "Ana reads that the test paused and ran again, and that she was paid once the payment went through",
+    "kind": "image",
+    "title": "The tester's bell",
+    "section": "Payments",
+    "group": "money",
+    "order": 9008,
+    "size": "phone"
+  },
+  "money-chargeback-starts-phone.webm": {
+    "caption": "The bank reverses a $10 payment while the test page is open: a chargeback hold starts and the page moves to the dashboard top",
+    "kind": "video",
+    "title": "A chargeback arrives",
+    "section": "Payments",
+    "group": "money",
+    "order": 9009,
+    "size": "phone"
+  },
+  "money-chargeback-fee-phone.png": {
+    "caption": "Payments: the three steps of a chargeback hold, and what is owed: “Your bank reversed a $10 payment: $10 + $15 chargeback fee”",
+    "kind": "image",
+    "title": "$10 + the $15 fee",
+    "section": "Payments",
+    "group": "money",
+    "order": 9010,
+    "size": "phone"
+  },
+  "admin-chargeback-open-phone.png": {
+    "caption": "The admin's Chargeback holds list: the reversed payment, the card check and what is owed, and Approve (faded until both are done)",
+    "kind": "image",
+    "title": "Admin: a chargeback hold",
+    "section": "Admin console",
+    "group": "money",
+    "order": 9011,
+    "size": "phone"
+  },
+  "money-chargeback-paid-phone.png": {
+    "caption": "$25 paid: the chargeback hold stays until the card check and the team's Approve",
+    "kind": "image",
+    "title": "Paid, but still on hold",
+    "section": "Payments",
+    "group": "money",
+    "order": 9012,
+    "size": "phone"
+  },
+  "money-chargeback-won-phone.webm": {
+    "caption": "The platform wins the chargeback while Payments is open: the hold lifts and the $25 paid for it is refunded, shown in What you've paid",
+    "kind": "video",
+    "title": "The chargeback is won",
+    "section": "Payments",
+    "group": "money",
+    "order": 9013,
+    "size": "phone"
+  },
+  "money-chargeback-refund-phone.png": {
+    "caption": "What you've paid: the repaid chargeback marked “refunded (your bank's chargeback was reversed)”",
+    "kind": "image",
+    "title": "The refund line",
+    "section": "Payments",
+    "group": "money",
+    "order": 9014,
+    "size": "phone"
+  },
+  "money-chargeback-bells-phone.png": {
+    "caption": "The developer's bell from start to end: the hold, the receipt, the refund and “Your bank's chargeback of $10.00 was reversed in your favour.”",
+    "kind": "image",
+    "title": "Chargeback bell lines",
+    "section": "Payments",
+    "group": "money",
+    "order": 9015,
+    "size": "phone"
+  },
+  "admin-chargeback-won-phone.png": {
+    "caption": "The developer has left the Chargeback holds list",
+    "kind": "image",
+    "title": "Admin: after a won chargeback",
+    "section": "Admin console",
+    "group": "money",
+    "order": 9016,
+    "size": "phone"
+  },
+  "money-payout-problem-phone.png": {
+    "caption": "Ana's payout account needs attention: the banner on her Payments page (and a bell line every 3 days until it's fixed)",
+    "kind": "image",
+    "title": "A payout problem",
+    "section": "Payments",
+    "group": "money",
+    "order": 9017,
+    "size": "phone"
+  },
+  "cbhold-second.png": {
+    "caption": "During the hold, another reversed payment is added: two lines of $12 + $15",
+    "kind": "image",
+    "title": "A second chargeback",
+    "section": "Payments",
+    "group": "cbhold",
+    "order": 10002,
+    "size": "desktop"
+  },
+  "cbhold-steps-phone.png": {
+    "caption": "A card verified with 3D Secure, what is owed paid ($12 + the $15 fee), and the team's approval; paying alone doesn't lift it",
+    "kind": "image",
+    "title": "Chargeback hold: three steps",
+    "section": "Payments",
+    "group": "cbhold",
+    "order": 10001,
+    "size": "phone"
+  },
+  "cbhold-second-phone.png": {
+    "caption": "During the hold, another reversed payment is added: two lines of $12 + $15",
+    "kind": "image",
+    "title": "A second chargeback",
+    "section": "Payments",
+    "group": "cbhold",
+    "order": 10002,
+    "size": "phone"
+  },
+  "cbhold-admin-ready-phone.png": {
+    "caption": "Card verified ✓ and owed paid ✓: Approve is now available",
+    "kind": "image",
+    "title": "Admin: ready to approve",
+    "section": "Admin console",
+    "group": "cbhold",
+    "order": 10003,
+    "size": "phone"
+  },
+  "cbhold-lift-phone.webm": {
+    "caption": "The developer (left) verifies a card and pays what is owed; the admin (right) approves; the hold lifts and the dashboard is back to normal",
+    "kind": "video",
+    "title": "Card check, pay, Approve",
+    "section": "Payments",
+    "group": "cbhold",
+    "order": 10004,
+    "size": "phone"
+  },
+  "cbhold-bells-phone.png": {
+    "caption": "The chargeback hold, the receipts and “Your tests are running again”",
+    "kind": "image",
+    "title": "Bell lines",
+    "section": "Payments",
+    "group": "cbhold",
+    "order": 10005,
+    "size": "phone"
+  },
+  "cbhold-tester-bell-phone.png": {
+    "caption": "Ana reads that the test paused and ran again, never “chargeback” or “hold”",
+    "kind": "image",
+    "title": "The tester's side",
+    "section": "Payments",
+    "group": "cbhold",
+    "order": 10006,
+    "size": "phone"
+  },
+  "bank-press-cancelled-phone.png": {
+    "caption": "The bank's pop-up was cancelled: “Your bank didn't confirm the payment, so nothing was charged.” No hold",
+    "kind": "image",
+    "title": "Not confirmed: nothing charged",
+    "section": "Payments",
+    "group": "bank",
+    "order": 11001,
+    "size": "phone"
+  },
+  "bank-press-phone.webm": {
+    "caption": "Nora presses Pay and her bank asks her to confirm: cancelled, nothing is charged; pressed again and confirmed, Ana is paid",
+    "kind": "video",
+    "title": "Pay with a bank check",
+    "section": "Payments",
+    "group": "bank",
+    "order": 11002,
+    "size": "phone"
+  },
+  "bank-away-tester-phone.png": {
+    "caption": "Ben charged for his unreviewed answers: “Charged $10.00. Payment may be delayed.”",
+    "kind": "image",
+    "title": "The tester's side",
+    "section": "Payments",
+    "group": "bank",
+    "order": 11003,
+    "size": "phone"
+  },
+  "bank-away-bell-phone.png": {
+    "caption": "Nora's bell (also emailed, even with email Off): “Your bank wants you to confirm a $10.00 payment. Confirm it in Payments by <date>.”",
+    "kind": "image",
+    "title": "Confirm it in Payments",
+    "section": "Payments",
+    "group": "bank",
+    "order": 11004,
+    "size": "phone"
+  },
+  "bank-confirm-list-phone.png": {
+    "caption": "Payments lists the payment waiting for her bank, with Confirm",
+    "kind": "image",
+    "title": "The Confirm button",
+    "section": "Payments",
+    "group": "bank",
+    "order": 11005,
+    "size": "phone"
+  },
+  "bank-confirmed-phone.png": {
+    "caption": "After Confirm the list is gone and the payment shows in What you've paid",
+    "kind": "image",
+    "title": "Confirmed",
+    "section": "Payments",
+    "group": "bank",
+    "order": 11006,
+    "size": "phone"
+  },
+  "bank-locked-phone.png": {
+    "caption": "Cam presses Charge while Nora's bank pop-up for the same answers is open: “A payment for this is being confirmed right now.”",
+    "kind": "image",
+    "title": "Locked while the bank confirms",
+    "section": "Payments",
+    "group": "bank",
+    "order": 11007,
+    "size": "phone"
+  },
+  "plans-free-launch-phone.png": {
+    "caption": "With FREE_UNTIL unset (today's setting) Payments says everything is included, with nothing to subscribe to yet",
+    "kind": "image",
+    "title": "Free during launch",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12001,
+    "size": "phone"
+  },
+  "plans-free-plan-phone.png": {
+    "caption": "After the free launch: one open test at a time, the perks a subscription adds, and Subscribe for $7/month",
+    "kind": "image",
+    "title": "The free plan",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12002,
+    "size": "phone"
+  },
+  "plans-second-test-phone.png": {
+    "caption": "Post is refused under the button: “You already have an open test. Subscribe ($7/month) to run several at once.” The form keeps what was typed",
+    "kind": "image",
+    "title": "A second open test",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12003,
+    "size": "phone"
+  },
+  "plans-perk-refused-phone.png": {
+    "caption": "Next round and Invite testers carry a “Subscribers” tag; a press is refused: “Next round needs a subscription ($7/month).”",
+    "kind": "image",
+    "title": "Perks on the free plan",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12004,
+    "size": "phone"
+  },
+  "plans-subscribed-phone.png": {
+    "caption": "Active since today, renews in a month, with Cancel subscription",
+    "kind": "image",
+    "title": "Subscribed",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12005,
+    "size": "phone"
+  },
+  "plans-cancelled-phone.png": {
+    "caption": "The perks last until the end of the paid month; Keep my subscription undoes it",
+    "kind": "image",
+    "title": "Cancelled",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12006,
+    "size": "phone"
+  },
+  "plans-past-due-phone.png": {
+    "caption": "“Your $7 subscription payment didn't go through. Update your card by <date> to keep it.” The perks continue meanwhile",
+    "kind": "image",
+    "title": "A declined renewal",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12007,
+    "size": "phone"
+  },
+  "plans-lapsed-live-phone.png": {
+    "caption": "The subscription lapsed while the test page was open: “Your subscription ended.” in the live box (a press would stop once for it)",
+    "kind": "image",
+    "title": "The open page is told",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12008,
+    "size": "phone"
+  },
+  "plans-lapse-phone.webm": {
+    "caption": "The last retry fails while the test page is open: the live box says “Your subscription ended.” The running test carries on; only new uses of a perk are refused",
+    "kind": "video",
+    "title": "The subscription lapses",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12009,
+    "size": "phone"
+  },
+  "plans-lapsed-phone.png": {
+    "caption": "Back on the free plan: “Your subscription ended because the payment didn't go through.” and Subscribe again",
+    "kind": "image",
+    "title": "Lapsed",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12010,
+    "size": "phone"
+  },
+  "plans-bells-phone.png": {
+    "caption": "Subscribed, cancelled, the declined renewal and the lapse (the last two also emailed with email Off)",
+    "kind": "image",
+    "title": "Subscription bell lines",
+    "section": "Payments",
+    "group": "plans",
+    "order": 12011,
+    "size": "phone"
+  },
+  "holds-suspend-routing-phone.webm": {
+    "caption": "The team suspends the developer while the test page (left) and Messages (right) are open: both move to the dashboard top; Post a test, typed in afterwards, is closed too",
+    "kind": "video",
+    "title": "Suspended while pages are open",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14001,
+    "size": "phone"
+  },
+  "holds-suspended-box-phone.png": {
+    "caption": "All tests paused with testers still in them, what stays open, and how to appeal through Contact us",
+    "kind": "image",
+    "title": "The blue box: suspended",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14002,
+    "size": "phone"
+  },
+  "holds-settings-open-phone.png": {
+    "caption": "A suspended account keeps Settings (Contact us, email, delete account); the profile editor is hidden",
+    "kind": "image",
+    "title": "Settings stays open",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14003,
+    "size": "phone"
+  },
+  "holds-tester-banner-phone.png": {
+    "caption": "Ana's session page: the blue paused banner lists only what still works (never “suspended”)",
+    "kind": "image",
+    "title": "The tester's side",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14004,
+    "size": "phone"
+  },
+  "holds-both-phone.png": {
+    "caption": "Ana's Charge was declined during the suspension: the same blue box now also says how to pay what is owed",
+    "kind": "image",
+    "title": "Suspended and on hold",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14005,
+    "size": "phone"
+  },
+  "holds-paid-still-suspended-phone.png": {
+    "caption": "“Your payment went through. Your tests stay paused while your account is suspended.” instead of “running again”",
+    "kind": "image",
+    "title": "Paid, still suspended",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14006,
+    "size": "phone"
+  },
+  "holds-reinstated-phone.png": {
+    "caption": "The dashboard top after the team lifts the suspension: “Your account is active again”, and the tests run again",
+    "kind": "image",
+    "title": "Active again",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14007,
+    "size": "phone"
+  },
+  "holds-tester-suspended-phone.png": {
+    "caption": "Cam's dashboard: removed from their tests, pay for accepted work still reaches Stripe, how to appeal, and the tests they were removed from",
+    "kind": "image",
+    "title": "A suspended tester",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14008,
+    "size": "phone"
+  },
+  "holds-tester-routing-phone.webm": {
+    "caption": "Cam's session page moves to the dashboard top, where the blue box explains",
+    "kind": "video",
+    "title": "A tester is suspended",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14009,
+    "size": "phone"
+  },
+  "holds-tester-reinstated-phone.png": {
+    "caption": "The test Cam was removed from waits with “You were removed from this test” and Ask to rejoin",
+    "kind": "image",
+    "title": "Tester active again",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14010,
+    "size": "phone"
+  },
+  "holds-dev-deleted-review-phone.png": {
+    "caption": "Ben's answers were still under review: “Omar Reyes deleted their account, so this can't be paid.”",
+    "kind": "image",
+    "title": "The developer deleted their account",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14011,
+    "size": "phone"
+  },
+  "holds-dev-deleted-charge-phone.png": {
+    "caption": "Dee's part was already open to Charge before the deletion: she can still charge or let it go",
+    "kind": "image",
+    "title": "Charge stays open",
+    "section": "Account states (holds, suspensions, deletion)",
+    "group": "holds",
+    "order": 14012,
+    "size": "phone"
+  },
+  "alerts-before-phone.png": {
+    "caption": "Ben sent his answers after the page loaded: Pay stops once and lists it under the button",
+    "kind": "image",
+    "title": "Before: Work sent stops Pay",
+    "section": "Developer test page",
+    "group": "alerts",
+    "order": 15001,
+    "size": "phone"
+  },
+  "excerpt-picker-phone.png": {
+    "caption": "Ana picks one paid answer and trims it (10 to 500 characters); “Don't name the product” is ticked by default",
+    "kind": "image",
+    "title": "The picker",
+    "section": "Tester session page",
+    "group": "excerpts",
+    "order": 16001,
+    "size": "phone"
+  },
+  "excerpt-ask-phone.webm": {
+    "caption": "Ana opens the picker on a paid written part, trims her answer and asks Nora",
+    "kind": "video",
+    "title": "Asking for an excerpt",
+    "section": "Tester session page",
+    "group": "excerpts",
+    "order": 16002,
+    "size": "phone"
+  },
+  "excerpt-needs-you-phone.png": {
+    "caption": "The quote, whether it names the product, and Allow or Deny",
+    "kind": "image",
+    "title": "Excerpt request in Needs you",
+    "section": "Developer test page",
+    "group": "excerpts",
+    "order": 16003,
+    "size": "phone"
+  },
+  "excerpt-hover-phone.png": {
+    "caption": "Ana's shown excerpts on her hover card",
+    "kind": "image",
+    "title": "On the hover card",
+    "section": "Developer test page",
+    "group": "excerpts",
+    "order": 16004,
+    "size": "phone"
+  },
+  "excerpt-row-phone.png": {
+    "caption": "The excerpt shown from this test, with Take down",
+    "kind": "image",
+    "title": "In the tester's row",
+    "section": "Developer test page",
+    "group": "excerpts",
+    "order": 16005,
+    "size": "phone"
+  },
+  "excerpt-profile-phone.png": {
+    "caption": "Shown excerpts as plain quotes; the one that names the product says so",
+    "kind": "image",
+    "title": "On Ana's profile",
+    "section": "Tester session page",
+    "group": "excerpts",
+    "order": 16006,
+    "size": "phone"
+  },
+  "excerpt-limit-phone.png": {
+    "caption": "A 4th request while 3 are shown or pending: “You can show at most 3 excerpts. Remove one first.”",
+    "kind": "image",
+    "title": "At most 3",
+    "section": "Tester session page",
+    "group": "excerpts",
+    "order": 16007,
+    "size": "phone"
+  },
+  "excerpt-nda-refused-phone.png": {
+    "caption": "Ana's page loaded before the NDA: her press is refused, “This test now has an NDA, so its work can't be shown as an excerpt.”",
+    "kind": "image",
+    "title": "An NDA added meanwhile",
+    "section": "Tester session page",
+    "group": "excerpts",
+    "order": 16008,
+    "size": "phone"
+  },
+  "excerpt-settings-phone.png": {
+    "caption": "Pending, shown and denied excerpts with Remove; the one from a test that now has an NDA reads “Hidden while … has an NDA”",
+    "kind": "image",
+    "title": "Ana's list in Settings",
+    "section": "Tester session page",
+    "group": "excerpts",
+    "order": 16009,
+    "size": "phone"
+  },
+  "excerpt-bells-phone.png": {
+    "caption": "“Your excerpt from … is now on your profile.”, “Nora Lane prefers that work from … isn't shown on profiles.” and “Nora Lane took down the excerpt from …”",
+    "kind": "image",
+    "title": "Decisions as bell lines",
+    "section": "Tester session page",
+    "group": "excerpts",
+    "order": 16010,
+    "size": "phone"
+  },
+  "excerpt-restricted-box-phone.png": {
+    "caption": "Omar is on a payment hold: his test pages are closed, so Ana's request waits under the blue box with Allow and Deny",
+    "kind": "image",
+    "title": "Restricted developer: the excerpt box",
+    "section": "Developer dashboard",
+    "group": "excerpts",
+    "order": 16011,
+    "size": "phone"
+  },
+  "long-find-card-phone.png": {
+    "caption": "Find tests shows 3 lines of the steps, then Show more",
+    "kind": "image",
+    "title": "1,000-character steps on a card",
+    "section": "Tester dashboard and Find",
+    "group": "long",
+    "order": 17001,
+    "size": "phone"
+  },
+  "long-join-phone.png": {
+    "caption": "The 1,000-character steps in full, the 1,000-character NDA in its scroll box, and the deadline with the time left",
+    "kind": "image",
+    "title": "The join page with long text",
+    "section": "Join page",
+    "group": "long",
+    "order": 17002,
+    "size": "phone"
+  },
+  "long-dev-card-phone.png": {
+    "caption": "3 lines, then Show more",
+    "kind": "image",
+    "title": "Long steps on the developer's card",
+    "section": "Developer dashboard",
+    "group": "long",
+    "order": 17003,
+    "size": "phone"
+  },
+  "long-questions-form-phone.png": {
+    "caption": "The answer form shows every question in full, each with its own box and formatting bar",
+    "kind": "image",
+    "title": "20 questions of 300 characters",
+    "section": "Tester session page",
+    "group": "long",
+    "order": 17004,
+    "size": "phone"
+  },
+  "long-offer-box-phone.png": {
+    "caption": "The NDA before and offered, each in a 12-line scroll box, and the questions as 3 then “+N more”",
+    "kind": "image",
+    "title": "The offer box with long text",
+    "section": "Tester session page",
+    "group": "long",
+    "order": 17005,
+    "size": "phone"
+  },
+  "long-terms-history-phone.png": {
+    "caption": "“NDA then and now” as two scroll boxes and “Questions then and now” as 3 then “+N more”",
+    "kind": "image",
+    "title": "Terms history",
+    "section": "Tester session page",
+    "group": "long",
+    "order": 17006,
+    "size": "phone"
+  },
+  "long-answer-counter-phone.png": {
+    "caption": "The live counter “N / 50,000” and the Bold, Italic and Code block bar",
+    "kind": "image",
+    "title": "A long written answer",
+    "section": "Tester session page",
+    "group": "long",
+    "order": 17007,
+    "size": "phone"
+  },
+  "long-answer-dev-phone.png": {
+    "caption": "The developer reads it formatted inside the piece's scroll box (about 16 lines); the Pay box stays below, always visible",
+    "kind": "image",
+    "title": "50,000 characters, formatted",
+    "section": "Developer test page",
+    "group": "long",
+    "order": 17008,
+    "size": "phone"
+  },
+  "many-overview-phone.png": {
+    "caption": "The overview keeps the long title in full where it's the main content: 50 of 50 spots used",
+    "kind": "image",
+    "title": "A long title and 50 testers",
+    "section": "Developer test page",
+    "group": "many",
+    "order": 18001,
+    "size": "phone"
+  },
+  "many-needs-you-phone.png": {
+    "caption": "Needs you lists one fold per person; long names are cut with “…” and shown in full on hover",
+    "kind": "image",
+    "title": "12 people waiting",
+    "section": "Developer test page",
+    "group": "many",
+    "order": 18002,
+    "size": "phone"
+  },
+  "many-testers-phone.png": {
+    "caption": "The avatar row and the tester rows in their own scroll box, so 50 rows never push the page down",
+    "kind": "image",
+    "title": "50 testers",
+    "section": "Developer test page",
+    "group": "many",
+    "order": 18003,
+    "size": "phone"
+  },
+  "many-live-phone.png": {
+    "caption": "The tick list of testers stays a compact list",
+    "kind": "image",
+    "title": "50 testers in Live session",
+    "section": "Developer test page",
+    "group": "many",
+    "order": 18004,
+    "size": "phone"
+  },
+  "many-dev-card-phone.png": {
+    "caption": "Long titles are cut with “…”, the full text on hover",
+    "kind": "image",
+    "title": "A long title on a card",
+    "section": "Developer dashboard",
+    "group": "many",
+    "order": 18005,
+    "size": "phone"
+  },
+  "many-tester-dash-phone.png": {
+    "caption": "The developer's long name and the long title in the tester's dashboard rows",
+    "kind": "image",
+    "title": "Long names on the tester's side",
+    "section": "Tester dashboard and Find",
+    "group": "many",
+    "order": 18006,
+    "size": "phone"
+  },
+  "keysrace-b-notice-phone.png": {
+    "caption": "Tab B's Save stops once for the two joins it hadn't seen (K-2 and K-3 are no longer free); the second press saves",
+    "kind": "image",
+    "title": "Tab B: its own blue notice",
+    "section": "Edit",
+    "group": "keysrace",
+    "order": 19001,
+    "size": "phone"
+  },
+  "keysrace-a-keys-phone.png": {
+    "caption": "The blue note says what the other tab changed; red marks K-2 (ticked here, given to Ben meanwhile) and too few free keys for the open spots",
+    "kind": "image",
+    "title": "Tab A: the key boxes after the race",
+    "section": "Edit",
+    "group": "keysrace",
+    "order": 19002,
+    "size": "phone"
+  },
+  "keysrace-a-notice-phone.png": {
+    "caption": "The red mistakes and the blue “since you opened this page” list: the joins and the other tab's key changes",
+    "kind": "image",
+    "title": "Tab A: the notice under Save",
+    "section": "Edit",
+    "group": "keysrace",
+    "order": 19003,
+    "size": "phone"
+  },
+  "keysrace-a-second-phone.png": {
+    "caption": "Pressed again with the red unfixed: refused, nothing saved",
+    "kind": "image",
+    "title": "Tab A: the second Save",
+    "section": "Edit",
+    "group": "keysrace",
+    "order": 19004,
+    "size": "phone"
+  },
+  "keysrace-phone.webm": {
+    "caption": "Tab A (left) ticks K-2, K-6, K-7 and types N-1; Ben and Cam join and get K-2 and K-3; tab B (right) removes K-4, K-5, K-8, adds B-1 and saves after its own blue notice; A's Save shows the blue notice and the red marks, the second press is refused, and A saves after pressing Keep on K-2 and adding a key",
+    "kind": "video",
+    "title": "Access keys race (two tabs)",
+    "section": "Edit",
+    "group": "keysrace",
+    "order": 19005,
+    "size": "phone"
+  },
+  "keysrace-notice-after-phone.png": {
+    "caption": "The read-only box on the test page: free keys as chips with the open spots, and each given key with its tester",
+    "kind": "image",
+    "title": "The Access keys notice afterwards",
+    "section": "Developer test page",
+    "group": "keysrace",
+    "order": 19006,
+    "size": "phone"
+  },
+  "changedq-dev-before-phone.png": {
+    "caption": "Ana's sent answers under the three questions they answered",
+    "kind": "image",
+    "title": "Developer, before",
+    "section": "Developer test page",
+    "group": "changedq",
+    "order": 20001,
+    "size": "phone"
+  },
+  "changedq-draft-phone.png": {
+    "caption": "She rewrites her answer to Q1 and doesn't send it yet",
+    "kind": "image",
+    "title": "Ana's draft",
+    "section": "Tester session page",
+    "group": "changedq",
+    "order": 20002,
+    "size": "phone"
+  },
+  "changedq-edit-before-phone.png": {
+    "caption": "Before the change: “Changes left: 3 of 3” next to the questions",
+    "kind": "image",
+    "title": "Edit: questions, 3 changes left",
+    "section": "Edit",
+    "group": "changedq",
+    "order": 20003,
+    "size": "phone"
+  },
+  "changedq-edit-after-phone.png": {
+    "caption": "After saving the new Q2: “Changes left: 2 of 3”",
+    "kind": "image",
+    "title": "Edit: 2 changes left",
+    "section": "Edit",
+    "group": "changedq",
+    "order": 20004,
+    "size": "phone"
+  },
+  "changedq-offer-phone.png": {
+    "caption": "“Nora Lane updated the listing: questions changed.” Before and after, with Switch or Keep",
+    "kind": "image",
+    "title": "The offer",
+    "section": "Tester session page",
+    "group": "changedq",
+    "order": 20005,
+    "size": "phone"
+  },
+  "changedq-form-phone.png": {
+    "caption": "Q1 keeps her unsent draft, Q2 is the new question and empty, Q3 is unchanged and keeps its answer",
+    "kind": "image",
+    "title": "The form above Send",
+    "section": "Tester session page",
+    "group": "changedq",
+    "order": 20006,
+    "size": "phone"
+  },
+  "changedq-previous-phone.png": {
+    "caption": "The whole earlier set, all of Q1 to Q3, as it was: read-only, newest first",
+    "kind": "image",
+    "title": "Previous questions and answers",
+    "section": "Tester session page",
+    "group": "changedq",
+    "order": 20007,
+    "size": "phone"
+  },
+  "changedq-switch-phone.webm": {
+    "caption": "Ana switches: Q1's draft stays, the new Q2 starts empty, Q3 keeps its answer, and the earlier set waits in its fold",
+    "kind": "video",
+    "title": "Switching to changed questions",
+    "section": "Tester session page",
+    "group": "changedq",
+    "order": 20008,
+    "size": "phone"
+  },
+  "changedq-dev-after-switch-phone.png": {
+    "caption": "Still the set Ana last sent, labelled “Sent for the questions until <date>”, reviewed at the price it was sent at",
+    "kind": "image",
+    "title": "Developer, after the switch",
+    "section": "Developer test page",
+    "group": "changedq",
+    "order": 20009,
+    "size": "phone"
+  },
+  "changedq-dev-after-send-phone.png": {
+    "caption": "The new set under the current questions",
+    "kind": "image",
+    "title": "Developer, after she sends again",
+    "section": "Developer test page",
+    "group": "changedq",
+    "order": 20010,
+    "size": "phone"
+  },
+  "changedq-dev-previous-phone.png": {
+    "caption": "Ana's row keeps the earlier sent set in “Previous questions and answers”",
+    "kind": "image",
+    "title": "Developer: the earlier set",
+    "section": "Developer test page",
+    "group": "changedq",
+    "order": 20011,
+    "size": "phone"
+  },
+  "paused-banner-full-phone.png": {
+    "caption": "Ana's banner lists only what she can do now (drafts, charge or let go, rate, leave, cancel her booked call) and says her deadline is paused too",
+    "kind": "image",
+    "title": "The paused banner",
+    "section": "Tester session page",
+    "group": "paused",
+    "order": 21001,
+    "size": "phone"
+  },
+  "paused-live-phone.webm": {
+    "caption": "The blue banner appears; Send, the call-request tools, Join and the chat box are hidden until it resumes",
+    "kind": "video",
+    "title": "The test is paused while the page is open",
+    "section": "Tester session page",
+    "group": "paused",
+    "order": 21002,
+    "size": "phone"
+  },
+  "paused-page-phone.png": {
+    "caption": "Only what works is shown: the banner, Charge or Let it go (payment may be delayed), Cancel on the booked call, Rate and Leave; no Send, no call requests, “Chat is paused while the test is paused.”",
+    "kind": "image",
+    "title": "A paused session page",
+    "section": "Tester session page",
+    "group": "paused",
+    "order": 21003,
+    "size": "phone"
+  },
+  "paused-banner-short-phone.png": {
+    "caption": "Ben has nothing to charge and no calls: his banner offers only drafts, rate and leave",
+    "kind": "image",
+    "title": "A shorter banner",
+    "section": "Tester session page",
+    "group": "paused",
+    "order": 21004,
+    "size": "phone"
+  },
+  "paused-dash-tag-phone.png": {
+    "caption": "The tester's dashboard row keeps the test with a “Paused” tag",
+    "kind": "image",
+    "title": "The Paused tag",
+    "section": "Tester dashboard and Find",
+    "group": "paused",
+    "order": 21005,
+    "size": "phone"
+  },
+  "paused-join-phone.png": {
+    "caption": "Not listed in Find tests; opening the link says “This test isn't available right now.”",
+    "kind": "image",
+    "title": "Paused, for someone not in it",
+    "section": "Join page",
+    "group": "paused",
+    "order": 21006,
+    "size": "phone"
+  },
+  "paused-bells-phone.png": {
+    "caption": "The tester's bell: the test was paused by the team, then “… is running again” with the deadline moved on",
+    "kind": "image",
+    "title": "Paused and running again",
+    "section": "Tester session page",
+    "group": "paused",
+    "order": 21007,
+    "size": "phone"
+  },
+  "stopped-live-phone.webm": {
+    "caption": "The developer (left) stops the test; Ana's open page (right) says so, and both pages keep only what still works",
+    "kind": "video",
+    "title": "Stopping a test",
+    "section": "Developer test page",
+    "group": "stopped",
+    "order": 22001,
+    "size": "phone"
+  },
+  "stopped-dev-page-phone.png": {
+    "caption": "No Edit, Stop, End early, Invite or call requests; Needs you (Pay, Reject, the call's length), the Testers panel, past calls, Alerts and Next round stay",
+    "kind": "image",
+    "title": "The stopped test page",
+    "section": "Developer test page",
+    "group": "stopped",
+    "order": 22002,
+    "size": "phone"
+  },
+  "stopped-tester-page-phone.png": {
+    "caption": "Her agreed scope, each part with its status, the work she sent, and what still works: Charge or Let it go later, Dispute, Rate",
+    "kind": "image",
+    "title": "The tester's stopped page",
+    "section": "Tester session page",
+    "group": "stopped",
+    "order": 22003,
+    "size": "phone"
+  },
+  "stopped-tester-calls-phone.png": {
+    "caption": "Ben's booked call was cancelled by the stop; the call that already happened stays listed",
+    "kind": "image",
+    "title": "Calls after a stop",
+    "section": "Tester session page",
+    "group": "stopped",
+    "order": 22004,
+    "size": "phone"
+  },
+  "stopped-dev-card-phone.png": {
+    "caption": "Stopped, with what still needs the developer",
+    "kind": "image",
+    "title": "A stopped card",
+    "section": "Developer dashboard",
+    "group": "stopped",
+    "order": 22005,
+    "size": "phone"
+  },
+  "stopped-tester-dash-phone.png": {
+    "caption": "The stopped test with its parts still under review",
+    "kind": "image",
+    "title": "The tester's dashboard after a stop",
+    "section": "Tester dashboard and Find",
+    "group": "stopped",
+    "order": 22006,
+    "size": "phone"
+  },
+  "stopped-bells-phone.png": {
+    "caption": "“Nora Lane stopped …” and the cancelled call, as the testers read them",
+    "kind": "image",
+    "title": "Stop bell lines",
+    "section": "Notifications and emails",
+    "group": "stopped",
+    "order": 22007,
+    "size": "phone"
+  },
+  "drafts-next-round-phone.webm": {
+    "caption": "The draft “(round 2)” opens in Post a test, filled in from the test",
+    "kind": "video",
+    "title": "Next round makes a draft",
+    "section": "Post a test",
+    "group": "drafts",
+    "order": 23001,
+    "size": "phone"
+  },
+  "drafts-card-phone.png": {
+    "caption": "Draft: the next round, not open yet; clicking it opens Post a test",
+    "kind": "image",
+    "title": "A draft card",
+    "section": "Developer dashboard",
+    "group": "drafts",
+    "order": 23002,
+    "size": "phone"
+  },
+  "drafts-post-page-phone.png": {
+    "caption": "Its own test page and Edit redirect here; Post the test opens it for testers",
+    "kind": "image",
+    "title": "A draft opens in Post a test",
+    "section": "Post a test",
+    "group": "drafts",
+    "order": 23003,
+    "size": "phone"
+  },
+  "drafts-delete-phone.png": {
+    "caption": "The confirm pop-up: nobody has joined it, so nothing else changes",
+    "kind": "image",
+    "title": "Deleting a draft",
+    "section": "Post a test",
+    "group": "drafts",
+    "order": 23004,
+    "size": "phone"
+  },
+  "drafts-posted-phone.png": {
+    "caption": "Round 2 is open for testers, on its own test page",
+    "kind": "image",
+    "title": "Posted from the draft",
+    "section": "Post a test",
+    "group": "drafts",
+    "order": 23005,
+    "size": "phone"
+  },
+  "emails-setting-phone.png": {
+    "caption": "Email Off, or one email a day, week or month listing everything new; a few lines are sent even with email Off",
+    "kind": "image",
+    "title": "How you're notified",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24001,
+    "size": "phone"
+  },
+  "emails-bell-dev-phone.png": {
+    "caption": "Every line as it arrived, stacked by kind and test, newest first",
+    "kind": "image",
+    "title": "Nora (developer, Daily): the bell",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24002,
+    "size": "phone"
+  },
+  "emails-bell-dev-off-phone.png": {
+    "caption": "Every line as it arrived, stacked by kind and test, newest first",
+    "kind": "image",
+    "title": "Omar (developer, email Off): the bell",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24003,
+    "size": "phone"
+  },
+  "emails-bell-tester-phone.png": {
+    "caption": "Every line as it arrived, stacked by kind and test, newest first",
+    "kind": "image",
+    "title": "Ana (tester, Daily): the bell",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24004,
+    "size": "phone"
+  },
+  "emails-bell-tester-off-phone.png": {
+    "caption": "Every line as it arrived, stacked by kind and test, newest first",
+    "kind": "image",
+    "title": "Ben (tester, email Off): the bell",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24005,
+    "size": "phone"
+  },
+  "emails-summary-dev-phone.png": {
+    "caption": "One email listing every update since the last one, each with its link",
+    "kind": "image",
+    "title": "Nora's daily email",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24006,
+    "size": "phone"
+  },
+  "emails-off-dev-phone.png": {
+    "caption": "Only the must-send lines (here: his bank wants him to confirm a payment) in one end-of-day email",
+    "kind": "image",
+    "title": "Omar's email with email Off",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24007,
+    "size": "phone"
+  },
+  "emails-summary-tester-phone.png": {
+    "caption": "Joined, paid, booked call and the other updates, once each",
+    "kind": "image",
+    "title": "Ana's daily email",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24008,
+    "size": "phone"
+  },
+  "emails-off-tester-phone.png": {
+    "caption": "Testers' must-send lines only; nothing else is emailed",
+    "kind": "image",
+    "title": "Ben's email with email Off",
+    "section": "Notifications and emails",
+    "group": "emails",
+    "order": 24009,
+    "size": "phone"
+  },
+  "settings-dev-phone.png": {
+    "caption": "Developer, tester or both; the profile; Contact us; email; and Delete account",
+    "kind": "image",
+    "title": "Settings",
+    "section": "Settings and account",
+    "group": "settings",
+    "order": 25001,
+    "size": "phone"
+  },
+  "settings-contact-sent-phone.png": {
+    "caption": "The message goes to the team by email with the sender's name and address",
+    "kind": "image",
+    "title": "Contact us",
+    "section": "Settings and account",
+    "group": "settings",
+    "order": 25002,
+    "size": "phone"
+  },
+  "settings-contact-limit-phone.png": {
+    "caption": "The 6th press: “You've sent 5 messages today. We'll reply by email.”",
+    "kind": "image",
+    "title": "Contact us: 5 a day",
+    "section": "Settings and account",
+    "group": "settings",
+    "order": 25003,
+    "size": "phone"
+  },
+  "admin-contact-email-phone.png": {
+    "caption": "The email to the team's address, with the topic, the sender and the message",
+    "kind": "image",
+    "title": "Contact us, as the team receives it",
+    "section": "Admin console",
+    "group": "settings",
+    "order": 25004,
+    "size": "phone"
+  },
+  "settings-delete-tester-phone.png": {
+    "caption": "The warning with Ana's real numbers: work under review, a part open to Charge, what happens to sent work and calls",
+    "kind": "image",
+    "title": "Deleting a tester account",
+    "section": "Settings and account",
+    "group": "settings",
+    "order": 25005,
+    "size": "phone"
+  },
+  "settings-delete-dev-phone.png": {
+    "caption": "Work waiting for review, parts testers can still charge and open disputes, with counts; then what deleting does",
+    "kind": "image",
+    "title": "Deleting a developer account",
+    "section": "Settings and account",
+    "group": "settings",
+    "order": 25006,
+    "size": "phone"
+  },
+  "tester-find-phone.png": {
+    "caption": "Open tests with their pay, parts and deadline; ones missing a need of yours say so",
+    "kind": "image",
+    "title": "Find tests",
+    "section": "Tester dashboard and Find",
+    "group": "tester",
+    "order": 26001,
+    "size": "phone"
+  },
+  "tester-join-deadline-phone.png": {
+    "caption": "“Your deadline: <date> (in 2 days …)”: Open until is every tester's deadline",
+    "kind": "image",
+    "title": "The deadline before joining",
+    "section": "Join page",
+    "group": "tester",
+    "order": 26002,
+    "size": "phone"
+  },
+  "tester-join-phone.png": {
+    "caption": "The steps, each part and its pay, the NDA to accept, and Join",
+    "kind": "image",
+    "title": "The join page",
+    "section": "Join page",
+    "group": "tester",
+    "order": 26003,
+    "size": "phone"
+  },
+  "tester-join-flow-phone.webm": {
+    "caption": "Ana reads the listing, accepts the NDA and joins: she lands on her session page",
+    "kind": "video",
+    "title": "Joining",
+    "section": "Join page",
+    "group": "tester",
+    "order": 26004,
+    "size": "phone"
+  },
+  "tester-session-phone.png": {
+    "caption": "The live box, her agreed scope, each part, the recordings, the written part, calls and chat",
+    "kind": "image",
+    "title": "The session page",
+    "section": "Tester session page",
+    "group": "tester",
+    "order": 26005,
+    "size": "phone"
+  },
+  "tester-written-form-phone.png": {
+    "caption": "Bold, Italic and Code block, the live counter, and Send",
+    "kind": "image",
+    "title": "The written part",
+    "section": "Tester session page",
+    "group": "tester",
+    "order": 26006,
+    "size": "phone"
+  },
+  "tester-recordings-phone.png": {
+    "caption": "Record the screen here (with the microphone if allowed) or upload a file; up to 5, sent together as one piece",
+    "kind": "image",
+    "title": "Recordings",
+    "section": "Tester session page",
+    "group": "tester",
+    "order": 26007,
+    "size": "phone"
+  },
+  "tester-dash-phone.png": {
+    "caption": "To do (each part with Send work), the tests she's in, and invitations",
+    "kind": "image",
+    "title": "The tester dashboard",
+    "section": "Tester dashboard and Find",
+    "group": "tester",
+    "order": 26008,
+    "size": "phone"
+  },
+  "admin-top-phone.png": {
+    "caption": "The tiles (people, parts awaiting review, charged, the platform's share, owed to testers, waitlist), then open disputes first",
+    "kind": "image",
+    "title": "The admin dashboard",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27001,
+    "size": "phone"
+  },
+  "admin-dispute-listed-phone.png": {
+    "caption": "What was paid and the listing, what each side said, and the total to decide (up to the listing)",
+    "kind": "image",
+    "title": "A dispute on a listed part",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27002,
+    "size": "phone"
+  },
+  "admin-dispute-unlisted-phone.png": {
+    "caption": "Ben was paid $0 for written feedback that wasn't in his contract: the admin sets an amount up to the $1,000 cap",
+    "kind": "image",
+    "title": "A dispute on an unlisted part",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27003,
+    "size": "phone"
+  },
+  "admin-decided-phone.png": {
+    "caption": "Each decision with the amount, who decided and the note",
+    "kind": "image",
+    "title": "Decided disputes",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27004,
+    "size": "phone"
+  },
+  "admin-dispute-bell-phone.png": {
+    "caption": "“Your dispute on … was decided”, with the amount",
+    "kind": "image",
+    "title": "A decision as the tester reads it",
+    "section": "Notifications and emails",
+    "group": "admin",
+    "order": 27005,
+    "size": "phone"
+  },
+  "admin-preview-suspension-phone.png": {
+    "caption": "What suspending Nora would do right now, before pressing Suspend",
+    "kind": "image",
+    "title": "Preview a suspension",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27006,
+    "size": "phone"
+  },
+  "admin-suspended-row-phone.png": {
+    "caption": "The row says who suspended it, when and why, with Lift the suspension",
+    "kind": "image",
+    "title": "A suspended account",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27007,
+    "size": "phone"
+  },
+  "admin-deleted-row-phone.png": {
+    "caption": "The team deleted Dee's account: the row keeps who, when and why",
+    "kind": "image",
+    "title": "A deleted account",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27008,
+    "size": "phone"
+  },
+  "admin-test-row-phone.png": {
+    "caption": "Pause (with a reason), Stop (close), and Allow 3 more changes when a field used its 3",
+    "kind": "image",
+    "title": "A test row",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27009,
+    "size": "phone"
+  },
+  "admin-paused-tests-phone.png": {
+    "caption": "Each paused test closes 7 days after it was first paused: Extend moves the date later, Close now closes it",
+    "kind": "image",
+    "title": "Paused tests",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27010,
+    "size": "phone"
+  },
+  "admin-extended-phone.png": {
+    "caption": "“extended by the team” next to the new closing date",
+    "kind": "image",
+    "title": "Extended",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27011,
+    "size": "phone"
+  },
+  "admin-mine-phone.png": {
+    "caption": "The tests this admin paused or stopped and the accounts they suspended, newest first",
+    "kind": "image",
+    "title": "Your actions",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27012,
+    "size": "phone"
+  },
+  "admin-lift-dev-waiting-phone.png": {
+    "caption": "From the 4th hold on: “You've paid what you owe. The team will review your account before your tests resume.”",
+    "kind": "image",
+    "title": "Paid, waiting for the team",
+    "section": "Payments",
+    "group": "admin",
+    "order": 27013,
+    "size": "phone"
+  },
+  "admin-lift-phone.png": {
+    "caption": "A 4th hold whose owed money is paid: Approve (with a note to the developer); the first press wins",
+    "kind": "image",
+    "title": "Approve a lift",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27014,
+    "size": "phone"
+  },
+  "admin-held-shares-phone.png": {
+    "caption": "A suspended tester's pay is charged but their share waits: Release to the tester, or Refund the developer",
+    "kind": "image",
+    "title": "Held tester shares",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27015,
+    "size": "phone"
+  },
+  "admin-payouts-phone.png": {
+    "caption": "Shares waiting for a payout account (Send now), and the latest payments",
+    "kind": "image",
+    "title": "Payouts and payments",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27016,
+    "size": "phone"
+  },
+  "admin-needs-today-phone.png": {
+    "caption": "The same list the daily admin email sends",
+    "kind": "image",
+    "title": "Needs the team today",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27017,
+    "size": "phone"
+  },
+  "admin-history-person-phone.png": {
+    "caption": "Opened from the admin console: payments, payouts, disputes, chargebacks, holds and suspensions, tests, reports and parts, each in pages of 25",
+    "kind": "image",
+    "title": "History of a person",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27018,
+    "size": "phone"
+  },
+  "admin-history-test-phone.png": {
+    "caption": "Its timeline, contracts and payments, as the admin sees the listing",
+    "kind": "image",
+    "title": "History of a test",
+    "section": "Admin console",
+    "group": "admin",
+    "order": 27019,
+    "size": "phone"
+  },
+  "admins2-dispute-phone.png": {
+    "caption": "Bo decides a dispute Ada decided a moment earlier: “This dispute was already decided by Ada Admin at <time>.”",
+    "kind": "image",
+    "title": "A dispute already decided",
+    "section": "Admin console",
+    "group": "admins2",
+    "order": 28001,
+    "size": "phone"
+  },
+  "admins2-suspension-phone.png": {
+    "caption": "Bo lifts a suspension Ada already lifted: “That account isn't suspended.”",
+    "kind": "image",
+    "title": "A suspension already lifted",
+    "section": "Admin console",
+    "group": "admins2",
+    "order": 28002,
+    "size": "phone"
+  },
+  "admins2-pause-phone.png": {
+    "caption": "Bo lifts the team's pause Ada already lifted: “That test isn't paused by the team.”",
+    "kind": "image",
+    "title": "A pause already lifted",
+    "section": "Admin console",
+    "group": "admins2",
+    "order": 28003,
+    "size": "phone"
+  },
+  "admins2-approve-phone.png": {
+    "caption": "Bo approves a lift Ada already approved: “This lift was already approved by Ada Admin at <time>.”",
+    "kind": "image",
+    "title": "An Approve already pressed",
+    "section": "Admin console",
+    "group": "admins2",
+    "order": 28004,
+    "size": "phone"
+  },
+  "admins2-deleted-phone.png": {
+    "caption": "Ada deleted Dee's account; Bo suspends it from his older page: “That account was deleted.”",
+    "kind": "image",
+    "title": "An account already deleted",
+    "section": "Admin console",
+    "group": "admins2",
+    "order": 28005,
+    "size": "phone"
+  },
+  "admins2-phone.webm": {
+    "caption": "Ada (left) acts first in each row; Bo (right) presses the same button on his older page and gets the refusal: a decided dispute, a lifted suspension, a lifted pause, an approved lift, a deleted account",
+    "kind": "video",
+    "title": "Two admins at once",
+    "section": "Admin console",
+    "group": "admins2",
+    "order": 28006,
+    "size": "phone"
+  },
+  "bells-applications-closed.png": {
+    "caption": "Three tests Ana applied to changed their listing: “3 tests you applied to changed: your applications were closed”, opening to list them",
+    "kind": "image",
+    "title": "Applications closed, stacked",
+    "section": "Notifications and emails",
+    "group": "bells",
+    "order": 29001,
+    "size": "desktop"
+  },
+  "bells-invites-resent.png": {
+    "caption": "“2 tests you were invited to changed: your invites were sent again”",
+    "kind": "image",
+    "title": "Invites sent again, stacked",
+    "section": "Notifications and emails",
+    "group": "bells",
+    "order": 29002,
+    "size": "desktop"
+  },
+  "bells-dev-misc.png": {
+    "caption": "Chat, and a tester finishing with “You can rate them for 14 days”",
+    "kind": "image",
+    "title": "More developer lines",
+    "section": "Notifications and emails",
+    "group": "bells",
+    "order": 29003,
+    "size": "desktop"
+  },
+  "bells-tester-misc.png": {
+    "caption": "Chat from the developer, paid, and the rating prompt",
+    "kind": "image",
+    "title": "More tester lines",
+    "section": "Notifications and emails",
+    "group": "bells",
+    "order": 29004,
+    "size": "desktop"
+  },
+  "bells-block.png": {
+    "caption": "Nora blocked Ana: Ana only reads “Your session on … ended.” (a block is never revealed)",
+    "kind": "image",
+    "title": "A block, as the tester reads it",
+    "section": "Notifications and emails",
+    "group": "bells",
+    "order": 29005,
+    "size": "desktop"
+  },
+  "bells-applications-closed-phone.png": {
+    "caption": "Three tests Ana applied to changed their listing: “3 tests you applied to changed: your applications were closed”, opening to list them",
+    "kind": "image",
+    "title": "Applications closed, stacked",
+    "section": "Notifications and emails",
+    "group": "bells",
+    "order": 29001,
+    "size": "phone"
+  },
+  "bells-invites-resent-phone.png": {
+    "caption": "“2 tests you were invited to changed: your invites were sent again”",
+    "kind": "image",
+    "title": "Invites sent again, stacked",
+    "section": "Notifications and emails",
+    "group": "bells",
+    "order": 29002,
+    "size": "phone"
+  },
+  "bells-dev-misc-phone.png": {
+    "caption": "Chat, and a tester finishing with “You can rate them for 14 days”",
+    "kind": "image",
+    "title": "More developer lines",
+    "section": "Notifications and emails",
+    "group": "bells",
+    "order": 29003,
+    "size": "phone"
+  },
+  "bells-tester-misc-phone.png": {
+    "caption": "Chat from the developer, paid, and the rating prompt",
+    "kind": "image",
+    "title": "More tester lines",
+    "section": "Notifications and emails",
+    "group": "bells",
+    "order": 29004,
+    "size": "phone"
+  },
+  "bells-block-phone.png": {
+    "caption": "Nora blocked Ana: Ana only reads “Your session on … ended.” (a block is never revealed)",
+    "kind": "image",
+    "title": "A block, as the tester reads it",
+    "section": "Notifications and emails",
+    "group": "bells",
+    "order": 29005,
+    "size": "phone"
+  },
+  "alerts-menu-ticked-phone.png": {
+    "caption": "Ticked types no longer stop your buttons; they still show, greyed, in the live box",
+    "kind": "image",
+    "title": "Alerts: Work sent ticked",
+    "section": "Developer test page",
+    "group": "alerts",
+    "order": 15002,
+    "size": "phone"
+  },
+  "alerts-after-phone.png": {
+    "caption": "Dee sent her answers after the page loaded, but Work sent is ticked: Pay for Cam went straight through",
+    "kind": "image",
+    "title": "After: no stop",
+    "section": "Developer test page",
+    "group": "alerts",
+    "order": 15003,
+    "size": "phone"
+  },
+  "alerts-greyed-phone.png": {
+    "caption": "A ticked type still shows in the live box, greyed (“You turned these stops off in Alerts” on hover)",
+    "kind": "image",
+    "title": "Still listed, greyed",
+    "section": "Developer test page",
+    "group": "alerts",
+    "order": 15004,
+    "size": "phone"
+  },
+  "alerts-flow-phone.webm": {
+    "caption": "With Work sent on, a tester's new answers stop Pay once; after ticking it in Alerts, the next Pay goes straight through and the line shows greyed",
+    "kind": "video",
+    "title": "Alerts stop one kind of stop",
+    "section": "Developer test page",
+    "group": "alerts",
+    "order": 15005,
+    "size": "phone"
+  },
+  "money-payout-problem.png": {
+    "caption": "Ana's payout account needs attention: the banner on her Payments page (and a bell line every 3 days until it's fixed)",
+    "kind": "image",
+    "title": "A payout problem",
+    "section": "Payments",
+    "group": "money",
+    "order": 9017,
+    "size": "desktop"
+  },
+  "post-all-red.png": {
+    "caption": "Empty required fields, a price under $1, 60 spots, Open until 45 days ahead, an NDA over 1,000 characters, a question over 300 characters and fewer keys than spots, with the list above Post the test",
+    "kind": "image",
+    "title": "Every red at once",
+    "section": "Post a test",
+    "group": "postred",
+    "order": 31001,
+    "size": "desktop"
+  },
+  "plans-ten-tests-notice.png": {
+    "caption": "Post is refused under the button: “You have 10 open tests, the most you can have at once. Stop or close one to post another.” The form keeps its text",
+    "kind": "image",
+    "title": "10 open tests",
+    "section": "Payments",
+    "group": "plans2",
+    "order": 30001,
+    "size": "desktop"
+  },
+  "plans-ten-tests.webm": {
+    "caption": "With 10 open tests (one full, one paused) Post is refused with the blue notice and the form keeps its text (left); the other tab stops one test (right); the next Post goes through",
+    "kind": "video",
+    "title": "10 open tests (two tabs)",
+    "section": "Payments",
+    "group": "plans2",
+    "order": 30002,
+    "size": "desktop"
+  },
+  "plans-draft-refused.png": {
+    "caption": "Omar's subscription ended and he has an open test: posting the round-2 draft is refused with “You already have an open test. Subscribe ($7/month) to run several at once.” and Open Payments",
+    "kind": "image",
+    "title": "A draft on the free plan",
+    "section": "Post a test",
+    "group": "plans2",
+    "order": 30003,
+    "size": "desktop"
+  },
+  "post-red-and-blue.png": {
+    "caption": "Open until 40 days ahead on the free plan with a test already open: the red at the field stops Post in the page, so the server's blue notice can't show yet",
+    "kind": "image",
+    "title": "Red first, then blue",
+    "section": "Post a test",
+    "group": "plans2",
+    "order": 30004,
+    "size": "desktop"
+  },
+  "post-red-and-blue-then.png": {
+    "caption": "With the date fixed, the next press reaches the server and the blue notice appears under Post the test",
+    "kind": "image",
+    "title": "…then the blue notice",
+    "section": "Post a test",
+    "group": "plans2",
+    "order": 30005,
+    "size": "desktop"
+  },
+  "plans-ten-tests-notice-phone.png": {
+    "caption": "Post is refused under the button: “You have 10 open tests, the most you can have at once. Stop or close one to post another.” The form keeps its text",
+    "kind": "image",
+    "title": "10 open tests",
+    "section": "Payments",
+    "group": "plans2",
+    "order": 30001,
+    "size": "phone"
+  },
+  "plans-ten-tests-phone.webm": {
+    "caption": "With 10 open tests (one full, one paused) Post is refused with the blue notice and the form keeps its text (left); the other tab stops one test (right); the next Post goes through",
+    "kind": "video",
+    "title": "10 open tests (two tabs)",
+    "section": "Payments",
+    "group": "plans2",
+    "order": 30002,
+    "size": "phone"
+  },
+  "plans-draft-refused-phone.png": {
+    "caption": "Omar's subscription ended and he has an open test: posting the round-2 draft is refused with “You already have an open test. Subscribe ($7/month) to run several at once.” and Open Payments",
+    "kind": "image",
+    "title": "A draft on the free plan",
+    "section": "Post a test",
+    "group": "plans2",
+    "order": 30003,
+    "size": "phone"
+  },
+  "post-red-and-blue-phone.png": {
+    "caption": "Open until 40 days ahead on the free plan with a test already open: the red at the field stops Post in the page, so the server's blue notice can't show yet",
+    "kind": "image",
+    "title": "Red first, then blue",
+    "section": "Post a test",
+    "group": "plans2",
+    "order": 30004,
+    "size": "phone"
+  },
+  "post-red-and-blue-then-phone.png": {
+    "caption": "With the date fixed, the next press reaches the server and the blue notice appears under Post the test",
+    "kind": "image",
+    "title": "…then the blue notice",
+    "section": "Post a test",
+    "group": "plans2",
+    "order": 30005,
+    "size": "phone"
+  },
+  "post-all-red-phone.png": {
+    "caption": "Empty required fields, a price under $1, 60 spots, Open until 45 days ahead, an NDA over 1,000 characters, a question over 300 characters and fewer keys than spots, with the list above Post the test",
+    "kind": "image",
+    "title": "Every red at once",
+    "section": "Post a test",
+    "group": "postred",
+    "order": 31001,
+    "size": "phone"
+  },
+  "post-all-red-scroll-phone.webm": {
+    "caption": "The phone form from top to bottom with every red message showing",
+    "kind": "video",
+    "title": "Every red at once, scrolled",
+    "section": "Post a test",
+    "group": "postred",
+    "order": 31002,
+    "size": "phone"
+  },
+  "edit-stop-tester-change.png": {
+    "caption": "Ana sent written answers and Ben joined while Edit was open: Save stops once with the blue list, and the key boxes and open spots are already up to date (K-2 is now Ben's)",
+    "kind": "image",
+    "title": "Save stops once for testers",
+    "section": "Edit",
+    "group": "editstop",
+    "order": 32001,
+    "size": "desktop"
+  },
+  "edit-stop-tester-change-video.webm": {
+    "caption": "The developer edits the instructions; Ana sends her answers and Ben joins (taking free key K-2); Save stops once with the list and the updated keys; the second press saves",
+    "kind": "video",
+    "title": "Edit stops once, then saves",
+    "section": "Edit",
+    "group": "editstop",
+    "order": 32002,
+    "size": "desktop"
+  },
+  "edit-stop-tester-change-phone.png": {
+    "caption": "Ana sent written answers and Ben joined while Edit was open: Save stops once with the blue list, and the key boxes and open spots are already up to date (K-2 is now Ben's)",
+    "kind": "image",
+    "title": "Save stops once for testers",
+    "section": "Edit",
+    "group": "editstop",
+    "order": 32001,
+    "size": "phone"
+  },
+  "edit-stop-tester-change-video-phone.webm": {
+    "caption": "The developer edits the instructions; Ana sends her answers and Ben joins (taking free key K-2); Save stops once with the list and the updated keys; the second press saves",
+    "kind": "video",
+    "title": "Edit stops once, then saves",
+    "section": "Edit",
+    "group": "editstop",
+    "order": 32002,
+    "size": "phone"
   }
 }
