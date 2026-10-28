@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { heartbeat, outageLine } from "@/lib/server/outages";
 import { GET as healthGET } from "@/app/api/health/route";
+import { POST as alertPOST } from "@/app/api/health/alert/route";
 import { bookCall, joined, sact, setup } from "./fixtures";
 
 // (Owner, Oct 22, NEWEST+6) Outages: detected from heartbeats, every running timer moves, calls inside are missed.
@@ -9,6 +10,9 @@ import { bookCall, joined, sact, setup } from "./fixtures";
 const MIN = 60_000, H = 60 * MIN;
 
 const ping = (key?: string) => healthGET(new Request(`http://localhost:3400/api/health${key ? `?key=${key}` : ""}`));
+/** (Batch 15 section 10) UptimeRobot's alert webhook: alertType 1 = down, 2 = up; alertDateTime in Unix seconds. */
+const alert = (type: 1 | 2, at: Date, key = "test-health-key") =>
+  alertPOST(new Request(`http://localhost:3400/api/health/alert?key=${key}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ alertType: type, alertDateTime: Math.round(at.getTime() / 1000), monitorFriendlyName: "Playtest" }) }));
 
 describe("outages", () => {
   beforeEach(() => {
@@ -20,7 +24,7 @@ describe("outages", () => {
     delete process.env.HEALTH_KEY;
   });
 
-  it("a gap over 15 minutes is recorded once; every running timer moves by its length; calls inside are missed", async () => {
+  it("a down/up alert pair 15 minutes or more apart is recorded once; every running timer moves by its length; calls inside are missed", async () => {
     await db.heartbeat.deleteMany({});
     await db.outage.deleteMany({});
     const { dev, testId } = await setup({ deadlineDays: 2, openUntil: new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10) });
@@ -36,14 +40,15 @@ describe("outages", () => {
       c: await db.contract.findUniqueOrThrow({ where: { id: sessionId } }),
       t: await db.test.findUniqueOrThrow({ where: { id: testId } }),
     };
-    // Heartbeats: one now; the next 2 h 30 min later (the outage).
-    const start = new Date();
-    await db.heartbeat.create({ data: { at: start } });
+    // (Batch 15 section 10) The uptime service's alerts: down now, up 2 h 30 min later (the outage).
+    const start = new Date(Math.floor(Date.now() / 1000) * 1000);
+    await db.appState.deleteMany({ where: { key: "outage-down" } });
+    expect((await alert(1, start)).status).toBe(200);
     const end = new Date(start.getTime() + 2.5 * H);
-    const o = await heartbeat(end);
-    expect(o).not.toBeNull();
-    expect(o!.ms).toBe(2.5 * H);
-    expect(await heartbeat(new Date(end.getTime() + MIN))).toBeNull(); // no new gap
+    const r = await (await alert(2, end)).json();
+    expect(r.outage).not.toBeNull();
+    expect(r.outage.ms).toBe(2.5 * H);
+    expect((await (await alert(2, new Date(end.getTime() + MIN))).json()).outage).toBeNull(); // an up with no down records nothing new
     expect(await db.outage.count()).toBe(1);
     const L = 2.5 * H;
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
@@ -70,7 +75,7 @@ describe("outages", () => {
     expect((await outageLines(new Date(start.getTime() - MIN))).map((x) => x.text)).toEqual([line]);
   }, 90_000);
 
-  it("gated: with the setting off a gap creates nothing; polls never write heartbeats; only the keyed ping does", async () => {
+  it("gated: with the setting off nothing is written; polls never write heartbeats; only the keyed ping does, and a gap never creates an outage", async () => {
     await db.heartbeat.deleteMany({});
     await db.outage.deleteMany({});
     // Off: the keyed ping writes nothing; a gap creates nothing.
@@ -93,10 +98,38 @@ describe("outages", () => {
     expect(await db.heartbeat.count()).toBe(0);
     await ping("test-health-key");
     expect(await db.heartbeat.count()).toBe(1);
-    // A gap between keyed pings creates an outage.
+    // (Batch 15 section 10) A gap between keyed pings creates nothing any more (a paused monitor changes nothing).
     await db.heartbeat.updateMany({ data: { at: new Date(Date.now() - 40 * MIN) } });
     await ping("test-health-key");
+    expect(await db.outage.count()).toBe(0);
+  }, 90_000);
+
+  it("(batch 15 section 10) a 20-minute gap with no pings records nothing; a down/up pair 40 minutes apart records one outage and moves a deadline", async () => {
+    await db.heartbeat.deleteMany({});
+    await db.outage.deleteMany({});
+    await db.appState.deleteMany({ where: { key: "outage-down" } });
+    const { testId } = await setup();
+    const { sessionId } = await joined(testId);
+    const due0 = (await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt.getTime();
+    // A 20-minute gap between keyed pings (a paused monitor): nothing.
+    await ping("test-health-key");
+    await db.heartbeat.updateMany({ data: { at: new Date(Date.now() - 20 * MIN) } });
+    await ping("test-health-key");
+    expect(await db.outage.count()).toBe(0);
+    expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt.getTime()).toBe(due0);
+    // A short down/up pair (10 minutes) records nothing either.
+    const t0 = new Date(Math.floor(Date.now() / 1000) * 1000);
+    await alert(1, t0);
+    expect((await (await alert(2, new Date(t0.getTime() + 10 * MIN))).json()).outage).toBeNull();
+    expect(await db.outage.count()).toBe(0);
+    // A wrong key is refused.
+    expect((await alert(1, t0, "wrong")).status).toBe(403);
+    // Down, then up 40 minutes later: one outage, and the tester's deadline moved 40 minutes.
+    await alert(1, t0);
+    await alert(1, new Date(t0.getTime() + 5 * MIN)); // a repeated down keeps the first start
+    const r = await (await alert(2, new Date(t0.getTime() + 40 * MIN))).json();
+    expect(r.outage.ms).toBe(40 * MIN);
     expect(await db.outage.count()).toBe(1);
-    expect(Math.round((await db.outage.findFirstOrThrow()).ms / MIN)).toBe(40);
+    expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt.getTime() - due0).toBe(40 * MIN);
   }, 90_000);
 });

@@ -195,15 +195,17 @@ The template is [.env.example](../.env.example). Never commit `.env*` files (the
 | `STRIPE_SECRET_KEY` | Stripe API key. Empty: presses are recorded as `not_set_up`, nothing is charged | Yes | empty |
 | `STRIPE_ALLOW_LIVE` | `1` allows an `sk_live_` key; without it a live key is refused ("Payments are switched off") | Yes for live | empty |
 | `STRIPE_PUBLISHABLE_KEY` | `pk_...` for Stripe.js pop-ups (3D Secure card check, bank confirmations). Empty: the page simulates the pop-up, so with real Stripe the bank's confirmation can't be completed in the page | Yes with Stripe | empty |
-| `STRIPE_WEBHOOK_SECRET` | Signing secret for `APP_URL/api/stripe/webhook`. Empty: the webhook answers 503 | Yes with Stripe | empty |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret of the platform endpoint `APP_URL/api/stripe/webhook`. With neither webhook secret set the route answers 503 | Yes with Stripe | empty |
+| `STRIPE_CONNECT_WEBHOOK_SECRET` | (Batch 15 §5) Signing secret of the Connect endpoint ("events on connected accounts"), same URL. The route accepts either secret | Yes with Stripe | empty |
+| `OWNER_EMAIL` | (Batch 15 §12) Only this admin sees the red "Settings to fix" box; unset, every admin sees it | No | empty |
 | `STRIPE_FAKE` | `1` uses an in-process fake Stripe, only with no secret key and a localhost `APP_URL` (evidence and media runs) | Never in production | empty |
 | `FREE_UNTIL` | ISO date when "free during launch" ends. Unset or unparsable: free with no end. Set it at least 30 days ahead (developers are told 30 and 7 days before) | Decide at launch | empty |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | Cloudflare R2 for uploads, only when all four are set | Yes (local disk doesn't work on Vercel) | empty (local disk) |
 | `UPLOAD_DIR` | Local-disk upload folder when R2 is off | No | `./uploads` (tests use `.test-uploads`) |
 | `CRON_SECRET` | Bearer token for `GET /api/cron/daily`. Empty: the route answers 503 | Yes | empty |
 | `ADMIN_EMAILS` | Comma-separated admin emails (in addition to `User.isAdmin`) | Yes | `owner@example.com` in the template |
-| `OUTAGE_CHECKS` | `1` turns outage detection on | Decide at launch | `0` |
-| `HEALTH_KEY` | Secret the uptime checker sends as `?key=`; only keyed pings write heartbeats | With `OUTAGE_CHECKS=1` | a long random value |
+| `OUTAGE_CHECKS` | `1` turns outage recording on (from the uptime service's alerts, batch 15 §10) | Decide at launch | `0` |
+| `HEALTH_KEY` | Secret the uptime service sends as `?key=` on its ping (heartbeats, information only) and on its alert webhook `POST /api/health/alert` | With `OUTAGE_CHECKS=1` | a long random value |
 | `SKIP_EMAIL_CONFIRM` | `1` skips the email-confirmation requirement (a strip says so). Ignored in production | Must be off | `0` |
 | `NEXT_DIST_DIR` | Build output folder, so a check or second server doesn't overwrite the running dev server's `.next` | No | `.next` |
 | `BASE`, `FAKE_BASE`, `ONLY`, `ADMIN`, `PLAYWRIGHT_BROWSERS_PATH` | Read by `scripts/evidence.cjs` / `scripts/media.cjs` only | No | see the script headers |
@@ -215,7 +217,8 @@ range), money and timer constants in `src/lib/rules.ts` (`PLATFORM_FEE_PERCENT`,
 
 ### Stripe webhook events
 
-`src/app/api/stripe/webhook/route.ts` verifies the signature with `STRIPE_WEBHOOK_SECRET` and handles:
+`src/app/api/stripe/webhook/route.ts` verifies the signature with `STRIPE_WEBHOOK_SECRET`, then with `STRIPE_CONNECT_WEBHOOK_SECRET` (batch 15 §5:
+either is accepted; a bad signature with both is a 400) and handles:
 
 | Event | Handler | Effect |
 | --- | --- | --- |
@@ -224,8 +227,22 @@ range), money and timer constants in `src/lib/rules.ts` (`PLATFORM_FEE_PERCENT`,
 | `invoice.paid`, `invoice.payment_failed`, `invoice.payment_action_required`, `customer.subscription.deleted` | `subscriptionWebhook` | Stripe Billing renewals, declines, bank confirmation, end |
 | `payout.failed`, `payout.paid`, `account.updated` (connected accounts) | `payoutProblem`, `payoutFixed` | The tester's payout banner and reminders |
 
-`.env.example` mentions only `charge.dispute.created`; subscribe the endpoint to all of the above. The payout events
-come from connected accounts (see section 10 about the second signing secret).
+Two endpoints at the same URL (both listed in `.env.example`):
+
+- **Platform endpoint** (events on your account): `charge.dispute.created`, `charge.dispute.closed`, `invoice.paid`,
+  `invoice.payment_failed`, `invoice.payment_action_required`, `customer.subscription.deleted`. Secret: `STRIPE_WEBHOOK_SECRET`.
+- **Connect endpoint** ("events on connected accounts"): `account.updated`, `payout.failed`, `payout.paid`. Secret:
+  `STRIPE_CONNECT_WEBHOOK_SECRET`. A tester's payout account is ready when `payouts_enabled` and the `transfers` capability is
+  `active` (batch 15 §4; `charges_enabled` doesn't matter for these receive-only accounts).
+
+### Settings checked loudly (batch 15 §12)
+
+`configProblems()` (`src/lib/configProblems.cjs`) lists every settings problem with a plain fix. `npm run build` runs
+`scripts/check-config.cjs` first: a `FREE_UNTIL` that isn't a date, a live Stripe key without the publishable key or a
+webhook secret, only some R2 settings, or production without `RESEND_API_KEY` fail the build (on Vercel the old version stays
+live). The rest only warn: they are logged once at server start (`src/instrumentation.ts`) and shown in a red box at the top
+of the admin dashboard to `OWNER_EMAIL` (every admin when unset). In production without `RESEND_API_KEY`, `sendEmail` throws
+and logs; it writes to the outbox only with `ALLOW_DEV_OUTBOX=1`.
 
 ---
 
@@ -386,14 +403,18 @@ On a fresh, healthy Postgres cluster (a new machine, Docker, Neon) none of this 
       Set `APP_URL` to the real https address. Confirm the cron from `vercel.json` appears and `CRON_SECRET` is set.
 - [ ] **Stripe, live.** `STRIPE_SECRET_KEY` = live secret key, `STRIPE_ALLOW_LIVE=1`, `STRIPE_PUBLISHABLE_KEY` = live
       publishable key. Turn on **Connect** (Express accounts, transfers capability) and complete the platform profile.
-- [ ] **Stripe webhook.** Endpoint `APP_URL/api/stripe/webhook` with the events in section 4; put its signing secret in
-      `STRIPE_WEBHOOK_SECRET`. Decide how to receive the connected-account payout events (section 10).
+- [ ] **Stripe webhooks.** Two endpoints, both at `APP_URL/api/stripe/webhook` (events in section 4): the platform endpoint
+      (secret in `STRIPE_WEBHOOK_SECRET`) and a Connect endpoint, "events on connected accounts" (secret in
+      `STRIPE_CONNECT_WEBHOOK_SECRET`).
 - [ ] **Resend.** Verify the sending domain; set `RESEND_API_KEY` and `EMAIL_FROM` on that domain. Send yourself a reset
       link to test. Without the key, live emails would silently go to the outbox table.
 - [ ] **Cloudflare R2.** Create the bucket and an API token limited to it; set the four `R2_*` variables. Add a CORS rule
       allowing `PUT` (uploads go straight from the browser) and `GET` from the `APP_URL` origin.
-- [ ] **UptimeRobot (or similar).** Generate a long random `HEALTH_KEY`, set `OUTAGE_CHECKS=1`, and add a 5-minute HTTP
-      monitor on `APP_URL/api/health?key=<HEALTH_KEY>`. Read the outage note in section 10 first.
+- [ ] **UptimeRobot.** Generate a long random `HEALTH_KEY`, set `OUTAGE_CHECKS=1`, and add a 5-minute HTTP monitor on
+      `APP_URL/api/health?key=<HEALTH_KEY>`. Then add an Alert Contact: type **Webhook**, method **POST**, URL
+      `APP_URL/api/health/alert?key=<HEALTH_KEY>`, "Send as JSON" with
+      `{"alertType": "*alertType*", "alertDateTime": "*alertDateTime*", "alertDuration": "*alertDuration*"}`, and attach it to
+      the monitor for both down and up alerts. Outages come only from these alerts (batch 15 §10): a paused monitor changes nothing.
 - [ ] **FREE_UNTIL.** Decide the end of free-during-launch. Leave it unset for "free with no end", or set an ISO date at
       least 30 days ahead.
 - [ ] **SKIP_EMAIL_CONFIRM.** Make sure it is `0` or unset (production ignores it anyway; keep staging honest too).
@@ -473,13 +494,8 @@ Find them with `grep -rn DEFAULT src` and in the batch files (`grep -n DEFAULT d
 
 ### Technical gaps found while writing this (not fixed)
 
-- **Connect webhook events need their own secret.** Payout events come from connected accounts, which Stripe sends to a
-  separate "Connected accounts" endpoint with its own signing secret. The route checks only `STRIPE_WEBHOOK_SECRET`.
-- **Outage detection depends on the monitor itself.** If the uptime checker stops pinging for over 15 minutes (paused
-  monitor, expired plan), the next ping records the whole gap as an outage and moves every running timer and cancels
-  calls in it (`heartbeat` / `recordOutage` in server/outages).
-- **R2 upload size isn't enforced.** The presigned `PUT` signs only the host; the size the browser declares is checked,
-  but the stored object's real size isn't (`finishRecording` doesn't check R2).
+- (Fixed in batch 15: the Connect webhook's own secret §5, outages from the uptime service's alerts §10, R2 upload sizes
+  signed and checked §6, sign-in limits §7, admins can open disputed work §8, time zones in bell lines and emails §11.)
 - **Long daily job.** `runDaily` does everything in one request, one row at a time. Watch Vercel's function time limit as
   data grows.
 - **No sign-in throttling.** Log-in has no attempt limit, and sign-up / log-in messages reveal whether an email has an

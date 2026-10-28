@@ -4,7 +4,7 @@ import { displayName, pronouns } from "@/lib/format";
 import { PAUSED_SEND, isLate, payByFrom, testerPaused } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
-import { ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_RECORDING_BYTES, MAX_RECORDINGS, isVideo, uploadTarget } from "./storage";
+import { ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_RECORDING_BYTES, MAX_RECORDINGS, deleteObject, headObject, isVideo, r2On, uploadTarget } from "./storage";
 import { ownContract, recordEvent, sessionRefusal } from "./tests";
 import { testerTermsGate } from "./terms";
 
@@ -39,17 +39,30 @@ export async function startRecording(tester: U, contractId: string, body: Record
   const ext = filename.includes(".") ? filename.slice(filename.lastIndexOf(".")).toLowerCase() : ".mp4";
   const storageKey = `recordings/${contractId}/${randomBytes(12).toString("hex")}${ext}`;
   const rec = await db.recording.create({ data: { contractId, storageKey, filename, sizeBytes: size, contentType: type, part } });
-  return { recordingId: rec.id, uploadUrl: uploadTarget(rec.id, storageKey) };
+  return { recordingId: rec.id, uploadUrl: uploadTarget(rec.id, storageKey, size) };
 }
 
 export async function finishRecording(tester: U, contractId: string, body: Record<string, unknown>) {
   await ownContract(tester.id, contractId);
   const rec = await db.recording.findUnique({ where: { id: String(body.recordingId ?? "") } });
   if (!rec || rec.contractId !== contractId) throw new HttpError(404, "not_found", "That upload doesn't exist.");
+  // (Batch 15 section 6) On R2 the browser uploaded straight to storage: check the real object. Missing, a different size from what was claimed, or over the limit:
+  // the object and the row are deleted. (Local uploads already count their bytes as they arrive.)
+  if (r2On()) {
+    const head = await headObject(rec.storageKey);
+    const limit = isVideo(rec.contentType) ? MAX_RECORDING_BYTES : MAX_ATTACHMENT_BYTES;
+    if (!head || head.size !== rec.sizeBytes || head.size > limit) {
+      if (head) await deleteObject(rec.storageKey);
+      await db.recording.delete({ where: { id: rec.id } });
+      throw new HttpError(409, "upload_unfinished", UPLOAD_UNFINISHED);
+    }
+  }
   await db.recording.update({ where: { id: rec.id }, data: { uploadedAt: new Date() } });
   return { ok: true };
 }
 
+/** (Batch 15 section 6) An R2 upload whose stored object doesn't match what the browser claimed. */
+export const UPLOAD_UNFINISHED = "That upload didn't finish properly. Try again.";
 export const TOO_MANY_RECORDINGS = `You can add at most ${MAX_RECORDINGS} recordings. Remove one first.`;
 export const STILL_UPLOADING = "A recording is still uploading. Send once it's done.";
 /** An upload started this recently and not finished counts as still uploading (an abandoned one stops blocking Send after this). */

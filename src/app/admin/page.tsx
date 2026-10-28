@@ -9,6 +9,8 @@ import { isAdmin } from "@/lib/server/session";
 import { AdminButton } from "./AdminButton";
 import { PagedList } from "./PagedList";
 import { adminCases } from "@/lib/server/holds";
+import { configProblems, seesConfigBox } from "@/lib/server/config";
+import { adminOutages, lengthText, outageLine } from "@/lib/server/outages";
 import { adminPage, disputeRow, type DisputeVM, type Page } from "@/lib/server/adminLists";
 import { StatTile } from "@/components/StatTile";
 import { BadgeDollarSign, FlaskConical, Inbox, ListChecks, Users, Wallet } from "lucide-react";
@@ -39,6 +41,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const focusDispute: DisputeVM | null = q.dispute ? await db.dispute.findUnique({ where: { id: q.dispute } }).then((d) => (d ? disputeRow(d) : null)) : null;
   const focusUser = q.user ? await db.user.findUnique({ where: { id: q.user } }) : null;
   const cases = await adminCases();
+  const outages = await adminOutages();
   // The full app's admin tiles: people, parts awaiting review, what was charged, the platform's share, what testers are owed.
   const charged = await db.payment.aggregate({ where: { status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true, feeCents: true }, _count: { _all: true } });
   const toReview = (await db.submission.count({ where: { review: null } })) + (await db.call.count({ where: { review: null, status: "booked", startsAt: { lte: new Date() } } }));
@@ -50,6 +53,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <Link href="/app">Back to the app</Link>
       </div>
       <h1 className="text-3xl font-bold tracking-tight text-white">Admin</h1>
+      {/* (Batch 15 section 12) The settings problems: only the owner (OWNER_EMAIL) sees them; every admin when it's unset. */}
+      {seesConfigBox(u) && configProblems().length > 0 && (
+        <section className="rounded-xl border border-rose-500/60 bg-rose-950/40 p-4" data-config-problems>
+          <h2 className="font-semibold text-rose-200">Settings to fix</h2>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-rose-100">
+            {configProblems().map((p) => (
+              <li key={p.message}>{p.message}</li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatTile icon={Users} label="Developers / testers" value={`${devCount} / ${testerCount}`} hint={`${openTests} tests accepting testers`} tone="indigo" />
@@ -59,6 +73,21 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <StatTile icon={BadgeDollarSign} label="Owed to testers" value={money(owedToTesters)} hint="waiting for a payout account" tone="amber" />
         <StatTile icon={ListChecks} label="On the waitlist" value={String(waitlistP.total)} hint="→ Waitlist" tone="indigo" />
       </section>
+
+      {/* (Batch 15 section 10) Outages, from the uptime service's own down/up alerts: the open "down" and the latest recorded outages. */}
+      {(outages.downSince || outages.rows.length > 0) && (
+        <section className="card space-y-2" id="outages" data-outages>
+          <h2 className="text-lg font-semibold text-white">Outages</h2>
+          {outages.downSince && <p className="text-sm text-amber-200">The uptime service says the site has been down since {fmtDateTime(outages.downSince)}. The outage is recorded when it says the site is up again (if it lasted 15 minutes or more).</p>}
+          <ul className="space-y-1 text-sm">
+            {outages.rows.map((o) => (
+              <li key={o.id} data-outage-line>
+                {outageLine(o.startAt, o.endAt, o.ms)} <span className="text-slate-400">({lengthText(o.ms)}, recorded {fmtDateTime(o.recordedAt)})</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {(focusDispute || focusUser) && (
         <section className="card space-y-2" id="focus" data-focus="">

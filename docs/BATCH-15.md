@@ -351,6 +351,7 @@ An admin suspends ONE side of an account: the developer side or the tester side.
   - Tester, under the toggle: "On: a button stops once when something changed since you opened the page. Off: only new terms from the developer stop it."
   - Both are small grey text, and on phones they wrap under the button.
 - **Proof:** a recording of each: the developer's menu and a tick turning a stop off, and the tester's toggle making a Send go through despite a payment line while a terms offer still stops.
+- **Owner change (Oct 30, later):** KEEP the developer's Alerts exactly as it is now: it stays in the overview's button row, keeps "Tick what should not stop your buttons" (ticked = ignored), and gets no new line under the button. The developer part of this item (the move, the flip, "Reset") is dropped. The tester's one-press Alerts toggle and its line stay as specified, and the proof covers only the tester's toggle.
 
 ## 27. The developer's side of a dispute: optional, never stopped, works while restricted (owner, Oct 30)
 - **Not required (as today):** an admin can decide without it. The Needs you item says "Add your side (optional, once; the team reads both)".
@@ -383,13 +384,14 @@ Applies while the developer's account is suspended (developer side, item 16) or 
 - **Cancel call keeps its normal stop-once.** After the press they stay on the restricted view.
 - **Any other press from an older full page** is refused and routed to the dashboard top with the failed-press line, as now.
 - **Item 23 (team pause of one test)** uses the same pair: Stop AND End early go through silently there too.
+- **Owner note (Oct 30, later):** no Alerts menu in the restricted view until the owner answers (it stays hidden there).
 - **Proof:** a recording of a suspended developer opening a test card and seeing the restricted view. They cancel a call, then Stop (it goes through despite a tester's change) and land on the dashboard with the "Done" line. Plus the disputes box with 5 disputes scrolling. Desktop and phone.
 
 ## 30. No Reject anywhere: Pay any amount, with a reason required at $0 (owner, Oct 30)
 - **Every Pay box** (written answers, recordings and calls; listed or unlisted; Needs you and the tester rows) **loses its Reject button.** The developer pays an amount from $0 up.
 - **The note** is labelled "Note to <name> (optional)", and it becomes required only when the amount is $0: "Say why you're paying $0 (the tester reads it)." It's red at the box.
   - Paying less than the listing but above $0 no longer requires a reason (owner, Oct 30; replaces checkPay's "Say why you're paying less than the listing"). PENDING owner confirmation: keep this one rule behind one constant, `REASON_WHEN_UNDER_LISTING = false`, so it can be flipped back.
-  - **Owner update (Oct 30, later):** paying LESS than the listing still requires a reason, as today. Set `REASON_WHEN_UNDER_LISTING = true` (keep checkPay's "Say why you're paying less than the listing�"). A $0 payment also requires a reason, including on unlisted parts. Everything else in this item stands.
+  - **Owner update (Oct 30, later):** paying LESS than the listing still requires a reason, as today. Set `REASON_WHEN_UNDER_LISTING = true` (keep checkPay's "Say why you're paying less than the listing…"). A $0 payment also requires a reason, including on unlisted parts. Everything else in this item stands.
 - **A $0 payment closes the row like a payment.** The tester can dispute any amount once, $0 included. Its wording on both sides is "Paid $0: "<reason>"".
 - **Old rejections stay** and show as "Rejected".
 - **Listed parts:** Charge / Let it go still only open for work left unreviewed. A $0 payment is a review.
@@ -432,6 +434,15 @@ On the developer test page's Live session panel, each tester's card lists their 
 - **The whole list of tester cards:** it scrolls on its own once it's taller than about 2 screens, with the tester tick list and the request form staying above it.
 
 **Proof:** a recording with one tester who has 6 booked calls and 4 past ones, desktop and phone.
+
+## 34. One $1,000 ceiling for all of a tester's calls on a test (owner, Oct 30, added later)
+One $1,000 ceiling for ALL of a tester's calls on a test, listed and unlisted together, with extra pay counted. This replaces batch 12 §2's unlisted-only $1,000 pool (`NO_LISTING_CALLS_TOTAL_CENTS` becomes `CALLS_TOTAL_CENTS`). The unlisted $200/h per-call cap is unchanged.
+- **Used** = everything paid for that tester's calls on the test (Pay, Pay more, dispute decisions, Charge), plus each booked call not yet paid at its reference (rate × booked length; unlisted: $200/h × booked length).
+- **Booking:** a request, an offer or an Accept that would push Used over $1,000 is refused, on both sides: "Calls with Ana on this test can come to at most $1,000; $X is left, so this call can't be booked." Pending requests over the limit can't be accepted (same line).
+- **Paying:** every call Pay / Pay more box's "up to" is also limited by what's left. Charge and dispute decisions are capped at what's left too. If a listed call's Charge amount is cut by the cap, say so: "Charge $X (the $1,000 limit for calls on this test)".
+- **Small warning text** (grey/amber, no stop) wherever calls are requested, offered, accepted or paid, on both sides. It appears when what's left is under one hour at that tester's listed rate, or under $200 for a tester whose calls aren't listed: "$X left of the $1,000 for calls with Ana on this test." The tester's wording is "…for your calls on this test."
+- **Tests** for each, including a mix of listed and unlisted calls.
+- **Proof:** a recording of the warning appearing, then a booking refused at the limit, desktop and phone.
 
 ## Check and report
 - Migrations: `LoginAttempt`, `User.timeZone`, the stored "down" alert (or reuse `AppState`). Write them by hand and check them with the `prisma migrate diff ... --exit-code` command from BATCH-10. A stale Prisma client is then the only acceptable failure.

@@ -2,10 +2,9 @@ import { db } from "@/lib/db";
 import { displayName, fmtDateTime } from "@/lib/format";
 import { notify } from "./notify";
 
-// (Owner, Oct 22, NEWEST+6) Outages, detected automatically (no admin entry). GET /api/health (an outside uptime
-// checker every 5 min), page polls and the daily job write heartbeats; a gap of more than 15 minutes between the last
-// heartbeat and now is an outage. It is recorded once (unique start) and then every timer that was running moves later
-// by its length; calls inside it are cancelled as "missed because the site was down" (never a no-show, no charge).
+// (Owner, Oct 22, NEWEST+6; batch 15 section 10) Outages come from the uptime service's own alerts (POST /api/health/alert?key=...): a "down" is stored and the
+// matching "up" records the outage when it lasted 15 minutes or more. It is recorded once (unique start) and then every timer that was running moves later by its
+// length; calls inside it are cancelled as "missed because the site was down" (never a no-show, no charge). Heartbeats from GET /api/health are information only.
 
 export const OUTAGE_MIN_MS = 15 * 60_000;
 const HEARTBEAT_EVERY_MS = 60_000;
@@ -27,16 +26,52 @@ export const outageLine = (start: Date, end: Date, ms: number) => {
 };
 
 /**
- * The app answered: check the gap since the last heartbeat (an outage if over 15 minutes), then write a heartbeat
- * (at most one a minute, unless `force`, e.g. /api/health). Returns the outage it recorded, if any.
+ * (Batch 15 section 10) The outside checker's keyed ping writes a heartbeat, for information only (at most one a minute, unless `force`). Missing pings NEVER create an
+ * outage any more: a paused monitor or an expired plan changes nothing. Outages come only from the uptime service's own down/up alerts (recordAlert).
  */
 export async function heartbeat(now = new Date(), force = false) {
-  if (!outageChecksOn()) return null; // without the setting nothing is written or detected
+  if (!outageChecksOn()) return null; // without the setting nothing is written
   const last = await db.heartbeat.findFirst({ orderBy: { at: "desc" } });
-  let outage = null;
-  if (last && now.getTime() - last.at.getTime() > OUTAGE_MIN_MS) outage = await recordOutage(last.at, now);
   if (force || !last || now.getTime() - last.at.getTime() >= HEARTBEAT_EVERY_MS) await db.heartbeat.create({ data: { at: now } });
-  return outage;
+  return null;
+}
+
+/** The stored "down" alert (AppState): when the uptime service said the site went down, until the matching "up". */
+export const DOWN_KEY = "outage-down";
+
+/** One UptimeRobot alert webhook, read from its JSON (or form) body and the URL's query: alertType 1 = down, 2 = up; the alert time (Unix seconds) and duration (seconds). */
+export function parseAlert(fields: Record<string, unknown>, now = new Date()): { type: "down" | "up" | null; at: Date; durationMs: number | null } {
+  const v = (k: string) => (fields[k] ?? fields[k.toLowerCase()]) as string | number | undefined;
+  const t = Number(v("alertType"));
+  const secs = Number(v("alertDateTime") ?? v("alertTime"));
+  const at = Number.isFinite(secs) && secs > 0 ? new Date(secs * 1000) : now;
+  const dur = Number(v("alertDuration"));
+  return { type: t === 1 ? "down" : t === 2 ? "up" : null, at, durationMs: Number.isFinite(dur) && dur > 0 ? dur * 1000 : null };
+}
+
+/**
+ * (Batch 15 section 10) An alert from the uptime service. A "down" is stored. The matching "up" records an outage from the down to the up when it lasted 15 minutes or
+ * more (recordOutage moves every running timer and cancels calls inside it); a shorter one only clears the stored down. Returns the outage recorded, if any.
+ */
+export async function recordAlert(alert: ReturnType<typeof parseAlert>) {
+  if (alert.type === "down") {
+    // The first down counts (a repeated down alert keeps the earlier start).
+    await db.appState.upsert({ where: { key: DOWN_KEY }, create: { key: DOWN_KEY, value: alert.at.toISOString() }, update: {} });
+    return null;
+  }
+  if (alert.type !== "up") return null;
+  const stored = await db.appState.findUnique({ where: { key: DOWN_KEY } });
+  const start = stored ? new Date(stored.value) : alert.durationMs != null ? new Date(alert.at.getTime() - alert.durationMs) : null;
+  await db.appState.deleteMany({ where: { key: DOWN_KEY } });
+  if (!start || isNaN(start.getTime()) || alert.at.getTime() - start.getTime() < OUTAGE_MIN_MS) return null;
+  return recordOutage(start, alert.at);
+}
+
+/** The admin dashboard: the stored down (if the site is down right now by the uptime service's account) and the latest outages. */
+export async function adminOutages() {
+  const down = await db.appState.findUnique({ where: { key: DOWN_KEY } });
+  const rows = await db.outage.findMany({ orderBy: { startAt: "desc" }, take: 10 });
+  return { downSince: down ? new Date(down.value) : null, rows };
 }
 
 /** Record [start, end) once and move every running timer by its length. */

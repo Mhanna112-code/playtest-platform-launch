@@ -39,6 +39,25 @@ const fakeStripe = {
   webhooks: { constructEvent: (raw: string, sig: string) => { if (sig !== "fake") throw new Error("bad signature"); return JSON.parse(raw); } },
 } as unknown as Stripe;
 
+/**
+ * (Batch 15 section 5) The webhook route's signature check: the platform endpoint's secret (STRIPE_WEBHOOK_SECRET), then the Connect endpoint's
+ * ("events on connected accounts", same URL: STRIPE_CONNECT_WEBHOOK_SECRET). Either one is accepted; null when neither matches. It never needs the API key.
+ */
+export function verifyWebhook(raw: string, signature: string): Record<string, unknown> | null {
+  const verifier = override?.webhooks ?? (fakeOn() ? fakeStripe.webhooks : Stripe.webhooks);
+  const secrets = fakeOn() && !override ? ["fake"] : [process.env.STRIPE_WEBHOOK_SECRET?.trim(), process.env.STRIPE_CONNECT_WEBHOOK_SECRET?.trim()].filter((x): x is string => !!x);
+  for (const secret of secrets) {
+    try {
+      return verifier.constructEvent(raw, signature, secret) as unknown as Record<string, unknown>;
+    } catch {
+      // try the next secret
+    }
+  }
+  return null;
+}
+/** Is any webhook secret set (or the fake on)? */
+export const webhookSecretsSet = () => fakeOn() || !!process.env.STRIPE_WEBHOOK_SECRET?.trim() || !!process.env.STRIPE_CONNECT_WEBHOOK_SECRET?.trim();
+
 export function stripeOn() {
   return !!override || !!process.env.STRIPE_SECRET_KEY?.trim() || fakeOn();
 }
@@ -194,11 +213,17 @@ export async function payoutSetupUrl(user: Party, base: string) {
   return link.url;
 }
 
+/**
+ * (Owner, Oct 30, batch 15 section 4) A tester's Express account is ready for payouts when Stripe has payouts on and the transfers capability is active. These accounts only
+ * RECEIVE money, so charges_enabled doesn't matter. The account.updated webhook uses the same rule.
+ */
+export const payoutReadyOf = (a: { payouts_enabled?: boolean | null; capabilities?: { transfers?: string | null } | null }) => !!a.payouts_enabled && a.capabilities?.transfers === "active";
+
 export async function refreshPayoutStatus(userId: string) {
   const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
   if (!user.stripeAccountId) return false;
   const a = await getStripe().accounts.retrieve(user.stripeAccountId);
-  const ready = !!a.payouts_enabled && !!a.charges_enabled;
+  const ready = payoutReadyOf(a);
   await db.user.update({ where: { id: userId }, data: { payoutsReady: ready } });
   return ready;
 }

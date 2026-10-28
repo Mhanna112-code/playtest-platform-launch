@@ -1,9 +1,9 @@
 import { db } from "@/lib/db";
 import { healthKeyOk, heartbeat, outageChecksOn } from "@/lib/server/outages";
 
-// (NEWEST+6, GATED) The outside uptime checker calls GET /api/health?key=<HEALTH_KEY> every 5 minutes. With
-// OUTAGE_CHECKS=1 and the right key, a heartbeat is written (a gap over 15 minutes since the last one is recorded as an
-// outage). Without the key it only reports the status. Page loads, polls and the daily job never write heartbeats.
+// (NEWEST+6, GATED; batch 15 section 10) The outside uptime checker calls GET /api/health?key=<HEALTH_KEY> every 5 minutes. With
+// OUTAGE_CHECKS=1 and the right key, a heartbeat is written for information only (missing pings never create an outage: outages
+// come from the alerts, /api/health/alert). Without the key it only reports the status. Page loads, polls and the daily job never write heartbeats.
 export async function GET(req: Request) {
   try {
     await db.$queryRaw`SELECT 1`;
