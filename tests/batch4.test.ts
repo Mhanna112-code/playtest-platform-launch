@@ -203,7 +203,7 @@ describe("E2, E3) stacking by kind and reminders in the summary email", () => {
     const { dev, testId } = await setup();
     const { tester } = await joined(testId);
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } });
-    await db.contract.updateMany({ where: { testId }, data: { dueAt: new Date(Date.now() + 2 * DAY) } }); // (batch 15 section 18) their own deadline
+    await db.contract.updateMany({ where: { testId }, data: { dueAt: new Date(Date.now() + 2 * DAY), joinedAt: new Date(Date.now() - 5 * DAY) } }); // (batch 16 section 1) their own deadline; the 3-day mark is due
     await startHold(dev.user.id, "unpaid");
     await cron();
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "Your deadline on" } } })).toBe(0);

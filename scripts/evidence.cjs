@@ -139,15 +139,14 @@ async function signIn(page, email) {
   let adminPage = null;
   let t2 = null; // signed in once (sign-in links are rate-limited per email)
 
-  await flow("01", "Landing page and waitlist (phone)", async () => {
+  await flow("01", "Landing page (phone)", async () => {
     const p = await ctx(PHONE);
     await p.goto("/");
     check("headline shows", await has(p, "text=You choose what to pay."));
+    // (Batch 16 section 7) No waitlist: no email box on the home page, and /api/waitlist is gone.
+    check("no waitlist email box", (await p.locator('input[type="email"]').count()) === 0 && !(await p.isVisible("text=Join the waitlist")));
+    check("/api/waitlist is gone (404)", (await p.request.post("/api/waitlist", { data: { email: `wait+${TS}@playtest.test` } })).status() === 404);
     await shot(p, "landing");
-    await p.fill('input[type="email"]', `wait+${TS}@playtest.test`);
-    await p.click("text=Join the waitlist");
-    check("waitlist confirms", await has(p, "text=You're on the list"));
-    await shot(p, "waitlist-done");
   });
 
   await flow("02", "Developer signs up with a password and posts a test (desktop)", async () => {
@@ -1564,7 +1563,7 @@ async function signIn(page, email) {
     // Developer tiles: on their profile as testers see it, and on their dashboard.
     await tp.goto(`/app/developers/${sql(`select id from "User" where email = '${DEV30}'`)}`);
     check("developer profile: no Reports reviewed tile", !(await tp.isVisible("text=Reports reviewed")));
-    check("developer profile: Pays on average 100% with the split line", await has(tp, "text=100% accepted in full, 0% partly, 0% rejected"));
+    check("developer profile: Pays on average 100% of the listing, over 1 piece of work (batch 16: no split line)", (await has(tp, "text=of the listing, over 1 piece of work")) && !(await tp.isVisible("text=accepted in full")));
     check("developer profile: Typical review 2 days with the charges/disputes line", (await has(tp, "text=2 days")) && (await has(tp, "text=0 charged by testers after the review window · 0 disputes decided for testers")));
     check("developer profile: Rating 5.0 ★, 1 rating", (await has(tp, "text=5.0 ★")) && (await has(tp, "text=1 rating")));
     check("developer profile: the footnote", await has(tp, "text=Typical review: the median time"));

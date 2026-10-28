@@ -273,17 +273,18 @@ describe("E, F) the admin dashboard order and pages of 25", () => {
 
   it("pages of 25: Previous / Next with '1–25 of N', keyset by date, no overlap; no Load more", async () => {
     const tag = randomUUID().slice(0, 6);
-    for (let i = 0; i < 60; i++) await db.waitlistEntry.create({ data: { email: `p-${tag}-${i}@test.playtest.test`, role: "tester", createdAt: new Date(Date.now() + 100_000 + i * 1000) } }).catch(() => null);
+    // (Batch 16 section 7: no waitlist any more) The Users list.
+    for (let i = 0; i < 60; i++) await db.user.create({ data: { email: `p-${tag}-${i}@test.playtest.test`, createdAt: new Date(Date.now() + 100_000 + i * 1000) } }).catch(() => null);
     const a = await admin();
     expect(PAGE).toBe(25);
-    const p1 = (await adminPage("waitlist", a.user.id, null)) as { rows: { id: string; at: string }[]; next: string | null; total: number };
+    const p1 = (await adminPage("users", a.user.id, null)) as { rows: { id: string; at: string }[]; next: string | null; total: number };
     expect(p1.rows.length).toBe(25);
-    const p2 = (await json(await moreGET(req(`/api/admin/more?kind=waitlist&after=${encodeURIComponent(p1.next!)}`, { cookie: a.cookie })))).body;
+    const p2 = (await json(await moreGET(req(`/api/admin/more?kind=users&after=${encodeURIComponent(p1.next!)}`, { cookie: a.cookie })))).body;
     expect(p2.rows.length).toBe(25);
     expect(p2.rows.some((r: { id: string }) => p1.rows.some((o) => o.id === r.id))).toBe(false);
     expect(p2.rows[0].at <= p1.rows[24].at).toBe(true);
     // Previous = the page fetched again with its own cursor (page 1: none), the same rows.
-    const back = (await json(await moreGET(req("/api/admin/more?kind=waitlist&after=", { cookie: a.cookie })))).body;
+    const back = (await json(await moreGET(req("/api/admin/more?kind=users&after=", { cookie: a.cookie })))).body;
     expect(back.rows.map((r: { id: string }) => r.id)).toEqual(p1.rows.map((r) => r.id));
     expect(p1.total).toBeGreaterThanOrEqual(60);
     const list = src("app/admin/PagedList.tsx");

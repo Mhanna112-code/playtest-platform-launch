@@ -5,9 +5,11 @@ import { api } from "@/lib/client";
 
 /**
  * (Owner, Oct 30, batch 15 section 26) The tester's one-press Alerts, at the top right of the session page, saved per tester for all their tests.
- * On: a button stops once when something changed since the page opened. Off: only new terms from the developer (and their key marked working) stop it; every other
- * change still shows in the live box, greyed.
+ * On: a button stops once when something changed since the page opened. Off: only new terms from the developer and their key marked working stop it; every other
+ * change still shows in the live box, greyed. (Owner, Oct 28, batch 16 section 4) The grey line under the button says what stops a press, for the state shown.
  */
+export const ALERTS_ON_LINE = "Stops a press once for: new terms, your key, pay, calls, delayed pay, your dispute, listing changes, other tabs.";
+export const ALERTS_OFF_LINE = "Stops a press only for: new terms, your key marked as working.";
 export function TesterAlertsToggle({ off: start }: { off: boolean }) {
   const [off, setOff] = useState(start);
   const [err, setErr] = useState("");
@@ -31,7 +33,7 @@ export function TesterAlertsToggle({ off: start }: { off: boolean }) {
       <button type="button" className="btn-secondary px-3 py-1.5 text-sm" aria-pressed={!off} onClick={() => void flip()}>
         {off ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />} Alerts: {off ? "Off" : "On"}
       </button>
-      <p className="text-xs text-slate-400">On: a button stops once when something changed since you opened the page. Off: only new terms from the developer stop it.</p>
+      <p className="text-xs text-slate-400" data-tester-alerts-line="">{off ? ALERTS_OFF_LINE : ALERTS_ON_LINE}</p>
       {err && <p className="text-xs text-rose-300">{err}</p>}
     </div>
   );

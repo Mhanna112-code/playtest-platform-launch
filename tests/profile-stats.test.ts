@@ -32,8 +32,8 @@ describe("profile tiles", () => {
 
     const s = await developerStats(dev.user.id);
     expect("reviewed" in s).toBe(false);
-    // (1 + 0.4 + 0 + 1) / 4 = 60%; 2 of 4 in full, 1 partly, 1 rejected.
-    expect(s.pays).toEqual({ value: "60%", hint: "50% accepted in full, 25% partly, 25% rejected" });
+    // (1 + 0.4 + 0 + 1) / 4 = 60%, over the 4 pieces (batch 16 section 5: no split by outcome).
+    expect(s.pays).toEqual({ value: "60%", hint: "of the listing, over 4 pieces of work" });
     // By hand: 2, 4 and 6 days -> the median is 4 days; the tester's charge doesn't count toward it.
     expect(s.review).toEqual({ value: "4 days", hint: "1 charged by testers after the review window · 0 disputes decided for testers" });
 

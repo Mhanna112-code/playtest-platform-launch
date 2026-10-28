@@ -240,7 +240,8 @@ model Test {
   excerpts   Excerpt[]
   /// Open until heads-up notices sent (3 days and 1 day before)
   notified3d Boolean @default(false)
-  /// Countdown notices already sent for Open until: "1m" | "1w" | "3d" | "1d"
+  /// Countdown notices already sent for Open until: "1m" | "1w" | "3d" | "1d". (Batch 16 section 1) Also each working tester's own deadline marks,
+  /// per contract and per deadline: "due:<contractId>:<deadline ms>:<mark>" (and ":seen" once the daily job has looked at that deadline)
   notifiedMarks String[]
   notified1d Boolean @default(false)
 
@@ -652,14 +653,6 @@ model OutboxEmail {
   subject   String
   text      String
   html      String   @default("")
-  createdAt DateTime @default(now())
-}
-
-model WaitlistEntry {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  /// "developer" | "tester" | "both"
-  role      String   @default("both")
   createdAt DateTime @default(now())
 }
 

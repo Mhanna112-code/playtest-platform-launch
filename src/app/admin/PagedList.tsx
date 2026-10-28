@@ -196,7 +196,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
   }
 }
 
-const LIST_KINDS = new Set<Kind>(["users", "tests", "payments", "waitlist", "u-payments", "u-payouts", "u-disputes", "u-chargebacks", "u-holds", "u-tests", "u-reports", "u-parts", "t-timeline", "t-contracts", "t-payments"]);
+const LIST_KINDS = new Set<Kind>(["users", "tests", "payments", "u-payments", "u-payouts", "u-disputes", "u-chargebacks", "u-holds", "u-tests", "u-reports", "u-parts", "t-timeline", "t-contracts", "t-payments"]);
 const PAGE = 25; // (Owner, Oct 26) pages of 25 (the server's PAGE)
 
 /**

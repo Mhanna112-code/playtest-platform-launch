@@ -84,7 +84,8 @@ describe("email settings and the bell", () => {
     const { testId } = await setup();
     const { tester } = await joined(testId);
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } });
-    await db.contract.updateMany({ where: { testId }, data: { dueAt: new Date(Date.now() + 2 * DAY) } }); // (batch 15 section 18) their own deadline
+    // (Batch 16 section 1) Their own deadline in 2 days, joined 5 days ago: the 3-day mark is due.
+    await db.contract.updateMany({ where: { testId }, data: { dueAt: new Date(Date.now() + 2 * DAY), joinedAt: new Date(Date.now() - 5 * DAY) } });
     await cron();
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "Your deadline on" } } })).toBe(1); // (batch 15 section 18) their own deadline
     expect(await db.outboxEmail.count({ where: { to: tester.user.email, subject: { contains: "Your deadline on" } } })).toBe(0);

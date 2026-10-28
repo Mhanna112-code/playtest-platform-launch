@@ -193,7 +193,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         <div className="space-y-2">
           <h2 className="flex items-center gap-2 font-semibold text-white"><BarChart3 className="h-5 w-5 text-sky-300" /> How {dev} reviews</h2>
           <ul className="space-y-1 text-sm text-slate-300">
-            <li>Pays on average: {devStats.pays.value} <span className="text-slate-500">· {devStats.pays.hint}</span></li>
+            <li>Pays on average: {devStats.pays.value === "-" ? <span className="text-slate-500">{devStats.pays.hint}</span> : <>{devStats.pays.value} <span className="text-slate-500">{devStats.pays.hint}</span></>}</li>
             <li>Typical review: {devStats.review.value}</li>
             <li>Rating: {devRating.line || "no ratings yet"}</li>
           </ul>

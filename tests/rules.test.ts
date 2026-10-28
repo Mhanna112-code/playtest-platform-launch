@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   callCharge, canCancelCall, canDispute, changedTerms, checkDisputeDecision, checkListing, checkPay, isLate, lateLabel, listingAmount,
-  CALL_KINDS, checkReject, contractSnapshot, devStopOnce, editCheck, endedLine, testerRefusal, joinCheck, mergeEdit, splitFee, stopOnce, stopOnceChanges, termsLine, type Listing,
+  CALL_KINDS, contractSnapshot, devStopOnce, editCheck, endedLine, testerRefusal, joinCheck, mergeEdit, splitFee, stopOnce, stopOnceChanges, termsLine, type Listing,
 } from "@/lib/rules";
 
 const listing = (over: Partial<Listing> = {}): Listing => ({
@@ -213,10 +213,6 @@ describe("one stop-once reason set for every developer button", () => {
     expect(devStopOnce([ev("edited", 11), ev("stopped", 12), ev("ended", 13), ev("next_round", 14), ev("opened", 15)], seen, false)).toEqual({ go: true });
   });
   it("the second press goes ahead", () => expect(devStopOnce([ev("paid", 11)], seen, true)).toEqual({ go: true }));
-  it("reject needs a reason", () => {
-    expect(checkReject("").ok).toBe(false);
-    expect(checkReject("Didn't follow the questions").ok).toBe(true);
-  });
 });
 
 describe("ended sessions", () => {

@@ -555,7 +555,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         testId={t.id}
         seenAt={seenAt}
         canRequest={t.status !== "stopped" && t.status !== "draft" && !u.holdStartedAt && !restricted}
-        noRequestReason={t.status === "stopped" ? "" : restricted ? "Your account is suspended: you can only cancel booked calls here." : u.holdStartedAt ? "Your tests are paused until you pay what you owe: calls wait meanwhile." : ""}
+        noRequestReason={t.status === "stopped" ? "" : u.holdStartedAt ? "Your tests are paused until you pay what you owe: calls wait meanwhile." : ""}
         testers={restricted ? devTesters.map((x) => ({ ...x, requests: [] })) : devTesters}
       />
       {t.status !== "stopped" && !restricted && (

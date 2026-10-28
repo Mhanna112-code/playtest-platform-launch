@@ -21,6 +21,9 @@ export const TESTER_FOOTNOTE =
   "Accepted parts: the written answers, recordings and live calls developers paid for (in full or partly, including ones the tester charged after the review window), out of the ones sent. " +
   "Rating: the average of developers' ratings, one per test, counted once they show.";
 
+/** "of the listing, over 4 pieces of work" / "of the listing, over 1 piece of work" / "no paid work yet" (the value is then "-"). */
+export const paysHint = (n: number) => (n ? `of the listing, over ${n} piece${n === 1 ? "" : "s"} of work` : "no paid work yet");
+
 /** The rating tile: "4.6 ★" with "12 ratings" (revealed ratings only). */
 export async function ratingTile(userId: string) {
   const r = await ratingSummary(userId);
@@ -39,7 +42,6 @@ export async function developerStats(developerId: string) {
   const paidOf = (r: (typeof reviews)[number]) => Math.max(r.amountCents, decidedFor.get(r.submissionId ?? r.callId ?? "") ?? 0);
   // Pays on average: contract work only (a listing amount above zero), after any dispute.
   const shares = decided.filter((r) => r.agreedCents != null && r.agreedCents > 0).map((r) => Math.min(1, paidOf(r) / r.agreedCents!));
-  const share = (f: (x: number) => boolean) => (shares.length ? shares.filter(f).length / shares.length : null);
   const avg = shares.length ? shares.reduce((a, x) => a + x, 0) / shares.length : null;
   // Typical review: by hand only (not the testers' charges), from sending (or the call's end) to the decision.
   const byTester = (r: (typeof reviews)[number]) => chargedByTester(r.reason) || r.auto;
@@ -58,7 +60,8 @@ export async function developerStats(developerId: string) {
   }).length;
   const n = med == null ? null : Math.max(1, Math.round(med));
   return {
-    pays: { value: pct(avg), hint: `${pct(share((x) => x >= 1))} accepted in full, ${pct(share((x) => x > 0 && x < 1))} partly, ${pct(share((x) => x === 0))} rejected` },
+    // (Owner, Oct 28, batch 16 section 5) No split by outcome: the average share, over how many pieces it counts.
+    pays: { value: pct(avg), hint: paysHint(shares.length) },
     review: { value: n == null ? "-" : `${n} day${n === 1 ? "" : "s"}`, hint: `${charged} charged by testers after the review window · ${disputesWon} dispute${disputesWon === 1 ? "" : "s"} decided for testers` },
   };
 }

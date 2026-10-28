@@ -65,7 +65,12 @@ describe("the tester's one-press Alerts (section 26) and Leave (section 25)", ()
     await db.user.update({ where: { id: other.tester.user.id }, data: { testerAlertsOff: false } });
     expect((await sact(other.sessionId, "leave", other.tester.cookie, { seenAt: loaded })).status).toBe(200);
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("<TesterAlertsToggle off={u.testerAlertsOff} />");
-    expect(src("components/TesterAlertsToggle.tsx")).toContain("On: a button stops once when something changed since you opened the page. Off: only new terms from the developer stop it.");
+    // (Batch 16 section 4) One grey line for the state shown: what stops a press.
+    const toggle = src("components/TesterAlertsToggle.tsx");
+    expect(toggle).toContain('"Stops a press once for: new terms, your key, pay, calls, delayed pay, your dispute, listing changes, other tabs."');
+    expect(toggle).toContain('"Stops a press only for: new terms, your key marked as working."');
+    expect(toggle).toContain('<p className="text-xs text-slate-400" data-tester-alerts-line="">{off ? ALERTS_OFF_LINE : ALERTS_ON_LINE}</p>');
+    expect(toggle).not.toContain("Off: only new terms from the developer stop it.");
   });
 });
 

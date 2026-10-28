@@ -17,7 +17,7 @@ npm run dev                   # http://localhost:3400
 ```
 
 - Sign up at `/signup` (email + password) and log in at `/login`; Forgot password emails a reset link. With no `RESEND_API_KEY`, emails (confirmation, reset) go to the dev outbox at `/dev/outbox`. Accounts made with the old email links set a password through Forgot password.
-- Admin: put your email in `ADMIN_EMAILS` and open `/admin` (disputes, no-show reports, payouts, users, tests, waitlist).
+- Admin: put your email in `ADMIN_EMAILS` and open `/admin` (disputes, no-show reports, payouts, users, tests).
 - Without `STRIPE_SECRET_KEY`, Pay presses are recorded as "payments not set up" so the whole flow still works.
 - `npm run check` = typecheck + lint + tests + production build. Tests use the `test` schema of the local database
   (`TEST_DATABASE_URL`), never the dev data, and fake Stripe.

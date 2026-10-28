@@ -3,7 +3,7 @@ import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
 import {
-  HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, choiceLine, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
+  HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, choiceLine, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, sendSummaries } from "./notify";
@@ -486,7 +486,7 @@ export async function chargebackWon(paymentIntentId: string) {
   return true;
 }
 
-/** The daily job: auto-pay after the review window, closing tests paused for 7 days, the paused reminders, Open until heads-ups. (No retries and no owed window any more: a declined payment is a hold at once.) */
+/** The daily job: auto-pay after the review window, closing tests paused for 7 days, the paused reminders, Open until heads-ups and each tester's own deadline reminders. (No retries and no owed window any more: a declined payment is a hold at once.) */
 export async function runDaily(now = new Date()) {
   const out = { autoPaid: 0, holds: 0, alerts: 0, headsUps: 0, choices: 0, retried: 0, closed: 0 };
   await (await import("./calls")).sweepNobodyJoined(now);
@@ -545,17 +545,30 @@ export async function runDaily(now = new Date()) {
   const pc = await import("./pauseClosure");
   await pc.pausedReminders(now); // (Owner, Oct 27) the developer's daily "<test> is paused and closes on <date> unless ..." (replaces the paused / day-before lines)
   out.closed = await pc.closePausedTests(now);
-  // 4. Open until heads-ups, 3 days and 1 day before (developer and working testers).
-  const closing = await db.test.findMany({ where: { status: { in: ["open", "closed"] }, openUntil: { gt: now }, ...PAUSE_FREE }, include: { developer: true, contracts: { where: { status: "working" }, include: { tester: true } } } });
+  // 4. Open until heads-ups for the developer: 1 month (when it was more than a month away), 1 week, 3 days and 1 day before.
+  const closing = await db.test.findMany({ where: { status: { in: ["open", "closed"] }, openUntil: { gt: now }, ...PAUSE_FREE } });
   for (const t of closing) {
     const m = countdownDue(t.openUntil, now, t.notifiedMarks, t.createdAt);
     if (!m) continue;
-    // Bell notifications only, never emailed.
-    // (Batch 15 sections 11 and 18) Each reader's own zone; Open until is the last day to join, each tester has their own deadline.
+    // Bell notifications only, never emailed. (Batch 15 sections 11 and 18) The reader's own zone; Open until is the last day to join.
     await bell(t.developerId, joinClosingLine(t.title, t.openUntil!, (d) => T(d, "date")), `/app/tests/${t.id}`, undefined, { reminder: `headsup:${t.id}` });
-    for (const c of t.contracts) if (c.dueAt.getTime() <= t.openUntil!.getTime() + 86_400_000) await bell(c.testerId, ownDeadlineLine(t.title, c.dueAt, (d) => T(d, "date")), `/app/sessions/${c.id}`, undefined, { reminder: `headsup:${t.id}` });
     await db.test.update({ where: { id: t.id }, data: { notifiedMarks: { push: m.mark }, ...(m.mark === "1d" ? { notified1d: true, notified3d: true } : m.mark === "3d" ? { notified3d: true } : {}) } });
     out.headsUps++;
+  }
+  // 4b. (Owner, Oct 28, batch 16 section 1) Each working tester's own reminders, counted to THEIR deadline: 1 month, 1 week, 3 days and 1 day before (only the marks
+  // still ahead when they joined). Sent marks are kept per tester and per deadline; they wait while the test is paused or the tester is suspended. Bell only.
+  const working = await db.contract.findMany({
+    where: { status: "working", dueAt: { gt: now }, tester: { deletedAt: null, testerSuspendedAt: null }, test: { status: { in: ["open", "closed"] }, ...PAUSE_FREE } },
+    select: { id: true, testerId: true, joinedAt: true, dueAt: true, test: { select: { id: true, title: true, notifiedMarks: true } } },
+    take: 5000,
+  });
+  for (const c of working) {
+    const due = ownDeadlineMarkDue(c, c.test.notifiedMarks, now);
+    if (due.send) {
+      await bell(c.testerId, ownDeadlineLine(c.test.title, c.dueAt, (d) => T(d, "date")), `/app/sessions/${c.id}`, undefined, { reminder: `headsup:${c.test.id}` });
+      out.headsUps++;
+    }
+    if (due.record.length) await db.test.update({ where: { id: c.test.id }, data: { notifiedMarks: { push: due.record } } });
   }
   // 5. (Owner, Oct 30, batch 15 section 2) The developer's review reminders, the SAME for listed and unlisted parts, counting to the review date (the later of the
   // tester's deadline and sent + 7 days): 1 month (if it was more than a month away), 3, 2 and 1 weeks, 3 days, 1 day. After it, a listed part opens Charge (1

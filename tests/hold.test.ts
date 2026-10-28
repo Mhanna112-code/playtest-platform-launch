@@ -9,7 +9,7 @@ import { GET as cronGET } from "@/app/api/cron/daily/route";
 import { POST as owedPOST } from "@/app/api/payments/owed/route";
 import { POST as verifyPOST } from "@/app/api/payments/verify-card/route";
 import { setStripeForTests } from "@/lib/server/stripe";
-import { startHold } from "@/lib/server/holds";
+import { runDaily, startHold } from "@/lib/server/holds";
 import { json, makeUser, req } from "./helpers";
 import { act, bookCall, joined, listingBody, sact, seen, setup } from "./fixtures";
 
@@ -204,14 +204,13 @@ describe("daily job", () => {
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Pay $" } } })).toBe(0); // no "Pay $X by ..." reminder
     const h = await setup();
     const hj = await joined(h.testId);
-    await db.test.update({ where: { id: h.testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } }); await db.contract.updateMany({ where: { testId: h.testId }, data: { dueAt: new Date(Date.now() + 2 * DAY) } }); // (batch 15 section 18: the tester's own deadline)
+    await db.test.update({ where: { id: h.testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } }); await db.contract.updateMany({ where: { testId: h.testId }, data: { dueAt: new Date(Date.now() + 2 * DAY), joinedAt: new Date(Date.now() - 5 * DAY) } }); // (batch 16 section 1: the tester's own deadline, joined 5 days ago: the 3-day mark)
     await cron();
     const n = () => db.notification.count({ where: { userId: hj.tester.user.id, text: { startsWith: "Your deadline on" } } }); // (batch 15 section 18: each tester reads their own deadline)
     expect(await n()).toBe(1);
     await cron(); // not twice
     expect(await n()).toBe(1);
-    await db.test.update({ where: { id: h.testId }, data: { openUntil: new Date(Date.now() + 12 * 3_600_000) } }); await db.contract.updateMany({ where: { testId: h.testId }, data: { dueAt: new Date(Date.now() + 12 * 3_600_000) } }); // (batch 15 section 18: the tester's own deadline)
-    await cron();
+    await runDaily(new Date(Date.now() + DAY + 60_000)); // (batch 16 section 1) a day later: the 1-day mark
     expect(await n()).toBe(2);
   });
 });

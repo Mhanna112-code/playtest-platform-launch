@@ -14,7 +14,7 @@ import { adminOutages, lengthText, outageLine } from "@/lib/server/outages";
 import { renderTimes } from "@/lib/tz";
 import { adminPage, disputeRow, type DisputeVM, type Page } from "@/lib/server/adminLists";
 import { StatTile } from "@/components/StatTile";
-import { BadgeDollarSign, FlaskConical, Inbox, ListChecks, Users, Wallet } from "lucide-react";
+import { BadgeDollarSign, FlaskConical, Inbox, Users, Wallet } from "lucide-react";
 
 export const metadata = { title: "Admin · Playtest" };
 export const dynamic = "force-dynamic";
@@ -28,8 +28,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   if (adminAccount(u) && !isAdmin(u)) return <main className="wrap space-y-4"><Brand /><p className="info" data-admin-paused="">{ADMIN_PAUSED} Contact the owner if you think this is a mistake.</p></main>;
   if (!isAdmin(u)) notFound();
   const q = await searchParams;
-  const [disputes, liftsP, mine, paused, chargebacks, decided, noShows, reportsP, usersP, testsP, paymentsP, waitlistP, contactP] = await Promise.all(
-    (["disputes", "lifts", "mine", "paused", "chargebacks", "decided", "noshows", "reports", "users", "tests", "payments", "waitlist", "contact"] as const).map((k) => adminPage(k, u.id, null)),
+  const [disputes, liftsP, mine, paused, chargebacks, decided, noShows, reportsP, usersP, testsP, paymentsP, contactP] = await Promise.all(
+    (["disputes", "lifts", "mine", "paused", "chargebacks", "decided", "noshows", "reports", "users", "tests", "payments", "contact"] as const).map((k) => adminPage(k, u.id, null)),
   );
   const [waiting, heldShares, held, devCount, testerCount, openTests] = await Promise.all([
     db.payment.findMany({ where: { transferStatus: "waiting" }, orderBy: { createdAt: "asc" }, take: 100 }),
@@ -74,7 +74,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <StatTile icon={Wallet} label="Charged so far" value={money(charged._sum.amountCents ?? 0)} hint={`${charged._count._all} payment${charged._count._all === 1 ? "" : "s"}`} tone="emerald" />
         <StatTile icon={FlaskConical} label="Your revenue (20%)" value={money(charged._sum.feeCents ?? 0)} hint="the platform's share of what was charged" tone="fuchsia" />
         <StatTile icon={BadgeDollarSign} label="Owed to testers" value={money(owedToTesters)} hint="waiting for a payout account" tone="amber" />
-        <StatTile icon={ListChecks} label="On the waitlist" value={String(waitlistP.total)} hint="→ Waitlist" tone="indigo" />
       </section>
 
       {/* (Batch 15 section 10) Outages, from the uptime service's own down/up alerts: the open "down" and the latest recorded outages. */}
@@ -227,11 +226,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       <section className="card space-y-3" id="tests">
         <h2 className="text-lg font-semibold text-white">Tests ({testsP.total})</h2>
         <PagedList kind="tests" initial={rows(testsP)} />
-      </section>
-
-      <section className="card space-y-3">
-        <h2 className="text-lg font-semibold text-white">Waitlist ({waitlistP.total})</h2>
-        <PagedList kind="waitlist" initial={rows(waitlistP)} />
       </section>
     </main>
   );

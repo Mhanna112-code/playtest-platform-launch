@@ -34,7 +34,7 @@ export type ReportVM = { id: string; at: string; reporter: string; reporterHref:
 export type PausedVM = { id: string; at: string; text: string; closure: string; extended: boolean };
 export type ChargebackVM = { id: string; at: string; email: string; since: string; chargebacks: string[]; cardVerified: boolean; owedPaid: boolean; owedLine: string };
 
-export type Kind = "contact" | "disputes" | "decided" | "mine" | "users" | "tests" | "noshows" | "payments" | "waitlist" | "paused" | "chargebacks" | "lifts" | "reports" | "u-payments" | "u-payouts" | "u-disputes" | "u-chargebacks" | "u-holds" | "u-tests" | "u-reports" | "u-parts" | "t-timeline" | "t-contracts" | "t-payments";
+export type Kind = "contact" | "disputes" | "decided" | "mine" | "users" | "tests" | "noshows" | "payments" | "paused" | "chargebacks" | "lifts" | "reports" | "u-payments" | "u-payouts" | "u-disputes" | "u-chargebacks" | "u-holds" | "u-tests" | "u-reports" | "u-parts" | "t-timeline" | "t-contracts" | "t-payments";
 /** (Batch 15 section 21) An admin by email, as admin views name them ("an admin (deleted)" once the account is gone). */
 export async function adminEmails(ids: (string | null | undefined)[]) {
   const list = [...new Set(ids.filter((x): x is string => !!x))];
@@ -55,7 +55,7 @@ const ACTION_WORDS: Record<string, string> = {
   suspend: "suspended", unsuspend: "reinstated", decide: "decided", "contact-replied": "marked replied", "approve-outage": "outage approved",
 };
 
-export const KINDS: Kind[] = ["contact", "disputes", "decided", "mine", "users", "tests", "noshows", "payments", "waitlist", "paused", "chargebacks", "lifts", "reports", "u-payments", "u-payouts", "u-disputes", "u-chargebacks", "u-holds", "u-tests", "u-reports", "u-parts", "t-timeline", "t-contracts", "t-payments"];
+export const KINDS: Kind[] = ["contact", "disputes", "decided", "mine", "users", "tests", "noshows", "payments", "paused", "chargebacks", "lifts", "reports", "u-payments", "u-payouts", "u-disputes", "u-chargebacks", "u-holds", "u-tests", "u-reports", "u-parts", "t-timeline", "t-contracts", "t-payments"];
 
 /** The profile page an admin can open for an account: the developer's, or else the tester's. */
 const profileHref = (u: { id: string; isDeveloper: boolean }) => (u.isDeveloper ? `/app/developers/${u.id}` : `/app/testers/${u.id}`);
@@ -305,17 +305,6 @@ async function payments(cursor: string | null): Promise<Page<TextVM>> {
   };
 }
 
-async function waitlist(cursor: string | null): Promise<Page<TextVM>> {
-  const c = parse(cursor);
-  const [list, total] = await Promise.all([
-    db.waitlistEntry.findMany({ where: olderThan("createdAt", c), orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: PAGE + 1 }),
-    db.waitlistEntry.count(),
-  ]);
-  const page = list.slice(0, PAGE);
-  const last = page[page.length - 1];
-  return { rows: page.map((w) => ({ id: w.id, at: w.createdAt.toISOString(), text: `${fmtDateTime(w.createdAt)} · ${w.email} · ${w.role}` })), next: list.length > PAGE && last ? cur(last.createdAt, last.id) : null, total };
-}
-
 const CAUSES = { hold: "payment hold", chargeback: "chargeback hold", suspension: "suspended", team: "paused by the team" } as const;
 
 async function paused(cursor: string | null): Promise<Page<PausedVM & { date: Date }>> {
@@ -357,7 +346,6 @@ export async function adminPage(kind: Kind, adminId: string, cursor: string | nu
       case "tests": return tests(cursor);
       case "noshows": return noShows(cursor);
       case "payments": return payments(cursor);
-      case "waitlist": return waitlist(cursor);
       case "paused": return paused(cursor);
       case "chargebacks": return chargebacks(cursor);
       case "lifts": return lifts(cursor);

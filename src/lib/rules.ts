@@ -236,6 +236,11 @@ export const joiningClosed = (t: { openUntil: Date | null }, now = new Date()) =
 export const closedToNewLine = (openUntil: Date, fmt: (d: Date) => string) => `This test closed to new testers on ${fmt(openUntil)}.`;
 /** The developer's card and test page after Open until: "Joining closed · testers working until Dec 3" ("" when nobody is still working). */
 export const joiningClosedLine = (latestDue: Date | null, fmt: (d: Date) => string) => (latestDue ? `Joining closed · testers working until ${fmt(latestDue)}` : "Joining closed · every tester's time is up");
+/** (Owner, Oct 28, batch 16 section 3) The days a new tester gets: the number in the card's "N days per tester" (null without Open until). */
+export const daysPerTester = (t: { testerDays: number | null; createdAt: Date; openUntil: Date | null }) => (t.openUntil ? t.testerDays ?? testerDaysOf(t.createdAt, t.openUntil) : null);
+/** Find's "Most time to finish": the most days per tester first; ties: the later Open until first (more time left to join); tests without Open until last. */
+export const byMostTimeToFinish = (a: { testerDays: number | null; createdAt: Date; openUntil: Date | null }, b: { testerDays: number | null; createdAt: Date; openUntil: Date | null }) =>
+  (daysPerTester(b) ?? -1) - (daysPerTester(a) ?? -1) || (b.openUntil?.getTime() ?? 0) - (a.openUntil?.getTime() ?? 0);
 /** Find cards and the listing: "14 days per tester · join by Nov 20". */
 export const perTesterLine = (days: number, openUntil: Date, fmt: (d: Date) => string) => `${days} day${days === 1 ? "" : "s"} per tester · join by ${fmt(openUntil)}`;
 /** The join page: "Your deadline: Dec 3 (14 days from joining)". */
@@ -469,11 +474,6 @@ export function devStopOnce(events: TestEventLike[], seenAt: Date, confirmed: bo
   return stopOnce(events, seenAt, confirmed, DEV_STOP_KINDS);
 }
 
-/** Reject: nothing is charged; a reason is required. */
-export function checkReject(reason: string): Check {
-  return reason.trim().length < 5 ? no("Say why you're rejecting it (the tester reads it).") : yes;
-}
-
 /** The one line a tester reads (and every later press is refused with) once their work was ended by the developer. */
 export function endedLine(c: { status: string; endKind: string; endedAt: Date | null; title?: string }, devName: string, fmt: (d: Date) => string) {
   if (c.status !== "ended" || !c.endedAt) return "";
@@ -526,7 +526,7 @@ export function joinCheck(t: JoinState, seenListingVersion: number, confirmed: b
 
 // ---------- Payment hold, auto-pay, Open until, invites (owner, Oct 22, newest) ----------
 
-export const REVIEW_DAYS = 7; // (Owner, Oct 29, batch 12 section 6) the review window: Charge opens at the later of Open until and this many days after a part was sent
+export const REVIEW_DAYS = 7; // (Owner, Oct 29, batch 12 section 6; batch 15 section 18) the review window: Charge opens at the later of the tester's own deadline and this many days after a part was sent
 export const HOLD_APPROVAL_AFTER = 3;
 /** The label that replaces an exact hold count outside the profile totals (admin only). */
 export const MANY_HOLDS_LABEL = "More than 3 holds"; // (Owner, Oct 27) after a developer's 3rd payment hold, every later hold needs an admin's Approve to lift
@@ -681,8 +681,8 @@ export function headsUpDue(openUntil: Date | null, now: Date, sent3d: boolean, s
 }
 export const headsUpLine = (title: string, openUntil: Date, fmt: (d: Date) => string) => `${title} closes on ${fmt(openUntil)}: send your work before then.`;
 /**
- * (Batch 15 section 18) Open until is the last day to JOIN: the developer reads "“X” closes to new testers on Nov 20"; a working tester reads their OWN deadline
- * ("Your deadline on “X” is Nov 20: send your work before then."), only while it comes no later than a day after Open until (later joiners have later deadlines).
+ * (Batch 15 section 18) Open until is the last day to JOIN: the developer reads "“X” closes to new testers on Nov 20" on Open until's marks. (Batch 16 section 1) A working
+ * tester reads their OWN deadline ("Your deadline on “X” is Nov 20: send your work before then.") on their own marks, counted to their deadline (ownDeadlineMarkDue).
  */
 export const joinClosingLine = (title: string, openUntil: Date, fmt: (d: Date) => string) => `“${title}” closes to new testers on ${fmt(openUntil)}.`;
 export const ownDeadlineLine = (title: string, dueAt: Date, fmt: (d: Date) => string) => `Your deadline on “${title}” is ${fmt(dueAt)}: send your work before then.`;
@@ -869,8 +869,8 @@ export const MARKS = [
 
 /**
  * Countdown pattern: 1 month before (only if it started more than a month away), 1 week, 3 days, 1 day before.
- * Returns the one mark due now (never one already sent; skipped marks aren't sent late), or null. (Batch 12 section 6) `noMonth`: the review reminders count only
- * 1 week, 3 days and 1 day before Charge opens.
+ * Returns the one mark due now (never one already sent; skipped marks aren't sent late), or null. Used for Open until's heads-ups to the developer (the review reminders
+ * use reviewMarksFor since batch 15; each tester's own deadline uses ownDeadlineMarkDue since batch 16). `noMonth` leaves the month out.
  */
 export function countdownDue(deadline: Date | null, now: Date, sent: string[], startedAt: Date, noMonth = false) {
   if (!deadline) return null;
@@ -916,6 +916,39 @@ export function reviewMarkDue(sentAt: Date, reviewDate: Date, now: Date, sent: s
   const passed = reviewMarksFor(sentAt, reviewDate).filter((m) => m.at.getTime() <= now.getTime());
   const last = passed[passed.length - 1];
   return last && !sent.includes(last.mark) ? last : null;
+}
+
+/**
+ * (Owner, Oct 28, batch 16 section 1) A working tester's own deadline reminders: 1 month, 1 week, 3 days and 1 day before THEIR deadline (dueAt). The same rule as the
+ * review reminders (reviewMarksFor): only marks still ahead when they joined; the month only when the deadline was more than a month away then; none within 24 hours of
+ * joining. Every tester gets the same tester days from joining (batch 15 section 18), so on one test every tester gets the same set: 10 days per tester gives 1 week,
+ * 3 days and 1 day; 45 days gives all four; 2 days gives 1 day.
+ */
+export function deadlineMarksFor(joinedAt: Date, dueAt: Date) {
+  const away = dueAt.getTime() - joinedAt.getTime();
+  return MARKS.filter((m) => (m.mark !== "1m" || away > m.ms) && dueAt.getTime() - m.ms >= joinedAt.getTime() + DAY_MS).map((m) => ({ ...m, at: new Date(dueAt.getTime() - m.ms) }));
+}
+/** The key prefix of one contract's sent deadline marks for one deadline, kept in Test.notifiedMarks (Open until's own marks there are bare: "1w"). */
+export const deadlineMarkKey = (contractId: string, dueAt: Date) => `due:${contractId}:${dueAt.getTime()}:`;
+/**
+ * (Batch 16 section 1) The tester's deadline reminder due now, and what to record. Sent marks are kept per contract AND per deadline (`due:<contract>:<deadline ms>:<mark>`),
+ * so a mark is never sent twice for the same deadline. When the deadline moved (an Edit moving Open until later, a pause shift), the first daily run that sees the new
+ * deadline records the marks already behind it as passed: only the marks still ahead of the new deadline fire. As with the review reminders, the latest mark passed is
+ * sent and every earlier one is recorded with it, so a missed mark is never sent late. `seen` marks a deadline the daily job has looked at.
+ */
+export function ownDeadlineMarkDue(c: { id: string; joinedAt: Date; dueAt: Date }, recorded: string[], now: Date): { send: (typeof MARKS)[number] | null; record: string[] } {
+  const key = deadlineMarkKey(c.id, c.dueAt);
+  const mine = recorded.filter((x) => x.startsWith(`due:${c.id}:`));
+  const here = mine.filter((x) => x.startsWith(key)).map((x) => x.slice(key.length));
+  const firstLook = here.length ? [] : [`${key}seen`];
+  if (now.getTime() >= c.dueAt.getTime()) return { send: null, record: [] };
+  const passed = deadlineMarksFor(c.joinedAt, c.dueAt).filter((m) => m.at.getTime() <= now.getTime());
+  const behind = passed.filter((m) => !here.includes(m.mark)).map((m) => `${key}${m.mark}`);
+  // The deadline moved: what's already behind the new one is recorded, never sent.
+  if (!here.length && mine.length) return { send: null, record: [...firstLook, ...behind] };
+  const last = passed[passed.length - 1];
+  if (!last || here.includes(last.mark)) return { send: null, record: firstLook };
+  return { send: MARKS.find((m) => m.mark === last.mark)!, record: [...firstLook, ...behind] };
 }
 
 export const ADMIN_DIGEST_DAYS = 3;

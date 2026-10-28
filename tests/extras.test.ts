@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { POST as waitlistPOST } from "@/app/api/waitlist/route";
 import { PUT as uploadPUT } from "@/app/api/recordings/[id]/upload/route";
 import { GET as fileGET } from "@/app/api/recordings/[id]/file/route";
-import { email, json, makeUser, req } from "./helpers";
+import { makeUser, req } from "./helpers";
 import { act, joined, sact, setup } from "./fixtures";
 
 describe("recordings", () => {
@@ -62,12 +61,3 @@ describe("emails for key events", () => {
   });
 });
 
-describe("waitlist", () => {
-  it("adds once per email", async () => {
-    const addr = email("wait");
-    expect((await json(await waitlistPOST(req("/api/waitlist", { body: { email: addr, role: "tester" } })))).status).toBe(200);
-    expect((await json(await waitlistPOST(req("/api/waitlist", { body: { email: addr, role: "developer" } })))).status).toBe(200);
-    expect(await db.waitlistEntry.findMany({ where: { email: addr } })).toMatchObject([{ role: "developer" }]);
-    expect((await json(await waitlistPOST(req("/api/waitlist", { body: { email: "nope" } })))).status).toBe(400);
-  });
-});

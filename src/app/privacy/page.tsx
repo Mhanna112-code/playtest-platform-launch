@@ -5,7 +5,7 @@ import { PublicShell } from "@/components/PublicShell";
 export const metadata = { title: "Privacy Policy · Playtest" };
 
 // Copied from the full app's Privacy Policy and adapted to the lean app (no phone numbers, texts, transcripts, AI, device
-// fingerprints or waitlist tracking). DRAFT: the owner reviews the wording (and a lawyer should) before launch.
+// fingerprints or tracking). DRAFT: the owner reviews the wording (and a lawyer should) before launch.
 const SECTIONS: { title: string; points: string[] }[] = [
   {
     title: "What we collect",
@@ -13,7 +13,6 @@ const SECTIONS: { title: string; points: string[] }[] = [
       "Your account: name, email, password (stored only as a one-way hash), the sides you use (developer, tester or both).",
       "Your profile: bio, interests, devices and languages.",
       "What you do on the site: tests posted and joined, the work you send (written answers, recordings), chat messages, call requests and calls (who joined and when), ratings and reviews, offers, invitations and messages to the team.",
-      "The waitlist (before the site opens): your email. We use it only to email you when the site opens.",
       "Payments: amounts, charges and payouts. Card and bank details are handled by Stripe and never stored on our servers.",
       "Technical basics: a sign-in cookie, and your IP address for limiting repeated login attempts. No advertising or tracking cookies.",
     ],

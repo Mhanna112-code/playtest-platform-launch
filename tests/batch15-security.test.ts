@@ -8,7 +8,6 @@ import { POST as webhookPOST } from "@/app/api/stripe/webhook/route";
 import { POST as confirmPOST } from "@/app/api/payments/confirm/route";
 import { POST as adminPOST } from "@/app/api/admin/[action]/route";
 import { POST as forgotPOST } from "@/app/api/auth/forgot/route";
-import { POST as waitlistPOST } from "@/app/api/waitlist/route";
 import { POST as logoutPOST } from "@/app/api/auth/logout/route";
 import { GET as switchGET, POST as switchPOST } from "@/app/app/switch/route";
 import { GET as cardGET, POST as cardPOST } from "@/app/api/payments/card/route";
@@ -255,14 +254,11 @@ describe("L1: headers", () => {
 });
 
 describe("L2: rate limits", () => {
-  it("forgot password: 10 per network an hour; waitlist: 5", async () => {
+  it("forgot password: 10 per network an hour (batch 16 section 7: no waitlist any more)", async () => {
     const ip = `203.0.113.${Math.floor(Math.random() * 250)}-${randomUUID().slice(0, 6)}`;
     const forgot = () => forgotPOST(req("/api/auth/forgot", { body: { email: `x-${randomUUID()}@playtest.test` }, headers: { "x-real-ip": ip } })).then(json);
     for (let i = 0; i < 10; i++) expect((await forgot()).status).toBe(200);
     expect((await forgot()).status).toBe(429);
-    const wl = () => waitlistPOST(req("/api/waitlist", { body: { email: `w-${randomUUID()}@playtest.test` }, headers: { "x-real-ip": ip } })).then(json);
-    for (let i = 0; i < 5; i++) expect((await wl()).status).toBe(200);
-    expect((await wl()).status).toBe(429);
   });
   it("chat: 30 messages a minute; kept forms: 50, the oldest dropped; clientIp uses the trusted hop", async () => {
     const { testId } = await setup();

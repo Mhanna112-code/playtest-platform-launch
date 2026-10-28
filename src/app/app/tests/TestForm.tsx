@@ -176,7 +176,8 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
   /** The lock note under a field that used its 3 changes. */
   const lockNote = (f: CriticalField) => (fieldLocked(f) ? <p className="info mt-1" data-critical-locked={f}>{criticalLine(f)}</p> : null);
 
-  // (Owner, Oct 29, batch 12 section 6) No "days after joining" field: Open until is required and is every tester's deadline (3 to 30 days from today on Post).
+  // (Owner, Oct 29, batch 12 section 6; batch 15 section 18) No "days after joining" field: Open until is required (3 to 30 days from today on Post) and is the last day
+  // to join; every tester gets the same days (opened → Open until) from when they join.
   const dlLine = "";
   // (5) Open until can only be extended.
   const ouNow = init.openUntil ? init.openUntil.slice(0, 10) : "";

@@ -1,14 +1,13 @@
 import Link from "next/link";
 import { AppWindow, ArrowRight, BadgeDollarSign, Bot, Check, Code2, FileText, Gamepad2, Glasses, Monitor, Radio, ShieldCheck, Smartphone, Video, Wand2, X } from "lucide-react";
 import { Brand } from "@/components/Brand";
-import { WaitlistForm } from "@/components/WaitlistForm";
 import { getPageUser } from "@/lib/server/page-auth";
 import { REVIEW_DAYS } from "@/lib/rules";
 
 export const dynamic = "force-dynamic";
 
-// The full app's home page (marketing), adapted to lean: no transcripts, themes, search or subscription (lean has none),
-// and the waitlist form in the hero.
+// The full app's home page (marketing), adapted to lean: no transcripts, themes, search or subscription (lean has none).
+// (Owner, Oct 28, batch 16 section 7) No waitlist: the site launches with open sign-up.
 export default async function Home() {
   const u = await getPageUser();
   return (
@@ -58,7 +57,6 @@ export default async function Home() {
               <li key={t} className="flex items-center gap-1.5"><Check className="h-4 w-4 text-volt-300" /> {t}</li>
             ))}
           </ul>
-          <WaitlistForm />
         </section>
 
         {/* Product types */}

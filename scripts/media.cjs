@@ -2290,7 +2290,7 @@ group("admin", async () => {
   const dUnlisted = await disputed(nora, ben, t2, sB, false, true);
   await admin.goto("/admin");
   await pause(admin, 800);
-  await shot(admin, "admin-top", "The admin dashboard | The tiles (people, parts awaiting review, charged, the platform's share, owed to testers, waitlist), then open disputes first", admin.locator("main > section").first());
+  await shot(admin, "admin-top", "The admin dashboard | The tiles (people, parts awaiting review, charged, the platform's share, owed to testers), then open disputes first", admin.locator("main > section").first());
   await shot(admin, "admin-dispute-listed", "A dispute on a listed part | What was paid and the listing, what each side said, and the total to decide (up to the listing)", `[data-dispute-row="${dListed}"]`);
   await shot(admin, "admin-dispute-unlisted", "A dispute on an unlisted part | Ben was paid $0 for written feedback that wasn't in his contract: the admin sets an amount up to the $1,000 cap", `[data-dispute-row="${dUnlisted}"]`);
   await admin.locator(`#total-${dUnlisted}`).fill("25.00");
@@ -2816,10 +2816,10 @@ group("b15stops", async () => {
   await shot(ana, "b15-36-charge-stop", "§36 Charge stops once | The developer changed the listing after the page loaded: Charge stops once and names itself", "#part-written");
   // §26 Alerts Off: a change that isn't Ana's contract never stops Send; new terms still do.
   await open(ben, `/app/sessions/${sB}`, "[data-tester-alerts]");
-  await shot(ben, "b15-26-toggle-on", "§26 The tester's Alerts toggle | At the top right: “Alerts: On” and its line", "[data-tester-alerts]");
+  await shot(ben, "b15-26-toggle-on", "§26 The tester's Alerts toggle | At the top right: “Alerts: On” and its line, “Stops a press once for: new terms, your key, pay, calls, delayed pay, your dispute, listing changes, other tabs.”", "[data-tester-alerts]");
   await ben.click("[data-tester-alerts] button");
   await ben.waitForSelector("[data-tester-alerts='off']");
-  await shot(ben, "b15-26-toggle-off", "§26 Alerts: Off | One press, saved for all Ben's tests: only new terms from the developer stop a press now", "[data-tester-alerts]");
+  await shot(ben, "b15-26-toggle-off", "§26 Alerts: Off | One press, saved for all Ben's tests: the grey line now reads “Stops a press only for: new terms, your key marked as working.”", "[data-tester-alerts]");
   await ben.reload();
   await ben.waitForSelector("#a0");
   await ben.locator("#a0").fill("Second try: the fog level is still too dark.");

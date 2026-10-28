@@ -165,18 +165,19 @@ describe("every bell line opens the exact place", () => {
 describe("the admin dashboard lists", () => {
   it("lists load a page at a time, newest first, by keyset: no overlap and no gaps, and only admins can load more", async () => {
     const tag = randomUUID().slice(0, 6);
-    for (let i = 0; i < 25; i++) await db.waitlistEntry.create({ data: { email: `w-${tag}-${i}@test.playtest.test`, role: "tester", createdAt: new Date(Date.now() + i * 1000) } }).catch(() => null);
+    // (Batch 16 section 7: no waitlist any more) The Users list.
+    for (let i = 0; i < 25; i++) await db.user.create({ data: { email: `w-${tag}-${i}@test.playtest.test`, createdAt: new Date(Date.now() + i * 1000) } }).catch(() => null);
     const a = await admin();
-    const p1 = (await adminPage("waitlist", a.user.id, null)) as { rows: { id: string; at: string }[]; next: string | null; total: number };
+    const p1 = (await adminPage("users", a.user.id, null)) as { rows: { id: string; at: string }[]; next: string | null; total: number };
     expect(p1.rows.length).toBe(PAGE);
     expect(p1.next).toBeTruthy();
     expect(p1.rows.map((r) => r.at)).toEqual([...p1.rows.map((r) => r.at)].sort().reverse());
-    const r2 = await json(await moreGET(req(`/api/admin/more?kind=waitlist&after=${encodeURIComponent(p1.next!)}`, { cookie: a.cookie })));
+    const r2 = await json(await moreGET(req(`/api/admin/more?kind=users&after=${encodeURIComponent(p1.next!)}`, { cookie: a.cookie })));
     expect(r2.status).toBe(200);
     expect(r2.body.rows.length).toBeGreaterThan(0);
     expect(r2.body.rows.every((r: { id: string; at: string }) => !p1.rows.some((o) => o.id === r.id) && r.at <= p1.rows[PAGE - 1].at)).toBe(true);
     const nobody = await makeUser({ dev: true });
-    expect((await json(await moreGET(req("/api/admin/more?kind=waitlist", { cookie: nobody.cookie })))).status).toBe(403);
+    expect((await json(await moreGET(req("/api/admin/more?kind=users", { cookie: nobody.cookie })))).status).toBe(403);
     expect((await json(await moreGET(req("/api/admin/more?kind=bogus", { cookie: a.cookie })))).status).toBe(400);
   });
 

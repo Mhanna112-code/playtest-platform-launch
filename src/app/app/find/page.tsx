@@ -7,7 +7,7 @@ import { CategoryChips, CategoryTile, mainCategory, PartBadges } from "@/compone
 import { displayName, fmtDate, money } from "@/lib/format";
 import { DEVICES } from "@/lib/options";
 import { ratingSummary } from "@/lib/server/ratings";
-import { perTesterLine, termsLine, testerDaysOf, testerShare } from "@/lib/rules";
+import { byMostTimeToFinish, perTesterLine, termsLine, testerDaysOf, testerShare } from "@/lib/rules";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { asListing, findTests, needsLines } from "@/lib/server/tests";
 
@@ -44,8 +44,9 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
     .filter((t) => !sp.part || (sp.part === "written" ? t.writtenCents != null : sp.part === "recording" ? t.recordingCents != null : sp.part === "live" ? t.liveRateCents != null : true))
     .filter((t) => !matchMine || needsLines(t, profile).length === 0);
   if (sp.sort === "pay") shown.sort((a, b) => topPrice(b) - topPrice(a));
-  // (Batch 12 section 6) The deadline is Open until: the latest first.
-  else if (sp.sort === "deadline") shown.sort((a, b) => (b.openUntil?.getTime() ?? 0) - (a.openUntil?.getTime() ?? 0));
+  // (Owner, Oct 28, batch 16 section 3) "Most time to finish": the days each new tester gets (the card's "N days per tester"), most first; ties: the later Open until
+  // first (more time left to join); tests without Open until last.
+  else if (sp.sort === "deadline") shown.sort(byMostTimeToFinish);
   return (
     <div className="space-y-6">
       <div>
