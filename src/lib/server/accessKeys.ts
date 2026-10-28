@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
-import { keyNeedLine, keyRefusal, keyReportedLine, KEY_MAX_LENGTH, parseKeys, repeatedKeys, tickedInUseLine } from "@/lib/keys";
+import { keyNeedLine, keyRefusal, keyReportedLine, KEY_MAX_LENGTH, parseKeys, repeatedKeys, reusedKeyLine, tickedInUseLine } from "@/lib/keys";
 import { HttpError } from "./http";
 import { logEvent } from "./live";
 
@@ -21,18 +21,49 @@ export async function openSpotsOf(tx: Tx, testId: string, spots?: number) {
 /** Does this test use access keys at all? (Any key ever added.) */
 export const usesKeys = async (tx: Tx, testId: string) => (await tx.accessKey.count({ where: { testId } })) > 0;
 
-/** The keys of a test grouped for the Edit page's boxes. */
+/**
+ * The keys of a test grouped for the Edit page's boxes. (Owner, Oct 30, batch 15 sections 19 and 44) "In use" also lists, greyed, the keys of testers who left or finished
+ * ("(left)" / "(finished)"): those can be typed back into Free (with a warning, never a mistake). Every key a refusal calls "in use" is a working tester's, listed here.
+ * (Section 45) `broken`: current working testers whose key is marked not working and whose warning the developer hasn't dismissed.
+ */
 export async function keyBoxes(testId: string) {
   const keys = await db.accessKey.findMany({ where: { testId }, orderBy: { createdAt: "asc" }, include: { contract: { include: { tester: true } } } });
-  const free = keys.filter((k) => k.status === "free").map((k) => ({ id: k.id, value: k.value }));
+  const free = keys.filter((k) => k.status === "free").map((k) => ({ id: k.id, value: k.value, ...(k.reusedFrom ? { reused: { from: k.reusedFrom, broken: k.reusedBroken } } : {}) }));
   const inUse = keys
-    .filter((k) => (k.status === "inuse" || k.status === "broken") && k.contract?.status === "working")
-    .map((k) => ({ id: k.id, value: k.value, broken: k.status === "broken", tester: displayName(k.contract!.tester), contractId: k.contractId! }));
+    .filter((k) => (k.status === "inuse" || k.status === "broken" || k.status === "held") && k.contract)
+    .map((k) => {
+      const working = k.contract!.status === "working";
+      return { id: k.id, value: k.value, broken: k.status === "broken", tester: displayName(k.contract!.tester), contractId: k.contractId!, ...(working ? {} : { gone: k.contract!.status === "left" ? ("left" as const) : ("finished" as const) }) };
+    })
+    .sort((a, b) => Number(!!a.gone) - Number(!!b.gone));
+  const broken = keys
+    .filter((k) => k.status === "broken" && k.contract?.status === "working" && !(k.brokenDismissedAt && k.brokenAt && k.brokenDismissedAt >= k.brokenAt))
+    .map((k) => ({ id: k.id, value: k.value, tester: displayName(k.contract!.tester) }));
   const spots = (await db.test.findUniqueOrThrow({ where: { id: testId }, select: { spots: true } })).spots;
   const open = await openSpotsOf(db, testId, spots);
   // testersIn: the working testers now, so Edit counts the open spots live as testers join.
   const testersIn = await db.contract.count({ where: { testId, status: "working" } });
-  return { free, inUse, open, testersIn, uses: keys.length > 0, now: new Date().toISOString() };
+  return { free, inUse, open, testersIn, uses: keys.length > 0, now: new Date().toISOString(), broken };
+}
+
+/**
+ * (Owner, Oct 30, batch 15 section 45) The developer's "Dismiss selected" on the broken-key warning: hides the selected rows (for this key report). With "Works now"
+ * ticked it also clears the key's broken mark: it's no longer crossed out, it can be reused without a warning, and the tester's next press stops once with "The developer
+ * marked your key as working" (even with Alerts Off: it's their contract). No bell.
+ */
+export async function dismissBrokenKeys(dev: { id: string }, testId: string, body: Record<string, unknown>) {
+  const t = await db.test.findUnique({ where: { id: testId }, select: { developerId: true } });
+  if (!t || t.developerId !== dev.id) throw new HttpError(404, "not_found", "That test doesn't exist.");
+  const ids = Array.isArray(body.keyIds) ? body.keyIds.map(String).slice(0, 200) : [];
+  const works = new Set(Array.isArray(body.worksNow) ? body.worksNow.map(String) : []);
+  if (!ids.length) throw new HttpError(400, "none", "Tick at least one key.");
+  const now = new Date();
+  const keys = await db.accessKey.findMany({ where: { id: { in: ids }, testId, status: "broken" } });
+  for (const k of keys) {
+    if (works.has(k.id)) await db.accessKey.update({ where: { id: k.id }, data: { status: "inuse", brokenAt: null, brokenDismissedAt: now, fixedAt: now } });
+    else await db.accessKey.update({ where: { id: k.id }, data: { brokenDismissedAt: now } });
+  }
+  return { dismissed: keys.length, fixed: keys.filter((k) => works.has(k.id)).length };
 }
 
 /**
@@ -94,31 +125,46 @@ export function checkTypedKeys(v: unknown) {
   return keys;
 }
 
-/** The mistakes with the keys that would be added and removed, against what the test has now. Does not write. */
+/**
+ * The mistakes with the keys that would be added and removed, against what the test has now. Does not write. (Owner, Oct 30, batch 15 sections 19 and 44) A key of a tester
+ * who left or finished can be typed back: it goes back to Free with a WARNING (`warnings`, never a mistake): "HR-3333: reused, previously given to Ben Okafor." or "HR-2222:
+ * reported as broken by Ben Okafor.". Refused: a key in use by a current working tester, and a duplicate.
+ */
 export async function planKeyChange(tx: Tx, testId: string, add: string[], remove: string[], spots: number) {
-  const existing = await tx.accessKey.findMany({ where: { testId } });
+  const existing = await tx.accessKey.findMany({ where: { testId }, include: { contract: { include: { tester: true } } } });
   const errors: string[] = [];
+  const warnings: string[] = [];
   const toAdd: string[] = [];
+  const toReuse: { id: string; from: string; broken: boolean }[] = [];
   for (const v of add) {
     const e = existing.find((k) => k.value === v);
-    if (e) {
-      const why = keyRefusal(v, e.status);
+    if (!e) toAdd.push(v);
+    else {
+      const name = e.contract ? displayName(e.contract.tester) : "";
+      const why = keyRefusal(v, e.status, { working: e.contract?.status === "working", name });
       if (why) errors.push(why);
-    } else toAdd.push(v);
+      else {
+        const broken = e.status === "broken" || !!e.brokenAt;
+        warnings.push(reusedKeyLine(v, name, broken));
+        toReuse.push({ id: e.id, from: name, broken });
+      }
+    }
   }
-  // A key ticked for removal that a tester was given meanwhile (in use, or reported since) is red, never dropped silently.
+  // A key deleted here that a tester was given since the page loaded is red, never dropped silently.
   for (const v of remove) if (existing.some((k) => k.value === v && (k.status === "inuse" || k.status === "broken"))) errors.push(tickedInUseLine(v));
   const removable = existing.filter((k) => k.status === "free" && remove.includes(k.value));
   const alreadyGone = remove.filter((v) => !existing.some((k) => k.value === v && k.status === "free"));
-  const free = existing.filter((k) => k.status === "free").length - removable.length + toAdd.length;
+  const free = existing.filter((k) => k.status === "free").length - removable.length + toAdd.length + toReuse.length;
   const open = await openSpotsOf(tx, testId, spots);
   const used = existing.length > 0 || toAdd.length > 0;
   // Every open spot needs a free key (only when the test uses keys at all).
   const need = used && (toAdd.length > 0 || removable.length > 0 || existing.length > 0) ? keyNeedLine(open, free) : "";
-  return { errors, toAdd, removable: removable.map((k) => k.id), alreadyGone, need, free, open };
+  return { errors, warnings, toAdd, toReuse, removable: removable.map((k) => k.id), alreadyGone, need, free, open };
 }
 
-export async function applyKeyChange(tx: Tx, testId: string, toAdd: string[], removeIds: string[]) {
+export async function applyKeyChange(tx: Tx, testId: string, toAdd: string[], removeIds: string[], toReuse: { id: string; from: string; broken: boolean }[] = []) {
   if (removeIds.length) await tx.accessKey.deleteMany({ where: { id: { in: removeIds }, status: "free" } });
   if (toAdd.length) await tx.accessKey.createMany({ data: toAdd.map((value) => ({ testId, value })) });
+  // (Batch 15 sections 19 and 44) A key typed back from a tester who left or finished: free again, its notice chip says where it came from.
+  for (const r of toReuse) await tx.accessKey.update({ where: { id: r.id }, data: { status: "free", contractId: null, assignedAt: null, brokenAt: null, fixedAt: null, brokenDismissedAt: null, reusedFrom: r.from, reusedBroken: r.broken } });
 }

@@ -27,17 +27,23 @@ export function keyNeedLine(openSpots: number, freeKeys: number) {
   return short > 0 ? `Add ${short} more key${short === 1 ? "" : "s"}: ${plural(openSpots, "open spot")}, ${plural(freeKeys, "free key")}.` : "";
 }
 
-/** (Report pass, the keys race) A key ticked for removal in Edit that a joining tester was given meanwhile: it stays, and the Save says so. */
-export const tickedInUseLine = (value: string) => `${value} was given to a tester after you ticked it, so it's in use now and can't be removed. Press Keep next to it.`;
+/** (Owner, Oct 30, batch 15 section 19) A key deleted from the Free box that a joining tester was given since the page loaded: it's in use now, and the Save says so. */
+export const tickedInUseLine = (value: string) => `${value} was given to a tester since you opened this page, so it's in use now and can't be removed.`;
 
-/** Why a typed key can't be added ("" when it can). `status` is the state of the same key already on this test, if any. */
-export function keyRefusal(value: string, status: string | null) {
+/**
+ * Why a typed key can't be added ("" when it can). `status` is the state of the same key already on this test, if any. (Owner, Oct 30, batch 15 sections 19 and 44)
+ * Refused only when it's in use by a CURRENT working tester (broken or not) or already free; a key of a tester who left or finished can come back (with a warning).
+ */
+export function keyRefusal(value: string, status: string | null, who: { working?: boolean; name?: string } = {}) {
   if (!status) return "";
   if (status === "free") return `${value} is already in your free keys.`;
-  if (status === "inuse") return `${value} is already in use by a tester, so it can't be added again.`;
-  if (status === "held") return `${value} was given to a tester who left the test, so it can't be used again.`;
-  return `${value} was reported as not working or was replaced, so it can't be used again.`;
+  if ((status === "inuse" || status === "broken") && who.working) return `${value} is in use by ${who.name || "a tester"}, so it can't be added.`;
+  return "";
 }
+/** (Batch 15 section 44) The warning-only line under the Free box for a key typed back in (never a mistake, never blocks Save). */
+export const reusedKeyLine = (value: string, name: string, broken: boolean) => (broken ? `${value}: reported as broken by ${name}.` : `${value}: reused, previously given to ${name}.`);
+/** The hint under the boxes. */
+export const FREE_KEYS_RULE = "Keys in use can't be added. Keys from testers who left or finished can be typed in again; you'll see if one was reported as broken.";
 
 /** (Owner, Oct 29, batch 14 section 6) The developer's quiet live-box line when a tester reports their key (not a stop-once kind, no bell). */
 export const keyReportedLine = (name: string) => `${name} reported their key doesn't work`;

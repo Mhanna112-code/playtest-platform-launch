@@ -342,7 +342,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const plan = await planKeyChange(tx, testId, keysAdd, keysRemove, next.spots);
     const keyErrs = [...plan.errors, ...(plan.need ? [plan.need] : [])];
     errs.push(...keyErrs);
-    const keysChanged = plan.toAdd.length > 0 || plan.removable.length > 0;
+    const keysChanged = plan.toAdd.length > 0 || plan.removable.length > 0 || plan.toReuse.length > 0;
     const stop = dc.length ? dc.map((c) => devLine(c, false)) : !gate.go ? gate.changes.map((c) => ({ text: c.text, at: c.createdAt })) : null;
     if (stop) {
       // Both together: the blue stop and any red mistakes (red wins: the next press still saves nothing while red remains).
@@ -364,7 +364,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
       ...(critical.length && everJoined ? { criticalCounts: storedCounts(countsAfter(counts, critical), since) } : {}),
     });
     if (keysChanged) {
-      await applyKeyChange(tx, testId, plan.toAdd, plan.removable);
+      await applyKeyChange(tx, testId, plan.toAdd, plan.removable, plan.toReuse);
     }
     // (Owner, Oct 30, batch 15 section 43) A Save that changed the terms or the names: one entry in the developer's Contract changes.
     const dealFields = fields.filter((f) => DEAL_FIELDS.includes(f));

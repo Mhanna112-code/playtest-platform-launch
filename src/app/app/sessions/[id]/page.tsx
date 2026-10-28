@@ -199,7 +199,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         {!meOff && <TesterAlertsToggle off={u.testerAlertsOff} />}
       </div>
       {pausedBanner && <p className="info" data-paused="">{pausedBanner}</p>}
-      {key && <KeyBox canReport={!meOff} sessionId={c.id} seenAt={seenAt} value={key.value} broken={key.status === "broken"} fresh={!!freshKey} />}
+      {key && <KeyBox canReport={!meOff} sessionId={c.id} seenAt={seenAt} value={key.value} broken={key.status === "broken"} fresh={!!freshKey} fixed={!!key.fixedAt} />}
       <LiveTop scope={`session:${c.id}`} seenAt={seenAt} seeIt="#listing" />
       <TesterTop sessionId={c.id} seenAt={seenAt} devName={dev} offer={offer && !refusal ? {
         id: offer.id, diff: offer.diff, ndaText: offer.ndaText, fromNdaText: c.ndaText, questions: ((offer.questions as string[]) ?? []).map(qText), fromQuestions: ((c.questions as string[]) ?? []).map(qText),

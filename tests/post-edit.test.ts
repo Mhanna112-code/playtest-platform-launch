@@ -143,19 +143,15 @@ describe("Access keys (design doc 5)", () => {
     expect(await db.accessKey.count({ where: { testId, status: "free" } })).toBe(2);
   });
 
-  it("Free keys can't drop below the open spots; used, left and broken keys can't be added again", async () => {
+  it("Free keys can't drop below the open spots; a working tester's key can't be added; (batch 15 sections 19 and 44) a key of a tester who left comes back with a warning", async () => {
     const { dev, testId } = await withKeys(["K1", "K2", "K3"], 3);
     const a = await joined(testId, "Ana Silva");
     expect((await edit(testId, dev.cookie, {}, { keysRemove: ["K3"] })).body.error.message).toBe("Add 1 more key: 2 open spots, 1 free key.");
-    expect((await edit(testId, dev.cookie, {}, { keysAdd: ["K1"] })).body.error.errors[0]).toMatch(/already in use/);
-    // Leaving keeps the key held for them: never free, never addable.
+    expect((await edit(testId, dev.cookie, {}, { keysAdd: ["K1"] })).body.error.errors[0]).toBe("K1 is in use by Ana Silva, so it can't be added.");
+    // After leaving, the key can be typed back into Free: it saves (a warning only, never a mistake) and the notice chip says where it came from.
     await sact(a.sessionId, "leave", a.tester.cookie, { seenAt: seen(), confirmed: true });
-    expect((await edit(testId, dev.cookie, {}, { keysAdd: ["K1"] })).body.error.errors[0]).toMatch(/can't be added again|already in use|given to a tester who left/);
-    // They get it back on returning (it was never reported).
-    await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [a.tester.user.id], confirmed: true });
-    await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [a.tester.user.id], confirmed: true });
-    const back = await act(testId, "join", a.tester.cookie, { listingVersion: (await db.test.findUniqueOrThrow({ where: { id: testId } })).listingVersion });
-    expect(back.status).toBe(200);
-    expect((await db.accessKey.findFirstOrThrow({ where: { contractId: a.sessionId, status: "inuse" } })).value).toBe("K1");
+    expect((await edit(testId, dev.cookie, {}, { keysAdd: ["K1"] })).status).toBe(200);
+    const k1 = await db.accessKey.findFirstOrThrow({ where: { value: "K1", testId } });
+    expect([k1.status, k1.reusedFrom, k1.reusedBroken]).toEqual(["free", "Ana Silva", false]);
   });
 });

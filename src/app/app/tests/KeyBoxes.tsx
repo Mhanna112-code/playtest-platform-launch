@@ -1,71 +1,79 @@
 "use client";
-import { X } from "lucide-react";
+import { FREE_KEYS_RULE, parseKeys, repeatedKeys, reusedKeyLine } from "@/lib/keys";
 
 export type KeysData = {
-  free: { id: string; value: string }[];
-  inUse: { id: string; value: string; broken: boolean; tester: string; contractId: string }[];
+  free: { id: string; value: string; reused?: { from: string; broken: boolean } }[];
+  /** Working testers' keys; keys of testers who left or finished come last, greyed ("(left)" / "(finished)"): those can be typed back into Free. */
+  inUse: { id: string; value: string; broken: boolean; tester: string; contractId: string; gone?: "left" | "finished" }[];
   open: number;
   /** The working testers now (the open spots follow them live). */
   testersIn?: number;
   uses: boolean;
+  broken?: { id: string; value: string; tester: string }[];
 };
 
-/**
- * (Design doc 5) Edit's access keys: "In use" (read only; a key reported as not working is greyed and crossed out) and "Free"
- * (add new keys, or remove free ones as long as the free keys still cover the open spots). Both follow the test live.
- */
-export function KeyBoxes({ data, removed, onRemove, typed, onType, onBlur, openSpots, line, note }: {
-  data: KeysData | null; removed: string[]; onRemove: (value: string, on: boolean) => void; typed: string; onType: (t: string) => void; onBlur: () => void; openSpots: number; line: string; note: React.ReactNode;
-}) {
-  const free = data?.free ?? [];
+/** (Batch 15 sections 19 and 44) What the Free box's lines mean against the keys loaded: the red mistakes and the warning-only lines. */
+export function freeBoxCheck(text: string, loaded: string[], data: KeysData | null) {
+  const lines = parseKeys(text);
   const inUse = data?.inUse ?? [];
+  const added = lines.filter((v) => !loaded.includes(v));
+  const removed = loaded.filter((v) => !lines.includes(v));
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const dup = repeatedKeys(text);
+  if (dup.length) errors.push(`${dup.join(", ")} ${dup.length === 1 ? "is" : "are"} typed more than once. Each key goes in once.`);
+  for (const v of added) {
+    const k = inUse.find((x) => x.value === v);
+    if (!k) continue;
+    if (!k.gone) errors.push(`${v} is in use by ${k.tester}, so it can't be added.`);
+    else warnings.push(reusedKeyLine(v, k.tester, k.broken));
+  }
+  // A deleted line whose key a joining tester was given since the page loaded.
+  for (const v of removed) if (inUse.some((x) => x.value === v && !x.gone)) errors.push(`${v} was given to a tester since you opened this page, so it's in use now and can't be removed.`);
+  return { lines, added, removed, errors, warnings };
+}
+
+/**
+ * (Owner, Oct 30, batch 15 section 19) Edit's access keys: "In use" (read only; a key reported as not working is crossed out; keys of testers who left or finished are
+ * greyed with "(left)" / "(finished)") and ONE plain text box with all the current free keys, one per line: delete a line to remove a key, type a line to add one. Save
+ * works out the change against the keys this page loaded, so another tab's work is never undone.
+ */
+export function KeyBoxes({ data, typed, onType, onBlur, openSpots, line, warnings, note }: {
+  data: KeysData | null; typed: string; onType: (t: string) => void; onBlur: () => void; openSpots: number; line: string; warnings: string[]; note: React.ReactNode;
+}) {
+  const inUse = data?.inUse ?? [];
+  const n = parseKeys(typed).length;
   return (
     <div className="space-y-3" id="keys">
       <p className="label !mb-0">Access keys (each joining tester gets one)</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5 rounded-xl border border-white/10 p-3" data-keys-in-use="">
-          <p className="text-sm font-medium text-white">In use <span className="font-normal text-slate-400">({inUse.length})</span></p>
+          <p className="text-sm font-medium text-white">In use <span className="font-normal text-slate-400">({inUse.filter((k) => !k.gone).length})</span></p>
           {inUse.length === 0 ? <p className="text-xs text-slate-500">No tester has a key yet.</p> : (
             <ul className="max-h-40 space-y-1 overflow-y-auto text-sm">
               {inUse.map((k) => (
-                <li key={k.id} className={`flex flex-wrap items-center justify-between gap-2 ${k.broken ? "text-slate-500 line-through" : "text-slate-200"}`} title={k.broken ? `${k.tester} reported this key as not working` : undefined}>
-                  <span className="font-mono">{k.value}</span>
-                  <span className="text-xs no-underline">{k.tester}{k.broken ? " · not working" : ""}</span>
-                  {/* A key ticked for removal here that a joining tester was given meanwhile: red until the tick is dropped. */}
-                  {removed.includes(k.value) && (
-                    <span className="flex basis-full items-center justify-between gap-2 text-xs text-rose-300 no-underline" data-ticked-in-use={k.value}>
-                      Ticked to remove here, but given to {k.tester} meanwhile
-                      <button type="button" className="btn-ghost !rounded-md !px-1.5 !py-0.5 text-xs" aria-label={`Keep ${k.value}`} onClick={() => onRemove(k.value, false)}>Keep</button>
-                    </span>
-                  )}
+                <li key={k.id} className={`flex flex-wrap items-center justify-between gap-2 ${k.gone ? "text-slate-500" : k.broken ? "text-slate-500 line-through" : "text-slate-200"}`} data-key-gone={k.gone} title={k.broken ? `${k.tester} reported this key as not working` : undefined}>
+                  <span className={`font-mono ${k.broken ? "line-through" : ""}`}>{k.value}</span>
+                  <span className="text-xs no-underline">{k.tester}{k.gone ? ` (${k.gone})` : ""}{k.broken ? " · not working" : ""}</span>
                 </li>
               ))}
             </ul>
           )}
         </div>
         <div className="space-y-1.5 rounded-xl border border-white/10 p-3" data-keys-free="">
-          <p className="text-sm font-medium text-white">Free <span className="font-normal text-slate-400">({free.length}, {openSpots} open spot{openSpots === 1 ? "" : "s"})</span></p>
-          {free.length === 0 ? <p className="text-xs text-slate-500">No free keys.</p> : (
-            <ul className="max-h-40 space-y-1 overflow-y-auto text-sm">
-              {free.map((k) => {
-                const gone = removed.includes(k.value);
-                return (
-                  <li key={k.id} className={`flex items-center justify-between gap-2 ${gone ? "text-slate-500 line-through" : "text-slate-200"}`}>
-                    <span className="font-mono">{k.value}</span>
-                    <button type="button" className="btn-ghost !rounded-md !px-1.5 !py-0.5 text-xs" aria-label={gone ? `Keep ${k.value}` : `Remove ${k.value}`} onClick={() => onRemove(k.value, !gone)}>
-                      {gone ? "Keep" : <X className="h-3.5 w-3.5" />}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          <label className="label !mb-0 !mt-2 text-xs" htmlFor="keysAdd">Add keys (one per line)</label>
-          <textarea id="keysAdd" rows={2} className={"input font-mono text-xs" + (line ? " field-bad" : "")} value={typed} onBlur={onBlur} onChange={(e) => onType(e.target.value)} placeholder={"KEY-3333\nKEY-4444"} />
+          <label className="text-sm font-medium text-white" htmlFor="keysFree">Free <span className="font-normal text-slate-400" data-free-head="">({n} key{n === 1 ? "" : "s"} · {openSpots} open spot{openSpots === 1 ? "" : "s"})</span></label>
+          <textarea id="keysFree" rows={Math.min(8, Math.max(3, n + 1))} className={"input font-mono text-xs" + (line ? " field-bad" : "")} value={typed} onBlur={onBlur} onChange={(e) => onType(e.target.value)} placeholder={"KEY-3333\nKEY-4444"} />
+          <p className="text-xs text-slate-500">One key per line. Delete a line to remove that key; type a new line to add one.</p>
         </div>
       </div>
       {line && <p className="err-field" role="alert">{line}</p>}
-      <p className="text-xs text-slate-500">Free keys go to new testers first. Keys already used, given to a tester who left, or reported as not working can&apos;t be added again.</p>
+      {/* (Batch 15 section 44) Warning only: never a mistake, never blocks Save, not counted in "Fix the N mistakes". */}
+      {warnings.length > 0 && (
+        <ul className="space-y-0.5 rounded-lg border border-amber-300/40 bg-amber-400/10 px-3 py-1.5 text-xs text-amber-100" data-key-warnings="">
+          {warnings.map((w) => <li key={w}><span className="mr-1 rounded border border-amber-300/50 px-1 text-[10px] uppercase tracking-wide">Reused</span>{w}</li>)}
+        </ul>
+      )}
+      <p className="text-xs text-slate-500">Free keys go to new testers first. {FREE_KEYS_RULE}</p>
       {note}
     </div>
   );

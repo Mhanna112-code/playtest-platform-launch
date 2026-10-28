@@ -58,6 +58,9 @@ export async function testerChanges(testerId: string, contractId: string, testId
     else out.push({ kind: "booked", text: `${dev} accepted your call request: ${rowsOf(r).length === 1 && rowsOf(r)[0].repeat !== "once" ? requestWords(r, when) : when}`, createdAt: r.decidedAt! });
   }
   for (const call of calls) out.push({ kind: "cancelled", text: `Your call on ${fmtDateTime(call.startsAt)} was cancelled`, createdAt: call.cancelledAt! });
+  // (Owner, Oct 30, batch 15 section 45) The developer marked this tester's key as working: a change to their contract (it stops even with Alerts Off; no bell).
+  const fixed = await db.accessKey.findFirst({ where: { contractId, fixedAt: { gt: seenAt }, status: "inuse" } });
+  if (fixed) out.push({ kind: "keyfixed", text: `The developer marked your key as working (${fixed.value})`, createdAt: fixed.fixedAt! });
   // (F) the listing's info (title, description, devices, languages) changed.
   out.push(...(await db.testEvent.findMany({ where: { testId, kind: { in: ["info", "renamed"] }, createdAt: { gt: seenAt } } })));
   out.push(...(await testerPaymentChanges(testerId, contractId, seenAt)));
