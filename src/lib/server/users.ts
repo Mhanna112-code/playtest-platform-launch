@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { HttpError } from "./http";
 import { requireUser } from "./session";
+import { accountGate, listLabel, logAccountChange, sidesLabel } from "./accountChanges";
 
 export const SUSPENDED = "Your account is paused. Contact support if you think this is a mistake.";
 
@@ -17,7 +18,7 @@ export const DEV_CHARGEBACK = "Your tests are paused after a chargeback. Open Pa
 const VERBS: Record<string, string> = {
   edit: "Save", stop: "Stop", "end-early": "End early", "next-round": "Next round", invite: "Invite", "cancel-invite": "Cancel invite", "request-time": "Call request", "answer-request": "Answer",
   application: "Answer", join: "Join", apply: "Apply", "rejoin-ask": "Ask to rejoin", message: "Message", written: "Send", "recording-start": "Send", "recording-send": "Send", "recording-done": "Send",
-  leave: "Leave", rate: "Rating", terms: "Switch or Keep", choose: "Charge", dispute: "Dispute", "dispute-side": "Dispute reply", "lower-length": "Lower the length", "no-show": "Report", "cancel-call": "Cancel call",
+  leave: "Leave", rate: "Rating", terms: "Switch or Keep", choose: "Charge", dispute: "Dispute", "dispute-side": "Dispute reply", "no-show": "Report", "cancel-call": "Cancel call",
   "cancel-set": "Cancel calls", "pay-extra": "Pay", "key-broken": "Report", open: "Open", review: "Pay",
 };
 
@@ -106,9 +107,28 @@ export async function saveProfile(userId: string, body: Record<string, unknown>)
   if (isTester && languages.length === 0) throw new HttpError(400, "bad_languages", "Pick at least one language you can test in.");
   const bio = str(body.bio, 1000);
   const emailPref = ["daily", "weekly", "monthly", "off"].includes(body.emailPref as string) ? (body.emailPref as string) : undefined;
-  return db.$transaction(async (tx) => {
+  // (Owner, Oct 28, batch 16 section 27) What this press sends, in the short form the stop box and the change log use (lists in the options' order).
+  const inOrder = (xs: string[], all: string[]) => listLabel(all.filter((x) => xs.includes(x)));
+  const sent: Record<string, string> = { name, pronoun: pronoun || "not set", sides: sidesLabel(isDeveloper, isTester), ...(isTester ? { devices: inOrder(devices, DEVICES), languages: inOrder(languages, LANGUAGES), bio } : {}) };
+  // A change made in another tab or device since this page opened stops the first Save once (a field changed to exactly this value isn't listed).
+  await accountGate(userId, body, "profile", sent);
+  const before = await db.user.findUniqueOrThrow({ where: { id: userId }, include: { profile: true } });
+  const saved = await db.$transaction(async (tx) => {
     const user = await tx.user.update({ where: { id: userId }, data: { name, pronoun, isDeveloper, isTester, ...(emailPref ? { emailPref } : {}) } });
     if (isTester) await tx.testerProfile.upsert({ where: { userId }, update: { devices, categories, languages, bio }, create: { userId, devices, categories, languages, bio } });
     return user;
   });
+  const tab = typeof body.tab === "string" ? body.tab : "";
+  const was: Record<string, string> = {
+    name: before.name, pronoun: before.pronoun || "not set", sides: sidesLabel(before.isDeveloper, before.isTester),
+    devices: inOrder(before.profile?.devices ?? [], DEVICES), languages: inOrder(before.profile?.languages ?? [], LANGUAGES), bio: before.profile?.bio ?? "",
+  };
+  const LABELS: Record<string, string> = { name: "Name", pronoun: "Pronoun", sides: "Sides", devices: "Devices", languages: "Languages", bio: "Bio" };
+  for (const [field, after] of Object.entries(sent)) {
+    if (was[field] === after) continue;
+    // A long value (the bio) reads "Bio changed"; the values are kept for the same-value rule.
+    const long = was[field].length > 60 || after.length > 60;
+    await logAccountChange(userId, tab, { scopes: field === "sides" || field === "name" ? ["profile", "settings"] : ["profile"], field, label: LABELS[field], before: was[field], after, ...(long ? { line: `${LABELS[field]} changed` } : {}) });
+  }
+  return saved;
 }

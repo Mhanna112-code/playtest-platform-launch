@@ -2,6 +2,7 @@ import Stripe from "stripe";
 import { db } from "@/lib/db";
 import { splitFee } from "@/lib/rules";
 import { HttpError } from "./http";
+import { cardLabel, logAccountChange } from "./accountChanges";
 
 // Stripe in test mode: developers save a card (Checkout in setup mode) and are charged off-session when they press Pay;
 // testers connect an Express account and get their share with the charge (destination charge, platform fee kept).
@@ -237,6 +238,11 @@ export async function saveCardFromCheckout(userId: string, sessionId: string) {
   if (!pm) throw new HttpError(400, "no_card", "The card wasn't saved. Try again.");
   await stripe.customers.update(user.stripeCustomerId!, { invoice_settings: { default_payment_method: pm } });
   await db.user.update({ where: { id: userId }, data: { stripePaymentMethodId: pm } });
+  // (Owner, Oct 28, batch 16 section 27) "Card: Visa ending 1111 → Visa ending 4242" for a Payments page open in another tab or device.
+  if (user.stripePaymentMethodId !== pm) {
+    const label = async (id: string | null) => (id ? cardLabel(await stripe.paymentMethods.retrieve(id).then((x) => x.card ?? {}, () => ({}))) : "no card");
+    await logAccountChange(userId, "", { scopes: ["payments"], field: "card", label: "Card", before: await label(user.stripePaymentMethodId), after: await label(pm) });
+  }
   // (Owner, Oct 29, batch 11 section 4) A new card during a hold: what is owed is retried on it at once.
   await (await import("./holds")).retryOwed(userId, new Date(), "card").catch((e) => console.error("[retry] card saved:", (e as Error).message));
 }
@@ -265,6 +271,8 @@ export async function refreshPayoutStatus(userId: string) {
   const a = await getStripe().accounts.retrieve(user.stripeAccountId);
   const ready = payoutReadyOf(a);
   await db.user.update({ where: { id: userId }, data: { payoutsReady: ready } });
+  // (Batch 16 section 27) For a Payments page open in another tab or device.
+  if (ready !== user.payoutsReady) await logAccountChange(userId, "", { scopes: ["payments"], field: "payout", label: "Payout account", before: user.payoutsReady ? "connected" : "not connected", after: ready ? "connected" : "not connected" });
   return ready;
 }
 

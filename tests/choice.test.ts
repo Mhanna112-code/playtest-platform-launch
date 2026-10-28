@@ -33,8 +33,8 @@ describe("Charge / Let it go at day 14", () => {
     expect(await db.notification.count({ where: { userId: tester.user.id, text: line } })).toBe(1);
     // (Owner, Oct 26) One email lists everything new: the daily job's summary carries the line.
     expect((await db.outboxEmail.findFirstOrThrow({ where: { to: tester.user.email, subject: { startsWith: "Your Playtest summary" } } })).text).toContain(line);
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe("Tick “charge Nora Lane $10.00 now” to charge.");
-    const r = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000 });
+    // (Batch 16 section 39) No tick for an ordinary amount: the Charge button (which names the amount) goes through alone.
+    const r = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" });
     expect(r.body).toMatchObject({ choice: "charge", amountCents: 1000 });
     // (Owner, Oct 27) A receipt follows the setting like any payment line: the daily job's email carries it (at most once).
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Receipt: you paid $10.00" }, payment: true } })).toBe(1);
@@ -75,7 +75,7 @@ describe("Charge / Let it go at day 14", () => {
     await cron();
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Reminder: Nora Lane didn't review" } } })).toBe(1);
     await startHold(dev.user.id, "unpaid");
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe("Tick “charge Nora Lane $10.00 now” to charge.");
+    // (Batch 16 section 39) The amount is the cap ($10.00): no tick needed, so it isn't refused for one (the hold rules decide; checked in batch 6).
     await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: null } });
     await db.submission.update({ where: { id: sub.id }, data: { choiceBy: new Date(Date.now() - 30 * 86_400_000) } });
     await cron();
@@ -141,11 +141,10 @@ describe("charge amount and a second failure", () => {
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "0", reason: "Not needed any more", confirmed: true })).status).toBe(200);
   });
 
-  it("Charge any amount up to the cap; above the cap refused; the tick names the typed amount", async () => {
+  it("Charge any amount up to the cap; above the cap refused; no tick needed at $200 or less (batch 16 section 39)", async () => {
     const { tester, sessionId, sub } = await waiting14();
     await cron();
     expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "12.00", tickedCents: 1200 })).body.error.message).toBe("At most $10.00.");
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "6.00", tickedCents: 1000 })).body.error.message).toBe("Tick “charge Nora Lane $6.00 now” to charge.");
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "6.00", tickedCents: 600 })).body).toMatchObject({ amountCents: 600 });
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "6.00" })).body).toMatchObject({ amountCents: 600 });
   });
 });

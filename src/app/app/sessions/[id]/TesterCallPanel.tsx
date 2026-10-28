@@ -48,7 +48,8 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
       )}
       {!m.cancelled && m.joinable && <JoinCall callId={m.id} />}
       {!m.cancelled && !m.ended && <a href={`/api/calls/${m.id}/ics`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline"><CalendarPlus className="h-3.5 w-3.5" /> Add to calendar</a>}
-      {!m.cancelled && !m.started && <CancelMenu needsReason={!m.canCancel} busy={busy} other={p.devName} onCancel={(why) => go("cancel-call", { callId: m.id, reason: why }, "cancel-" + m.id)} />}
+      {/* (Batch 16 section 24) Once the work is over (a stop, a closure, an early end): no Cancel call and no Join call. */}
+      {!m.cancelled && !m.started && !p.refusal && <CancelMenu needsReason={!m.canCancel} busy={busy} other={p.devName} onCancel={(why) => go("cancel-call", { callId: m.id, reason: why }, "cancel-" + m.id)} />}
       {!m.cancelled && m.started && !p.noReport && <ReportProblem path={`/api/sessions/${p.sessionId}/no-show`} callId={m.id} otherName={p.devName} seenAt={p.seenAt} reported={m.report ?? null} />}
       {/* (Batch 15 section 40) The app measures the length while you're both in the call page; nobody enters it. */}
       {m.started && !m.cancelled && m.lengthText && <span className="badge border-sky-300/40 text-sky-200" data-measuring="">{m.lengthText}</span>}
@@ -73,9 +74,9 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
               <div className="flex flex-wrap items-center gap-2">
                 <span className="mr-auto text-slate-200">{st.label} · {st.minutes} min · {st.rate}</span>
                 <button className="btn-ghost text-xs" onClick={() => setOpen({ ...open, [st.id]: !shown })}>{shown ? "Hide calls" : "Show calls"}</button>
-                <CancelMenu needsReason={st.needsReason} busy={busy} other={p.devName} label="Cancel the remaining calls"
+                {!p.refusal && <CancelMenu needsReason={st.needsReason} busy={busy} other={p.devName} label="Cancel the remaining calls"
                   rule={`Cancels every call still ahead and ${p.devName} is told.${st.needsReason ? " The next one is less than 24 hours away: say why." : ""}`}
-                  onCancel={(why) => go("cancel-set", { setId: st.id, reason: why }, "cancel-set-" + st.id)} />
+                  onCancel={(why) => go("cancel-set", { setId: st.id, reason: why }, "cancel-set-" + st.id)} />}
               </div>
               <p className="text-xs text-slate-400">Cancel to stop the remaining calls.</p>
               {box("cancel-set-" + st.id)}

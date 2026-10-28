@@ -5,12 +5,12 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { FormMistakes } from "@/components/FormMistakes";
 import { FIELD } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
-import { MARKABLE } from "@/lib/markJump";
 import type { RowJson } from "@/lib/callRows";
-import { acceptChoices, describeRows, newRow, RequestRows, rowsPayload, type RowState } from "@/components/RequestRows";
+import { alignedClash, newRow, RequestRows, rowsPayload, type RowState } from "@/components/RequestRows";
+import { CallRequestsPanel } from "@/components/CallRequestsPanel";
+import type { Slot } from "@/lib/callClash";
 
 type Req = { id: string; rows: RowJson[]; mine: boolean; who: string; contractId: string; rate: string; minutes?: number };
-const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 /**
  * Calls are always requests. A request is "Choose one" (up to 3 times; the other side picks one) or "Weekly" (one time
@@ -18,7 +18,11 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  * always at the contract rate. Pending requests: Accept / Decline / Withdraw. Boxes under the button. (Batch 16 section 10) A mistake in the request form is
  * red at its box (the server's line goes to the box whose data-match fits it) and listed under Request a time.
  */
-export function CallRequests(p: { path: string; seenAt: string; side: "developer" | "tester"; requests: Req[]; targets: { contractId: string; name: string; rate: string }[]; canRequest: boolean }) {
+export function CallRequests(p: {
+  path: string; seenAt: string; side: "developer" | "tester"; requests: Req[]; targets: { contractId: string; name: string; rate: string }[]; canRequest: boolean;
+  /** (Batch 16 section 33) For the clash checks: the booked calls between you, your other calls, and the limits (waiting, booked, what's left of the $1,000, the rate). */
+  clash?: { calls: Slot[]; elsewhere: (Slot & { name: string })[]; pending: number; booked: number; leftCents: number | null; rateCents: number | null };
+}) {
   // (NEXT-UI 12b) What the limit box said: the next press sends it, and stops again if who is blocked / at the limit changed.
   const [limitSeen, setLimitSeen] = useState("");
   const { press, changes, error, busy, at, errData } = usePress(p.seenAt, (d) => {
@@ -37,6 +41,10 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
   };
   const all = p.targets.length > 0 && p.targets.every((t) => ticked.includes(t.contractId));
   const filled = rowsPayload(rows);
+  // (Owner, Oct 28, batch 16 section 33) Clash checks while the form is filled (the same as the developer's): red under the row, blue for an exact match.
+  const clash = p.clash && p.side === "tester" && p.targets[0]
+    ? alignedClash(rows, minutes, "tester", [{ name: p.targets[0].name, calls: p.clash.calls, requests: p.requests.map((q) => ({ id: q.id, rows: q.rows, minutes: q.minutes ?? 0, mine: q.mine })), pending: p.clash.pending, booked: p.clash.booked, leftCents: p.clash.leftCents, rateCents: p.clash.rateCents }], p.clash.elsewhere)
+    : { notes: undefined, limits: [] as string[] };
   const form = useRef<HTMLDivElement>(null);
   const minNow = useLocalMin(5);
   const send = () =>
@@ -52,29 +60,9 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
     );
   return (
     <div className="space-y-2 text-sm">
-      {p.requests.length > 0 && (
-        <ul className="space-y-2">
-          {p.requests.map((r) => (
-            <li key={r.id} id={`req-${r.id}`} className={`flex flex-wrap items-center gap-2 ${MARKABLE}`}>
-              <span className="mr-auto">
-                {r.mine ? `You requested${p.side === "developer" ? ` with ${r.who}` : ""}` : `${r.who} requested`}{" "}
-                {describeRows(r.rows)}{r.minutes ? ` · ${r.minutes} min` : ""} · {r.rate}
-              </span>
-              {r.mine ? (
-                <button className="btn-ghost" disabled={busy} onClick={() => go("answer-request", { requestId: r.id, action: "withdraw", contractId: r.contractId }, "w-" + r.id)}>Withdraw</button>
-              ) : (
-                <>
-                  {acceptChoices(r.rows).map((x) => (
-                    <button key={x.label} className="btn" disabled={busy} onClick={() => go("answer-request", { requestId: r.id, action: "accept", ...(x.time ? { time: x.time } : {}), contractId: r.contractId }, "a-" + r.id)}>{x.label}</button>
-                  ))}
-                  <button className="btn-ghost" disabled={busy} onClick={() => go("answer-request", { requestId: r.id, action: "decline", contractId: r.contractId }, "d-" + r.id)}>Decline</button>
-                </>
-              )}
-              <div className="basis-full">{box("w-" + r.id)}{box("a-" + r.id)}{box("d-" + r.id)}</div>
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* (Batch 16 sections 33 and 35) The one Call requests panel: every waiting request with them, both directions, soonest first. */}
+      <CallRequestsPanel side={p.side} seenAt={p.seenAt} path={() => p.path}
+        requests={p.requests.map((r) => ({ id: r.id, contractId: r.contractId, tester: p.side === "tester" ? "You" : r.who, asker: r.who, rows: r.rows, minutes: r.minutes ?? 0, mine: r.mine, rate: r.rate }))} />
       {p.canRequest && (
         <div className="space-y-2" ref={form} data-mistakes-root="">
           {p.side === "developer" && p.targets.length > 0 && (
@@ -88,7 +76,8 @@ export function CallRequests(p: { path: string; seenAt: string; side: "developer
               ))}
             </fieldset>
           )}
-          <RequestRows rows={rows} setRows={setRows} minNow={minNow} />
+          <RequestRows rows={rows} setRows={setRows} minNow={minNow} notes={clash.notes} />
+          {clash.limits.map((l) => <p key={l} className="err-field" tabIndex={-1} data-red-msg={l} data-clash-limit="">{l}</p>)}
           <div className="flex flex-wrap items-end gap-2">
             <label className="inline-flex items-center gap-1">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max="180" data-whole="" data-msg="A live call lasts from 10 to 180 minutes." data-required="" data-required-msg="Enter the call's length in minutes."
               data-match="length in minutes|live call lasts" value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min <span className="text-xs text-slate-500">10–180</span></label>

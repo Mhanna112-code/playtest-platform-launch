@@ -56,7 +56,8 @@ describe("after the test is stopped", () => {
     expect((await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
   });
 
-  it("Dispute: the developer adding their side stops the tester's next dispute press once; an already disputed piece is final", async () => {
+  // (Owner, Oct 28, batch 16 section 25) On a stopped test the tester's Dispute goes through on the FIRST press, whatever changed (the developer's side included).
+  it("Dispute: goes through on the first press after the developer added their side; an already disputed piece is final", async () => {
     const s = await setup({ writtenCents: "10.00", recordingCents: "10.00", liveRateCents: null });
     const j = await joined(s.testId);
     await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] });
@@ -71,12 +72,9 @@ describe("after the test is stopped", () => {
     expect((await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: w.id, reason: "I answered everything properly", seenAt: opened })).status).toBe(200);
     const d1 = await db.dispute.findFirstOrThrow({ where: { submissionId: w.id } });
     expect((await act(s.testId, "dispute-side", s.dev.cookie, { disputeId: d1.id, text: "They skipped half of it", seenAt: seen(), confirmed: true })).status).toBe(200);
-    // Disputing the second piece with a page that predates the developer's side: stops once, then goes ahead.
-    const stop = await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: rec.id, reason: "The recording was fine really", seenAt: opened });
-    expect(stop.body.error.code).toBe("stop_once");
-    expect(texts(stop).join(" ")).toMatch(/Nora Lane added their side to your dispute/);
-    const go = await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: rec.id, reason: "The recording was fine really", seenAt: opened, confirmed: true, boxAt: stop.body.error.now });
-    expect(go.status).toBe(200);
+    // Disputing the second piece with a page that predates the developer's side: goes through on the first press.
+    const go = await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: rec.id, reason: "The recording was fine really", seenAt: opened });
+    expect(go.status, JSON.stringify(go.body)).toBe(200);
     // Disputing the first piece again: final.
     expect((await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: w.id, reason: "Again, please look", seenAt: seen(), confirmed: true })).body.error.message).toMatch(/already disputed/);
   });

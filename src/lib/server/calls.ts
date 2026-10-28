@@ -1,13 +1,14 @@
 import { db } from "@/lib/db";
 import { T } from "@/lib/tz";
 import { displayName, fmtDateTime, pronouns } from "@/lib/format";
-import { cancelLine, checkCancel, type TestEventLike, NOBODY_JOINED, JOIN_OPENS_MIN, PAY_WAITS, payByFrom } from "@/lib/rules";
-import { PRESENCE_GAP_MS, callMinutesOf, checkLower, measureDeadline, measureIsFinal, measureOverlap } from "@/lib/callMeasure";
+import { cancelLine, checkCancel, type TestEventLike, NOBODY_JOINED, JOIN_OPENS_MIN, payByFrom } from "@/lib/rules";
+import { PRESENCE_GAP_MS, measureDeadline, measureIsFinal, measureOverlap } from "@/lib/callMeasure";
 import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { notify } from "./notify";
 import { testerGate as sharedTesterGate } from "./testerGate";
-import { devGate, devGateIfSeen, devOnHold, ownContract, ownTest, recordEvent, staleNote } from "./tests";
+import { devGate, devGateIfSeen, ownContract, ownTest, recordEvent, staleNote } from "./tests";
+import { CALL_ACTS } from "./live";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -28,10 +29,15 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
     const c = await tx.call.findUnique({ where: { id: callId }, include: { contract: { include: { tester: true } } } });
     if (!c || c.contract.testId !== testId) throw new HttpError(404, "not_found", "That call doesn't exist.");
     const name = displayName(c.contract.tester);
-    if (c.status === "cancelled") throw new HttpError(409, "cancelled", `The call with ${name} was already cancelled.` + (await staleNote(testId, body.seenAt)));
+    // (Batch 16 section 21) Cancelled in another tab: this press stops once naming it, then it's already done.
+    if (c.status === "cancelled") {
+      await devGate(tx, testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`call:${c.id}`, `c:${c.contractId}`] });
+      throw new HttpError(409, "cancelled", `The call with ${name} was already cancelled.` + (await staleNote(testId, body.seenAt)));
+    }
     const ok = checkCancel(c.startsAt, new Date(), reason);
     if (!ok.ok) throw new HttpError(400, "reason", ok.message);
-    await devGate(tx, testId, body);
+    // (Batch 16 section 21) Another tab's call action with this tester stops it once.
+    await devGate(tx, testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`call:${c.id}`, `c:${c.contractId}`] });
     await tx.call.update({ where: { id: c.id }, data: { status: "cancelled", cancelledBy: "developer", cancelledAt: new Date(), cancelNote: reason } });
     await tx.callSlot.update({ where: { id: c.slotId }, data: { status: "removed" } });
     await recordEvent(tx, testId, "cancelled", `You cancelled the call with ${name} on ${fmtDateTime(c.startsAt)}`, false, {}, c.contractId);
@@ -100,37 +106,13 @@ export async function reportNoShow(user: U, callId: string, body: Record<string,
   const typed = typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
   if (!kind && typed.length < 5) throw new HttpError(400, "bad_note", "Say what happened.");
   const note = kind ? `${kind[0].toUpperCase()}${kind.slice(1)}${typed ? `: ${typed}` : "."}` : typed;
-  if (side === "developer") await devGateIfSeen(call.contract.testId, body);
+  if (side === "developer") await devGateIfSeen(call.contract.testId, body, { acts: ["no-show", "cancel-call", "cancel-set"], keys: [`call:${call.id}`] });
   else await sharedTesterGate(user.id, call.contractId, call.contract.testId, body);
   await db.call.update({ where: { id: call.id }, data: { noShowBy: side, noShowNote: note, noShowAt: new Date() } });
   return { reported: true };
 }
 
-/**
- * (Owner, Oct 30, batch 15 section 40) The developer can only LOWER a call's measured length, with a reason the tester reads, in the call's Pay box ("Lower the length").
- * Never raise it. Only once the length is final, and before the call is paid. The same stop-once and hold / suspension refusals as Pay.
- */
-export async function lowerCallLength(dev: U, testId: string, body: Record<string, unknown>) {
-  await ownTest(dev.id, testId);
-  const reason = readText(body.reason, LIMITS.reason, "reason");
-  const minutes = typeof body.minutes === "number" ? body.minutes : typeof body.minutes === "string" && body.minutes.trim() ? Number(body.minutes) : null;
-  if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", PAY_WAITS);
-  return db.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
-    const call = await tx.call.findUnique({ where: { id: String(body.callId ?? "") }, include: { contract: true, review: true } });
-    if (!call || call.contract.testId !== testId) throw new HttpError(404, "not_found", "That call doesn't exist.");
-    if (call.status !== "booked") throw new HttpError(409, "cancelled", "This call was cancelled.");
-    if (call.review) throw new HttpError(409, "paid", "This call was already paid, so its length can't change.");
-    const current = callMinutesOf(call);
-    if (current == null) throw new HttpError(409, "measuring", MEASURING_REFUSAL);
-    const ok = checkLower(minutes, current, reason);
-    if (!ok.ok) throw new HttpError(400, "bad_minutes", ok.message);
-    await devGate(tx, testId, body);
-    await tx.call.update({ where: { id: call.id }, data: { actualMinutes: minutes!, lengthNote: reason } });
-    await recordEvent(tx, testId, "lowered", `You lowered the length of the call on ${fmtDateTime(call.startsAt)} to ${minutes} min`, false, {}, call.contractId);
-    return { minutes };
-  });
-}
+// (Owner, Oct 28, batch 16 section 26) No "Lower the length": a call has just Pay (measured length × rate; paying less needs the usual reason).
 export const MEASURING_REFUSAL = "This call is still being measured: you can pay it once its length is final.";
 
 /**

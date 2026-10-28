@@ -48,6 +48,9 @@ describe("a chargeback is a hold with extra steps", () => {
     await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 900, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + 86_400_000) } });
     steps = (await chargebackSteps(dev.user.id))!;
     expect(stepsLine(steps.remaining)).toBe("Still to do: verify a card with 3D Secure, then pay what you owe ($32.00), then wait for the team's approval.");
+    // (Batch 16 section 41) Before the card is verified, Pay what you owe is refused.
+    expect((await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })))).body.error.message).toBe("Verify your card first.");
+    await db.user.update({ where: { id: dev.user.id }, data: { chargebackCardVerifiedAt: new Date() } }); // (batch 16 section 41) step 1 first: Pay what you owe waits for the verified card
     const paid = await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })));
     expect(paid.status).toBe(200);
     expect(paid.body.lifted).toBe(false);
@@ -55,7 +58,7 @@ describe("a chargeback is a hold with extra steps", () => {
     expect((await holdOf(dev.user.id)).holdStartedAt).not.toBeNull();
     steps = (await chargebackSteps(dev.user.id))!;
     expect(steps.owedPaid).toBe(true);
-    expect(stepsLine(steps.remaining)).toBe("Still to do: verify a card with 3D Secure, then wait for the team's approval.");
+    expect(stepsLine(steps.remaining)).toBe("Still to do: wait for the team's approval.");
   });
 
   it("the admin sees 'card verified / owed paid' and Approve; approving needs both, then lifts the hold and tests resume", async () => {

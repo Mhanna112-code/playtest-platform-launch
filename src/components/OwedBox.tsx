@@ -15,7 +15,7 @@ type Line = { id: string; retry: boolean; amountCents: number; until: string | n
  * (Owner, Oct 29, batch 10) The page polls (AutoRefresh): the amount and the lines follow `owed` live, and the page drops the box when nothing is owed. A press
  * still checks what was last confirmed (the page load or the last stop box), so a press after a change stops once with the new lines.
  */
-export function OwedBox({ onHold, owed, chargeback = false, review = false, retryLine = "" }: { onHold: boolean; owed: Line[]; chargeback?: boolean; review?: boolean; /** (Batch 11) "Last try: ... · next try: ..." of the automatic retries */ retryLine?: string }) {
+export function OwedBox({ onHold, owed, chargeback = false, review = false, retryLine = "", verifyFirst = false }: { onHold: boolean; owed: Line[]; chargeback?: boolean; review?: boolean; /** (Batch 11) "Last try: ... · next try: ..." of the automatic retries */ retryLine?: string; /** (Batch 16 section 41) a chargeback hold with no verified card yet: Pay waits for step 1 */ verifyFirst?: boolean }) {
   const [err, setErr] = useState("");
   const [failing, setFailing] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -45,7 +45,8 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
       )}
       {(!chargeback || retry.length > 0) && <button
         className="btn"
-        disabled={busy}
+        disabled={busy || verifyFirst}
+        aria-disabled={verifyFirst}
         onClick={async () => {
           setBusy(true);
           setErr("");
@@ -86,6 +87,8 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
       >
         Pay what you owe ({money(changes ? total : seenTotal)})
       </button>}
+      {/* (Owner, Oct 28, batch 16 section 41) The chargeback steps in order: the card first. */}
+      {verifyFirst && <p className="text-xs" data-verify-first="">Verify your card first (step 1): then you can pay what you owe.</p>}
       <ChangesBox changes={changes} />
       {bankNote && <p className="info" data-bank-not-confirmed="">{bankNote}</p>}
       {done && <p className="ok">{done}</p>}

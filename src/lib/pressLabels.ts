@@ -4,7 +4,7 @@
 export const PRESS_VERBS: Record<string, string> = {
   edit: "Save", stop: "Stop the test", "end-early": "End early", "next-round": "Next round", invite: "Invite", "cancel-invite": "Cancel invite", "request-time": "Request a time", "answer-request": "Answer",
   application: "Answer", join: "Join", apply: "Apply", "rejoin-ask": "Ask to rejoin", message: "Send", written: "Send", "recording-start": "Send", "recording-send": "Send", "recording-done": "Send",
-  leave: "Leave", rate: "Rate", terms: "Switch or Keep", choose: "Charge", dispute: "Dispute", "dispute-side": "Send your side", "lower-length": "Lower the length", "no-show": "Report", "cancel-call": "Cancel call",
+  leave: "Leave", rate: "Rate", terms: "Switch or Keep", choose: "Charge", dispute: "Dispute", "dispute-side": "Send your side", "no-show": "Report", "cancel-call": "Cancel call",
   "cancel-set": "Cancel calls", "pay-extra": "Pay more", "key-broken": "Report", open: "Accept testers again", review: "Pay", "post-draft": "Post the test", "delete-draft": "Delete", "withdraw-application": "Withdraw",
 };
 

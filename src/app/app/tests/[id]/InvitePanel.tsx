@@ -3,6 +3,7 @@ import { PlusMore } from "@/components/PlusMore";
 import { TAG_NAMES } from "@/lib/inviteRows";
 import { SubscribersTag } from "@/components/SubscribeLink";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChangesBox } from "@/components/ChangesBox";
 import { MistakeList } from "@/components/FieldChecks";
 import { api } from "@/lib/client";
@@ -21,14 +22,16 @@ type PanelData = { worked: Tester[]; suggested: Tester[]; found: Tester[]; found
 
 /**
  * The invite panel (test page only), the full app's fold ("Invite testers" with its icon opens and closes it). Sections:
- * Invited (Cancel invite) · People you've worked with · the filters (the devices / languages THIS test needs) · Suggested ·
- * Find testers (empty until you search). The filters narrow Suggested and Find testers. Greyed rows can't be ticked. A
+ * Invited (Cancel invite) · the filters (the devices / languages THIS test needs) · Search by name with Find testers right under it
+ * (batch 16 section 29: hidden until you search) · People you've worked with · Suggested. The filters narrow Suggested and Find testers. Greyed rows can't be ticked. A
  * ticked tester missing something the test needs gets an in-page confirm under Invite (Invite anyway / Cancel).
  * (Owner, Oct 28, batch 16 section 12) The lists come from the server over EVERY tester: the name search (2+ characters, after a short pause in
  * typing) and the ticks ask it again; every match shows in a scroll box, and above 100 the first 100 with "Showing 100 of N: type more of the name".
  */
 export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelData; sent: Sent[]; options: { devices: string[]; languages: string[] }; /** (Batch 8) false on the free plan: the "Subscribers" tag */ perks?: boolean }) {
-  const { press, changes, error, busy, setError, at, errData } = usePress(p.seenAt);
+  const router = useRouter();
+  // (Batch 16 section 21) An invite from another tab for a ticked tester stops Invite once; the panel shows it at once (the row greys, "Invited <date>").
+  const { press, changes, error, busy, setError, at, errData } = usePress(p.seenAt, () => router.refresh());
   // (NEXT-UI 12b) When the Invite anyway box last updated (its first showing, a changed list, a live update): Invite anyway
   // goes ahead only if nothing new happened since; anything newer stops it again inside the box.
   const [gapAt, setGapAt] = useState("");
@@ -44,6 +47,16 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   const term = q.trim().length >= 2 ? q.trim() : "";
   const asked = useRef(0);
   const first = useRef(true);
+  // (Batch 16 section 21) When the page refreshes (an invite from another tab, the poll), the lists follow: the server's lists again, or the search asked again.
+  const [again, setAgain] = useState(0);
+  const lastInitial = useRef(p.initial);
+  useEffect(() => {
+    if (lastInitial.current === p.initial) return;
+    lastInitial.current = p.initial;
+    if (!term && !f.devices.length && !f.languages.length) setData(p.initial);
+    else setAgain((n) => n + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.initial]);
   useEffect(() => {
     if (first.current) {
       first.current = false;
@@ -58,11 +71,19 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
         .finally(() => { if (n === asked.current) setSearching(false); });
     }, 300);
     return () => clearTimeout(t);
-  }, [term, f, p.testId]);
+  }, [term, f, p.testId, again]);
   const worked = data.worked;
   // Suggested: the top 5 invitable newcomers after the device / language ticks (ranked on the server: meets, score, accepted parts, matches).
   const suggested = data.suggested;
   const found = term && data.searched ? data.found : [];
+  // (Owner, Oct 28, batch 16 section 31) What this panel last showed for each tester (their devices and languages): Invite sends it, with the test's requirements
+  // as shown, so the server stops once when either changed since. A ticked tester who is now greyed is unticked when the panel refreshes.
+  const shown = useRef(new Map<string, { devices: string[]; languages: string[] }>());
+  useEffect(() => {
+    for (const t of [...data.worked, ...data.suggested, ...data.found]) shown.current.set(t.id, { devices: t.devices, languages: t.languages });
+    const grey = new Set([...data.worked, ...data.suggested, ...data.found].filter((t) => t.grey).map((t) => t.id));
+    if (grey.size) setTicked((tk) => (tk.some((id) => grey.has(id)) ? tk.filter((id) => !grey.has(id)) : tk));
+  }, [data]);
   // The fold: shut at first, open when the page comes back to it (#invite, e.g. after inviting).
   const [open, setOpen] = useState(false);
   useEffect(() => {
@@ -71,7 +92,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
 
   async function invite(anyway: boolean) {
     setMsg("");
-    const r = await press<{ message: string }>(`/api/tests/${p.testId}/invite`, { testerIds: ticked, anyway, seenGaps: confirm ? confirm.filter((l) => l.endsWith("which this test needs.")) : undefined, ...(anyway && gapAt ? { confirmed: true, boxAt: gapAt } : {}) }, anyway ? "anyway" : "invite");
+    const r = await press<{ message: string }>(`/api/tests/${p.testId}/invite`, { testerIds: ticked, anyway, seenGaps: confirm ? confirm.filter((l) => l.endsWith("which this test needs.")) : undefined, ...(anyway && gapAt ? { confirmed: true, boxAt: gapAt } : {}), seenNeeds: p.options, seenTesters: Object.fromEntries(ticked.flatMap((id) => (shown.current.has(id) ? [[id, shown.current.get(id)!]] : []))) }, anyway ? "anyway" : "invite");
     if (r) {
       setConfirm(null);
       setMsg(r.message);
@@ -195,17 +216,22 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
         </div>
       )}
       <input className="input max-w-xs" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find testers" />
+      {/* (Owner, Oct 28, batch 16 section 29) The search's results right under the box, in their own scroll box (every match, about 8 rows tall; above 100, the
+          first 100 and the line saying so), so a search never needs scrolling down the lists. With the box empty, the heading and results are hidden. */}
+      {term && (
+        <div className="space-y-1.5" data-invite-find="">
+          <h3>Find testers</h3>
+          {data.capLine && <p className="note" data-invite-cap="">{data.capLine}</p>}
+          {found.length > 0 && <ul className="max-h-64 space-y-1.5 overflow-y-auto" data-invite-found="">{found.map((t) => row(t, "f"))}</ul>}
+          {data.searched && !searching && found.length === 0 && <p className="note" data-invite-none="">No testers match “{term}”.</p>}
+        </div>
+      )}
       {/* (Batch 16 section 10) Nothing ticked: the lists are the field, red with their line under them, and listed under Invite. */}
       <div id="invite-lists" className={`max-h-72 space-y-2 overflow-y-auto text-sm ${none ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}`} data-invite-lists="" data-red-msg={none ? "Tick at least one tester." : undefined}>
         <h3>People you&apos;ve worked with</h3>
         {worked.length ? <ul className="space-y-1.5">{worked.map((t) => row(t, "w"))}</ul> : <p className="note">Nobody yet.</p>}
         <h3>Suggested</h3>
         {suggested.length ? <ul className="space-y-1.5">{suggested.map((t) => row(t, "s"))}</ul> : <p className="note">No suggestions right now.</p>}
-        <h3>Find testers</h3>
-        {/* (Batch 16 section 12) Every match, in a scroll box about 8 rows tall; above 100, the first 100 and the line saying so. */}
-        {term && data.capLine && <p className="note" data-invite-cap="">{data.capLine}</p>}
-        {found.length > 0 && <ul className="max-h-64 space-y-1.5 overflow-y-auto" data-invite-found="">{found.map((t) => row(t, "f"))}</ul>}
-        {term && data.searched && !searching && found.length === 0 && <p className="note" data-invite-none="">No testers match “{term}”.</p>}
       </div>
       {none && <p className="err-field">Tick at least one tester.</p>}
       <div className="flex flex-wrap items-center gap-2">

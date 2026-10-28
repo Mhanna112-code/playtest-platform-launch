@@ -1,6 +1,7 @@
 "use client";
 import { SubscribersTag } from "@/components/SubscribeLink";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
 import { KeyRound, Pencil, Play, Repeat } from "lucide-react";
@@ -24,7 +25,9 @@ type Tester = { contractId: string; name: string; sent: string[]; toSend: string
 export function TopPanel(p: { joinClosedLine?: string; id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean;
   /** (Batch 15 section 39) The Alerts types this state can still have (a paused or stopped test shows fewer); omitted: all. */ alertKeys?: string[];
   /** (Batch 15 section 29) After Stop / End early from the restricted view: on to the dashboard top with "Done: …". */ doneTo?: string }) {
-  const { press, changes, error, busy, at } = usePress(p.seenAt);
+  const router = useRouter();
+  // (Batch 16 section 21) End early stopped by another tab's action on the ticked testers: the pop-up's summary for them (calls, work waiting) refreshes.
+  const { press, changes, error, busy, at } = usePress(p.seenAt, () => router.refresh());
   // (Batch 16 section 10) End early's mistakes are red at their box and listed under its button, not as a plain line.
   const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={k === "end-early" && error.startsWith(FIELD) ? "" : error} didntGo={k === "stop" || k === "end-early"} /> : null);
   const [open, setOpen] = useState<"" | "end" | "next">("");

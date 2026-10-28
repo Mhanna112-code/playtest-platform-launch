@@ -44,12 +44,14 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
       {changes && (
         <>
           <p className="font-medium" data-didnt-go="">{named ? `Your ${named} didn't go through.` : "Your press didn't go through."}</p>
-          <p className="font-medium">Since you opened this page:</p>
+          {/* (Batch 16 section 27) Payments, the profile editor and Settings: what another tab or device changed on the account. */}
+          <p className="font-medium">{changes.length > 0 && changes.every((c) => c.kind === "account" || c.kind === "account-at") ? "Changed in another tab or device since you opened this page:" : "Since you opened this page:"}</p>
           {/* (Design doc 2) The newest 3 lines, then "Show N more" opening a scroll box about 8 lines tall. */}
           <LongList className="my-1 list-disc pl-5" tall="max-h-52">
             {[...changes].map((c, i) => (
               <li key={`${c.at}|${c.text}|${i}`}>
-                {c.text.startsWith("You also did this in another tab") ? `${c.text} at ${time(c.at)}` : `${c.text} · ${time(c.at)}`}
+                {/* (Batch 16 section 21) A line can open what it's about (e.g. the next round's draft another tab made). */}
+                {c.link?.startsWith("/") ? <><a href={c.link} data-stop-link="">{c.text}</a> · {time(c.at)}</> : c.text.startsWith("You also did this in another tab") || c.kind === "account-at" ? `${c.text} at ${time(c.at)}` : c.kind === "account" ? c.text : `${c.text} · ${time(c.at)}`}
                 {/* (Owner, Oct 28) "Ana switched to the new terms" / "kept their current terms": the same "See their contract" as the top box (scrolls on the test page; a new tab from Edit). */}
                 {c.kind === "terms" && c.contract && <> <ContractLink contract={c.contract} /></>}
                 {(() => { const d = detail?.(c); return d ? <div className="mt-0.5 text-xs" data-stop-detail="">{d}</div> : null; })()}

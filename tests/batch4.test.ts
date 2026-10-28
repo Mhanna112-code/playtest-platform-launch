@@ -480,9 +480,11 @@ describe("follow-up 6) one Save in another tab is one line in one voice, and 'Ch
     const loaded = seen();
     await new Promise((r) => setTimeout(r, 30));
     expect((await act(testId, "edit", dev.cookie, { version: v, tab: "tab-2", fields: { description: "Sail further", liveRateCents: "40.00" } })).status).toBe(200);
-    const stop = await act(testId, "next-round", dev.cookie, { seenAt: loaded, tab: "tab-1" });
-    expect(stop.body.error.code).toBe("stop_once");
-    expect(stop.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["You changed the description and live call rate in another tab"]);
+    // (Batch 16 section 21) A Save in another tab is about Edit only: Next round here isn't stopped by it (one line, one voice, in the log).
+    const next = await act(testId, "next-round", dev.cookie, { seenAt: loaded, tab: "tab-1" });
+    expect(next.body.error?.code).not.toBe("stop_once");
+    const log = await db.actionLog.findFirstOrThrow({ where: { testId, tab: "tab-2" } });
+    expect(log.text.split("\u001f")[0]).toBe("You changed the description and live call rate in another tab");
   });
 
   it("the listing the open Edit page polls carries the change count and whether anyone joined", async () => {

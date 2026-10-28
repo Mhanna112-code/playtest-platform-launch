@@ -19,6 +19,14 @@ export async function GET(req: Request) {
       // Payments stays open during a hold or suspension, so it always refreshes.
       return ok({ v, restricted: false });
     }
+    // (Owner, Oct 28, batch 16 section 32) The tester's invitations (dashboard and join page): any invite of theirs closing, re-sent or its test filling refreshes the page.
+    if (q.get("invites")) {
+      const invs = await db.invite.findMany({ where: { testerId: u.id }, orderBy: { updatedAt: "desc" }, take: 100, select: { id: true, status: true, updatedAt: true, testId: true, test: { select: { spots: true, status: true } } } });
+      const open = invs.filter((i) => i.status === "sent");
+      const working = open.length ? await db.contract.groupBy({ by: ["testId"], where: { testId: { in: open.map((i) => i.testId) }, status: "working" }, _count: { _all: true } }) : [];
+      const full = open.filter((i) => (working.find((w) => w.testId === i.testId)?._count._all ?? 0) >= i.test.spots).map((i) => i.id);
+      return ok({ v: [invs.map((i) => `${i.id}:${i.status}:${i.updatedAt.getTime()}:${i.test.status}`).join(","), full.join(",")].join("|"), restricted: false });
+    }
     let testId = q.get("test") ?? "";
     const sessionId = q.get("session") ?? "";
     if (sessionId) {
@@ -37,13 +45,19 @@ export async function GET(req: Request) {
     ]);
     const msg = await db.message.findFirst({ where: { testId }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
     const inv = await db.invite.findFirst({ where: { testId }, orderBy: { updatedAt: "desc" }, select: { updatedAt: true } });
+    // (Owner, Oct 28, batch 16 section 21) What the developer did in another tab (a call request, a Pay, an End early…): this tab's page updates on its poll
+    // (most of those give no live line). Call requests and calls are in it too, whoever changed them.
+    const own = sessionId ? null : await db.actionLog.findFirst({ where: { userId: u.id, testId }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
+    const reqV = await db.callRequest.findFirst({ where: { testId }, orderBy: { updatedAt: "desc" }, select: { updatedAt: true } });
+    // (Batch 16 section 31) A tester's devices or languages changed: the developer's invite panel recomputes its tags, greys and Suggested order.
+    const profV = sessionId ? null : (await db.testerProfile.aggregate({ _max: { updatedAt: true } }))._max.updatedAt;
     const sus = sessionId ? 0 : await db.user.count({ where: { testerSuspendedAt: { not: null } } });
     // (Batch 14 section 6) The Access keys notice: keys added or deleted in Edit, or given at a join, refresh the page.
     const keyRows = sessionId ? [] : await db.accessKey.groupBy({ by: ["status"], where: { testId }, _count: { _all: true } });
     const keysV = keyRows.map((k) => `${k.status}:${k._count._all}`).sort().join(",");
     const pay = { n: payCount, last: (payLast?.createdAt.getTime() ?? 0) + (payLast?.status ?? "") };
     // (Batch 10) The developer's suspension and the team's pause are in it too, so a tester's session page shows (or drops) the paused banner live.
-    const v = [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV].join("|");
+    const v = [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0].join("|");
     // (Owner, Oct 28) Whether the team stopped the test: an open test page or Edit moves to the top of the test page at once.
     // (Batch 10) A tester's session page isn't restricted by the developer's hold (only the developer's own pages are): it keeps refreshing, so the paused banner shows live.
     // (Batch 15 section 16) Each side's own suspension: the tester side on a session page, the developer side on a test page.

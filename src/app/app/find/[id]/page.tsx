@@ -13,6 +13,7 @@ import { JoinBox } from "./JoinBox";
 import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
 import { isAdmin } from "@/lib/server/session";
 import { LiveTop } from "@/components/LiveTop";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { qOptional, qText } from "@/lib/questions";
 import { ratingSummary } from "@/lib/server/ratings";
 import { NoThanksButton } from "./NoThanksButton";
@@ -88,6 +89,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       <p><a href="/app/find">← All tests</a></p>
       {isAdmin(u) && <AdminTestBoxes testId={t.id} adminId={u.id} />}
       {t.developerId !== u.id && <LiveTop scope={`listing:${t.id}`} seenAt={seenAt} seeIt="#listing" />}
+      {/* (Batch 16 section 32) An invite to this test: the page follows it live (closed, re-sent, the test filling). */}
+      {invite && <AutoRefresh query="invites=1" />}
       <section className="card space-y-4" id="listing">
         <div className="flex items-start gap-4">
           <CategoryTile category={mainCategory(t.categories)} size="h-14 w-14" />

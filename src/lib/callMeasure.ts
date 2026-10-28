@@ -87,14 +87,6 @@ export function callLengthLine(x: { actualMinutes: number | null; measuredMinute
   return `Length: ${m} min${both ? ` (${both})` : ""}`;
 }
 
-/** Lowering the length: whole minutes, at least 1 and below the current length; a reason is required (the tester reads it). */
-export function checkLower(minutes: number | null, current: number, reason: string): { ok: true } | { ok: false; message: string } {
-  if (minutes == null || !Number.isInteger(minutes) || minutes < 1) return { ok: false, message: "Enter the length in whole minutes." };
-  if (minutes >= current) return { ok: false, message: `You can only lower the length: below ${current} min.` };
-  if (reason.trim().length < 5) return { ok: false, message: "Say why you're lowering the length (the tester reads it)." };
-  return { ok: true };
-}
-
 // ---------- Rate and Amount fill each other (the call Pay box) ----------
 /** Typing a rate fills Amount = rate × length. */
 export const amountFromRate = (rateCents: number, minutes: number) => Math.round((rateCents * minutes) / 60);

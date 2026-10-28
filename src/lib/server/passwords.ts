@@ -182,6 +182,10 @@ export async function resetPassword(body: Record<string, unknown>) {
 /** Change the password while signed in: the current one first; every OTHER device is signed out. */
 export async function changePassword(userId: string, req: Request, body: Record<string, unknown>) {
   const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
+  // (Owner, Oct 28, batch 16 section 27) Changed in another tab or device since this page opened: the first press stops once ("Password changed at 3:10 PM"),
+  // before the current password is checked (the one typed here may be the old one).
+  const ac = await import("./accountChanges");
+  await ac.accountGate(userId, body, "settings");
   if (user.passwordHash && !(await verifyPassword(typeof body.current === "string" ? body.current : "", user.passwordHash))) throw field("Your current password isn't right");
   const password = readNewPassword(body.password, "Use at least 8 characters");
   if (body.password !== body.confirm) throw field("The two passwords don't match");
@@ -190,6 +194,7 @@ export async function changePassword(userId: string, req: Request, body: Record<
     db.user.update({ where: { id: userId }, data: { passwordHash: await hashPassword(password) } }),
     db.session.deleteMany({ where: { userId, ...(here ? { tokenHash: { not: hashToken(here) } } : {}) } }),
   ]);
+  await ac.logAccountChange(userId, typeof body.tab === "string" ? body.tab : "", { scopes: ["settings"], field: "password", label: "Password", line: "Password changed", at: true });
   return { changed: true };
 }
 

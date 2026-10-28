@@ -8,7 +8,6 @@ import { db } from "@/lib/db";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { GET as cronGET } from "@/app/api/cron/daily/route";
 import * as R from "@/lib/rules";
-import { checkLower } from "@/lib/callMeasure";
 import { startHold } from "@/lib/server/holds";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
@@ -40,8 +39,6 @@ describe("latest batch rules", () => {
     expect(renderTimes(R.callCancelledLine(d, "stopped"), Intl.DateTimeFormat().resolvedOptions().timeZone)).toMatch(/was cancelled because the test was stopped\.$/);
     expect(R.callReference(4000, 25)).toEqual({ cents: 1667, text: "Listing: $40/h × 25 min = $16.67" });
     expect(R.callReference(null, 25)).toEqual({ cents: null, text: "Not listed" });
-    expect(checkLower(25, 30, "We stopped early").ok).toBe(true);
-    expect(checkLower(31, 30, "Longer").ok).toBe(false);
     expect(R.declinedLine("Ana Silva", 1667, "live call")).toBe("Your card was declined, so Ana Silva wasn't paid $16.67 for the call. Update your card in Payments, then press Pay again.");
     expect(R.emailDecision("each", false)).toBe("summary"); // (Owner, Oct 26) no per-update emails any more: a leftover "each" counts as daily
     expect(R.emailDecision("off", false)).toBe("skip");
@@ -150,12 +147,11 @@ describe("live calls blocked during holds and on stopped/closed tests", () => {
 });
 
 describe("call length and payment problems on a call", () => {
-  it("Lower the length sets the Pay box reference (rate × the lowered minutes)", async () => {
+  it("(batch 16 section 26) no Lower the length: the action is gone; paying less than measured × rate needs the usual reason", async () => {
     const { dev, testId, call } = await withCall({}, true);
-    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 25, reason: "We stopped early.", seenAt: new Date().toISOString(), confirmed: true })).status).toBe(200);
-    expect((await pay(dev.cookie, { kind: "call", id: call.id, amount: "10.00", tickedCents: 1000 })).body.error.message).toContain("listing's $12.50");
-    expect((await pay(dev.cookie, { kind: "call", id: call.id, amount: "12.50", tickedCents: 1250 })).status).toBe(200);
-    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 20, reason: "Even shorter." })).body.error.message).toBe("This call was already paid, so its length can't change.");
+    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 25, reason: "We stopped early.", seenAt: new Date().toISOString(), confirmed: true })).status).toBe(404);
+    const less = await pay(dev.cookie, { kind: "call", id: call.id, amount: "1.00", tickedCents: 100 });
+    expect(less.body.error.message).toMatch(/^Say why you're paying less than the listing's \$/);
   });
 
   it("a declined Pay shows the exact line; a chargeback on the call payment reads 'live call'", async () => {
@@ -179,10 +175,13 @@ describe("call length and payment problems on a call", () => {
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
     const { payOwed } = await import("@/lib/server/holds");
     // (Owner, Oct 27) The reversed $15.00 is owed again: "Pay what you owe" charges it on the card (paying alone never lifts a chargeback hold).
+    // (Batch 16 section 41) Step 1 first: Pay what you owe is refused until the card is verified.
+    await expect(payOwed(dev.user)).rejects.toMatchObject({ code: "verify_first", message: "Verify your card first." });
+    await expect((await import("@/lib/server/chargeback")).approveChargebackHold(dev.user.id)).rejects.toMatchObject({ code: "steps_missing" });
+    await db.user.update({ where: { id: dev.user.id }, data: { chargebackCardVerifiedAt: new Date() } });
     expect(await payOwed(dev.user)).toEqual({ paid: 1, stillFailing: [], lifted: false, confirm: [] });
     // A chargeback hold is a hold with extra steps: a verified card and the admin's approval lift it (paying alone never does).
     const { startCardVerification, approveChargebackHold } = await import("@/lib/server/chargeback");
-    await expect(approveChargebackHold(dev.user.id)).rejects.toMatchObject({ code: "steps_missing" });
     setStripeForTests(null); // no Stripe here (dev): the card check is simulated
     await startCardVerification(dev.user);
     expect((await approveChargebackHold(dev.user.id)).lifted).toBe(true);

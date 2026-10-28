@@ -81,7 +81,7 @@ describe("batch 13 sections 1-3: excerpt requests", () => {
     expect((await X.pendingForDeveloper(s.dev.user.id, s.testId)).map((x) => x.id)).toEqual([id]);
     expect((await ex(s.dev.cookie, { action: "decide", excerptId: id, decision: "allow" })).status).toBe(200);
     expect(await db.notification.count({ where: { userId: s.tester.user.id, text: "Your excerpt from Harbor Run is now on your profile." } })).toBe(1);
-    expect((await ex(s.dev.cookie, { action: "decide", excerptId: id, decision: "deny" })).body.error.message).toBe("This request was already decided.");
+    expect((await ex(s.dev.cookie, { action: "decide", excerptId: id, decision: "deny" })).body.error.message).toBe("You already allowed this excerpt."); // (batch 16 section 21) the same item already decided: says how
     expect(await X.pendingForDeveloper(s.dev.user.id, s.testId)).toEqual([]);
     expect(await X.shownExcerpts(s.tester.user.id)).toEqual([{ id, text: "the second boss was far too hard", question: "What did you like?", source: "Harbor Run" }]);
     // The developer takes it down from the tester's row: the tester is told.
@@ -103,8 +103,12 @@ describe("batch 13 sections 1-3: excerpt requests", () => {
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("<ExcerptPicker submissionId={written.id} choices={excerptPicks} />");
     expect(src("components/Excerpts.tsx")).toContain("Show an excerpt on your profile");
     expect(src("app/app/testers/[id]/page.tsx")).toContain("<MyExcerpts items={await myExcerpts(p.id)} />");
-    expect(src("app/app/account/page.tsx")).toContain("<MyExcerpts items={await myExcerpts(u.id)} />");
-    expect(src("app/app/tests/[id]/TestersJoined.tsx")).toContain("data-hover-excerpt");
+    // (Batch 16 section 30) Not on Settings any more; a suspended tester side removes them from the dashboard.
+    expect(src("app/app/account/page.tsx")).not.toContain("<MyExcerpts");
+    expect(src("app/app/page.tsx")).toContain("{suspended && await myExcerpts(userId).then((items) => (items.length ? <MyExcerpts items={items} /> : null))}");
+    // (Batch 16 section 23) Not on the hover card any more.
+    expect(src("app/app/tests/[id]/TestersJoined.tsx")).not.toContain("data-hover-excerpt");
+    expect(src("app/app/tests/[id]/page.tsx")).not.toContain("excerpts: (await shownExcerpts(c.testerId))");
   });
 
   it("no stop-once, blocks change nothing, a restricted developer decides from the dashboard box, a suspended tester can only Remove", async () => {
@@ -150,7 +154,9 @@ describe("batch 13 section 4: Rate and suspensions", () => {
     const r = await sact(s.sessionId, "rate", s.tester.cookie, { stars: 4 });
     expect(r.status).toBe(403);
     expect(r.body.error).toMatchObject({ code: "suspended", suspended: true });
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain('{rateBlock === "" && !meOff && (');
+    // (Batch 16 section 28) Hidden while suspended, except in the limited view of a test they were removed from (canAct).
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain('{rateBlock === "" && canAct && (');
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("const canAct = !meOff || limited;");
     await db.user.update({ where: { id: s.tester.user.id }, data: { devSuspendedAt: null, testerSuspendedAt: null } });
     expect((await sact(s.sessionId, "rate", s.tester.cookie, { stars: 4 })).status).toBe(200);
   });

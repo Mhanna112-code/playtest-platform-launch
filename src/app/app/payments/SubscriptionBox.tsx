@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { PressButton } from "@/components/PressButton";
 import { PERK_LIST, SUBSCRIPTION_PRICE, type SubState } from "@/lib/subscription";
@@ -11,13 +12,15 @@ export function SubscriptionBox(p: {
   state: SubState; since: string | null; renews: string | null; endedReason: string; seenAt: string; hasCard: boolean; needsCard: boolean;
   launch: { free: boolean; until: string | null }; pastDueBy: string | null; restricted: boolean;
 }) {
+  // (Batch 16 section 27) The page's own load time: a silent refresh after a change elsewhere keeps it, so the first press still stops once.
+  const [seenAt] = useState(p.seenAt);
   const perks = (
     <ul className="space-y-1 text-sm text-slate-300">
       {PERK_LIST.map((x) => <li key={x} className="flex gap-2"><Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-volt-300" /> {x}</li>)}
     </ul>
   );
   const btn = (action: string, label: string, cls = "btn-secondary px-3 py-1.5 text-sm") => (
-    <PressButton seenAt={p.seenAt} path="/api/payments/subscription" body={{ action }} className={cls}>{label}</PressButton>
+    <PressButton seenAt={seenAt} path="/api/payments/subscription" body={{ action }} className={cls}>{label}</PressButton>
   );
   const subscribed = p.state === "active" || p.state === "cancelled" || p.state === "past_due" || p.state === "paused";
   return (

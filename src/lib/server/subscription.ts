@@ -172,7 +172,9 @@ export async function subscriptionConfirmed(paymentId: string, now = new Date())
 /** Cancel any time (also during a hold or suspension: Payments stays open). It lasts until the end of the paid month; no refunds. */
 export async function cancelSubscription(dev: Dev, now = new Date()) {
   const u = await userOf(dev.id);
-  if (!subscribed(u, now) || u.subscriptionCanceling) throw new HttpError(409, "none", "There's no subscription to cancel.");
+  // (Batch 16 section 27) A repeat (cancelled in another tab or device) is a plain refusal.
+  if (subscribed(u, now) && u.subscriptionCanceling) throw new HttpError(409, "already", "Your subscription is already cancelled.");
+  if (!subscribed(u, now)) throw new HttpError(409, "none", "There's no subscription to cancel.");
   if (billingOn() && u.subscriptionId && u.subscriptionId !== "manual") await getStripe().subscriptions.update(u.subscriptionId, { cancel_at_period_end: true });
   await db.user.update({ where: { id: u.id }, data: { subscriptionCanceling: true } });
   if (u.subscriptionRenewsAt) await tell(u, `Subscription cancelled: you can use the perks until ${T(u.subscriptionRenewsAt, "dateYear")}`);
@@ -182,6 +184,7 @@ export async function cancelSubscription(dev: Dev, now = new Date()) {
 /** "Keep my subscription": undo a cancel before the paid month ends (charges nothing, so it works during a hold too). */
 export async function keepSubscription(dev: Dev, now = new Date()) {
   const u = await userOf(dev.id);
+  if (subscribed(u, now) && !u.subscriptionCanceling) throw new HttpError(409, "already", "You're already subscribed."); // (batch 16 section 27) kept elsewhere
   if (!u.subscriptionCanceling || !subscribed(u, now)) throw new HttpError(409, "none", "There's nothing to keep.");
   if (billingOn() && u.subscriptionId && u.subscriptionId !== "manual") await getStripe().subscriptions.update(u.subscriptionId, { cancel_at_period_end: false });
   await db.user.update({ where: { id: u.id }, data: { subscriptionCanceling: false } });

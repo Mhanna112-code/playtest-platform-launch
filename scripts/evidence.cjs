@@ -429,7 +429,7 @@ async function signIn(page, email) {
     await tester.goto(`/app/sessions/${SA}`);
     check("tester offered the choice", await has(tester, "text=didn't review your written answers in 14 days: charge $10.00 or let it go"));
     await shot(tester, "choice-offered-tester");
-    await tester.check("text=charge Nora Lane $10.00 now");
+    // (Batch 16 section 39) No tick at $200 or less: the Charge button goes through alone.
     await tester.click("button:has-text('Charge Nora Lane')");
     await tester.waitForTimeout(1500);
     await dev.goto(t11Url());
@@ -441,7 +441,7 @@ async function signIn(page, email) {
     check("Payments page lists it", await has(dev, "text=Ana Silva's written answers $10.00 · card declined"));
     await shot(dev, "owed-payments-page-developer");
     // A second failed payment while one is still owed starts the hold at once.
-    await tester.check("text=charge Nora Lane $15.00 now");
+    // (Batch 16 section 39) No tick at $200 or less: the Charge button goes through alone.
     await tester.click("button:has-text('Charge Nora Lane')");
     await tester.waitForTimeout(1500);
     await dev.goto(t11Url());
@@ -1139,7 +1139,8 @@ async function signIn(page, email) {
     // (b) Developer, ONE stop box: the failure on Reef + Cara's action on this test.
     await dev.click("button:has-text('Next round')");
     await dev.click("text=Start the next round");
-    check("developer stop box: failure on another test + a tester's action here + another tab", (await has(dev, "text=Payment failed on Reef")) && (await has(dev, "text=/Cara Diaz \\d+ sent .*written answers/")) && (await has(dev, "text=You also did this in another tab: sent a call request")));
+    // (Batch 16 section 21) The call request from another tab isn't a reason for Next round (it doesn't touch it): only the failure and Cara's action stop it.
+    check("developer stop box: failure on another test + a tester's action here (not the other tab's call request)", (await has(dev, "text=Payment failed on Reef")) && (await has(dev, "text=/Cara Diaz \\d+ sent .*written answers/")) && !(await dev.isVisible("[data-stop-box] >> text=You also did this in another tab")));
     await shot(dev, "combined-other-test-failure-and-tester-action-developer");
     await dev.reload();
     // The tester reads "delayed" (naming Reef) in her Kelp Forest top box.
@@ -2094,7 +2095,7 @@ async function signIn(page, email) {
     C("Tester stop F: listing info changed (Send written)", "tester", "24", "24-combined-info-and-call-tester.png"),
     C("Developer stop: testers joined / sent (top panel)", "developer", "04", "04-stop-once-box.png"),
     C("Developer stop: chargeback (End early)", "developer", "14", "14-chargeback-stop-once-developer.png"),
-    C("Developer stop: own action in another tab + failure on another test + a tester's action (Next round)", "developer", "25", "25-combined-other-test-failure-and-tester-action-developer.png"),
+    C("Developer stop: failure on another test + a tester's action (Next round)", "developer", "25", "25-combined-other-test-failure-and-tester-action-developer.png"),
     C("Developer stop on Edit Save: a change saved in another tab", "developer", "23", "23-edit-save-stopped-developer.png"),
     C("Live top box (tester)", "tester", "23", "23-top-box-info-tester.png"),
     C("Live top box (developer)", "developer", "23", "23-top-box-declined-developer.png"),

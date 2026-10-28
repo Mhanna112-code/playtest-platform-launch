@@ -12,6 +12,7 @@
 // another field never clears it); a press goes to the first red field and puts the cursor in it; the list under the button (MistakeList) is read
 // from the red fields themselves, so the two always agree. A field a component marks red itself carries data-red-msg (its line's text).
 import { useEffect, useRef, useState } from "react";
+import { roundedMoneyText } from "@/lib/format";
 
 type Field = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 const isField = (el: EventTarget | null): el is Field => el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
@@ -186,6 +187,14 @@ export function markServerMistakes(root: Element | null, messages: string[], fin
   return orphans;
 }
 
+/** Rounds a money box (data-money) in place, through the native setter so a React-controlled box takes the new value too. */
+export function roundMoneyBox(el: HTMLInputElement) {
+  const next = roundedMoneyText(el.value);
+  if (next === el.value) return;
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(el, next);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 export function FieldChecks() {
   useEffect(() => {
     const groupOf = (el: Element) => el.closest("[data-field-group]");
@@ -196,6 +205,8 @@ export function FieldChecks() {
       if (g && (notes.has(g) || server.has(g))) showField(g);
     };
     const onLeave = (e: FocusEvent) => {
+      // (Batch 16 section 36) A money box rounds to the cent when it's left (half up) and shows the rounded value: what will be charged.
+      if (e.target instanceof HTMLInputElement && e.target.dataset.money != null) roundMoneyBox(e.target);
       if (!isField(e.target) || !hasRules(e.target)) return;
       showField(e.target);
     };

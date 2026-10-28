@@ -148,9 +148,9 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
     expect(page.indexOf('{pausedBanner && <p className="info" data-paused="">{pausedBanner}</p>}')).toBeLessThan(page.indexOf("{key && <KeyBox"));
     expect(page).toContain("<WrittenForm canSend={!rulesPaused}");
     expect(page).toContain("sendable={!rulesPaused}");
-    expect(page).toContain("(canRequestCall || (pendingReqs.length > 0 && !paused))");
+    expect(page).toContain("(canRequestCall || (pendingReqs.length > 0 && !paused && !refusal))"); // (batch 16 section 24) gone after a stop too
     expect(page).toContain("const canRequestCall = !refusal && !blockedPair && !paused;");
-    expect(page).toContain("joinable: !paused && callJoinable(x, now)");
+    expect(page).toContain("joinable: !paused && !refusal && callJoinable(x, now)"); // (batch 16 section 24)
     expect(page).toContain("chat={!meOff ?");
     expect(src("app/app/chat/[id]/page.tsx")).toContain("closed={blocked || paused}");
     const actions = src("app/app/sessions/[id]/SessionActions.tsx");
@@ -248,7 +248,7 @@ describe("batch 10 item 5: Pay what you owe updates live and never charges twice
     expect(b.body.v).not.toBe(a.body.v);
     const page = src("app/app/payments/page.tsx");
     expect(page).toContain('{dev && <AutoRefresh query="owed=1" />}');
-    expect(page).toContain("if (!o.length) return review ?");
+    expect(page).toContain("if (!o.length) return cbSteps ?"); // (batch 16 section 41) "Paid. Your tests stay paused until the team approves." on a chargeback hold
     expect(src("components/OwedBox.tsx")).toContain('e.code === "nothing_owed"');
   });
 
@@ -330,6 +330,7 @@ describe("batch 10 item 6: a chargeback the platform wins", () => {
 
   it("already paid: that amount is refunded to their card with a receipt line", async () => {
     const { dev, p, refunds } = await chargedBack();
+    await db.user.update({ where: { id: dev.user.id }, data: { chargebackCardVerifiedAt: new Date() } }); // (batch 16 section 41) step 1 first: Pay what you owe waits for the verified card
     expect(await payOwed(await db.user.findUniqueOrThrow({ where: { id: dev.user.id } }))).toMatchObject({ paid: 1, lifted: false });
     const repay = await db.payment.findFirstOrThrow({ where: { repaysId: p.id } });
     expect(repay).toMatchObject({ kind: "chargeback", status: "charged" });

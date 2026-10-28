@@ -18,6 +18,9 @@ import { testerShare } from "@/lib/rules";
 import { SubscriptionBox } from "./SubscriptionBox";
 import { launchState } from "@/lib/server/subscription";
 import { RETRY_DAYS, fmtSubDay, subState } from "@/lib/subscription";
+import { AccountRefresh } from "@/components/AccountRefresh";
+import { accountChangesSince } from "@/lib/server/accountChanges";
+import { AccountFormButton } from "./AccountFormButton";
 
 export const metadata = { title: "Payments · Playtest" };
 export const dynamic = "force-dynamic";
@@ -30,7 +33,7 @@ const MESSAGES: Record<string, string> = {
   confirm: "Confirm your email first: payouts go only to a confirmed account. We sent you a link.",
 };
 
-export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; pending?: string }> }) {
+export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; pending?: string; stop?: string; since?: string; tab?: string }> }) {
   const u = await requirePageUser();
   await (await import("@/lib/server/recovery")).checkStuck({ developerId: u.id }); // (batch 15 section 9) payments stuck "in progress"
   const q = await searchParams;
@@ -54,10 +57,17 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     dev ? db.payment.findMany({ where: { developerId: u.id, OR: [{ status: { in: ["charged", "not_set_up"] } }, { status: "refunded", kind: "chargeback" }] }, orderBy: { createdAt: "desc" }, take: 500 }) : [],
     tester ? db.payment.findMany({ where: { testerId: u.id, kind: { not: "subscription" }, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "desc" }, take: 500 }) : [],
   ]);
+  // (Owner, Oct 28, batch 16 section 27) Change card / payout setup stopped once (the account changed in another tab or device): the box under that button.
+  const seenAt = new Date().toISOString();
+  const since = q.since ? new Date(q.since) : null;
+  const stopLines = (q.stop === "card" || q.stop === "payout") && since && !isNaN(since.getTime()) ? await accountChangesSince(u.id, since, "payments", q.tab ?? "") : [];
+  const stopFor = (press: string) => (q.stop === press && stopLines.length ? { changes: stopLines.map((c) => ({ ...c, at: c.at.toISOString() })), at: seenAt } : null);
   // The full app's billing / payouts pages: one column of cards, each with its icon heading; lists as rows.
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <h1 className="text-3xl font-bold tracking-tight text-white">Payments</h1>
+      {/* (Batch 16 section 27) Changes made in another tab or device update this page silently. */}
+      <AccountRefresh />
       {tester && u.payoutProblemAt && <PayoutBanner />}
       {!on && <p className="info">{MESSAGES.off}</p>}
       {cbSteps && <ChargebackSteps steps={cbSteps} />}
@@ -67,8 +77,9 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       {dev && (await owedForBox(u.id).then((o) => {
         const review = !!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER);
         if (!u.holdStartedAt) return null;
-        if (!o.length) return review ? <p className="info" data-hold-review-paid="">You&apos;ve paid what you owe. The team will review your account before your tests resume.</p> : null;
-        return <OwedBox onHold={!!u.holdStartedAt} owed={o} chargeback={!!cbSteps} review={review} retryLine={retryStatusLine(u, fmtDateTime)} />;
+        // (Owner, Oct 28, batch 16 section 41) A chargeback hold: paying never lifts it (step 2 shows ✓; the team's Approve, step 3, lifts it).
+        if (!o.length) return cbSteps ? <p className="info" data-chargeback-paid="">Paid. Your tests stay paused until the team approves.</p> : review ? <p className="info" data-hold-review-paid="">You&apos;ve paid what you owe. The team will review your account before your tests resume.</p> : null;
+        return <OwedBox onHold={!!u.holdStartedAt} owed={o} chargeback={!!cbSteps} review={review} retryLine={retryStatusLine(u, fmtDateTime)} verifyFirst={!!cbSteps && !cbSteps.cardVerified} />;
       }))}
       {/* (Batch 11) Payments the developer's bank wants confirmed (made while they weren't here). */}
       {dev && await (async () => {
@@ -86,7 +97,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         const launch = await launchState();
         return (
           <SubscriptionBox state={subState(u)} since={u.subscribedAt ? fmtSubDay(u.subscribedAt) : null} renews={u.subscriptionRenewsAt ? fmtSubDay(u.subscriptionRenewsAt) : null}
-            endedReason={u.subscriptionEndReason} seenAt={new Date().toISOString()} hasCard={!!u.stripePaymentMethodId} needsCard={on} restricted={!!(u.holdStartedAt || u.devSuspendedAt)}
+            endedReason={u.subscriptionEndReason} seenAt={seenAt} hasCard={!!u.stripePaymentMethodId} needsCard={on} restricted={!!(u.holdStartedAt || u.devSuspendedAt)}
             launch={{ free: launch.free, until: launch.until ? fmtSubDay(launch.until) : null }}
             pastDueBy={u.subscriptionPastDueAt ? fmtSubDay(new Date(u.subscriptionPastDueAt.getTime() + RETRY_DAYS * 86_400_000)) : null} />
         );
@@ -97,7 +108,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <h2 className="flex items-center gap-2 font-semibold text-white"><CreditCard className="h-5 w-5 text-indigo-300" /> Your card</h2>
             <p className="text-sm text-slate-300">{u.stripePaymentMethodId ? "A card is saved." : "No card yet."} You&apos;re charged only when you press Pay, for exactly the amount you tick.</p>
             {/* (Batch 15 section 41, L5) Stripe objects are made only on a POST. */}
-            {on && <form method="post" action="/api/payments/card"><button className="btn"><CreditCard className="h-4 w-4" /> {u.stripePaymentMethodId ? "Change card" : "Add a card"}</button></form>}
+            {on && <AccountFormButton action="/api/payments/card" seenAt={seenAt} press={u.stripePaymentMethodId ? "Change card" : "Add a card"} stop={stopFor("card")}><CreditCard className="h-4 w-4" /> {u.stripePaymentMethodId ? "Change card" : "Add a card"}</AccountFormButton>}
             <p className="flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck className="h-3.5 w-3.5" /> Card details are entered on Stripe&apos;s page and never reach this site.</p>
           </section>
           <section className="card space-y-3">
@@ -158,7 +169,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <p className="text-sm text-slate-300">
               {u.payoutsReady ? "Your payout account is connected. Each payment is sent to it." : u.stripeAccountId ? "Stripe still needs a few details before you can be paid." : "Connect a payout account to receive money for your work."}
             </p>
-            {on && !u.payoutsReady && <form method="post" action="/api/payments/payout"><button className="btn"><Banknote className="h-4 w-4" /> {u.stripeAccountId ? "Continue setup" : "Connect a payout account"}</button></form>}
+            {on && !u.payoutsReady && <AccountFormButton action="/api/payments/payout" seenAt={seenAt} press={u.stripeAccountId ? "Continue setup" : "Connect a payout account"} stop={stopFor("payout")}><Banknote className="h-4 w-4" /> {u.stripeAccountId ? "Continue setup" : "Connect a payout account"}</AccountFormButton>}
             <p className="flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck className="h-3.5 w-3.5" /> Bank details go to Stripe and never reach this site.</p>
           </section>
           <section className="card space-y-3">

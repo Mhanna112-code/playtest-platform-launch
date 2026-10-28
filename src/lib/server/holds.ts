@@ -3,7 +3,7 @@ import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
 import {
-  HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, choiceLine, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
+  CHARGE_TICK_CENTS, chargeTickLine, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, choiceLine, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, sendSummaries } from "./notify";
@@ -132,6 +132,9 @@ export async function resumeTests(tx: Prisma.TransactionClient, devId: string, s
 
 /** (Owner, Oct 28 night, batch 9) A pause started: the tests it pauses that weren't paused yet start their one 7-day clock now. */
 export async function markPaused(where: { developerId?: string; id?: string }, now = new Date()) {
+  // (Owner, Oct 28, batch 16 section 32) Open invites close when the test or its developer can't take testers (any pause, hold or suspension); nothing reopens
+  // by itself: the developer can invite again after.
+  await db.invite.updateMany({ where: { status: "sent", test: { ...where, status: { in: ["open", "closed"] } } }, data: { status: "cancelled" } });
   await db.test.updateMany({ where: { ...where, status: { in: ["open", "closed"] }, pausedSince: null }, data: { pausedSince: now } });
 }
 
@@ -255,6 +258,8 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
     if (await liftHoldIfClear(dev.id)) return { paid: 0, stillFailing: [] as string[], lifted: true };
     throw new HttpError(409, "nothing_owed", NOTHING_OWED);
   }
+  // (Owner, Oct 28, batch 16 section 41) A chargeback hold's steps go in order: a card verified with 3D Secure first, then paying (which never lifts it: the team's Approve does).
+  if (u.holdStartedAt && u.holdReason === "chargeback" && !u.chargebackCardVerifiedAt) throw new HttpError(409, "verify_first", VERIFY_FIRST);
   const seen = typeof body.seenTotalCents === "number" ? body.seenTotalCents : null;
   const lines = await owedLines(dev.id);
   const seenIds = Array.isArray(body.seenIds) ? (body.seenIds as unknown[]).map(String) : [];
@@ -485,6 +490,9 @@ export async function chargebackWon(paymentIntentId: string) {
   await liftHoldIfClear(dev.id);
   return true;
 }
+
+/** (Batch 16 section 41) Pay what you owe during a chargeback hold before the card is verified. */
+export const VERIFY_FIRST = "Verify your card first.";
 
 /** The daily job: auto-pay after the review window, closing tests paused for 7 days, the paused reminders, Open until heads-ups and each tester's own deadline reminders. (No retries and no owed window any more: a declined payment is a hold at once.) */
 export async function runDaily(now = new Date()) {
@@ -744,7 +752,8 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   if (choice === "charge" && typed! > cap) throw new HttpError(400, "too_much", `At most ${money(cap)}.`);
   if (choice === "charge" && typed! > 0 && typed! < 50) throw new HttpError(400, "too_small", "The smallest card charge is $0.50.");
   const amount = choice === "charge" ? typed! : 0;
-  if (choice === "charge" && body.tickedCents !== amount) throw new HttpError(400, "tick", `Tick “charge ${displayName(dev)} ${money(amount)} now” to charge.`);
+  // (Batch 16 section 39) The tick only above $200, naming the typed amount.
+  if (choice === "charge" && amount > CHARGE_TICK_CENTS && body.tickedCents !== amount) throw new HttpError(400, "tick", chargeTickLine(displayName(dev), amount));
   const payKey = serverKey("choice", s.id);
   const review = await db.review.create({ data: { submissionId: s.id, contractId: c.id, amountCents: amount, agreedCents: s.agreedCents, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey } }).catch(() => null);
   if (!review) throw new HttpError(409, "done", "This was already settled.");
@@ -814,7 +823,8 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
   if (choice === "charge" && typed! > cap) throw new HttpError(400, "too_much", `At most ${money(cap)}.`);
   if (choice === "charge" && typed! > 0 && typed! < 50) throw new HttpError(400, "too_small", "The smallest card charge is $0.50.");
   const amount = choice === "charge" ? typed! : 0;
-  if (choice === "charge" && body.tickedCents !== amount) throw new HttpError(400, "tick", `Tick “charge ${displayName(dev)} ${money(amount)} now” to charge.`);
+  // (Batch 16 section 39) The tick only above $200, naming the typed amount.
+  if (choice === "charge" && amount > CHARGE_TICK_CENTS && body.tickedCents !== amount) throw new HttpError(400, "tick", chargeTickLine(displayName(dev), amount));
   const payKey = serverKey("choice", x.id);
   const minutes = callMinutesOf(x);
   const review = await db.review.create({ data: { callId: x.id, contractId: c.id, amountCents: amount, agreedCents: x.rateCents != null && minutes != null ? callReference(x.rateCents, minutes).cents : null, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey } }).catch(() => null);

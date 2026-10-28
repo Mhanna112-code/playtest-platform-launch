@@ -115,7 +115,8 @@ describe("batch 5 item 3: a restricted account's signed-in pages go to the dashb
 
   it("only the dashboard, Payments, Settings and the bell list stay open: for a suspended tester and a suspended or held developer", () => {
     for (const u of [susTester, heldDev, cbDev, susDev]) {
-      for (const p of closedPaths) expect(closedForSuspended(p, u), `${p} ${JSON.stringify(u)}`).toBe(true);
+      // (Batch 16 section 28) A suspended tester's session page decides itself (the limited view of a test they were removed from).
+      for (const p of closedPaths) expect(closedForSuspended(p, u), `${p} ${JSON.stringify(u)}`).toBe(!(u === susTester && p === "/app/sessions/x"));
       expect(closedForSuspended("/app/tests/x", u)).toBe(u === susTester);
       for (const p of openPaths) expect(closedForSuspended(p, u), p).toBe(false);
     }
@@ -138,7 +139,7 @@ describe("batch 5 item 3: a restricted account's signed-in pages go to the dashb
     expect(closedForSuspended("/app/chat/x", both, "developer", "tester")).toBe(false);
     expect(closedForSuspended("/app/calls/x", both, "tester", "developer")).toBe(true);
     const bothSuspended = { ...both, devSuspendedAt: new Date(), testerSuspendedAt: new Date() };
-    for (const p of closedPaths) expect(closedForSuspended(p, bothSuspended, "tester"), p).toBe(true);
+    for (const p of closedPaths) expect(closedForSuspended(p, bothSuspended, "tester"), p).toBe(p !== "/app/sessions/x"); // (batch 16 section 28) the page decides
     expect(restrictedOn(both, "tester")).toBe(false);
     expect(restrictedOn(both, "developer")).toBe(true);
     expect(restrictedOn(bothSuspended, "tester")).toBe(true);
@@ -156,8 +157,10 @@ describe("batch 5 item 3: a restricted account's signed-in pages go to the dashb
   });
 
   it("every closed page sends them away itself before rendering; the header keeps only the open links; the bell list lands closed lines on the dashboard", () => {
-    for (const [f, p] of [["app/app/developers/[id]/page.tsx", "/app/developers"], ["app/app/testers/[id]/page.tsx", "/app/testers"], ["app/app/sessions/[id]/page.tsx", "/app/sessions"], ["app/app/find/page.tsx", "/app/find"], ["app/app/find/[id]/page.tsx", "/app/find"], ["app/app/messages/page.tsx", "/app/messages"], ["app/app/profile/page.tsx", "/app/profile"]])
+    for (const [f, p] of [["app/app/developers/[id]/page.tsx", "/app/developers"], ["app/app/testers/[id]/page.tsx", "/app/testers"], ["app/app/find/page.tsx", "/app/find"], ["app/app/find/[id]/page.tsx", "/app/find"], ["app/app/messages/page.tsx", "/app/messages"], ["app/app/profile/page.tsx", "/app/profile"]])
       expect(src(f), f).toContain(`requireOpenPage("${p}")`);
+    // (Batch 16 section 28) The session page decides itself: only the limited view of a test a suspended tester was removed from.
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain('if (u.testerSuspendedAt && !limited) redirect("/app");');
     for (const f of ["app/app/chat/[id]/page.tsx", "app/app/calls/[id]/page.tsx"]) {
       expect(src(f), f).toContain("requireOpenPage(");
       expect(src(f), f).toContain("leaveIfClosed(u,");

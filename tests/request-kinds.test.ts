@@ -135,12 +135,9 @@ describe("clash checks", () => {
     const b = await joined(testId, "Ben Carter", "he");
     const base = atHours(50);
     await bookCall(testId, dev.cookie, a.sessionId, a.tester.cookie, 50 + 2 * 7 * DAY); // week 3
-    await devReq(testId, dev.cookie, [b.sessionId], { times: [base], weeks: 4 });
-    const rb = await pending(b.sessionId, "developer");
-    const r = await act(testId, "answer-request", dev.cookie, { contractId: b.sessionId, requestId: rb.id, action: "accept", seenAt: seen(), confirmed: true });
-    expect(r.status).toBe(409); // the developer can't accept their own request
-    const res = await sact(b.sessionId, "answer-request", b.tester.cookie, { requestId: rb.id, action: "accept" });
-    expect(res.body.error.message).toMatch(/^These weeks clash: week 3 \(.+\): This time is no longer free\.$/);
+    // (Batch 16 section 33) The developer's own call with Ana in week 3: the request is refused at once, naming that call (the form shows it red first).
+    const sent = await devReq(testId, dev.cookie, [b.sessionId], { times: [base], weeks: 4 });
+    expect(sent.body.error.message).toMatch(/^The 3rd call \(.+\): you have a call with Ana Silva then \(.+\)\.$/);
     expect(await db.call.count({ where: { contractId: b.sessionId } })).toBe(0);
   });
 

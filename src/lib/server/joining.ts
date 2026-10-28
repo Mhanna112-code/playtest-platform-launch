@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
-import { displayName, fmtDateTime, fmtTime, pronouns } from "@/lib/format";
+import { displayName, fmtDate, fmtDateTime, fmtTime, pronouns } from "@/lib/format";
 import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, MAX_ACTIVE_TESTS, termsDiff, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
@@ -116,6 +116,28 @@ export async function listingGate(userId: string, testId: string, body: Record<s
   }
 }
 
+/**
+ * (Owner, Oct 28, batch 16 section 32) Why an invite is closed, said to the tester (never "hold" or "suspended"): stopped (or the developer deleted) → "This test was
+ * stopped."; Open until passed → "“<test>” closed to new testers on <date>."; a pause, hold or the developer's suspension → "“<test>” isn't taking new testers right
+ * now, so this invite was closed."; cancelled, blocked or anything else → "This invite is no longer open."
+ */
+export async function inviteClosedLine(testId: string, now = new Date()) {
+  const t = await db.test.findUnique({ where: { id: testId }, include: { developer: { select: { holdStartedAt: true, devSuspendedAt: true, deletedAt: true } } } });
+  if (!t) return INVITE_NOT_OPEN;
+  if (t.status === "stopped" || t.developer.deletedAt) return "This test was stopped.";
+  if (t.openUntil && t.openUntil.getTime() < now.getTime()) return `“${t.title}” closed to new testers on ${fmtDate(t.openUntil)}.`;
+  if (t.adminPausedAt || t.developer.holdStartedAt || t.developer.devSuspendedAt) return `“${t.title}” isn't taking new testers right now, so this invite was closed.`;
+  return INVITE_NOT_OPEN;
+}
+export const INVITE_NOT_OPEN = "This invite is no longer open.";
+/** Join or Accept on an invite that closed meanwhile: refused (no stop box) with the reason; the card goes. */
+async function closedInvite(testerId: string, body: Record<string, unknown>) {
+  if (typeof body.inviteId !== "string" || !body.inviteId) return;
+  const inv = await db.invite.findUnique({ where: { id: body.inviteId } });
+  if (!inv || inv.testerId !== testerId || inv.status !== "cancelled") return;
+  throw new HttpError(409, "invite_closed", await inviteClosedLine(inv.testId));
+}
+
 /** Accept on an invite a listing change replaced: refused under the button, with the new invite right there. */
 async function replacedInvite(testerId: string, testId: string, body: Record<string, unknown>) {
   if (typeof body.inviteId !== "string" || !body.inviteId) return;
@@ -132,6 +154,7 @@ export async function join(tester: U, testId: string, body: Record<string, unkno
   if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
   const t = await db.test.findUnique({ where: { id: testId } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
+  await closedInvite(tester.id, body); // (batch 16 section 32) the invite closed meanwhile: refused with the reason
   const refusal = await joinRefusal(tester.id, testId, { rejoin: body.rejoinAccepted === true });
   if (refusal) throw new HttpError(409, "refused", refusal);
   // (Design doc 7.3) Coming back is always an ask the developer accepts, unless they invited the tester back (or this is the accepted ask).
@@ -154,6 +177,7 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
   if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
   const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
+  await closedInvite(tester.id, body); // (batch 16 section 32)
   const refusal = await joinRefusal(tester.id, testId);
   if (refusal) throw new HttpError(409, "refused", refusal);
   await listingGate(tester.id, testId, body, "apply");
@@ -198,12 +222,13 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   // (Batch 16 section 11) Closed by a block (either way): neutral, never says why.
   if (a.status === "closed" && a.closedReason === "blocked") throw new HttpError(409, "gone", `${name}'s application was closed.`);
   if (a.status === "closed") throw new HttpError(409, "gone", a.closedReason === "invite_only" ? `${name}'s application closed when the test became invite only at ${fmtTime(a.decidedAt ?? new Date())}.` : `${name}'s application closed when you changed the listing in another tab at ${fmtTime(a.decidedAt ?? new Date())}.`);
-  if (a.status !== "pending") throw new HttpError(409, "gone", a.status === "withdrawn" ? `${name} withdrew their application.` : "This application was already answered.");
+  // (Batch 16 section 21) Answered already (in another tab): a plain refusal naming it, no stop box.
+  if (a.status !== "pending") throw new HttpError(409, "gone", a.status === "withdrawn" ? `${name} withdrew their application.` : a.status === "declined" ? "You already declined this application." : a.status === "accepted" || a.status === "joined" ? "You already accepted this application." : "This application was already answered.");
   const extra: TestEventLike[] = [];
   const seenAt = typeof body.seenAt === "string" ? new Date(body.seenAt) : null;
   if (seenAt && tester.profile && tester.profile.updatedAt > seenAt) extra.push({ kind: "profile", text: `${name} changed their profile`, createdAt: tester.profile.updatedAt });
   extra.push(...(await listingChanges(testId, body.seenAt)));
-  await db.$transaction((tx) => devGate(tx, testId, body, {}, extra));
+  await db.$transaction((tx) => devGate(tx, testId, body, {}, extra, undefined, { acts: ["application"], keys: [`app:${a.id}`] }));
   if (body.action === "decline") {
     await db.application.update({ where: { id: a.id }, data: { status: "declined", decidedAt: new Date() } });
     const title = (await db.test.findUniqueOrThrow({ where: { id: testId } })).title;

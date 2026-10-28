@@ -2,13 +2,22 @@
 import { useState } from "react";
 import { FormMistakes } from "@/components/FormMistakes";
 import { PasswordInput } from "@/components/PasswordInput";
-import { api, errOf } from "@/lib/client";
+import { ChangesBox, type Change } from "@/components/ChangesBox";
+import { api, ApiError, errOf } from "@/lib/client";
+import { mergeChanges } from "@/lib/live";
 
-/** Change your password: your other devices are signed out. (Batch 16 section 10) A mistake is red at its box and listed under the button. */
-export function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
+/**
+ * Change your password: your other devices are signed out. (Batch 16 section 10) A mistake is red at its box and listed under the button.
+ * (Owner, Oct 28, batch 16 section 27) Changed in another tab or device since the page opened (e.g. the password): the first press stops once with what
+ * changed, keeping what was typed; the second goes ahead.
+ */
+export function PasswordForm({ hasPassword, seenAt: seen0 }: { hasPassword: boolean; seenAt?: string }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [done, setDone] = useState(false);
+  const [seenAt] = useState(seen0 ?? "");
+  const [changes, setChanges] = useState<Change[] | null>(null);
+  const [boxAt, setBoxAt] = useState("");
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
@@ -17,11 +26,15 @@ export function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
     setErr("");
     setDone(false);
     try {
-      await api("/api/auth/password", f);
+      await api("/api/auth/password", { ...f, ...(seenAt ? { seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}) } : {}) });
+      setChanges(null);
       setDone(true);
       form.reset();
     } catch (e) {
-      setErr(errOf(e));
+      if (e instanceof ApiError && e.code === "stop_once") {
+        setChanges((c) => (c ? mergeChanges(c, (e.data.changes as Change[]) ?? []) : ((e.data.changes as Change[]) ?? [])));
+        if (typeof e.data.now === "string") setBoxAt(e.data.now);
+      } else setErr(errOf(e));
     } finally {
       setBusy(false);
     }
@@ -46,6 +59,7 @@ export function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
       <p className="text-xs text-slate-500">At least 8 characters. Saving signs you out on your other devices.</p>
       {done && <p className="text-emerald-300">Password changed. Your other devices are signed out.</p>}
       <button className="btn" disabled={busy}>{busy ? "Saving…" : "Save the new password"}</button>
+      <ChangesBox changes={changes} press="Save the new password" />
       <FormMistakes text={err} press="Save the new password" />
     </form>
   );

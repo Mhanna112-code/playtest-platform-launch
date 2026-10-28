@@ -518,7 +518,7 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
                   <span className="flex flex-wrap items-center gap-2">
                     <label className={`flex items-center gap-1 ${free || !on ? "text-slate-600" : "text-slate-300"}`}>
                       $
-                      <input id={part.price} className={"input w-24 py-1" + (bad(part.price) ? " field-bad" : "")} inputMode="decimal" disabled={!on || free || pl} placeholder={part.ph} value={free ? "" : price}
+                      <input id={part.price} className={"input w-24 py-1" + (bad(part.price) ? " field-bad" : "")} inputMode="decimal" data-money="" disabled={!on || free || pl} placeholder={part.ph} value={free ? "" : price}
                         onChange={(e) => set({ [part.price]: e.target.value } as Partial<F>)} aria-label={`Price for the ${part.title.toLowerCase()}`}
                         data-min={part.min} data-max={part.max} data-zero-ok="" data-min-msg={part.lowMsg} data-max-msg={part.highMsg} data-msg={part.lowMsg} />
                       {part.unit}

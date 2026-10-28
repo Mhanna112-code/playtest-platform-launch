@@ -100,15 +100,12 @@ describe("paying a measured call (sections 30, 31, 40)", () => {
     await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() + DAY) } });
     const done = await tookPlace(call.id, 29);
     expect(done.measuredMinutes).toBe(29);
-    // Lower: never up, a reason required.
-    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 35, reason: "Longer than that", seenAt: seen(), confirmed: true })).body.error.message).toBe("You can only lower the length: below 29 min.");
-    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 20, reason: "", seenAt: seen(), confirmed: true })).body.error.message).toBe("Say why you're lowering the length (the tester reads it).");
-    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 20, reason: "We stopped early to fix the build.", seenAt: seen(), confirmed: true })).status).toBe(200);
-    expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).actualMinutes).toBe(20);
-    // The rate typed last wins: $30/h × 20 min = $10.00, whatever the amount box said.
-    const r = await pay(dev.cookie, { kind: "call", id: call.id, rate: "30.00", typed: "rate", amount: "99.00", tickedCents: 1000 });
+    // (Batch 16 section 26) No Lower the length: the call is paid for its measured length.
+    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 20, reason: "We stopped early to fix the build.", seenAt: seen(), confirmed: true })).status).toBe(404);
+    // The rate typed last wins: $30/h × 29 min = $14.50, whatever the amount box said.
+    const r = await pay(dev.cookie, { kind: "call", id: call.id, rate: "30.00", typed: "rate", amount: "99.00", tickedCents: 1450 });
     expect(r.status).toBe(200);
-    expect(r.body.amountCents).toBe(1000);
+    expect(r.body.amountCents).toBe(1450);
     // The amount typed last: the rate is recomputed from it.
     const rev = await db.review.findFirstOrThrow({ where: { callId: call.id } });
     expect(rev.rateCents).toBe(3000);

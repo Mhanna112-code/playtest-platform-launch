@@ -2,6 +2,7 @@ import { appUrl } from "@/lib/server/auth";
 import { requireUser } from "@/lib/server/session";
 import { cardSetupUrl, stripeOn } from "@/lib/server/stripe";
 import { sameOriginForm } from "@/lib/server/http";
+import { formGate } from "@/lib/server/accountChanges";
 
 // Developer: open Stripe Checkout (setup mode) to save a card. (Batch 15 section 41, L5) Only a POST from this site's own form makes Stripe objects.
 export async function GET(req: Request) {
@@ -14,6 +15,9 @@ export async function POST(req: Request) {
   try {
     const u = await requireUser(req);
     if (!stripeOn()) return Response.redirect(`${base}/app/payments?error=off`, 303);
+    // (Owner, Oct 28, batch 16 section 27) Changed in another tab or device since the page opened: back to Payments with the box under this button.
+    const back = await formGate(u.id, await req.formData().catch(() => new FormData()), "card", base);
+    if (back) return Response.redirect(back, 303);
     return Response.redirect(await cardSetupUrl(u, base), 303);
   } catch (e) {
     console.error("[payments] card setup:", (e as Error).message);

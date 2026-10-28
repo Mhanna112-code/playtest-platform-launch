@@ -6,6 +6,7 @@ import { bell, notify } from "./notify";
 import { chargeIsOpen, rateStops, testClosedForRate, testPaused } from "@/lib/rules";
 import { testerGate } from "./testerGate";
 import { cancelCallsAhead, devGate, lockTest, ownContract, ownTest, recordEvent, spotOpened } from "./tests";
+import { PAY_ACTS } from "./live";
 
 // (Owner, Oct 22, NEWEST+5) Ratings.
 // TESTER rates the developer once (1) at least one part was sent or one call took place, (2) every sent part / call is
@@ -140,7 +141,7 @@ export async function devRate(dev: { id: string; name: string; email: string }, 
   await db.$transaction(async (tx) => {
     await lockTest(tx, testId);
     // (Owner, Oct 28) While the test is open every stop-once kind applies; after it closes only pay, reject, charge, let go and disputes (batch 4 D4).
-    await devGate(tx, testId, body, {}, [], (e) => rateStops(e, closed));
+    await devGate(tx, testId, body, {}, [], (e) => rateStops(e, closed), { acts: ["rate", ...PAY_ACTS], keys: [`c:${contractId}`], rate: contractId });
     await tx.rating.create({ data: { testId, contractId, side: "developer", raterId: dev.id, rateeId: c0.testerId, ...r, revealedAt: now } });
     await tx.rating.updateMany({ where: { contractId, side: "tester", revealedAt: null }, data: { revealedAt: now } });
   });

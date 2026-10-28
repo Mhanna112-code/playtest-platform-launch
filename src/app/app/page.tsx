@@ -2,6 +2,8 @@ import Link from "next/link";
 import { ArrowRight, Award, CalendarClock, CheckCircle2, Clock, Compass, FileSignature, Hourglass, Inbox, KeyRound, LayoutGrid, ListTodo, MessagesSquare, PlusCircle, RotateCcw, Users, Wallet, XCircle, AppWindow, Banknote } from "lucide-react";
 import { db } from "@/lib/db";
 import { compact, compactMoney, displayName, fmtDate, fmtDateTime, money, num } from "@/lib/format";
+import { AutoRefresh } from "@/components/AutoRefresh";
+import { LiveTop } from "@/components/LiveTop";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { sideFor } from "@/lib/sides";
 import { ProfileForm } from "./profile/ProfileForm";
@@ -17,7 +19,8 @@ import { asListing, findTests } from "@/lib/server/tests";
 import { RestrictedBox } from "@/components/RestrictedBox";
 import { ClampText } from "@/components/ClampText";
 import { ExcerptDecision } from "@/components/Excerpts";
-import { pendingForDeveloper } from "@/lib/server/excerpts";
+import { myExcerpts, pendingForDeveloper } from "@/lib/server/excerpts";
+import { ExcerptQuestion, MyExcerpts } from "@/components/ExcerptList";
 import { devRestricted, restrictionsOf } from "@/lib/restricted";
 import { PayoutBanner } from "@/components/PayoutBanner";
 import { CallsBox } from "./CallsBox";
@@ -97,6 +100,8 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
           {excerptBox.map((x) => (
             <div key={x.id} id={`excerpt-${x.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
               <p className="text-slate-300"><b className="text-white">{x.tester}</b> would like to show this from “{x.testTitle}” on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
+              {/* (Batch 16 section 37) The question it answers, above the quote. */}
+              <ExcerptQuestion question={x.question} />
               <ClampText text={`“${x.text}”`} className="text-slate-200" />
               <ExcerptDecision excerptId={x.id} />
             </div>
@@ -182,7 +187,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
   if (!restricted) for (const x of await pendingForDeveloper(userId)) items.push({ key: `e-${x.id}`, at: new Date(), href: `/app/tests/${x.testId}#excerpt-${x.id}`, who: x.tester, text: <>would like to show an excerpt from <b className="text-white">{x.testTitle}</b> on their profile</>, cta: "Allow or Deny" });
   for (const r of reqs) {
     const x = contractTest.get(r.contractId);
-    if (x) items.push({ key: `r-${r.id}`, at: r.createdAt, href: `/app/tests/${x.t.id}#calls`, who: displayName(x.c.tester), text: <>asked for a live call · <b className="text-white">{x.t.title}</b></>, cta: "Answer" });
+    if (x) items.push({ key: `r-${r.id}`, at: r.createdAt, href: `/app/tests/${x.t.id}#req-${r.id}`, who: displayName(x.c.tester), text: <>asked for a live call · <b className="text-white">{x.t.title}</b></>, cta: "Answer in Live session →" }); // (batch 16 section 35) opens the Call requests panel at it
   }
   items.sort((a, b) => b.at.getTime() - a.at.getTime());
   const toReview = items.filter((i) => i.key.startsWith("s-") || i.key.startsWith("c-")).length;
@@ -367,7 +372,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
     db.application.findMany({ where: { testerId: userId, status: "pending" }, orderBy: { createdAt: "desc" } }),
     db.payment.aggregate({ where: { testerId: userId, kind: { not: "subscription" }, status: { in: ["charged", "not_set_up"] } }, _sum: { testerCents: true } }),
     ratingSummary(userId),
-    db.invite.findMany({ where: { testerId: userId, status: "sent", test: { status: "open" } }, orderBy: { createdAt: "desc" }, include: { test: { include: { developer: true } } } }),
+    db.invite.findMany({ where: { testerId: userId, status: "sent", test: { status: "open" } }, orderBy: { createdAt: "desc" }, include: { test: { include: { developer: true, _count: { select: { contracts: { where: { status: "working" } } } } } } } }),
     Promise.all(contracts.map(async (c) => [c.id, await unreadCount(userId, c.testId, c.testerId)] as const)),
     suspended ? Promise.resolve([] as Awaited<ReturnType<typeof findTests>>) : findTests(user),
     db.rating.findMany({ where: { contractId: { in: ids }, side: "tester" }, select: { contractId: true } }),
@@ -375,6 +380,9 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   ]);
   const unread = new Map(unreadList);
   const rated = new Set(ratedIds.map((r) => r.contractId));
+  // (Batch 16 section 32) An invite re-sent on a new listing (an earlier one of theirs on that test was replaced).
+  const replacedOn = new Set((await db.invite.findMany({ where: { testerId: userId, status: "replaced", testId: { in: invites.map((i) => i.testId) } }, select: { testId: true } })).map((r) => r.testId));
+  const resentIds = new Set(invites.filter((i) => replacedOn.has(i.testId)).map((i) => i.id));
   // (Owner, Oct 30, batch 15 section 38) A test the tester applied to that became invite only stays here, marked "Closed to new testers (invite only)" (an open invite of theirs still works).
   const inviteOnlyApps = (await db.application.findMany({ where: { testerId: userId, status: "closed", closedReason: "invite_only", decidedAt: { gt: new Date(now.getTime() - 30 * DAY) } }, orderBy: { decidedAt: "desc" }, take: 20 })).filter((a) => !apps.some((x) => x.testId === a.testId));
   const appTests = new Map((await db.test.findMany({ where: { id: { in: [...apps, ...inviteOnlyApps].map((a) => a.testId) } }, include: { developer: true } })).map((t) => [t.id, t]));
@@ -412,7 +420,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   // (Owner, Oct 28) A suspended tester's session pages are closed: nothing here links to them.
   const answers = suspended ? [] : [
     ...offers.flatMap((o) => { const c = byId.get(o.contractId); return c ? [{ key: `offer-${o.id}`, c, text: `${displayName(c.test.developer)} offered new terms: ${o.diff}`, href: `/app/sessions/${c.id}`, cta: "Switch or keep your terms" }] : []; }),
-    ...devReqs.flatMap((r) => { const c = byId.get(r.contractId); return c ? [{ key: `req-${r.id}`, c, text: `${displayName(c.test.developer)} asked for a live call`, href: `/app/sessions/${c.id}#calls`, cta: "Accept or decline" }] : []; }),
+    ...devReqs.flatMap((r) => { const c = byId.get(r.contractId); return c ? [{ key: `req-${r.id}`, c, text: `${displayName(c.test.developer)} asked for a live call`, href: `/app/sessions/${c.id}#req-${r.id}`, cta: "Answer in Live session →" }] : []; }), // (batch 16 section 35)
   ];
   const upcoming = suspended ? [] : contracts.flatMap((c) => c.calls.map((x) => ({ c, x }))).sort((a, b) => a.x.startsAt.getTime() - b.x.startsAt.getTime());
   const more = recommended.filter((t) => !t.contracts.some((c) => c.status === "working")).slice(0, 4);
@@ -422,7 +430,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       <li key={c.id} className="card flex flex-wrap items-center gap-3 p-4" data-removed={c.id}>
         <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
         <div className="min-w-[12rem] flex-1">
-          <p className="truncate font-semibold text-white" title={c.title}>{c.title} {pausedTest(c.test) && <PausedTag />}</p>
+          {/* (Batch 16 section 28) The row opens the session page: while suspended, its limited view (parts, what was paid, Dispute, Charge, Let it go, Rate). */}
+          <p className="truncate font-semibold text-white" title={c.title}><Link href={`/app/sessions/${c.id}`} className="text-white" data-removed-open={c.id}>{c.title}</Link> {pausedTest(c.test) && <PausedTag />}</p>
           <p className="text-sm text-slate-400" data-removed-label="">You were removed from this test.</p>
         </div>
         {may && (
@@ -456,6 +465,10 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         <StatTile icon={Award} label="Rating" value={rating.n ? `${rating.avg.toFixed(1)} ★` : "-"} hint={rating.n ? `${plural(rating.n, "rating")}` : "no ratings yet"} tone="fuchsia" />
         <StatTile icon={ListTodo} label="To do" value={compact(todoParts.length + answers.length)} hint={answers.length ? `${answers.length} waiting for your answer` : "parts to send"} tone="indigo" />
       </section>
+
+      {/* (Owner, Oct 28, batch 16 section 30) A suspended tester side can't open their profile, so their excerpts (with Remove: batch 13) are here, under
+          the blue box. Otherwise they're on their own profile. */}
+      {suspended && await myExcerpts(userId).then((items) => (items.length ? <MyExcerpts items={items} /> : null))}
 
       {/* (Owner, Oct 28, batch 16 section 13) "Search by developer" over every test this tester has been in; typing replaces the sections below with the results. */}
       <DevSearch rows={devSearchRows(contracts, !suspended)}>
@@ -578,6 +591,9 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         </section>
       )}
 
+      {/* (Owner, Oct 28, batch 16 section 32) Invitations follow every close live: the page refreshes on its poll, and the live box says which invite closed. */}
+      {!suspended && <AutoRefresh query="invites=1" />}
+      {!suspended && <LiveTop scope="invites:me" seenAt={now.toISOString()} />}
       {!suspended && invites.length > 0 && (
         <section className="space-y-3" id="invitations">
           {sectionTitle(<Inbox className="h-5 w-5 text-emerald-300" />, "Invitations", invites.length)}
@@ -587,6 +603,9 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 <Link href={`/app/find/${i.testId}`} className="mr-auto min-w-0 truncate" title={`${displayName(i.test.developer)} invited you to “${i.test.title}”`}>
                   {displayName(i.test.developer)} invited you to “{i.test.title}”. Accept opens the test page. {pausedTest(i.test) && <PausedTag />}
                 </Link>
+                {/* (Batch 16 section 32) Re-sent on a new listing, or the test is full: said on the card. */}
+                {resentIds.has(i.id) && <span className="badge" data-invite-resent="">Sent again on the new listing · {fmtDate(i.createdAt)}</span>}
+                {i.test._count.contracts >= i.test.spots && <span className="badge" data-invite-full="">Full right now: your invite stays open</span>}
                 <Link href={`/app/find/${i.testId}`} className="btn px-3 py-1.5 text-sm no-underline hover:no-underline">Accept</Link>
                 <NoThanks inviteId={i.id} />
               </li>

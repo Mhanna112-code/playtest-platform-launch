@@ -6,6 +6,7 @@ import { notify } from "./notify";
 import { asListing, devGate, devGateIfSeen, needsGap, ownTest, recordEvent, stampCounting } from "./tests";
 import { revealedRatingsWhere } from "./ratings";
 import { doesntListItems, doesntListTag, withYouText } from "@/lib/inviteRows";
+import { INVITE_ACTS } from "./live";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -161,6 +162,37 @@ function removedNeeds(t: { devices: string[]; languages: string[] }, p: { device
   return t.devices.join(" or ");
 }
 
+type Needs = { devices: string[]; languages: string[] };
+const listOf = (xs: string[]) => (xs.length ? xs.join(", ") : "none");
+const same = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
+const needsOf = (v: unknown): Needs | null => {
+  const o = v && typeof v === "object" ? (v as Record<string, unknown>) : null;
+  const arr = (x: unknown) => (Array.isArray(x) ? x.map(String) : null);
+  const devices = arr(o?.devices), languages = arr(o?.languages);
+  return devices && languages ? { devices, languages } : null;
+};
+/** (Owner, Oct 28, batch 16 section 31) "The test's requirements changed: Devices: Windows PC → iPad · Languages: Russian, Turkish → English" ("" when the same). */
+export function requirementsChangedLine(seen: Needs, now: Needs) {
+  const parts = [
+    ...(same(seen.devices, now.devices) ? [] : [`Devices: ${listOf(seen.devices)} → ${listOf(now.devices)}`]),
+    ...(same(seen.languages, now.languages) ? [] : [`Languages: ${listOf(seen.languages)} → ${listOf(now.languages)}`]),
+  ];
+  return parts.length ? `The test's requirements changed: ${parts.join(" · ")}` : "";
+}
+/**
+ * (Batch 16 section 31) A ticked tester's devices or languages changed since the panel showed them: "<name> removed Russian, which this test needs" when they no
+ * longer meet a need they met; otherwise "<name> changed their devices: none → iPad" (and the same for languages).
+ */
+export function testerNeedsChangedLines(name: string, seen: Needs, now: Needs, test: Needs) {
+  if (same(seen.devices, now.devices) && same(seen.languages, now.languages)) return [];
+  const gone = removedNeeds(test, now);
+  if (gone && !removedNeeds(test, seen)) return [`${name} removed ${gone}, which this test needs`];
+  return [
+    ...(same(seen.devices, now.devices) ? [] : [`${name} changed their devices: ${listOf(seen.devices)} → ${listOf(now.devices)}`]),
+    ...(same(seen.languages, now.languages) ? [] : [`${name} changed their languages: ${listOf(seen.languages)} → ${listOf(now.languages)}`]),
+  ];
+}
+
 /**
  * Invite ticked testers. Refused for good when the test is full, stopped, past Open until or paused. Stops once for the
  * developer stop-once reasons plus: a ticked tester's profile no longer fits, a ticked tester joined, or was already
@@ -186,11 +218,27 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     const invites = await tx.invite.findMany({ where: { testId, testerId: { in: ids } } });
     // Extra stop-once reasons for the ticked testers.
     const extra: TestEventLike[] = [];
+    // (Owner, Oct 28, batch 16 section 31) What the panel showed: the test's requirements and each ticked tester's devices and languages. A change since then always
+    // stops Invite / Invite anyway once (they're Invite's own checks, not Alerts types); the page shows the updated panel with it.
+    const seenNeeds = needsOf(body.seenNeeds);
+    const seenTesters = body.seenTesters && typeof body.seenTesters === "object" ? (body.seenTesters as Record<string, unknown>) : null;
+    if (seenNeeds) {
+      const line = requirementsChangedLine(seenNeeds, t);
+      if (line) {
+        const ed = await tx.testEvent.findFirst({ where: { testId, kind: { in: ["edited", "info"] } }, orderBy: { createdAt: "desc" } });
+        extra.push({ kind: "profile", text: line, createdAt: ed?.createdAt ?? new Date() });
+      }
+    }
     if (!isNaN(seenAt.getTime())) {
       for (const p of people) {
         const name = displayName(p);
-        const gone = removedNeeds(t, p.profile);
-        if (gone && p.profile && p.profile.updatedAt > seenAt) extra.push({ kind: "profile", text: `${name} removed ${gone}, which this test needs`, createdAt: p.profile.updatedAt });
+        const seenP = seenTesters ? needsOf(seenTesters[p.id]) : null;
+        if (seenP) {
+          for (const line of testerNeedsChangedLines(name, seenP, { devices: p.profile?.devices ?? [], languages: p.profile?.languages ?? [] }, t)) extra.push({ kind: "profile", text: line, createdAt: p.profile?.updatedAt ?? new Date() });
+        } else {
+          const gone = removedNeeds(t, p.profile);
+          if (gone && p.profile && p.profile.updatedAt > seenAt) extra.push({ kind: "profile", text: `${name} removed ${gone}, which this test needs`, createdAt: p.profile.updatedAt });
+        }
         const joined = contracts.find((c) => c.testerId === p.id && c.joinedAt > seenAt);
         if (joined) extra.push({ kind: "joined", text: `${name} joined this test, so ${pronouns(p.pronoun).subj}'s no longer in your invite list`.replace("they's", "they're"), createdAt: joined.joinedAt });
         // A ticked tester became greyed or removed since the page loaded.
@@ -201,7 +249,8 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
         if (lastJoin && lastJoin.testId !== testId && (await tx.contract.count({ where: { testerId: p.id, status: "working" } })) >= MAX_ACTIVE_TESTS) extra.push({ kind: "joined", text: `${name} can't join more tests right now`, createdAt: lastJoin.joinedAt });
       }
     }
-    await devGate(tx, testId, body, {}, extra);
+    // (Batch 16 section 21) An invite (or a cancelled invite) for the same tester from another tab stops it once.
+    await devGate(tx, testId, body, {}, extra, undefined, { acts: INVITE_ACTS, keys: ids.map((id) => `t:${id}`) });
     const gaps = people
       .filter((p) => !contracts.some((c) => c.testerId === p.id) && missingNeed(t, p.profile))
       .map((p) => `${displayName(p)} doesn't list ${missingNeed(t, p.profile)}, which this test needs.`);
@@ -250,8 +299,10 @@ export async function cancelInvite(dev: U, testId: string, body: Record<string, 
   await ownTest(dev.id, testId);
   const inv = await db.invite.findUnique({ where: { id: String(body.inviteId ?? "") }, include: { test: true } });
   if (!inv || inv.testId !== testId) throw new HttpError(404, "not_found", "That invite doesn't exist.");
+  // (Batch 16 section 21) Cancelled in another tab: this press stops once naming it, then it's already done.
+  if (inv.status !== "sent") await devGateIfSeen(testId, body, { acts: INVITE_ACTS, keys: [`t:${inv.testerId}`] });
   if (inv.status !== "sent") throw new HttpError(409, "gone", inv.status === "joined" ? "They already joined." : inv.status === "replaced" ? "This invite is no longer valid: it was re-sent on the new listing." : "This invite was already cancelled.");
-  await devGateIfSeen(testId, body);
+  await devGateIfSeen(testId, body, { acts: INVITE_ACTS, keys: [`t:${inv.testerId}`] });
   await db.invite.update({ where: { id: inv.id }, data: { status: "cancelled" } });
   return { ok: true };
 }

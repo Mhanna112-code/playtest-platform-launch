@@ -45,8 +45,6 @@ const SAME_TEXT: [string, string, string][] = [
   ["app/app/sessions/[id]/SessionActions.tsx", "lib/server/payments.ts", "Say why you think the pay should be higher (at least a sentence)."],
   ["components/RateBox.tsx", "lib/server/ratings.ts", "Choose 1 to 5 stars."],
   ["app/app/tests/[id]/PayBox.tsx", "lib/rules.ts", "Enter an amount like 7.50."],
-  ["app/app/tests/[id]/PayBox.tsx", "lib/callMeasure.ts", "Enter the length in whole minutes."],
-  ["app/app/tests/[id]/PayBox.tsx", "lib/callMeasure.ts", "Say why you're lowering the length (the tester reads it)."],
   ["app/app/sessions/[id]/ChoiceBox.tsx", "lib/server/holds.ts", "Enter an amount like 5.00."],
   ["app/app/sessions/[id]/ChoiceBox.tsx", "lib/server/holds.ts", "The smallest card charge is $0.50."],
   ["components/CancelMenu.tsx", "lib/rules.ts", "The call is less than 24 hours away: say why you're cancelling (the other side sees it)."],

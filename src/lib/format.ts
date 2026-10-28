@@ -29,14 +29,25 @@ export function compact(n: number): string {
 /** A money stat tile: exact under $10,000 ("$4,203.50"), then "$12.4k". */
 export const compactMoney = (cents: number) => (Math.abs(cents) < 1_000_000 ? money(cents) : (cents < 0 ? "-$" : "$") + compact(Math.abs(cents) / 100));
 
-/** "12.50" → 1250; null when not a valid amount. */
+/**
+ * Dollars typed or sent ("7.50", "$7.5", 7.5) to cents. (Owner, Oct 28, batch 16 section 36) Any number of decimals is accepted and rounded to the cent,
+ * half up, from the digits themselves (1.4545 → 145, 2.005 → 201, 0.495 → 50), so no float error moves a charge; limits apply to the rounded value.
+ * Letters, negative numbers and empty boxes stay refused (null).
+ */
 export function toCents(v: unknown): number | null {
-  if (typeof v === "number") return Number.isFinite(v) ? Math.round(v * 100) : null;
+  if (typeof v === "number") return Number.isFinite(v) && v >= 0 ? toCents(v.toFixed(6)) : null;
   if (typeof v !== "string") return null;
   const s = v.trim().replace(/^\$/, "");
-  if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
-  return Math.round(parseFloat(s) * 100);
+  const m = /^(\d+)(?:\.(\d+))?$/.exec(s);
+  if (!m) return null;
+  const f = (m[2] ?? "").padEnd(3, "0");
+  return Number(m[1]) * 100 + Number(f.slice(0, 2)) + (f[2] >= "5" ? 1 : 0);
 }
+/** A money box's value after it's left: rounded to the cent ("1.4545" → "1.45"), or as typed when it isn't an amount (the red line says why). */
+export const roundedMoneyText = (typed: string) => {
+  const c = toCents(typed);
+  return c == null ? typed : `${Math.floor(c / 100)}.${String(c % 100).padStart(2, "0")}`;
+};
 
 export const isEmail = (s: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s) && s.length <= 254;
 export const normEmail = (s: string) => s.trim().toLowerCase();

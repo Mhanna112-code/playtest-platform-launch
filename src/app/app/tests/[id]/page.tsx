@@ -33,7 +33,7 @@ import { rowsOf, toJson } from "@/lib/callRows";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
-import { HOLD_APPROVAL_AFTER, NOT_LISTED, callListed, deletedNoPayoutsLine, joiningClosedLine, testerPayable } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, NOT_LISTED, callListed, deletedNoPayoutsLine, joiningClosedLine, payMoreState, testEndedAt, testerPayable } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
@@ -57,7 +57,8 @@ import { byQuestion } from "@/lib/byQuestion";
 import { PrevSetFolds, SetView } from "@/components/AnswerSets";
 import { itemsOf, prevSetsOf } from "@/lib/answerSets";
 import { NOT_REQUIRED } from "@/lib/questions";
-import { pendingForDeveloper, shownExcerpts } from "@/lib/server/excerpts";
+import { pendingForDeveloper } from "@/lib/server/excerpts";
+import { ExcerptQuestion } from "@/components/ExcerptList"; // (batch 16 section 37) the question above each excerpt request
 import { ExcerptDecision, ExcerptRemove } from "@/components/Excerpts";
 
 export const metadata = { title: "Test · Playtest" };
@@ -124,6 +125,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const expired = inviteExpired(t);
   const soon = t.openUntil && t.openUntil > new Date() && t.openUntil.getTime() - Date.now() < 3 * 86_400_000;
   const now = new Date();
+  // (Owner, Oct 28, batch 16 section 22) Pay more closes 30 days after the test ended; the box says so in its last 7 days.
+  const payMore = payMoreState(testEndedAt(t, t.contracts, now), now, fmtDate);
   // (Owner, Oct 26) A chargeback hold's steps. (A paused test's closing date is told by bell and shown to the admin, not on the page.)
   const cbSteps = await chargebackSteps(u.id);
   // (Owner, Oct 27) While a failed payment is owed, Pay (part Pay, extra pay) is disabled: "Pay what you owe first."; the room above the listing prices for extra pay.
@@ -137,7 +140,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     return [k.submissionId ?? k.callId!, { room: r.roomCents, listed: r.listed, pool: r.callPoolRoomCents, box: { roomCents: r.roomCents, aboveRoomCents: r.aboveRoomCents, ceilingBinds: r.ceilingBinds } }] as const;
   })));
   // (Batch 15 section 34) What's left of the $1,000 for each tester's calls, and the small warning when under an hour (or under $200 unlisted).
-  const callsWarn = new Map(await Promise.all(t.contracts.map(async (c) => [c.id, callsLeftWarning(await callsLeftCents(c.id), callListed(t, c) ? c.liveRateCents : null, "developer", displayName(c.tester))] as const)));
+  const callsLeft = new Map(await Promise.all(t.contracts.map(async (c) => [c.id, await callsLeftCents(c.id)] as const)));
+  const callsWarn = new Map(t.contracts.map((c) => [c.id, callsLeftWarning(callsLeft.get(c.id) ?? 0, callListed(t, c) ? c.liveRateCents : null, "developer", displayName(c.tester))] as const));
+  // (Owner, Oct 28, batch 16 section 33) The developer's other booked calls still ahead (any tester, any test), for the clash checks while Request a time is filled.
+  const otherCalls = (await db.call.findMany({ where: { status: "booked", startsAt: { gt: new Date(now.getTime() - 6 * 3_600_000) }, contract: { test: { developerId: u.id } } }, include: { contract: { include: { tester: true } } } }))
+    .map((x) => ({ contractId: x.contractId, name: displayName(x.contract.tester), start: x.startsAt.toISOString(), minutes: x.minutes }));
   const lengthOf = (x: Parameters<typeof callLengthLine>[0]) => callLengthLine(x, fmtTime);
   const lateOf = (c: { dueAt: Date; tester: { name: string; email: string } }, x: { createdAt: Date }) => (isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(c.tester), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined);
   const partPaid = (id: string) => payments.filter((p) => (p.submissionId === id || p.callId === id) && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
@@ -178,8 +185,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       contractId: c.id, name: displayName(c.tester), terms, booked, warning: callsWarn.get(c.id) ?? "",
       calls: live.filter((x) => !x.setId).map(toCall),
       sets,
-      // (NEXT-UI 21) The testers' requests wait in Needs you; here only the developer's own.
-      requests: reqs.filter((r) => r.contractId === c.id && r.fromSide === "developer").map((r) => ({
+      // (Batch 16 section 33) Their waiting requests and yours, as they arrive (answered in the Call requests panel).
+      pending: reqs.filter((r) => r.contractId === c.id).length, leftCents: callsLeft.get(c.id) ?? null, rateCents: callListed(t, c) ? c.liveRateCents : null,
+      requests: reqs.filter((r) => r.contractId === c.id).map((r) => ({
         id: r.id, minutes: r.minutes, rows: toJson(rowsOf(r)), mine: r.fromSide === "developer",
         rate: rateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents),
       })),
@@ -257,8 +265,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             {excerptReqs.map((x) => (
               <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm" data-excerpt-request="">
                 <p className="text-slate-300"><b className="text-white">Excerpt request</b> · {x.tester} would like to show this on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
+                <ExcerptQuestion question={x.question} />
                 <ClampText text={`“${x.text}”`} className="text-slate-200" />
-                <ExcerptDecision excerptId={x.id} />
+                <ExcerptDecision excerptId={x.id} seenAt={seenAt} />
               </div>
             ))}
             {shownEx.map((e) => (
@@ -341,9 +350,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           {excerptReqs.map((x) => (
             <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm scroll-mt-24" data-excerpt-request="">
               <p className="text-slate-300"><b className="text-white">Excerpt request</b> · {x.tester} would like to show this on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
-              {x.question && <p className="text-xs text-slate-400">{x.question}</p>}
+              <ExcerptQuestion question={x.question} />
               <ClampText text={`“${x.text}”`} className="text-slate-200" />
-              <ExcerptDecision excerptId={x.id} />
+              <ExcerptDecision excerptId={x.id} seenAt={seenAt} />
             </div>
           ))}
           {disputesWaiting.map((d) => (
@@ -387,7 +396,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   <p className="text-sm text-slate-200" data-call-length="">{lengthOf(x.x!)}</p>
                   {x.x!.actualMinutes != null && x.x!.lengthNote && <ReasonQuote text={x.x!.lengthNote} />}
                   <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.x!.id)?.box}
-                    minutes={callMinutesOf(x.x!)!} rateCents={x.x!.rateCents} lower={{ testId: t.id }} warning={callsWarn.get(x.c.id)}
+                    minutes={callMinutesOf(x.x!)!} rateCents={x.x!.rateCents} warning={callsWarn.get(x.c.id)}
                     listingCents={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).cents}
                     listingText={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
                 </>
@@ -416,7 +425,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           ].filter(Boolean),
           block: null, // (Owner, Oct 27) Block and Report live only on profiles
           chat: <ChatWithButton contractId={c.id} name={displayName(c.tester)} />, // (Owner, Oct 27) "Chat with <name>" on every hover card
-          excerpts: (await shownExcerpts(c.testerId)).map((x) => x.text), // (Batch 13) up to 3, never from a test that has an NDA now
+          // (Owner, Oct 28, batch 16 section 23) No excerpts on the hover card: they stay on the tester's profile.
         })))}
         gone={t.contracts.filter((c) => c.status !== "working").map((c) => ({ contractId: c.id, name: displayName(c.tester), how: c.endKind === "stopped" || c.endKind === "closed" ? "Stopped" : c.endKind === "suspended" || c.endKind === "deleted" ? "Removed" : c.endKind === "rated" ? "Left" : c.status === "left" ? "Left" : "Ended early", at: c.endedAt }))}
       >
@@ -457,8 +466,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       <span className={r.sub ? "text-emerald-200" : "text-slate-400"}>{r.sub ? `Sent ${fmtDate(r.sub.sentAt)}` : "Not sent yet"}</span>
                       {r.sub && <span className="text-slate-300">· paid {money(partPaid(r.sub.id))} of {r.sub.agreedCents != null ? money(r.sub.agreedCents) : `(${NOT_LISTED.toLowerCase()})`}</span>}
                       {/* (Owner, Oct 29, batch 11 section 6 / batch 12 section 3) A paid piece keeps its Pay box as "Pay more" until its cap is reached. */}
-                      {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
-                        <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)}
+                      {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && payMore.open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
+                        <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                           room={rooms.get(r.sub.id)?.box} listingCents={r.sub.agreedCents} listingText={`${money(r.sub.agreedCents)} for ${r.name === "Recording" ? "a recording" : "written answers"}`} />
                       )}
                       {r.sub?.review && r.sub.review.amountCents === 0 && !r.sub.review.rejected && r.sub.review.reason && <span className="w-full text-sm text-slate-300" data-paid-zero="">{paidZeroLine(r.sub.review.reason)}</span>}
@@ -495,8 +504,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                             {badge.reason && <ReasonQuote text={badge.reason} />}
                             {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
                             {inNeeds && <a href={`#call-${x.id}`} className="text-xs">Pay it in Needs you ↑</a>}
-                            {x.review && !x.review.rejected && !restricted && (rooms.get(x.id)?.room ?? 0) > 0 && (
-                              <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)}
+                            {x.review && !x.review.rejected && !restricted && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
+                              <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                                 room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
                                 listingCents={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).cents}
                                 listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
@@ -549,7 +558,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       </TestersJoined>
       {!restricted && <ContractChanges entries={changeEntries} fmt={(iso) => fmtDateTime(new Date(iso))} />}
       {cbSteps && <ChargebackSteps steps={cbSteps} />}
-      {(u.holdStartedAt || (owedList.length > 0 && !u.devSuspendedAt)) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} chargeback={!!cbSteps} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />}
+      {(u.holdStartedAt || (owedList.length > 0 && !u.devSuspendedAt)) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} chargeback={!!cbSteps} verifyFirst={!!cbSteps && !cbSteps.cardVerified} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />}
       {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date(), "developer")}</p>}
       <DevCallPanel
         testId={t.id}
@@ -557,6 +566,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         canRequest={t.status !== "stopped" && t.status !== "draft" && !u.holdStartedAt && !restricted}
         noRequestReason={t.status === "stopped" ? "" : u.holdStartedAt ? "Your tests are paused until you pay what you owe: calls wait meanwhile." : ""}
         testers={restricted ? devTesters.map((x) => ({ ...x, requests: [] })) : devTesters}
+        // (Batch 16 sections 33 and 35) The one Call requests panel: every waiting request, both directions (Needs you's rows open it here).
+        requests={restricted ? [] : reqs.flatMap((r) => {
+          const c = working.find((x) => x.id === r.contractId);
+          return c ? [{ id: r.id, contractId: c.id, tester: displayName(c.tester), asker: r.fromSide === "developer" ? "you" : displayName(c.tester), rows: toJson(rowsOf(r)), minutes: r.minutes, mine: r.fromSide === "developer", rate: rateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents), warning: callsWarn.get(c.id) || undefined }] : [];
+        })}
+        elsewhere={otherCalls}
       />
       {t.status !== "stopped" && !restricted && (
         <InvitePanel

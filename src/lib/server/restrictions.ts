@@ -64,17 +64,20 @@ async function pauseDeveloper(u: { id: string; email: string }) {
 
 async function removeTester(u: { id: string; name: string; email: string; pronoun: string }, kind: "suspended" | "deleted") {
   const contracts = await db.contract.findMany({ where: { testerId: u.id, status: "working" }, include: { test: { include: { developer: true } } } });
+  // (Owner, Oct 28, batch 16 section 21) A closed tester account is a tester leaving: the developer's "left" line (Testers leaving in Alerts), never why; a deleted
+  // account by the name every other page shows for it, "Deleted account".
+  const who = kind === "deleted" ? "Deleted account" : displayName(u);
   for (const c of contracts) {
     const cancelled = await db.$transaction(async (tx) => {
       await tx.contract.update({ where: { id: c.id }, data: { status: "left", endKind: kind, endedAt: new Date() } });
-      const list = await cancelCallsAhead(tx, [c.id], `${displayName(u)} left the test.`);
+      const list = await cancelCallsAhead(tx, [c.id], `${who} left the test.`);
       await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the tester left", decidedAt: new Date() } });
       // Developers only ever see "left" (never why).
-      await recordEvent(tx, c.testId, "left", `${displayName(u)} left the test`, true, {}, c.id);
+      await recordEvent(tx, c.testId, "left", `${who} left the test`, true, {}, c.id);
       return list;
     });
     await tellCancelled(cancelled, "ended");
-    await notify(c.test.developer.email, `${displayName(u)} left “${c.title}”`, [`${displayName(u)} left your test “${c.title}”. Work they already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: u.id });
+    await notify(c.test.developer.email, `${who} left “${c.title}”`, [`${who} left your test “${c.title}”. Work they already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: u.id });
     await spotOpened(c.testId);
   }
   await db.application.updateMany({ where: { testerId: u.id, status: "pending" }, data: { status: "withdrawn", decidedAt: new Date() } });

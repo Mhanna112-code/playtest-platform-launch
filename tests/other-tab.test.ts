@@ -50,8 +50,9 @@ describe("reason E: your own actions in another tab", () => {
     await later();
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, tab: "tab-2" });
+    // (Batch 16 section 21) A Pay in another tab is a big change: it stops every press here once (Stop included), as "You … in another tab".
     const r = await act(testId, "stop", dev.cookie, { seenAt: pageLoaded, tab: "tab-1" });
-    expect(texts(r)).toEqual(["You also did this in another tab: paid Ana Silva $10.00 for the written answers"]);
+    expect(texts(r)).toEqual(["You paid Ana Silva $10.00 for the written answers in another tab"]);
     // The tab that paid is never stopped by it.
     expect((await act(testId, "next-round", dev.cookie, { seenAt: pageLoaded, tab: "tab-2" })).body.error?.code).not.toBe("stop_once");
   });

@@ -7,6 +7,7 @@ import { CapacityCard } from "@/components/ProfileTiles";
 import { sideFor } from "@/lib/sides";
 import { ClampText } from "@/components/ClampText";
 import { LongList } from "@/components/LongList";
+import { AccountRefresh } from "@/components/AccountRefresh";
 
 export const metadata = { title: "Profile · Playtest" };
 export const dynamic = "force-dynamic";
@@ -36,7 +37,9 @@ export default async function ProfilePage() {
           <p className="mb-6 text-sm"><Link href={`/app/testers/${u.id}`} className="text-sky-300 hover:underline">How developers see you</Link> <span className="text-slate-500">(your profile and figures as they see them)</span></p>
         </>
       )}
-      <ProfileForm side={side ?? "tester"} init={{ name: u.name, pronoun: u.pronoun, isDeveloper: u.isDeveloper, isTester: u.isTester, devices: p?.devices ?? [], categories: p?.categories ?? [], languages: p?.languages ?? [], bio: p?.bio ?? "" }} />
+      {/* (Batch 16 section 27) Saved in another tab or device: this page updates silently; the first Save afterwards stops once. */}
+      <AccountRefresh />
+      <ProfileForm side={side ?? "tester"} seenAt={new Date().toISOString()} init={{ name: u.name, pronoun: u.pronoun, isDeveloper: u.isDeveloper, isTester: u.isTester, devices: p?.devices ?? [], categories: p?.categories ?? [], languages: p?.languages ?? [], bio: p?.bio ?? "" }} />
       <div className="mt-6 space-y-6">
         {side === "developer" && u.isDeveloper && <CapacityCard userId={u.id} />}
         <section className="card space-y-2" aria-label="Your ratings">

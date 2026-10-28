@@ -28,6 +28,13 @@ export const HIGH_PART_TICK = "I confirm this part pays more than $200.";
  * amount; a changed amount unticks it). Over PAY_TICK_CENTS ($200) a second tick is needed too: "I confirm this payment is over $200." Paying $0 needs no tick.
  */
 export const PAY_TICK_CENTS = 20_000;
+/**
+ * (Owner, Oct 28, batch 16 section 39) The tester's Charge needs no tick for ordinary amounts (its button names the amount); above $200, the same line as the developer's
+ * Pay, the tick stays and must name the typed amount: "Charge Nora Lane $250.00 now (over $200)".
+ */
+export const CHARGE_TICK_CENTS = PAY_TICK_CENTS;
+export const chargeTickLabel = (devName: string, cents: number) => `Charge ${devName} ${money(cents)} now (over $200)`;
+export const chargeTickLine = (devName: string, cents: number) => `Tick “${chargeTickLabel(devName, cents)}” to charge.`;
 export const PAY_TICK_LINE = (cents: number) => `I understand this payment of ${money(cents)} can't be refunded and is charged now.`;
 export const OVER_PAY_TICK_LINE = "I confirm this payment is over $200.";
 
@@ -512,6 +519,47 @@ export function endedLine(c: { status: string; endKind: string; endedAt: Date | 
   return `${devName} ended your session early on ${fmt(c.endedAt)}. Work you sent is still reviewed.`;
 }
 
+// ---------- (Owner, Oct 28, batch 16 section 24) The tester's page after the test stops, closes, or their work is ended early ----------
+
+/** (Owner, Oct 28, batch 16 section 28) The top line of the limited view a suspended tester gets of a test they were removed from. */
+export const LIMITED_VIEW_LINE = "Your account is paused. You can still dispute, charge or let go of unreviewed work, and rate.";
+/** The work is over for this tester (the developer or the team stopped the test, it closed, or their work was ended early): never a block, a rating or a leave. */
+export const workOver = (c: { status: string; endKind: string; endedAt: Date | null }) => c.status === "ended" && !!c.endedAt && !["blocked", "rated"].includes(c.endKind);
+/** The first half of the stopped line, as endedLine says it: "Nora Lane stopped the test on Nov 3" / "This test ended on Nov 3" / "Nora Lane ended your session early on Nov 3". */
+function overHalf(c: { endKind: string; endedAt: Date | null }, devName: string, fmt: (d: Date) => string) {
+  const d = fmt(c.endedAt!);
+  return c.endKind === "stopped" ? `${devName} stopped the test on ${d}` : c.endKind === "closed" ? `This test ended on ${d}` : `${devName} ended your session early on ${d}`;
+}
+/** The presses that go once the work is over (hidden on the page, refused on the server); WORK_OVER_PRESSES are the names the refusal gives them. */
+export const WORK_OVER_ACTIONS = ["terms", "written", "recording-start", "recording-done", "recording-send", "recording-remove", "request-time", "answer-request", "cancel-call", "cancel-set", "key-broken"] as const;
+export const WORK_OVER_PRESSES = ["Switch", "Keep", "Send", "upload", "Remove", "Request a time", "Accept", "Decline", "Withdraw", "Cancel call", "“This key doesn't work”"] as const;
+/** The press's name in the refusal: "Send", "Switch", "Request a time", "Cancel call", "“This key doesn't work”"… ("" for a press that isn't one of them). */
+export function workOverPress(action: string, body: Record<string, unknown> = {}): string {
+  switch (action) {
+    case "terms": return body.choice === "keep" ? "Keep" : "Switch";
+    case "written": case "recording-send": return "Send";
+    case "recording-start": case "recording-done": return "upload";
+    case "recording-remove": return "Remove";
+    case "request-time": return "Request a time";
+    case "answer-request": return body.action === "decline" ? "Decline" : body.action === "withdraw" ? "Withdraw" : "Accept";
+    case "cancel-call": case "cancel-set": return "Cancel call";
+    case "key-broken": return "“This key doesn't work”";
+  }
+  return "";
+}
+/** An old page's press after the work ended: "Nora Lane stopped the test on Nov 3, so your Send didn't go through. Work you sent is still reviewed." */
+export const workOverLine = (c: { endKind: string; endedAt: Date | null }, devName: string, fmt: (d: Date) => string, press: string) =>
+  `${overHalf(c, devName, fmt)}, so your ${press} didn't go through. Work you sent is still reviewed.`;
+/**
+ * The stopped line at the top of the session page, listing what still works (built from what is actually on the page, as the paused banner does):
+ * "Nora Lane stopped the test on Nov 3. You can still charge or let go of unreviewed work, dispute, rate and chat. Work you sent is still reviewed."
+ * With `press` (an old page's press was refused), it names it: "Nora Lane stopped the test on Nov 3, so your Send didn't go through. You can still …".
+ */
+export function stillWorksLine(c: { endKind: string; endedAt: Date | null }, devName: string, fmt: (d: Date) => string, can: { charge?: boolean; dispute?: boolean; rate?: boolean; chat?: boolean; excerpt?: boolean }, press = "") {
+  const list = [can.charge && "charge or let go of unreviewed work", can.dispute && "dispute", can.rate && "rate", can.excerpt && "ask to show an excerpt", can.chat && "chat"].filter((x): x is string => !!x);
+  return `${overHalf(c, devName, fmt)}${press ? `, so your ${press} didn't go through` : ""}.${list.length ? ` You can still ${andList(list)}.` : ""} Work you sent is still reviewed.`;
+}
+
 
 // ---------- Edit version check ----------
 
@@ -848,7 +896,7 @@ export function paidByKind(parts: { kind: "written" | "recording" | "call"; amou
 
 /** The developer adds their side to a dispute once. */
 export function checkDevSide(text: string, already: boolean): Check {
-  if (already) return no("You already added your side to this dispute.");
+  if (already) return no("You already sent your side."); // (batch 16 section 21) the same press already made, in another tab or here
   if (text.trim().length < 5) return no("Write your side in a sentence or two.");
   return yes;
 }
@@ -1113,7 +1161,8 @@ export function canAskToRejoin(c: { status: string; endKind: string; endedAt: Da
 /** The stop-once kinds that still apply to Rate after the test closed (stopped or closed): pay, reject, charge, let go, a dispute filed or decided. */
 export const RATE_AFTER_CLOSE_KINDS = ["paid", "rejected", "payment", "choice", "chargeback", "dispute", "admin"] as const;
 /** The person's own presses in another tab that are about the same: Pay, Reject, Charge, Let it go, a dispute or the developer's side of one. */
-const RATE_OWN = /^(You also did this in another tab: )?(paid |rejected |charged for |let your |opened a dispute|added your side to a dispute)/;
+// (Batch 16 section 21) The developer's own lines now read "You paid … in another tab".
+const RATE_OWN = /^(You also did this in another tab: |You )?(paid |rejected |charged for |let your |opened a dispute|added your side to a dispute)/;
 /** Is the test closed for Rate's purposes? */
 export const testClosedForRate = (t: { status: string }) => t.status === "closed" || t.status === "stopped";
 /**
@@ -1125,6 +1174,30 @@ export function rateStops(e: TestEventLike, closed: boolean) {
   if (e.kind === "own") return RATE_OWN.test(e.text);
   return (RATE_AFTER_CLOSE_KINDS as readonly string[]).includes(e.kind);
 }
+
+// ---------- (Owner, Oct 28, batch 16 section 22) Pay more closes 30 days after the test ends ----------
+
+export const PAY_MORE_DAYS = 30;
+/**
+ * When the test ended: stopped or closed (its stop time), or done (joining closed and the last working tester's deadline passed: the latest of Open until, the
+ * working testers' deadlines and the others' ends). null while it still runs. A Next round is its own test, with its own clock.
+ */
+export function testEndedAt(t: { status: string; stoppedAt: Date | null; openUntil: Date | null }, contracts: { status: string; dueAt: Date; endedAt: Date | null }[], now = new Date()) {
+  if (t.status === "stopped") return t.stoppedAt ?? now;
+  if (t.status === "draft" || !t.openUntil || t.openUntil.getTime() > now.getTime()) return null;
+  if (contracts.some((c) => c.status === "working" && c.dueAt.getTime() > now.getTime())) return null;
+  return new Date(Math.max(t.openUntil.getTime(), ...contracts.map((c) => (c.status === "working" ? c.dueAt : c.endedAt ?? c.dueAt).getTime())));
+}
+/** The day Pay more closes (null while the test runs). */
+export const payMoreClosesAt = (endedAt: Date | null) => (endedAt ? new Date(endedAt.getTime() + PAY_MORE_DAYS * 86_400_000) : null);
+/** Pay more: open, closed, and the grey line in its last 7 days ("Pay more closes on Dec 6."). */
+export function payMoreState(endedAt: Date | null, now: Date, fmt: (d: Date) => string) {
+  const closes = payMoreClosesAt(endedAt);
+  const open = !closes || now.getTime() <= closes.getTime();
+  return { open, closes, line: open && closes && closes.getTime() - now.getTime() <= 7 * 86_400_000 ? `Pay more closes on ${fmt(closes)}.` : "" };
+}
+/** A press from an old page after it closed. */
+export const payMoreClosedLine = (closes: Date, fmt: (d: Date) => string) => `Pay more closed on ${fmt(closes)}, ${PAY_MORE_DAYS} days after the test ended.`;
 
 // ---------- Extra pay from the Testers panel (owner, Oct 26) ----------
 

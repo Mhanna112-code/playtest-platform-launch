@@ -73,8 +73,9 @@ describe("the restricted view (sections 29 and 37)", () => {
   });
 
   it("(section 39) a paused test's Alerts list only what can still happen; a stopped one fewer still", () => {
-    expect([...PAUSED_ALERTS]).toEqual(["leaving", "calls", "payments", "disputes", "admin", "own"]);
-    expect([...STOPPED_ALERTS]).toEqual(["payments", "disputes", "admin", "own"]);
+    // (Batch 16 section 21) No "Your saves and presses in another tab" type any more.
+    expect([...PAUSED_ALERTS]).toEqual(["leaving", "calls", "payments", "disputes", "admin"]);
+    expect([...STOPPED_ALERTS]).toEqual(["payments", "disputes", "admin"]);
     expect(src("components/AlertsMenu.tsx")).toContain("!keys || keys.includes(a.key)");
   });
 });

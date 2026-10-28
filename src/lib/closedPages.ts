@@ -14,6 +14,8 @@ export const OPEN_FOR_RESTRICTED = ["/app", "/app/payments", "/app/account", "/a
 export const isTestPage = (path: string) => /^\/app\/tests\/(?!new$)[^/]+$/.test(clean(path));
 
 const clean = (path: string) => path.split(/[?#]/)[0].replace(/\/$/, "") || "/";
+/** (Owner, Oct 28, batch 16 section 28) A session page opens for a suspended tester side only as the limited view of a test they were removed from: the page decides. */
+export const isSessionPage = (path: string) => /^\/app\/sessions\/[^/]+$/.test(clean(path));
 export const openForRestricted = (path: string) => {
   const p = clean(path);
   return OPEN_FOR_RESTRICTED.some((x) => p === x || (x !== "/app" && p.startsWith(`${x}/`)));
@@ -39,6 +41,8 @@ export function closedForSuspended(path: string, u: Who, side?: string | null, r
   const p = clean(path);
   if (!(p === "/app" || p.startsWith("/app/")) || openForRestricted(p)) return false;
   if (isTestPage(p) && !testerRestricted(u, role ?? side)) return false; // its restricted view (the page decides what shows)
+  // (Batch 16 section 28) A suspended tester side: a session page opens as the limited view of a test they were removed from; the page sends anything else to the dashboard.
+  if (isSessionPage(p) && testerRestricted(u, "tester")) return false;
   // A chat or call of an account with both sides: the page knows the role and decides, unless both sides are restricted.
   if (!role && byRole(p) && u.isDeveloper && u.isTester) return restrictedOn(u, "developer") && restrictedOn(u, "tester");
   return restrictedOn(u, role ?? side);

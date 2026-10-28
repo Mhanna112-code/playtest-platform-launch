@@ -88,7 +88,8 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
       for (const p of ["/app/tests/abc/edit", "/app/tests/new", "/app/messages", "/app/chat/x", "/app/profile", "/app/testers/x", "/app/developers/x", "/app/find", "/app/find/x", "/app/sessions/x", "/app/calls/x"]) expect(closedForSuspended(p, u), p).toBe(true);
       for (const p of ["/app", "/app/", "/app?failed=x", "/app/payments", "/app/help", "/app/account", "/app/account/blocked", "/app/notifications", "/app/switch"]) expect(closedForSuspended(p, u), p).toBe(false);
     }
-    for (const p of ["/app/find", "/app/find/x", "/app/profile", "/app/messages", "/app/chat/x", "/app/sessions/x", "/app/calls/x", "/app/testers/x", "/app/developers/x"]) expect(closedForSuspended(p, tester), p).toBe(true);
+    for (const p of ["/app/find", "/app/find/x", "/app/profile", "/app/messages", "/app/chat/x", "/app/calls/x", "/app/testers/x", "/app/developers/x"]) expect(closedForSuspended(p, tester), p).toBe(true);
+    expect(closedForSuspended("/app/sessions/x", tester)).toBe(false); // (batch 16 section 28) the page decides: the limited view of a test they were removed from
     expect(closedForSuspended("/app/help", tester)).toBe(false);
     expect(closedForSuspended("/app/payments", tester)).toBe(false);
     // A hold restricts only the developer side of an account with both.

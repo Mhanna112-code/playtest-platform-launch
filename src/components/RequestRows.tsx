@@ -1,5 +1,6 @@
 "use client";
 import type { RowJson } from "@/lib/callRows";
+import { clashNotes, localFmt, type ClashLine, type ClashTarget, type Slot } from "@/lib/callClash";
 
 // (NEXT-UI 7) The call request's time rows, the same on both sides: each row has its own "Once / Daily / Weekly" (Once by
 // default) and, when it repeats, a calls drop-down: 2-8 and "Forever" at the bottom. Up to 3 rows; with more than one row
@@ -38,13 +39,33 @@ export function acceptChoices(rows: RowJson[]): { label: string; time?: string }
   return rows.map((r) => ({ label: `Accept ${r.repeat === "once" ? short(r.startsAt) : rowText(r)}`, time: r.startsAt }));
 }
 
-export function RequestRows({ rows, setRows, minNow }: { rows: RowState[]; setRows: (r: RowState[]) => void; minNow: string }) {
+/**
+ * (Owner, Oct 28, batch 16 section 33) Each row's clash lines, aligned with the rows: under the row as it's typed; a red one also marks the row's time red
+ * (data-red-msg: listed under the button, and the press waits until it's fixed), a blue one is information only.
+ */
+export function alignedClash(rows: RowState[], minutes: string, side: "developer" | "tester", targets: ClashTarget[], elsewhere: (Slot & { name: string })[]) {
+  const idx: number[] = [];
+  const filled: RowJson[] = [];
+  rows.forEach((r, i) => {
+    if (!r.when) return;
+    const d = new Date(r.when);
+    if (isNaN(d.getTime())) return;
+    idx.push(i);
+    filled.push({ startsAt: d.toISOString(), repeat: r.repeat, count: r.repeat === "once" ? 1 : r.count === "forever" ? 0 : Number(r.count) });
+  });
+  const n = clashNotes({ rows: filled, minutes: minutes.trim() ? Number(minutes) : null, side, targets, elsewhere, fmt: localFmt() });
+  const notes: ClashLine[][] = rows.map(() => []);
+  idx.forEach((i, k) => (notes[i] = n.rows[k]));
+  return { notes, limits: n.limits };
+}
+
+export function RequestRows({ rows, setRows, minNow, notes }: { rows: RowState[]; setRows: (r: RowState[]) => void; minNow: string; notes?: ClashLine[][] }) {
   const set = (i: number, patch: Partial<RowState>) => setRows(rows.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   return (
     <div className="space-y-2">
       {rows.map((r, i) => (
         <div key={i} className="flex flex-wrap items-center gap-2" data-request-row="">
-          <input type="datetime-local" min={minNow} data-msg="Pick a time in the future." data-match="in the future|up to 3 times|exactly one time" aria-label={`Requested time ${i + 1}`} className="input max-w-xs" value={r.when} onChange={(e) => set(i, { when: e.target.value })} />
+          <input type="datetime-local" min={minNow} data-msg="Pick a time in the future." data-match="in the future|up to 3 times|exactly one time|overlaps|you have a call" data-red-msg={notes?.[i]?.find((x) => x.tone === "red")?.text || undefined} aria-label={`Requested time ${i + 1}`} className="input max-w-xs" value={r.when} onChange={(e) => set(i, { when: e.target.value })} />
           <select aria-label={`Repeat ${i + 1}`} className="input w-auto" value={r.repeat} onChange={(e) => set(i, { repeat: e.target.value as RowState["repeat"] })}>
             <option value="once">Once</option>
             <option value="daily">Daily</option>
@@ -57,6 +78,7 @@ export function RequestRows({ rows, setRows, minNow }: { rows: RowState[]; setRo
             </select>
           )}
           {rows.length > 1 && <button type="button" className="btn-ghost text-xs" onClick={() => setRows(rows.filter((_, j) => j !== i))}>Remove</button>}
+          {(notes?.[i] ?? []).map((x) => <p key={x.text} className={`basis-full text-sm ${x.tone === "red" ? "err-field" : "text-sky-200"}`} data-clash={x.tone}>{x.text}</p>)}
         </div>
       ))}
       {rows.length < 3 && <button type="button" className="btn-ghost" onClick={() => setRows([...rows, newRow()])}>+ Another time</button>}

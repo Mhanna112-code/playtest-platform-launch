@@ -11,6 +11,10 @@ import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
 export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: string; seenAt: string; offer: { id: string; diff: string; ndaText?: string; fromNdaText?: string; questions?: string[]; fromQuestions?: string[]; answers?: string[] } | null; devName: string }) {
   const [box, setBox] = useStopBox();
   const [offerId, setOfferId] = useState(offer?.id ?? "");
+  // (Owner, Oct 28, batch 16 section 38A) The offer can arrive while the page is open (a refresh brings it): Switch / Keep always send the offer shown now.
+  useEffect(() => {
+    if (offer?.id) setOfferId(offer.id);
+  }, [offer?.id]);
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;

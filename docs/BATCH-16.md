@@ -153,13 +153,160 @@ Today (KeyBoxes `freeBoxCheck`): if this tab deleted K-2 but hasn't saved, and B
 **A tester who deleted their account or was suspended** is treated like a tester leaving: the same live line the developer gets for a leave (keep today's neutral wording and the "Deleted account" name where it applies), under the **Testers leaving** Alerts type, so it can be ticked off like a leave. Remove "a closed tester account" from the menu's intro: "Tick what should **not** stop your buttons. A payment hold or pause, a stopped test and final refusals always stop." Final refusals are unchanged (e.g. Pay to a deleted tester without payouts is still refused).
 
 **Remove "Your saves and presses in another tab" from Alerts** (`ALERT_TYPES`, `PAUSED_ALERTS`, `STOPPED_ALERTS`, the design of the menu, stored ticks ignored). What the developer did in another tab is never news and can't be switched off:
-- **Most presses in another tab** (Stop, End early, Next round draft, Pay, Pay more, Edit saves, Accept/Decline applications, excerpt Allow/Deny, Rate…): no line in the live box. The page's UI updates as usual on its poll (banners, rows, buttons). **On press only:** a press this tab makes that the other tab's action affects (the same press, or one on the same thing) stops once with "You also did this in another tab: <what>." (as today), then refuses or goes through as usual. Edit keeps its own field notes (§17–§20).
-- **End early in another tab (owner):** silent; this tab just updates (those testers show as ended). It stops once here only if this tab presses End early for any of the same testers ("You also did this in another tab: ended Ana Silva's work early"); testers already ended are dropped from the press, the rest go through after the second press.
-- **End early here after pay or call actions in another tab (owner):** stops once only when those actions touch the testers ticked in this End early (a Pay on their work, a call requested, booked or cancelled with them), because the pop-up's summary for them (calls cancelled, work still waiting for Pay) is out of date; the box names what changed and the pop-up's summary refreshes. Pay or call actions about other testers don't stop it.
-- **Invites and calls in another tab are the exception: live AND on press.**
-  - Live: a line in the live box naming the change ("You invited Ana Silva in another tab", "You requested a call with Ben Okafor for Nov 3, 3:00 PM in another tab", "You cancelled the call with Cam Lee on …"), and this tab's UI updates at once to match: the invite panel shows the tester as "Invited <date>" (greyed, Cancel invite), the call panel shows the request or booking, a cancelled call leaves the list.
-  - On press: an invite or call press touching the same tester or call stops once naming that change; after the second press, trying the same thing again shows it's already done (e.g. requesting the same time: "You already requested this time with Ben Okafor." as a refusal, and the request is shown in the panel).
-- Tests: Pay in tab A then Pay in tab B (stop once, no live line); invite in A shows live in B and greys the row; same call request in both tabs; Stop in A updates B without a live line, and Stop in B stops once.
+**What the developer did in another tab, and the old test page (owner, Oct 28; replaces the earlier bullets and table):**
+- **"Big" changes stop EVERY press once** (every button on the test page, Accept / Decline, Rate and excerpt Allow / Deny included), even when the press is about something else: **End early, Stop the test, Pay or Pay more (on any piece), and any call change** (request, withdraw, accept, decline, cancel, Lower the length). The stop box lists them as "You … in another tab" lines; the second press goes ahead (or is refused as usual if it can no longer happen).
+- **Special cases, on press:** End early on testers the other tab already ended (those testers are dropped, the rest go through on the second press); Stop when the other tab already stopped the test (then refused: already stopped); Next round when the other tab already made the draft (the box links to it).
+- **Special cases, live AND on press** (a line in the live box at once, and the UI updates while keeping what you typed):
+  - **Pay on the same piece (owner):** the piece was unpaid here and the other tab paid it: the Pay box simply disappears (the Needs you row goes; the tester row shows the paid amount and an empty Pay more as for any paid piece). What was typed is dropped.
+  - **Pay more on the same piece:** the box updates to the new paid total and room; the amount and note you typed stay.
+  - **Call changes:** the call panel updates at once: cancelled calls leave, newly booked or requested ones appear, and anything you were requesting that is now booked or requested is marked ("Already booked" / "Already requested"); the rest of your request form (times you picked, length) stays.
+  - **Invite / Cancel invite** (as before): the invite panel updates at once (Invited <date> / tickable again); an Invite press for that tester stops once.
+- **Obvious cases, refused, no stop box:** a press the other tab already made on the same item: "You already rated Ana Silva.", "You already allowed this excerpt.", "You already declined this application.", "You already sent your side." The page updates to show it.
+- **Everything else from another tab** (Edit saves, Accept / Decline elsewhere, Rate elsewhere, excerpts, Alerts ticks, chat): no line and no stop; the page just updates on its poll.
+- **Pay more** only appears after the developer's first Pay on a piece (unchanged).
+- **Testers switching or keeping terms** are never in a stop box (unchanged since batch 14); a Switch is only the quiet line in the live box, a Keep nothing.
+
+- Tests: Pay in tab A, then Rate in tab B stops once listing it; Pay on the same piece in both (live update, typed amount kept); invite in A shows live in B and greys the row; same call request in both tabs; Stop in A updates B without a live line, and Stop in B stops once.
+
+## 22. Pay more closes 30 days after the test ends (owner, Oct 28)
+Pay more on a paid piece stays until its cap is reached, but no longer for ever: it closes **30 days after the test ends** (stopped, closed, or done when the last tester's deadline passed; a Next round is a new test and has its own clock).
+- Until then the box shows a small grey line in its last 7 days: "Pay more closes on <date>."
+- After it closes the box is gone; a press from an old page is refused: "Pay more closed on <date>, 30 days after the test ended."
+- Pays still owed (Needs you), Charge, disputes, delayed payments and the admin's decisions are unaffected.
+- Tests: open at day 29, refused at day 31 (client and server), the grey line in the last 7 days.
+
+## Decided, no change (owner, Oct 28)
+- Open until stays one date: it sets the last day to join AND the days each tester gets (opened → Open until). No separate "days per tester" field.
+
+## 23. No excerpts in hover cards (owner, Oct 28)
+Remove the shown excerpts from the tester hover card (the avatar row on the developer test page: tests/[id]/page.tsx ~line 419 passes `excerpts` to TestersJoined). The hover card keeps rating, accepted parts, the profile link and "Chat with <name>". Excerpts stay on the tester's profile. Update the media/evidence step that shows them in the hover card.
+
+## 24. Tester page after the test stops (owner, Oct 28)
+Applies when the developer stops the test, the team stops it, it closes, or the developer ends this tester's work early: the tester's work is over.
+- **Gone from the page** (hidden at once by the live update, and refused on the server): Switch / Keep (the offer box), Send for written answers and recordings, Record, attachments and drafts' Save, Request a time, Accept, Decline, Withdraw, Cancel call, Join call, **the access key box with "This key doesn't work"**, and the Alerts toggle if nothing left on the page can stop.
+- **A press of any of those from an old page** is refused and the page **moves to the top**, where the stopped line names what didn't go through: "<dev> stopped the test on <date>, so your Send didn't go through. Work you sent is still reviewed." (ended early / closed / team stop use their own first half as today). No stop box.
+- **Still works, and the stop itself never stops them** (no stop-once for the stop): Charge, Let it go, Dispute, Rate, chat, asking to show an excerpt, Remove excerpt. Other changes keep their usual rules (e.g. the developer paid that piece meanwhile: Charge is refused as today; a new Pay still stops Rate once).
+- **Leave (owner to confirm, DEFAULT):** hidden after the stop, because the tester's work has already ended and there is nothing to leave; their part ends when they rate.
+- **The stopped line lists what still works**, built from what is actually available (as the paused banner does), e.g. "<dev> stopped this test on Nov 3. You can still charge or let go of unreviewed work, dispute, rate and chat. Work you sent is still reviewed."
+- Tests: each hidden press from an old page (refused + scroll to top), each allowed press goes through on the first press after a stop, the key box gone.
+
+## 25. Stopped, closed, ended, paused, held or suspended: what still works goes through silently (owner, Oct 28)
+In any of these states, every press that is still allowed goes through on the **first press**: no stop-once for anything (other people's changes, other tabs, the state itself). Refusals stay exactly as they are (already done, caps, "<dev> paid $X for this meanwhile.", "already rated", an NDA now on the test, etc.); a refused press shows its reason and the page updates.
+**Developer, test stopped or closed:** Pay, Pay more (until it closes, §22), Rate, Next round, excerpt Allow / Deny / Take down, Send your side (dispute), chat, Alerts ticks.
+**Developer, test paused (any cause) or developer held / suspended:** Stop the test, End early, Cancel call (test page and dashboard Calls box), excerpt Allow / Deny / Take down, Send your side.
+**Tester, test stopped / closed / their work ended early, or a test they left or were removed from (incl. by a suspension of their tester side: see §28):** Charge, Let it go, Dispute, Rate, chat, ask to show an excerpt, Remove excerpt (§24; Leave hidden). Today leaving or removal blocks Dispute and excerpt requests: allow both (owner).
+**Tester, test paused:** save drafts, Charge, Let it go, Dispute, Rate, Leave, Cancel call, chat, excerpts.
+**Tester, own side suspended:** Remove excerpt (Settings), payout setup.
+**Exceptions that still stop once (DEFAULT, owner to confirm), because money or a judgement would act on something unseen:**
+- **Pay what you owe:** if the amount owed changed since the page loaded (a tester charged meanwhile), it stops once showing the new total; it never charges an amount the developer didn't see.
+- **Rate (both sides):** stops once if a payment, Charge, Let it go or dispute decision about that person's work arrived since the page loaded, so nobody rates without seeing it.
+- §21's other-tab stops don't apply in these states; other-tab repeats are plain "already" refusals.
+- Tests: each listed press goes through on the first press in each state; the two exceptions; refusals unchanged.
+
+## 26. No "Lower the length": a call has just Pay (owner, Oct 28)
+Remove batch 15 §40's "Lower the length" completely: the `LowerLength` box in PayBox.tsx, the `lower-length` action (api/tests/[id]/[action]/route.ts, STOPPED_ALLOWS), its stop-once and Alerts wiring, its tester line and reason, and its tests/media. A call's Pay box starts at the measured length × the rate, and the developer just presses Pay; paying less than that uses the usual required reason ("Say why you're paying less …"), and the tester can dispute once as usual. Charge still uses the measured length × the contract rate. Old lowered lengths stay as recorded.
+
+## 27. Settings, profile and Payments: changes made elsewhere update silently, and stop once on press (owner, Oct 28)
+Covers every button on **Payments** (Change card, Subscribe, Cancel / Keep subscription, payout setup, Pay what you owe), the **profile editor** (name, bio, devices, languages, categories, photo; the Developer / Tester / both switch) and **Settings from Change password up** (name and email, Resend the link, the side switch, Change password). Delete account, Sign out of all devices and the email setting keep their own rules.
+- **Live:** when one of these is changed in another tab or device, this page updates silently on its poll (no live line): the card shown, subscription state and buttons, payout status, saved profile values. Fields the user is typing in keep what they typed.
+- **On press:** the first press after such a change stops once with a blue box: "Changed in another tab or device since you opened this page:" and what changed in short form ("Card: Visa ending 1111 → Visa ending 4242", "Subscription: cancelled, ends Dec 1", "Devices: Windows PC → Windows PC, iPad", "Password changed at 3:10 PM"), then "Press <button> again to go ahead." Typed values are kept; the second press saves them on top (as Edit does). §17's same-value rule applies: a field changed elsewhere to exactly what this tab has is not listed.
+- **Repeats** are plain refusals: "Your subscription is already cancelled.", "You're already subscribed."
+- **Pay what you owe** keeps §25's exception (stops once showing the new total if it changed), including during a hold.
+- Tests: card changed in tab A, Cancel in tab B stops once; profile devices changed in A, Save in B stops once and keeps B's typed bio; password changed in A, Change password in B stops once.
+
+## 28. A suspended tester: a limited view of tests they were removed from (owner, Oct 28)
+Today a suspended tester side has only a read-only "Tests you were removed from" list and every other press is refused. Change:
+- Each row in "Tests you were removed from" opens a **limited view** of that session page (like the developer's paused view): their parts with status and what each was paid, the work they sent (read-only), and only these presses, which go through on the first press (§25): **Dispute, Charge, Let it go, Rate**.
+- Hidden there: sending work, drafts, calls, chat, the key box, Leave, excerpt requests. Find tests and profiles stay closed.
+- **Excerpt requests wait until the suspension lifts** (owner): once reinstated, they can ask for excerpts from these tests (and from tests they left), as §25 allows.
+- A short line at the top of the limited view: "Your account is paused. You can still dispute, charge or let go of unreviewed work, and rate."
+- Tests: open the limited view while suspended; each allowed press works; excerpt request hidden and refused on the server while suspended, allowed after reinstating.
+
+## 29. Invite: search results right under the search box (owner, Oct 28)
+In the invite panel, the "Find testers" results show directly under "Search by name" (above People you've worked with and Suggested), in their own scroll box (§12), so a search never needs scrolling down the lists. With the box empty, the "Find testers" heading and results are hidden.
+
+## 30. Account page: current side only, fewer duplicates (owner, Oct 28)
+Changes to /app/account only; every page it links to stays as it is.
+- **Top:** the name and email card (with "not confirmed yet" and Resend the link), heading "<name> · Developer" or "· Tester" for the side you're on.
+- **No "Developer, tester, or both" cards** (the page shows only the side you're on). When the other side is off, one small line with a button: "Want to test other people's products too? Start testing too" / "Want to post tests too? Start posting tests too". When both are on, nothing (the header's ⇄ switches sides).
+- **The Settings link list stays**, with two changes: only the profile link for the side you're on (Tester profile OR Developer profile), and no "Change password" link (the "Change your password" form is on the same page). Payments, Notifications and alerts, Blocked people, Privacy and Contact us stay.
+- **"Your excerpts" list removed** from this page (it's on the tester's own profile, with Remove). A suspended tester's Remove excerpt (batch 13) must stay possible: the tester profile's excerpt list stays reachable while suspended, or Remove is offered from the dashboard's blue box; report which.
+- **Unchanged:** Change your password (the form), Signed-in devices, Delete account. Blocked people and Delete account stay account-wide (a block is between people; Delete account removes the whole login, both sides).
+- Update the design doc references and media/evidence steps that read the removed items.
+
+## 31. Invite: requirement changes update the panel and stop Invite once (bug found by the owner, Oct 28)
+Owner's test: the test's required devices/languages were changed in Edit in another tab, and a tester (who listed none) added one of the new requirements and removed an old one. The old test page's invite panel didn't update, and Invite went through with no stop. Today Invite only stops for "<name> removed <X>, which this test needs".
+- **Live (the page's poll):** the invite panel refreshes from the server: the filter tick boxes show the test's current devices and languages, each row's "Doesn't list …" tag, greyed state and the Suggested order are recomputed. Ticked testers stay ticked (unless now greyed). Search text stays.
+- **On press (Invite and Invite anyway), stop once** if, since the panel was last shown:
+  - the test's required devices or languages changed (Edit in any tab): "The test's requirements changed: Devices: Windows PC → iPad · Languages: Russian, Turkish → English";
+  - a ticked tester's devices or languages changed in any way (added or removed): "Fay Ito changed their devices: none → iPad" / "…removed Russian, which this test needs".
+  The box ends "Press Invite again to go ahead." The panel shows the updated tags at the same time. On the second press, a ticked tester missing a current need gets the usual "Invite anyway" confirm with the CURRENT needs; Invite anyway also re-checks that the gap lines it shows are current (the server's `seenGaps` check) and stops once if not.
+- Covered by "Listing changes" (test requirements) and "Joins and applications" (tester profile) in Alerts? No: these are Invite's own checks and always stop Invite (like today's "removed X" line).
+- Tests: both changes from the owner's case; only the test's requirements changed; only the tester's profile changed (added, removed); Invite anyway with stale gaps; the panel's live refresh.
+
+## 32. Tester invitations follow every close, live and on press (owner, Oct 28)
+Rules unchanged: an invite stays open when the test is full ("…is full right now. Your invite stays open…") and is sent again when an Edit changes the listing (it stays pending, on the new listing); it closes when the test or the developer can't take testers (any pause, hold or suspension, a stop, a deleted developer), at Open until, when the developer cancels it, after a block either way, or when the tester is deleted. After a pause or hold the developer can invite again; nothing reopens by itself.
+- **Live:** the tester's Invitations (dashboard and the join page) update on the poll: a closed invite's card disappears, with a neutral line in the live box, e.g. "Your invite to “Harbor Run” was closed." A re-sent invite updates its card in place ("Sent again on the new listing · <date>"); a full test's card shows "Full right now: your invite stays open".
+- **On press:** Join this test / Accept / Decline on an invite that closed meanwhile is refused (no stop box) with the reason, and the card disappears:
+  - pause, hold or the developer's suspension: "“<test>” isn't taking new testers right now, so this invite was closed." (never "hold" or "suspended");
+  - Open until passed: "“<test>” closed to new testers on <date>.";
+  - stopped (or developer deleted): "This test was stopped.";
+  - cancelled, blocked or anything else: "This invite is no longer open."
+- A press on an invite that was re-sent meanwhile stops once as today ("<dev> updated <test>: …"), showing the new listing.
+- Tests: each close reason (live removal + refused press + card gone), the re-sent case, the full case.
+
+## 33. Calls: live panels, one scrollable requests panel, clashes shown before the press (owner, Oct 28)
+Owner's case: fbbb requested Mon, Nov 2, 1:38 PM while the developer was filling Request a time with the same time. The developer's press stopped once (listing the request), but the tester card below still read "No calls or requests", and nothing marked the clash.
+- **Live:** the Live session panel updates on the page's poll: each tester card shows new requests (theirs and yours), bookings and cancellations as they happen; the stop box is no longer the only place a new request appears.
+- **One "Call requests" panel** (developer test page, Live session; and the tester's session page for their own): every waiting request on this test in both directions, soonest first: tester, time(s), Once / Daily / Weekly (N calls or Forever), length, who asked, with Accept / Decline (theirs) or Withdraw (yours). A plain scroll box about 5 rows tall (§14 style); updates live.
+- **Clash checks while filling the form** (both sides' Request a time; each time row checked live as it's typed and whenever the data changes), for every ticked tester and every call in a Daily / Weekly set (Forever: its first 8):
+  - **Exact match** with the other side's waiting request (same start, same length, same repeat): not red; a blue line under the row "fbbb asked for exactly this: Request a time books it." The press books at once, as today ("Booked: you both picked <time>"), and both requests leave the panel.
+  - **Overlap** with a call or waiting request between the two of you: red "Overlaps fbbb's request for Mon, Nov 2, 1:38–1:48 PM." / "Overlaps your call with fbbb on …".
+  - **Overlap with the developer's other calls** (another tester, any of their tests): red "You have a call with Ana Silva then (1:30–2:00 PM)." Same for the tester's other calls.
+  - Two rows in the same form overlapping each other: red on the later row.
+  - The existing limits (3 waiting requests, 3 booked times, the $1,000 for a tester's calls) show red at the form before the press, with today's wording.
+  - A set with a clash names the first one: "The 3rd call (Thu, Nov 12) overlaps …".
+  - Red rows follow §10 (listed under the button, the button refused until fixed); the server re-checks everything on press.
+- **Stop-once unchanged:** a change the page hasn't shown yet still stops the press once, and the panels already show it.
+- Tests: the owner's case (exact match books, panel updates), an overlap from each source, a weekly set with a later clash, live arrival of a request while the form is open.
+
+## 34. (Moved to post-launch by the owner, Oct 28: do NOT build) Files placed at the cursor in written answers
+Keep today's "Files and recordings" box under the written answers for launch. If any of this was started, revert it. The idea (📎 and ⏺ in each answer's toolbar, files shown in place) goes in the design doc's post-launch ideas.
+
+## 35. Call requests in Needs you open the Live session panel (owner, Oct 28)
+The Needs you row "<tester> asked for a live call: <time> · <length> · <Listed/Not listed>" (developer test page and dashboard) loses its own Accept / Decline. The whole row (and a "Answer in Live session →" link on it) opens the test page at the Live session's Call requests panel (§33) with that request highlighted for a few seconds. Accept / Decline happen only there, so they follow every rule of that panel: stop-once (blue box), the clash checks, the paused / stopped / restricted refusals, and §25 where it applies. The row still leaves Needs you once the request is answered, withdrawn or closed (live). Same for a tester's view if they have such a row.
+
+## 36. Money boxes round to cents instead of refusing (owner, Oct 28)
+Today `toCents` (lib/format.ts) refuses more than 2 decimals ("Enter an amount like 7.50."), so "1.4545454545" in a Pay box is red and Pay is refused.
+- Every money box (Pay, Pay more, a call's rate and amount, Charge, Post/Edit prices and the live rate, Pay what you owe if typed) **rounds to cents when the box is left**, half up, and shows the rounded value (1.4545 → 1.45; 2.005 → 2.01), so the developer sees exactly what will be charged before pressing.
+- The server rounds the same way (toCents accepts any number of decimals and rounds); a press that arrives unrounded is charged at the rounded amount shown in the result.
+- Limits and minimums apply to the rounded value ($0.50 minimum, caps).
+- Still refused: letters, negative numbers, empty where required.
+- Tests: 1.4545 → $1.45 on blur and on the server; 0.495 → $0.50; 0.494 → refused below the minimum (or $0.00 if typed as 0.004 → 0.00: allowed as $0 with its reason).
+
+## 37. Excerpts show the question they answer (owner, Oct 28)
+On the tester's profile ("Excerpts of their work") and their own "Your excerpts" list, each excerpt shows the question it answers above the quote, in small grey text cut to 2 lines with "Show more" (the data already carries `question`; ExcerptList.tsx doesn't render it). The developer's Allow / Deny row in Needs you shows it the same way. An excerpt from "Anything else" reads "Anything else (bugs, ideas)".
+
+## 38. Two bugs from the owner's test (Oct 28, ~2:10 PM)
+**A. "That offer doesn't exist." under Switch / Keep.** The offer arrived while the session page was open (it came in through Send's stop box at 2:09 PM). `TesterTop` keeps `offerId` in `useState(offer?.id ?? "")`, so it stays "" when the offer appears live, and the press sends an empty id; `decideTerms` (terms.ts ~67) then throws "That offer doesn't exist."
+- Fix: `offerId` follows the offer currently shown (update it whenever the live offer changes).
+- Server: when the id is missing or not the newest open offer, act on the newest open offer under the existing "changed the terms again" stop-once (shows the newest; the second press decides on it). Only when there's no open offer at all: "These terms are no longer on offer." (never "doesn't exist").
+- Test: the offer arrives after the page loads; Switch and Keep both work; an offer replaced by a newer one; no offer left.
+**B. Dispute didn't stop once for the developer's call request (tester Alerts On).** Likely cause: the developer's Request a time shows to the tester as kind `offered` (calls.ts ~63, "A new call time was offered"), but the tester's stop-once `KINDS` in testerGate.ts (~78) list `requested`, `booked`, `cancelled` and not `offered` (nor `removed`, `withdrew_req`, `declined_req`, `confirmed`). Check every call-change kind the tester can see is in the tester's kinds, for every tester press (Dispute, Send, Charge, Let it go, Rate, call buttons, Switch / Keep), and that the Dispute box sends `seenAt`. Test: each call change before each tester press stops once with Alerts On, and doesn't with Alerts Off.
+
+## 39. Charge: no confirm tick, except above $200 (owner, Oct 28)
+The tester's Charge box today needs the tick "charge <dev> $X now" for every amount. Remove it for ordinary amounts: the Charge button (which already names the amount, "Charge Nora Lane $9.00") goes through on its own. Above $200 (the same `PAY_TICK_CENTS` line the developer's Pay uses), the tick stays and is required: "Charge Nora Lane $X now (over $200)"; the button stays disabled until it's ticked, and the server refuses an unticked charge over $200 (the tick must name the typed amount, as today). Let it go is unchanged. Update tests and media steps.
+
+## 40. Tester's live call part: no blue box per call (owner, Oct 28)
+On the tester's session page, each held call under the Live call part shows a blue box "Live call on <time>: waiting for <dev> to pay. Listing: $15.00 · Paid so far for this part: $0.00 (you get 80%)". Remove the blue box; the part line above already shows the contract rate and paid so far. Each call becomes one short grey line: "<Wed, Oct 28, 5:49 AM> · 30 min · waiting for <dev> to pay" (or "paid $X", "charged", "let go"), with Charge / Let it go / Dispute under it when they apply, as today. Blue stays only for real notices.
+
+## 41. Chargeback hold: verify first, then pay, then the team lifts it (owner, Oct 28)
+The three steps on Payments stay (verify a card with 3D Secure, pay what is owed, the team's Approve), now in strict order:
+- **Pay what you owe is disabled until a card is verified with 3D Secure**, with the line under it: "Verify your card first (step 1): then you can pay what you owe."
+- **Paying doesn't lift the hold** (DEFAULT, owner to confirm): after the payment goes through, step 2 shows ✓ and the box reads "Paid. Your tests stay paused until the team approves." The hold lifts only when an admin presses Approve (step 3); the bell "Your tests are running again" comes then.
+- The server refuses Pay what you owe during a chargeback hold without a verified card ("Verify your card first.").
+- Payment holds (not chargebacks) are unchanged: paying lifts them as today.
+- Tests: pay before verifying (disabled and refused), verify then pay (hold stays), admin Approve lifts it.
 
 ## Check and report
 - Tests for items 1, 3, 4 and 5 (item 1: a tester joining with 40 days, 10 days and 2 days; a deadline moved later; a paused test).

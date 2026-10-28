@@ -18,7 +18,7 @@ describe("presses repeated after a lost answer (section 13)", () => {
     // The only raw fetches in pages and components are polls, heartbeats and draft keeping (never a press).
     const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
     const files = [...walk(path.resolve(__dirname, "../src/components")), ...walk(path.resolve(__dirname, "../src/app")).filter((f) => !f.includes(`${path.sep}api${path.sep}`))].filter((f) => f.endsWith(".tsx"));
-    for (const f of files) for (const m of fs.readFileSync(f, "utf8").matchAll(/fetch\(([^)]*)/g)) expect(m[1], f).toMatch(/status|presence|pulse|account\/status|admin\/dispute|kept/);
+    for (const f of files) for (const m of fs.readFileSync(f, "utf8").matchAll(/fetch\(([^)]*)/g)) expect(m[1], f).toMatch(/status|presence|pulse|account\/status|account\/changes|admin\/dispute|kept/); // (batch 16 section 27) account/changes is a poll
   });
 
   it("Pay, Pay more, Charge, Let it go, Send, Join, Apply, Accept, Book, Rate and Join call: the same press twice does it once", async () => {

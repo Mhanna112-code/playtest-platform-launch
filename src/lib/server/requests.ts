@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, fmtTime, money, pronouns } from "@/lib/format";
-import { checkCallMinutes, checkCancel } from "@/lib/rules";
+import { andList, checkCallMinutes, checkCancel } from "@/lib/rules";
 import { FOREVER_AHEAD, MAX_ROWS, occurrences, rowsOf, stepMs, toJson, type CallRow, type RowRepeat } from "@/lib/callRows";
 import type { Prisma } from "@prisma/client";
 import { NOT_LISTED, PAUSED_RIGHT_NOW, callListed, testPaused } from "@/lib/rules";
@@ -13,6 +13,9 @@ import { bell, notify } from "./notify";
 import { devGate, recordEvent } from "./tests";
 import { testerGate } from "./testerGate";
 import { ceilingRefusal, checkCeiling } from "./callMoney";
+import { CALL_ACTS } from "./live";
+import { clashNotes, localFmt } from "@/lib/callClash";
+import { safeZone } from "@/lib/tz";
 
 /** (Batch 15 section 34) The calls a request books if accepted: the most of any one row (a "choose one" row books 1; a set books all of its calls). */
 const callsIfAccepted = (rows: CallRow[]) => Math.max(1, ...rows.map((r) => occurrences(r).length));
@@ -215,6 +218,22 @@ async function refusals(c: Ctx["c"], side: Side) {
 // (Owner) Call REQUESTS (requested, withdrawn, declined, closed) are not bell lines: they show in Needs you, the Live session
 // panel and the live top box. Booked and cancelled calls are bell lines (and stack there).
 
+/**
+ * (Owner, Oct 28, batch 16 section 33) The server's re-check of what the form shows red that the older checks don't cover: the requester's OTHER calls (another
+ * person, any test: "You have a call with Ana Silva then (1:30–2:00 PM).") and two times in the request overlapping each other. The same lines as the form.
+ */
+async function ownCallClash(side: Side, who: { id: string; timeZone?: string | null }, contractIds: string[], rows: CallRow[], minutes: number) {
+  const since = new Date(Date.now() - 6 * 3_600_000);
+  const others = side === "developer"
+    ? (await db.call.findMany({ where: { status: "booked", startsAt: { gt: since }, contractId: { notIn: contractIds }, contract: { test: { developerId: who.id } } }, include: { contract: { include: { tester: true } } } })).map((x) => ({ start: x.startsAt.toISOString(), minutes: x.minutes, name: displayName(x.contract.tester) }))
+    : (await db.call.findMany({ where: { status: "booked", startsAt: { gt: since }, contractId: { notIn: contractIds }, contract: { testerId: who.id } }, include: { contract: { include: { test: { include: { developer: true } } } } } })).map((x) => ({ start: x.startsAt.toISOString(), minutes: x.minutes, name: displayName(x.contract.test.developer) }));
+  const n = clashNotes({ rows: toJson(rows), minutes, side, targets: [], elsewhere: others, fmt: localFmt(safeZone(who.timeZone)) });
+  return n.rows.flat().find((x) => x.tone === "red")?.text ?? "";
+}
+
+/** "You already requested this time with Ben Okafor." */
+export const alreadyRequestedLine = (names: string[]) => `You already requested this time with ${andList(names)}.`;
+
 /** Developer: Request a time with one or more ticked working testers. */
 export async function devRequestTime(dev: U, testId: string, body: Record<string, unknown>) {
   const ids = Array.isArray(body.contractIds) ? body.contractIds.map(String) : body.contractId ? [String(body.contractId)] : [];
@@ -228,7 +247,12 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     await refusals(x.c, "developer");
     all.push(x);
   }
-  await db.$transaction((tx) => devGate(tx, testId, body));
+  // (Batch 16 section 21) Another tab's call action with any of these testers stops it once.
+  await db.$transaction((tx) => devGate(tx, testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: ids.map((id) => `c:${id}`) }));
+  // (Batch 16 section 21) The same time again (e.g. requested in another tab meanwhile): already done, said plainly; the request shows in the panel.
+  const again: string[] = [];
+  for (const { c } of all) if (await db.callRequest.findFirst({ where: { contractId: c.id, fromSide: "developer", status: "pending", startsAt: kind.startsAt } })) again.push(displayName(c.tester));
+  if (again.length) throw new HttpError(409, "already", alreadyRequestedLine(again));
   // Auto-match ("choose one" only): a tester already requested one of these exact times at the contract rate.
   const onceStarts = kind.rows.filter((r) => r.repeat === "once").map((r) => r.startsAt);
   if (onceStarts.length) {
@@ -247,6 +271,10 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
         return { booked: true, callId: call.id, message: line };
       }
     }
+  }
+  {
+    const own = await ownCallClash("developer", dev, all.map((x) => x.c.id), kind.rows, reqMinutes);
+    if (own) throw new HttpError(409, "clash", own);
   }
   // Clashes and the 2-pending limit, per tester.
   const blocked: string[] = [], atLimit: string[] = [], ok: Ctx[] = [];
@@ -309,6 +337,8 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
       return { booked: true, callId: call.id, message: line };
     }
   }
+  const own = await ownCallClash("tester", user, [contractId], kind.rows, minutes); // (batch 16 section 33)
+  if (own) throw new HttpError(409, "clash", own);
   const clash = await sendClash(contractId, requestTimes(kind), minutes, devName, undefined, { side: "tester", otherPoss: pronouns(c.test.developer.pronoun).poss });
   if (clash) throw new HttpError(409, "clash", clash);
   if ((await pendingRequests(contractId)) >= MAX_REQUESTS) throw new HttpError(409, "limit", requestLimitLine(devName));
@@ -339,9 +369,11 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   const mine = r.fromSide === side;
   if (r.status === "pending" && r.startsAt < new Date()) await db.callRequest.update({ where: { id: r.id }, data: { status: "closed", closedReason: "its time passed" } });
   const fresh = await db.callRequest.findUniqueOrThrow({ where: { id: r.id } });
+  // (Batch 16 section 21) Answered or withdrawn in another tab: the developer's press stops once naming it, then it's already done.
+  if (fresh.status !== "pending" && side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`] }));
   if (fresh.status !== "pending") throw new HttpError(409, "gone", refusalFor(fresh, displayName(other), mine));
   if (action === "withdraw" ? !mine : mine) throw new HttpError(409, "not_yours", mine ? "You can't answer your own request: withdraw it instead." : "Only the person who asked can withdraw it.");
-  if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body));
+  if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`] }));
   else await testerGate(c.testerId, contractId, c.testId, body);
   if (action === "accept") {
     await refusals(c, side);
@@ -409,7 +441,7 @@ export async function cancelCallSet(user: U, contractId: string, body: Record<st
   if (!first.length) throw new HttpError(409, "cancelled", "The remaining calls of this set were already cancelled.");
   const ok = checkCancel(first[0].startsAt, now, reason);
   if (!ok.ok) throw new HttpError(400, "reason", ok.message);
-  if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body));
+  if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`set:${setId}`, `c:${contractId}`] }));
   else await testerGate(c.testerId, contractId, c.testId, body);
   const calls = await ahead();
   if (!calls.length) throw new HttpError(409, "cancelled", "The remaining calls of this set were already cancelled.");

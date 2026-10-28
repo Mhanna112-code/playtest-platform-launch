@@ -9,7 +9,9 @@ import { openDispute } from "@/lib/server/payments";
 import { reportKeyBroken } from "@/lib/server/accessKeys";
 import { db } from "@/lib/db";
 import { displayName, fmtDate } from "@/lib/format";
-import { PAUSE_DEFAULTS, PAUSED_SEND, testerPaused, testerRefusal } from "@/lib/rules";
+import { PAUSE_DEFAULTS, PAUSED_SEND, WORK_OVER_ACTIONS, testPaused, testerPaused, testerRefusal, workOver, workOverLine, workOverPress } from "@/lib/rules";
+import { markQuiet } from "@/lib/server/testerGate";
+import { requireUser } from "@/lib/server/session";
 import { leaveTest, sendWritten } from "@/lib/server/tests";
 import { requireActive, requireConfirmed } from "@/lib/server/users";
 
@@ -22,15 +24,22 @@ type Ctx = { params: Promise<{ id: string; action: string }> };
 
 /**
  * (Owner, Oct 26) When the test was stopped or the tester's work was ended while the page is open, every later press is a FINAL
- * refusal, blue under the button (not a stop-once): Send, any call action, Switch / Keep, Request. (Charge / Let it go, Dispute, Rate,
- * Report a problem, chat and Leave keep their own rules.)
+ * refusal (not a stop-once): Send, any call action, Switch / Keep, Request, uploads, "This key doesn't work". (Charge / Let it go, Dispute, Rate,
+ * Report a problem, chat and excerpts keep their own rules.) (Owner, Oct 28, batch 16 section 24) After a stop, a closure or an early end the refusal
+ * names the press ("Nora Lane stopped the test on Nov 3, so your Send didn't go through. Work you sent is still reviewed.") with the code
+ * "work_over": the page moves to its top, where the stopped line says the same. A leave, a rating or a block keep their own (neutral) line.
  */
-const FINAL_AFTER_END = new Set(["terms", "written", "recording-start", "recording-done", "recording-send", "recording-remove", "request-time", "answer-request", "cancel-call", "cancel-set", "key-broken"]);
-async function finalRefusal(userId: string, contractId: string, action: string) {
+const FINAL_AFTER_END = new Set<string>(WORK_OVER_ACTIONS);
+async function finalRefusal(userId: string, contractId: string, action: string, body: Record<string, unknown>) {
   if (!FINAL_AFTER_END.has(action)) return;
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== userId || c.status === "working") return;
-  const line = testerRefusal(c, { openUntil: null }, displayName(c.test.developer), fmtDate, new Date());
+  const dev = displayName(c.test.developer);
+  if (workOver(c)) {
+    const press = workOverPress(action, body);
+    throw new HttpError(409, "work_over", workOverLine(c, dev, fmtDate, press), { failed: press, top: true });
+  }
+  const line = testerRefusal(c, { openUntil: null }, dev, fmtDate, new Date());
   if (line) throw new HttpError(409, "gone", line);
 }
 
@@ -49,15 +58,46 @@ async function pausedRefusal(userId: string, contractId: string, action: string)
   if (SEND_ACTIONS.has(action) || !PAUSE_DEFAULTS.draftsEditable) throw new HttpError(409, "paused", PAUSED_SEND);
 }
 
+/**
+ * (Owner, Oct 28, batch 16 section 25) What still works in these states goes through on the FIRST press (no stop-once for anything; refusals unchanged):
+ * - the test stopped or closed, the tester's work ended early, a test they left or were removed from (incl. by a suspension of their tester side): Charge, Let it go,
+ *   Dispute, Rate, chat (excerpts have their own route, which never stops);
+ * - the test paused (any cause): drafts, Charge, Let it go, Dispute, Rate, Leave, Cancel call, chat.
+ * Rate keeps the DEFAULT exception (it stops once for a payment, Charge, Let it go or dispute about the work since the page loaded).
+ */
+const QUIET_WHEN_OVER = new Set(["choose", "dispute", "rate", "message"]);
+const QUIET_WHEN_PAUSED = new Set(["choose", "dispute", "rate", "leave", "cancel-call", "cancel-set", "message", "recording-start", "recording-done", "recording-remove"]);
+async function markQuietPress(userId: string, contractId: string, action: string, body: Record<string, unknown>) {
+  if (!QUIET_WHEN_OVER.has(action) && !QUIET_WHEN_PAUSED.has(action)) return;
+  const c = await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true, status: true, test: { select: { adminPausedAt: true, developer: { select: { devSuspendedAt: true, holdStartedAt: true } } } } } });
+  if (!c || c.testerId !== userId) return;
+  const quiet = (c.status !== "working" && QUIET_WHEN_OVER.has(action)) || (testPaused(c.test.developer, c.test) && QUIET_WHEN_PAUSED.has(action));
+  if (quiet) markQuiet(body, action === "rate" ? "rate" : "skip");
+}
+
+/**
+ * (Owner, Oct 28, batch 16 section 28) A suspended tester side: the tests they were removed from open in a limited view, where Dispute, Charge, Let it go and Rate still
+ * work (on the first press). Every other press stays refused while suspended (excerpt requests too, through their own route, until the suspension lifts).
+ */
+const LIMITED_ACTIONS = new Set(["choose", "dispute", "rate"]);
+async function limitedUser(req: Request, contractId: string, action: string) {
+  if (!LIMITED_ACTIONS.has(action)) return null;
+  const u = await requireUser(req);
+  if (!u.testerSuspendedAt) return null;
+  const c = await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true, endKind: true, status: true } });
+  return c && c.testerId === u.id && c.status !== "working" && c.endKind === "suspended" ? u : null;
+}
+
 // Tester actions on their own session (contract).
 export async function POST(req: Request, { params }: Ctx) {
   return handle(async () => {
     const { id, action } = await params;
-    const u = await requireActive(req);
+    const u = (await limitedUser(req, id, action)) ?? (await requireActive(req));
     const body = await readJson(req, 900_000); // (batch 14; batch 15) a written part of up to 50,000 characters, with the question set it answers (20 × 20,000)
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
-    await finalRefusal(u.id, id, action);
+    await finalRefusal(u.id, id, action, body);
     await pausedRefusal(u.id, id, action);
+    await markQuietPress(u.id, id, action, body);
     const res0 = await run(u, id, action, body);
     const data = await res0.clone().json().catch(() => null);
     // A rename the page hadn't shown: the press went ahead; the note goes under the button.

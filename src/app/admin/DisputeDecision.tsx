@@ -38,7 +38,7 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-sm" htmlFor={`total-${id}`}>Total pay for this piece</label>
         <span>$</span>
-        <input id={`total-${id}`} className="input w-28" inputMode="decimal" aria-label="Total pay for this piece ($)" data-min={String(minCents / 100)} data-max={String(maxCents / 100)}
+        <input id={`total-${id}`} className="input w-28" inputMode="decimal" data-money="" aria-label="Total pay for this piece ($)" data-min={String(minCents / 100)} data-max={String(maxCents / 100)}
           data-msg={`Enter an amount from ${dollars(minCents)} to ${dollars(maxCents)}, or leave it blank to keep the pay as it is.`} data-match="^(?!Keep it to)" value={total} onChange={(e) => setTotal(e.target.value)} />
         <span className="text-xs text-slate-500">{dollars(minCents)}-{dollars(maxCents)} · leave blank to keep it as it is</span>
       </div>

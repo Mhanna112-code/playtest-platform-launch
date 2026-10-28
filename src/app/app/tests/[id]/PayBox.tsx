@@ -21,15 +21,15 @@ export type PayRoom = { roomCents: number; aboveRoomCents: number; ceilingBinds:
  *     REASON_WHEN_UNDER_LISTING is on, below the listing.
  *   - Beside the amount, the room left: "up to $15.00 above the listing" / "up to $2,000.00 (max)" / "up to $X (what's left of the $1,000 for calls)". An amount above it
  *     is refused in red at the box as it's typed (and again on the server).
- *   - A call's box: Rate and Amount fill each other (rate × length; amount ÷ length × 60); the one typed last wins and the server recomputes the other. "Lower the length"
- *     (with a reason the tester reads) is under it until the call is paid.
+ *   - A call's box: Rate and Amount fill each other (rate × length; amount ÷ length × 60); the one typed last wins and the server recomputes the other. (Batch 16 section 26) No
+ *     "Lower the length": the box starts at the measured length × the rate; paying less needs the usual reason.
  *   - Every amount above $0 needs the tick that names it, and over $200 also "I confirm this payment is over $200." A changed amount unticks both.
  * After a piece is paid, the tester row keeps the same box as "Pay more" (`more`: no rate, the amount starts empty) until its cap is reached.
  * (Batch 16 section 10) Each mistake is red at its box (the server's line goes to the box whose data-match fits it) and listed under the button.
  */
 export function PayBox(p: {
   kind: "submission" | "call"; id: string; name: string; listingCents: number | null; listingText: string; paidSoFarCents: number; seenAt: string; note?: string; owes?: boolean;
-  minutes?: number; rateCents?: number | null; room?: PayRoom; more?: { testId: string; contractId: string }; lower?: { testId: string }; warning?: string;
+  minutes?: number; rateCents?: number | null; room?: PayRoom; more?: { testId: string; contractId: string }; warning?: string;
 }) {
   const listed = p.listingCents != null;
   const more = p.more;
@@ -109,13 +109,13 @@ export function PayBox(p: {
         {isCall && (
           <div>
             <label className="label" htmlFor={`rate-${p.id}`}>Rate ($/h)</label>
-            <input id={`rate-${p.id}`} className="input w-24" inputMode="decimal" data-rate="" data-match="rate like|at most .200 an hour" value={rate} onChange={(e) => typeRate(e.target.value)} placeholder={listed ? "" : `up to ${money(NO_LISTING_CALL_RATE_CAP_CENTS).replace(/\.00$/, "")}`} />
+            <input id={`rate-${p.id}`} className="input w-24" inputMode="decimal" data-money="" data-rate="" data-match="rate like|at most .200 an hour" value={rate} onChange={(e) => typeRate(e.target.value)} placeholder={listed ? "" : `up to ${money(NO_LISTING_CALL_RATE_CAP_CENTS).replace(/\.00$/, "")}`} />
             <span className="ml-1 text-xs text-slate-500">× {minutes} min</span>
           </div>
         )}
         <div>
           <label className="label req" htmlFor={`amt-${p.id}`}>Amount ($)</label>
-          <input id={`amt-${p.id}`} className="input w-32" inputMode="decimal" data-amount="" data-min="0.5" data-max="999999.99" data-zero-ok="" data-msg="Enter an amount like 7.50." data-min-msg={`The smallest card charge is ${money(MIN_CHARGE_CENTS)}: pay $0.00 or at least ${money(MIN_CHARGE_CENTS)}.`} data-max-msg={STRIPE_MAX_LINE}
+          <input id={`amt-${p.id}`} className="input w-32" inputMode="decimal" data-money="" data-amount="" data-min="0.5" data-max="999999.99" data-zero-ok="" data-msg="Enter an amount like 7.50." data-min-msg={`The smallest card charge is ${money(MIN_CHARGE_CENTS)}: pay $0.00 or at least ${money(MIN_CHARGE_CENTS)}.`} data-max-msg={STRIPE_MAX_LINE}
             data-match="amount like|smallest card charge|Stripe can't|more than you can pay|most you can pay at once|extra would be" data-red-msg={overText || undefined} value={amount} onChange={(e) => typeAmount(e.target.value)} placeholder="0.00" />
         </div>
         {roomText && <span className="pb-2 text-sm text-slate-400" data-pay-room="">{roomText}</span>}
@@ -150,34 +150,6 @@ export function PayBox(p: {
       {p.note && <p className="note">{p.note}</p>}
       {error === "Pay what you owe first." && <a className="text-sm" href="#owed">Pay what you owe ↑</a>}
       {done && <p className="ok">{done}</p>}
-      {isCall && p.lower && minutes > 1 && <LowerLength testId={p.lower.testId} callId={p.id} minutes={minutes} name={p.name} seenAt={p.seenAt} />}
     </div>
-  );
-}
-
-/** (Batch 15 section 40) "Lower the length": the developer can only lower a call's measured length, with a reason the tester reads. Never raise it. */
-function LowerLength({ testId, callId, minutes, name, seenAt }: { testId: string; callId: string; minutes: number; name: string; seenAt: string }) {
-  const [v, setV] = useState("");
-  const [why, setWhy] = useState("");
-  const { press, changes, error, busy, at } = usePress(seenAt);
-  const n = Number(v);
-  // (Batch 16 section 10) The same lines as the server's (checkLower).
-  const badLine = v.trim() === "" ? "" : !Number.isInteger(n) || n < 1 ? "Enter the length in whole minutes." : n >= minutes ? `You can only lower the length: below ${minutes} min.` : "";
-  const bad = !!badLine;
-  return (
-    <details className="rounded-lg border border-white/10 p-2 text-sm" data-lower-length="" data-mistakes-root="">
-      <summary className="fold-chevron cursor-pointer text-slate-300">Lower the length</summary>
-      <div className="mt-2 space-y-2">
-        <p className="note">You can only lower it (below {minutes} min), and {name} reads your reason. {name} can dispute the amount once.</p>
-        <label className="inline-flex items-center gap-1">New length <input id={`lower-min-${callId}`} className="input w-20" inputMode="numeric" data-match="length in whole minutes|only lower the length" data-red-msg={badLine || undefined} value={v} onChange={(e) => setV(e.target.value)} aria-label="New length in minutes" /> min</label>
-        {bad && <p className="err-field">{badLine}</p>}
-        <label className="label req" htmlFor={`lower-why-${callId}`}>Why (the tester reads it)</label>
-        <textarea id={`lower-why-${callId}`} className="input" rows={2} data-min-chars="5" data-msg="Say why you're lowering the length (the tester reads it)." data-match="why you're lowering" value={why} onChange={(e) => setWhy(e.target.value)} />
-        <p className={`text-xs ${why.length > LIMITS.reason ? "text-rose-300" : "text-slate-500"}`}>{why.length.toLocaleString("en-US")} / {LIMITS.reason.toLocaleString("en-US")}</p>
-        <button className="btn-secondary" disabled={busy || !v.trim() || bad || why.trim().length < 5 || why.length > LIMITS.reason} onClick={async () => { if (await press(`/api/tests/${testId}/lower-length`, { callId, minutes: n, reason: why }, "lower")) window.location.reload(); }}>Lower the length</button>
-        {at === "lower" && <ChangesBox changes={changes} error={error.startsWith(FIELD) ? "" : error} />}
-        <FormMistakes text={at === "lower" && error.startsWith(FIELD) ? error : ""} press="Lower the length" />
-      </div>
-    </details>
   );
 }

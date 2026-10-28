@@ -105,7 +105,9 @@ async function paidLater(contractId: string) {
 }
 
 describe("batch 7 item 4: stop-once on every press still allowed", () => {
-  it("developer, stopped test: Pay, Pay more, Lower the length and Rate stop once; the side of a dispute never stops", async () => {
+  // (Owner, Oct 28, batch 16 sections 25 and 26) Reversed: on a stopped test Pay, Pay more and the side of a dispute go through on the FIRST press; Rate stops once
+  // only for a payment, Charge, Let it go or dispute decision about that person; there's no Lower the length any more.
+  it("developer, stopped test: Pay, Pay more and the side of a dispute go through at once; Rate stops once for a payment about that person", async () => {
     const { dev, testId } = await setup({ recordingCents: "5.00" });
     const a = await joined(testId);
     const b = await joined(testId, "Ben Carter", "he");
@@ -122,31 +124,34 @@ describe("batch 7 item 4: stop-once on every press still allowed", () => {
     await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
     const loaded = seen();
     await settle();
-    await db.testEvent.create({ data: { testId, kind: "paid", text: "Ben Carter charged $1.00 for their recording" } });
-    stops(await pay(dev.cookie, { kind: "submission", id: subA.id, amount: "10.00", tickedCents: 1000, seenAt: loaded }), "pay");
-    stops(await act(testId, "pay-extra", dev.cookie, { contractId: b.sessionId, submissionId: subB.id, amount: "2.00", tickedCents: 200, seenAt: loaded }), "extra pay");
-    stops(await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 25, reason: "We stopped early.", seenAt: loaded }), "lower the length");
+    await db.testEvent.create({ data: { testId, kind: "paid", text: "Ben Carter charged $1.00 for their recording", contractId: b.sessionId } });
+    expect((await pay(dev.cookie, { kind: "submission", id: subA.id, amount: "10.00", tickedCents: 1000, seenAt: loaded, confirmed: false })).status).toBe(200);
+    expect((await act(testId, "pay-extra", dev.cookie, { contractId: b.sessionId, submissionId: subB.id, amount: "2.00", tickedCents: 200, seenAt: loaded })).status).toBe(200);
+    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 25, reason: "We stopped early.", seenAt: loaded })).status).toBe(404);
     // (Batch 15 section 27) The side of a dispute never stops.
     expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "They skipped two answers", seenAt: loaded })).status).toBe(200);
+    // Rate Ana: the payment about Ben doesn't stop it; a payment about Ana does (Pay above was about Ana, from this tab: not news), so add one.
+    await db.testEvent.create({ data: { testId, kind: "paid", text: "Ana Silva charged $1.00 for their recording", contractId: a.sessionId } });
     stops(await act(testId, "rate", dev.cookie, { contractId: a.sessionId, stars: 4, seenAt: loaded }), "rate");
   });
 
-  it("developer, restricted: Cancel call from the dashboard's Calls box returns the changes, then goes through", async () => {
+  it("developer, restricted: Cancel call from the dashboard's Calls box goes through on the first press (batch 16 section 25)", async () => {
     const { dev, testId } = await setup();
     const a = await joined(testId);
     const call = await bookCall(testId, dev.cookie, a.sessionId, a.tester.cookie, 24 * 6);
     await startHold(dev.user.id, "unpaid");
+    await settle();
     const loaded = seen();
     await settle();
     await db.testEvent.create({ data: { testId, kind: "left", text: "Ben Carter left the test" } });
-    const r = await act(testId, "cancel-call", dev.cookie, { callId: call.id, seenAt: loaded });
-    stops(r, "cancel call");
-    expect((await act(testId, "cancel-call", dev.cookie, { callId: call.id, seenAt: loaded, confirmed: true })).status).toBe(200);
+    expect((await act(testId, "cancel-call", dev.cookie, { callId: call.id, seenAt: loaded })).status).toBe(200);
     expect(src("app/app/CallsBox.tsx")).toContain("<ChangesBox changes={changes} error={error} />");
   });
 
   for (const state of ["stopped", "paused"] as const) {
-    it(`tester, ${state} test: Charge, Let it go, Dispute, Rate${state === "paused" ? ", Leave and Cancel call" : ""} stop once`, async () => {
+    // (Owner, Oct 28, batch 16 section 25) Reversed: in these states what still works goes through on the FIRST press; only Rate keeps its exception (a payment
+    // about the work arrived since the page loaded). Refusals are unchanged.
+    it(`tester, ${state} test: Charge, Dispute${state === "paused" ? " and Cancel call" : ""} go through on the first press; Rate stops once for the new payment`, async () => {
       const { dev, testId } = await setup({ recordingCents: "5.00" });
       const { tester, sessionId } = await joined(testId);
       await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -159,13 +164,16 @@ describe("batch 7 item 4: stop-once on every press still allowed", () => {
       await settle();
       const rec = await paidLater(sessionId);
       const press = (action: string, body: Record<string, unknown>) => sact(sessionId, action, tester.cookie, { seenAt: loaded, ...body });
-      stops(await press("choose", { submissionId: sub.id, choice: "charge", tickedCents: 1000 }), "charge");
-      stops(await press("choose", { submissionId: sub.id, choice: "letgo" }), "let it go");
-      stops(await press("dispute", { kind: "submission", id: rec.id, reason: "I recorded the whole session" }), "dispute");
-      stops(await press("rate", { stars: 4 }), "rate");
+      stops(await press("rate", { stars: 4 }), "rate"); // the DEFAULT exception: a payment about the work arrived since the page loaded
+      const charged = await press("choose", { submissionId: sub.id, choice: "charge", tickedCents: 1000 });
+      expect(charged.status, JSON.stringify(charged.body)).toBe(200);
+      expect((await press("choose", { submissionId: sub.id, choice: "letgo" })).body.error.message).toBe("You already chose for this."); // refusals unchanged
+      const disputed = await press("dispute", { kind: "submission", id: rec.id, reason: "I recorded the whole session" });
+      expect(disputed.status, JSON.stringify(disputed.body)).toBe(200);
       if (call) {
         // (Batch 15 section 25) Leave never stops: it goes through on the first press (checked last, below).
-        stops(await press("cancel-call", { callId: call.id }), "cancel call");
+        const cancelled = await press("cancel-call", { callId: call.id, reason: "Something came up at work." });
+        expect(cancelled.status, JSON.stringify(cancelled.body)).toBe(200);
       }
     });
   }

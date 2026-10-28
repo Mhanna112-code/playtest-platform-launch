@@ -6,7 +6,7 @@ import { act, bookCall, joined, setup } from "./fixtures";
 // (Owner, Oct 23, NEWEST+8) Nobody joined by the halfway point -> auto-cancelled (no charge, never a no-show, both told). (Batch 15 section 40) The length is measured
 // (up to 150% of the booked length); the developer can only lower it, with a reason.
 describe("call rules", () => {
-  it("the measured length is capped at 150% of the booked length; it can only be lowered", async () => {
+  it("the measured length is capped at 150% of the booked length (batch 16 section 26: it can't be lowered)", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 48);
@@ -18,8 +18,7 @@ describe("call rules", () => {
     ] });
     await sweepNobodyJoined();
     expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).measuredMinutes).toBe(45);
-    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 46, reason: "It ran long" })).body.error.message).toBe("You can only lower the length: below 45 min.");
-    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 40, reason: "We chatted after.", seenAt: new Date().toISOString(), confirmed: true })).status).toBe(200);
+    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 40, reason: "We chatted after.", seenAt: new Date().toISOString(), confirmed: true })).status).toBe(404);
   });
 
   it("nobody joined by the halfway point: cancelled, no charge, never a no-show, both told; one side joined: left alone", async () => {
@@ -115,13 +114,14 @@ describe("Add to calendar (.ics)", () => {
 });
 
 describe("the measured length, as both sides read it (batch 15 section 40)", () => {
-  it("a lowered length keeps its reason (the tester reads it); the line names the time both were in the call", async () => {
+  it("an old lowered length stays as recorded, with its reason (batch 16 section 26: nothing new can be lowered)", async () => {
     const { callLengthLine } = await import("@/lib/callMeasure");
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 1);
     await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 60 * 60_000), measuredMinutes: 30, measuredAt: new Date(), measuredFrom: new Date(Date.now() - 60 * 60_000), measuredTo: new Date(Date.now() - 30 * 60_000) } });
-    expect((await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 20, reason: "We finished early.", seenAt: new Date().toISOString(), confirmed: true })).status).toBe(200);
+    // A length lowered before batch 16 (recorded directly): it keeps its line and reason.
+    await db.call.update({ where: { id: call.id }, data: { actualMinutes: 20, lengthNote: "We finished early." } });
     const c = await db.call.findUniqueOrThrow({ where: { id: call.id } });
     expect([c.actualMinutes, c.lengthNote]).toEqual([20, "We finished early."]);
     expect(callLengthLine(c, () => "2:00 PM")).toBe("Length: 20 min (lowered from 30 min; both in the call 2:00–2:00 PM)");

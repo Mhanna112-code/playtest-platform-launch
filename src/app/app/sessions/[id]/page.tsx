@@ -1,9 +1,9 @@
-import { notFound } from "next/navigation";
-import { devDeletedLine, REVIEW_DAYS, NOT_LISTED, byTesterChoice, PAUSE_DEFAULTS, chargedDelayedLine, disputeLimitText, testerPaused } from "@/lib/rules";
+import { notFound, redirect } from "next/navigation";
+import { LET_GO_BY_TESTER, chargedByTester, LIMITED_VIEW_LINE, WORK_OVER_PRESSES, stillWorksLine, workOver, devDeletedLine, NOT_LISTED, byTesterChoice, PAUSE_DEFAULTS, chargedDelayedLine, disputeLimitText, testerPaused } from "@/lib/rules";
 import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, MessagesSquare, Users, XCircle } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
-import { callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, callReference, cancelNeedsReason, canDispute, closesInLine, DELAYED_CALL_LINE, isLate, pausedForTesters, callListed, lateLabel, termsLine, testPaused, testerShare, canAskToRejoin, leftText, paidZeroLine } from "@/lib/rules";
+import { callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, closesInLine, DELAYED_CALL_LINE, isLate, pausedForTesters, callListed, lateLabel, termsLine, testPaused, testerShare, canAskToRejoin, leftText, paidZeroLine } from "@/lib/rules";
 import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, callsLeftWarning, MEASURING_LINE } from "@/lib/callMeasure";
 import { callsLeftCents } from "@/lib/server/callMoney";
 import { callChargeCap, callChoiceLine } from "@/lib/server/holds";
@@ -11,7 +11,7 @@ import { fmtTime } from "@/lib/format";
 import { renderTimes } from "@/lib/tz";
 import { ReasonQuote } from "@/components/ScrollText";
 import { TesterAlertsToggle } from "@/components/TesterAlertsToggle";
-import { requireOpenPage } from "@/lib/server/page-auth";
+import { requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { roomUrl } from "@/lib/server/calls";
 import { paidLines } from "@/lib/server/paid";
@@ -38,6 +38,7 @@ import { KeyBox } from "./KeyBox";
 import { WrittenAttachments } from "./WrittenAttachments";
 import { Formatted } from "@/components/Formatted";
 import { AttachmentList } from "@/components/AttachmentList";
+import { PageLoaded } from "@/components/PageLoaded";
 import { NdaBox } from "@/components/NdaBox";
 import { PlusMore } from "@/components/PlusMore";
 import { QuestionList } from "@/components/QuestionList";
@@ -56,10 +57,11 @@ const partLine = (listing: number | null, paid: number) =>
   `${listing == null ? NOT_LISTED : `Listing: ${money(listing)}`} · Paid so far for this part: ${money(paid)} (you get 80%)`;
 const TONE = { grey: "", amber: "border-amber-300/40 text-amber-200", green: "border-emerald-400/40 text-emerald-200", rose: "border-rose-400/40 text-rose-200" } as const;
 
-export default async function SessionPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function SessionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?: Promise<{ failed?: string }> }) {
   await (await import("@/lib/server/calls")).sweepNobodyJoined();
   const { id } = await params;
-  const u = await requireOpenPage("/app/sessions"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
+  // (Owner, Oct 28) Closed to a restricted account (it moves to the dashboard top), except (batch 16 section 28) the limited view of a test a suspended tester was removed from.
+  const u = await requirePageUser();
   await (await import("@/lib/server/recovery")).checkStuck({ contractId: id }); // (batch 15 section 9) payments stuck "in progress"
   const c = await db.contract.findUnique({
     where: { id },
@@ -71,11 +73,20 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
     },
   });
   if (!c || c.testerId !== u.id) notFound();
+  // (Batch 16 section 28) A suspended tester side opens only the tests they were removed from, in a limited view: their parts, what each was paid, the work sent,
+  // and Dispute, Charge, Let it go and Rate. Everything else (sending, drafts, calls, chat, the key box, Leave, excerpt requests) stays hidden.
+  const limited = !!u.testerSuspendedAt && c.status !== "working" && c.endKind === "suspended";
+  if (u.testerSuspendedAt && !limited) redirect("/app");
   const dev = displayName(c.test.developer);
   // (Batch 12 section 1) A developer who deleted their account.
   const devGone = !!c.test.developer.deletedAt;
   const devRealName = displayName({ ...c.test.developer, deletedAt: null });
   const refusal = sessionRefusal(c, c.test, dev);
+  // (Owner, Oct 28, batch 16 section 24) The test stopped (the developer or the team), closed, or this tester's work was ended early: the work is over. What's gone
+  // (the offer, Send, uploads, the call tools, the key box, Leave) is hidden; a press of it from an old page comes back here, at the top, named in the stopped line.
+  const over = workOver(c);
+  const failedAsked = (await searchParams)?.failed ?? "";
+  const failedPress = over && (WORK_OVER_PRESSES as readonly string[]).includes(failedAsked) ? failedAsked : "";
   const written = c.submissions.find((s) => s.kind === "written");
   const recording = c.submissions.find((s) => s.kind === "recording");
   // (Owner, Oct 29, batch 13 section 8) The written part as SETS: what was last sent (under the questions it answered), the form's current questions with carried-over
@@ -127,6 +138,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const rulesPaused = testerPaused(c.test.developer, c.test);
   const draftsShown = !rulesPaused || PAUSE_DEFAULTS.draftsEditable;
   const meOff = !!u.testerSuspendedAt;
+  // What a suspended tester can still press in the limited view (section 28): Dispute, Charge, Let it go, Rate.
+  const canAct = !meOff || limited;
   // (Owner, Oct 28 afternoon) Calls can be requested whether or not a live call is a listed part (one that isn't says so: its pay is up to the developer).
   const canRequestCall = !refusal && !blockedPair && !paused;
   const listedCall = callListed(c.test, c);
@@ -155,7 +168,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const infoChanged = (await db.testEvent.count({ where: { testId: c.testId, kind: "info", createdAt: { gt: c.joinedAt } } })) > 0;
   // (NEXT-UI 7) The calls, and the booked daily / weekly sets as one line each ("Weekly · Mon 3:00 PM (3 left)").
   // (Batch 15 section 42) The Live session: only calls ahead and calls in progress ("Call in progress / measuring" once started).
-  const mineCalls = c.calls.filter((x) => x.status === "booked" && !callIsOver(x) && !blockedPair).map((x) => ({ id: x.id, setId: x.setId, joinable: !paused && callJoinable(x, now), when: x.startsAt.toISOString(), minutes: x.minutes, room: roomUrl(x, x.slot), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, ended: false, report: x.noShowBy ? { byMe: x.noShowBy === "tester", note: x.noShowNote } : null, lengthText: x.startsAt <= now ? MEASURING_LINE : "", reported: !!x.noShowBy, cancelled: cancelledText(x), rate: rateLabel(x.rateCents, c.liveRateCents), late: isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined }));
+  const mineCalls = c.calls.filter((x) => x.status === "booked" && !callIsOver(x) && !blockedPair).map((x) => ({ id: x.id, setId: x.setId, joinable: !paused && !refusal && callJoinable(x, now), when: x.startsAt.toISOString(), minutes: x.minutes, room: roomUrl(x, x.slot), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, ended: false, report: x.noShowBy ? { byMe: x.noShowBy === "tester", note: x.noShowNote } : null, lengthText: x.startsAt <= now ? MEASURING_LINE : "", reported: !!x.noShowBy, cancelled: cancelledText(x), rate: rateLabel(x.rateCents, c.liveRateCents), late: isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined }));
   const callSets = await db.callSet.findMany({ where: { contractId: c.id } });
   const mineSets = [...new Set(c.calls.filter((x) => x.setId && x.status === "booked" && !x.review).map((x) => x.setId!))].flatMap((sid) => {
     const cs = c.calls.filter((x) => x.setId === sid && x.status === "booked" && !x.review).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
@@ -168,8 +181,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   });
   // (Owner, Oct 29, batch 10) A paused test hides what doesn't work right now (Send, the call-request tools, Join call, chat's message box) and says at the top what still
   // works, built from what is actually on the page (the server refusals stay as a backstop).
-  const choiceOpen = (sub: typeof written) => !!(sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && !meOff && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0);
-  const disputable = (r: { amountCents: number; agreedCents: number | null; reason: string } | null | undefined, d: unknown) => !!r && !meOff && canDispute(r.amountCents, r.agreedCents, !!d, byTesterChoice(r.reason)).ok;
+  const choiceOpen = (sub: typeof written) => !!(sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && canAct && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0);
+  const disputable = (r: { amountCents: number; agreedCents: number | null; reason: string } | null | undefined, d: unknown) => !!r && canAct && canDispute(r.amountCents, r.agreedCents, !!d, byTesterChoice(r.reason)).ok;
   const unpaidPart = !written?.review || !recording?.review;
   const pausedBanner = rulesPaused ? pausedForTesters({
     drafts: draftsShown && !refusal && !meOff && unpaidPart,
@@ -183,11 +196,21 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
 
     deadline: c.status === "working", // (batch 11) a working tester's deadline moves with the pause
   }) : "";
+  // (Batch 16 section 24) What still works once the work is over, built from what is actually on the page (as the paused banner does).
+  const stillWorks = {
+    charge: !meOff && !devGone && ([written, recording].some((x) => !!x && !x.review && (x.agreedCents ?? 0) > 0 && chargeAmount(x.agreedCents, partPaid.get(x.id) ?? 0) > 0) || c.calls.some((x) => !x.review && x.status === "booked" && callMinutesOf(x) != null && callListed(c.test, c))),
+    dispute: [written, recording].some((x) => x && !chargedOwed.has(x.id) && !delayedSubs.has(x.id) && disputable(x.review, x.dispute)) || c.calls.some((x) => !owedCalls.has(x.id) && disputable(x.review, x.dispute)),
+    rate: rateBlock === "" && !meOff,
+    excerpt: excerptPicks.length > 0,
+    chat: !meOff && !blockedPair,
+  };
   // The full app's session page: one centred column; the header card (title, by, badges, Chat, Open the product), then a
   // card per part.
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <AutoRefresh query={`session=${c.id}`} />
+      {/* (Batch 16 section 38B) Call changes stop a press once even after a refresh showed them: counted from when the page first loaded here. */}
+      <PageLoaded at={seenAt} />
       {/* (Design doc 8, owner Oct 26) The top, in this order: the test name, the access-key box, the live updates box (every change except the
           contract's), and right below it the Switch / Keep offer box. */}
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -196,7 +219,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           <h1 className="text-2xl font-bold tracking-tight text-white">{c.title}</h1>
         </div>
         {/* (Batch 15 section 26) The tester's one-press Alerts, at the top right. */}
-        {!meOff && <TesterAlertsToggle off={u.testerAlertsOff} />}
+        {/* (Batch 16 section 24) After the work is over, only while something left on the page can still stop (Charge / Let it go, Dispute, Rate). */}
+        {!meOff && (!over || stillWorks.charge || stillWorks.dispute || stillWorks.rate) && <TesterAlertsToggle off={u.testerAlertsOff} />}
       </div>
       {pausedBanner && <p className="info" data-paused="">{pausedBanner}</p>}
       {key && <KeyBox canReport={!meOff} sessionId={c.id} seenAt={seenAt} value={key.value} broken={key.status === "broken"} fresh={!!freshKey} fixed={!!key.fixedAt} />}
@@ -205,7 +229,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         id: offer.id, diff: offer.diff, ndaText: offer.ndaText, fromNdaText: c.ndaText, questions: ((offer.questions as string[]) ?? []).map(qText), fromQuestions: ((c.questions as string[]) ?? []).map(qText),
         answers: sentItems.map((x) => x.answer),
       } : null} />
-      {refusal && <div className="info space-y-1"><p>{refusal}</p>
+      {limited && <p className="info" data-limited-view="">{LIMITED_VIEW_LINE}</p>}
+      {refusal && !limited && <div className="info space-y-1" id="stopped-line" data-stopped-line="" {...(failedPress ? { "data-work-over-failed": failedPress } : {})}><p>{over ? stillWorksLine(c, dev, fmtDate, stillWorks, failedPress) : refusal}</p>
         {/* (Batch 15 sections 20 and 22) The developer's End early reason, in italics, scrolling when long (never in the bell line). */}
         {c.status === "ended" && c.endKind === "early" && c.endReason && <ReasonQuote text={c.endReason} />}
       </div>}
@@ -262,11 +287,10 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
 
       </section>
 
-      {c.test.status === "stopped" && <p className="note" data-stopped-line="">This test is stopped. You can still charge or let go of unreviewed work after {REVIEW_DAYS} days, dispute a decision, rate the developer, and chat.</p>}
       {myRating && !rated.testerRevealed && <p className="note">You rated {dev}.</p>}
       {myRating && rated.testerRevealed && <p className="note">You rated {dev}: {myRating.stars} ★{myRating.comment ? ` · “${myRating.comment}”` : ""}</p>}
       {rated.developer && <p className="note">{dev} rated you: {rated.developer.stars} ★{rated.developer.comment ? ` · “${rated.developer.comment}”` : ""}</p>}
-      {rateBlock === "" && !meOff && (
+      {rateBlock === "" && canAct && (
         <RateBox
           path={`/api/sessions/${c.id}/rate`}
           seenAt={seenAt}
@@ -345,12 +369,12 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
               </p>
               <p className="text-slate-400">{cents == null ? NOT_LISTED : `In your contract · ${cents === 0 ? "free" : `${money(testerShare(cents))} for you`}`}{` · Paid so far ${money(sub ? partPaid.get(sub.id) ?? 0 : 0)}`}</p>
               {sub && <p className="text-xs text-slate-500">{partLine(sub.agreedCents, partPaid.get(sub.id) ?? 0)}</p>}
-              {sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && !meOff && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0 && (
+              {sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && canAct && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0 && (
                 <ChoiceBox paused={rulesPaused} seenAt={seenAt} sessionId={c.id} submissionId={sub.id} devName={dev} cents={chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0)} line={choiceLine(dev, key, chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0))} />
               )}
               {/* (Batch 12 section 1) The developer deleted their account before Charge opened: this part can't be paid. */}
               {sub && !sub.review && !sub.choiceOfferedAt && devGone && <p className="info" data-dev-deleted="">{devDeletedLine(devRealName)}</p>}
-              {sub && chargedOwed.has(sub.id) ? <p className="info" data-charged-delayed="">{chargedDelayedLine(chargedOwed.get(sub.id)!)}</p> : sub && delayedSubs.has(sub.id) ? <p className="info">Payment for this part may be delayed.</p> : sub?.review && <TesterReview dev={dev} extras={extraRows.filter((p) => p.submissionId === sub.id)} off={meOff} delayed={disputeOwed.has(sub.id)} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} />}
+              {sub && chargedOwed.has(sub.id) ? <p className="info" data-charged-delayed="">{chargedDelayedLine(chargedOwed.get(sub.id)!)}</p> : sub && delayedSubs.has(sub.id) ? <p className="info">Payment for this part may be delayed.</p> : sub?.review && <TesterReview dev={dev} extras={extraRows.filter((p) => p.submissionId === sub.id)} off={meOff && !limited} delayed={disputeOwed.has(sub.id)} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} />}
             </li>
           ))}
           <li id="part-live" data-part="live" className="scroll-mt-24 space-y-1.5 rounded-xl border border-white/[0.08] p-3 text-sm">
@@ -364,21 +388,20 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             {callsWarning && <p className="text-xs text-amber-200" data-calls-warning="">{callsWarning}</p>}
             {c.calls.filter((x) => !x.review && x.status === "booked" && callMinutesOf(x) != null).map((x) => devGone ? <p key={x.id} className="info" data-dev-deleted="">Live call on {fmtDateTime(x.startsAt)}: {devDeletedLine(devRealName)}</p> : (
               <div key={x.id} className="space-y-1">
-                <p className="info">
-                  Live call on {fmtDateTime(x.startsAt)}: waiting for {dev} to pay. {partLine(callReference(x.rateCents, callMinutesOf(x)!).cents, partPaid.get(x.id) ?? 0)}{failedCalls.has(x.id) && ` ${DELAYED_CALL_LINE}`}
-                </p>
-                <p className="text-xs text-slate-400" data-call-length="">{callLengthLine(x, fmtTime)}</p>
+                {/* (Owner, Oct 28, batch 16 section 40) One short grey line per call (the part line above has the rate and what's paid so far); blue only for a real notice. */}
+                <p className="text-xs text-slate-400" data-call-row="" data-call-length="">{fmtDateTime(x.startsAt)} · {callMinutesOf(x)} min · waiting for {dev} to pay</p>
+                {failedCalls.has(x.id) && <p className="info">{DELAYED_CALL_LINE}</p>}
                 {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
                 {/* (Batch 15 section 15) A listed call left unpaid past its review date: Charge or Let it go, as a sent part. */}
-                {x.choiceOfferedAt && !meOff && (callCaps.get(x.id)?.cents ?? 0) > 0 && (
+                {x.choiceOfferedAt && canAct && (callCaps.get(x.id)?.cents ?? 0) > 0 && (
                   <ChoiceBox paused={rulesPaused} seenAt={seenAt} sessionId={c.id} callId={x.id} devName={dev} cents={callCaps.get(x.id)!.cents} line={renderTimes(callChoiceLine(dev, x.startsAt, callCaps.get(x.id)!.cents, callCaps.get(x.id)!.capped), u.timeZone)} />
                 )}
               </div>
             ))}
             {c.calls.filter((x) => x.review).map((x) => (
               <div key={x.id} className="space-y-2">
-                <p className="text-slate-300">Live call on {fmtDateTime(x.startsAt)} · <span className="text-xs text-slate-400">{callLengthLine(x, fmtTime)}</span></p>
-                {owedCalls.has(x.id) ? <p className="info">{DELAYED_CALL_LINE}</p> : <TesterReview dev={dev} extras={extraRows.filter((p) => p.callId === x.id)} off={meOff} delayed={disputeOwed.has(x.id)} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} />}
+                <p className="text-xs text-slate-400" data-call-row="">{fmtDateTime(x.startsAt)} · {callMinutesOf(x) ?? x.minutes} min · {callOutcome(x.review!)}</p>
+                {owedCalls.has(x.id) ? <p className="info">{DELAYED_CALL_LINE}</p> : <TesterReview dev={dev} extras={extraRows.filter((p) => p.callId === x.id)} off={meOff && !limited} delayed={disputeOwed.has(x.id)} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} />}
               </div>
             ))}
           </li>
@@ -386,7 +409,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       </section>
 
       {/* The full app's ONE Live session panel: the rate, Booked, Past calls and Requests (calls are always requests). */}
-      {(c.calls.length > 0 || canRequestCall || pendingReqs.length > 0) && (
+      {!limited && (c.calls.length > 0 || canRequestCall || pendingReqs.length > 0) && (
         <LivePanel minutes={c.calls.filter((x) => x.status === "booked" && x.startsAt > now).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())[0]?.minutes ?? null}>
           {termLine("Live call", c.liveRateCents, c.liveRequired, true, liveCalls.reduce((a, x) => a + (partPaid.get(x.id) ?? 0), 0))}
           {!listedCall && c.liveRateCents != null && <p className="note" data-unlisted-call="">New calls: {NOT_LISTED}</p>}
@@ -401,7 +424,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             noReport={meOff}
             lateNote={now > c.dueAt ? `Your deadline was ${fmtDate(c.dueAt).replace(/, \d{4}$/, "")} (a guide, not a limit): a call you book now reads “${bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, ""))}”.` : undefined}
           />
-          {(canRequestCall || (pendingReqs.length > 0 && !paused)) && (
+          {(canRequestCall || (pendingReqs.length > 0 && !paused && !refusal)) && (
             <section className="space-y-1.5" aria-label="Call requests" data-live-section="Requests">
               <h3 className="text-sm font-semibold text-white">Requests</h3>
               <CallRequests
@@ -411,6 +434,16 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
                 canRequest={canRequestCall}
                 targets={[{ contractId: c.id, name: dev, rate: "" }]}
                 requests={pendingReqs.map((r) => ({ id: r.id, minutes: r.minutes, rows: toJson(rowsOf(r)), mine: r.fromSide === "tester", who: dev, contractId: c.id, rate: rateLabel(listedCall ? c.liveRateCents : null, c.liveRateCents) }))}
+                // (Batch 16 section 33) The clash checks while the form is filled: the calls between you, your other calls, and the limits.
+                clash={{
+                  calls: liveCalls.filter((x) => x.startsAt > new Date(now.getTime() - 6 * 3_600_000)).map((x) => ({ start: x.startsAt.toISOString(), minutes: x.minutes })),
+                  elsewhere: (await db.call.findMany({ where: { status: "booked", startsAt: { gt: new Date(now.getTime() - 6 * 3_600_000) }, contract: { testerId: u.id, id: { not: c.id } } }, include: { contract: { include: { test: { include: { developer: true } } } } } }))
+                    .map((x) => ({ start: x.startsAt.toISOString(), minutes: x.minutes, name: displayName(x.contract.test.developer) })),
+                  pending: pendingReqs.length,
+                  booked: new Set(liveCalls.filter((x) => x.startsAt > now).map((x) => x.setId ?? x.id)).size,
+                  leftCents: await callsLeftCents(c.id),
+                  rateCents: listedCall ? c.liveRateCents : null,
+                }}
               />
             </section>
           )}
@@ -496,6 +529,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
 }
 
 type Rev = { amountCents: number; agreedCents: number | null; rejected: boolean; reason: string; createdAt: Date; rateCents?: number | null };
+/** (Batch 16 section 40) A reviewed call's word on its grey line: "paid $X", "charged", "let go" (an older rejection: "rejected"). */
+const callOutcome = (r: Rev) => (r.rejected ? "rejected" : r.reason === LET_GO_BY_TESTER ? "let go" : chargedByTester(r.reason) ? "charged" : `paid ${money(r.amountCents)}`);
 type Disp = { status: string; decidedCents: number | null; decisionNote: string; devSide: string } | null;
 
 /** What the developer did with a piece, as the tester reads it (they see what they get; never holds or chargebacks). */

@@ -1,4 +1,4 @@
-import { seenNow } from "./live";
+import { boxSeenAt, pageLoadedAt, seenNow } from "./live";
 import { pressLabelOf } from "./pressLabels";
 
 /** (Batch 15 section 36) The label of the last press that was stopped or refused: the box under it names it ("Your Pay didn't go through."). */
@@ -30,7 +30,7 @@ export const TAB = typeof window === "undefined" ? "" : Math.random().toString(3
 export async function api<T = unknown>(path: string, body?: unknown, method?: string): Promise<T> {
   // Every press sends the later of the page's render time and what the live top notice has shown (NEWEST+3).
   // (Owner) New terms (reason A) are measured from the page itself: `pageSeenAt` is when the page was rendered, whatever the top box showed.
-  if (body && typeof body === "object" && typeof (body as { seenAt?: unknown }).seenAt === "string") body = { ...body, pageSeenAt: (body as { seenAt: string }).seenAt, seenAt: seenNow((body as { seenAt: string }).seenAt) };
+  if (body && typeof body === "object" && typeof (body as { seenAt?: unknown }).seenAt === "string") body = { ...body, pageSeenAt: (body as { seenAt: string }).seenAt, seenAt: seenNow((body as { seenAt: string }).seenAt), ...(pageLoadedAt() ? { loadedAt: pageLoadedAt() } : {}), ...(boxSeenAt() ? { boxSeenAt: boxSeenAt() } : {}) };
   let res: Response;
   try {
     res = await fetch(path, {
@@ -60,6 +60,12 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
     if ((data?.error?.code === "admin_stopped" || data?.error?.code === "admin_paused") && typeof window !== "undefined" && typeof data.error.failed === "string") {
       const m = /\/api\/tests\/([^/]+)\//.exec(path);
       if (m) window.location.href = `/app/tests/${m[1]}?failed=${encodeURIComponent(data.error.failed)}`;
+    }
+    // (Owner, Oct 28, batch 16 section 24) The test stopped, closed or the tester's work was ended while this page was open: a press of what's gone (Send,
+    // Switch / Keep, a call action, an upload, "This key doesn't work") reloads the session page at its TOP, where the stopped line names the press.
+    if (data?.error?.code === "work_over" && typeof window !== "undefined" && typeof data.error.failed === "string") {
+      const m = /\/api\/sessions\/([^/]+)\//.exec(path);
+      if (m) window.location.href = `/app/sessions/${m[1]}?failed=${encodeURIComponent(data.error.failed)}`;
     }
     if ((data?.error?.code === "suspended" || data?.error?.code === "held" || data?.error?.held === true) && typeof window !== "undefined" && typeof data.error.failed === "string") {
       window.location.href = `/app?failed=${encodeURIComponent(data.error.failed)}`;

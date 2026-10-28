@@ -86,8 +86,11 @@ export async function decideExcerpt(dev: { id: string; name: string; email: stri
   if (!allow && body.decision !== "deny") throw new HttpError(400, "bad_decision", "Choose Allow or Deny.");
   const x = await db.excerpt.findUnique({ where: { id: String(body.excerptId ?? "") }, include: { test: true } });
   if (!x || x.test.developerId !== dev.id) throw new HttpError(404, "gone", ALREADY_DECIDED);
-  if (x.status !== "pending") throw new HttpError(409, "decided", ALREADY_DECIDED);
+  // (Owner, Oct 28, batch 16 section 21) The same press already made (in another tab): a plain refusal, no stop box.
+  if (x.status !== "pending") throw new HttpError(409, "decided", x.status === "shown" ? "You already allowed this excerpt." : x.status === "denied" ? "You already denied this excerpt." : ALREADY_DECIDED);
   if (allow && x.test.ndaText) throw new HttpError(409, "nda", NDA_NO_ALLOW);
+  // A big change made in another tab (End early, Stop, a Pay, a call change) stops even Allow / Deny once.
+  await (await import("./tests")).bigOwnGate(dev.id, x.testId, body);
   const done = await db.excerpt.updateMany({ where: { id: x.id, status: "pending" }, data: { status: allow ? "shown" : "denied", decidedAt: new Date() } });
   if (done.count !== 1) throw new HttpError(409, "decided", ALREADY_DECIDED);
   await bell(x.testerId, allow ? allowedLine(x.test.title) : deniedLine(displayName(dev), x.test.title), allow ? `/app/testers/${x.testerId}#excerpts` : "/app/account#excerpts", undefined, { testId: x.testId });

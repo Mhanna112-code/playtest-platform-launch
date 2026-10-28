@@ -9,6 +9,12 @@ import { renderTimes } from "@/lib/tz";
 import { CONTRACT_KINDS, testerChanges } from "@/lib/server/testerGate";
 import { ownTest } from "@/lib/server/tests";
 
+/** (Owner, Oct 28, batch 16 section 32) "Your invite to “Harbor Run” was closed." for each invite of theirs closed since `since` (never why). */
+async function invitesClosedSince(userId: string, since: Date, testId?: string) {
+  const closed = await db.invite.findMany({ where: { testerId: userId, status: "cancelled", updatedAt: { gt: since }, ...(testId ? { testId } : {}) }, include: { test: { select: { title: true } } }, take: 20 });
+  return closed.map((i) => ({ kind: "invite", text: `Your invite to “${i.test.title}” was closed.`, createdAt: i.updatedAt }));
+}
+
 // The live top notice (owner, NEWEST+3): every stop-once reason (A-E) on this page since it was opened, as the page's
 // auto-refresh picks them up. `now` is the point up to which the page has shown everything: the page's buttons send it
 // as their "seen" marker, so a press only stops for changes the page hadn't shown yet.
@@ -42,6 +48,11 @@ export async function GET(req: Request) {
       ignored = new Set(u.ignoredAlerts);
     } else if (kind === "listing") {
       changes = await joinPageChanges(u.id, id, since.toISOString(), tab);
+      // (Batch 16 section 32) Their invite to this test closed: a neutral line (the page refreshes without it).
+      changes.push(...(await invitesClosedSince(u.id, since, id)));
+    } else if (kind === "invites") {
+      // (Batch 16 section 32) The tester's dashboard: each of their invites that closed since the page loaded.
+      changes = await invitesClosedSince(u.id, since);
     } else throw new HttpError(404, "not_found", "Nothing to watch here.");
     // (NEWEST+6) "The site was down from … Deadlines and payment dates moved … later." on every affected page.
     // (Batch 15 section 11) Their times in the viewer's own zone.

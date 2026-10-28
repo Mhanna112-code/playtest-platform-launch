@@ -58,7 +58,7 @@ describe("newest addition", () => {
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "disputed a payment" } } })).toBe(1);
     const d = await db.dispute.findFirstOrThrow({ where: { submissionId: sub.id } });
     expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "Answers 2 and 3 were one word each" })).status).toBe(200);
-    expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "Again" })).body.error.message).toBe("You already added your side to this dispute.");
+    expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "Again" })).body.error.message).toBe("You already sent your side.");
     const other = await makeUser({ dev: true });
     expect((await act(testId, "dispute-side", other.cookie, { disputeId: d.id, text: "Not mine at all" })).status).toBe(404);
     expect((await db.dispute.findUniqueOrThrow({ where: { id: d.id } })).devSide).toBe("Answers 2 and 3 were one word each");

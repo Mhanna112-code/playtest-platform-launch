@@ -4,9 +4,11 @@ import { Err } from "@/components/Err";
 import { FormMistakes } from "@/components/FormMistakes";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { api, errOf } from "@/lib/client";
+import { ChangesBox, type Change } from "@/components/ChangesBox";
 
 // (Owner, Oct 29, batch 13) Excerpt requests: the tester's picker, the developer's Allow / Deny, and Remove / Take down. None of them stops once: a press goes through
 // whatever changed meanwhile, and is refused only when the request (or excerpt) no longer exists, or (a request, an Allow) when the test now has an NDA.
+// (Owner, Oct 28, batch 16 section 21) The exception: a big change made in another tab (End early, Stop, a Pay, a call change) stops Allow / Deny once.
 
 const MIN = 10, MAX = 500;
 
@@ -66,17 +68,20 @@ export function ExcerptPicker({ submissionId, choices }: { submissionId: string;
 }
 
 /** The developer's Allow and Deny on a pending request (Needs you, or the restricted dashboard box). */
-export function ExcerptDecision({ excerptId }: { excerptId: string }) {
+export function ExcerptDecision({ excerptId, seenAt }: { excerptId: string; /** the test page's load time: a big change in another tab stops once */ seenAt?: string }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [box, setBox] = useState<{ changes: Change[]; at: string } | null>(null);
   const decide = async (decision: "allow" | "deny") => {
     setBusy(true);
     setErr("");
     try {
-      await api("/api/excerpts", { action: "decide", excerptId, decision });
+      await api("/api/excerpts", { action: "decide", excerptId, decision, ...(seenAt ? { seenAt } : {}), ...(box ? { confirmed: true, boxAt: box.at } : {}) });
       window.location.reload();
     } catch (e) {
-      setErr(errOf(e));
+      const stop = (e as { code?: string; data?: { changes?: Change[] } }).code === "stop_once" ? (e as { data: { changes?: Change[] } }).data.changes ?? [] : null;
+      if (stop) setBox({ changes: stop, at: new Date().toISOString() });
+      else setErr(errOf(e));
       setBusy(false);
     }
   };
@@ -86,6 +91,7 @@ export function ExcerptDecision({ excerptId }: { excerptId: string }) {
         <button type="button" className="btn px-3 py-1 text-sm" disabled={busy} onClick={() => decide("allow")}>Allow</button>
         <button type="button" className="btn-secondary px-3 py-1 text-sm" disabled={busy} onClick={() => decide("deny")}>Deny</button>
       </div>
+      {box && <ChangesBox changes={box.changes} press="Allow / Deny" />}
       <Err text={err} />
     </div>
   );

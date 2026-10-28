@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money } from "@/lib/format";
-import { TESTER_CHOICE_REASONS, stopOnce, type TestEventLike } from "@/lib/rules";
+import { TESTER_CHOICE_REASONS, rateStops, stopOnce, type TestEventLike } from "@/lib/rules";
 import { rowsOf } from "@/lib/callRows";
 import { HttpError } from "./http";
 import { asLines, ownChanges, seenOf, tabOf, testerPaymentChanges, withRenamed } from "./live";
@@ -15,6 +15,10 @@ import { asLines, ownChanges, seenOf, tabOf, testerPaymentChanges, withRenamed }
 
 /** Closed because of the tester's own press (their own action, reason E). */
 const CLOSED_BY_TESTER = new Set(["you asked a different rate", "the tester left"]);
+/** (Owner, Oct 28, batch 16 section 24) What the stop, a closure or an early end did by itself (requests closed, calls ahead cancelled): never a stop-once
+ * reason for what still works afterwards (Charge, Let it go, Dispute, Rate); the stopped line at the top already says it. */
+const CLOSED_BY_END = new Set(["the test was stopped", "the session ended", "the test ended"]);
+const byTheEnd = (c: { status: string; endedAt: Date | null }, at: Date | null) => c.status === "ended" && !!c.endedAt && !!at && Math.abs(at.getTime() - c.endedAt.getTime()) < 60_000;
 
 export async function testerChanges(testerId: string, contractId: string, testId: string, seenAt: Date, tab = "", termsFrom: Date = seenAt): Promise<TestEventLike[]> {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
@@ -48,7 +52,7 @@ export async function testerChanges(testerId: string, contractId: string, testId
     if (r.status === "pending" && r.createdAt > seenAt) out.push({ kind: "requested", text: `${dev} requested ${what}`, createdAt: r.createdAt });
     else if (r.status === "withdrawn") out.push({ kind: "requested", text: `${dev} withdrew the request for ${what}`, createdAt: r.updatedAt });
     else if (r.status === "taken") out.push({ kind: "requested", text: `The call time ${when} is no longer available: another tester took it`, createdAt: r.updatedAt });
-    else if (r.status === "closed" && !CLOSED_BY_TESTER.has(r.closedReason)) out.push({ kind: "requested", text: `The call time ${when} is no longer available`, createdAt: r.updatedAt });
+    else if (r.status === "closed" && !CLOSED_BY_TESTER.has(r.closedReason) && !CLOSED_BY_END.has(r.closedReason)) out.push({ kind: "requested", text: `The call time ${when} is no longer available`, createdAt: r.updatedAt });
     // booked / declined by the tester themselves: their own action (reason E)
   }
   for (const r of mine) {
@@ -57,7 +61,7 @@ export async function testerChanges(testerId: string, contractId: string, testId
     else if (r.closedReason === "matched") out.push({ kind: "booked", text: `Booked: ${dev} asked for the same time, ${when}`, createdAt: r.decidedAt! });
     else out.push({ kind: "booked", text: `${dev} accepted your call request: ${rowsOf(r).length === 1 && rowsOf(r)[0].repeat !== "once" ? requestWords(r, when) : when}`, createdAt: r.decidedAt! });
   }
-  for (const call of calls) out.push({ kind: "cancelled", text: `Your call on ${fmtDateTime(call.startsAt)} was cancelled`, createdAt: call.cancelledAt! });
+  for (const call of calls.filter((x) => !(x.cancelledBy === "system" && byTheEnd(c, x.cancelledAt)))) out.push({ kind: "cancelled", text: `Your call on ${fmtDateTime(call.startsAt)} was cancelled`, createdAt: call.cancelledAt! });
   // (Owner, Oct 30, batch 15 section 45) The developer marked this tester's key as working: a change to their contract (it stops even with Alerts Off; no bell).
   const fixed = await db.accessKey.findFirst({ where: { contractId, fixedAt: { gt: seenAt }, status: "inuse" } });
   if (fixed) out.push({ kind: "keyfixed", text: `The developer marked your key as working (${fixed.value})`, createdAt: fixed.fixedAt! });
@@ -72,9 +76,34 @@ export async function testerChanges(testerId: string, contractId: string, testId
 export const CONTRACT_KINDS = new Set(["terms", "keyfixed"]);
 
 const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", "info", "payment", "admin", "own", "dispute"];
+/**
+ * (Owner, Oct 28, batch 16 section 38B) The call changes a tester sees (the developer's requests, withdrawn or taken, their own request accepted or declined, a call
+ * cancelled). They stop every tester press once even after the live box or a refresh of the page showed them: counted from when the page loaded in this tab
+ * (`loadedAt`), or from the newest change a stop box there already listed (`boxSeenAt`).
+ */
+export const TESTER_CALL_KINDS = new Set(["requested", "booked", "cancelled"]);
+
+/**
+ * (Owner, Oct 28, batch 16 section 25) A press still allowed in a stopped, closed or ended test, a test the tester left or was removed from, or a paused test, goes
+ * through on the FIRST press: no stop-once for anything (other people's changes, other tabs, the state itself). The session route marks such a press on its body
+ * (a symbol, so a page can't send it): "skip" goes straight through; "rate" keeps the one DEFAULT exception, Rate stops once if a payment, Charge, Let it go or a
+ * dispute about the work arrived since the page loaded (the post-close Rate kinds). Refusals are untouched (they're checked by each press itself).
+ */
+export const QUIET_PRESS = Symbol.for("playtest.quietPress");
+export type QuietMode = "skip" | "rate";
+export const markQuiet = (body: Record<string | symbol, unknown>, mode: QuietMode) => {
+  body[QUIET_PRESS] = mode;
+};
+const quietOf = (body: Record<string, unknown>) => (body as Record<string | symbol, unknown>)[QUIET_PRESS] as QuietMode | undefined;
 
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
 export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; keep?: (e: TestEventLike) => boolean } = {}) {
+  const quiet = quietOf(body);
+  if (quiet === "skip") return;
+  if (quiet === "rate") {
+    const own = opts.keep;
+    opts = { ...opts, skipTerms: true, keep: (e) => rateStops(e, true) && (own?.(e) ?? true) };
+  }
   // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt); Leave and
   // Block send no boxAt, so they still stop just once.
   const boxAt = seenOf(body.boxAt);
@@ -83,12 +112,18 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   if (!seenAt) return;
   // New terms count from the page's own render (pageSeenAt), or from the box's time on a second press; everything else from `seenAt`.
   const termsFrom = body.confirmed === true ? seenAt : seenOf(body.pageSeenAt) ?? seenAt;
-  const raw = await testerChanges(testerId, contractId, testId, seenAt, tabOf(body), termsFrom);
+  const loadedAt = body.confirmed === true ? null : seenOf(body.loadedAt);
+  const boxSeen = seenOf(body.boxSeenAt);
+  const fromBox = boxSeen && loadedAt && boxSeen > loadedAt ? boxSeen : loadedAt;
+  const callsFrom = fromBox && fromBox < seenAt ? fromBox : seenAt;
+  const raw0 = await testerChanges(testerId, contractId, testId, callsFrom, tabOf(body), termsFrom);
+  // Everything but the call changes still counts from `seenAt` (the later of the page's render and what the live box showed).
+  const raw = raw0.filter((e) => e.kind === "terms" || (TESTER_CALL_KINDS.has(e.kind) ? e.createdAt > callsFrom : e.createdAt > seenAt));
   // (Owner, Oct 28) `keep`: a button that stops for only some kinds (Rate after the test closed).
   const all = withRenamed(opts.keep ? raw.filter((e) => e.kind === "renamed" || opts.keep!(e)) : raw, body);
   const changes = all.filter((e) => (e.kind === "terms" ? !opts.skipTerms && e.createdAt > termsFrom : true));
   const terms = changes.filter((e) => e.kind === "terms");
-  const r = stopOnce(changes.filter((e) => e.kind !== "terms"), seenAt, false, [...KINDS, "renamed", "keyfixed"]);
+  const r = stopOnce(changes.filter((e) => e.kind !== "terms"), callsFrom, false, [...KINDS, "renamed", "keyfixed"]);
   // (Owner, Oct 30, batch 15 section 26) Alerts Off: only changes to the tester's own contract stop (a new terms offer, their key marked working).
   const off = (await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
   const rest = r.go ? [] : off ? r.changes.filter((e) => CONTRACT_KINDS.has(e.kind)) : r.changes;

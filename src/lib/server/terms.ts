@@ -58,21 +58,28 @@ export async function testerTermsGate(contractId: string, _devName: string, body
   await testerGate(c.testerId, contractId, c.testId, body, fresh ? "Press again to send under your current terms, or switch first." : "Press again to go ahead.");
 }
 
+/** (Batch 16 section 38A) Switch / Keep when no offer is open any more. */
+export const NO_LONGER_ON_OFFER = "These terms are no longer on offer.";
+
 /** Switch to the offered terms, or keep the current ones. Stops once if the terms changed again since (shows the newest). */
 export async function decideTerms(tester: { id: string }, contractId: string, body: Record<string, unknown>) {
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== tester.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
   await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: true });
-  const offer = await db.termsOffer.findUnique({ where: { id: String(body.offerId ?? "") } });
-  if (!offer || offer.contractId !== contractId) throw new HttpError(404, "not_found", "That offer doesn't exist.");
+  // (Owner, Oct 28, batch 16 section 38A) The press names the offer its page showed. Missing, unknown or not the newest open one: the newest open offer is decided on,
+  // after the "changed the terms again" stop-once. Only with no open offer at all is it refused, and never as "doesn't exist".
+  const asked = typeof body.offerId === "string" && body.offerId ? await db.termsOffer.findUnique({ where: { id: body.offerId } }) : null;
+  const offer = asked && asked.contractId === contractId ? asked : null;
   const newest = await openOffer(contractId);
-  if (offer.status !== "open" || (newest && newest.id !== offer.id)) {
-    if (newest && body.confirmed !== true) {
-      throw new HttpError(409, "stop_once", "Press again to go ahead.", { top: true, changes: [{ text: `${displayName(c.test.developer)} changed the terms again: ${newest.diff}`, at: newest.createdAt }], offerId: newest.id, tail: "Press again to decide on these newest terms." });
-    }
-    if (!newest) throw new HttpError(409, "gone", offer.status === "switched" ? "You already switched to these terms." : "You already decided on these terms.");
+  if (!newest) {
+    if (offer?.status === "switched") throw new HttpError(409, "gone", "You already switched to these terms.");
+    if (offer?.status === "kept") throw new HttpError(409, "gone", "You already decided on these terms.");
+    throw new HttpError(409, "gone", NO_LONGER_ON_OFFER);
   }
-  const target = newest ?? offer;
+  if ((!offer || offer.id !== newest.id) && body.confirmed !== true) {
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { top: true, changes: [{ text: `${displayName(c.test.developer)} changed the terms again: ${newest.diff}`, at: newest.createdAt }], offerId: newest.id, tail: "Press again to decide on these newest terms." });
+  }
+  const target = newest;
   const now = new Date();
   if (body.choice === "switch") {
     const sets = await questionSetsOnSwitch(c, (target.questions as string[]) ?? [], now);

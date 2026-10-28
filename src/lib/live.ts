@@ -16,6 +16,23 @@ export function clearShown(s: string) {
     shownUpTo = "";
   }
 }
+/**
+ * (Owner, Oct 28, batch 16 section 38B) When this page first loaded in this tab (a refresh of its data never moves it), and the newest change a stop box under a button
+ * has listed. A tester's press sends both: a call change stops it once even when the live box or a refresh already showed it, until a stop box has listed it.
+ */
+let loaded: { path: string; at: string } | null = null;
+let boxSeenUpTo = "";
+export function notePageLoaded(at: string) {
+  if (typeof window === "undefined") return;
+  const path = window.location.pathname;
+  if (!loaded || loaded.path !== path) {
+    loaded = { path, at };
+    boxSeenUpTo = "";
+  }
+}
+export const pageLoadedAt = () => (loaded && typeof window !== "undefined" && loaded.path === window.location.pathname ? loaded.at : "");
+export const boxSeenAt = () => boxSeenUpTo;
+
 /** The seen marker a press sends: the page's render time, or later if the top notice has shown more. */
 export function seenNow(pageSeenAt: string) {
   return shownUpTo && shownUpTo > pageSeenAt ? shownUpTo : pageSeenAt;
@@ -35,7 +52,10 @@ const ck = (c: Change) => `${new Date(c.at).getTime()}|${c.text}`;
  */
 const shownInBox = new Set<string>();
 export function markShownInBox(lines: Change[]) {
-  for (const c of lines) shownInBox.add(ck(c));
+  for (const c of lines) {
+    shownInBox.add(ck(c));
+    if (c.at > boxSeenUpTo) boxSeenUpTo = c.at;
+  }
 }
 export const wasShownInBox = (c: Change) => shownInBox.has(ck(c));
 /** Adds newly picked-up changes to an open box, skipping any it already lists. */

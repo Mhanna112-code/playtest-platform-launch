@@ -94,6 +94,8 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       } else if (e instanceof ApiError && e.code === "needs" && e.data.gaps) setAsking({ ask: action === "apply" ? "apply" : "join", gaps: e.data.gaps as Gaps });
       // (Batch 16 section 10) The server's "Accept the NDA to join." belongs to the tick.
       else if (e instanceof ApiError && e.code === "nda" && p.nda) { setNdaErr(e.message); requestAnimationFrame(() => { const root = document.getElementById("join-card"); announcePress(root); focusFirstMistake(root); }); }
+      // (Batch 16 section 32) The invite closed meanwhile: refused with the reason (no stop box), and the page drops the invite.
+      else if (e instanceof ApiError && e.code === "invite_closed") { setErr(e.message); router.refresh(); }
       else setErr(errOf(e));
     } finally {
       setBusy(false);

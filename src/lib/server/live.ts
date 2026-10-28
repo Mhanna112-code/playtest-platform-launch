@@ -14,9 +14,57 @@ export const OWN_PREFIX = "You also did this in another tab: ";
 
 export const tabOf = (body: Record<string, unknown>) => (typeof body.tab === "string" ? body.tab.slice(0, 64) : "");
 
-/** Log one thing a person did on a test (any button that changes something). */
-export async function logAction(userId: string, testId: string, body: Record<string, unknown>, text: string) {
-  await db.actionLog.create({ data: { userId, testId, text, tab: tabOf(body) } });
+/**
+ * (Owner, Oct 28, batch 16 section 21) What an action was about, kept with its log line (after META, so no new column): the press (`a`, e.g. "pay")
+ * and the things it touched (`k`: "c:<contract>", "sub:<id>", "call:<id>", "req:<id>", "t:<tester>", "set:<id>", "app:<id>", "test").
+ */
+export type OwnAbout = { a: string; k: string[] };
+const META = "\u001f";
+/**
+ * A press on the developer's side. (Owner, Oct 28, batch 16 section 21) The "big" changes made in another tab (BIG_OWN_ACTS) stop EVERY press on the test page
+ * once (`big: false` only for Edit's Save, which has its own notes); an invite or cancelled invite stops only a press it touches (acts × things); nothing else
+ * the developer did elsewhere is ever a reason.
+ */
+export type Press = {
+  acts: readonly string[]; keys: readonly string[]; big?: boolean;
+  /** (Batch 16 section 25) Rate on this contract: on a stopped test it still stops once for a payment, Charge, Let it go or dispute decision about this person. */
+  rate?: string;
+  /** (Batch 16 sections 21 and 25) Stop on a test another tab stopped after this page loaded: it still stops once, then it's refused. */
+  inState?: boolean;
+};
+export type OwnEvent = TestEventLike & { about?: OwnAbout; live?: string };
+export const CALL_ACTS = ["request-time", "answer-request", "cancel-call", "cancel-set", "no-show"] as const;
+/** The call changes (request, withdraw, accept, decline, cancel). (Batch 16 section 26: no Lower the length.) */
+export const CALL_CHANGE_ACTS = ["request-time", "answer-request", "cancel-call", "cancel-set"] as const;
+export const PAY_ACTS = ["pay", "pay-more"] as const;
+export const INVITE_ACTS = ["invite", "cancel-invite"] as const;
+/** End early, Stop the test, Pay or Pay more (any piece) and any call change: they stop every press on the test page once. */
+export const BIG_OWN_ACTS = ["end-early", "stop", ...PAY_ACTS, ...CALL_CHANGE_ACTS] as const;
+/** Live in the live box at once (and the page updates): a Pay or Pay more, a call change, an invite or cancelled invite. Stop and End early are not. */
+export const LIVE_OWN_ACTS = [...PAY_ACTS, ...CALL_CHANGE_ACTS, ...INVITE_ACTS] as const;
+const has = (list: readonly string[], a?: string) => !!a && list.includes(a);
+/** Does this action from another tab touch this press? */
+export const touches = (o: OwnEvent, p: Press) => !!o.about && p.acts.includes(o.about.a) && o.about.k.some((k) => p.keys.includes(k) || p.keys.includes("*"));
+
+/** Log one thing a person did on a test (any button that changes something), with what it was about. */
+export async function logAction(userId: string, testId: string, body: Record<string, unknown>, text: string, about?: OwnAbout) {
+  await db.actionLog.create({ data: { userId, testId, text: about ? `${text}${META}${JSON.stringify(about)}` : text, tab: tabOf(body) } });
+}
+/** (Batch 16 section 21) Only the big changes made in another tab, as stop lines: for presses that otherwise never stop (excerpt Allow / Deny). */
+export async function bigOwnLines(devId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db): Promise<TestEventLike[]> {
+  return (await ownChanges(devId, testId, since, tab, tx)).filter((o) => has(BIG_OWN_ACTS, o.about?.a)).map((o) => ({ kind: "own", text: o.live ?? o.text, createdAt: o.createdAt }));
+}
+
+/** A log line's text and what it was about. */
+function parseLog(raw: string): { text: string; about?: OwnAbout } {
+  const i = raw.indexOf(META);
+  if (i < 0) return { text: raw };
+  try {
+    const about = JSON.parse(raw.slice(i + 1)) as OwnAbout;
+    return { text: raw.slice(0, i), about: typeof about?.a === "string" && Array.isArray(about.k) ? about : undefined };
+  } catch {
+    return { text: raw.slice(0, i) };
+  }
 }
 
 export function seenOf(v: unknown): Date | null {
@@ -25,9 +73,13 @@ export function seenOf(v: unknown): Date | null {
 }
 
 /** This person's own actions on the test since `since`, from other tabs. */
-export async function ownChanges(userId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db): Promise<TestEventLike[]> {
+export async function ownChanges(userId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db): Promise<OwnEvent[]> {
   const rows = await tx.actionLog.findMany({ where: { userId, testId, createdAt: { gt: since }, ...(tab ? { tab: { not: tab } } : { tab: { not: "" } }) }, orderBy: { createdAt: "asc" }, take: 50 });
-  return rows.map((r) => ({ kind: "own", text: r.text.startsWith("You ") ? r.text : OWN_PREFIX + r.text, createdAt: r.createdAt }));
+  return rows.map((r) => {
+    const { text, about } = parseLog(r.text);
+    // (Batch 16 section 21) The live box's own wording for invites and calls: "You invited Ana Silva in another tab".
+    return { kind: "own", text: text.startsWith("You ") ? text : OWN_PREFIX + text, createdAt: r.createdAt, ...(about ? { about } : {}), ...(!text.startsWith("You ") ? { live: `You ${text} in another tab` } : {}) };
+  });
 }
 
 /**
@@ -35,7 +87,7 @@ export async function ownChanges(userId: string, testId: string, since: Date, ta
  * charges...) plus the developer's own actions in another tab. The developer's own events ("You paid ...") come only
  * through the action log, so the tab that did them never stops for them.
  */
-export async function devChanges(devId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db, opts: { all?: boolean } = {}): Promise<TestEventLike[]> {
+export async function devChanges(devId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db, opts: { all?: boolean; press?: Press } = {}): Promise<TestEventLike[]> {
   // (Batch 14) The live box (`all`) also lists the quiet kinds: a tester's Switch (stacked per day) and a key reported as not working. They never stop a press.
   const events = stackSwitches(await tx.testEvent.findMany({ where: { testId, createdAt: { gt: since }, kind: { in: [...DEV_STOP_KINDS, "renamed", ...(opts.all ? DEV_QUIET_KINDS : [])] } }, orderBy: { createdAt: "asc" }, take: 100 }));
   // (Owner, Oct 28) The developer's OWN listing edit (from another tab) is already said once, in their own voice, by the action log ("You changed the description and access keys in another tab"):
@@ -46,7 +98,18 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
     if (e.kind === "renamed" && e.text.startsWith(`${me} `)) return [{ ...e, text: e.text.replace(`${me} `, "You ") }];
     return [e];
   });
-  const all = [...theirs, ...(await devPaymentChanges(devId, testId, since, tx)), ...(await ownChanges(devId, testId, since, tab, tx))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  // (Owner, Oct 28, batch 16 section 21) What the developer did in another tab is never news and can't be switched off in Alerts: the live box shows only
+  // invites and calls ("You invited Ana Silva in another tab"); a press stops once only for another tab's action that touches it (`press`).
+  // In both, an action of theirs reads "You paid Ana Silva $10.00 for the written answers in another tab".
+  const own = (await ownChanges(devId, testId, since, tab, tx)).flatMap((o): TestEventLike[] => {
+    const line = { kind: "own", text: o.live ?? o.text, createdAt: o.createdAt };
+    if (opts.all) return has(LIVE_OWN_ACTS, o.about?.a) ? [line] : [];
+    if (!opts.press) return [];
+    // Edit's Save keeps its own lines (another tab's Save) as they are.
+    if (opts.press.big === false) return touches(o, opts.press) ? [o] : [];
+    return has(BIG_OWN_ACTS, o.about?.a) || touches(o, opts.press) ? [line] : [];
+  });
+  const all = [...theirs, ...(await devPaymentChanges(devId, testId, since, tx)), ...own].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Design doc 6) Update types the developer ignores in the Alerts menu no longer stop a press (the live box still lists them, greyed).
   if (opts.all) return all;
   const ignored = new Set((await tx.user.findUnique({ where: { id: devId }, select: { ignoredAlerts: true } }))?.ignoredAlerts ?? []);
@@ -93,8 +156,8 @@ export async function devPaymentChanges(devId: string, testId: string, since: Da
     const title = c?.test.title ?? "a test";
     const who = `${money(p.amountCents)} to ${c ? displayName(c.tester) : "a tester"} for the ${pieceLabel(p, kinds)}`;
     const next = " · pay what you owe in Payments"; // (Owner, Oct 27) no retries and no cut-off any more: a declined payment is a hold at once
-    if (p.settledAt && p.settledAt > since) out.push({ kind: "payment", text: `Payment went through on ${title}: ${who}`, createdAt: p.settledAt });
-    else if (p.status === "failed" && p.createdAt > since) out.push({ kind: "payment", text: `Payment failed on ${title}: ${who}${next}`, createdAt: p.createdAt });
+    if (p.settledAt && p.settledAt > since) out.push({ kind: "payment", text: `Payment went through on ${title}: ${who}`, createdAt: p.settledAt, contractId: p.contractId } as TestEventLike);
+    else if (p.status === "failed" && p.createdAt > since) out.push({ kind: "payment", text: `Payment failed on ${title}: ${who}${next}`, createdAt: p.createdAt, contractId: p.contractId } as TestEventLike);
   }
   // Chargebacks opened / resolved on the developer's OTHER tests (this test's come as its own events).
   const others = await tx.testEvent.findMany({ where: { kind: { in: ["chargeback", "payment"] }, createdAt: { gt: since }, testId: { not: testId }, test: { developerId: devId } }, include: { test: { select: { title: true } } }, take: 50 });

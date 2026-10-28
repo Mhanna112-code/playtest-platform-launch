@@ -993,13 +993,14 @@ function openCharge(sessionId, testId) {
   own(`update "Submission" set "sentAt" = ${utc} - interval '15 days', "payBy" = ${utc} - interval '1 day', "choiceOfferedAt" = ${utc} - interval '1 day', "choiceBy" = ${utc} + interval '6 days' where id = '${subOf(sessionId)}'`);
   own(`update "Test" set "openUntil" = ${utc} - interval '1 day' where id = '${testId}'`);
 }
-/** The tester presses Charge on their session page (tick, then the button). */
+/** The tester presses Charge on their session page (batch 16 section 39: the tick only above $200, then the button). */
 async function chargeUI(page, sessionId) {
   await page.goto(`/app/sessions/${sessionId}`);
-  const box = page.locator("label", { hasText: /charge .* now/ }).first();
-  await box.scrollIntoViewIfNeeded();
-  await box.locator("input").check();
-  await page.locator("button", { hasText: /^Charge / }).first().click();
+  const btn = page.locator("button", { hasText: /^Charge / }).first();
+  await btn.scrollIntoViewIfNeeded();
+  const tick = page.locator("[data-charge-tick] input");
+  if (await tick.count()) await tick.first().check();
+  await btn.click();
 }
 /**
  * The fake's stand-in for the bank's confirmation pop-up is the browser's confirm box, which recordings can't show: answer it, then put a labelled marker on the page
@@ -1128,12 +1129,14 @@ group("money", async () => {
   sec("Admin console");
   await shot(admin, "admin-chargeback-open", "Admin: a chargeback hold | The admin's Chargeback holds list: the reversed payment, the card check and what is owed, and Approve (faded until both are done)", admin.locator(`[data-chargeback-hold="${omar.uid}"]`));
   sec("Payments");
-  // He pays what he owes ($25) on Payments.
+  // (Batch 16 section 41) Step 1 first: Pay what you owe waits for the card check ("Verify your card first (step 1): …"). Then he pays what he owes ($25).
+  await omar.locator("[data-chargeback-steps] button", { hasText: "Verify a card" }).click(); // (simulated in the fake: verified at once)
+  await omar.waitForSelector("[data-step-ok=yes]", { timeout: 15000 }).catch(() => {});
   await omar.locator("#owed button", { hasText: /Pay what you owe/ }).click();
   await pause(omar, 2500);
   await omar.reload();
   await omar.waitForSelector("[data-chargeback-steps]");
-  await shot(omar, "money-chargeback-paid", "Paid, but still on hold | $25 paid: the chargeback hold stays until the card check and the team's Approve", "[data-chargeback-steps]");
+  await shot(omar, "money-chargeback-paid", "Verified and paid, but still on hold | Card verified and $25 paid: “Paid. Your tests stay paused until the team approves.” The team's Approve lifts it", "[data-chargeback-steps]");
   // The platform wins the chargeback: the $25 is refunded and the hold, with nothing left owed, lifts.
   {
     const D = await rec(V, omar);
@@ -1615,10 +1618,10 @@ group("excerpts", async () => {
   await decide(nora, p1.sub, "allow");
   await decide(nora, p2.sub, "deny");
   ok(await askExcerpt(ana, p4.sub, "the wake looks lovely at night"), "ask 4");
-  // Shown excerpts are on the hover card (up to 3) and in the tester's row, where the developer can take one down.
+  // (Batch 16 section 23) Shown excerpts are in the tester's row, where the developer can take one down, and on the profile; never on the hover card.
   await nora.goto(`/app/tests/${p3.t}`);
   await nora.waitForSelector("#testers-joined");
-  await shot(nora, "excerpt-hover", "On the hover card | Ana's shown excerpts on her hover card", "#testers-joined", async () => {
+  await shot(nora, "excerpt-hover", "The hover card | Rating, accepted parts, the profile link and Chat with Ana: no excerpts (they're on her profile)", "#testers-joined", async () => {
     await nora.locator("#testers-joined a[aria-label='Ana Silva: profile']").first().hover();
     await pause(nora, 800);
   });
@@ -1658,9 +1661,10 @@ group("excerpts", async () => {
   await ana.waitForSelector("text=/now has an NDA/");
   await pause(ana, 600);
   await shot(ana, "excerpt-nda-refused", "An NDA added meanwhile | Ana's page loaded before the NDA: her press is refused, “This test now has an NDA, so its work can't be shown as an excerpt.”", pick6);
-  await ana.goto("/app/account");
+  // (Batch 16 section 30) The list is on the tester's own profile now (not Settings).
+  await ana.goto(`/app/testers/${userId(`tester+media${TS}exa@playtest.test`)}`);
   await ana.waitForSelector("#excerpts");
-  await shot(ana, "excerpt-settings", "Ana's list in Settings | Pending, shown and denied excerpts with Remove; the one from a test that now has an NDA reads “Hidden while … has an NDA”", "#excerpts");
+  await shot(ana, "excerpt-settings", "Ana's list on her profile | Pending, shown and denied excerpts with Remove; the one from a test that now has an NDA reads “Hidden while … has an NDA”", "#excerpts");
   await openBell(ana);
   await shot(ana, "excerpt-bells", "Decisions as bell lines | “Your excerpt from … is now on your profile.”, “Nora Lane prefers that work from … isn't shown on profiles.” and “Nora Lane took down the excerpt from …”", bellList(ana));
   // 5. A restricted developer: their test pages are closed, so pending requests wait in a box at the dashboard top, with Allow and Deny.
@@ -2165,7 +2169,7 @@ group("settings", async () => {
   own(`update "Test" set "openUntil" = (now() at time zone 'utc') + interval '10 days' where id = '${t2}'`);
   await nora.goto("/app/account");
   await pause(nora, 800);
-  await shotFull(nora, "settings-dev", "Settings | Developer, tester or both; the profile; Contact us; email; and Delete account");
+  await shotFull(nora, "settings-dev", "Settings | “Nora Lane · Developer”, the developer profile link, Payments, Contact us, the password form and Delete account (batch 16: no side cards, no excerpts)");
   // Contact us: the message reaches the team by email; at most 5 a day.
   await ana.goto("/app/help");
   await ana.locator("select").first().selectOption("A payment");
@@ -2720,7 +2724,7 @@ group("b15calls", async () => {
   sql(`delete from "CallPresence" where "callId" = '${call}'`);
   tookPlace(call, nora.uid, ana.uid, 90, 29);
   await open(nora, `/app/tests/${t}`, `#call-${call}`);
-  await shot(nora, "b15-40-measured", "§40 The measured length | “Length: 29 min (both in the call …)”; the Pay box's Rate and Amount use it; “Lower the length” is under it", `#call-${call}`);
+  await shot(nora, "b15-40-measured", "§40 The measured length | “Length: 29 min (both in the call …)”; the Pay box's Rate and Amount use it", `#call-${call}`);
   // Rate and Amount fill each other.
   const R = await rec(V, nora);
   await open(R, `/app/tests/${t}`, `#call-${call}`);
@@ -2734,18 +2738,9 @@ group("b15calls", async () => {
   await pause(R, 2000);
   await shot(R, "b15-40-rate-amount", "§40 Rate and Amount fill each other | Typing $40/h filled $19.33; typing $10.00 filled the rate back ($20.69/h); the one typed last wins on the server too", `#call-${call}`);
   finishVideo([{ file: await saveVideo(R, "b15-40-rate.webm"), from: fromR }], "b15-40-rate-amount-video", "§40 Rate and Amount, live | A rate fills the amount (rate × 29 min); an amount fills the rate (to the cent per hour)");
-  // Lower the length, with a reason the tester reads.
-  await open(nora, `/app/tests/${t}`, `#call-${call}`);
-  await nora.locator(`#call-${call} [data-lower-length] > summary`).click();
-  await nora.locator(`#call-${call} [data-lower-length] input`).fill("20");
-  await nora.locator(`#lower-why-${call}`).fill("We spent the first 9 minutes fixing my microphone.");
-  await shot(nora, "b15-40-lower", "§40 Lower the length | Only lower, never raise; a reason is required and the tester reads it", `#call-${call}`);
-  await nora.locator(`#call-${call} [data-lower-length] button:has-text('Lower the length')`).click();
-  await nora.waitForSelector("text=/lowered from 29 min/", { timeout: 20000 });
-  await pause(nora, 800);
-  await shot(nora, "b15-40-lowered", "§40 Lowered | “Length: 20 min (lowered from 29 min; both in the call …)” with the reason in italics; the Pay box now uses 20 minutes", `#call-${call}`);
+  // (Batch 16 section 26) No "Lower the length" any more: the call has just Pay.
   await open(ana, `/app/sessions/${sA}`, "#part-live");
-  await shot(ana, "b15-40-tester-view", "§40 The tester's view | Ana reads the measured length, that it was lowered to 20 min, and why", "#part-live");
+  await shot(ana, "b15-40-tester-view", "§40 The tester's view | Ana reads the measured length", "#part-live");
 }, { section: LF, fake: true });
 
 group("b15ceiling", async () => {

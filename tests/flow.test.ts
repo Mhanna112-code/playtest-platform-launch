@@ -143,7 +143,7 @@ describe("tester session", () => {
     await act(testId, "end-early", dev.cookie, { seenAt: seen(), contractId: sessionId, reason: "We have enough", confirmed: true });
     const r = await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     expect(r.status).toBe(409);
-    expect(r.body.error.message).toMatch(/^Nora Lane ended your session early on .+\. Work you sent is still reviewed\.$/);
+    expect(r.body.error.message).toMatch(/^Nora Lane ended your session early on .+, so your Send didn't go through\. Work you sent is still reviewed\.$/); // (batch 16 section 24)
     expect((await db.call.count({ where: { contractId: sessionId, status: "booked" } }))).toBe(0);
   });
 
@@ -152,7 +152,7 @@ describe("tester session", () => {
     const { tester, sessionId } = await joined(testId);
     await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
     const r = await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
-    expect(r.body.error.message).toMatch(/^Nora Lane stopped the test on .+\. Work you sent is still reviewed\.$/);
+    expect(r.body.error.message).toMatch(/^Nora Lane stopped the test on .+, so your Send didn't go through\. Work you sent is still reviewed\.$/); // (batch 16 section 24)
   });
 
   it("late work is accepted and marked; after Open until it's refused", async () => {

@@ -1,5 +1,6 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { checkFields, useLocalMin } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
 import { FormMistakes } from "@/components/FormMistakes";
@@ -7,31 +8,41 @@ import { FIELD } from "@/lib/client";
 import { JoinCall } from "@/components/JoinCall";
 import { CalendarPlus } from "lucide-react";
 import { usePress } from "@/lib/usePress";
-import { MARKABLE } from "@/lib/markJump";
 import { LivePanel } from "@/components/LivePanel";
 import { CallTimer } from "@/components/CallTimer";
 import { ReportProblem } from "@/components/ReportProblem";
 import { CallPresence } from "@/components/CallPresence";
 import { CancelMenu } from "@/components/CancelMenu";
 import type { RowJson } from "@/lib/callRows";
-import { acceptChoices, describeRows, newRow, RequestRows, rowsPayload, type RowState } from "@/components/RequestRows";
+import { alignedClash, describeRows, newRow, RequestRows, rowsPayload, type RowState } from "@/components/RequestRows";
+import { CallRequestsPanel, type PanelReq } from "@/components/CallRequestsPanel";
+import { jumpTo } from "@/lib/markJump";
 
 export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string; joinable?: boolean; report?: { byMe: boolean; note: string } | null; measuring?: string };
 /** A booked daily / weekly set: its line ("Weekly · Mon 3:00 PM (3 left)", or no count for Forever), and whether Cancel needs a reason. */
 export type DevSet = { id: string; label: string; minutes: number; rate: string; needsReason: boolean; calls: DevCall[] };
 export type DevReq = { id: string; rows: RowJson[]; mine: boolean; rate: string; minutes?: number };
-export type DevTester = { contractId: string; name: string; terms: string; booked: number; calls: DevCall[]; sets: DevSet[]; requests: DevReq[]; warning?: string };
+export type DevTester = { contractId: string; name: string; terms: string; booked: number; calls: DevCall[]; sets: DevSet[]; requests: DevReq[]; warning?: string;
+  /** (Batch 16 section 33) For the clash checks: waiting requests with them (both sides), what's left of the $1,000 and the rate a call books at. */
+  pending?: number; leftCents?: number | null; rateCents?: number | null };
+/** (Batch 16 section 33) The developer's other calls (any tester, any test): "You have a call with Ana Silva then (1:30–2:00 PM)." */
+export type OtherCall = { contractId: string; name: string; start: string; minutes: number };
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-const short = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
 
 /**
  * The developer's live-call panel (owner layout): the rate line; one tick row per tester with their terms and
  * "N of 3 booked"; [Request a time] to everyone ticked; then per-tester blocks (ticked testers, or everyone with a call or
  * request when nothing is ticked): booked calls, daily/weekly sets as one line, waiting requests. Boxes under the button.
  */
-export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestReason = "" }: { testId: string; seenAt: string; testers: DevTester[]; canRequest: boolean; noRequestReason?: string }) {
-  const { press, changes, error, busy, at, errData } = usePress(seenAt);
+export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestReason = "", requests = [], elsewhere = [] }: { testId: string; seenAt: string; testers: DevTester[]; canRequest: boolean; noRequestReason?: string; /** (Batch 16 section 33) every waiting request, both directions */ requests?: PanelReq[]; elsewhere?: OtherCall[] }) {
+  const router = useRouter();
+  // (Batch 16 section 21) A call request, booking or cancellation from another tab stops a press touching it once: the panel shows it at once.
+  const { press, changes, error, busy, at, errData } = usePress(seenAt, () => router.refresh());
+  // Requesting the same time again is already done: said plainly, and the request shows in the panel.
+  useEffect(() => {
+    if (error.startsWith("You already requested this time")) router.refresh();
+  }, [error, router]);
   const [ticked, setTicked] = useState<string[]>([]);
   const [rows, setRows] = useState<RowState[]>([newRow()]);
   const [minutes, setMinutes] = useState("");
@@ -49,6 +60,23 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   };
   const all = testers.length > 0 && testers.every((t) => ticked.includes(t.contractId));
   const filled = rowsPayload(rows);
+  // (Owner, Oct 28, batch 16 section 33) Clash checks as the form is filled, for every ticked tester (and every call of a Daily / Weekly set): red lines under the
+  // row (listed under the button; the press waits until fixed), a blue line for an exact match with their waiting request, and the limits in today's wording.
+  const tickedTesters = testers.filter((t) => ticked.includes(t.contractId));
+  const clash = alignedClash(rows, minutes, "developer", tickedTesters.map((t) => ({
+    name: t.name, pending: t.pending, booked: t.booked, leftCents: t.leftCents, rateCents: t.rateCents,
+    calls: [...t.calls, ...t.sets.flatMap((x) => x.calls)].map((c) => ({ start: c.when, minutes: c.minutes })),
+    requests: t.requests.map((q) => ({ id: q.id, rows: q.rows, minutes: q.minutes ?? 0, mine: q.mine })),
+  })), elsewhere.filter((c) => !ticked.includes(c.contractId)).map((c) => ({ start: c.start, minutes: c.minutes, name: c.name })));
+  // (Owner, Oct 28, batch 16 section 21) What this form is requesting that is now booked or requested (e.g. from another tab): marked; the rest of the form stays.
+  const already = filled.flatMap((r) => ticked.flatMap((cid) => {
+    const t = testers.find((x) => x.contractId === cid);
+    if (!t) return [];
+    const at = new Date(r.startsAt).getTime();
+    if ([...t.calls, ...t.sets.flatMap((x) => x.calls)].some((c) => new Date(c.when).getTime() === at)) return [`Already booked: ${t.name}, ${fmt(r.startsAt)}`];
+    if (t.requests.some((q) => q.mine && q.rows.some((x) => new Date(x.startsAt).getTime() === at))) return [`Already requested: ${t.name}, ${fmt(r.startsAt)}`];
+    return [];
+  }));
   const shown = ticked.length ? testers.filter((t) => ticked.includes(t.contractId)) : testers.filter((t) => t.calls.length || t.sets.length || t.requests.length);
 
   const callRow = (t: DevTester, c: DevCall) => (
@@ -87,7 +115,9 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
       )}
       {canRequest && (
         <div className="space-y-2 text-sm" ref={form} data-mistakes-root="">
-          <RequestRows rows={rows} setRows={setRows} minNow={minNow} />
+          <RequestRows rows={rows} setRows={setRows} minNow={minNow} notes={clash.notes} />
+          {clash.limits.map((l) => <p key={l} className="err-field" tabIndex={-1} data-red-msg={l} data-clash-limit="">{l}</p>)}
+          {already.length > 0 && <ul className="space-y-0.5 text-xs text-amber-200" data-already="">{already.map((l) => <li key={l}>{l}</li>)}</ul>}
           <div className="flex flex-wrap items-end gap-2">
             <label className="inline-flex items-center gap-1 text-sm">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max="180" data-whole="" data-msg="A live call lasts from 10 to 180 minutes." data-required="" data-required-msg="Enter the call's length in minutes."
               data-match="length in minutes|live call lasts" value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min <span className="text-xs text-slate-500">10–180</span></label>
@@ -104,6 +134,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           <FormMistakes text={at === "request" && red ? error : ""} press="Request a time" />
         </div>
       )}
+      <CallRequestsPanel side="developer" seenAt={seenAt} requests={requests} path={() => `/api/tests/${testId}`} />
       {shown.length === 0 && canRequest && <p className="note">No calls or requests yet.</p>}
       {/* (Batch 15 section 33) The whole list of tester cards scrolls on its own once it's taller than about 2 screens; the tick list and the request form stay above it. */}
       <div className="max-h-[200vh] space-y-2 overflow-y-auto pr-1" data-testers-calls="">
@@ -131,27 +162,14 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
               </li>
             ))}
           </ul>
+          {/* (Batch 16 section 33) Their waiting requests and yours, as they arrive; each opens its row in Call requests (Accept / Decline / Withdraw are there). */}
           {t.requests.length > 0 && <p className="font-medium">Waiting</p>}
           <ul className="space-y-1">
             {t.requests.map((r) => (
-              <li key={r.id} id={`req-${r.id}`} className={`flex flex-wrap items-center gap-2 ${MARKABLE}`}>
-                <span className="mr-auto">
-                  {r.mine ? "You requested" : `${t.name} requested`}{" "}
-                  {describeRows(r.rows)}{r.minutes ? ` · ${r.minutes} min` : ""} · {r.rate}
-                </span>
-                {r.mine ? (
-                  <button className="btn-ghost" disabled={busy} onClick={() => go("answer-request", { requestId: r.id, action: "withdraw", contractId: t.contractId }, "w-" + r.id)}>Withdraw</button>
-                ) : (
-                  <>
-                    {acceptChoices(r.rows).map((x) => (
-                      <button key={x.label} className="btn" disabled={busy} onClick={() => go("answer-request", { requestId: r.id, action: "accept", ...(x.time ? { time: x.time } : {}), contractId: t.contractId }, "a-" + r.id)}>{x.label}</button>
-                    ))}
-                    <button className="btn-ghost" disabled={busy} onClick={() => go("answer-request", { requestId: r.id, action: "decline", contractId: t.contractId }, "d-" + r.id)}>Decline</button>
-                  </>
-                )}
-                {box("w-" + r.id)}
-                {box("a-" + r.id)}
-                {box("d-" + r.id)}
+              <li key={r.id}>
+                <a href={`#req-${r.id}`} onClick={(e) => { e.preventDefault(); jumpTo(`req-${r.id}`); }}>
+                  {r.mine ? "You requested" : `${t.name} requested`} {describeRows(r.rows)}{r.minutes ? ` · ${r.minutes} min` : ""} · {r.rate}
+                </a>
               </li>
             ))}
           </ul>

@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { countsOf } from "@/lib/limits";
 import { gapsOf } from "@/lib/gaps";
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
-import { devCancelCall, lowerCallLength, reportNoShow } from "@/lib/server/calls";
+import { devCancelCall, reportNoShow } from "@/lib/server/calls";
 import { cancelInvite, inviteGaps, invitePanel, inviteTesters } from "@/lib/server/invites";
 import { answerRequest, cancelCallSet, devRequestTime } from "@/lib/server/requests";
 import { apply, askToRejoin, decideApplication, join, withdrawApplication } from "@/lib/server/joining";
@@ -54,7 +54,7 @@ export async function POST(req: Request, { params }: Ctx) {
 }
 
 /** The tester-side and read-only presses on this route: the team's pause or stop of the test never refuses them here. */
-const STOPPED_ALLOWS = new Set(["message", "rate", "dispute-side", "pay-extra", "lower-length", "no-show"]);
+const STOPPED_ALLOWS = new Set(["message", "rate", "dispute-side", "pay-extra", "no-show"]);
 const TESTER_SIDE = new Set(["join", "apply", "rejoin-ask", "withdraw-application", "my-gaps"]);
 
 /**
@@ -103,8 +103,6 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         return ok(await (await import("@/lib/server/accessKeys")).dismissBrokenKeys(u, id, body));
       case "cancel-set":
         return ok(await cancelCallSet(u, String(body.contractId ?? ""), body));
-      case "lower-length":
-        return ok(await lowerCallLength(u, id, body));
       case "no-show":
         return ok(await reportNoShow(u, String(body.callId ?? ""), body));
       case "pay-extra":

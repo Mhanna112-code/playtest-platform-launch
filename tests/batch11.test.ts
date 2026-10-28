@@ -122,6 +122,7 @@ describe("batch 11 item 2: the chargeback fee", () => {
     const { dev, p, st } = await chargedBack();
     expect((await owed(dev.user.id)).map((x) => x.amountCents)).toEqual([2500]);
     expect((await owedLines(dev.user.id))[0].text).toBe("Your bank reversed a $10 payment: $10 + $15 chargeback fee");
+    await db.user.update({ where: { id: dev.user.id }, data: { chargebackCardVerifiedAt: new Date() } }); // (batch 16 section 41) step 1 first: Pay what you owe waits for the verified card
     const r = await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })));
     expect(r.body.paid).toBe(1);
     expect(st.made.at(-1)!.amount).toBe(2500);
@@ -130,6 +131,7 @@ describe("batch 11 item 2: the chargeback fee", () => {
 
   it("won after paying: the amount and the fee are refunded; a payments-kind stop-once line on the test page", async () => {
     const { dev, p, st, testId } = await chargedBack();
+    await db.user.update({ where: { id: dev.user.id }, data: { chargebackCardVerifiedAt: new Date() } }); // (batch 16 section 41) step 1 first: Pay what you owe waits for the verified card
     await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })));
     const loaded = seen();
     await settle();

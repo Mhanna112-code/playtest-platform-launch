@@ -10,7 +10,8 @@ import { LongList } from "@/components/LongList";
 // bottom), "N spots still open" / "All spots are filled", "N of M spots taken · Change in Edit", and "No longer
 // working (N)".
 
-export type Seat = { testerId: string; name: string; summary: string[]; block: ReactNode; chat?: ReactNode; /** (Batch 13) shown excerpts, up to 3 */ excerpts?: string[] };
+/** (Batch 16 section 23) The hover card: rating, accepted parts, the profile link and "Chat with <name>"; no excerpts (they're on the profile). */
+export type Seat = { testerId: string; name: string; summary: string[]; block: ReactNode; chat?: ReactNode };
 export type Gone = { contractId: string; name: string; how: string; at: Date | null };
 
 function TesterAvatar({ seat }: { seat: Seat }) {
@@ -25,7 +26,6 @@ function TesterAvatar({ seat }: { seat: Seat }) {
         <span className="block font-semibold text-white">{seat.name}</span>
         {/* Devices and languages: 3, then "+N more". */}
         {seat.summary.map((l, i) => <span key={l} className="block text-slate-300">{i === 0 && l.includes(", ") ? <PlusMore items={l.split(", ")} /> : l}</span>)}
-        {(seat.excerpts ?? []).map((x, i) => <span key={i} className="mt-1 block text-xs italic text-slate-300" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }} data-hover-excerpt="">“{x}”</span>)}
         <Link href={`/app/testers/${seat.testerId}`} className="mt-1 block text-sky-300 hover:underline">See their profile</Link>
         {seat.chat && <span className="mt-3 block border-t border-white/10 pt-2">{seat.chat}</span>}
         {seat.block && <span className="mt-3 block border-t border-white/10 pt-2">{seat.block}</span>}

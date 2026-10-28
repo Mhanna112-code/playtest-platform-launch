@@ -1,18 +1,36 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Choices } from "@/components/Choices";
 import { FormMistakes } from "@/components/FormMistakes";
-import { api, errOf } from "@/lib/client";
+import { ChangesBox, type Change } from "@/components/ChangesBox";
+import { api, ApiError, errOf } from "@/lib/client";
+import { mergeChanges } from "@/lib/live";
 import { DEVICES, LANGUAGES } from "@/lib/options";
 
 type Init = { name: string; pronoun: string; isDeveloper: boolean; isTester: boolean; devices: string[]; categories: string[]; languages: string[]; bio: string };
 
 /** The profile form of the side in use: the developer's is the name; the tester's adds devices, languages and a bio. (Batch 16 section 10) A mistake is red at its box and listed under the button. */
-export function ProfileForm({ init, first, side = "tester" }: { init: Init; first?: boolean; side?: "developer" | "tester" }) {
+export function ProfileForm({ init, first, side = "tester", seenAt: seen0 }: { init: Init; first?: boolean; side?: "developer" | "tester"; /** (Batch 16 section 27) the page's load time */ seenAt?: string }) {
   const [v, setV] = useState(init);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const set = (p: Partial<Init>) => setV((o) => ({ ...o, ...p }));
+  // (Owner, Oct 28, batch 16 section 27) Saved in another tab or device: the page refreshes silently and the boxes not typed in take the saved values; the
+  // first Save afterwards stops once (from the page's load time) listing what changed; the second saves what's here on top.
+  const [seenAt] = useState(seen0 ?? "");
+  const [changes, setChanges] = useState<Change[] | null>(null);
+  const [boxAt, setBoxAt] = useState("");
+  const typed = useRef(new Set<keyof Init>());
+  const set = (p: Partial<Init>) => {
+    for (const k of Object.keys(p) as (keyof Init)[]) typed.current.add(k);
+    setV((o) => ({ ...o, ...p }));
+  };
+  useEffect(() => {
+    setV((o) => {
+      const next = { ...o };
+      for (const k of Object.keys(init) as (keyof Init)[]) if (!typed.current.has(k)) (next as Record<string, unknown>)[k] = init[k];
+      return next;
+    });
+  }, [init]);
   const tester = first ? v.isTester : side === "tester";
 
   async function save(e: React.FormEvent) {
@@ -20,11 +38,16 @@ export function ProfileForm({ init, first, side = "tester" }: { init: Init; firs
     setBusy(true);
     setMsg(null);
     try {
-      await api("/api/profile", v);
+      await api("/api/profile", { ...v, ...(seenAt ? { seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}) } : {}) });
+      setChanges(null);
+      typed.current.clear();
       if (first) window.location.href = "/app";
       else setMsg({ ok: true, text: "Your profile is saved." });
     } catch (err) {
-      setMsg({ ok: false, text: errOf(err) });
+      if (err instanceof ApiError && err.code === "stop_once") {
+        setChanges((c) => (c ? mergeChanges(c, (err.data.changes as Change[]) ?? []) : ((err.data.changes as Change[]) ?? [])));
+        if (typeof err.data.now === "string") setBoxAt(err.data.now);
+      } else setMsg({ ok: false, text: errOf(err) });
     } finally {
       setBusy(false);
     }
@@ -67,6 +90,7 @@ export function ProfileForm({ init, first, side = "tester" }: { init: Init; firs
         <button className="btn" disabled={busy}>{busy ? "Saving…" : first ? "Continue" : "Save profile"}</button>
         <span role="status" aria-live="polite">{msg?.ok && <span className="text-emerald-300">{msg.text}</span>}</span>
       </div>
+      <ChangesBox changes={changes} press={first ? "Continue" : "Save profile"} />
       <FormMistakes text={msg && !msg.ok ? msg.text : ""} press={first ? "Continue" : "Save profile"} />
     </form>
   );
