@@ -177,7 +177,7 @@ describe("deleting an account (design doc 2, 9, 11.4)", () => {
     const a = await act(testId, "edit", dev.cookie, { version: 1, fields: {} });
     expect(a.status).toBe(401);
     expect(a.body.error.code).toBe("deleted");
-    await expect(logIn({ email, password: "whatever123" })).rejects.toMatchObject({ message: "This account no longer exists" });
+    await expect(logIn({ email, password: "whatever123" })).rejects.toMatchObject({ message: "Wrong email or password" }); // (batch 15 section 7: one message)
     // The tester can still read their session; history stays.
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["x", "y"] })).status).toBe(409);
   });

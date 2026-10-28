@@ -70,7 +70,8 @@ describe("sign up, confirm, log in, reset", () => {
     expect(await getUserFromRequest(req("/app", { cookie: cookieOf(other) }))).toBeNull();
     // An account from the old email links: no password yet.
     const { user } = await makeUser();
-    expect((await json(await loginPOST(req("/api/auth/login", { body: { email: user.email, password: "anything-1" } })))).body.error.message).toBe("This account has no password yet. Use “Forgot your password?” to choose one.");
+    // (Batch 15 section 7) One message whatever the reason, so it never reveals who has an account.
+    expect((await json(await loginPOST(req("/api/auth/login", { body: { email: user.email, password: "anything-1" } })))).body.error.message).toBe("Wrong email or password");
   });
 
   it("email confirmation is required for the listed presses (blue refusal), not for profile or chat", async () => {

@@ -13,6 +13,8 @@ export function LoginForm({ reset, google, next = "/app" }: { reset: boolean; go
       {google && (
         <>
           <a className="btn-ghost w-full" href="/api/auth/google/start">Continue with Google</a>
+          {/* (Batch 15 section 7) Sign-in never says whether an account has a password: this hint points Google sign-ups to the right button. */}
+          <p className="note text-center" data-google-hint>Signed up with Google? Use Continue with Google.</p>
           <p className="note text-center">or</p>
         </>
       )}

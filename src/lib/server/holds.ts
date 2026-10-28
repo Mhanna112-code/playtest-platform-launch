@@ -580,6 +580,8 @@ export async function runDaily(now = new Date()) {
   // 10. (Owner, Oct 26) The reminders that need their own rules, then the emails last (one email lists everything new; payment lines also go out end of day).
   await dailyReminders(now);
   await (await import("./ratings")).ratingReminders(now);
+  // (Batch 15 section 7) Sign-in attempts older than a day are deleted.
+  await (await import("./passwords")).cleanLoginAttempts(now);
   await sendSummaries(now);
   return out;
 }

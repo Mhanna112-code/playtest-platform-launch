@@ -38,10 +38,42 @@ async function issue(email: string, kind: "reset" | "verify", ms: number) {
 }
 const recentlySent = (email: string, kind: string) => db.loginToken.count({ where: { email, kind, createdAt: { gt: new Date(Date.now() - 3_600_000) } } });
 
-/** Sign up: email + password. Signed in at once; a confirmation link is emailed. */
-export async function signUp(body: Record<string, unknown>, base: string) {
+// ---------- (Owner, Oct 30, batch 15 section 7) One sign-in message, and attempt limits ----------
+
+export const WRONG_LOGIN = "Wrong email or password";
+export const TOO_MANY_TRIES = "Too many tries. Wait 15 minutes or reset your password.";
+export const TOO_MANY_SIGNUPS = "Too many new accounts from here. Try again in an hour.";
+export const LOGIN_WINDOW_MS = 15 * 60_000;
+export const LOGIN_FAILS_PER_EMAIL = 5;
+export const LOGIN_FAILS_PER_NETWORK = 20;
+export const SIGNUPS_PER_NETWORK_HOUR = 10;
+/**
+ * The network a press came from: the first address of x-forwarded-for (always set on Vercel), else x-real-ip. Without either header: "unknown" in production (counted
+ * like any network), "" on a local dev server (no network limit, so local test runs and recordings can make many accounts; the per-email limit still applies).
+ */
+export function clientIp(req: Request) {
+  const fwd = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip")?.trim();
+  return (fwd || (process.env.NODE_ENV === "production" ? "unknown" : "")).slice(0, 100);
+}
+/** 5 failed tries for one email, or 20 from one network, in 15 minutes pause sign-in for that email or network (even with the right password). */
+async function loginPaused(email: string, ip: string, now: Date) {
+  const since = new Date(now.getTime() - LOGIN_WINDOW_MS);
+  const [byEmail, byIp] = await Promise.all([
+    db.loginAttempt.count({ where: { kind: "login", ok: false, email, at: { gt: since } } }),
+    ip ? db.loginAttempt.count({ where: { kind: "login", ok: false, ip, at: { gt: since } } }) : 0,
+  ]);
+  return byEmail >= LOGIN_FAILS_PER_EMAIL || byIp >= LOGIN_FAILS_PER_NETWORK;
+}
+/** The daily job: attempts older than a day are deleted. */
+export const cleanLoginAttempts = (now = new Date()) => db.loginAttempt.deleteMany({ where: { at: { lt: new Date(now.getTime() - 86_400_000) } } });
+
+/** Sign up: email + password. Signed in at once; a confirmation link is emailed. (Batch 15 section 7) At most 10 new accounts per network an hour. */
+export async function signUp(body: Record<string, unknown>, base: string, ip = "", now = new Date()) {
   const email = readEmail(body.email);
   const password = readNewPassword(body.password);
+  if (ip && (await db.loginAttempt.count({ where: { kind: "signup", ok: true, ip, at: { gt: new Date(now.getTime() - 3_600_000) } } })) >= SIGNUPS_PER_NETWORK_HOUR)
+    throw new HttpError(429, "too_many", TOO_MANY_SIGNUPS);
+  // (Owner, Oct 30) Sign-up keeps "An account with that email already exists".
   if (await db.user.findUnique({ where: { email } })) throw field("An account with that email already exists");
   // (NEXT-UI 15) The full app's sign-up form also asks who you are (developer, tester or both), your name and the Terms.
   const role = body.role === "developer" || body.role === "tester" || body.role === "both" ? body.role : "";
@@ -55,30 +87,48 @@ export async function signUp(body: Record<string, unknown>, base: string) {
   const user = await db.user.create({
     data: { email, passwordHash: await hashPassword(password), ...(who ?? {}), ...(who?.isTester ? { profile: { create: { devices: [], languages: [], categories: [] } } } : {}) },
   });
+  await db.loginAttempt.create({ data: { email, ip, kind: "signup", ok: true, at: now } });
   await sendVerification(user.id, base);
   return { user, ...(await createSession(user.id)) };
 }
 
-/** Log in. A wrong password is a form mistake (red); an account without a password is pointed to Forgot password. */
-export async function logIn(body: Record<string, unknown>) {
+/**
+ * Log in. (Batch 15 section 7) One message for no account, a deleted account, an account without a password (Google sign-up) and a wrong password: "Wrong email or
+ * password" (red), so it never reveals who has an account. Too many failed tries pause sign-in for that email or network for 15 minutes, even with the right password.
+ */
+export async function logIn(body: Record<string, unknown>, ip = "", now = new Date()) {
   const email = readEmail(body.email);
   const password = typeof body.password === "string" ? body.password : "";
   if (!password) throw field("Enter your password");
+  if (await loginPaused(email, ip, now)) throw new HttpError(429, "too_many", TOO_MANY_TRIES);
   const user = await db.user.findUnique({ where: { email } });
-  if (user?.deletedAt) throw field("This account no longer exists");
-  if (user && !user.passwordHash) throw field("This account has no password yet. Use “Forgot your password?” to choose one.");
-  if (!user || !(await verifyPassword(password, user.passwordHash))) throw field("Wrong email or password");
+  const ok = !!user && !user.deletedAt && !!user.passwordHash && (await verifyPassword(password, user.passwordHash));
+  await db.loginAttempt.create({ data: { email, ip, kind: "login", ok, at: now } });
+  if (!ok || !user) throw field(WRONG_LOGIN);
   await db.session.deleteMany({ where: { userId: user.id, expiresAt: { lt: new Date() } } });
   return { user, ...(await createSession(user.id)) };
 }
+
+/** (Batch 15 section 7) The reset email for an account with no password (a Google sign-up). */
+export const NO_PASSWORD_YET = "Your account has no password yet. Choose one here:";
 
 /** "Forgot your password?": always the same answer, so it can't reveal who has an account. */
 export async function requestReset(body: Record<string, unknown>, base: string) {
   const email = readEmail(body.email);
   const user = await db.user.findUnique({ where: { email } });
-  if (user && (await recentlySent(email, "reset")) < EMAILS_PER_HOUR) {
+  if (user && !user.deletedAt && (await recentlySent(email, "reset")) < EMAILS_PER_HOUR) {
     const token = await issue(email, "reset", RESET_MINUTES * 60_000);
     const link = `${base}/reset/${token}`;
+    // (Batch 15 section 7) An account with no password yet (a Google sign-up) gets the same link, worded for a first password.
+    if (!user.passwordHash) {
+      await sendEmail({
+        to: email,
+        subject: "Choose a password",
+        text: `${NO_PASSWORD_YET}\n${link}\n\nThe link works once, for ${RESET_MINUTES} minutes. You can keep using Continue with Google too.`,
+        html: `<p>${NO_PASSWORD_YET} <a href="${link}">Choose a password</a></p><p>The link works once, for ${RESET_MINUTES} minutes. You can keep using Continue with Google too.</p>`,
+      });
+      return { sent: true };
+    }
     await sendEmail({
       to: email,
       subject: "Reset your password",

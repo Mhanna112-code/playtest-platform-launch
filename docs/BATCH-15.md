@@ -444,6 +444,33 @@ One $1,000 ceiling for ALL of a tester's calls on a test, listed and unlisted to
 - **Tests** for each, including a mix of listed and unlisted calls.
 - **Proof:** a recording of the warning appearing, then a booking refused at the limit, desktop and phone.
 
+## 35. Code gaps found by the rule checklist (Oct 30, added later)
+From docs/media/rule-checklist.json (status "gap"). Fix each with a test.
+- **Build link:** `parseListing` accepts http://, but the message says https://. Require https:// and keep the message.
+- **Invite rows' unmet needs** (`TAG_NAMES` in src/lib/inviteRows.ts): name 3 items, then a "+N more" that opens to show the rest (it currently shows 2, with an "or N more…" that can't be opened). Update invite-rows.test.ts.
+- **Developer dashboard's Needs you:**
+  - Include excerpt requests (Allow / Deny), not only in the restricted box.
+  - Applications and rejoin asks link to their own row (`#item-…` plus the markJump highlight), not to `#needs-you`.
+- **Live box:** a new dispute line links to its Needs you row, the same as its bell line.
+- **Tester dashboard, Upcoming calls:** each row gets a Join button while the call is joinable (the same rule as the session page).
+- **Admin "Your actions"** (`mine` in adminLists.ts): also list ACCOUNTS this admin suspended (per side, item 16) or deleted, not only tests.
+- **A suspended admin loses admin access.** Login refuses them like any suspended account, and the console and every admin action refuse them ("Your account is paused."). Add tests.
+- **A tester's call request makes a bell line for the developer** ("<name> asked for a call: <time(s)>"), stacked like the other request lines, as the doc says.
+- **The admin's Stop takes the same test lock as the developer's Stop,** so a simultaneous developer Stop and admin Stop can't both run. The second is refused: "This test was already stopped."
+- **Stale test names and comments** that describe old rules ("14 days", "$100 cap", "20 at a time", "the same again as extra pay"…): rename or update them to match what they check. Also fix the comments in suspended-and-ask.test.ts, restrictions.test.ts and design-misc.test.ts.
+- **Leave alone for now (owner deciding):** the call Join window, invite-only tests in Find for invited testers, and Next round after a team stop.
+
+## 36. Every stop-once box names the press first and ends with the action (owner, Oct 30, added later)
+This applies on both sides, on every page: the test page, Edit, the session page, Payments and the dashboards. The box reads, top to bottom:
+1. "Your <button> didn't go through." Use the button's own label: "Your Pay on Ana Silva's written answers didn't go through.", "Your Stop the test didn't go through.", "Your Save didn't go through.", "Your Send didn't go through."
+2. "Since you opened this page:" and the list of changes.
+3. The Alerts lines ("You can turn these stops off in Alerts…" / "Don't stop me for: …"). For testers, use the item 26 toggle wording.
+4. Last line, bold: "Press <button> again to go ahead.", e.g. "Press Pay again to go ahead."
+
+Refusals (not stops) keep their own wording, but also start by naming the press: "Your Pay didn't go through: <reason>." Re-record the stop-once scenarios to match.
+
+**Also (Oct 30, added later), a proof:** a "tester-stop-once" group (desktop + phone): the tester has the session page open with a written answer typed; the developer pays another piece or edits the listing; Send stops once with the blue list; the second press goes through. Plus a still of a tester's Charge stopping once after the developer paid something, and a still with Alerts Off where Send goes through while a terms offer still stops it.
+
 ## Check and report
 - Migrations: `LoginAttempt`, `User.timeZone`, the stored "down" alert (or reuse `AppState`). Write them by hand and check them with the `prisma migrate diff ... --exit-code` command from BATCH-10. A stale Prisma client is then the only acceptable failure.
 - Run `NEXT_DIST_DIR=.next-build npm run check` until it's green.

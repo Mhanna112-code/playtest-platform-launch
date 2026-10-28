@@ -86,6 +86,8 @@ model User {
   lastSummaryAt DateTime?
   /// (NEWEST+9) The most testers per test this developer has earned so far (it never shrinks; see src/lib/capacity.ts)
   testerLimit   Int       @default(10)
+  /// (Batch 15 section 11) The person's IANA time zone, sent by their browser ("" = unknown: UTC). Every time in their bell lines and emails is written in it.
+  timeZone      String    @default("")
 
   notifications Notification[]
 
@@ -97,6 +99,21 @@ model User {
   chatReads ChatRead[]
   keptForms KeptForm[]
   excerpts  Excerpt[]
+}
+
+/// (Batch 15 section 7) Sign-in and sign-up attempts, for the limits (5 failed tries per email or 20 per network in 15 minutes; 10 new accounts per network an hour).
+/// ip = the first address of x-forwarded-for. The daily job deletes rows older than a day.
+model LoginAttempt {
+  id    String   @id @default(cuid())
+  email String
+  ip    String
+  /// "login" | "signup"
+  kind  String   @default("login")
+  ok    Boolean
+  at    DateTime @default(now())
+
+  @@index([email, at])
+  @@index([ip, at])
 }
 
 /// One-use sign-in link tokens (only the SHA-256 hash is stored)
