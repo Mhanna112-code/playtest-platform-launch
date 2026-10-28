@@ -946,6 +946,21 @@ model AccountEvent {
 }
 
 /// (Owner, Oct 27) A Contact us message: at most 5 per account per day.
+/// (Owner, Oct 30, batch 15 section 21) Every admin action, with the admin who did it: admin views name them by email ("an admin (deleted)" once that account is gone).
+/// Developers and testers never see which admin; they read "the team".
+model AdminAction {
+  id        String   @id @default(cuid())
+  adminId   String
+  /// The admin route's action: "pause-test", "stop-test", "suspend", "delete-account", "release-share", "refund-share", "allow-critical-changes", "approve-hold" ...
+  action    String
+  /// What it acted on (a test, an account, a payment, a dispute, a contact message)
+  targetId  String
+  createdAt DateTime @default(now())
+
+  @@index([targetId, createdAt])
+  @@index([adminId, createdAt])
+}
+
 model ContactMessage {
   id        String   @id @default(cuid())
   userId    String

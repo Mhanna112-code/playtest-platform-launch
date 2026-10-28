@@ -238,10 +238,8 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   if (!isAdmin(admin)) throw new HttpError(403, "not_admin", "Only admins can decide disputes.");
   const d = await db.dispute.findUnique({ where: { id: disputeId } });
   if (!d) throw new HttpError(404, "not_found", "That dispute doesn't exist.");
-  if (d.status !== "open") {
-    const by = d.decidedById ? await db.user.findUnique({ where: { id: d.decidedById } }) : null;
-    throw new HttpError(409, "decided", `This dispute was already decided${by ? ` by ${displayName(by)}` : ""}${d.decidedAt ? ` at ${fmtDateTime(d.decidedAt)}` : ""}.`);
-  }
+  // (Batch 15 section 21) The two-admin refusal names the other admin by email: "ben@… already decided this dispute at 3:10 PM."
+  if (d.status !== "open") throw new HttpError(409, "decided", await decidedByLine(d.decidedById, d.decidedAt));
   // (Owner, Oct 30, batch 15 section 27) The developer added their side after this admin's page loaded: Decide stops once so they can read it.
   const seen = typeof body.seenAt === "string" ? new Date(body.seenAt) : null;
   if (seen && !isNaN(seen.getTime()) && body.confirmed !== true && d.devSideAt && d.devSideAt > seen) {
@@ -262,8 +260,7 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   if (claimed.count !== 1) {
     // Any admin, first decision wins: the second press says who and when.
     const won = await db.dispute.findUnique({ where: { id: d.id } });
-    const by = won?.decidedById ? await db.user.findUnique({ where: { id: won.decidedById } }) : null;
-    throw new HttpError(409, "decided", `This dispute was already decided${by ? ` by ${displayName(by)}` : ""}${won?.decidedAt ? ` at ${fmtDateTime(won.decidedAt)}` : ""}.`);
+    throw new HttpError(409, "decided", await decidedByLine(won?.decidedById ?? null, won?.decidedAt ?? null));
   }
   let delayed = false;
   const owedRow = { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, amountCents: extra, feeCents: 0, testerCents: 0 };
@@ -304,6 +301,13 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   await notify(c.tester.email, `Your dispute on “${c.title}” was decided`, [line, ...(delayed ? ["Payment may be delayed until the test resumes."] : []), ...(note ? [`Their note: “${note}”`] : [])], `/app/sessions/${c.id}#${d.callId ? "part-live" : partAnchor((await db.submission.findUnique({ where: { id: d.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers")}`, { group: "disputedecided" });
   await notify(c.test.developer.email, `A dispute on “${c.title}” was decided`, [line, ...(note ? [`The team's note: “${note}”`] : [])], `/app/tests/${c.testId}#tester-${c.id}`, { group: "disputedecided" });
   return { extraCents: extra };
+}
+
+/** "ben@playtest.test already decided this dispute at 3:10 PM." ("An admin (deleted)" once that account is gone). */
+async function decidedByLine(byId: string | null, at: Date | null) {
+  const by = byId ? await db.user.findUnique({ where: { id: byId }, select: { email: true, deletedAt: true } }) : null;
+  const who = by && !by.deletedAt ? by.email : byId ? "An admin (deleted)" : "Another admin";
+  return `${who} already decided this dispute${at ? ` at ${fmtTime(at)}` : ""}.`;
 }
 
 /** A payment receipt to the developer for every payment that goes through: bell + email, always sent. */

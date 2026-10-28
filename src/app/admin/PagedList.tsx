@@ -1,12 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api, errOf } from "@/lib/client";
+import { DisputeWork } from "./DisputeWork";
+import { ScrollText } from "@/components/ScrollText";
+import type { ContactVM } from "@/lib/server/adminLists";
 import type { ChargebackVM, DisputeVM, Kind, LiftVM, MineVM, Page, PausedVM, ReportVM, TestVM, TextVM, UserVM } from "@/lib/server/adminLists";
 import { AdminButton } from "./AdminButton";
 import { DisputeDecision } from "./DisputeDecision";
 import { PreviewButton } from "./PreviewButton";
 
-type AnyRow = DisputeVM | MineVM | UserVM | TestVM | TextVM | PausedVM | ChargebackVM | LiftVM | ReportVM;
+type AnyRow = ContactVM | DisputeVM | MineVM | UserVM | TestVM | TextVM | PausedVM | ChargebackVM | LiftVM | ReportVM;
 
 /** A hold lift waiting for Approve: a note box and Approve (first press wins, like Decide). */
 function LiftApprove({ id }: { id: string }) {
@@ -51,6 +54,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
           <p><b>{d.head}</b></p>
           <p>{d.money}</p>
           <p>{d.said}</p>
+          <DisputeWork work={d.work ?? null} />
           {d.open ? <DisputeDecision id={d.id} minCents={d.min} maxCents={d.max} side={d.devSide ?? ""} sideAt={d.devSideAt ?? null} dev={d.dev ?? "The developer"} /> : <>
             {d.devSide && <p>Developer&apos;s side: “{d.devSide}”</p>}
             <p className="note">{d.decided}</p>
@@ -171,6 +175,17 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
             Chargeback hold: card verified <b>{c.cardVerified ? "✓" : "✗"}</b>, owed paid <b>{c.owedPaid ? "✓" : "✗"}</b>{c.owedLine}{" "}
             <AdminButton action="approve-chargeback" id={c.id} label="Approve" disabled={!c.cardVerified || !c.owedPaid} />
           </p>
+        </div>
+      );
+    }
+    case "contact": {
+      const m = row as ContactVM;
+      return (
+        <div id={`contact-${m.id}`} className="space-y-1 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-contact-row={m.id}>
+          <p><b>{m.from}</b> · {m.topic}</p>
+          {/* (Batch 15 section 21) Up to 50,000 characters: a scroll box about 8 lines tall (the email to the team has it in full). */}
+          <ScrollText text={m.message} lines={8} className="text-slate-300" />
+          {m.replied ? <p className="note" data-replied="">{m.replied}</p> : <AdminButton action="contact-replied" id={m.id} label="Mark replied" />}
         </div>
       );
     }

@@ -91,7 +91,9 @@ describe("admin disputes: any admin, first decision wins", () => {
     expect((await adm("decide", one.cookie, { id: d.id, total: "" })).status).toBe(200);
     const second = await adm("decide", two.cookie, { id: d.id, total: "10.00" });
     expect(second.status).toBe(409);
-    expect(second.body.error.message).toMatch(/^This dispute was already decided by Admin One at .+\.$/);
+    // (Batch 15 section 21) Named by email: "<email> already decided this dispute at 3:10 PM."
+    expect(second.body.error.message).toBe(`${one.user.email} already decided this dispute at ${second.body.error.message.split(" at ").pop()}`);
+    expect(second.body.error.message).toMatch(/ already decided this dispute at .+\.$/);
   });
 });
 

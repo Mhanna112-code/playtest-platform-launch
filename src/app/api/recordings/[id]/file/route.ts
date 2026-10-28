@@ -1,12 +1,12 @@
 import { canView } from "@/lib/server/recordings";
-import { getUserFromRequest } from "@/lib/server/session";
+import { getUserFromRequest, isAdmin } from "@/lib/server/session";
 import { dispositionOf, r2On, readLocal, viewUrl } from "@/lib/server/storage";
 
-// Watch a recording: only the tester who made it and the test's developer.
+// Watch a recording: only the tester who made it, the test's developer and (batch 15 section 8) admins.
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const u = await getUserFromRequest(req);
   const { id } = await params;
-  const r = u ? await canView(u.id, id) : null;
+  const r = u ? await canView(u.id, id, isAdmin(u)) : null;
   if (!r) return new Response("Not found", { status: 404 });
   if (r2On()) return Response.redirect(viewUrl(r.id, r.storageKey, r.contentType, r.filename), 302);
   try {

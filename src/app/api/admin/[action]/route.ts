@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { fmtTime } from "@/lib/format";
 import { countingSince, countsOf, lockedFields, storedCounts } from "@/lib/limits";
 import { HttpError, handle, ok, readJson, readText } from "@/lib/server/http";
 import { LIMITS } from "@/lib/limits";
@@ -21,7 +22,27 @@ export async function POST(req: Request, { params }: Ctx) {
     if (!isAdmin(u)) throw new HttpError(403, "not_admin", "Only admins can do that.");
     const body = await readJson(req);
     const id = String(body.id ?? "");
+    const res = await run(u, action, id, body);
+    // (Batch 15 section 21) Every admin action is kept with the admin who did it (a preview changes nothing).
+    if (action !== "preview-suspension") await db.adminAction.create({ data: { adminId: u.id, action, targetId: id } });
+    return res;
+  });
+}
+
+async function run(u: Awaited<ReturnType<typeof requireUser>>, action: string, id: string, body: Record<string, unknown>) {
+  {
     switch (action) {
+      // (Batch 15 section 21) Contact us: an admin marks a message replied (the list says who and when).
+      case "contact-replied": {
+        const done = await db.contactMessage.updateMany({ where: { id, repliedById: null }, data: { repliedById: u.id, repliedAt: new Date() } });
+        if (done.count !== 1) {
+          const m = await db.contactMessage.findUnique({ where: { id } });
+          if (!m) throw new HttpError(404, "not_found", "That message doesn't exist.");
+          const by = m.repliedById ? await db.user.findUnique({ where: { id: m.repliedById }, select: { email: true } }) : null;
+          throw new HttpError(409, "replied", `${by?.email ?? "An admin (deleted)"} already marked this replied${m.repliedAt ? ` at ${fmtTime(m.repliedAt)}` : ""}.`);
+        }
+        return ok({ ok: true });
+      }
       case "decide":
         return ok(await decideDispute(u, id, body));
       case "suspend": {
@@ -80,5 +101,5 @@ export async function POST(req: Request, { params }: Ctx) {
         return ok({ ok: true });
     }
     throw new HttpError(404, "not_found", "That action doesn't exist.");
-  });
+  }
 }

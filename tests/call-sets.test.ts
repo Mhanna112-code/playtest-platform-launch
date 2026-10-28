@@ -95,7 +95,7 @@ describe("call request rows", () => {
 });
 
 describe("(Owner, item 22) bell lines for calls: booked and cancelled are bell lines for the other side; requests are not", () => {
-  it("a request makes no bell; booking tells the requester; each cancel tells the other side", async () => {
+  it("a developer request makes no bell (batch 15: a tester request does); booking tells the requester; each cancel tells the other side", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const bells = (userId: string) => db.notification.count({ where: { userId } });
@@ -109,7 +109,8 @@ describe("(Owner, item 22) bell lines for calls: booked and cancelled are bell l
     await act(testId, "cancel-call", dev.cookie, { seenAt: seen(), confirmed: true, callId: call.id });
     expect(await bells(tester.user.id)).toBeGreaterThan(before); // cancelled by the developer: the tester
     await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: at(100) });
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "asked for" } } })).toBe(0);
+    // (Owner, Oct 30, batch 15 section 35) A tester's call request IS a bell line for the developer ("<name> asked for a call: <time>"), stacked.
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "asked for a call" }, groupKey: "callrequests" } })).toBe(1);
     await act(testId, "answer-request", dev.cookie, { contractId: sessionId, requestId: (await pending(sessionId, "tester")).id, action: "accept", seenAt: seen(), confirmed: true });
     const call2 = await db.call.findFirstOrThrow({ where: { contractId: sessionId, status: "booked" } });
     const devBells = await bells(dev.user.id);

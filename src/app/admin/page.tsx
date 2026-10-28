@@ -28,8 +28,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   if (adminAccount(u) && !isAdmin(u)) return <main className="wrap space-y-4"><Brand /><p className="info" data-admin-paused="">{ADMIN_PAUSED} Contact the owner if you think this is a mistake.</p></main>;
   if (!isAdmin(u)) notFound();
   const q = await searchParams;
-  const [disputes, liftsP, mine, paused, chargebacks, decided, noShows, reportsP, usersP, testsP, paymentsP, waitlistP] = await Promise.all(
-    (["disputes", "lifts", "mine", "paused", "chargebacks", "decided", "noshows", "reports", "users", "tests", "payments", "waitlist"] as const).map((k) => adminPage(k, u.id, null)),
+  const [disputes, liftsP, mine, paused, chargebacks, decided, noShows, reportsP, usersP, testsP, paymentsP, waitlistP, contactP] = await Promise.all(
+    (["disputes", "lifts", "mine", "paused", "chargebacks", "decided", "noshows", "reports", "users", "tests", "payments", "waitlist", "contact"] as const).map((k) => adminPage(k, u.id, null)),
   );
   const [waiting, heldShares, held, devCount, testerCount, openTests] = await Promise.all([
     db.payment.findMany({ where: { transferStatus: "waiting" }, orderBy: { createdAt: "asc" }, take: 100 }),
@@ -164,6 +164,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       <section className="card scroll-mt-24 space-y-3" id="decided">
         <h2 className="text-lg font-semibold text-white">Decided disputes ({decided.total})</h2>
         <PagedList kind="decided" initial={rows(decided)} empty="None yet." scroll />
+      </section>
+
+      {/* (Batch 15 section 21) Contact us: newest first, each message in a scroll box; who replied. */}
+      <section className="card scroll-mt-24 space-y-3" id="contact">
+        <h2 className="text-lg font-semibold text-white">Contact us ({contactP.total})</h2>
+        <PagedList kind="contact" initial={rows(contactP)} empty="No messages." scroll />
       </section>
 
       <section className="card space-y-3" id="reports">

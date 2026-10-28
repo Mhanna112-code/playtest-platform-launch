@@ -151,8 +151,9 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
 }
 
 /** Who may watch: the tester who made it, or the test's developer. */
-export async function canView(userId: string, recordingId: string) {
+export async function canView(userId: string, recordingId: string, admin = false) {
   const r = await db.recording.findUnique({ where: { id: recordingId }, include: { contract: { include: { test: true } } } });
-  if (!r || (r.contract.testerId !== userId && r.contract.test.developerId !== userId)) return null;
+  // (Batch 15 section 8) Admins (ADMIN_EMAILS, confirmed) can open the work in a dispute row's "See the work".
+  if (!r || (!admin && r.contract.testerId !== userId && r.contract.test.developerId !== userId)) return null;
   return r;
 }
