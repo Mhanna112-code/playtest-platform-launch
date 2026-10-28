@@ -96,6 +96,7 @@ model User {
   messages  Message[]
   chatReads ChatRead[]
   keptForms KeptForm[]
+  excerpts  Excerpt[]
 }
 
 /// One-use sign-in link tokens (only the SHA-256 hash is stored)
@@ -208,6 +209,7 @@ model Test {
   events    TestEvent[]
   invites   Invite[]
   accessKeys AccessKey[]
+  excerpts   Excerpt[]
   /// Open until heads-up notices sent (3 days and 1 day before)
   notified3d Boolean @default(false)
   /// Countdown notices already sent for Open until: "1m" | "1w" | "3d" | "1d"
@@ -284,6 +286,10 @@ model Contract {
   callSets    CallSet[]
   messages    Message[]
   accessKeys  AccessKey[]
+  excerpts    Excerpt[]
+  /// (Owner, Oct 29, batch 13) The tester's previous sets of questions and answers, newest first (at most 3): [{ until, items: [{ question, required, answer }] }].
+  /// Kept when they switch to terms with changed questions (sent answers or the draft, whatever the form had).
+  prevSets    Json     @default("[]")
 
   @@unique([testId, testerId])
   @@index([testerId])
@@ -295,8 +301,12 @@ model Submission {
   contractId String
   contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
   kind       String
-  /// Written: array of answers, one per question
+  /// Written: (owner, Oct 29, batch 13) the whole set it answers: [{ question, required, answer }] (older rows were a list of answers)
   answers    Json     @default("[]")
+  /// (Batch 13) Earlier SENT sets this one replaced (the developer's "Previous questions and answers" fold): [{ until, items }], newest first
+  prevSets   Json     @default("[]")
+  /// (Batch 13) Set when the tester switched to changed questions after sending this: "Sent for the questions until <date>" (null = the current questions)
+  setUntil   DateTime?
   notes      String   @default("")
   /// The listing price for this part from the contract; null = extra work (not in the listing)
   agreedCents Int?
@@ -321,6 +331,7 @@ model Submission {
   recordings Recording[]
   review     Review?
   dispute    Dispute?
+  excerpts   Excerpt[]
 
   @@unique([contractId, kind])
 }
@@ -822,4 +833,31 @@ model ContactMessage {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+/// (Owner, Oct 29, batch 13) A tester's request to show a short excerpt of written work the developer paid for on their public profile. The test's developer allows or
+/// denies it. Never stopped by stop-once, blocks, suspensions or holds; hidden (not deleted) while the test has an NDA.
+model Excerpt {
+  id           String     @id @default(cuid())
+  testerId     String
+  tester       User       @relation(fields: [testerId], references: [id], onDelete: Cascade)
+  testId       String
+  test         Test       @relation(fields: [testId], references: [id], onDelete: Cascade)
+  contractId   String
+  contract     Contract   @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  /// The question it answers, and the quote: plain text, 10 to 500 characters, trimmed from that answer
+  question     String     @default("")
+  text         String
+  /// "Don't name the product" (ticked by default)
+  hideProduct  Boolean    @default(true)
+  /// "pending" | "shown" | "denied" | "closed" (the developer deleted their account while it waited)
+  status       String     @default("pending")
+  closedReason String     @default("")
+  decidedAt    DateTime?
+  createdAt    DateTime   @default(now())
+
+  @@index([testerId, status])
+  @@index([testId, status])
 }

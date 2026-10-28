@@ -1,5 +1,6 @@
 import { devChanges, seenOf, tabOf, withRenamed } from "./live";
 import { qOptional } from "@/lib/questions";
+import { itemsFor, itemsOf, prevSetsOf, pushPrev, sameQuestions } from "@/lib/answerSets";
 import { overLimitText } from "@/lib/capacity";
 import { countsAfter, countsOf, criticalLine, isCritical, lockedFields } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
@@ -702,7 +703,16 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     const now = new Date();
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
     if (existing?.review) throw new HttpError(409, "paid", "Your written answers were already paid for, so they can't be changed. Send anything new in the chat.");
-    const data = { answers, notes, late: isLate(c.dueAt, now), updatedAt: now, payBy: payByFrom(now) };
+    // (Owner, Oct 29, batch 13 section 8) The whole set is stored: each question with its answer. Sending replaces the sent version; an earlier set it replaces (sent
+    // for questions the tester has since switched away from) moves to the developer's "Previous questions and answers", and (DEFAULT) the new set is priced at the
+    // current contract's written price.
+    const items = itemsFor(qs, answers);
+    const before = existing ? itemsOf(existing.answers, qs) : [];
+    const replacesEarlier = !!existing && (!!existing.setUntil || !sameQuestions(before, items));
+    const data = {
+      answers: items as unknown as Prisma.InputJsonValue, notes, late: isLate(c.dueAt, now), updatedAt: now, payBy: payByFrom(now),
+      ...(replacesEarlier ? { setUntil: null, agreedCents: c.writtenCents, prevSets: pushPrev(prevSetsOf(existing!.prevSets), { until: (existing!.setUntil ?? now).toISOString(), items: before }) as unknown as Prisma.InputJsonValue } : {}),
+    };
     const sub = existing
       ? await tx.submission.update({ where: { id: existing.id }, data })
       : await tx.submission.create({ data: { contractId, kind: "written", agreedCents: c.writtenCents, ...data } });

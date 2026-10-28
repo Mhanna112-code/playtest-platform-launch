@@ -15,6 +15,9 @@ import { ratingSummary } from "@/lib/server/ratings";
 import { unreadCount } from "@/lib/server/messages";
 import { asListing, findTests } from "@/lib/server/tests";
 import { RestrictedBox } from "@/components/RestrictedBox";
+import { ClampText } from "@/components/ClampText";
+import { ExcerptDecision } from "@/components/Excerpts";
+import { pendingForDeveloper } from "@/lib/server/excerpts";
 import { devRestricted, restrictionsOf } from "@/lib/restricted";
 import { PayoutBanner } from "@/components/PayoutBanner";
 import { CallsBox } from "./CallsBox";
@@ -53,10 +56,24 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
   const devOff = side === "developer" && u.isDeveloper && devRestricted(u, side);
   const testerOff = side === "tester" && u.isTester && !!u.suspendedAt;
   const cbSteps = devOff && u.holdStartedAt ? await chargebackSteps(u.id) : null;
+  // (Owner, Oct 29, batch 13) A restricted developer can't open test pages: their excerpt requests wait here, under the blue box, with Allow and Deny.
+  const excerptBox = devOff ? await pendingForDeveloper(u.id) : [];
   return (
     <div className="space-y-8">
       {(devOff || testerOff) && (
         <RestrictedBox failed={failed} developer={devOff} tester={testerOff} kinds={restrictionsOf(u)} steps={cbSteps?.remaining} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />
+      )}
+      {excerptBox.length > 0 && (
+        <section className="card space-y-3" id="excerpt-requests" data-excerpt-box="">
+          <h2 className="font-semibold text-white">Excerpt requests</h2>
+          {excerptBox.map((x) => (
+            <div key={x.id} id={`excerpt-${x.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
+              <p className="text-slate-300"><b className="text-white">{x.tester}</b> would like to show this from “{x.testTitle}” on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
+              <ClampText text={`“${x.text}”`} className="text-slate-200" />
+              <ExcerptDecision excerptId={x.id} />
+            </div>
+          ))}
+        </section>
       )}
       {!u.suspendedAt && u.reinstatedAt && now.getTime() - u.reinstatedAt.getTime() < 3 * DAY && (
         <p className="ok rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2" role="status" data-reinstated-box="">Your account is active again · {fmtDateTime(u.reinstatedAt)}</p>

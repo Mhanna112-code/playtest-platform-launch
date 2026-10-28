@@ -13,6 +13,8 @@ import { sideFor } from "@/lib/sides";
 
 import { BlockButton } from "@/components/BlockButton";
 import { ReportButton } from "@/components/ReportButton";
+import { MyExcerpts, ShownExcerpts } from "@/components/ExcerptList";
+import { myExcerpts, shownExcerpts } from "@/lib/server/excerpts";
 
 export const metadata = { title: "Tester · Playtest" };
 export const dynamic = "force-dynamic";
@@ -51,6 +53,8 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
         {shared && <ChatWithButton contractId={shared.id} name={name} />}
       </section>
       <TesterTiles userId={p.id} />
+      {/* (Owner, Oct 29, batch 13) Shown excerpts (never from a test that has an NDA now); the tester's own list, with Remove, on their own profile. */}
+      {mine ? <MyExcerpts items={await myExcerpts(p.id)} /> : <ShownExcerpts items={await shownExcerpts(p.id)} />}
       <section className="card space-y-3">
         <h2 className="font-semibold text-white">About</h2>
         <p className="whitespace-pre-wrap break-words text-sm text-slate-300">{pr?.bio || <span className="text-slate-500">No bio yet.</span>}</p>

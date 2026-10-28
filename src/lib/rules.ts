@@ -4,6 +4,7 @@
 import type { Prisma } from "@prisma/client";
 import { money } from "./format";
 import { LIMITS } from "./limits";
+import { qText } from "./questions";
 
 // ---------- Money ----------
 
@@ -235,7 +236,7 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
   if (!l.description?.trim()) { if (isNew("description")) errs.push("Say what testers should do (What to do)."); }
   else if (l.description.length > LIMITS.whatToDo && isNew("description")) errs.push(`Keep What to do to ${LIMITS.whatToDo.toLocaleString("en-US")} characters.`);
   if (l.mature && (l.matureWhy ?? "").trim().length < 5 && (isNew("mature") || isNew("matureWhy"))) errs.push("Say why this test is mature (18+): it's required for mature content.");
-  if ((l.ndaText ?? "").length > LIMITS.nda) errs.push(`Keep the NDA to ${LIMITS.nda.toLocaleString("en-US")} characters.`);
+  if ((l.ndaText ?? "").length > LIMITS.nda && isNew("ndaText")) errs.push(`Keep the NDA to ${LIMITS.nda.toLocaleString("en-US")} characters.`);
   if (!l.categories?.length) errs.push("Tick at least one category.");
   if (!Number.isInteger(l.spots) || l.spots < LIMITS.spots.min || l.spots > MAX_SPOTS) errs.push(`Spots must be a whole number from 1 to ${MAX_SPOTS}.`);
   else if (l.spots < testersIn) errs.push(`Spots can't go below the ${testersIn} tester${testersIn === 1 ? "" : "s"} already in.`);
@@ -255,6 +256,8 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
   }
   if (l.writtenCents != null && l.questions.filter((q) => q.trim()).length === 0) errs.push("Add at least one question for the written answers.");
   if (l.questions.length > LIMITS.questions.max) errs.push(`At most ${LIMITS.questions.max} questions.`);
+  // (Owner, Oct 29, batch 13 section 9, DEFAULT) At most 300 characters per question (checked when the questions are saved).
+  if (isNew("questions") && l.questions.some((q) => qText(q).length > LIMITS.questionChars)) errs.push(`Keep each question to ${LIMITS.questionChars} characters.`);
   return errs;
 }
 

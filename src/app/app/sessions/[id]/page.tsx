@@ -22,7 +22,7 @@ import { unreadCount } from "@/lib/server/messages";
 import { PersonHover } from "@/components/PersonHover";
 import { ChatWithButton } from "@/components/ChatWithButton";
 import { LiveTop } from "@/components/LiveTop";
-import { qOptional, qText } from "@/lib/questions";
+import { qText } from "@/lib/questions";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, rateBlocker, rateWarning, ratingSummary } from "@/lib/server/ratings";
 import { openOffer } from "@/lib/server/terms";
@@ -31,6 +31,12 @@ import { KeyBox } from "./KeyBox";
 import { WrittenAttachments } from "./WrittenAttachments";
 import { Formatted } from "@/components/Formatted";
 import { AttachmentList } from "@/components/AttachmentList";
+import { NdaBox } from "@/components/NdaBox";
+import { PlusMore } from "@/components/PlusMore";
+import { PrevSetFolds, SetView } from "@/components/AnswerSets";
+import { carryOver, itemsOf, prevSetsOf } from "@/lib/answerSets";
+import { ExcerptPicker } from "@/components/Excerpts";
+import { excerptChoices } from "@/lib/server/excerpts";
 
 export const metadata = { title: "Your session · Playtest" };
 export const dynamic = "force-dynamic";
@@ -61,6 +67,13 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const refusal = sessionRefusal(c, c.test, dev);
   const written = c.submissions.find((s) => s.kind === "written");
   const recording = c.submissions.find((s) => s.kind === "recording");
+  // (Owner, Oct 29, batch 13 section 8) The written part as SETS: what was last sent (under the questions it answered), the form's current questions with carried-over
+  // answers, and the previous sets kept when the tester switched to changed questions.
+  const sentItems = written ? itemsOf(written.answers, writtenQuestions(c)) : [];
+  const prevSets = prevSetsOf(c.prevSets);
+  // (Batch 13) "Show an excerpt on your profile": paid written answers, never while the test has an NDA, one pending request per part.
+  const excerptPending = written ? (await db.excerpt.count({ where: { submissionId: written.id, status: "pending" } })) > 0 : false;
+  const excerptPicks = written && !c.test.ndaText && !excerptPending && !u.suspendedAt ? await excerptChoices(written) : [];
   const now = new Date();
   const seenAt = now.toISOString();
   const offer = await openOffer(c.id);
@@ -165,7 +178,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       <LiveTop scope={`session:${c.id}`} seenAt={seenAt} seeIt="#listing" />
       <TesterTop sessionId={c.id} seenAt={seenAt} devName={dev} offer={offer && !refusal ? {
         id: offer.id, diff: offer.diff, ndaText: offer.ndaText, fromNdaText: c.ndaText, questions: ((offer.questions as string[]) ?? []).map(qText), fromQuestions: ((c.questions as string[]) ?? []).map(qText),
-        answers: written ? ((written.answers as string[]) ?? []) : [],
+        answers: sentItems.map((x) => x.answer),
       } : null} />
       {refusal && <p className="info">{refusal}</p>}
       {!refusal && c.test.openUntil && c.test.openUntil > now && c.test.openUntil.getTime() - now.getTime() < 3 * 86_400_000 && (
@@ -214,7 +227,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         {c.ndaText && c.ndaAcceptedAt && (
           <details className="text-sm" data-nda="">
             <summary className="cursor-pointer text-slate-300">NDA accepted {fmtDate(c.ndaAcceptedAt)}</summary>
-            <p className="mt-1 whitespace-pre-wrap rounded-lg bg-white/[0.03] p-2 text-slate-300">{c.ndaText}</p>
+            <div className="mt-1"><NdaBox text={c.ndaText} /></div>
           </details>
         )}
 
@@ -250,7 +263,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           <li>Deliverables: {[c.writtenCents != null ? "written answers" : "", c.recordingCents != null ? "screen recording" : "", c.liveRateCents != null ? "live call" : ""].filter(Boolean).join(", ") || "none in your contract"}</li>
           <li>Prices (what you get): {termsLine(c, true)}</li>
           <li>Due {fmtDate(c.dueAt)}{c.test.openUntil ? " (the test's Open until)" : ""}</li>
-          {writtenQuestions(c).length > 0 && <li>Questions: {writtenQuestions(c).map((q) => `“${qText(q)}”`).join(", ")}</li>}
+          {writtenQuestions(c).length > 0 && <li>Questions: <PlusMore items={writtenQuestions(c).map((q) => `“${qText(q)}”`)} /></li>}
           <li>Agreed {fmtDate(c.joinedAt)}. Everything above is fixed in your contract; if {dev} changes the listing later you choose Switch or Keep.</li>
         </ul>
         {/* (Design doc 9) The terms history: every offer and what you chose, with the questions and NDA you were on. */}
@@ -263,11 +276,13 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
                 {fmtDate(o.createdAt)}: {dev} offered new terms ({o.diff}) · {o.status === "switched" ? `you switched${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "kept" ? `you kept your terms${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "open" ? "waiting for your answer" : "replaced by a newer offer"}
                 {Array.isArray(o.fromQuestions) && JSON.stringify(o.fromQuestions) !== JSON.stringify(o.questions) && (
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">Questions then and now</summary>
-                    <p>Then: {(o.fromQuestions as string[]).map(qText).join(" · ") || "none"}</p><p>Offered: {((o.questions as string[]) ?? []).map(qText).join(" · ") || "none"}</p></details>
+                    {/* (Batch 13 section 9) 3 questions, then "+N more". */}
+                    <p>Then: {(o.fromQuestions as string[]).length ? <PlusMore sep=" · " items={(o.fromQuestions as string[]).map((q) => `“${qText(q)}”`)} /> : "none"}</p>
+                    <p>Offered: {((o.questions as string[]) ?? []).length ? <PlusMore sep=" · " items={((o.questions as string[]) ?? []).map((q) => `“${qText(q)}”`)} /> : "none"}</p></details>
                 )}
                 {o.fromNdaText !== o.ndaText && (
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">NDA then and now</summary>
-                    <p className="whitespace-pre-wrap">Then: {o.fromNdaText || "none"}</p><p className="whitespace-pre-wrap">Offered: {o.ndaText || "none"}</p></details>
+                    <div className="mt-1 space-y-2"><NdaBox label="Before" text={o.fromNdaText} /><NdaBox label="Offered" text={o.ndaText} /></div></details>
                 )}
               </li>
             ))}
@@ -366,7 +381,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           canSend={!refusal && !recording?.review && !meOff && draftsShown}
           sendable={!rulesPaused}
           sentBefore={!!recording}
-          recordings={c.recordings.filter((r) => r.part === "recording").map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, uploaded: !!r.uploadedAt }))}
+          recordings={c.recordings.filter((r) => r.part === "recording").map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, uploaded: !!r.uploadedAt, sent: !!r.submissionId }))}
         />
       </section>
 
@@ -376,12 +391,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         {/* (Owner, Oct 28 evening) Paid, or the test stopped / their work ended: the answers they sent stay readable (no Send). */}
         {written && (written.review || refusal || meOff) ? (
           <div className="space-y-2" data-sent-answers="">
-            {writtenQuestions(c).map((q, i) => (
-              <div key={i} className="text-sm">
-                <p className="font-medium text-ink-200">{qText(q)}{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</p>
-                <Formatted text={(written.answers as string[])[i] ?? ""} />
-              </div>
-            ))}
+            {written.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(written.setUntil)}</p>}
+            <SetView items={sentItems} />
             {written.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><Formatted text={written.notes} /></div>}
             <AttachmentList items={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && r.submissionId === written.id)} />
           </div>
@@ -389,11 +400,17 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           !written ? <p className="note">Nothing sent.</p> : null
         ) : (
           <>
-            <WrittenForm canSend={!rulesPaused} seenAt={seenAt} sessionId={c.id} questions={writtenQuestions(c)} initial={(written?.answers as string[]) ?? []} initialNotes={written?.notes ?? ""} update={!!written} />
+            {written?.setUntil && <p className="note" data-set-until="">What you sent is for the questions until {fmtDate(written.setUntil)}: {dev} reviews it at the price it was sent at. Send again to send these questions instead.</p>}
+            <WrittenForm canSend={!rulesPaused} seenAt={seenAt} sessionId={c.id} questions={writtenQuestions(c)} initial={carryOver(sentItems, writtenQuestions(c))} initialNotes={written?.notes ?? ""} update={!!written} />
             {/* (Batch 11) Files and recordings attached to the written part (drafts: they can be added while the test is paused). */}
             <WrittenAttachments sessionId={c.id} canAdd items={c.recordings.filter((r) => r.part === "written").map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, uploaded: !!r.uploadedAt, video: r.contentType.startsWith("video/"), sent: !!r.submissionId }))} />
           </>
         )}
+        {/* (Batch 13 section 8) The previous sets of questions and answers, newest first, read-only. */}
+        <PrevSetFolds sets={prevSets} />
+        {/* (Batch 13) Show an excerpt of paid written answers on the profile (the developer allows or denies it). */}
+        {written && excerptPicks.length > 0 && <ExcerptPicker submissionId={written.id} choices={excerptPicks} />}
+        {excerptPending && <p className="note" data-excerpt-pending="">Your excerpt request is waiting for {dev}.</p>}
       </section>
 
       {/* (NEXT-UI 4) Leaving, in its own card as in the full app. */}

@@ -2,6 +2,8 @@
 import { Err } from "@/components/Err";
 import { useEffect, useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
+import { NdaBox } from "@/components/NdaBox";
+import { PlusMore } from "@/components/PlusMore";
 import { api, errOf } from "@/lib/client";
 import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
 
@@ -46,15 +48,18 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
       {offer.ndaText != null && offer.ndaText !== (offer.fromNdaText ?? "") && (
         <details className="text-sm" open>
           <summary className="cursor-pointer font-medium">{offer.ndaText ? "The NDA" : "The NDA is removed"}{offer.fromNdaText ? " (changed)" : ""}: switching means you accept it</summary>
-          {offer.fromNdaText && <p className="mt-1 whitespace-pre-wrap text-xs text-sky-200/80">Before: {offer.fromNdaText}</p>}
-          {offer.ndaText && <p className="mt-1 whitespace-pre-wrap">{offer.ndaText}</p>}
+          {/* (Batch 13 section 9) "Before" and "Offered" as two scroll boxes, never in full. */}
+          <div className="mt-1 space-y-2">
+            {offer.fromNdaText && <NdaBox label="Before" text={offer.fromNdaText} />}
+            {offer.ndaText && <NdaBox label="Offered" text={offer.ndaText} />}
+          </div>
         </details>
       )}
       {offer.questions && offer.fromQuestions && JSON.stringify(offer.questions) !== JSON.stringify(offer.fromQuestions) && (
         <details className="text-sm" open>
           <summary className="cursor-pointer font-medium">The questions changed: before and after</summary>
-          <p className="mt-1 text-xs text-sky-200/80">Before: {offer.fromQuestions.join(" · ") || "none"}</p>
-          <p className="mt-1">After: {offer.questions.join(" · ") || "none"}</p>
+          <p className="mt-1 text-xs text-sky-200/80">Before: {offer.fromQuestions.length ? <PlusMore sep=" · " items={offer.fromQuestions.map((q) => `“${q}”`)} /> : "none"}</p>
+          <p className="mt-1">After: {offer.questions.length ? <PlusMore sep=" · " items={offer.questions.map((q) => `“${q}”`)} /> : "none"}</p>
           {offer.answers && offer.answers.some(Boolean) && <p className="mt-1 whitespace-pre-wrap text-xs text-sky-200/80">Your answers so far: {offer.answers.filter(Boolean).join(" / ")}</p>}
         </details>
       )}

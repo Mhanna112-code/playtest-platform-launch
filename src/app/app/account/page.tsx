@@ -7,6 +7,8 @@ import { ResendConfirm } from "@/components/ResendConfirm";
 import { confirmSkipped } from "@/lib/server/users";
 import { SideButton } from "./SideButton";
 import { DeleteAccount } from "./DeleteAccount";
+import { MyExcerpts } from "@/components/ExcerptList";
+import { myExcerpts } from "@/lib/server/excerpts";
 import { PasswordForm } from "../profile/PasswordForm";
 import { devRestricted } from "@/lib/restricted";
 import { devDeleteLines, testerDeleteFacts, testerDeleteLines } from "@/lib/server/deletion";
@@ -77,6 +79,8 @@ export default async function AccountPage() {
           {link("/app/help", LifeBuoy, "Contact us", "Questions, problems, payments")}
         </ul>
       </section>
+      {/* (Owner, Oct 29, batch 13) Settings lists the tester's excerpts with Remove; it stays open while suspended, so Remove works then too. */}
+      {u.isTester && <MyExcerpts items={await myExcerpts(u.id)} />}
       <section id="password" className="scroll-mt-24"><PasswordForm hasPassword={!!u.passwordHash} /></section>
       {/* (Owner, Oct 28) A tester's pop-up carries their real numbers; a developer's blockers (DEFAULT) are listed with links. */}
       <DeleteAccount testerLines={tester ? testerDeleteLines(await testerDeleteFacts(u.id)) : undefined} devLines={dev ? await devDeleteLines(u.id) : []} subscriptionLine={subscribed(u) ? DELETE_ENDS_SUBSCRIPTION : ""} />

@@ -1,7 +1,7 @@
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { reportNoShow, testerCancelCall } from "@/lib/server/calls";
 import { sendMessage } from "@/lib/server/messages";
-import { finishRecording, sendRecording, startRecording } from "@/lib/server/recordings";
+import { finishRecording, sendRecording, removeRecording, startRecording } from "@/lib/server/recordings";
 import { chooseOutcome } from "@/lib/server/holds";
 import { answerRequest, cancelCallSet, requestTime } from "@/lib/server/requests";
 import { decideTerms } from "@/lib/server/terms";
@@ -25,7 +25,7 @@ type Ctx = { params: Promise<{ id: string; action: string }> };
  * refusal, blue under the button (not a stop-once): Send, any call action, Switch / Keep, Request. (Charge / Let it go, Dispute, Rate,
  * Report a problem, chat and Leave keep their own rules.)
  */
-const FINAL_AFTER_END = new Set(["terms", "written", "recording-start", "recording-done", "recording-send", "request-time", "answer-request", "cancel-call", "cancel-set", "key-broken"]);
+const FINAL_AFTER_END = new Set(["terms", "written", "recording-start", "recording-done", "recording-send", "recording-remove", "request-time", "answer-request", "cancel-call", "cancel-set", "key-broken"]);
 async function finalRefusal(userId: string, contractId: string, action: string) {
   if (!FINAL_AFTER_END.has(action)) return;
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
@@ -40,7 +40,7 @@ async function finalRefusal(userId: string, contractId: string, action: string) 
  * uploaded); Charge / Let it go, disputes, rating, leaving and cancelling calls carry on under their own rules. Testers read only "paused".
  */
 const SEND_ACTIONS = new Set(["written", "recording-send"]);
-const DRAFT_ACTIONS = new Set(["recording-start", "recording-done"]);
+const DRAFT_ACTIONS = new Set(["recording-start", "recording-done", "recording-remove"]);
 async function pausedRefusal(userId: string, contractId: string, action: string) {
   if (!SEND_ACTIONS.has(action) && !DRAFT_ACTIONS.has(action) && action !== "message") return;
   const c = await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true, test: { select: { adminPausedAt: true, developer: { select: { suspendedAt: true, holdStartedAt: true } } } } } });
@@ -93,6 +93,8 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         return ok(await finishRecording(u, id, body));
       case "recording-send":
         return ok(await sendRecording(u, id, body));
+      case "recording-remove":
+        return ok(await removeRecording(u, id, body));
       case "message": {
         const m = await sendMessage(u, id, body.body);
         return ok({ id: m.id });

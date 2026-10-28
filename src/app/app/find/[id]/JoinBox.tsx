@@ -1,4 +1,5 @@
 "use client";
+import { NdaBox } from "@/components/NdaBox";
 import { Err } from "@/components/Err";
 import { useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -125,7 +126,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       {p.nda && (
         <div className="space-y-2" id="nda">
           <p className="label !mb-0">The developer&apos;s NDA</p>
-          <div className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-ink-950/60 p-3 text-sm text-slate-300" tabIndex={0}>{p.nda}</div>
+          <NdaBox text={p.nda} />
           <label className="flex items-center gap-2 text-sm text-white">
             <input id="nda-accept" type="checkbox" checked={nda} onChange={(e) => { setNda(e.target.checked); if (e.target.checked) setNdaErr(""); }} onBlur={() => !nda && setNdaErr("Accept the NDA to " + (applying ? "apply." : "join."))} /> I accept this NDA
           </label>

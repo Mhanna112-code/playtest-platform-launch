@@ -32,7 +32,7 @@ describe("recordings", () => {
     expect((await sact(sessionId, "recording-start", tester.cookie, { filename: "a.mp4", size: 501 * 1024 * 1024, contentType: "video/mp4" })).body.error.message).toBe("Recordings can be at most 500 MB.");
     expect((await sact(sessionId, "recording-start", tester.cookie, { filename: "a.png", size: 10, contentType: "image/png" })).status).toBe(400);
     for (let i = 0; i < 5; i++) expect((await sact(sessionId, "recording-start", tester.cookie, { filename: "a.mp4", size: 10, contentType: "video/mp4" })).status).toBe(200);
-    expect((await sact(sessionId, "recording-start", tester.cookie, { filename: "a.mp4", size: 10, contentType: "video/mp4" })).body.error.message).toBe("You can upload at most 5 recordings for a test.");
+    expect((await sact(sessionId, "recording-start", tester.cookie, { filename: "a.mp4", size: 10, contentType: "video/mp4" })).body.error.message).toBe("You can add at most 5 recordings. Remove one first.");
   });
 });
 

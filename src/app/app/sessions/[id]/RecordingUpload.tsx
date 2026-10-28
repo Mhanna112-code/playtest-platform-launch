@@ -7,10 +7,38 @@ import { stopBox, useStopBox } from "@/lib/topStop";
 import { uploadToSession } from "@/lib/upload";
 import { ScreenRecorder } from "@/components/ScreenRecorder";
 import { ChangesBox } from "@/components/ChangesBox";
+import { ConfirmButton } from "@/components/ConfirmButton";
 
-type Rec = { id: string; filename: string; size: number; uploaded: boolean };
+type Rec = { id: string; filename: string; size: number; uploaded: boolean; sent?: boolean };
 
-/** Upload up to 5 screen recordings (500 MB each), then send them. Can be sent again with new ones until paid. */
+const clock = (s: number) => (Number.isFinite(s) ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}` : "");
+
+/** (Batch 13 section 7) One recording before sending: a preview, its length and size, and Remove (with a confirm). */
+function RecordingRow({ r, sessionId, canRemove }: { r: Rec; sessionId: string; canRemove: boolean }) {
+  const [length, setLength] = useState("");
+  const [err, setErr] = useState("");
+  return (
+    <li className="space-y-1 rounded-lg border border-white/[0.08] p-2" data-recording-row={r.id}>
+      <video controls preload="metadata" className="max-h-56 w-full rounded bg-black" src={`/api/recordings/${r.id}/file`} onLoadedMetadata={(e) => setLength(clock(e.currentTarget.duration))} />
+      <p className="flex flex-wrap items-center gap-2 text-sm">
+        <a href={`/api/recordings/${r.id}/file`} target="_blank" rel="noreferrer" className="min-w-0 break-all">{r.filename}</a>
+        <span className="text-xs text-slate-500">{length && `${length} · `}{(r.size / 1024 / 1024).toFixed(1)} MB{r.sent ? " · sent" : " · not sent yet"}</span>
+        {canRemove && (
+          <ConfirmButton className="btn-ghost ml-auto !px-2 !py-0.5 text-xs" title="Remove this recording?" confirmLabel="Remove" body={<p>{r.sent ? "It stays with what you sent until you send again; then it's left out. Its slot is free at once." : "It's deleted and its slot is free again."}</p>}
+            onConfirm={() => api(`/api/sessions/${sessionId}/recording-remove`, { recordingId: r.id }).then(() => window.location.reload()).catch((e) => setErr(errOf(e)))}>
+            Remove
+          </ConfirmButton>
+        )}
+      </p>
+      <Err text={err} />
+    </li>
+  );
+}
+
+/**
+ * Upload up to 5 screen recordings (500 MB each), then send them. (Owner, Oct 29, batch 13 section 7) Send sends them all together as ONE piece of work; until it's paid
+ * (or rejected) recordings can be removed or added and sent again.
+ */
 export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, seenAt, sendable = true }: { sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean; seenAt: string; /** (Batch 10) false while the test is paused: uploads (drafts) still work, Send is hidden */ sendable?: boolean }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
@@ -38,15 +66,12 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
   return (
     <div className="space-y-2">
       {uploaded.length > 0 && (
-        <ul className="text-sm">
-          {uploaded.map((r) => (
-            <li key={r.id}>
-              <a href={`/api/recordings/${r.id}/file`} target="_blank" rel="noreferrer">{r.filename}</a> · {(r.size / 1024 / 1024).toFixed(1)} MB
-            </li>
-          ))}
+        <ul className="space-y-2" data-recordings="">
+          {uploaded.map((r) => <RecordingRow key={r.id} r={r} sessionId={sessionId} canRemove={canSend} />)}
         </ul>
       )}
-      {canSend && recordings.length < 5 && (
+      <p className="text-xs text-slate-500" data-recording-count="">{uploaded.length} of 5 recordings{uploaded.length >= 5 ? ": remove one to add another" : ""}</p>
+      {canSend && uploaded.length < 5 && (
         <>
           {/* (Batch 11) Record in the page, or upload a file. */}
           <ScreenRecorder sessionId={sessionId} part="recording" />
@@ -74,7 +99,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
             }
           }}
         >
-          {sentBefore ? "Send my updated recording" : "Send my recording"}
+          {sentBefore ? `Send my updated recording${uploaded.length === 1 ? "" : "s"}` : `Send my recording${uploaded.length === 1 ? "" : "s"}`}
         </button>
       )}
       <ChangesBox changes={box && !box.top ? box.changes : null} tail={box?.tail} />

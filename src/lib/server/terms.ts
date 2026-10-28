@@ -6,6 +6,8 @@ import { HttpError } from "./http";
 import { notify } from "./notify";
 import { testerGate } from "./testerGate";
 import { logEvent } from "./live";
+import { carryOver, itemsFor, itemsOf, prevSetsOf, pushPrev } from "@/lib/answerSets";
+import { qText } from "@/lib/questions";
 
 const nameOf = async (id: string) => displayName(await db.user.findUniqueOrThrow({ where: { id } }));
 
@@ -73,7 +75,9 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
   const target = newest ?? offer;
   const now = new Date();
   if (body.choice === "switch") {
+    const sets = await questionSetsOnSwitch(c, (target.questions as string[]) ?? [], now);
     await db.$transaction([
+      ...sets,
       db.contract.update({
         where: { id: contractId },
         // Switching to terms with an NDA means accepting it now.
@@ -88,6 +92,34 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
   await db.termsOffer.update({ where: { id: target.id }, data: { status: "kept", decidedAt: now } });
   await logEvent(c.testId, "terms", `${await nameOf(c.testerId)} kept their current terms`, c.id);
   return { switched: false };
+}
+
+/**
+ * (Owner, Oct 29, batch 13 section 8) Switching to terms whose questions changed (even one of them): the whole earlier set (every question with the answer it had, the
+ * draft's if one is kept, else what was sent) becomes a previous set "until <date>" (at most 3). The form then shows the current questions: an answer to a question
+ * whose text is unchanged is carried over (draft text too); changed or new questions start empty. A sent, unpaid set for the old questions is marked "Sent for the
+ * questions until <date>" for the developer, and keeps its price.
+ */
+async function questionSetsOnSwitch(c: { id: string; testerId: string; questions: unknown; prevSets: unknown }, next: string[], now: Date) {
+  const old = (c.questions as string[]) ?? [];
+  if (JSON.stringify(old) === JSON.stringify(next)) return [];
+  const sub = await db.submission.findUnique({ where: { contractId_kind: { contractId: c.id, kind: "written" } }, include: { review: true } });
+  const kept = await db.keptForm.findUnique({ where: { userId_key: { userId: c.testerId, key: `written:${c.id}` } } });
+  const draft = (kept?.data ?? null) as { answers?: unknown; notes?: unknown } | null;
+  const sent = sub ? itemsOf(sub.answers, old) : [];
+  const oldQs = old.length ? old : ["Your feedback"];
+  const fromDraft = Array.isArray(draft?.answers) ? (draft!.answers as unknown[]).map((a) => (typeof a === "string" ? a : "")) : null;
+  const byText = new Map(sent.map((x) => [x.question, x.answer]));
+  const items = itemsFor(oldQs, fromDraft ?? oldQs.map((q) => byText.get(qText(q)) ?? ""));
+  const ops: Prisma.PrismaPromise<unknown>[] = [];
+  if (items.some((x) => x.answer.trim()) || sub) ops.push(db.contract.update({ where: { id: c.id }, data: { prevSets: pushPrev(prevSetsOf(c.prevSets), { until: now.toISOString(), items }) as unknown as Prisma.InputJsonValue } }));
+  const nextQs = next.length ? next : ["Your feedback"];
+  if (!sub?.review) {
+    const notes = typeof draft?.notes === "string" ? draft.notes : sub?.notes ?? "";
+    ops.push(db.keptForm.upsert({ where: { userId_key: { userId: c.testerId, key: `written:${c.id}` } }, update: { data: { answers: carryOver(items, nextQs), notes } }, create: { userId: c.testerId, key: `written:${c.id}`, data: { answers: carryOver(items, nextQs), notes } } }));
+    if (sub && !sub.setUntil) ops.push(db.submission.update({ where: { id: sub.id }, data: { setUntil: now } }));
+  }
+  return ops;
 }
 
 /** Developer's tester row: "On their original terms · offered new terms Oct 22" / "Switched to the Oct 22 terms". */

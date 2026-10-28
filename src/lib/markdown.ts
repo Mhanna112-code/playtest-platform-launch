@@ -40,3 +40,13 @@ export function wrapSelection(value: string, start: number, end: number, kind: "
   const next = value.slice(0, start) + open + inner + close + value.slice(end);
   return { value: next, start: start + open.length, end: start + open.length + inner.length };
 }
+
+/** (Batch 13) An answer as plain text, formatting stripped (excerpts are shown as plain quotes): the words only, spaces tidied. */
+export function plainText(src: string) {
+  return parseFormatted(src ?? "")
+    .map((b) => (b.kind === "code" ? b.text : b.runs.map((r) => r.text).join("")))
+    .join("\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s*\n\s*/g, "\n")
+    .trim();
+}

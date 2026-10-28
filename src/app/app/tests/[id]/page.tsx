@@ -16,7 +16,6 @@ import { rejoinAskLine } from "@/lib/server/joining";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, rateBlocker, ratingSummary } from "@/lib/server/ratings";
 import { LiveTop } from "@/components/LiveTop";
-import { qOptional, qText } from "@/lib/questions";
 import { MessagesSquare } from "lucide-react";
 import { Applications } from "./Applications";
 import { NeedsRequests } from "./NeedsRequests";
@@ -45,6 +44,11 @@ import { RowsBox } from "./RowsBox";
 import { testerStats } from "@/lib/server/profileStats";
 import { ByQuestion } from "./ByQuestion";
 import { byQuestion } from "@/lib/byQuestion";
+import { PrevSetFolds, SetView } from "@/components/AnswerSets";
+import { itemsOf, prevSetsOf } from "@/lib/answerSets";
+import { NOT_REQUIRED } from "@/lib/questions";
+import { pendingForDeveloper, shownExcerpts } from "@/lib/server/excerpts";
+import { ExcerptDecision, ExcerptRemove } from "@/components/Excerpts";
 
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
@@ -181,7 +185,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     ...c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), what: x.kind === "written" ? "their written answers" : "their recording", reason: x.dispute!.reason })),
     ...c.calls.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), what: `the call on ${fmtDateTime(x.startsAt)}`, reason: x.dispute!.reason })),
   ]);
-  const needsCount = pieces.length + apps.length + needsRequests.length + disputesWaiting.length;
+  // (Owner, Oct 29, batch 13) Excerpt requests waiting for Allow or Deny (hidden while the test has an NDA), and excerpts shown from this test (Take down in the row).
+  const excerptReqs = await pendingForDeveloper(u.id, t.id);
+  const shownEx = await db.excerpt.findMany({ where: { testId: t.id, status: "shown" }, orderBy: { decidedAt: "desc" } });
+  const needsCount = pieces.length + apps.length + needsRequests.length + disputesWaiting.length + excerptReqs.length;
   return (
     <>
       <AutoRefresh query={`test=${t.id}`} />
@@ -239,6 +246,14 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         <NeedsYou count={needsCount}>
           <Applications testId={t.id} seenAt={seenAt} apps={apps} />
           <NeedsRequests testId={t.id} seenAt={seenAt} requests={needsRequests} />
+          {excerptReqs.map((x) => (
+            <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm scroll-mt-24" data-excerpt-request="">
+              <p className="text-slate-300"><b className="text-white">Excerpt request</b> · {x.tester} would like to show this on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
+              {x.question && <p className="text-xs text-slate-400">{x.question}</p>}
+              <ClampText text={`“${x.text}”`} className="text-slate-200" />
+              <ExcerptDecision excerptId={x.id} />
+            </div>
+          ))}
           {disputesWaiting.map((d) => (
             <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
               <p className="text-slate-300"><b className="text-white">{d.name}</b> disputed what you paid for {d.what} · waiting for the team:</p>
@@ -264,12 +279,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   {/* (Owner, Oct 29, batch 10) One piece's answers in their own scroll box (about 16 lines) when longer; the Pay box below stays outside it. */}
                   {/* (Batch 11) Formatted answers, and the piece's files and recordings, inside the same scroll box. */}
                   <AnswersBox>
-                    {x.s!.kind === "written" && writtenQuestions(x.c).map((q, i) => (
-                      <div key={i} className="text-sm">
-                        <p className="font-medium text-ink-200">{qText(q)}{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</p>
-                        <Formatted text={(x.s!.answers as string[])[i] ?? ""} />
-                      </div>
-                    ))}
+                    {/* (Batch 13 section 8) What was last sent, under the questions it answered; an earlier set says so (reviewed and paid at the price it was sent at). */}
+                    {x.s!.kind === "written" && x.s!.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(x.s!.setUntil)}</p>}
+                    {x.s!.kind === "written" && <SetView items={itemsOf(x.s!.answers, writtenQuestions(x.c))} />}
                     {x.s!.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><Formatted text={x.s!.notes} /></div>}
                     <AttachmentList items={x.s!.recordings.filter((r) => r.uploadedAt)} />
                   </AnswersBox>
@@ -316,6 +328,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           ].filter(Boolean),
           block: null, // (Owner, Oct 27) Block and Report live only on profiles
           chat: <ChatWithButton contractId={c.id} name={displayName(c.tester)} />, // (Owner, Oct 27) "Chat with <name>" on every hover card
+          excerpts: (await shownExcerpts(c.testerId)).map((x) => x.text), // (Batch 13) up to 3, never from a test that has an NDA now
         })))}
         gone={t.contracts.filter((c) => c.status !== "working").map((c) => ({ contractId: c.id, name: displayName(c.tester), how: c.endKind === "stopped" || c.endKind === "closed" ? "Stopped" : c.endKind === "suspended" || c.endKind === "deleted" ? "Removed" : c.endKind === "rated" ? "Left" : c.status === "left" ? "Left" : "Ended early", at: c.endedAt }))}
       >
@@ -383,6 +396,15 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 </ul>
                 <p className="text-sm"><b>Paid in all:</b> {money(paidSoFar(c.id))}{(bookedAhead || held || cancelledN) ? ` · Calls: ${[bookedAhead ? `${bookedAhead} booked ahead` : "", held ? `${held} held` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}` : ""}</p>
                 {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}
+                {/* (Batch 13 section 8) Earlier SENT sets this tester replaced after switching to changed questions. */}
+                <PrevSetFolds sets={prevSetsOf(c.submissions.find((s) => s.kind === "written")?.prevSets)} />
+                {/* (Batch 13) Excerpts shown from this test: the developer can take one down at any time. */}
+                {shownEx.filter((e) => e.contractId === c.id).map((e) => (
+                  <div key={e.id} className="flex flex-wrap items-start gap-2 text-sm" data-shown-excerpt="">
+                    <span className="min-w-0 flex-1"><span className="text-slate-400">On {name}&apos;s profile{t.ndaText ? " (hidden while this test has an NDA)" : ""}: </span><ClampText text={`“${e.text}”`} className="text-slate-200" /></span>
+                    {!restricted && <ExcerptRemove excerptId={e.id} label="Take down" body={`It leaves ${name}'s profile at once, and ${name} is told.`} />}
+                  </div>
+                ))}
                 {/* (Batch 11, DEFAULT) A tester who deleted their account with no payout account: their unreviewed work left Needs you. */}
                 {!testerPayable(c.tester) && (c.submissions.some((x) => !x.review) || c.calls.some((x) => x.status === "booked" && x.startsAt <= now && !x.review)) && <p className="note" data-deleted-no-payouts="">{deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null }))}</p>}
                 {ri?.avg && <p className="note">{name}: {ri.avg}</p>}
@@ -450,7 +472,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               c.submissions
                 .filter((s) => s.kind === "written")
                 .map((s) => ({
-                  contractId: c.id, tester: displayName(c.tester), questions: writtenQuestions(c), answers: (s.answers as string[]) ?? [], notes: s.notes, sentAt: s.updatedAt,
+                  // (Batch 13 section 8) Grouped by the exact text of the question each answer was sent for.
+                  ...((items) => ({ questions: items.map((i) => (i.required ? i.question : NOT_REQUIRED + i.question)), answers: items.map((i) => i.answer) }))(itemsOf(s.answers, writtenQuestions(c))),
+                  contractId: c.id, tester: displayName(c.tester), notes: s.notes, sentAt: s.updatedAt,
                   status: (!s.review ? "waiting" : s.review.rejected && !(s.dispute?.decidedCents) ? "rejected" : "paid") as "paid" | "rejected" | "waiting",
                   paidCents: Math.max(s.review?.amountCents ?? 0, s.dispute?.decidedCents ?? 0),
                 })),

@@ -351,7 +351,8 @@ describe("batch 11 item 7: the written part", () => {
     expect(parseFormatted("<script>alert(1)</script> [x](javascript:alert(1))")).toEqual([{ kind: "text", runs: [{ text: "<script>alert(1)</script> [x](javascript:alert(1))" }] }]);
     expect(wrapSelection("hello world", 6, 11, "bold")).toEqual({ value: "hello **world**", start: 8, end: 13 });
     expect(src("components/Formatted.tsx")).not.toContain("dangerouslySetInnerHTML");
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("<Formatted text={(x.s!.answers as string[])[i]");
+    // (Batch 13) The answers are shown formatted inside each set (SetView).
+    expect(src("components/AnswerSets.tsx")).toContain("<Formatted text={it.answer} />");
   });
 
   it("files on the written part: images, PDF, text or zip, 25 MB, 5 at most; recordings too; they go with the answers", async () => {

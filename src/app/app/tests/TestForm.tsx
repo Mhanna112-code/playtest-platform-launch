@@ -17,6 +17,8 @@ import { HIGH_PART_CENTS, HIGH_PART_TICK, type Listing } from "@/lib/rules";
 import { toCents } from "@/lib/format";
 import { KeyBoxes, type KeysData } from "./KeyBoxes";
 import { ExpandNote } from "@/components/ExpandNote";
+import { NdaBox } from "@/components/NdaBox";
+import { ShieldCheck } from "lucide-react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 
 // Post and Edit share this form. Prices are typed in dollars ("7.50"; "0" for free). Edit sends only the fields the
@@ -331,7 +333,7 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
         <div>
           <label className="label req" htmlFor="description">What should testers do?{left("description")}</label>
           <textarea id="description" rows={4} disabled={fieldLocked("description")} className={"input" + (bad("description") ? " field-bad" : "")} value={f.description} maxLength={LIMITS.whatToDo} data-required="" data-required-msg="Say what testers should do." onBlur={() => leave("description")} onChange={(e) => set({ description: e.target.value })} />
-          <p className="mt-1 text-right text-xs text-slate-500" aria-hidden>{f.description.length}/{LIMITS.whatToDo.toLocaleString("en-US")}</p>
+          <p className="mt-1 text-right text-xs text-slate-500" data-steps-count="">{f.description.length.toLocaleString("en-US")} / {LIMITS.whatToDo.toLocaleString("en-US")}</p>
           {lockNote("description")}
           {note("description")}
         </div>
@@ -435,7 +437,7 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
               <ul className="mt-2 space-y-1">
                 {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (
                   <li key={q} className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm">
-                    <span className="min-w-0 break-words text-ink-200">{q}</span>
+                    <span className="min-w-0 break-words text-ink-200">{q} <span className={`whitespace-nowrap text-xs ${q.length > LIMITS.questionChars ? "text-rose-300" : "text-slate-500"}`} data-question-count="">{q.length} / {LIMITS.questionChars}</span></span>
                     <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-ink-300">
                       <input type="checkbox" disabled={fieldLocked("questions")} checked={f.optionalQs.includes(q)} onChange={(e) => set({ optionalQs: e.target.checked ? [...f.optionalQs, q] : f.optionalQs.filter((x) => x !== q) })} /> Not required
                     </label>
@@ -475,12 +477,21 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
 
       <div className="panel">
         <h2>Optional</h2>
-        <div>
-          <label className="label" htmlFor="ndaText">NDA (testers must accept it before joining){left("ndaText")}</label>
-          <textarea id="ndaText" rows={4} disabled={fieldLocked("ndaText")} className="input" maxLength={LIMITS.nda} value={f.ndaText} onChange={(e) => set({ ndaText: e.target.value })} placeholder="Leave empty for no NDA. Testers accept this text before they join; changing it later is a new offer they accept." />
+        {/* (Owner, Oct 29, batch 13 section 5) The NDA in its own card, as in the full app; the 3-change limit and the Switch / Keep offer stay. */}
+        <section className="space-y-3 rounded-xl border border-white/10 p-3" data-nda-card="">
+          <h3 className="flex items-center gap-2 font-semibold text-white"><ShieldCheck className="h-5 w-5 text-emerald-300" /> <label htmlFor="ndaText">Keep it confidential? (NDA, optional)</label>{left("ndaText")}</h3>
+          <ul className="list-disc space-y-0.5 pl-5 text-sm text-slate-400">
+            <li>An NDA stops testers sharing your build or what they saw. They must accept it before joining.</li>
+            <li>With or without one, <strong className="text-slate-200">you can always use the feedback you receive</strong> to improve your product.</li>
+            <li>Testers can never show work from a test under an NDA as excerpts on their profile; without one, they can only with your permission.</li>
+          </ul>
+          {/* (Batch 13 section 9) 1,000 characters; an older, longer NDA stays as it is until a Save changes it. */}
+          <textarea id="ndaText" rows={4} disabled={fieldLocked("ndaText")} className={"input" + (f.ndaText.length > LIMITS.nda && f.ndaText !== base.ndaText ? " field-bad" : "")} value={f.ndaText} onChange={(e) => set({ ndaText: e.target.value })} placeholder="Leave blank for no NDA. If filled, testers must accept it before joining." />
+          <p className={`text-right text-xs ${f.ndaText.length > LIMITS.nda && f.ndaText !== base.ndaText ? "text-rose-300" : "text-slate-500"}`} data-nda-count="">{f.ndaText.length.toLocaleString("en-US")} / {LIMITS.nda.toLocaleString("en-US")}</p>
+          {f.ndaText.trim() && <NdaBox label="How testers see it" text={f.ndaText} />}
           {lockNote("ndaText")}
           {note("ndaText")}
-        </div>
+        </section>
         {edit ? (
           <KeyBoxes data={keysData} removed={keysRemove} onRemove={(v, on) => { setKeysRemove((r) => (on ? [...r, v] : r.filter((x) => x !== v))); leave("keys"); }}
             typed={keysText} onType={(t) => setKeysText(t)} onBlur={() => leave("keys")} openSpots={openN} line={keysBad ? keyLine : ""} note={note("keys")} />

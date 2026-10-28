@@ -9,7 +9,8 @@ export const LIMITS = {
   testName: 60,
   whatToDo: 1000,
   matureWhy: 500,
-  nda: 20_000,
+  nda: 1000, // (Owner, Oct 29, batch 13 section 9; was 20,000) older, longer NDAs stay, but a Save that changes the NDA must fit
+  questionChars: 300, // (Batch 13 section 9, DEFAULT) per question
   categoriesMin: 1,
   questions: { min: 1, max: 20 },
   partMinCents: 100, // $1.00, or free

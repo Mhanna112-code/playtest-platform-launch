@@ -178,6 +178,8 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
     // (Owner, Oct 28) Open disputes are withdrawn.
     await db.dispute.updateMany({ where: { testerId: userId, status: "open" }, data: { status: "withdrawn" } });
   }
+  // (Owner, Oct 29, batch 13) A tester's excerpt requests and shown excerpts are removed; a developer's pending requests close (shown excerpts stay).
+  await (await import("./excerpts")).excerptsOnDelete(userId);
   return { ok: true };
 }
 
