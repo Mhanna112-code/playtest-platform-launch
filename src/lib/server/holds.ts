@@ -3,7 +3,7 @@ import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
 import {
-  HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, choiceLine, failedLine, headsUpLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
+  HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, choiceLine, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, sendSummaries } from "./notify";
@@ -551,9 +551,9 @@ export async function runDaily(now = new Date()) {
     const m = countdownDue(t.openUntil, now, t.notifiedMarks, t.createdAt);
     if (!m) continue;
     // Bell notifications only, never emailed.
-    const line = headsUpLine(t.title, t.openUntil!, (d) => T(d, "date")); // (batch 15 section 11) each reader's own zone
-    await bell(t.developerId, line, `/app/tests/${t.id}`, undefined, { reminder: `headsup:${t.id}` });
-    for (const c of t.contracts) await bell(c.testerId, line, `/app/sessions/${c.id}`, undefined, { reminder: `headsup:${t.id}` });
+    // (Batch 15 sections 11 and 18) Each reader's own zone; Open until is the last day to join, each tester has their own deadline.
+    await bell(t.developerId, joinClosingLine(t.title, t.openUntil!, (d) => T(d, "date")), `/app/tests/${t.id}`, undefined, { reminder: `headsup:${t.id}` });
+    for (const c of t.contracts) if (c.dueAt.getTime() <= t.openUntil!.getTime() + 86_400_000) await bell(c.testerId, ownDeadlineLine(t.title, c.dueAt, (d) => T(d, "date")), `/app/sessions/${c.id}`, undefined, { reminder: `headsup:${t.id}` });
     await db.test.update({ where: { id: t.id }, data: { notifiedMarks: { push: m.mark }, ...(m.mark === "1d" ? { notified1d: true, notified3d: true } : m.mark === "3d" ? { notified3d: true } : {}) } });
     out.headsUps++;
   }

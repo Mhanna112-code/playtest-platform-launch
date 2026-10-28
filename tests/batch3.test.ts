@@ -84,9 +84,10 @@ describe("email settings and the bell", () => {
     const { testId } = await setup();
     const { tester } = await joined(testId);
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } });
+    await db.contract.updateMany({ where: { testId }, data: { dueAt: new Date(Date.now() + 2 * DAY) } }); // (batch 15 section 18) their own deadline
     await cron();
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "closes on" } } })).toBe(1);
-    expect(await db.outboxEmail.count({ where: { to: tester.user.email, subject: { contains: "closes on" } } })).toBe(0);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "Your deadline on" } } })).toBe(1); // (batch 15 section 18) their own deadline
+    expect(await db.outboxEmail.count({ where: { to: tester.user.email, subject: { contains: "Your deadline on" } } })).toBe(0);
   });
 
   it("each admin gets one daily email listing new disputes (it can't be turned off); no per-event admin emails", async () => {

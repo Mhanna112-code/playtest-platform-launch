@@ -2584,6 +2584,8 @@ group("editstop", async () => {
 
 // ---------- Batch 15: the launch fixes (one case or more per item; the report's "Launch fixes" section) ----------
 const LF = "Launch fixes";
+/** An INSERT … RETURNING id: the id (psql adds the command tag on the next line). */
+const sqlId = (q) => sql(q).split(String.fromCharCode(10))[0].trim();
 const utcNow = "(now() at time zone 'utc')";
 /** Opens the test page and scrolls an element into view (the pictures start from the top of the page anyway). */
 async function open(page, url, sel) {
@@ -2600,6 +2602,7 @@ const piece = (page, id) => page.locator(`#piece-${id}, #call-${id}`).first();
 
 group("b15pay", async () => {
   const nora = await account(`dev+media${TS}lp@playtest.test`, "Nora Lane", "developer", "she");
+  setCard(nora.email, "pm_card_visa");
   const ana = await account(`tester+media${TS}lpa@playtest.test`, "Ana Silva", "tester", "she");
   const ben = await account(`tester+media${TS}lpb@playtest.test`, "Ben Okafor", "tester", "he");
   const t = await postTest(nora, { writtenCents: "10.00" });
@@ -2642,6 +2645,7 @@ group("b15pay", async () => {
 
 group("b15calls", async () => {
   const nora = await account(`dev+media${TS}lc@playtest.test`, "Nora Lane", "developer", "she");
+  setCard(nora.email, "pm_card_visa");
   const ana = await account(`tester+media${TS}lca@playtest.test`, "Ana Silva", "tester", "she", { phone: true });
   const t = await postTest(nora, { liveRateCents: "30.00", spots: "3" });
   const sA = await join(ana, t);
@@ -2691,6 +2695,7 @@ group("b15calls", async () => {
 
 group("b15ceiling", async () => {
   const nora = await account(`dev+media${TS}lk@playtest.test`, "Nora Lane", "developer", "she");
+  setCard(nora.email, "pm_card_visa");
   const ana = await account(`tester+media${TS}lka@playtest.test`, "Ana Silva", "tester", "she");
   const t = await postTest(nora, { liveRateCents: "150.00", spots: "3" });
   const sA = await join(ana, t);
@@ -2719,6 +2724,7 @@ group("b15ceiling", async () => {
 
 group("b15live", async () => {
   const nora = await account(`dev+media${TS}ll@playtest.test`, "Nora Lane", "developer", "she");
+  setCard(nora.email, "pm_card_visa");
   const ana = await account(`tester+media${TS}lla@playtest.test`, "Ana Silva", "tester", "she");
   const t = await postTest(nora, { liveRateCents: "30.00", spots: "3" });
   const sA = await join(ana, t);
@@ -2750,12 +2756,13 @@ group("b15live", async () => {
 
 group("b15stops", async () => {
   const nora = await account(`dev+media${TS}ls@playtest.test`, "Nora Lane", "developer", "she");
+  setCard(nora.email, "pm_card_visa");
   const ana = await account(`tester+media${TS}lsa@playtest.test`, "Ana Silva", "tester", "she", { phone: true });
   const ben = await account(`tester+media${TS}lsb@playtest.test`, "Ben Okafor", "tester", "he");
   const t = await postTest(nora, { recordingCents: "15.00", spots: "4" });
   const sA = await join(ana, t), sB = await join(ben, t);
   // §36 The developer's stop box: Ben sends while the page is open; Pay on Ana's recording stops once.
-  const recA = own(`insert into "Submission" (id, "contractId", kind, "agreedCents", "sentAt", "updatedAt", "payBy", "devMarks") values ('ms' || md5(random()::text), '${sA}', 'recording', 1500, ${utcNow}, ${utcNow}, ${utcNow} + interval '7 days', ARRAY[]::text[]) returning id`);
+  const recA = sqlId(`insert into "Submission" (id, "contractId", kind, "agreedCents", "sentAt", "updatedAt", "payBy", "devMarks") values ('ms' || md5(random()::text), '${sA}', 'recording', 1500, ${utcNow}, ${utcNow}, ${utcNow} + interval '7 days', ARRAY[]::text[]) returning id`);
   await open(nora, `/app/tests/${t}`, `#piece-${recA}`);
   await sendWritten(ben, sB);
   await nora.locator(`#piece-${recA} [data-pay-tick] input`).check();
@@ -2785,7 +2792,7 @@ group("b15stops", async () => {
   const sub = subOf(sA);
   own(`update "Submission" set "choiceOfferedAt" = ${utcNow}, "choiceBy" = ${utcNow} + interval '7 days', "payBy" = ${utcNow} - interval '1 day' where id = '${sub}'`);
   await open(ana, `/app/sessions/${sA}`, "#part-written");
-  const recB = own(`insert into "Submission" (id, "contractId", kind, "agreedCents", "sentAt", "updatedAt", "payBy", "devMarks") values ('ms' || md5(random()::text), '${sB}', 'recording', 1500, ${utcNow}, ${utcNow}, ${utcNow} + interval '7 days', ARRAY[]::text[]) returning id`);
+  const recB = sqlId(`insert into "Submission" (id, "contractId", kind, "agreedCents", "sentAt", "updatedAt", "payBy", "devMarks") values ('ms' || md5(random()::text), '${sB}', 'recording', 1500, ${utcNow}, ${utcNow}, ${utcNow} + interval '7 days', ARRAY[]::text[]) returning id`);
   void recB;
   await apiEdit(nora, t, { description: "Sail through the first three harbors at night." });
   await ana.locator("#part-written [data-pay-tick] input, #part-written input[type=checkbox]").first().check().catch(() => {});
@@ -2800,34 +2807,40 @@ group("b15stops", async () => {
   await ben.waitForSelector("[data-tester-alerts='off']");
   await shot(ben, "b15-26-toggle-off", "§26 Alerts: Off | One press, saved for all Ben's tests: only new terms from the developer stop a press now", "[data-tester-alerts]");
   await ben.reload();
+  await ben.waitForSelector("#a0");
   await ben.locator("#a0").fill("Second try: the fog level is still too dark.");
-  ok(await post(nora, "/api/review", { kind: "submission", id: subOf(sB), amount: "10.00", tickedCents: 1000, payKey: require("crypto").randomUUID(), ...go }), "pay Ben");
-  await ben.click("button:has-text('Send my updated answers'), button:has-text('Send my answers')").catch(() => {});
-  await pause(ben, 2500);
-  await shot(ben, "b15-26-off-goes", "§26 Alerts Off: Send goes through | Nora paid Ben after his page loaded: the live box shows it greyed and Send went straight through", "main");
+  ok(await post(nora, "/api/review", { kind: "submission", id: subOf(sB), amount: "15.00", tickedCents: 1500, payKey: require("crypto").randomUUID(), ...go }), "pay Ben");
+  await waitLive(ben, "[data-live-top]");
+  await ben.click("button:has-text('Send my updated answers'), button:has-text('Send my answers')");
+  await ben.waitForSelector("p.ok", { timeout: 15000 }).catch(() => {});
+  await pause(ben, 1200);
+  await shotSpan(ben, "b15-26-off-goes", "§26 Alerts Off: Send goes through | Nora paid Ben after his page loaded: the live box shows it greyed (it won't stop anything) and Send went straight through", "[data-live-top]", ben.locator("p.ok").first(), 12, 16);
   await apiEdit(nora, t, { writtenCents: "12.00" });
-  await ben.locator("#a0").fill("Third try.").catch(() => {});
-  await ben.click("button:has-text('Send my updated answers'), button:has-text('Send my answers')").catch(() => {});
-  await pause(ben, 2500);
-  await shot(ben, "b15-26-off-terms-stop", "§26 New terms still stop | With Alerts Off, a terms offer still stops the press: the offer box at the top", "main");
+  await ben.locator("#a0").fill("Third try.");
+  await ben.click("button:has-text('Send my updated answers'), button:has-text('Send my answers')");
+  await ben.waitForSelector("#terms-offer", { timeout: 15000 }).catch(() => {});
+  await pause(ben, 1500);
+  await shot(ben, "b15-26-off-terms-stop", "§26 New terms still stop | With Alerts Off, a terms offer still stops the press: the page goes up to the offer box (Switch or Keep)", "#terms-offer");
   // §25 Leave never stops: after a change, Leave goes through on the first press.
   await open(ana, `/app/sessions/${sA}`, "main");
   await apiEdit(nora, t, { description: "Sail through all three harbors at night." });
   await ana.click("button:has-text('Leave')").catch(() => {});
   await ana.waitForSelector("dialog[open]").catch(() => {});
   await ana.click("dialog[open] button:has-text('Leave')").catch(() => {});
-  await pause(ana, 2500);
-  await shot(ana, "b15-25-leave", "§25 Leave never stops | The listing changed after the page loaded; Leave (after its own confirm) went through on the first press", "main");
+  await ana.waitForSelector("text=You left this test.", { timeout: 15000 });
+  await shot(ana, "b15-25-leave", "§25 Leave never stops | The listing changed after the page loaded; Leave (after its own confirm) went through on the first press", ana.locator(".info", { hasText: "You left this test." }).first());
 }, { section: LF, fake: true });
 
 group("b15paused", async () => {
   const nora = await account(`dev+media${TS}lr@playtest.test`, "Nora Lane", "developer", "she");
+  setCard(nora.email, "pm_card_visa");
   const ana = await account(`tester+media${TS}lra@playtest.test`, "Ana Silva", "tester", "she");
   const admin = await adminAccount();
   const t = await postTest(nora, { liveRateCents: "30.00", spots: "6" });
   const sA = await join(ana, t);
-  await bookCall(nora, ana, t, sA, 48);
-  await bookCall(nora, ana, t, sA, 72);
+  // (A suspension cancels the calls in the next 3 days; these are later.)
+  await bookCall(nora, ana, t, sA, 120);
+  await bookCall(nora, ana, t, sA, 144);
   // Five testers dispute a $0 payment each: the dashboard box with 5 disputes scrolls.
   for (const [i, n] of ["Ben Okafor", "Cam Lee", "Dee Marsh", "Eli Novak", "Fay Ito"].entries()) {
     const x = await account(`tester+media${TS}lr${i}@playtest.test`, n, "tester", "they");
@@ -2850,7 +2863,7 @@ group("b15paused", async () => {
   await pause(D, 2000);
   await D.click("button:has-text('Stop the test')");
   await D.waitForSelector("dialog[open]");
-  await join(await account(`tester+media${TS}lrz@playtest.test`, "Gus Hale", "tester", "he"), t).catch(() => {});
+  ok(await post(ana, `/api/sessions/${sA}/leave`, { ...go, reason: "Something came up" }), "leave (a change after the page loaded)");
   await D.click("dialog[open] button:has-text('Stop the test')");
   await D.waitForURL((u) => u.pathname === "/app", { timeout: 20000 }).catch(() => {});
   await D.waitForSelector("[data-done-line]").catch(() => {});
@@ -2861,7 +2874,7 @@ group("b15paused", async () => {
   await adminDo(admin, "unsuspend", nora.uid, { side: "developer" });
   const t2 = await postTest(nora, { title: "Harbor Run: reef", spots: "3" });
   await join(ana, t2);
-  await adminDo(admin, "pause-test", t2, { note: "Media pass check: " + "a tester reported that the build link opens a different game, so we paused this test while we look. ".repeat(10).slice(0, 990) });
+  await adminDo(admin, "pause-test", t2, { note: "Media pass check: " + "a tester reported that the build link opens a different game, so we paused this test while we look. ".repeat(10).slice(0, 975) });
   await open(nora, `/app/tests/${t2}`, "[data-test-banner]");
   await shot(nora, "b15-37-team-paused", "§37 and §20 The team paused this test | Title, the 1,000-character reason in italics in its scroll box, and at the bottom “For now you can stop this test, end testers' work early, or cancel calls.”", "[data-test-banner]");
   await nora.click("[data-alerts-menu] > summary");
@@ -2887,6 +2900,7 @@ group("b15paused", async () => {
 
 group("b15contract", async () => {
   const nora = await account(`dev+media${TS}lt@playtest.test`, "Nora Lane", "developer", "she");
+  setCard(nora.email, "pm_card_visa");
   const ana = await account(`tester+media${TS}lta@playtest.test`, "Ana Silva", "tester", "she");
   const ben = await account(`tester+media${TS}ltb@playtest.test`, "Ben Okafor", "tester", "he");
   const cam = await account(`tester+media${TS}ltc@playtest.test`, "Cam Lee", "tester", "they");
@@ -2905,14 +2919,15 @@ group("b15contract", async () => {
   await pause(nora, 800);
   await shot(nora, "b15-43-contract-changes", "§43 Contract changes | One entry per Save that changed terms or names, newest first: before → after, Switched / Kept / Not decided yet (names link to the rows), and each Save's effects", "#contract-changes");
   await shot(nora, "b15-24-rename-row", "§24 Renames in the tester row | “Renamed: “Harbor Run · Harbor Run: first 3 levels” → “Harbor Run · Harbor Run: night harbors”” in each working tester's contract changes", `#tester-${sA}`);
-  await open(ana, `/app/sessions/${sA}`, "[data-terms-history]");
-  await ana.locator("[data-terms-history]").locator("xpath=ancestor::details[1]").locator("summary").first().click().catch(() => {});
+  await open(ana, `/app/sessions/${sA}`, "main");
+  await ana.locator("[data-terms-history]").locator("xpath=ancestor::details[1]").evaluate((d) => { d.open = true; });
   await pause(ana, 600);
   await shot(ana, "b15-43-tester-history", "§43 The tester's own deal history | The terms she joined on, each offer and what she chose, the rename, her earlier questions, and payments, in order; never others' choices", "[data-terms-history]");
 }, { section: LF, fake: true });
 
 group("b15keys", async () => {
   const nora = await account(`dev+media${TS}ly@playtest.test`, "Nora Lane", "developer", "she");
+  setCard(nora.email, "pm_card_visa");
   const ana = await account(`tester+media${TS}lya@playtest.test`, "Ana Silva", "tester", "she");
   const ben = await account(`tester+media${TS}lyb@playtest.test`, "Ben Okafor", "tester", "he");
   const cam = await account(`tester+media${TS}lyc@playtest.test`, "Cam Lee", "tester", "they");
@@ -2958,6 +2973,7 @@ group("b15keys", async () => {
 
 group("b15admin", async () => {
   const nora = await account(`dev+media${TS}la@playtest.test`, "Nora Lane", "developer", "she");
+  setCard(nora.email, "pm_card_visa");
   const ana = await account(`tester+media${TS}laa@playtest.test`, "Ana Silva", "tester", "she");
   const a1 = await adminAccount();
   adminP = null;
@@ -2996,6 +3012,7 @@ group("b15admin", async () => {
 
 group("b15misc", async () => {
   const nora = await account(`dev+media${TS}lm@playtest.test`, "Nora Lane", "developer", "she");
+  setCard(nora.email, "pm_card_visa");
   const ana = await account(`tester+media${TS}lma@playtest.test`, "Ana Silva", "tester", "she");
   const ben = await account(`tester+media${TS}lmb@playtest.test`, "Ben Okafor", "tester", "he");
   // §18 Every tester gets the same days; Open until is the last day to join.
@@ -3011,10 +3028,12 @@ group("b15misc", async () => {
   const call = await bookCall(nora, ana, t, sA, 0.12);
   await open(ana, "/app", "#upcoming-calls");
   await shot(ana, "b15-35-upcoming-join", "§35 and §38 Upcoming calls | The tester dashboard's Upcoming calls has Join while the call can be joined", "#upcoming-calls");
+  await ana.reload();
+  await ana.waitForSelector("#upcoming-calls button:has-text('Join call')");
   ok(await post(nora, `/api/tests/${t}/cancel-call`, { ...go, callId: call, reason: "Something came up at work" }), "cancel");
+  // Pressed at once, before the page's own refresh takes the row away.
   await ana.click("#upcoming-calls button:has-text('Join call')");
-  await ana.waitForSelector("text=/Your Join call didn't go through/");
-  await pause(ana, 600);
+  await ana.waitForSelector("text=/Your Join call didn't go through/", { timeout: 5000 });
   await shot(ana, "b15-38-stale-join", "§38 A stale Join | “Your Join call didn't go through: Nora Lane cancelled this call at <time>.” and the button leaves", "#upcoming-calls");
   // §22 End early: the button waits for a reason and a tester; the tester reads it in italics.
   const sB = await join(ben, t);
@@ -3061,6 +3080,7 @@ group("b15daily", async () => {
   // The daily job on the media server's own database (CRON_SECRET=media-cron): review reminders, Charge opening, Open until heads-ups, the admin's daily email,
   // the "N applications wait" line and the suspended accounts reminder.
   const nora = await account(`dev+media${TS}ld@playtest.test`, "Nora Lane", "developer", "she");
+  setCard(nora.email, "pm_card_visa");
   const ana = await account(`tester+media${TS}lda@playtest.test`, "Ana Silva", "tester", "she");
   const ben = await account(`tester+media${TS}ldb@playtest.test`, "Ben Okafor", "tester", "he");
   const admin = await adminAccount();
@@ -3076,7 +3096,7 @@ group("b15daily", async () => {
   own(`update "Call" set "payBy" = ${utcNow} - interval '1 hour' where id = '${call}'`);
   // Unlisted written answers sent 5 days ago (review date in 2 days): the "3 days" mark is due.
   ok(await post(ben, `/api/tests/${u}/apply`, { ...go, note: "I'd love to try it." }), "apply");
-  own(`update "Submission" set "updatedAt" = ${utcNow} - interval '5 days', "payBy" = ${utcNow} + interval '2 days' where "contractId" = '${sA}'`);
+  sql(`update "Submission" set "updatedAt" = ${utcNow} - interval '5 days', "payBy" = ${utcNow} + interval '2 days' where "contractId" = '${sA}'`);
   // A suspended account to review.
   const zed = await account(`tester+media${TS}ldz@playtest.test`, "Zed Ruiz", "tester", "he");
   await adminDo(admin, "suspend", zed.uid, { note: "Media pass check: spam", side: "tester" });

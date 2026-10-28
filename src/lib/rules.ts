@@ -680,6 +680,12 @@ export function headsUpDue(openUntil: Date | null, now: Date, sent3d: boolean, s
   return null;
 }
 export const headsUpLine = (title: string, openUntil: Date, fmt: (d: Date) => string) => `${title} closes on ${fmt(openUntil)}: send your work before then.`;
+/**
+ * (Batch 15 section 18) Open until is the last day to JOIN: the developer reads "“X” closes to new testers on Nov 20"; a working tester reads their OWN deadline
+ * ("Your deadline on “X” is Nov 20: send your work before then."), only while it comes no later than a day after Open until (later joiners have later deadlines).
+ */
+export const joinClosingLine = (title: string, openUntil: Date, fmt: (d: Date) => string) => `“${title}” closes to new testers on ${fmt(openUntil)}.`;
+export const ownDeadlineLine = (title: string, dueAt: Date, fmt: (d: Date) => string) => `Your deadline on “${title}” is ${fmt(dueAt)}: send your work before then.`;
 
 /** Invite: reasons the whole press is refused for good. */
 export function inviteTestRefusal(
