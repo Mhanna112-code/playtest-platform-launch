@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { heartbeat, outageLine, recordAlert } from "@/lib/server/outages";
+import { renderTimes } from "@/lib/tz";
 import { GET as healthGET } from "@/app/api/health/route";
 import { POST as alertPOST } from "@/app/api/health/alert/route";
 import { bookCall, joined, sact, setup } from "./fixtures";
@@ -66,14 +67,14 @@ describe("outages", () => {
     expect((await db.call.findUniqueOrThrow({ where: { id: later.id } })).status).toBe("booked");
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "was missed because the site was down" } } })).toBe(1);
     // One bell each, with the times and the length; no hold wording.
-    const line = outageLine(start, end, L);
+    const line = renderTimes(outageLine(start, end, L), "UTC"); // (batch 15 section 11) written in each reader's zone (these accounts have none: UTC)
     expect(line).toMatch(/^The site was down from .+ to .+\. Deadlines and payment dates moved 2 h 30 min later\.$/);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: line } })).toBe(1);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: line } })).toBe(1);
     expect(line).not.toMatch(/hold|pause/i);
     // The top box on affected pages.
     const { outageLines } = await import("@/lib/server/outages");
-    expect((await outageLines(new Date(start.getTime() - MIN))).map((x) => x.text)).toEqual([line]);
+    expect((await outageLines(new Date(start.getTime() - MIN))).map((x) => renderTimes(x.text, "UTC"))).toEqual([line]);
   }, 90_000);
 
   it("gated: with the setting off nothing is written; polls never write heartbeats; only the keyed ping does, and a gap never creates an outage", async () => {

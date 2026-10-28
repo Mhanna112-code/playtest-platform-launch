@@ -2,6 +2,8 @@
 import { useRef, useState } from "react";
 import { api, errOf } from "@/lib/client";
 import { checkFields } from "@/components/FieldChecks";
+import { LIMITS } from "@/lib/limits";
+import { counterText, reasonTooLong } from "@/lib/rules";
 
 const dollars = (c: number) => `$${(c / 100).toFixed(2)}`;
 
@@ -27,7 +29,10 @@ export function DisputeDecision({ id, minCents, maxCents }: { id: string; minCen
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-sm" htmlFor={`note-${id}`}>Note to both</label>
-        <input id={`note-${id}`} className="input w-72 max-w-full" value={note} onChange={(e) => setNote(e.target.value)} />
+        {/* (Batch 15 section 20) Up to 1,000 characters, a live counter, red when over. */}
+        <textarea id={`note-${id}`} rows={2} className={`input w-72 max-w-full ${note.length > LIMITS.reason ? "field-bad" : ""}`} value={note} onChange={(e) => setNote(e.target.value)} />
+        <span className={`block text-right text-xs ${note.length > LIMITS.reason ? "text-rose-300" : "text-slate-500"}`} data-reason-count="">{counterText(note.length, LIMITS.reason)}</span>
+        {note.length > LIMITS.reason && <span className="err-field">{reasonTooLong()}</span>}
         <button
           className="btn-ghost"
           disabled={busy}

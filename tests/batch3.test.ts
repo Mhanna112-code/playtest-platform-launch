@@ -1,3 +1,4 @@
+import { renderTimes } from "@/lib/tz";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -32,8 +33,9 @@ async function withCall(over: Record<string, unknown> = {}, heldAgo = false) {
 describe("latest batch rules", () => {
   it("cancelled-call lines, call reference, call length, declined line, email settings", () => {
     const d = new Date(2026, 10, 5, 15, 0);
-    expect(R.callCancelledLine(d, "paused")).toBe("Your call on Thu, Nov 5 was cancelled because the test is paused.");
-    expect(R.callCancelledLine(d, "stopped")).toBe("Your call on Thu, Nov 5 was cancelled because the test was stopped.");
+    // (Batch 15 section 11) The time is a token, written in the reader's own zone.
+    expect(renderTimes(R.callCancelledLine(d, "paused"), Intl.DateTimeFormat().resolvedOptions().timeZone)).toMatch(/^Your call on Thu, Nov 5 at 3:00 PM \S+ was cancelled because the test is paused\.$/);
+    expect(renderTimes(R.callCancelledLine(d, "stopped"), Intl.DateTimeFormat().resolvedOptions().timeZone)).toMatch(/was cancelled because the test was stopped\.$/);
     expect(R.callReference(4000, 25)).toEqual({ cents: 1667, text: "Listing: $40/h × 25 min = $16.67" });
     expect(R.callReference(null, 25)).toEqual({ cents: null, text: "Not listed" });
     expect(R.checkActualMinutes(25, 30).ok).toBe(true);
@@ -208,7 +210,7 @@ describe("newest owner rules", () => {
     const call = new Date(2026, 10, 5, 15, 0);
     expect(R.checkCancel(new Date(now.getTime() + 20 * 3_600_000), now, "").ok).toBe(false);
     expect(R.checkCancel(new Date(now.getTime() + 30 * 3_600_000), now, "").ok).toBe(true);
-    expect(R.cancelLine("Ben Carter", call, "car trouble")).toBe("Ben Carter cancelled the call on Thu, Nov 5 at 3:00 PM: car trouble");
+    expect(renderTimes(R.cancelLine("Ben Carter", call, "car trouble"), Intl.DateTimeFormat().resolvedOptions().timeZone)).toMatch(/^Ben Carter cancelled the call on Thu, Nov 5 at 3:00 PM \S+: car trouble$/);
     expect(R.closesInLine("Harbor Run", new Date(now.getTime() + (2 * 24 + 4) * 3_600_000), now)).toBe("⏱ Harbor Run closes in 2 days 4 hours: send your work before then.");
     expect(R.closesInLine("Harbor Run", new Date(now.getTime() + 5 * 3_600_000), now)).toBe("⏱ Harbor Run closes in 5 hours: send your work before then.");
     expect(R.emailDecision("weekly", false)).toBe("summary");

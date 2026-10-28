@@ -611,6 +611,30 @@ Build these BEFORE the remaining UI items. Tests for each; file:line refs are fr
 
 **Proof:** a recording of the developer's Contract changes panel after 3 saves with mixed switches and keeps, plus the tester's own history. Desktop and phone.
 
+## 44. Access keys: undo "doesn't work", and reused keys flagged (owner, Oct 30, added later; relayed as "item 43", numbered 44 here). It extends items 19 and 25's key rules.
+1. **A tester can undo "This key doesn't work".** While they're working on the test, their session page's key notice shows "Marked as not working" with a "It works now" button.
+   - Pressing it clears the report. The key stops being crossed out in Edit's In use, in the test page's Access keys notice and in their tester row.
+   - The developer gets one quiet live-box line: "Ana says their key works now". No stop-once, no bell.
+   - They can report it again later.
+   - When the tester leaves or finishes, the whole key notice disappears from their page, and their last choice (working / not working) stays as it was.
+2. **Reusing a key from a tester who left or finished** (item 19) stays allowed, but it's flagged in red under the Free box: "HR-3333: reused, previously given to Ben Okafor." This red line is a WARNING ONLY. It doesn't count as a mistake, doesn't block Save, and isn't in "Fix the N mistakes". Give it its own style so the red-means-blocked rule holds everywhere else, or put a "Reused" tag on the warning.
+   - The read-only Access keys notice shows the chip as "HR-3333 · reused (Ben Okafor)".
+   - Keys still marked broken can't be reused. That one stays refused. **(Owner change, Oct 30, later: replaced, see below.)**
+- **Owner change (Oct 30, later; items 19 and 44): keys reported as broken CAN be typed back into Free.** A key from a tester who left or finished, last marked as not working, is allowed back with the warning-only red line "HR-2222: reported as broken by Ben Okafor." (it replaces "reused, previously given to…" for that key). Still a warning only: it doesn't block Save and isn't counted in "Fix the N mistakes". The Access keys notice chip reads "HR-2222 · reported as broken (Ben Okafor)". **Still refused (real red mistakes):** a key in use by a CURRENT working tester, broken or not ("…is in use by Ana Silva, so it can't be added."); duplicates. The Free-box hint: "Keys in use can't be added. Keys from testers who left or finished can be typed in again; you'll see if one was reported as broken."
+
+Tests, and a still of each for the report.
+
+## 45. The broken-key warning on the developer's test page (owner, Oct 30, added later; relayed as "item 44", numbered 45 here)
+**Inside the Access keys notice,** add a warning line (amber) at the top: "Ben Okafor's key doesn't work (HR-2222)". Several lines stack: "2 testers' keys don't work: Ben Okafor (HR-2222), Cam Lee (HR-3333)". It only lists CURRENT working testers whose key is marked not working.
+- When none are left (they left, finished, or pressed "It works now"), the warning line disappears. The notice's Free and Given parts stay as they are.
+- **Dismiss:** each warning has a Dismiss (×) that hides it for this developer. It's stored per key report. A new report on the same key (the tester marks it again after "It works now") shows it again.
+- Dismissing doesn't change the key's state. It stays crossed out in Given and in Edit's In use.
+- Updates are live, as the rest of the notice.
+
+- **Owner change (Oct 30, later): dismissing uses tick boxes, not an × per line.** Each warning row has a tick box: "☐ Ben Okafor · HR-2222", "☐ Cam Lee · HR-3333". At the top: "Select all (N)". Below them, one "Dismiss selected" button, disabled until something is ticked, reading "Dismiss 2" when two are ticked. The rest is unchanged.
+
+Tests, and a still (warning shown, then dismissed) for the report.
+
 ## Check and report
 - Migrations: `LoginAttempt`, `User.timeZone`, the stored "down" alert (or reuse `AppState`). Write them by hand and check them with the `prisma migrate diff ... --exit-code` command from BATCH-10. A stale Prisma client is then the only acceptable failure.
 - Run `NEXT_DIST_DIR=.next-build npm run check` until it's green.

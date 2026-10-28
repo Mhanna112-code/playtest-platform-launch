@@ -5,6 +5,7 @@ import { CategoryTile, mainCategory, PartBadges } from "@/components/Ui";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, money } from "@/lib/format";
 import { REVIEW_DAYS, termsLine, testerShare, testPaused } from "@/lib/rules";
+import { ScrollText } from "@/components/ScrollText";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { asListing, needsLines } from "@/lib/server/tests";
 import { JoinBox } from "./JoinBox";
@@ -108,7 +109,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           {t.languages.length > 0 && <span className="badge"><Languages className="h-3.5 w-3.5" /> {t.languages.join(", ")}</span>}
           <span className="badge"><Users className="h-3.5 w-3.5" /> {plural(testersIn, "tester")} on this test</span>
         </div>
-        {t.description && <p className="whitespace-pre-wrap text-slate-300">{t.description}</p>}
+        {/* (Batch 15 section 17) The steps in a scroll box about 6 lines tall (short steps show without a scroll bar). */}
+        {t.description && <ScrollText text={t.description} className="text-slate-300" label="What to do" />}
         {t.mature && <p className="info !border-rose-300/30 !bg-rose-400/10 !text-rose-100"><b>Mature (18+):</b> {t.matureWhy}</p>}
         {devRating.comments.length > 0 && (
           <details className="text-sm">
@@ -144,7 +146,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         <div className="card space-y-3">
           <h2 className="flex items-center gap-2 font-semibold text-white"><HelpCircle className="h-5 w-5 text-indigo-300" /> {dev} wants to know</h2>
           {l.questions.length ? (
-            <ul className="list-disc space-y-1 pl-5 text-sm text-slate-300">{l.questions.map((q) => <li key={q}>{qText(q)}{qOptional(q) && <span className="text-ink-500"> · not required</span>}</li>)}</ul>
+            <ul className="list-disc space-y-1 pl-5 text-sm text-slate-300">{l.questions.map((q) => <li key={q}><ScrollText text={qText(q)} label="Question" />{qOptional(q) && <span className="text-ink-500"> · not required</span>}</li>)}</ul>
           ) : (
             <p className="text-sm text-slate-400">Where you got stuck, any bugs, and what you liked.</p>
           )}

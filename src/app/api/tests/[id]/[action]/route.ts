@@ -41,7 +41,7 @@ export async function POST(req: Request, { params }: Ctx) {
   return handle(async () => {
     const { id, action } = await params;
     const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action), devSide: !TESTER_SIDE.has(action) });
-    const body = await readJson(req);
+    const body = await readJson(req, 900_000); // (batch 15 sections 3 and 17) an Edit with 20 questions and the steps at 20,000 characters each
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
     await adminRefusal(req, u.id, id, action);
     const res0 = await run(u, id, action, body);

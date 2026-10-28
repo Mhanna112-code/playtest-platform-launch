@@ -3,7 +3,7 @@ import { Err } from "@/components/Err";
 import { useEffect, useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { NdaBox } from "@/components/NdaBox";
-import { PlusMore } from "@/components/PlusMore";
+import { QuestionList } from "@/components/QuestionList";
 import { api, errOf } from "@/lib/client";
 import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
 
@@ -58,8 +58,8 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
       {offer.questions && offer.fromQuestions && JSON.stringify(offer.questions) !== JSON.stringify(offer.fromQuestions) && (
         <details className="text-sm" open>
           <summary className="cursor-pointer font-medium">The questions changed: before and after</summary>
-          <p className="mt-1 text-xs text-sky-200/80">Before: {offer.fromQuestions.length ? <PlusMore sep=" · " items={offer.fromQuestions.map((q) => `“${q}”`)} /> : "none"}</p>
-          <p className="mt-1">After: {offer.questions.length ? <PlusMore sep=" · " items={offer.questions.map((q) => `“${q}”`)} /> : "none"}</p>
+          <div className="mt-1 text-xs text-sky-200/80">Before: <QuestionList items={offer.fromQuestions} /></div>
+          <div className="mt-1">After: <QuestionList items={offer.questions} /></div>
           {offer.answers && offer.answers.some(Boolean) && <p className="mt-1 whitespace-pre-wrap text-xs text-sky-200/80">Your answers so far: {offer.answers.filter(Boolean).join(" / ")}</p>}
         </details>
       )}

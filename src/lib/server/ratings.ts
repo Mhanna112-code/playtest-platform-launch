@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { T } from "@/lib/tz";
 import { displayName, money, pronouns } from "@/lib/format";
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
@@ -180,7 +181,7 @@ export async function ratingReminders(now = new Date()) {
     if (!c || c.test.status !== "stopped" || testPaused(c.test.developer, c.test)) continue;
     if (now.getTime() - (await sinceLast(c.test.developerId, c.testId, r.createdAt)).getTime() < every) continue;
     if ((await rateBlocker(c.id, "developer", now)) !== "") continue;
-    await bell(c.test.developerId, `Reminder: rate ${displayName(c.tester)} for “${c.title}” (until ${new Date(r.createdAt.getTime() + WINDOW_DAYS * DAY).toLocaleDateString("en-US", { month: "short", day: "numeric" })})`, `/app/tests/${c.testId}#tester-${c.id}`, undefined, { own: true, reminder: `rate-dev:${c.id}` });
+    await bell(c.test.developerId, `Reminder: rate ${displayName(c.tester)} for “${c.title}” (until ${T(new Date(r.createdAt.getTime() + WINDOW_DAYS * DAY), "date")})`, `/app/tests/${c.testId}#tester-${c.id}`, undefined, { own: true, reminder: `rate-dev:${c.id}` });
     n++;
   }
   return n;

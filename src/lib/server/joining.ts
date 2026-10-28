@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, fmtTime, pronouns } from "@/lib/format";
 import { PAUSED_RIGHT_NOW, canAskToRejoin, leftText, MAX_ACTIVE_TESTS, termsDiff, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
@@ -213,7 +214,7 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   const c = await joinTest({ ...tester, isTester: true }, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true, acceptedByDeveloper: true, rejoinAccepted: isRejoin, ndaAcceptedAt: a.ndaAcceptedAt?.toISOString(), ndaAccepted: !!a.ndaAcceptedAt });
   await db.application.update({ where: { id: a.id }, data: { status: "accepted", decidedAt: new Date() } });
   if (isRejoin) {
-    const line = `You're back in ${t.title}: your deadline is ${fmtDateTime(c.dueAt)}.`;
+    const line = `You're back in ${t.title}: your deadline is ${T(c.dueAt)}.`;
     await notify(tester.email, line, [line, `Your session is restored on the current listing: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { about: dev.id });
     return { accepted: true, sessionId: c.id, line: `${name} rejoined: ${pronouns(tester.pronoun).poss} deadline is ${fmtDateTime(c.dueAt)}.` };
   }
@@ -327,7 +328,7 @@ export async function matchInviteAndAsk(testId: string, testerId: string) {
   const c = await joinTest(tester, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true, rejoinAccepted: true, ndaAccepted: !!app.ndaAcceptedAt, ndaAcceptedAt: app.ndaAcceptedAt?.toISOString() });
   await db.application.update({ where: { id: app.id }, data: { status: "joined", decidedAt: new Date() } });
   const back = app.kind === "rejoin";
-  await notify(tester.email, back ? `You're back in ${t.title}` : `You're in: ${t.title}`, [back ? `You're back in ${t.title}: your deadline is ${fmtDateTime(c.dueAt)}.` : `You're in: ${t.title}.`], `/app/sessions/${c.id}`, { about: t.developerId });
+  await notify(tester.email, back ? `You're back in ${t.title}` : `You're in: ${t.title}`, [back ? `You're back in ${t.title}: your deadline is ${T(c.dueAt)}.` : `You're in: ${t.title}.`], `/app/sessions/${c.id}`, { about: t.developerId });
   await notify(t.developer.email, `${displayName(tester)} ${back ? "rejoined" : "joined"} “${t.title}”`, [`${displayName(tester)} ${back ? "rejoined" : "joined"} (you'd invited ${pronouns(tester.pronoun).obj} and ${pronouns(tester.pronoun).subj === "they" ? "they'd" : `${pronouns(tester.pronoun).subj} had`} asked).`], `/app/tests/${testId}#tester-${c.id}`, { about: testerId });
   return c;
 }

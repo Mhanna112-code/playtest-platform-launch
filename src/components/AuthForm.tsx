@@ -18,7 +18,10 @@ export function AuthForm(p: { announce?: "in"; path: string; extra?: Record<stri
     setBusy(true);
     setErr("");
     try {
-      await api(p.path, { ...fields, ...(p.extra ?? {}) });
+      // (Batch 15 section 11) The browser's own time zone goes with sign-in and sign-up (bell lines and emails are written in it).
+      let timeZone = "";
+      try { timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? ""; } catch { /* unknown: UTC */ }
+      await api(p.path, { ...fields, ...(p.extra ?? {}), timeZone });
       if (p.announce) announceAuth("in", p.next || "/app");
       if (p.next) window.location.href = p.next;
       else {

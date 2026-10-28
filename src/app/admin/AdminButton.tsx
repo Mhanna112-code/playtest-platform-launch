@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import { api, errOf } from "@/lib/client";
+import { LIMITS } from "@/lib/limits";
+import { counterText, reasonTooLong } from "@/lib/rules";
 
 /**
  * A small admin action: optional text/amount inputs, one button, the result or refusal in plain words. `extra`: fixed values sent with the press (e.g. the side of a
@@ -21,9 +23,18 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
           ))}
         </span>
       )}
-      {fields.map((f) => (
-        <input key={f.name} aria-label={f.label} placeholder={f.ph ?? f.label} className="input w-40" value={v[f.name] ?? ""} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} />
-      ))}
+      {fields.map((f) =>
+        // (Owner, Oct 30, batch 15 section 20) A reason ("note") box: up to 1,000 characters with a live counter; over it is red at the field (the server refuses it too).
+        f.name === "note" ? (
+          <span key={f.name} className="inline-flex flex-col">
+            <textarea aria-label={f.label} placeholder={f.ph ?? f.label} rows={2} className={`input w-64 max-w-full ${(v[f.name] ?? "").length > LIMITS.reason ? "field-bad" : ""}`} value={v[f.name] ?? ""} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} />
+            <span className={`text-right text-xs ${(v[f.name] ?? "").length > LIMITS.reason ? "text-rose-300" : "text-slate-500"}`} data-reason-count="">{counterText((v[f.name] ?? "").length, LIMITS.reason)}</span>
+            {(v[f.name] ?? "").length > LIMITS.reason && <span className="err-field">{reasonTooLong()}</span>}
+          </span>
+        ) : (
+          <input key={f.name} aria-label={f.label} placeholder={f.ph ?? f.label} className="input w-40" value={v[f.name] ?? ""} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} />
+        ),
+      )}
       <button
         className={danger ? "btn-danger" : "btn-ghost"}
         disabled={busy || disabled}

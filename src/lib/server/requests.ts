@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, fmtTime, money, pronouns } from "@/lib/format";
 import { checkCallMinutes, checkCancel } from "@/lib/rules";
@@ -6,7 +7,8 @@ import { FOREVER_AHEAD, MAX_ROWS, occurrences, rowsOf, stepMs, toJson, type Call
 import type { Prisma } from "@prisma/client";
 import { NOT_LISTED, PAUSED_RIGHT_NOW, callListed, testPaused } from "@/lib/rules";
 import { DEV_SUSPENDED } from "./users";
-import { HttpError } from "./http";
+import { HttpError, readText } from "./http";
+import { LIMITS } from "@/lib/limits";
 import { notify } from "./notify";
 import { devGate, recordEvent } from "./tests";
 import { testerGate } from "./testerGate";
@@ -235,7 +237,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
         if ((await bookedTimes(c.id)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit("developer", displayName(c.tester)));
         const call = await bookAt(c.id, hit, match.minutes, bookRate(c.test, c), null, true);
         await db.callRequest.update({ where: { id: match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
-        const line = `Booked: you both picked ${fmtDateTime(hit)}`;
+        const line = `Booked: you both picked ${T(hit)}`;
         await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: c.test.developerId });
         return { booked: true, callId: call.id, message: line };
       }
@@ -293,7 +295,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
       const call = await bookAt(contractId, hit, m.minutes, bookRate(c.test, c));
       await db.callRequest.update({ where: { id: m.id }, data: { status: "booked", callId: call.id, decidedAt: new Date() } });
       await closeBatch(m.batchId, m.id);
-      const line = `Booked: you both picked ${fmtDateTime(hit)}`;
+      const line = `Booked: you both picked ${T(hit)}`;
       await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#call-${call.id}`, { about: c.testerId });
       return { booked: true, callId: call.id, message: line };
     }
@@ -385,7 +387,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
 export async function cancelCallSet(user: U, contractId: string, body: Record<string, unknown>) {
   const { c, side, other } = await ctx(user.id, contractId);
   const setId = String(body.setId ?? "");
-  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 500) : "";
+  const reason = readText(body.reason, LIMITS.reason, "reason"); // (batch 15 section 20) refused over 1,000, never cut
   const now = new Date();
   const ahead = () => db.call.findMany({ where: { contractId, setId, status: "booked", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
   const first = await ahead();
@@ -404,8 +406,9 @@ export async function cancelCallSet(user: U, contractId: string, body: Record<st
     if (set) await tx.callSet.update({ where: { id: set.id }, data: { status: "cancelled" } });
     await recordEvent(tx, c.testId, "cancelled", `${displayName(user)} cancelled the ${unit} calls from ${fmtDateTime(calls[0].startsAt)} (${calls.length} left)`, false, {}, contractId);
   });
-  const line = `${displayName(user)} cancelled the remaining ${unit} calls (${calls.length}), starting ${fmtDateTime(calls[0].startsAt)}${reason ? `: ${reason}` : "."}`;
-  await notify(other.email, line, [line], side === "developer" ? `/app/sessions/${contractId}#call-${calls[0].id}` : `/app/tests/${c.testId}#call-${calls[0].id}`, { about: user.id });
+  // (Batch 15 sections 11 and 20) The time in the reader's own zone; the reason only in the email, never in the bell line.
+  const line = `${displayName(user)} cancelled the remaining ${unit} calls (${calls.length}), starting ${T(calls[0].startsAt)}.`;
+  await notify(other.email, line, [line, ...(reason ? [`Their reason: “${reason}”`] : [])], side === "developer" ? `/app/sessions/${contractId}#call-${calls[0].id}` : `/app/tests/${c.testId}#call-${calls[0].id}`, { about: user.id });
   return { cancelled: calls.length };
 }
 
@@ -433,7 +436,7 @@ export async function topUpForeverSets(now = new Date()) {
       const clash = await acceptClash(c, "developer", [at], set.minutes);
       if (clash.length) {
         skipped++;
-        const line = `The ${unitOf(set.repeat)} call on ${fmtDateTime(at)} was skipped: ${displayName(c.tester)} or ${displayName(c.test.developer)} already has a call at that time.`;
+        const line = `The ${unitOf(set.repeat)} call on ${T(at)} was skipped: ${displayName(c.tester)} or ${displayName(c.test.developer)} already has a call at that time.`;
         await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#calls`);
         await notify(c.tester.email, line, [line], `/app/sessions/${c.id}`);
         continue;

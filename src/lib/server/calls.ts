@@ -1,7 +1,9 @@
 import { db } from "@/lib/db";
+import { T } from "@/lib/tz";
 import { displayName, fmtDateTime, pronouns } from "@/lib/format";
 import { cancelLine, LENGTH_WAITS, checkActualMinutes, checkCancel, type TestEventLike, callClosed, NOBODY_JOINED } from "@/lib/rules";
-import { HttpError } from "./http";
+import { HttpError, readText } from "./http";
+import { LIMITS } from "@/lib/limits";
 import { notify } from "./notify";
 import { testerGate as sharedTesterGate } from "./testerGate";
 import { devGate, devGateIfSeen, devOnHold, ownContract, ownTest, recordEvent, staleNote } from "./tests";
@@ -19,7 +21,7 @@ const canSee = (slot: { allowedTesterIds: string[] }, testerId: string) => slot.
 export async function devCancelCall(dev: U, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
   const callId = String(body.callId ?? "");
-  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 500) : "";
+  const reason = readText(body.reason, LIMITS.reason, "reason"); // (batch 15 section 20) refused over 1,000, never cut
   const call = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
     const c = await tx.call.findUnique({ where: { id: callId }, include: { contract: { include: { tester: true } } } });
@@ -34,8 +36,9 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
     await recordEvent(tx, testId, "cancelled", `You cancelled the call with ${name} on ${fmtDateTime(c.startsAt)}`, false, {}, c.contractId);
     return c;
   });
-  const line = cancelLine(displayName(dev), call.startsAt, reason);
-  await notify(call.contract.tester.email, line, [line], `/app/sessions/${call.contractId}#call-${call.id}`, { about: dev.id });
+  // (Batch 15 section 20) The reason is in the email and on the page, never in the bell line.
+  const line = cancelLine(displayName(dev), call.startsAt, "");
+  await notify(call.contract.tester.email, line, [cancelLine(displayName(dev), call.startsAt, reason)], `/app/sessions/${call.contractId}#call-${call.id}`, { about: dev.id });
   return { cancelled: true };
 }
 
@@ -64,7 +67,7 @@ const testerGate = (tester: U, c: { id: string; testId: string }, body: Record<s
 export async function testerCancelCall(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
   const callId = String(body.callId ?? "");
-  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 500) : "";
+  const reason = readText(body.reason, LIMITS.reason, "reason"); // (batch 15 section 20) refused over 1,000, never cut
   const call = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
     const call = await tx.call.findUnique({ where: { id: callId } });
@@ -78,8 +81,8 @@ export async function testerCancelCall(tester: U, contractId: string, body: Reco
     await recordEvent(tx, c0.testId, "cancelled", `${displayName(tester)} cancelled ${pronouns(tester.pronoun).poss} call on ${fmtDateTime(call.startsAt)}`, false, {}, contractId);
     return call;
   });
-  const line = cancelLine(displayName(tester), call.startsAt, reason);
-  await notify(c0.test.developer.email, line, [line, "The time is open again for other testers."], `/app/tests/${c0.testId}#call-${call.id}`, { about: tester.id });
+  const line = cancelLine(displayName(tester), call.startsAt, "");
+  await notify(c0.test.developer.email, line, [cancelLine(displayName(tester), call.startsAt, reason), "The time is open again for other testers."], `/app/tests/${c0.testId}#call-${call.id}`, { about: tester.id });
   return { cancelled: true };
 }
 
@@ -133,7 +136,7 @@ export async function sweepNobodyJoined(now = new Date()) {
     const done = await db.call.updateMany({ where: { id, status: "booked", devJoinedAt: null, testerJoinedAt: null }, data: { status: "cancelled", cancelledBy: "system", cancelledAt: now, cancelNote: NOBODY_JOINED } });
     if (done.count !== 1) continue;
     const call = await db.call.findUniqueOrThrow({ where: { id }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } } });
-    const line = `Your call on ${fmtDateTime(call.startsAt)}: ${NOBODY_JOINED}`;
+    const line = `Your call on ${T(call.startsAt)}: ${NOBODY_JOINED}`;
     await notify(call.contract.tester.email, line, [line, "Nothing is charged."], `/app/sessions/${call.contractId}#call-${call.id}`);
     await notify(call.contract.test.developer.email, line.replace("Your call", `Your call with ${displayName(call.contract.tester)}`), [line, "Nothing is charged."], `/app/tests/${call.contract.testId}#call-${call.id}`);
   }

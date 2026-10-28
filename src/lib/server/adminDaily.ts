@@ -1,5 +1,7 @@
 import { db } from "@/lib/db";
-import { displayName, fmtDateTime } from "@/lib/format";
+import { displayName } from "@/lib/format";
+import { T, renderTimes } from "@/lib/tz";
+const fmtDateTime = (d: Date) => T(d); // (batch 15 section 11) written in each admin's own zone when the email goes
 import { pauseCountdownLine, pauseClosesAt } from "@/lib/pause";
 import { appUrl } from "./auth";
 import { chargebackHolds } from "./chargeback";
@@ -69,7 +71,8 @@ export async function adminDailyEmails(now = new Date()) {
     }
     if (items.length) {
       try {
-        await sendEmail({ to: a.email, subject: `Playtest admin: ${items.length} item${items.length === 1 ? "" : "s"} for the team`, text: [...items.map((i) => (i.startsWith("   ") ? i : `• ${i}`)), "", "Playtest"].join("\n") });
+        const tz = (await db.user.findUnique({ where: { id: a.id }, select: { timeZone: true } }))?.timeZone;
+        await sendEmail({ to: a.email, subject: `Playtest admin: ${items.length} item${items.length === 1 ? "" : "s"} for the team`, text: renderTimes([...items.map((i) => (i.startsWith("   ") ? i : `• ${i}`)), "", "Playtest"].join("\n"), tz) });
         sent++;
       } catch (e) {
         console.error("[email] admin daily:", (e as Error).message);

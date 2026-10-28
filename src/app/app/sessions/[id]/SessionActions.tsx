@@ -9,6 +9,7 @@ import { restoreDraft } from "@/lib/answerSets";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { qOptional, qText } from "@/lib/questions";
 import { ChangesBox } from "@/components/ChangesBox";
+import { ScrollText } from "@/components/ScrollText";
 import { WRITTEN_MAX_CHARS, writtenLength } from "@/lib/rules";
 import { wrapSelection } from "@/lib/markdown";
 
@@ -85,7 +86,8 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     <form className="space-y-3" onSubmit={send}>
       {questions.map((q, i) => (
         <div key={i}>
-          <label className={`label ${qOptional(q) ? "" : "req"}`} htmlFor={`a${i}`}>{qText(q)}{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</label>
+          {/* (Batch 15 section 3) A long question sits in a scroll box about 6 lines tall. */}
+          <label className={`label ${qOptional(q) ? "" : "req"}`} htmlFor={`a${i}`}><ScrollText text={qText(q)} label={`Question ${i + 1}`} />{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</label>
           <AnswerBox id={`a${i}`} value={answers[i]} onChange={(v) => setAnswers((all) => all.map((a, j) => (j === i ? v : a)))} />
         </div>
       ))}

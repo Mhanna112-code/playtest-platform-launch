@@ -3,7 +3,8 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money, toCents } from "@/lib/format";
 import { LET_GO_BY_TESTER, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, checkDisputeDecision, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkReject, checkExtraPay, extraCapCents, overListingLine, overMaxLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, NO_LISTING_CALLS_TOTAL_CENTS, overCallsLine, PAY_WAITS, testerShare } from "@/lib/rules";
-import { HttpError } from "./http";
+import { HttpError, readText } from "./http";
+import { LIMITS } from "@/lib/limits";
 import { adminUsers, bell, notify } from "./notify";
 import { blockedEitherWay } from "./blocks";
 import { labelled, reportedOver3 } from "./reports";
@@ -58,7 +59,8 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
   const amountCents = reject ? 0 : toCents(body.amount);
   const tickedCents = typeof body.tickedCents === "number" ? body.tickedCents : null;
   // (Batch 9) The optional note on every Pay (required below the listing): the same field as the reason.
-  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 1000) : typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
+  // (Batch 15 section 20) The note (required below the listing and at $0): at most 1,000 characters, refused at the box, never cut.
+  const reason = readText(typeof body.reason === "string" ? body.reason : body.note, LIMITS.reason, "bad_reason");
   const over200 = body.over200 === true || body.understood === true;
   // (Batch 9) A call's Pay: the rate typed ($/h), when one was.
   const rateCents = body.rate === undefined || body.rate === null || body.rate === "" ? null : toCents(body.rate);
@@ -172,7 +174,8 @@ export async function finishReviewPay(paymentId: string, result: { status: strin
   await notify(
     c.tester.email,
     // (Batch 11 section 6) "<dev> paid you $X" for the first payment ("<dev> paid you $X more" for a Pay more).
-    `${rev.amountCents === 0 ? `${displayName(dev)} paid $0 for your ${piece.label} on “${c.title}”` : `${displayName(dev)} paid you ${money(rev.amountCents)} for your ${piece.label} on “${c.title}”`}${rev.reason ? `: “${rev.reason}”` : ""}`,
+    // (Batch 15 section 20) The note never rides in the bell line; it's in the email and on the session page.
+    rev.amountCents === 0 ? `${displayName(dev)} paid $0 for your ${piece.label} on “${c.title}”` : `${displayName(dev)} paid you ${money(rev.amountCents)} for your ${piece.label} on “${c.title}”`,
     [
       rev.amountCents === 0 ? `${displayName(dev)} paid $0 for this.` : `${displayName(dev)} paid ${money(rev.amountCents)}${rev.rateCents != null ? ` (${money(rev.rateCents)}/h)` : ""} for your ${piece.label}: you get ${money(testerShare(rev.amountCents))}.`,
       ...(rev.reason ? [`Their note: “${rev.reason}”`] : []),
@@ -189,7 +192,7 @@ export async function finishReviewPay(paymentId: string, result: { status: strin
 /** Tester: dispute once, on any part the developer reviewed (batch 10: listed or not, any amount, $0 included, or a Reject). */
 export async function openDispute(tester: U, contractId: string, body: Record<string, unknown>) {
   const kind = String(body.kind ?? ""), id = String(body.id ?? "");
-  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 2000) : "";
+  const reason = readText(body.reason, LIMITS.disputeText, "bad_reason");
   if (reason.length < 10) throw new HttpError(400, "bad_reason", "Say why you think the pay should be higher (at least a sentence).");
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== tester.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
@@ -249,7 +252,7 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
   const extra = check.extraCents!;
   const c = await db.contract.findUniqueOrThrow({ where: { id: d.contractId }, include: { tester: true, test: { include: { developer: true } } } });
-  const note = typeof body.note === "string" ? body.note.trim().slice(0, 2000) : "";
+  const note = readText(body.note, LIMITS.reason, "bad_note"); // (batch 15 section 20) the admin's decision note: 1,000
   // Claim the dispute first so two admins can't charge twice.
   const claimed = await db.dispute.updateMany({ where: { id: d.id, status: "open" }, data: { status: "decided", decidedCents: decided!, decisionNote: note, decidedById: admin.id, decidedAt: new Date() } });
   if (claimed.count !== 1) {
@@ -407,7 +410,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   const amount = toCents(body.amount);
   const check = checkExtraPay(amount, typeof body.tickedCents === "number" ? body.tickedCents : null, body.over200 === true || body.understood === true);
   if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
-  const note = typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
+  const note = readText(body.note, LIMITS.reason, "bad_note");
   const card = cardRefusal(dev);
   if (card) throw new HttpError(409, "no_card", card);
   // (Batch 15 section 41, C1) The page's press id (a UUID) wrapped for this developer; "extra:" makes it the Pay more's own.
@@ -469,8 +472,8 @@ export async function finishExtraPay(paymentId: string, result: { status: string
     await tx.payment.update({ where: { id: p.id }, data: { status: result.status, stripePaymentIntentId: result.stripePaymentIntentId, ...(result.feeCents != null ? { feeCents: result.feeCents, testerCents: result.testerCents, transferStatus: result.transferStatus } : {}), actionPi: null, actionBy: null } });
     await recordEvent(tx, c.testId, "paid", `You paid ${name} ${money(amount)} extra for the ${label}`, false, {}, c.id);
   });
-  const line = `${displayName(dev)} paid you ${money(amount)} more for your ${label} on “${c.test.title}”${p.note ? `: “${p.note}”` : ""}`;
-  await notify(c.tester.email, line, [line + `. You get ${money(testerShare(amount))}.`, ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : [])], `/app/sessions/${c.id}#${p.callId ? "part-live" : `part-${label === "recording" ? "recording" : "written"}`}`, { payment: true, group: "textra", about: dev.id });
+  const line = `${displayName(dev)} paid you ${money(amount)} more for your ${label} on “${c.test.title}”`;
+  await notify(c.tester.email, line, [line + `. You get ${money(testerShare(amount))}.`, ...(p.note ? [`Their note: “${p.note}”`] : []), ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : [])], `/app/sessions/${c.id}#${p.callId ? "part-live" : `part-${label === "recording" ? "recording" : "written"}`}`, { payment: true, group: "textra", about: dev.id });
   await receipt(dev.email, `an extra payment to ${name}`, amount, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
   return { paid: true, amountCents: amount, status: result.status };
 }

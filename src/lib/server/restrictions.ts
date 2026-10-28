@@ -193,7 +193,7 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
   // (Owner, Oct 29, batch 12 section 1) A developer can always delete their account (the warning lists what is left; nothing blocks it).
   // (Batch 8) The subscription ends at once, with no refund.
   if (u.isDeveloper) await (await import("./subscription")).endOnDelete(userId);
-  await db.user.update({ where: { id: userId }, data: { deletedAt: new Date(), deletedBy: by, deleteReason: reason.slice(0, 500) } });
+  await db.user.update({ where: { id: userId }, data: { deletedAt: new Date(), deletedBy: by, deleteReason: reason } });
   await db.invite.updateMany({ where: { testerId: userId, status: "sent" }, data: { status: "cancelled" } });
   if (u.isDeveloper) {
     const tests = await db.test.findMany({ where: { developerId: userId, status: { not: "stopped" } } });
@@ -248,7 +248,8 @@ export async function pauseTest(adminId: string, testId: string, note: string) {
   await closeRequests({ contractIds: (await db.contract.findMany({ where: { testId }, select: { id: true } })).map((c) => c.id) }, "the test is paused");
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
   await (await import("./pauseClosure")).bellPausedTests(dev.id);
-  await notify(dev.email, `The team paused “${t.title}”${note ? `: ${note}` : ""}`, [`The team paused “${t.title}”${note ? `: ${note}` : "."} You can only stop it for now.`, "Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
+  // (Batch 15 section 20) Never the note in the bell line: it says what happened; the note is on the test page and in the email.
+  await notify(dev.email, `The team paused “${t.title}”`, [`The team paused “${t.title}”${note ? `: ${note}` : "."} You can only stop it for now.`, "Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
   return { ok: true };
 }
 
@@ -285,7 +286,7 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
   });
   await tellCancelled(cancelled, "stopped");
   for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
-  await notify(t.developer.email, `The team stopped “${t.title}”${note ? `: ${note}` : ""}`, [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay or reject. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
+  await notify(t.developer.email, `The team stopped “${t.title}”`, [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay or reject. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
   return { ok: true };
 }
 

@@ -1,7 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime } from "@/lib/format";
-import { notify } from "./notify";
+import { linesFor, notify } from "./notify";
+import { T } from "@/lib/tz";
 
 // (Owner, Oct 22, NEWEST+6; batch 15 section 10) Outages come from the uptime service's own alerts (POST /api/health/alert?key=...): a "down" is stored and the
 // matching "up" records the outage when it lasted 15 minutes or more. It is recorded once (unique start) and then every timer that was running moves later by its
@@ -22,17 +23,16 @@ export function healthKeyOk(key: string | null) {
 /** The key from the request: the `x-health-key` header, or `?key=` in the URL. */
 export const healthKeyOf = (req: Request) => req.headers.get("x-health-key") ?? new URL(req.url).searchParams.get("key");
 
-const clock = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 export const lengthText = (ms: number) => {
   const m = Math.round(ms / 60_000), h = Math.floor(m / 60), r = m % 60;
   return h ? `${h} h${r ? ` ${r} min` : ""}` : `${r} min`;
 };
-/** "The site was down from 2:10 to 4:40 PM. Deadlines and payment dates moved 2 h 30 min later." */
-export const outageLine = (start: Date, end: Date, ms: number) => {
-  const a = clock(start), b = clock(end);
-  const sameHalf = a.slice(-2) === b.slice(-2) && start.toDateString() === end.toDateString();
-  return `The site was down from ${sameHalf ? a.slice(0, -3) : a} to ${b}. Deadlines and payment dates moved ${lengthText(ms)} later.`;
-};
+/**
+ * "The site was down from 2:10 PM EST to 4:40 PM EST. Deadlines and payment dates moved 2 h 30 min later." (Batch 15 section 11) The times are tokens, written in each
+ * reader's own time zone; pages render them in the viewer's (renderTimes).
+ */
+export const outageLine = (start: Date, end: Date, ms: number) =>
+  `The site was down from ${start.toDateString() === end.toDateString() ? T(start, "time") : T(start, "datetime")} to ${T(end, "time")}. Deadlines and payment dates moved ${lengthText(ms)} later.`;
 
 /**
  * (Batch 15 section 10) The outside checker's keyed ping writes a heartbeat, for information only (at most one a minute, unless `force`). Missing pings NEVER create an
@@ -141,7 +141,7 @@ async function applyOutage(o: { startAt: Date; endAt: Date; ms: number }) {
   const calls = await db.call.findMany({ where: { status: "booked", startsAt: { gte: start, lt: end } }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } } });
   for (const c of calls) {
     await db.call.update({ where: { id: c.id }, data: { status: "cancelled", cancelledBy: "system", cancelledAt: new Date(), cancelNote: "missed because the site was down" } });
-    const line = `Your call on ${fmtDateTime(c.startsAt)} was missed because the site was down. Nothing is charged; you can request a new time.`;
+    const line = `Your call on ${T(c.startsAt)} was missed because the site was down. Nothing is charged; you can request a new time.`;
     await notify(c.contract.tester.email, line, [line], `/app/sessions/${c.contractId}#call-${c.id}`);
     await notify(c.contract.test.developer.email, line.replace("Your call", `Your call with ${displayName(c.contract.tester)}`), [line], `/app/tests/${c.contract.testId}#call-${c.id}`);
   }
@@ -150,7 +150,8 @@ async function applyOutage(o: { startAt: Date; endAt: Date; ms: number }) {
   const testers = await db.contract.findMany({ where: { status: "working" }, select: { testerId: true }, distinct: ["testerId"] });
   const devs = await db.test.findMany({ where: { status: "open" }, select: { developerId: true }, distinct: ["developerId"] });
   const ids = [...new Set([...testers.map((x) => x.testerId), ...devs.map((x) => x.developerId)])];
-  await db.notification.createMany({ data: ids.map((userId) => ({ userId, text: line, link: "/app" })) });
+  const each = await linesFor(ids, line);
+  await db.notification.createMany({ data: ids.map((userId) => ({ userId, text: each.get(userId)!, link: "/app" })) });
 }
 
 /** The top-box lines: outages recorded since the page loaded. */

@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { isEmail, normEmail } from "@/lib/format";
+import { safeZone } from "@/lib/tz";
 import { sendEmail } from "./email";
 import { HttpError } from "./http";
 import { createSession, hashToken, newToken, readCookie, SESSION_COOKIE } from "./session";
@@ -37,6 +38,12 @@ async function issue(email: string, kind: "reset" | "verify", ms: number) {
   return token;
 }
 const recentlySent = (email: string, kind: string) => db.loginToken.count({ where: { email, kind, createdAt: { gt: new Date(Date.now() - 3_600_000) } } });
+
+/** (Batch 15 section 11) A valid IANA time zone name from the browser, or "". */
+export function readTimeZone(v: unknown) {
+  if (typeof v !== "string" || !v || v.length > 64 || !/^[A-Za-z_+\-/0-9]+$/.test(v)) return "";
+  return safeZone(v) === v ? v : "";
+}
 
 // ---------- (Owner, Oct 30, batch 15 section 7) One sign-in message, and attempt limits ----------
 
@@ -94,7 +101,7 @@ export async function signUp(body: Record<string, unknown>, base: string, ip = "
     who = { name, isDeveloper: role !== "tester", isTester: role !== "developer" };
   }
   const user = await db.user.create({
-    data: { email, passwordHash: await hashPassword(password), ...(who ?? {}), ...(who?.isTester ? { profile: { create: { devices: [], languages: [], categories: [] } } } : {}) },
+    data: { email, passwordHash: await hashPassword(password), timeZone: readTimeZone(body.timeZone), ...(who ?? {}), ...(who?.isTester ? { profile: { create: { devices: [], languages: [], categories: [] } } } : {}) },
   });
   await db.loginAttempt.create({ data: { email, ip, kind: "signup", ok: true, at: now } });
   await sendVerification(user.id, base);
@@ -114,6 +121,9 @@ export async function logIn(body: Record<string, unknown>, ip = "", now = new Da
   const ok = !!user && !user.deletedAt && !!user.passwordHash && (await verifyPassword(password, user.passwordHash));
   await db.loginAttempt.create({ data: { email, ip, kind: "login", ok, at: now } });
   if (!ok || !user) throw field(WRONG_LOGIN);
+  // (Batch 15 section 11) The browser's time zone, sent with the sign-in.
+  const tz = readTimeZone(body.timeZone);
+  if (tz && tz !== user.timeZone) await db.user.update({ where: { id: user.id }, data: { timeZone: tz } });
   await db.session.deleteMany({ where: { userId: user.id, expiresAt: { lt: new Date() } } });
   return { user, ...(await createSession(user.id)) };
 }

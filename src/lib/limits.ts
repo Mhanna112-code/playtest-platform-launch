@@ -7,10 +7,16 @@ export const LIMITS = {
   openUntilMinDays: 3,
   productName: 60,
   testName: 60,
-  whatToDo: 1000,
+  whatToDo: 20_000, // (Owner, Oct 30, batch 15 section 17; was 1,000)
   matureWhy: 500,
   nda: 1000, // (Owner, Oct 29, batch 13 section 9; was 20,000) older, longer NDAs stay, but a Save that changes the NDA must fit
-  questionChars: 300, // (Batch 13 section 9, DEFAULT) per question
+  question: 20_000, // (Owner, Oct 30, batch 15 section 3; was 300) per question
+  /** (Owner, Oct 30, batch 15 section 20) Every reason and note: the admin's reasons and decision notes, Pay notes, the reason for paying less or $0. */
+  reason: 1000,
+  /** (Batch 15 section 22) End early's "Why?" */
+  endEarlyReason: 10_000,
+  /** (Batch 15 section 27) The developer's side of a dispute */
+  devSide: 2000,
   categoriesMin: 1,
   questions: { min: 1, max: 20 },
   partMinCents: 100, // $1.00, or free
@@ -29,7 +35,7 @@ export const LIMITS = {
   ratingComment: 500,
   disputeText: 2000,
   bio: 1000,
-  contact: { min: 10, max: 3000 },
+  contact: { min: 10, max: 50_000 }, // (Owner, Oct 30, batch 15 section 21; was 3,000)
   criticalChanges: 3, // (Owner, Oct 28 afternoon) per field: saves that change the steps (What to do), the NDA, questions, required languages or required devices, each counted from the first join
   contactPerDay: 5, // (Owner, Oct 27) Contact us messages per account per day
 } as const;

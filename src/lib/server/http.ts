@@ -56,6 +56,15 @@ export async function handle(fn: () => Promise<Response>): Promise<Response> {
   }
 }
 
+/**
+ * (Owner, Oct 30, batch 15 section 20) A typed reason, note or message: trimmed, and REFUSED (red at the field) when over its limit, never cut silently.
+ */
+export function readText(v: unknown, max: number, code = "too_long") {
+  const s = typeof v === "string" ? v.trim() : "";
+  if (s.length > max) throw new HttpError(400, code, `Keep it to ${max.toLocaleString("en-US")} characters.`);
+  return s;
+}
+
 /** (Batch 15 section 41, L5) A plain form POST from this site's own page (its Origin, when the browser sends one, is this site). */
 export function sameOriginForm(req: Request, base: string) {
   const origin = req.headers.get("origin");

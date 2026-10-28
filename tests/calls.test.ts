@@ -42,7 +42,9 @@ describe("calls are always requests", () => {
     const near = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 10);
     expect((await sact(sessionId, "cancel-call", tester.cookie, { seenAt: seen(), callId: near.id })).body.error.message).toBe("The call is less than 24 hours away: say why you're cancelling (the other side sees it).");
     expect((await sact(sessionId, "cancel-call", tester.cookie, { seenAt: seen(), callId: near.id, reason: "car trouble" })).status).toBe(200);
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: { endsWith: ": car trouble" }, AND: { text: { startsWith: "Ana Silva cancelled the call on " } } } })).toBe(1);
+    // (Batch 15 section 20) The reason is in the email and on the page, never in the bell line.
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { endsWith: "." }, AND: { text: { startsWith: "Ana Silva cancelled the call on " } } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "car trouble" } } })).toBe(0);
     const far = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 60);
     await later();
     expect((await act(testId, "cancel-call", dev.cookie, { seenAt: seen(), callId: far.id })).status).toBe(200);

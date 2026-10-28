@@ -16,6 +16,7 @@ import { redirect } from "next/navigation";
 import { closedForSuspended, restrictedOn } from "@/lib/closedPages";
 import { restrictionKey } from "@/lib/restricted";
 import { SessionWatch } from "@/components/SessionWatch";
+import { TimeZoneSync } from "@/components/TimeZoneSync";
 
 // The full Playtest Platform's header (NEWEST+8): logo, the side's links with their icons, the bell, the account pill
 // and the log-out icon; the confirm-email strip under it; a wide main column.
@@ -105,6 +106,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">{children}</main>
       <FieldChecks />
       <SessionWatch userId={u.id} name={name} restriction={restrictionKey(u, side)} />
+      <TimeZoneSync stored={u.timeZone} />
     </>
   );
 }

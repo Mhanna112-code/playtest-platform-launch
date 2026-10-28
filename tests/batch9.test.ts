@@ -96,7 +96,7 @@ describe("batch 9 item 2: an unlisted part has only Pay", () => {
     expect(rej.body.error.message).toBe("A part that isn't listed can't be rejected: pay $0 to close it.");
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "0", reason: "Thanks, not needed after all" })).status).toBe(200);
     expect(await db.review.findFirstOrThrow({ where: { submissionId: sub.id } })).toMatchObject({ amountCents: 0, rejected: false, reason: "Thanks, not needed after all" });
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid $0 for your written answers on “Harbor Run”: “Thanks, not needed after all”" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid $0 for your written answers on “Harbor Run”" } })).toBe(1); // (batch 15 section 20: no note in the bell)
     const d = await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question fully" });
     expect(d.status).toBe(200); // (Batch 10) every reviewed part can be disputed, unlisted ones too
     expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('{listed && !more && <button className="btn-danger"');
@@ -122,10 +122,10 @@ describe("batch 9 item 3: an optional note on every Pay", () => {
     const { dev, tester, testId, sessionId, sub } = await sentWork("10.00");
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400 })).body.error.message).toContain("Say why");
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, reason: "Great detail" })).status).toBe(200);
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $10.00 for your written answers on “Harbor Run”: “Great detail”" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $10.00 for your written answers on “Harbor Run”" } })).toBe(1);
     expect((await extra(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "2.00", tickedCents: 200, note: "For the bug list" })).status).toBe(200);
     expect(await db.payment.findFirstOrThrow({ where: { submissionId: sub.id, kind: "extra" } })).toMatchObject({ note: "For the bug list" });
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $2.00 more for your written answers on “Harbor Run”: “For the bug list”" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $2.00 more for your written answers on “Harbor Run”" } })).toBe(1);
     expect(src("app/app/tests/[id]/PayBox.tsx")).toContain("Note to {p.name}");
     expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('{more ? " (optional)"');
     expect(src("app/app/sessions/[id]/page.tsx")).toContain('data-extra-line=""');

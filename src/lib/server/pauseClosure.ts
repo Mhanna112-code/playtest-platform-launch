@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { T } from "@/lib/tz";
 import { displayName, fmtDate } from "@/lib/format";
 import { PAUSE_CLOSE_DAYS, pauseClosedReason, pauseClosesAt } from "@/lib/pause";
 import { HttpError } from "./http";
@@ -70,7 +71,7 @@ export async function extendPauseClosure(testId: string, days: unknown, now = ne
   if (!info) throw new HttpError(409, "not_paused", "That test isn't paused.");
   const at = new Date(info.at.getTime() + n * DAY);
   await db.test.update({ where: { id: testId }, data: { pauseCloseAt: at, pauseCloseSetAt: now } });
-  await notify(t.developer.email, `“${t.title}” will close later`, [`The team moved the date “${t.title}” closes to ${fmtDate(at)} (it stays paused until your account is cleared).`], `/app/tests/${testId}`, { own: true });
+  await notify(t.developer.email, `“${t.title}” will close later`, [`The team moved the date “${t.title}” closes to ${T(at, "date")} (it stays paused until your account is cleared).`], `/app/tests/${testId}`, { own: true });
   return { ok: true, closesAt: at.toISOString() };
 }
 
@@ -86,7 +87,7 @@ export async function pausedTestsForAdmin() {
     .sort((a, b) => a.info.at.getTime() - b.info.at.getTime());
 }
 
-const day = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const day = (d: Date) => T(d, "date"); // (batch 15 section 11) in the reader's own zone
 
 /** What lifts the pause, in the developer's words (an account cause wins over the team's pause). */
 function liftsWhen(causes: ReturnType<typeof pauseClosesAt> extends infer R ? (R extends { causes: infer C } ? C : never) : never) {

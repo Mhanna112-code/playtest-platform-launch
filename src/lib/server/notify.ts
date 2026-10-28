@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { summaryDue } from "@/lib/rules";
+import { renderTimes } from "@/lib/tz";
 import { appUrl } from "./auth";
 import { sendEmail } from "./email";
 
@@ -42,9 +43,11 @@ export type Opts = { always?: boolean; about?: string; own?: boolean; testId?: s
  */
 const flags = (o: { own?: boolean; group?: string; payment?: boolean }) => ({ own: o.own ?? (!!o.payment && !o.group), groupKey: o.group ?? null, payment: !!o.payment });
 
-export async function notify(to: string, subject: string, lines: string[], path: string, opts: Opts = {}) {
-  const user = await db.user.findUnique({ where: { email: to }, select: { id: true } });
+export async function notify(to: string, subject0: string, lines0: string[], path: string, opts: Opts = {}) {
+  const user = await db.user.findUnique({ where: { email: to }, select: { id: true, timeZone: true } });
   if (user && opts.about && !(await inReach(user.id, opts.about))) return;
+  // (Batch 15 section 11) Times in the line are written in the recipient's own time zone (unknown: UTC).
+  const subject = renderTimes(subject0, user?.timeZone), lines = lines0.map((l) => renderTimes(l, user?.timeZone));
   if (!user) {
     // Not an account (nowhere for a bell or a summary to go): the one email goes at once.
     try {
@@ -60,9 +63,23 @@ export async function notify(to: string, subject: string, lines: string[], path:
 }
 
 /** A bell notification only (no email), e.g. the Open until heads-ups. */
-export async function bell(userId: string, text: string, link: string, about?: string, opts: Pick<Opts, "own" | "testId" | "group" | "payment" | "reminder"> = {}) {
+export async function bell(userId: string, text0: string, link: string, about?: string, opts: Pick<Opts, "own" | "testId" | "group" | "payment" | "reminder"> = {}) {
   if (about && !(await inReach(userId, about))) return;
+  const text = await renderFor(userId, text0);
   await db.notification.create({ data: { userId, text, link, testId: opts.testId ?? (await testIdOfLink(link)), reminderKey: opts.reminder ?? null, ...flags(opts) } });
+}
+
+/** (Batch 15 section 11) A line's time tokens, in this person's time zone. */
+export async function renderFor(userId: string, text: string) {
+  if (!text.includes("⟦t:")) return text;
+  const u = await db.user.findUnique({ where: { id: userId }, select: { timeZone: true } });
+  return renderTimes(text, u?.timeZone);
+}
+/** (Batch 15 section 11) The same line for many people: each in their own time zone. */
+export async function linesFor(userIds: string[], text: string) {
+  if (!text.includes("⟦t:")) return new Map(userIds.map((id) => [id, text]));
+  const zones = new Map((await db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, timeZone: true } })).map((u) => [u.id, u.timeZone]));
+  return new Map(userIds.map((id) => [id, renderTimes(text, zones.get(id))]));
 }
 
 /** Everyone who is an admin (flagged, or listed in ADMIN_EMAILS). */

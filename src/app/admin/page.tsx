@@ -11,6 +11,7 @@ import { PagedList } from "./PagedList";
 import { adminCases } from "@/lib/server/holds";
 import { configProblems, seesConfigBox } from "@/lib/server/config";
 import { adminOutages, lengthText, outageLine } from "@/lib/server/outages";
+import { renderTimes } from "@/lib/tz";
 import { adminPage, disputeRow, type DisputeVM, type Page } from "@/lib/server/adminLists";
 import { StatTile } from "@/components/StatTile";
 import { BadgeDollarSign, FlaskConical, Inbox, ListChecks, Users, Wallet } from "lucide-react";
@@ -87,7 +88,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 {o.needsApproval && !o.approvedAt ? (
                   <span className="text-amber-200">Over 24 hours: the uptime service says the site was down from {fmtDateTime(o.startAt)} to {fmtDateTime(o.endAt)} ({lengthText(o.ms)}). Nothing has moved yet. <AdminButton action="approve-outage" id={o.id} label="Approve: move every timer" /></span>
                 ) : (
-                  <>{outageLine(o.startAt, o.endAt, o.ms)} <span className="text-slate-400">({lengthText(o.ms)}, recorded {fmtDateTime(o.recordedAt)}{o.approvedAt ? ", approved" : ""})</span></>
+                  <>{renderTimes(outageLine(o.startAt, o.endAt, o.ms), u.timeZone)} <span className="text-slate-400">({lengthText(o.ms)}, recorded {fmtDateTime(o.recordedAt)}{o.approvedAt ? ", approved" : ""})</span></>
                 )}
               </li>
             ))}

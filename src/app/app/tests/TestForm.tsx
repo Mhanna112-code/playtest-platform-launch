@@ -13,7 +13,8 @@ import { NotSentTag, useKept } from "@/lib/useKept";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { keyNeedLine, parseKeys, tickedInUseLine } from "@/lib/keys";
-import { HIGH_PART_CENTS, HIGH_PART_TICK, type Listing } from "@/lib/rules";
+import { HIGH_PART_CENTS, HIGH_PART_TICK, QUESTION_TOO_LONG, counterText, type Listing } from "@/lib/rules";
+import { ScrollText } from "@/components/ScrollText";
 import { toCents } from "@/lib/format";
 import { KeyBoxes, type KeysData } from "./KeyBoxes";
 import { ExpandNote } from "@/components/ExpandNote";
@@ -448,7 +449,12 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
               <ul className="mt-2 space-y-1">
                 {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (
                   <li key={q} className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm">
-                    <span className="min-w-0 break-words text-ink-200">{q} <span className={`whitespace-nowrap text-xs ${q.length > LIMITS.questionChars ? "text-rose-300" : "text-slate-500"}`} data-question-count="">{q.length} / {LIMITS.questionChars}</span></span>
+                    {/* (Batch 15 sections 3 and 32) A long question in a scroll box; its counter, and the red message at the field when it's over. */}
+                    <span className="min-w-0 flex-1 text-ink-200">
+                      <ScrollText text={q} label="Question" />
+                      <span className={`whitespace-nowrap text-xs ${q.length > LIMITS.question ? "text-rose-300" : "text-slate-500"}`} data-question-count="">{counterText(q.length, LIMITS.question)}</span>
+                      {q.length > LIMITS.question && <span className="err-field block" data-question-red="">{QUESTION_TOO_LONG}</span>}
+                    </span>
                     <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-ink-300">
                       <input type="checkbox" disabled={fieldLocked("questions")} checked={f.optionalQs.includes(q)} onChange={(e) => set({ optionalQs: e.target.checked ? [...f.optionalQs, q] : f.optionalQs.filter((x) => x !== q) })} /> Not required
                     </label>

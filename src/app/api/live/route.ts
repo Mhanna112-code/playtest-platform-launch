@@ -5,6 +5,7 @@ import { joinPageChanges } from "@/lib/server/joining";
 import { asLines, devChanges } from "@/lib/server/live";
 import { requireUser } from "@/lib/server/session";
 import { outageLines } from "@/lib/server/outages";
+import { renderTimes } from "@/lib/tz";
 import { testerChanges } from "@/lib/server/testerGate";
 import { ownTest } from "@/lib/server/tests";
 
@@ -43,7 +44,8 @@ export async function GET(req: Request) {
       changes = await joinPageChanges(u.id, id, since.toISOString(), tab);
     } else throw new HttpError(404, "not_found", "Nothing to watch here.");
     // (NEWEST+6) "The site was down from … Deadlines and payment dates moved … later." on every affected page.
-    const outages = await outageLines(since);
+    // (Batch 15 section 11) Their times in the viewer's own zone.
+    const outages = (await outageLines(since)).map((o) => ({ ...o, text: renderTimes(o.text, u.timeZone) }));
     const shown = changes.filter((c) => c.createdAt <= now);
     const seenTo = new Date(Math.max(margin.getTime(), ...shown.map((c) => c.createdAt.getTime())));
     return ok({ changes: [...asLines(shown, ignored), ...outages].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()), now: seenTo.toISOString() });

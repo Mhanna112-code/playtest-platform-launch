@@ -5,6 +5,7 @@ import type { Prisma } from "@prisma/client";
 import { money } from "./format";
 import { LIMITS } from "./limits";
 import { qText } from "./questions";
+import { T } from "./tz";
 
 // ---------- Money ----------
 
@@ -191,13 +192,21 @@ export const TERM_FIELDS = LISTING_FIELDS.filter((f) => f !== "spots");
 
 export const MAX_SPOTS = LIMITS.spots.max;
 
+/** (Batch 15 section 32) The red messages at the field on Post and Edit. */
+export const QUESTION_TOO_LONG = `Keep each question to ${LIMITS.question.toLocaleString("en-US")} characters.`;
+export const NDA_TOO_LONG = `Keep the NDA to ${LIMITS.nda.toLocaleString("en-US")} characters.`;
+/** (Batch 15 section 20) The red line at any reason or note box over the limit (never cut silently). */
+export const reasonTooLong = (max: number = LIMITS.reason) => `Keep it to ${max.toLocaleString("en-US")} characters.`;
+/** "N / 1,000": the live counter under every reason box. */
+export const counterText = (n: number, max: number) => `${n.toLocaleString("en-US")} / ${max.toLocaleString("en-US")}`;
+
 /** (Batch 12 section 6) Open until's range on Post. */
 export const OPEN_UNTIL_RANGE = "Set Open until 3 to 30 days from today: it's every tester's deadline too.";
 /** The day a deadline needs Open until to reach: the test's opening + the deadline's days + the buffer (11.5: "must leave 3 days inside Open until"). */
 export function openUntilNeeded(openedAt: Date, deadlineDays: number) {
   return new Date(openedAt.getTime() + (deadlineDays + LIMITS.deadlineBufferDays) * 86_400_000);
 }
-const shortDay = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
 
 export type ListingCtx = {
   /** Edit: only the fields that changed get the newer rules (older tests keep working); Post: everything. */
@@ -236,7 +245,7 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
   if (!l.description?.trim()) { if (isNew("description")) errs.push("Say what testers should do (What to do)."); }
   else if (l.description.length > LIMITS.whatToDo && isNew("description")) errs.push(`Keep What to do to ${LIMITS.whatToDo.toLocaleString("en-US")} characters.`);
   if (l.mature && (l.matureWhy ?? "").trim().length < 5 && (isNew("mature") || isNew("matureWhy"))) errs.push("Say why this test is mature (18+): it's required for mature content.");
-  if ((l.ndaText ?? "").length > LIMITS.nda && isNew("ndaText")) errs.push(`Keep the NDA to ${LIMITS.nda.toLocaleString("en-US")} characters.`);
+  if ((l.ndaText ?? "").length > LIMITS.nda && isNew("ndaText")) errs.push(NDA_TOO_LONG);
   if (!l.categories?.length) errs.push("Tick at least one category.");
   if (!Number.isInteger(l.spots) || l.spots < LIMITS.spots.min || l.spots > MAX_SPOTS) errs.push(`Spots must be a whole number from 1 to ${MAX_SPOTS}.`);
   else if (l.spots < testersIn) errs.push(`Spots can't go below the ${testersIn} tester${testersIn === 1 ? "" : "s"} already in.`);
@@ -256,8 +265,8 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
   }
   if (l.writtenCents != null && l.questions.filter((q) => q.trim()).length === 0) errs.push("Add at least one question for the written answers.");
   if (l.questions.length > LIMITS.questions.max) errs.push(`At most ${LIMITS.questions.max} questions.`);
-  // (Owner, Oct 29, batch 13 section 9, DEFAULT) At most 300 characters per question (checked when the questions are saved).
-  if (isNew("questions") && l.questions.some((q) => qText(q).length > LIMITS.questionChars)) errs.push(`Keep each question to ${LIMITS.questionChars} characters.`);
+  // (Owner, Oct 30, batch 15 section 3) At most 20,000 characters per question (checked when the questions are saved).
+  if (isNew("questions") && l.questions.some((q) => qText(q).length > LIMITS.question)) errs.push(QUESTION_TOO_LONG);
   return errs;
 }
 
@@ -553,7 +562,8 @@ export const PAY_WAITS = "Pay what you owe first.";
 export const CONFIRM_DAYS = 3;
 /** (Batch 12 section 5) A press's confirmation pop-up locks the piece for at most this long. */
 export const PRESS_ACTION_MS = 15 * 60_000;
-export const bankConfirmLine = (cents: number, by: Date) => `Your bank wants you to confirm a ${money(cents)} payment. Confirm it in Payments by ${by.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}.`;
+/** (Batch 15 section 11) The date is a time token: written in the developer's own time zone where the line is stored. */
+export const bankConfirmLine = (cents: number, by: Date) => `Your bank wants you to confirm a ${money(cents)} payment. Confirm it in Payments by ${T(by, "dateYear")}.`;
 export const BANK_NOT_CONFIRMED = "Your bank didn't confirm the payment, so nothing was charged.";
 export const PIECE_LOCKED = "A payment for this is being confirmed right now.";
 /** (Owner, Oct 29, batch 11 section 4) Automatic retries of what is owed during a hold: once a day, at most this many a hold. */
@@ -654,7 +664,8 @@ export const andList = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.s
 
 // ---------- Latest batch (owner, Oct 22): calls, payment problems, email settings ----------
 
-const callDay = (d: Date) => d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+/** (Batch 15 section 11) A call's day in a bell line: a token, written in each reader's own time zone. */
+const callDay = (d: Date) => T(d, "dayTime");
 const CANCEL_WHY = { paused: "the test is paused", stopped: "the test was stopped", closed: "the test was closed", ended: "your session was ended" } as const;
 
 /** What a tester reads when a booked call is cancelled for them (never any fault). */
@@ -730,8 +741,7 @@ export function checkCancel(startsAt: Date, now: Date, reason: string): Check {
   if (cancelNeedsReason(startsAt, now) && reason.trim().length < 3) return no("The call is less than 24 hours away: say why you're cancelling (the other side sees it).");
   return yes;
 }
-const whenLong = (d: Date) =>
-  `${d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} at ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+const whenLong = (d: Date) => T(d, "dayTime");
 export const cancelLine = (name: string, startsAt: Date, reason: string) => `${name} cancelled the call on ${whenLong(startsAt)}${reason.trim() ? `: ${reason.trim()}` : "."}`;
 
 /** "⏱ Harbor Run closes in 2 days 4 hours: send your work before then." */

@@ -9,13 +9,14 @@ import { keyNeedLine, parseKeys } from "@/lib/keys";
 import { testerCapacity } from "./capacity";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { LIMITS } from "@/lib/limits";
 import { displayName, fmtDate, fmtDateTime, pronouns, toCents } from "@/lib/format";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import {
   andList, testPaused, testerPaused, PAUSED_SEND, WRITTEN_MAX_CHARS, checkWrittenLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { gapsOf, gapsUnseen, noGaps, readGaps } from "@/lib/gaps";
-import { HttpError } from "./http";
+import { HttpError, readText } from "./http";
 import { notify } from "./notify";
 import { offerNewTerms, testerTermsGate } from "./terms";
 import { testerGate } from "./testerGate";
@@ -88,13 +89,14 @@ export function parseListing(body: Record<string, unknown>, partial = false): Pa
   // (Design doc 4) Longer than the limits are kept so the check can say so (never cut silently).
   if (has("productName")) out.productName = str(body.productName, 400);
   if (has("title")) out.title = str(body.title, 400);
-  if (has("description")) out.description = str(body.description, 5000);
+  if (has("description")) out.description = str(body.description, LIMITS.whatToDo + 5000); // (batch 15 section 17) over the limit is kept so the check can say so
   if (has("mature")) out.mature = body.mature === true;
   if (has("matureWhy")) out.matureWhy = str(body.matureWhy, 1000);
   if (has("ndaText")) out.ndaText = typeof body.ndaText === "string" ? body.ndaText.replace(/\r\n/g, "\n").trim().slice(0, 30_000) : "";
   if (has("buildUrl")) {
     out.buildUrl = str(body.buildUrl, 500);
-    if (out.buildUrl && !/^https?:\/\//i.test(out.buildUrl)) throw new HttpError(400, "bad_url", "The build link must start with https://");
+    // (Batch 15 section 35) https:// only, as the message says.
+    if (out.buildUrl && !/^https:\/\//i.test(out.buildUrl)) throw new HttpError(400, "bad_url", "The build link must start with https://");
   }
   if (has("categories")) out.categories = list(body.categories, CATEGORIES);
   if (has("devices")) out.devices = list(body.devices, DEVICES);
@@ -115,7 +117,7 @@ export function parseListing(body: Record<string, unknown>, partial = false): Pa
     const v = str(body.openUntil, 40);
     out.openUntil = v ? (/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T23:59:59.000Z` : v) : null;
   }
-  if (has("questions")) out.questions = Array.isArray(body.questions) ? body.questions.filter((q): q is string => typeof q === "string").map((q) => q.trim().slice(0, 500)).filter(Boolean) : [];
+  if (has("questions")) out.questions = Array.isArray(body.questions) ? body.questions.filter((q): q is string => typeof q === "string").map((q) => q.trim()).filter(Boolean) : [];
   return out;
 }
 
@@ -509,8 +511,9 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
  */
 export async function endEarly(dev: U, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
-  const reason = str(body.reason, 500);
-  if (reason.length < 5) throw new HttpError(400, "bad_reason", "Say why you're ending their work (they read it).");
+  // (Owner, Oct 30, batch 15 section 22) Required (at least one character), at most 10,000, refused beyond (never cut).
+  const reason = readText(body.reason, LIMITS.endEarlyReason, "bad_reason");
+  if (!reason) throw new HttpError(400, "bad_reason", "Say why you're ending their work (they read it).");
   const ids = [...new Set((Array.isArray(body.contractIds) ? body.contractIds : [body.contractId]).map((x) => String(x ?? "")).filter(Boolean))];
   if (!ids.length) throw new HttpError(400, "none", "Tick at least one tester.");
   let cancelled: Awaited<ReturnType<typeof cancelCallsAhead>> = [];

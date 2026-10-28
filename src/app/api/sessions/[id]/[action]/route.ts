@@ -54,7 +54,7 @@ export async function POST(req: Request, { params }: Ctx) {
   return handle(async () => {
     const { id, action } = await params;
     const u = await requireActive(req);
-    const body = await readJson(req, 450_000); // (batch 14) a written part of up to 50,000 characters
+    const body = await readJson(req, 900_000); // (batch 14; batch 15) a written part of up to 50,000 characters, with the question set it answers (20 × 20,000)
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
     await finalRefusal(u.id, id, action);
     await pausedRefusal(u.id, id, action);

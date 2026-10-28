@@ -1,7 +1,8 @@
 import type Stripe from "stripe";
 import { db } from "@/lib/db";
 import { HttpError } from "./http";
-import { notify } from "./notify";
+import { linesFor, notify } from "./notify";
+import { T } from "@/lib/tz";
 import { PAYMENTS_PROBLEM, chargePlatform, getStripe, isCardError, stripeOn, type NeedsAction } from "./stripe";
 import { serverKey } from "./pressKeys";
 import { receipt } from "./payments";
@@ -148,7 +149,7 @@ async function activate(u: Dev, now: Date, id: string, startsCharging: Date) {
     where: { id: u.id },
     data: { subscriptionStatus: "active", subscriptionId: id, subscribedAt: now, subscriptionAnchorAt: startsCharging, subscriptionRenewsAt: renews, subscriptionCanceling: false, subscriptionEndedAt: null, subscriptionEndReason: "", subscriptionPastDueAt: null, subscriptionPausedAt: null },
   });
-  await tell(u, startsCharging > now ? `You're subscribed (${SUBSCRIPTION_PRICE}): the first charge is on ${fmtSubDay(startsCharging)}` : `You're subscribed (${SUBSCRIPTION_PRICE}), renewing ${fmtSubDay(renews)}`);
+  await tell(u, startsCharging > now ? `You're subscribed (${SUBSCRIPTION_PRICE}): the first charge is on ${T(startsCharging, "dateYear")}` : `You're subscribed (${SUBSCRIPTION_PRICE}), renewing ${fmtSubDay(renews)}`);
   return { subscribed: true, renewsAt: renews };
 }
 
@@ -173,7 +174,7 @@ export async function cancelSubscription(dev: Dev, now = new Date()) {
   if (!subscribed(u, now) || u.subscriptionCanceling) throw new HttpError(409, "none", "There's no subscription to cancel.");
   if (billingOn() && u.subscriptionId && u.subscriptionId !== "manual") await getStripe().subscriptions.update(u.subscriptionId, { cancel_at_period_end: true });
   await db.user.update({ where: { id: u.id }, data: { subscriptionCanceling: true } });
-  if (u.subscriptionRenewsAt) await tell(u, `Subscription cancelled: you can use the perks until ${fmtSubDay(u.subscriptionRenewsAt)}`);
+  if (u.subscriptionRenewsAt) await tell(u, `Subscription cancelled: you can use the perks until ${T(u.subscriptionRenewsAt, "dateYear")}`);
   return { cancelled: true, until: u.subscriptionRenewsAt };
 }
 
@@ -228,7 +229,7 @@ export async function resumeBilling(devId: string, now = new Date()) {
   return true;
 }
 
-const failedLine = (by: Date) => `Your ${SUBSCRIPTION_PRICE.replace("/month", "")} subscription payment didn't go through. Update your card by ${fmtSubDay(by)} to keep it.`;
+const failedLine = (by: Date) => `Your ${SUBSCRIPTION_PRICE.replace("/month", "")} subscription payment didn't go through. Update your card by ${T(by, "dateYear")} to keep it.`;
 export const LAPSED_LINE = "Your subscription ended because the payment didn't go through.";
 
 /** A renewal was declined: past due (perks continue while it is retried), with a notice sent even with email Off. */
@@ -326,10 +327,11 @@ export const FREE_ENDED_LINE = "Free during launch ended: the extras need a subs
 /** One notice to every developer (bell + the end-of-day email, sent even with email Off), in one write. */
 async function tellAllDevs(line: string) {
   const ids = (await db.user.findMany({ where: { isDeveloper: true, deletedAt: null }, select: { id: true } })).map((u) => u.id);
-  await db.notification.createMany({ data: ids.map((userId) => ({ userId, text: line, link: "/app/payments#subscription", mustEmail: true, own: false, groupKey: "payhold", payment: true })) });
+  const each = await linesFor(ids, line); // (batch 15 section 11) each developer's own time zone
+  await db.notification.createMany({ data: ids.map((userId) => ({ userId, text: each.get(userId)!, link: "/app/payments#subscription", mustEmail: true, own: false, groupKey: "payhold", payment: true })) });
   return ids.length;
 }
-const freeLine = (until: Date) => `Free during launch ends soon: the extras need a ${SUBSCRIPTION_PRICE} subscription from ${fmtSubDay(until)}.`;
+const freeLine = (until: Date) => `Free during launch ends soon: the extras need a ${SUBSCRIPTION_PRICE} subscription from ${T(until, "dateYear")}.`;
 
 /** The daily job: the 30-day and 7-day notices before free-during-launch ends (sent even with email Off), and the end itself (like a lapse: a stop-once line). */
 export async function freeLaunchNotices(now = new Date()) {

@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
 import {
@@ -538,7 +539,7 @@ export async function runDaily(now = new Date()) {
     const m = countdownDue(t.openUntil, now, t.notifiedMarks, t.createdAt);
     if (!m) continue;
     // Bell notifications only, never emailed.
-    const line = headsUpLine(t.title, t.openUntil!, fmtDate);
+    const line = headsUpLine(t.title, t.openUntil!, (d) => T(d, "date")); // (batch 15 section 11) each reader's own zone
     await bell(t.developerId, line, `/app/tests/${t.id}`, undefined, { reminder: `headsup:${t.id}` });
     for (const c of t.contracts) await bell(c.testerId, line, `/app/sessions/${c.id}`, undefined, { reminder: `headsup:${t.id}` });
     await db.test.update({ where: { id: t.id }, data: { notifiedMarks: { push: m.mark }, ...(m.mark === "1d" ? { notified1d: true, notified3d: true } : m.mark === "3d" ? { notified3d: true } : {}) } });
@@ -711,6 +712,7 @@ async function dailyReminders(now: Date) {
   const tests = await db.test.findMany({ where: { id: { in: waiting.map((w) => w.testId) }, status: "open", ...PAUSE_FREE }, select: { id: true, title: true, developerId: true } });
   const told = new Set((await db.notification.findMany({ where: { userId: { in: tests.map((t) => t.developerId) }, testId: { in: tests.map((t) => t.id) }, text: { endsWith: "for your answer" }, createdAt: { gt: since } }, select: { testId: true }, distinct: ["testId"] })).map((n) => n.testId));
   const count = new Map(waiting.map((w) => [w.testId, w._count._all]));
+  // (Batch 15 section 35: "N applications wait"; no times in this line.)
   await db.notification.createMany({
     data: tests.filter((t) => !told.has(t.id)).map((t) => {
       const n = count.get(t.id)!;

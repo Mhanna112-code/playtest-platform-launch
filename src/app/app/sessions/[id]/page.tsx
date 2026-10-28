@@ -33,6 +33,8 @@ import { Formatted } from "@/components/Formatted";
 import { AttachmentList } from "@/components/AttachmentList";
 import { NdaBox } from "@/components/NdaBox";
 import { PlusMore } from "@/components/PlusMore";
+import { QuestionList } from "@/components/QuestionList";
+import { ScrollText } from "@/components/ScrollText";
 import { PrevSetFolds, SetView } from "@/components/AnswerSets";
 import { carryOver, itemsOf, prevSetsOf } from "@/lib/answerSets";
 import { ExcerptPicker } from "@/components/Excerpts";
@@ -205,7 +207,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             {unread > 0 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950" aria-label={`${unread} unread`}>{unread}</span>}
           </a>}
         </div>
-        {c.description && <p className="whitespace-pre-wrap text-slate-300">{c.description}</p>}
+        {/* (Batch 15 section 17) The steps in a scroll box about 6 lines tall. */}
+        {c.description && <ScrollText text={c.description} className="text-slate-300" label="What to do" />}
         <p className="text-sm text-slate-400">Due {fmtDate(c.dueAt)}{c.status === "working" && c.dueAt > now && c.dueAt.getTime() - now.getTime() < 24 * 3_600_000 ? ` · ${leftText(c.dueAt.getTime() - now.getTime())} left` : ""}{isLate(c.dueAt, now) && !refusal ? ": your deadline has passed, late work is still accepted and marked late." : ""}</p>
         {c.buildUrl && (
           <a href={c.buildUrl} target="_blank" rel="noreferrer" className="btn w-fit no-underline hover:no-underline">
@@ -277,8 +280,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
                 {Array.isArray(o.fromQuestions) && JSON.stringify(o.fromQuestions) !== JSON.stringify(o.questions) && (
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">Questions then and now</summary>
                     {/* (Batch 13 section 9) 3 questions, then "+N more". */}
-                    <p>Then: {(o.fromQuestions as string[]).length ? <PlusMore sep=" · " items={(o.fromQuestions as string[]).map((q) => `“${qText(q)}”`)} /> : "none"}</p>
-                    <p>Offered: {((o.questions as string[]) ?? []).length ? <PlusMore sep=" · " items={((o.questions as string[]) ?? []).map((q) => `“${qText(q)}”`)} /> : "none"}</p></details>
+                    {/* (Batch 15 section 3) Each question cut to 3 lines with Show more; 3 then +N more. */}
+                    <div>Then: <QuestionList items={(o.fromQuestions as string[]).map(qText)} /></div>
+                    <div>Offered: <QuestionList items={((o.questions as string[]) ?? []).map(qText)} /></div></details>
                 )}
                 {o.fromNdaText !== o.ndaText && (
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">NDA then and now</summary>

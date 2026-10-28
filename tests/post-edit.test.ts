@@ -20,7 +20,7 @@ describe("Post a test (design doc 4)", () => {
     expect(r.status).toBe(400);
     expect(r.body.error.errors).toEqual(expect.arrayContaining(["Enter the product name.", "Keep the title to 60 characters.", "Say what testers should do (What to do)."]));
     expect((await post(dev.cookie, { productName: "x".repeat(61) })).body.error.message).toBe("Keep the product name to 60 characters.");
-    expect((await post(dev.cookie, { description: "x".repeat(1001) })).body.error.message).toBe("Keep What to do to 1,000 characters.");
+    expect((await post(dev.cookie, { description: "x".repeat(20_001) })).body.error.message).toBe("Keep What to do to 20,000 characters."); // (batch 15 section 17)
   });
 
   it("Mature needs its reason", async () => {

@@ -2,6 +2,7 @@ import { HelpCircle, MessageSquareText } from "lucide-react";
 import { fmtDateTime, money } from "@/lib/format";
 import type { QuestionBlock } from "@/lib/byQuestion";
 import { Formatted } from "@/components/Formatted";
+import { ScrollText } from "@/components/ScrollText";
 
 const STATUS = { paid: "border-emerald-400/40 text-emerald-200", rejected: "border-rose-400/40 text-rose-200", waiting: "border-amber-300/40 text-amber-200" } as const;
 
@@ -17,7 +18,7 @@ export function ByQuestion({ blocks }: { blocks: QuestionBlock[] }) {
           return (
             <section key={b.title} className="card space-y-3">
               <h3 className="flex flex-wrap items-center gap-2 font-semibold text-white">
-                <Icon className={`h-5 w-5 ${b.title === "Other notes" ? "text-slate-300" : "text-indigo-300"}`} /> {b.title}
+                <Icon className={`h-5 w-5 shrink-0 ${b.title === "Other notes" ? "text-slate-300" : "text-indigo-300"}`} /> <ScrollText text={b.title} className="min-w-0 flex-1" label="Question" />
                 {b.notRequired && <span data-not-required="" className="badge border-white/15 text-xs font-normal text-slate-400">not required</span>}
                 <span className="text-sm font-normal text-slate-500">{b.answers.length} answer{b.answers.length === 1 ? "" : "s"}</span>
               </h3>

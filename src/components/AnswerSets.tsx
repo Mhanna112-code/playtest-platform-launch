@@ -1,4 +1,5 @@
 import { Formatted } from "@/components/Formatted";
+import { ScrollText } from "@/components/ScrollText";
 import { fmtDate } from "@/lib/format";
 import type { PrevSet, SetItem } from "@/lib/answerSets";
 
@@ -8,7 +9,7 @@ export function SetView({ items }: { items: SetItem[] }) {
     <>
       {items.map((it, i) => (
         <div key={i} className="text-sm" data-set-item="">
-          <p className="font-medium text-ink-200 break-words">{it.question}{!it.required && <span className="ml-1 font-normal text-ink-500">· not required</span>}</p>
+          <div className="font-medium text-ink-200"><ScrollText text={it.question} label="Question" />{!it.required && <span className="ml-1 font-normal text-ink-500">· not required</span>}</div>
           {it.answer.trim() ? <Formatted text={it.answer} /> : <p className="text-slate-500">(no answer)</p>}
         </div>
       ))}

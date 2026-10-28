@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { countingSince, countsOf, lockedFields, storedCounts } from "@/lib/limits";
-import { HttpError, handle, ok, readJson } from "@/lib/server/http";
+import { HttpError, handle, ok, readJson, readText } from "@/lib/server/http";
+import { LIMITS } from "@/lib/limits";
 import { decideDispute } from "@/lib/server/payments";
 import { ADMIN_PAUSED, adminAccount, isAdmin, requireUser } from "@/lib/server/session";
 import { sendWaitingTransfer } from "@/lib/server/stripe";
@@ -25,7 +26,7 @@ export async function POST(req: Request, { params }: Ctx) {
         return ok(await decideDispute(u, id, body));
       case "suspend": {
         if (id === u.id) throw new HttpError(409, "self", "You can't pause your own account.");
-        const note = typeof body.note === "string" ? body.note.trim().slice(0, 500) : "";
+        const note = readText(body.note, LIMITS.reason, "bad_note");
         if (note.length < 3) throw new HttpError(400, "bad_note", "Record why (it is kept with the suspension).");
         return ok(await suspendAccount(u.id, id, note, body.side));
       }
@@ -35,16 +36,16 @@ export async function POST(req: Request, { params }: Ctx) {
         return ok(await previewSuspension(id));
       case "delete-account": {
         if (id === u.id) throw new HttpError(409, "self", "Use Settings to delete your own account.");
-        const reason = typeof body.note === "string" ? body.note.trim().slice(0, 500) : "";
+        const reason = readText(body.note, LIMITS.reason, "bad_note");
         if (reason.length < 3) throw new HttpError(400, "bad_note", "Record why (it is kept with the deletion).");
         return ok(await deleteAccount(id, "admin", reason));
       }
       case "pause-test":
-        return ok(await pauseTest(u.id, id, typeof body.note === "string" ? body.note.trim().slice(0, 500) : ""));
+        return ok(await pauseTest(u.id, id, readText(body.note, LIMITS.reason, "bad_note")));
       case "unpause-test":
         return ok(await unpauseTest(id));
       case "stop-test":
-        return ok(await adminStopTest(id, typeof body.note === "string" ? body.note.trim().slice(0, 500) : "", u.id));
+        return ok(await adminStopTest(id, readText(body.note, LIMITS.reason, "bad_note"), u.id));
       case "release-share": {
         const p = await db.payment.findUniqueOrThrow({ where: { id } });
         return ok(await releaseHeldShares(p.testerId, [p.id]));
@@ -64,7 +65,7 @@ export async function POST(req: Request, { params }: Ctx) {
         return ok({ ok: true });
       // (Owner, Oct 26) A chargeback hold needs the admin's approval (id = the developer) once the card is verified and what is owed is paid.
       case "approve-hold":
-        return ok(await approveHoldLift(u.id, id, typeof body.note === "string" ? body.note.trim().slice(0, 500) : ""));
+        return ok(await approveHoldLift(u.id, id, readText(body.note, LIMITS.reason, "bad_note")));
       case "approve-chargeback":
         return ok(await approveChargebackHold(id));
       // A paused test closes after 7 days: the admin can move its date later (days, default 7) or close it now (id = the test).

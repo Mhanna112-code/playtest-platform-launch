@@ -275,22 +275,22 @@ describe("batch 13 section 8: whole sets of questions and answers", () => {
 });
 
 describe("batch 13 section 9: long text", () => {
-  it("NDA 1,000 (an older, longer one stays until changed), questions 300 each, live counters, scroll boxes", async () => {
+  it("NDA 1,000 (an older, longer one stays until changed), questions (batch 15 section 3) 20,000 each, live counters, scroll boxes", async () => {
     expect(LIMITS.nda).toBe(1000);
-    expect(LIMITS.questionChars).toBe(300);
+    expect(LIMITS.question).toBe(20_000);
     const s = await setup({ ndaText: "x".repeat(1000) });
     expect((await edit(s.testId, s.dev.cookie, { ndaText: "y".repeat(1001) })).body.error.message).toBe("Keep the NDA to 1,000 characters.");
     await db.test.update({ where: { id: s.testId }, data: { ndaText: "z".repeat(5000) } });
     expect((await edit(s.testId, s.dev.cookie, { title: "Harbor Run 2" })).status).toBe(200);
-    expect((await edit(s.testId, s.dev.cookie, { questions: ["Q".repeat(301)] })).body.error.message).toBe("Keep each question to 300 characters.");
-    expect((await edit(s.testId, s.dev.cookie, { questions: ["Q".repeat(300)] })).status).toBe(200);
+    expect((await edit(s.testId, s.dev.cookie, { questions: ["Q".repeat(20_001)] })).body.error.message).toBe("Keep each question to 20,000 characters.");
+    expect((await edit(s.testId, s.dev.cookie, { questions: ["Q".repeat(20_000)] })).status).toBe(200);
     const f = src("app/app/tests/TestForm.tsx");
     expect(f).toContain("data-nda-count");
     expect(f).toContain("data-steps-count");
-    expect(f).toContain("{q.length} / {LIMITS.questionChars}");
+    expect(f).toContain("{counterText(q.length, LIMITS.question)}");
     expect(src("components/NdaBox.tsx")).toContain("max-h-[15rem] overflow-y-auto");
     for (const p of ["app/app/find/[id]/JoinBox.tsx", "app/app/sessions/[id]/page.tsx", "app/app/sessions/[id]/TesterTop.tsx", "app/app/tests/TestForm.tsx"]) expect(src(p)).toContain("<NdaBox");
     expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain('<NdaBox label="Before"');
-    expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain('<PlusMore sep=" · "');
+    expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain("<QuestionList items={offer.fromQuestions} />"); // (batch 15 section 3)
   });
 });

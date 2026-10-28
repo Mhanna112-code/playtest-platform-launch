@@ -295,7 +295,7 @@ describe("batch 11 item 6 (with batch 12 section 2): one Pay box, Pay more", () 
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $30.00 for your written answers on “Harbor Run”" } })).toBe(1);
     expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "10.01", tickedCents: 1001 })).body.error.message).toBe("This is more than you can pay above the listing (up to $10).");
     expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "10.00", tickedCents: 1000, note: "Great" })).status).toBe(200);
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $10.00 more for your written answers on “Harbor Run”: “Great”" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $10.00 more for your written answers on “Harbor Run”" } })).toBe(1); // (batch 15 section 20: the note is in the email, not the bell)
   });
 
   it("an unlisted written piece: up to $2000 in all; Pay more needs a first payment", async () => {
