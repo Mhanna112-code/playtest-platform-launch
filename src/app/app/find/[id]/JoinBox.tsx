@@ -1,6 +1,7 @@
 "use client";
 import { NdaBox } from "@/components/NdaBox";
 import { Err } from "@/components/Err";
+import { MistakeList, announcePress, focusFirstMistake } from "@/components/FieldChecks";
 import { useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { api, errOf, ApiError } from "@/lib/client";
@@ -57,7 +58,8 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     setCovered(null);
     if (p.nda && !nda) {
       setNdaErr("Accept the NDA to " + (action === "apply" ? "apply." : action === "rejoin-ask" ? "ask to rejoin." : "join."));
-      document.getElementById("nda-accept")?.focus();
+      // (Batch 16 section 10) The tick is red with its line, listed under the button, and gets the cursor.
+      requestAnimationFrame(() => { const root = document.getElementById("join-card"); announcePress(root); focusFirstMistake(root); });
       return;
     }
     if (noGaps(p.missing)) return go(action);
@@ -90,6 +92,8 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
         setErr(`${e.message}${e.data.terms ? ` ${String(e.data.terms)}. Press Join to join on it.` : ""}`);
         if (typeof e.data.newInviteId === "string") setInviteId(e.data.newInviteId);
       } else if (e instanceof ApiError && e.code === "needs" && e.data.gaps) setAsking({ ask: action === "apply" ? "apply" : "join", gaps: e.data.gaps as Gaps });
+      // (Batch 16 section 10) The server's "Accept the NDA to join." belongs to the tick.
+      else if (e instanceof ApiError && e.code === "nda" && p.nda) { setNdaErr(e.message); requestAnimationFrame(() => { const root = document.getElementById("join-card"); announcePress(root); focusFirstMistake(root); }); }
       else setErr(errOf(e));
     } finally {
       setBusy(false);
@@ -122,13 +126,13 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
   const applying = !rejoining && p.mode === "apply" && !p.invited; // an invited tester just joins
   return (
     // The full app's join card (claim-form.tsx): the choices, the button with the spots left, and how long they'll have.
-    <div className="card space-y-4">
+    <div className="card space-y-4" id="join-card" data-mistakes-root="">
       {p.nda && (
         <div className="space-y-2" id="nda">
           <p className="label !mb-0">The developer&apos;s NDA</p>
           <NdaBox text={p.nda} />
           <label className="flex items-center gap-2 text-sm text-white">
-            <input id="nda-accept" type="checkbox" checked={nda} onChange={(e) => { setNda(e.target.checked); if (e.target.checked) setNdaErr(""); }} onBlur={() => !nda && setNdaErr("Accept the NDA to " + (applying ? "apply." : "join."))} /> I accept this NDA
+            <input id="nda-accept" type="checkbox" data-red-msg={ndaErr || undefined} checked={nda} onChange={(e) => { setNda(e.target.checked); if (e.target.checked) setNdaErr(""); }} onBlur={() => !nda && setNdaErr("Accept the NDA to " + (applying ? "apply." : "join."))} /> I accept this NDA
           </label>
           {ndaErr && <p className="err-field" role="alert">{ndaErr}</p>}
         </div>
@@ -163,6 +167,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
           onClose={() => setAsking(null)}
         />
       )}
+      <MistakeList press={rejoining ? "Ask to rejoin" : applying ? "Apply to join" : "Join this test"} />
       <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} />
       {done && <p className="ok">{done}</p>}
       <Err text={err} />

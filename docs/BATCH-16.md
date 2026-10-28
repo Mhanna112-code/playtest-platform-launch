@@ -50,16 +50,68 @@ The "Why is this test mature?" box turns red for "idk" because the server needs 
 - When it's red, show a red line under the box (the form's usual red line, on blur or after a press, like the other fields): empty → "Say why this test is mature (18+): it's required for mature content."; 1–4 characters → "Say a little more: at least 5 characters." Use the same two messages on the server.
 - The grey line under the tick box contradicts itself ("No graphic content … Graphic content must be marked Mature"). Change it to: "Tick this if your test has mature content, and say why. Never allowed: sexual content involving minors, illegal content, real-world gore. Other graphic content must be marked Mature." Check the Terms of Use say the same and report if they don't.
 
-## 10. A press with mistakes: "Please fix the mistakes above." and go to the first one (owner, Oct 28)
-Today Post lists the server's messages under the button ("Fix the mistake above, then press Post the test again." plus a bullet per mistake), while the field itself may or may not be red: the owner saw the Mature list under the button with the "idk" box not red. The two systems (FieldChecks on blur and the server's `errs` matched by FIELD_WORDS) disagree.
+## 10. A press with mistakes: the list under the button stays, and works (owner, Oct 28)
+Today Post lists the server's messages under the button ("Fix the mistake above, then press Post the test again." plus a bullet per mistake), while the field itself may or may not be red: the owner saw the Mature line in the list with the "idk" box not red. The two systems (FieldChecks on blur and the server's `errs` matched by FIELD_WORDS) disagree. The owner is fine with the list as long as it matches the fields.
 - **One rule, every form with fields** (Post, Edit, posting a draft, profile/settings, sign up, log in, reset password, Contact us, dispute and rating boxes, and any other form that has field mistakes):
-  - Each mistake shows at its field only: the box red, with the red line under it saying what's wrong (from the client check or the server, the same text).
-  - Under the button only: "Please fix the mistakes above." (one line, red), no list.
-  - The page scrolls to the **first** red field (top to bottom) and puts the cursor in it.
-  - A field stays red until its own value is fixed: it's re-checked as it's typed in once it has been red, and editing another field never clears it. When the last one is fixed, the line under the button goes.
-- A server mistake that belongs to no field (rare) shows under the button in red as now; refusals that aren't mistakes (blue, e.g. "Confirm your email first.") and the blue stop-once box are unchanged.
+  - Each mistake shows at its field: the box red, with the red line under it saying what's wrong (from the client check or the server, the same text).
+  - Under the button: the existing heading line and one bullet per field that is red right now, with the same text as the field's line. Each bullet is a link that goes to its field and puts the cursor in it.
+  - On the press, the page also scrolls to the **first** red field (top to bottom) and puts the cursor in it.
+  - The list and the fields always agree: a field stays red until its own value is fixed (re-checked as it's typed in once it has been red; editing another field never clears it), and its bullet goes at the same moment. When the last one is fixed, the list goes.
+- A server mistake that belongs to no field (rare) stays in the list without a link; refusals that aren't mistakes (blue, e.g. "Confirm your email first.") and the blue stop-once box are unchanged.
 - Every server field message must map to its field; add a test that each Post/Edit field message from `checkListing`/`editCheck` lands on a field (no FIELD_WORDS misses).
-- Proof: a short recording on Post: two mistakes (Mature "idk" and an empty title), press Post, the page goes to the title, fix it, the next one is still red, fix it, the line goes.
+- Proof: a short recording on Post: two mistakes (Mature "idk" and an empty title), press Post, the page goes to the title, both are red and listed, fix the title (its bullet goes), click the Mature bullet, fix it, the list goes.
+
+## 11. A block hides the developer's other tests, either way; past tests stay (owner, Oct 28)
+Whoever blocked whom (tester → developer or developer → tester), the tester never sees that developer's tests they weren't already part of. Tests they were part of stay on their dashboard as now (ended by the block if they were working, with their history, payments, Charge, Dispute and Rate as today).
+Already true (keep, and cover with tests in both directions): Find hides them (`findTests` uses `blockPartners`), the developer's profile is not found, invites can't be sent, sessions end.
+Change:
+- **A direct link** to one of that developer's tests the tester was never part of (no contract, invite or application from before the block) reads "This test isn't available right now." with nothing of the listing shown, the same as a paused test for someone not involved. Today it shows the full listing with "This test isn't taking new testers right now." Never reveal the block.
+- **Pending applications** between them close at the block, like invites (check `blockUser`; today it cancels invites and ends working sessions only). The tester's application line: the neutral "<test>: your application was closed." The developer's: none.
+- **Audit every other place a tester can meet a new test** and hide that developer's tests there too: bell lines and emails (e.g. a spot opening, a new invite, a Next round, closing reminders for tests they only applied to), chat (stays closed as now), rejoin requests ("Ask to rejoin" is refused neutrally: "This test isn't taking new testers right now."), and any list or count of open tests. Report what you found.
+- Unblocking brings everything back as before (Find, profile, links); nothing closed by the block reopens by itself.
+
+## 12. Invite: "Search by name" finds every tester, not the newest 500 (bug found Oct 28)
+`invitableTesters` (server/invites.ts ~line 20) loads `take: 500` testers, newest first, and the panel's "Search by name" only filters those. The owner's local DB has 981 testers; the real tester "fbbb" (created Oct 27) has 790 newer accounts, so the search never finds them. At launch this silently hides every tester past the newest 500.
+- **Search by name asks the server** (2+ characters, after a short pause in typing): all testers who are invitable or greyed by the usual rules (not deleted, not blocked either way, not in this test), case-insensitive, matching any part of the name, ordered as today (invitable first, then meets and score), every match in a scroll box about 8 rows tall (no pages); above 100 matches it shows the first 100 with "Showing 100 of N: type more of the name". The device/language ticks still narrow it.
+- **Suggested** (top 5) and **People you've worked with** are computed over all testers on the server, not over a capped list. No silent caps anywhere: if a list is limited, it says so.
+- Tests: more than 500 testers with the target the oldest; search finds them; blocked or deleted never appear; filters apply.
+
+## 13. Tester dashboard: search your tests by developer name (owner, Oct 28)
+- A "Search by developer" box at the top of the tester dashboard's tests (sessions) list. Typing 1+ characters narrows the list to tests whose developer's name contains it (case-insensitive, any part of the name), across every test the tester has been in: working, finished, left, ended, stopped, closed. Results most recent first (by when they joined). Clearing the box brings the normal dashboard back.
+- No match: "No tests with a developer named “<typed>”." Names of deleted developers ("Deleted account") match that text.
+- It searches all of the tester's tests, not only the ones shown on the current page of the list (if the list is paged or folded, the search covers everything). Blocked developers' past tests are included (they stay on the dashboard, §11).
+- Phones: the box is full width above the list.
+- Tests: several developers, a partial and a different-case match, an old ended test found, no-match line.
+
+## 14. Dashboard and profile lists: plain scroll boxes, no "Show N more" (owner, Oct 28)
+Every list panel on the **tester dashboard**, the **developer dashboard** (Your tests, Needs you, disputes, excerpts, invites, applications, left/removed and the rest) and the **"Open tests" on a developer's profile** becomes a plain scroll box:
+- Everything is in the list, newest or most urgent first as today; no "Show N more" button, no pages, no cut-off.
+- The box is about 4 rows tall for row lists; the developer's "Your tests" card grid scrolls inside a box about 2 card rows tall (one column of about 3 cards on phones). A short list shows without a scroll bar.
+- Headings, filters, chips and search boxes stay above the box and never scroll away.
+- This replaces `LongList` on these pages only. Blue boxes (live box, stop boxes, notices) keep their "3 lines, then Show N more" rule.
+- §13's search results show in the same scroll box.
+
+- **Developer profile "Open tests" seen by a tester:** invite-only tests are not listed (as in Find), unless this tester is invited to, applied to or in that test.
+
+## 15. A tester's profile, seen by a developer: your tests with them (owner, Oct 28)
+New section on the tester profile (testers/[id]/page.tsx), shown only to a developer viewing it: **"Your tests with <name>"**, every one of THIS developer's tests the tester has been part of (joined), most recent first, in a scroll box like §14. Other developers' tests never show, so nothing private leaks. The tester's own view of their profile doesn't have it; neither does an admin view (admins have their own lists).
+- Filters above it, two tick boxes: **Open** and **Closed**, both ticked at first (= all). Open = the test is still running (taking testers, or joining closed with testers still working); Closed = stopped, ended or closed. Unticking both shows all too.
+- Each row: test name (opens the developer's test page), "Joined <date>", and the tester's state there (Working, Finished, Left, Ended).
+- None yet: "<name> hasn't been in any of your tests yet."
+- Not shown when blocked either way (the profile itself isn't).
+- Phones: the filters wrap above the box.
+- Tests: mixed open/closed, both filters, another developer's tests never appear, the tester's own view has no section.
+
+## 16. Open until: at most 30 days from when the test opened (owner, Oct 28)
+Today Edit allows Open until up to 30 days from TODAY, so repeated extensions keep a test open for ever and grow every tester's days without limit (each extension adds D to `testerDays`).
+- **The cap:** Open until can be at most **30 days after the test opened**: posted, or its current Next round opened (the same "opened" moment `testerDays` counts from). So tester days never exceed 30.
+- **Post:** unchanged in effect (opening is today): hint "only later, up to 30 days from today" stays on Post.
+- **Edit:** Open until can only move later and never past the cap. Hint: "only later, up to <cap date> (30 days after the test opened)". A later date is red: "Open until can be at most 30 days after the test opened (<cap date>)." Server: same message.
+- **Pause and outage shifts** still move Open until and deadlines later automatically, even past the cap (the developer couldn't use that time).
+- **Next round** opens a fresh 30 days, as now.
+- **Edit's "Each tester gets…" hint is wrong today** (it counts today to the date, e.g. "35 days"). On Edit it must show what each tester will get after the change: current tester days + the extension ("Each tester gets 19 days from when they join (14 now + 5)."). Post keeps "today to this date (N days)".
+- Existing tests already past the cap keep their date; they just can't move later.
+- Tests: extend within the cap; past the cap refused (client and server); a paused test shifted past the cap; Next round resets; the Edit hint's numbers.
 
 ## Check and report
 - Tests for items 1, 3, 4 and 5 (item 1: a tester joining with 40 days, 10 days and 2 days; a deadline moved later; a paused test).

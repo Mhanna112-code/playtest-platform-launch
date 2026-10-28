@@ -26,7 +26,9 @@ import { ReasonQuote } from "@/components/ScrollText";
 import { DisputeSide } from "./tests/[id]/DisputeSide";
 import { disputesForSide } from "@/lib/server/disputes";
 import { DismissRemoved } from "./DismissRemoved";
-import { LongList } from "@/components/LongList";
+import { ScrollList } from "@/components/ScrollList";
+import { DevSearch } from "./DevSearch";
+import { devSearchRows } from "@/lib/server/testerSearch";
 import { rejoinAskLine } from "@/lib/server/joining";
 import { pronouns } from "@/lib/format";
 import { chargebackSteps } from "@/lib/server/chargeback";
@@ -76,8 +78,8 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
       {disputeBox.length > 0 && (
         <section className="card space-y-3" id="dispute-sides" data-dispute-box="">
           <h2 className="font-semibold text-white">Disputes: add your side</h2>
-          {/* More than 3: a scroll box about 3 items tall. */}
-          <div className={`space-y-2 ${disputeBox.length > 3 ? "max-h-[30rem] overflow-y-auto pr-1" : ""}`} data-scroll={disputeBox.length > 3 ? "disputes" : undefined}>
+          {/* (Batch 16 section 14) Every dispute, in a plain scroll box. */}
+          <ScrollList as="div" className="space-y-2">
             {disputeBox.map((d) => (
               <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
                 <p className="text-slate-300"><b className="text-white">{d.name}</b> disputed what you paid for {d.what} on “{d.testTitle}”:</p>
@@ -85,13 +87,13 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
                 <DisputeSide seenAt={now.toISOString()} testId={d.testId} disputeId={d.id} />
               </div>
             ))}
-          </div>
+          </ScrollList>
         </section>
       )}
       {excerptBox.length > 0 && (
         <section className="card space-y-3" id="excerpt-requests" data-excerpt-box="">
           <h2 className="font-semibold text-white">Excerpt requests</h2>
-          <div className={`space-y-2 ${excerptBox.length > 3 ? "max-h-[30rem] overflow-y-auto pr-1" : ""}`}>
+          <ScrollList as="div" className="space-y-2">
           {excerptBox.map((x) => (
             <div key={x.id} id={`excerpt-${x.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
               <p className="text-slate-300"><b className="text-white">{x.tester}</b> would like to show this from “{x.testTitle}” on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
@@ -99,7 +101,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
               <ExcerptDecision excerptId={x.id} />
             </div>
           ))}
-          </div>
+          </ScrollList>
         </section>
       )}
       {/* (Batch 15 section 16) The side in use: its own reinstatement. */}
@@ -219,8 +221,8 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
           <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
             <span className="h-2 w-2 rounded-full bg-amber-400" /> Needs review <span className="text-sm font-normal text-slate-400">{num(reviewRows.length)}</span>
           </h2>
-          {/* Newest first: 3 rows, then "Show N more" opening a scroll box. Each row opens that test's Needs you. */}
-          <LongList shown={3} tall="max-h-72" className="space-y-2">
+          {/* Newest first, every row in a plain scroll box (batch 16 section 14). Each row opens that test's Needs you. */}
+          <ScrollList className="space-y-2">
             {reviewRows.map((r) => (
               <li key={r.id}>
                 <Link href={`/app/tests/${r.id}#needs-you`} className="card card-hover flex items-center gap-3 p-4 no-underline hover:no-underline">
@@ -229,7 +231,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
                 </Link>
               </li>
             ))}
-          </LongList>
+          </ScrollList>
         </section>
       )}
 
@@ -238,8 +240,8 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
           <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
             <span className="h-2 w-2 rounded-full bg-amber-400" /> Needs you <span className="text-sm font-normal text-slate-400">{num(shown.length)}</span>
           </h2>
-          {/* More than 4 items: a scroll box (newest first). */}
-          <ul className={`space-y-2 ${shown.length > 4 ? "max-h-[22rem] overflow-y-auto pr-1" : ""}`} data-needs-list={shown.length > 4 ? "scroll" : "plain"}>
+          {/* Newest first, every item in a plain scroll box (batch 16 section 14). */}
+          <ScrollList className="space-y-2">
             {shown.map((r) => {
               const inner = (
                 <>
@@ -254,7 +256,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
                 </li>
               );
             })}
-          </ul>
+          </ScrollList>
         </section>
       )}
 
@@ -273,7 +275,8 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
             {!restricted && <Link href="/app/tests/new" className="btn mt-2"><PlusCircle className="h-4 w-4" /> Post a test</Link>}
           </div>
         ) : (
-          <ul className="grid gap-4 md:grid-cols-2">
+          // (Batch 16 section 14) Every test card, in a scroll box about 2 card rows tall (one column of about 3 on phones); the chips stay above it.
+          <ScrollList size="cards" className="grid gap-4 md:grid-cols-2">
             {tests.map((t) => {
               const inIt = t.contracts.filter((c) => c.status === "working");
               const accepted = t.contracts.filter((c) => c.submissions.some((s) => s.review && !s.review.rejected)).length;
@@ -336,7 +339,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
                 </li>
               );
             })}
-          </ul>
+          </ScrollList>
         )}
       </section>
     </>
@@ -454,10 +457,12 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         <StatTile icon={ListTodo} label="To do" value={compact(todoParts.length + answers.length)} hint={answers.length ? `${answers.length} waiting for your answer` : "parts to send"} tone="indigo" />
       </section>
 
+      {/* (Owner, Oct 28, batch 16 section 13) "Search by developer" over every test this tester has been in; typing replaces the sections below with the results. */}
+      <DevSearch rows={devSearchRows(contracts, !suspended)}>
       {removed.length > 0 && (
         <section className="space-y-3" id="suspended-tests">
           {sectionTitle(<RotateCcw className="h-5 w-5 text-rose-300" />, "Tests you were removed from", removed.length)}
-          <LongList shown={3} tall="max-h-72" className="space-y-2">{removed.map((c) => removedCard(c))}</LongList>
+          <ScrollList className="space-y-2">{removed.map((c) => removedCard(c))}</ScrollList>
         </section>
       )}
 
@@ -465,7 +470,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         <section className="space-y-3" id="charge-or-cancel">
           {sectionTitle(<Banknote className="h-5 w-5 text-amber-300" />, "Charge or cancel", chargeable.length)}
           <p className="note">Parts the developer hasn&apos;t reviewed once {REVIEW_DAYS} days have passed since you sent them and your deadline has passed: charge for them, or let them go.</p>
-          <LongList shown={3} tall="max-h-72" className="space-y-2">
+          <ScrollList className="space-y-2">
             {chargeable.map(({ c, parts }) => (
               <li key={c.id}>
                 <Link href={`/app/sessions/${c.id}#part-${parts[0].kind}`} className="card card-hover flex flex-wrap items-center gap-3 border-amber-400/30 p-4 no-underline hover:no-underline">
@@ -474,7 +479,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 </Link>
               </li>
             ))}
-          </LongList>
+          </ScrollList>
         </section>
       )}
 
@@ -483,7 +488,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         {todoParts.length === 0 && answers.length === 0 ? (
           <p className="card text-sm text-slate-400">{suspended ? "Nothing to do while your account is suspended." : "Nothing to finish. Pick up a new test below."}</p>
         ) : (
-          <LongList shown={3} tall="max-h-96" className="space-y-2">
+          <ScrollList className="space-y-2">
             {answers.map((a) => (
               <li key={a.key}>
                 <Link href={a.href} className="card card-hover flex flex-wrap items-center gap-3 border-sky-300/40 p-4 no-underline hover:no-underline">
@@ -514,14 +519,14 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 </li>
               );
             })}
-          </LongList>
+          </ScrollList>
         )}
       </section>
 
       {(waiting.length > 0 || apps.length > 0 || inviteOnlyApps.length > 0) && (
         <section className="space-y-3">
           {sectionTitle(<Hourglass className="h-5 w-5 text-amber-300" />, "Waiting for the developer")}
-          <LongList shown={3} tall="max-h-72" className="space-y-2">
+          <ScrollList className="space-y-2">
             {apps.map((a) => (
               <li key={a.id}>
                 <Link href={`/app/find/${a.testId}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">
@@ -552,7 +557,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 </li>
               );
             })}
-          </LongList>
+          </ScrollList>
         </section>
       )}
 
@@ -560,7 +565,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         <section className="space-y-3" id="upcoming-calls">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-white"><CalendarClock className="h-5 w-5 text-amber-300" /> Upcoming calls <span className="text-sm font-normal text-slate-400">next 7 days</span></h2>
           <div className="card p-3">
-            <LongList shown={4} tall="max-h-72" className="divide-y divide-white/5">
+            <ScrollList size="lines" className="divide-y divide-white/5">
               {upcoming.map(({ c, x }) => (
                 <li key={x.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
                   <Link href={`/app/sessions/${c.id}#live`} className="mr-auto min-w-0 truncate text-slate-200 no-underline hover:underline" title={`${displayName(c.test.developer)} · ${c.title}`}><b className="text-white">{displayName(c.test.developer)}</b> · {c.title} · {fmtDateTime(x.startsAt)} · {x.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></Link>
@@ -568,7 +573,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                   {callJoinable(x, now) && !testPaused(c.test.developer, c.test) && <JoinCall callId={x.id} />}
                 </li>
               ))}
-            </LongList>
+            </ScrollList>
           </div>
         </section>
       )}
@@ -576,7 +581,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       {!suspended && invites.length > 0 && (
         <section className="space-y-3" id="invitations">
           {sectionTitle(<Inbox className="h-5 w-5 text-emerald-300" />, "Invitations", invites.length)}
-          <LongList shown={3} tall="max-h-64" className="space-y-2">
+          <ScrollList className="space-y-2">
             {invites.map((i) => (
               <li key={i.id} className="info flex flex-wrap items-center gap-2">
                 <Link href={`/app/find/${i.testId}`} className="mr-auto min-w-0 truncate" title={`${displayName(i.test.developer)} invited you to “${i.test.title}”`}>
@@ -586,14 +591,14 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 <NoThanks inviteId={i.id} />
               </li>
             ))}
-          </LongList>
+          </ScrollList>
         </section>
       )}
 
       {!suspended && left.length > 0 && (
         <section className="space-y-3" id="rejoin">
           {sectionTitle(<RotateCcw className="h-5 w-5 text-sky-300" />, "Tests you left", left.length)}
-          <LongList shown={3} tall="max-h-72" className="space-y-2">{left.map((c) => leftCard(c))}</LongList>
+          <ScrollList className="space-y-2">{left.map((c) => leftCard(c))}</ScrollList>
         </section>
       )}
 
@@ -633,7 +638,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       {history.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-white">History</h2>
-          <LongList shown={3} tall="max-h-96" className="space-y-2">
+          <ScrollList className="space-y-2">
             {history.sort(byEnd).map((c) => {
               const rejected = c.submissions.some((s) => s.review?.rejected) && !c.submissions.some((s) => s.review && !s.review.rejected);
               const mine = allOffers.filter((o) => o.contractId === c.id);
@@ -664,9 +669,10 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 </li>
               );
             })}
-          </LongList>
+          </ScrollList>
         </section>
       )}
+      </DevSearch>
     </>
   );
 }

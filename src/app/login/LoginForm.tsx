@@ -20,11 +20,11 @@ export function LoginForm({ reset, google, next = "/app" }: { reset: boolean; go
       )}
       <div>
         <label className="label req" htmlFor="email">Email</label>
-        <input className="input" id="email" name="email" type="email" autoComplete="email" required />
+        <input className="input" id="email" name="email" type="email" autoComplete="email" required data-required="" data-required-msg="Enter a valid email" data-match="email$" />
       </div>
       <div>
         <label className="label req" htmlFor="password">Password</label>
-        <PasswordInput id="password" name="password" autoComplete="current-password" required />
+        <PasswordInput id="password" name="password" autoComplete="current-password" required data-required="" data-required-msg="Enter your password" data-match="your password|wrong email or password" />
         <Link href="/forgot" className="mt-1 inline-block text-xs text-indigo-300 hover:underline">Forgot your password?</Link>
       </div>
     </AuthForm>

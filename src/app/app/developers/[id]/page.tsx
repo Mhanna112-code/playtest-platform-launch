@@ -7,12 +7,13 @@ import { termsLine } from "@/lib/rules";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { DeveloperTiles } from "@/components/ProfileTiles";
 import { BlockButton } from "@/components/BlockButton";
+import { ScrollList } from "@/components/ScrollList";
 import { ReportButton } from "@/components/ReportButton";
 import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
 import { isAdmin } from "@/lib/server/session";
 import { anySuspended, devRestricted } from "@/lib/restricted";
 import { sideFor } from "@/lib/sides";
-import { testPaused } from "@/lib/rules";
+import { profileOpenTests } from "@/lib/server/profileOpenTests";
 
 
 export const metadata = { title: "Developer · Playtest" };
@@ -31,7 +32,8 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
   if (!mine && !isAdmin(viewer) && (await db.block.count({ where: { OR: [{ blockerId: viewer.id, blockedId: p.id }, { blockerId: p.id, blockedId: viewer.id }] } }))) notFound();
   // (Owner, Oct 27) Paused tests (a hold, a suspension or the team's pause) are not listed for other people; a suspended tester can't open any, and a restricted developer's own pages are closed.
   const devOff = mine && p.isDeveloper && devRestricted(viewer, sideFor(viewer, "/app/developers"));
-  const open = (await db.test.findMany({ where: { developerId: p.id, status: "open", ...(mine ? {} : { adminPausedAt: null }) }, orderBy: { createdAt: "desc" }, include: { contracts: { where: { status: "working" }, select: { id: true } } } })).filter((t) => mine || !testPaused(p, t));
+  // (Batch 16 section 14) Invite-only tests are listed only for people invited to, applying to or in them (as in Find).
+  const open = await profileOpenTests(p, viewer, isAdmin(viewer));
   const name = displayName(p);
   const reportedRow = !mine ? await db.report.findUnique({ where: { reporterId_reportedId: { reporterId: viewer.id, reportedId: p.id } } }) : null;
   const reportedOn = reportedRow ? fmtDate(reportedRow.createdAt) : null;
@@ -53,8 +55,9 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
       <DeveloperTiles userId={p.id} />
       <section className="card space-y-3">
         <h2 className="font-semibold text-white">Open tests</h2>
+        {/* (Owner, Oct 28, batch 16 section 14) Every open test, in a plain scroll box (no "Show N more"). */}
         {open.length === 0 ? <p className="text-sm text-slate-400">No open tests right now.</p> : (
-          <ul className="space-y-2">
+          <ScrollList className="space-y-2">
             {open.map((t) => (
               <li key={t.id}>
                 {(devOff || (!mine && viewer.testerSuspendedAt)) ? <div className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100"><span className="min-w-0 flex-1"><span className="block truncate font-medium text-white" title={t.title}>{t.title}</span></span></div> : <Link href={mine ? `/app/tests/${t.id}` : `/app/find/${t.id}`} className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100 no-underline hover:bg-white/[0.04] hover:no-underline">
@@ -67,7 +70,7 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
                 </Link>}
               </li>
             ))}
-          </ul>
+          </ScrollList>
         )}
       </section>
       {isAdmin(viewer) && !mine && <AdminPersonBoxes userId={p.id} adminId={viewer.id} developer={p.isDeveloper} tester={p.isTester} />}

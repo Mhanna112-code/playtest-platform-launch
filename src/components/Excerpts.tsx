@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Err } from "@/components/Err";
+import { FormMistakes } from "@/components/FormMistakes";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { api, errOf } from "@/lib/client";
 
@@ -34,13 +35,13 @@ export function ExcerptPicker({ submissionId, choices }: { submissionId: string;
     }
   }
   return (
-    <div className="space-y-2" data-excerpt-picker="">
+    <div className="space-y-2" data-excerpt-picker="" data-mistakes-root="">
       {!open && <button type="button" className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(true)}>Show an excerpt on your profile</button>}
       {open && (
         <div className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
           <p className="font-medium text-white">Show an excerpt on your profile</p>
           <p className="text-slate-400">Pick one answer and trim it to the part you want to show. It&apos;s shown as a plain quote, and the developer allows or denies it.</p>
-          <fieldset className="space-y-1">
+          <fieldset id={`excerpt-pick-${submissionId}`} className="space-y-1" data-field-group="" data-match="pick one of your answers">
             {choices.map((c) => (
               <label key={c.index} className="flex items-start gap-2">
                 <input type="radio" name={`excerpt-${submissionId}`} checked={index === c.index} onChange={() => pick(c.index)} />
@@ -49,7 +50,7 @@ export function ExcerptPicker({ submissionId, choices }: { submissionId: string;
             ))}
           </fieldset>
           <label className="label req" htmlFor={`excerpt-text-${submissionId}`}>The excerpt</label>
-          <textarea id={`excerpt-text-${submissionId}`} rows={4} className="input" maxLength={MAX} value={text} onChange={(e) => setText(e.target.value)} />
+          <textarea id={`excerpt-text-${submissionId}`} rows={4} className="input" maxLength={MAX} data-match="an excerpt is|trim the excerpt" value={text} onChange={(e) => setText(e.target.value)} />
           <p className={`text-xs ${n < MIN || n > MAX ? "text-rose-300" : "text-slate-500"}`} data-excerpt-count="">{n} / {MAX} (at least {MIN})</p>
           <label className="flex items-center gap-2"><input type="checkbox" checked={hide} onChange={(e) => setHide(e.target.checked)} /> Don&apos;t name the product</label>
           <div className="flex gap-2">
@@ -58,7 +59,8 @@ export function ExcerptPicker({ submissionId, choices }: { submissionId: string;
           </div>
         </div>
       )}
-      <Err text={err} />
+      {/* (Batch 16 section 10) A mistake is red at its box and listed; a refusal stays blue. */}
+      <FormMistakes text={err} press="Ask the developer" />
     </div>
   );
 }

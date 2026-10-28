@@ -33,18 +33,18 @@ export default async function SignupPage() {
         </fieldset>
         <div>
           <label className="label req" htmlFor="name">Name</label>
-          <input className="input" id="name" name="name" autoComplete="name" required />
+          <input className="input" id="name" name="name" autoComplete="name" required data-required="" data-required-msg="Enter your name" data-match="your name" />
         </div>
         <div>
           <label className="label req" htmlFor="email">Email</label>
-          <input className="input" id="email" name="email" type="email" autoComplete="email" required />
+          <input className="input" id="email" name="email" type="email" autoComplete="email" required data-required="" data-required-msg="Enter a valid email" data-match="email" />
         </div>
         <div>
           <label className="label req" htmlFor="password">Password</label>
-          <PasswordInput id="password" name="password" autoComplete="new-password" minLength={8} required />
+          <PasswordInput id="password" name="password" autoComplete="new-password" minLength={8} required data-required="" data-required-msg="Password must be at least 8 characters" data-min-chars="8" data-msg="Password must be at least 8 characters" data-match="password|200 characters" />
         </div>
         <label className="flex items-start gap-2 text-sm text-slate-300">
-          <input type="checkbox" name="acceptTerms" value="yes" required className="mt-1" />
+          <input type="checkbox" id="acceptTerms" name="acceptTerms" value="yes" required className="mt-1" data-match="terms of use" />
           <span>I agree to the <a href="/terms" target="_blank" className="text-indigo-300 underline">Terms of Use</a> and the <a href="/privacy" target="_blank" className="text-indigo-300 underline">Privacy policy</a>.</span>
         </label>
       </AuthForm>

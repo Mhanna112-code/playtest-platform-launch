@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-28T12:50:14.877Z",
+  "generated": "2026-10-28T16:46:47.345Z",
   "sizes": {
     "desktop": "1280x900",
     "phone": "375x812"
@@ -258,6 +258,20 @@
           "kind": "video",
           "desktop": null,
           "phone": "post-all-red-scroll-phone.webm"
+        },
+        {
+          "title": "§10 Two mistakes",
+          "explanation": "Post went to the title; the title and the Mature why are red, and the list under the button links to each",
+          "kind": "image",
+          "desktop": "b16-10-two-red.png",
+          "phone": "b16-10-two-red-phone.png"
+        },
+        {
+          "title": "§10 A press with mistakes",
+          "explanation": "Mature “idk” and an empty title: Post goes to the title, both are red and listed; fixing the title removes its bullet; the Mature bullet jumps to its box; fixing it, the list goes",
+          "kind": "video",
+          "desktop": "b16-10-mistakes.webm",
+          "phone": "b16-10-mistakes-phone.webm"
         }
       ]
     },

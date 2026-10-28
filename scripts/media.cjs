@@ -2563,6 +2563,42 @@ group("postred", async () => {
   }
 }, { section: "Post a test" });
 
+// ---------- (Batch 16 section 10) A press with mistakes: the list under the button matches the red fields and goes to the first ----------
+group("b16mistakes", async () => {
+  const dev = await account(`dev+media${TS}m16@playtest.test`, "Mina Park", "developer", "she");
+  const P = await rec(V, dev);
+  await P.goto("/app/tests/new");
+  await fillPost(P, "First three reefs");
+  // Two mistakes: Mature with "idk" as the why, and an empty title.
+  await P.locator("label:has-text('Mature (18+) content') input[type=checkbox]").check();
+  await P.fill("#matureWhy", "idk");
+  await P.fill("#title", "");
+  await P.evaluate(() => window.scrollTo(0, 0));
+  await pause(P, 800);
+  const from = at(P);
+  await P.locator("button:has-text('Post the test')").scrollIntoViewIfNeeded();
+  await pause(P, 800);
+  await P.click("button:has-text('Post the test')");
+  await P.waitForSelector("[data-mistake-list] [data-mistake-link]");
+  await pause(P, 1500);
+  if ((await P.evaluate(() => document.activeElement && document.activeElement.id)) !== "title") throw new Error("the press didn't go to the title");
+  const links = await P.locator("[data-mistake-link]").allTextContents();
+  if (links.length !== 2 || links[0] !== "Give the test a title." || links[1] !== "Say a little more: at least 5 characters.") throw new Error("list: " + JSON.stringify(links));
+  await shot(P, "b16-10-two-red", "§10 Two mistakes | Post went to the title; the title and the Mature why are red, and the list under the button links to each", "[data-mistake-list]");
+  await typeSlow(P, "#title", "First three reefs", 60);
+  await pause(P, 1200);
+  if ((await P.locator("[data-mistake-link]").count()) !== 1) throw new Error("the title's bullet didn't go");
+  await P.locator("[data-mistake-link]").first().scrollIntoViewIfNeeded();
+  await pause(P, 800);
+  await P.click("[data-mistake-link]:has-text('Say a little more')");
+  await pause(P, 1200);
+  await P.locator("#matureWhy").press("End");
+  await typeSlow(P, "#matureWhy", ": sharks bite in the second reef", 50);
+  await P.waitForSelector("[data-mistake-list][hidden]", { state: "attached" });
+  await pause(P, 1800);
+  finishVideo([{ file: await saveVideo(P, "b16-10-mistakes.webm"), from }], "b16-10-mistakes", "§10 A press with mistakes | Mature “idk” and an empty title: Post goes to the title, both are red and listed; fixing the title removes its bullet; the Mature bullet jumps to its box; fixing it, the list goes");
+}, { section: "Post a test" });
+
 // ---------- Edit stops once for testers' actions (the owner's extra case) ----------
 group("editstop", async () => {
   const nora = await account(`dev+media${TS}es@playtest.test`, "Nora Lane", "developer", "she");
@@ -3305,7 +3341,7 @@ function writeManifest(list) {
 
 {
   (async () => {
-    browser = await chromium.launch({ channel: "msedge" });
+    browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || "msedge" }); // (Batch 16) BROWSER_CHANNEL=chrome when Edge won't start
     const fakeUp = await fetch(`${FAKE}/api/health`).then((r) => r.ok, () => false);
     const results = [];
     for (const [gi, g] of groups.entries()) {

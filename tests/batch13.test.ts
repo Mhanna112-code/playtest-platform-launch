@@ -289,7 +289,8 @@ describe("batch 13 section 9: long text", () => {
     expect(f).toContain("data-steps-count");
     expect(f).toContain("{counterText(q.length, LIMITS.question)}");
     expect(src("components/NdaBox.tsx")).toContain("max-h-[15rem] overflow-y-auto");
-    for (const p of ["app/app/find/[id]/JoinBox.tsx", "app/app/sessions/[id]/page.tsx", "app/app/sessions/[id]/TesterTop.tsx", "app/app/tests/TestForm.tsx"]) expect(src(p)).toContain("<NdaBox");
+    for (const p of ["app/app/find/[id]/JoinBox.tsx", "app/app/sessions/[id]/page.tsx", "app/app/sessions/[id]/TesterTop.tsx"]) expect(src(p)).toContain("<NdaBox");
+    expect(f).not.toContain("<NdaBox"); // (batch 16 section 8) no "How testers see it" preview on Post / Edit
     expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain('<NdaBox label="Before"');
     expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain("<QuestionList items={offer.fromQuestions} />"); // (batch 15 section 3)
   });

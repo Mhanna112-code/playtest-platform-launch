@@ -2,8 +2,9 @@
 import { PlusMore } from "@/components/PlusMore";
 import { TAG_NAMES } from "@/lib/inviteRows";
 import { SubscribersTag } from "@/components/SubscribeLink";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
+import { MistakeList } from "@/components/FieldChecks";
 import { api } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
 import { PressButton } from "@/components/PressButton";
@@ -14,6 +15,8 @@ import { LiveNotices } from "@/components/LiveNotices";
 
 type Tester = { id: string; name: string; rating?: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; tagItems?: string[]; detail?: string; together?: { id: string; title: string }[] };
 type Sent = { id: string; name: string; status: string };
+/** (Batch 16 section 12) What the server works out over every tester: worked with, Suggested after the ticks, and the name search. */
+type PanelData = { worked: Tester[]; suggested: Tester[]; found: Tester[]; foundTotal: number; capLine: string; searched: boolean };
 
 
 /**
@@ -21,8 +24,10 @@ type Sent = { id: string; name: string; status: string };
  * Invited (Cancel invite) · People you've worked with · the filters (the devices / languages THIS test needs) · Suggested ·
  * Find testers (empty until you search). The filters narrow Suggested and Find testers. Greyed rows can't be ticked. A
  * ticked tester missing something the test needs gets an in-page confirm under Invite (Invite anyway / Cancel).
+ * (Owner, Oct 28, batch 16 section 12) The lists come from the server over EVERY tester: the name search (2+ characters, after a short pause in
+ * typing) and the ticks ask it again; every match shows in a scroll box, and above 100 the first 100 with "Showing 100 of N: type more of the name".
  */
-export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester[]; sent: Sent[]; options: { devices: string[]; languages: string[] }; /** (Batch 8) false on the free plan: the "Subscribers" tag */ perks?: boolean }) {
+export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelData; sent: Sent[]; options: { devices: string[]; languages: string[] }; /** (Batch 8) false on the free plan: the "Subscribers" tag */ perks?: boolean }) {
   const { press, changes, error, busy, setError, at, errData } = usePress(p.seenAt);
   // (NEXT-UI 12b) When the Invite anyway box last updated (its first showing, a changed list, a live update): Invite anyway
   // goes ahead only if nothing new happened since; anything newer stops it again inside the box.
@@ -33,12 +38,31 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
   const [ticked, setTicked] = useState<string[]>([]);
   const [msg, setMsg] = useState("");
   const [confirm, setConfirm] = useState<string[] | null>(null);
-  const notInvited = useMemo(() => p.testers.filter((t) => !t.invited), [p.testers]);
-  const passes = (t: Tester) => (!f.devices.length || t.devices.some((d) => f.devices.includes(d))) && (!f.languages.length || t.languages.some((l) => f.languages.includes(l)));
-  const worked = notInvited.filter((t) => t.section === "worked");
-  // Suggested: the top 5 invitable newcomers after the device / language ticks (already ranked: meets, score, accepted parts, matches).
-  const suggested = notInvited.filter((t) => t.section === "other" && !t.grey && passes(t)).slice(0, 5);
-  const found = q.trim().length >= 2 ? notInvited.filter((t) => passes(t) && t.name.toLowerCase().includes(q.trim().toLowerCase())) : [];
+  // (Batch 16 section 12) The server's lists; the ticks and the name search (2+ characters) ask it again after a short pause in typing.
+  const [data, setData] = useState<PanelData>(p.initial);
+  const [searching, setSearching] = useState(false);
+  const term = q.trim().length >= 2 ? q.trim() : "";
+  const asked = useRef(0);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    const n = ++asked.current;
+    setSearching(true);
+    const t = setTimeout(() => {
+      void api<PanelData>(`/api/tests/${p.testId}/invite-search`, { q: term, devices: f.devices, languages: f.languages })
+        .then((r) => { if (n === asked.current) setData(r); })
+        .catch(() => null)
+        .finally(() => { if (n === asked.current) setSearching(false); });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [term, f, p.testId]);
+  const worked = data.worked;
+  // Suggested: the top 5 invitable newcomers after the device / language ticks (ranked on the server: meets, score, accepted parts, matches).
+  const suggested = data.suggested;
+  const found = term && data.searched ? data.found : [];
   // The fold: shut at first, open when the page comes back to it (#invite, e.g. after inviting).
   const [open, setOpen] = useState(false);
   useEffect(() => {
@@ -146,7 +170,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
   return (
     <details id="invite" className="card scroll-mt-24" open={open} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)} aria-label="Invite testers">
       <summary className="fold-chevron flex cursor-pointer items-center gap-2 font-semibold text-white"><UserPlus className="h-5 w-5 text-sky-300" /> Invite testers{p.perks === false && <SubscribersTag />}</summary>
-      <div className="mt-3 space-y-3 text-sm">
+      <div className="mt-3 space-y-3 text-sm" data-mistakes-root="">
       {p.sent.length > 0 && (
         <>
           <h3>Invited</h3>
@@ -171,19 +195,24 @@ export function InvitePanel(p: { testId: string; seenAt: string; testers: Tester
         </div>
       )}
       <input className="input max-w-xs" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find testers" />
-      <div className="max-h-72 space-y-2 overflow-y-auto text-sm" data-invite-lists="">
+      {/* (Batch 16 section 10) Nothing ticked: the lists are the field, red with their line under them, and listed under Invite. */}
+      <div id="invite-lists" className={`max-h-72 space-y-2 overflow-y-auto text-sm ${none ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}`} data-invite-lists="" data-red-msg={none ? "Tick at least one tester." : undefined}>
         <h3>People you&apos;ve worked with</h3>
         {worked.length ? <ul className="space-y-1.5">{worked.map((t) => row(t, "w"))}</ul> : <p className="note">Nobody yet.</p>}
         <h3>Suggested</h3>
         {suggested.length ? <ul className="space-y-1.5">{suggested.map((t) => row(t, "s"))}</ul> : <p className="note">No suggestions right now.</p>}
         <h3>Find testers</h3>
-        {found.length > 0 && <ul className="space-y-1.5">{found.map((t) => row(t, "f"))}</ul>}
+        {/* (Batch 16 section 12) Every match, in a scroll box about 8 rows tall; above 100, the first 100 and the line saying so. */}
+        {term && data.capLine && <p className="note" data-invite-cap="">{data.capLine}</p>}
+        {found.length > 0 && <ul className="max-h-64 space-y-1.5 overflow-y-auto" data-invite-found="">{found.map((t) => row(t, "f"))}</ul>}
+        {term && data.searched && !searching && found.length === 0 && <p className="note" data-invite-none="">No testers match “{term}”.</p>}
       </div>
+      {none && <p className="err-field">Tick at least one tester.</p>}
       <div className="flex flex-wrap items-center gap-2">
         <button className="btn" disabled={busy} onClick={() => (ticked.length ? invite(false) : setNone(true))}>Invite</button>
         <span className="text-xs text-slate-400">{ticked.length} selected</span>
       </div>
-      {none && <p className="err-field">Tick at least one tester.</p>}
+      <MistakeList press="Invite" shown={none} />
       {msg && <p className="info" data-invite-msg="">{msg}</p>}
       {at !== "anyway" && <ChangesBox changes={changes} error={error} />}
       {confirm && (

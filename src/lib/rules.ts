@@ -206,6 +206,10 @@ export const MAX_SPOTS = LIMITS.spots.max;
 
 /** (Batch 15 section 32) The red messages at the field on Post and Edit. */
 export const QUESTION_TOO_LONG = `Keep each question to ${LIMITS.question.toLocaleString("en-US")} characters.`;
+/** (Owner, Oct 28, batch 16 section 9) The Mature (18+) "why": required, at least 5 characters; the same two lines at the field and from the server. */
+export const MATURE_WHY_MIN = 5;
+export const MATURE_WHY_REQUIRED = "Say why this test is mature (18+): it's required for mature content.";
+export const MATURE_WHY_SHORT = `Say a little more: at least ${MATURE_WHY_MIN} characters.`;
 export const NDA_TOO_LONG = `Keep the NDA to ${LIMITS.nda.toLocaleString("en-US")} characters.`;
 /** (Batch 15 section 20) The red line at any reason or note box over the limit (never cut silently). */
 export const reasonTooLong = (max: number = LIMITS.reason) => `Keep it to ${max.toLocaleString("en-US")} characters.`;
@@ -269,6 +273,13 @@ export type ListingCtx = {
 };
 
 /** Check a listing's values. Returns every problem, each in a plain sentence. */
+/** (Batch 16 section 10) The price lines, the same at the field (the client check) and from the server. */
+export const partLowLine = (name: string) => `The ${name} price must be at least ${money(PRICE_LIMITS.partMin)} (or free).`;
+export const partHighLine = (name: string) => `The ${name} price can be at most ${money(PRICE_LIMITS.partMax)}.`;
+export const rateLowLine = () => `The live call rate must be at least ${money(PRICE_LIMITS.rateMin)} an hour (or free).`;
+export const rateHighLine = () => `The live call rate can be at most ${money(PRICE_LIMITS.rateMax)} an hour.`;
+export const DESCRIPTION_REQUIRED = "Say what testers should do (What to do).";
+
 export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: ListingCtx = {}): string[] {
   const errs: string[] = [];
   const isNew = (f: string) => !ctx.changed || ctx.changed.has(f);
@@ -290,9 +301,9 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
   else if (l.productName.length > LIMITS.productName && isNew("productName")) errs.push(`Keep the product name to ${LIMITS.productName} characters.`);
   if (!l.title.trim()) errs.push("Give the test a title.");
   else if (l.title.length > LIMITS.testName && isNew("title")) errs.push(`Keep the title to ${LIMITS.testName} characters.`);
-  if (!l.description?.trim()) { if (isNew("description")) errs.push("Say what testers should do (What to do)."); }
+  if (!l.description?.trim()) { if (isNew("description")) errs.push(DESCRIPTION_REQUIRED); }
   else if (l.description.length > LIMITS.whatToDo && isNew("description")) errs.push(`Keep What to do to ${LIMITS.whatToDo.toLocaleString("en-US")} characters.`);
-  if (l.mature && (l.matureWhy ?? "").trim().length < 5 && (isNew("mature") || isNew("matureWhy"))) errs.push("Say why this test is mature (18+): it's required for mature content.");
+  if (l.mature && (l.matureWhy ?? "").trim().length < MATURE_WHY_MIN && (isNew("mature") || isNew("matureWhy"))) errs.push((l.matureWhy ?? "").trim() ? MATURE_WHY_SHORT : MATURE_WHY_REQUIRED);
   if ((l.ndaText ?? "").length > LIMITS.nda && isNew("ndaText")) errs.push(NDA_TOO_LONG);
   if (!l.categories?.length) errs.push("Tick at least one category.");
   if (!Number.isInteger(l.spots) || l.spots < LIMITS.spots.min || l.spots > MAX_SPOTS) errs.push(`Spots must be a whole number from 1 to ${MAX_SPOTS}.`);
@@ -300,16 +311,16 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
   if (l.writtenCents == null && l.recordingCents == null && l.liveRateCents == null) errs.push("Choose at least one kind of feedback.");
   const part = (c: number | null, name: string, field: "writtenCents" | "recordingCents", key: "written" | "recording") => {
     if (c == null || c === 0) return;
-    if (c < PRICE_LIMITS.partMin) errs.push(`The ${name} price must be at least ${money(PRICE_LIMITS.partMin)} (or free).`);
+    if (c < PRICE_LIMITS.partMin) errs.push(partLowLine(name));
     else if (c > PRICE_LIMITS.partMax) {
-      if (isNew(field)) errs.push(`The ${name} price can be at most ${money(PRICE_LIMITS.partMax)}.`);
+      if (isNew(field)) errs.push(partHighLine(name));
     } else if (c > HIGH_PART_CENTS && isNew(field) && ctx.saved?.[field] !== c && !ctx.confirmedHigh?.includes(key)) errs.push(`Tick “${HIGH_PART_TICK}” for the ${name} price.`);
   };
   part(l.writtenCents, "written answers", "writtenCents", "written");
   part(l.recordingCents, "recording", "recordingCents", "recording");
   if (l.liveRateCents != null) {
-    if (l.liveRateCents !== 0 && l.liveRateCents < PRICE_LIMITS.rateMin) errs.push(`The live call rate must be at least ${money(PRICE_LIMITS.rateMin)} an hour (or free).`);
-    else if (l.liveRateCents > PRICE_LIMITS.rateMax && isNew("liveRateCents")) errs.push(`The live call rate can be at most ${money(PRICE_LIMITS.rateMax)} an hour.`);
+    if (l.liveRateCents !== 0 && l.liveRateCents < PRICE_LIMITS.rateMin) errs.push(rateLowLine());
+    else if (l.liveRateCents > PRICE_LIMITS.rateMax && isNew("liveRateCents")) errs.push(rateHighLine());
   }
   if (l.writtenCents != null && l.questions.filter((q) => q.trim()).length === 0) errs.push("Add at least one question for the written answers.");
   if (l.questions.length > LIMITS.questions.max) errs.push(`At most ${LIMITS.questions.max} questions.`);

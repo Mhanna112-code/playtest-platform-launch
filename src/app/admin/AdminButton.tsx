@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
-import { api, errOf } from "@/lib/client";
+import { FIELD, api, errOf } from "@/lib/client";
+import { FormMistakes } from "@/components/FormMistakes";
+import { checkFields } from "@/components/FieldChecks";
 import { LIMITS } from "@/lib/limits";
 import { counterText, reasonTooLong } from "@/lib/rules";
 
@@ -13,7 +15,7 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   return (
-    <span className="inline-flex flex-wrap items-center gap-2">
+    <span className="inline-flex flex-wrap items-center gap-2" data-mistakes-root="">
       {choice && (
         <span className="inline-flex flex-wrap items-center gap-2" role="radiogroup" aria-label={choice.label} data-side-choice="">
           {choice.options.map((o) => (
@@ -27,7 +29,9 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
         // (Owner, Oct 30, batch 15 section 20) A reason ("note") box: up to 1,000 characters with a live counter; over it is red at the field (the server refuses it too).
         f.name === "note" ? (
           <span key={f.name} className="inline-flex flex-col">
-            <textarea aria-label={f.label} placeholder={f.ph ?? f.label} rows={2} className={`input w-64 max-w-full ${(v[f.name] ?? "").length > LIMITS.reason ? "field-bad" : ""}`} value={v[f.name] ?? ""} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} />
+            <textarea id={`${action}-${id}-note`} aria-label={f.label} placeholder={f.ph ?? f.label} rows={2} className={`input w-64 max-w-full ${(v[f.name] ?? "").length > LIMITS.reason ? "field-bad" : ""}`}
+              {...(action === "delete-account" || action === "suspend" ? { "data-required": "", "data-required-msg": `Record why (it is kept with the ${action === "suspend" ? "suspension" : "deletion"}).`, "data-min-chars": "3", "data-msg": `Record why (it is kept with the ${action === "suspend" ? "suspension" : "deletion"}).` } : {})} data-match="record why|keep it to"
+              data-red-msg={(v[f.name] ?? "").length > LIMITS.reason ? reasonTooLong() : undefined} value={v[f.name] ?? ""} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} />
             <span className={`text-right text-xs ${(v[f.name] ?? "").length > LIMITS.reason ? "text-rose-300" : "text-slate-500"}`} data-reason-count="">{counterText((v[f.name] ?? "").length, LIMITS.reason)}</span>
             {(v[f.name] ?? "").length > LIMITS.reason && <span className="err-field">{reasonTooLong()}</span>}
           </span>
@@ -38,7 +42,8 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
       <button
         className={danger ? "btn-danger" : "btn-ghost"}
         disabled={busy || disabled}
-        onClick={async () => {
+        onClick={async (e) => {
+          if (!checkFields(e.currentTarget.parentElement)) return;
           setBusy(true);
           setMsg(null);
           try {
@@ -54,7 +59,9 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
       >
         {label}
       </button>
-      {msg && <span className={msg.ok ? "ok" : "err"}>{msg.text}</span>}
+      {msg && !msg.text.startsWith(FIELD) && <span className={msg.ok ? "ok" : "err"}>{msg.text}</span>}
+      {/* (Batch 16 section 10) A mistake is red at its box and listed here. */}
+      <FormMistakes text={msg && !msg.ok && msg.text.startsWith(FIELD) ? msg.text : ""} press={label} />
     </span>
   );
 }

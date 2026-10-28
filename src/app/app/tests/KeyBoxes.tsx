@@ -62,7 +62,7 @@ export function KeyBoxes({ data, typed, onType, onBlur, openSpots, line, warning
         </div>
         <div className="space-y-1.5 rounded-xl border border-white/10 p-3" data-keys-free="">
           <label className="text-sm font-medium text-white" htmlFor="keysFree">Free <span className="font-normal text-slate-400" data-free-head="">({n} key{n === 1 ? "" : "s"} · {openSpots} open spot{openSpots === 1 ? "" : "s"})</span></label>
-          <textarea id="keysFree" rows={Math.min(8, Math.max(3, n + 1))} className={"input font-mono text-xs" + (line ? " field-bad" : "")} value={typed} onBlur={onBlur} onChange={(e) => onType(e.target.value)} placeholder={"KEY-3333\nKEY-4444"} />
+          <textarea id="keysFree" rows={Math.min(8, Math.max(3, n + 1))} className={"input font-mono text-xs" + (line ? " field-bad" : "")} data-red-msg={line || undefined} value={typed} onBlur={onBlur} onChange={(e) => onType(e.target.value)} placeholder={"KEY-3333\nKEY-4444"} />
           <p className="text-xs text-slate-500">One key per line. Delete a line to remove that key; type a new line to add one.</p>
         </div>
       </div>

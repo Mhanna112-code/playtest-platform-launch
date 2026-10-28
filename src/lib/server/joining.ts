@@ -68,9 +68,11 @@ export async function joinPageChanges(userId: string, testId: string, seenAt: un
   const info = await db.testEvent.findMany({ where: { testId, kind: { in: ["info", "renamed"] }, createdAt: { gt: d } } });
   // (NEWEST+4, LIVE + GONE) Their application closed / their invite re-sent on the updated listing.
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
+  // (Batch 16 section 11) A test a block hides from this tester shows nothing (its page reads "This test isn't available right now.").
+  if (await (await import("./blocks")).hiddenByBlock(userId, t)) return [];
   const gone: TestEventLike[] = [];
   for (const a of await db.application.findMany({ where: { testId, testerId: userId, status: "closed", decidedAt: { gt: d } } }))
-    gone.push({ kind: "applied", text: a.closedReason === "full" ? `${t.title} is full: your application was closed` : a.closedReason === "invite_only" ? `${displayName(t.developer)} made the test invite only: your application was closed` : `${displayName(t.developer)} changed the listing: your application was closed`, createdAt: a.decidedAt! });
+    gone.push({ kind: "applied", text: a.closedReason === "blocked" ? (await import("./blocks")).appClosedLine(t.title).replace(/\.$/, "") : a.closedReason === "full" ? `${t.title} is full: your application was closed` : a.closedReason === "invite_only" ? `${displayName(t.developer)} made the test invite only: your application was closed` : `${displayName(t.developer)} changed the listing: your application was closed`, createdAt: a.decidedAt! });
   // (Correction 6) Invited: the test filled (the invite stays open) / a spot opened.
   if (await db.invite.findFirst({ where: { testId, testerId: userId, status: "sent" } })) {
     for (const e of await db.testEvent.findMany({ where: { testId, kind: { in: ["full", "spot_open"] }, createdAt: { gt: d } } }))
@@ -193,6 +195,8 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   const tester = await db.user.findUniqueOrThrow({ where: { id: a.testerId }, include: { profile: true } });
   const name = displayName(tester);
   if (a.status === "closed" && a.closedReason === "full") throw new HttpError(409, "gone", `${name}'s application closed when the test filled up at ${fmtTime(a.decidedAt ?? new Date())}.`);
+  // (Batch 16 section 11) Closed by a block (either way): neutral, never says why.
+  if (a.status === "closed" && a.closedReason === "blocked") throw new HttpError(409, "gone", `${name}'s application was closed.`);
   if (a.status === "closed") throw new HttpError(409, "gone", a.closedReason === "invite_only" ? `${name}'s application closed when the test became invite only at ${fmtTime(a.decidedAt ?? new Date())}.` : `${name}'s application closed when you changed the listing in another tab at ${fmtTime(a.decidedAt ?? new Date())}.`);
   if (a.status !== "pending") throw new HttpError(409, "gone", a.status === "withdrawn" ? `${name} withdrew their application.` : "This application was already answered.");
   const extra: TestEventLike[] = [];
@@ -285,6 +289,9 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
   const old = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } });
   const rated = old ? (await db.rating.count({ where: { contractId: old.id } })) > 0 : false;
   if (!old || old.status === "working") throw new HttpError(409, "not_again", old ? "You've already joined this test." : "You haven't been in this test.");
+  // (Owner, Oct 28, batch 16 section 11) A block either way: the ask is refused with the neutral line (never says why).
+  const blocks = await import("./blocks");
+  if (await blocks.blockedEitherWay(tester.id, t.developerId)) throw new HttpError(409, "refused", blocks.NOT_TAKING_LINE);
   if (!canAskToRejoin(old, rated)) throw new HttpError(409, "not_again", rated || old.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't ask to rejoin this test.");
   const refusal = await joinRefusal(tester.id, testId, { rejoin: true });
   if (refusal) throw new HttpError(409, "refused", refusal);

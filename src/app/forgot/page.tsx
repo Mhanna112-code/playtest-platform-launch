@@ -23,7 +23,7 @@ export default function ForgotPage() {
       >
         <div>
           <label className="label req" htmlFor="email">Email</label>
-          <input className="input" id="email" name="email" type="email" required autoComplete="email" />
+          <input className="input" id="email" name="email" type="email" required autoComplete="email" data-required="" data-required-msg="Enter a valid email" data-match="email" />
         </div>
       </AuthForm>
     </AuthShell>

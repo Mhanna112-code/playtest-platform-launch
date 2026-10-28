@@ -1,8 +1,9 @@
 "use client";
 import { Err } from "@/components/Err";
 import { checkFields } from "@/components/FieldChecks";
+import { FormMistakes } from "@/components/FormMistakes";
 import { useState } from "react";
-import { api, errOf } from "@/lib/client";
+import { api, errOf, FIELD } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { uploadToSession } from "@/lib/upload";
 import { ScreenRecorder } from "@/components/ScreenRecorder";
@@ -51,7 +52,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
 
   async function upload(file: File) {
     setErr("");
-    if (file.size > 500 * 1024 * 1024) return setErr("Recordings can be at most 500 MB.");
+    if (file.size > 500 * 1024 * 1024) return setErr(FIELD + "Recordings can be at most 500 MB.");
     setBusy(true);
     try {
       await uploadToSession(sessionId, file, file.name, "recording", setProgress);
@@ -64,7 +65,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-mistakes-root="">
       {uploaded.length > 0 && (
         <ul className="space-y-2" data-recordings="">
           {uploaded.map((r) => <RecordingRow key={r.id} r={r} sessionId={sessionId} canRemove={canSend} />)}
@@ -77,7 +78,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
           <ScreenRecorder sessionId={sessionId} part="recording" />
           <label className="block text-sm">
             <span className="label">Or upload a recording (video, up to 500 MB; 5 at most)</span>
-            <input type="file" accept="video/*" disabled={busy} onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+            <input type="file" id={`recording-file-${sessionId}`} accept="video/*" disabled={busy} data-match="video file|500 MB|file is empty|upload a recording first" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
           </label>
         </>
       )}
@@ -89,6 +90,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
           onClick={async (e) => {
             if (!checkFields(e.currentTarget.parentElement)) return;
             setBusy(true);
+            setErr("");
             try {
               await api(`/api/sessions/${sessionId}/recording-send`, { seenAt, confirmed, boxAt });
               window.location.reload();
@@ -103,7 +105,8 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
         </button>
       )}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
-      <Err text={err} />
+      {/* (Batch 16 section 10) A file mistake is red at the file box, and listed here. */}
+      <FormMistakes text={err} press={sentBefore ? "Send my updated recording" : "Send my recording"} />
     </div>
   );
 }

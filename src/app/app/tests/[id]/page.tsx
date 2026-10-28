@@ -18,7 +18,7 @@ import { unreadCount } from "@/lib/server/messages";
 import { DevCallPanel, type DevCall, type DevTester } from "./DevCallPanel";
 
 import { InvitePanel } from "./InvitePanel";
-import { invitable, inviteExpired } from "@/lib/server/invites";
+import { inviteExpired, invitePanel } from "@/lib/server/invites";
 import { owedForBox } from "@/lib/server/holds";
 import { termsRowLines } from "@/lib/server/terms";
 import { rejoinAskLine } from "@/lib/server/joining";
@@ -119,7 +119,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (NEXT-UI 4) Chat is its own page per session: each tester's row links to it with an unread badge.
   const unread = new Map(await Promise.all(t.contracts.map(async (c) => [c.id, await unreadCount(u.id, t.id, c.testerId)] as const)));
   const blockedIds = new Set((await db.block.findMany({ where: { blockerId: u.id } })).map((b) => b.blockedId));
-  const [testers, invites, owedList] = await Promise.all([invitable(u.id, id), db.invite.findMany({ where: { testId: id, status: { in: ["sent", "joined"] } }, orderBy: { createdAt: "desc" } }), owedForBox(u.id)]);
+  const [invitePanelData, invites, owedList] = await Promise.all([restricted || t.status === "stopped" ? null : invitePanel(u.id, id), db.invite.findMany({ where: { testId: id, status: { in: ["sent", "joined"] } }, orderBy: { createdAt: "desc" } }), owedForBox(u.id)]);
   const people = new Map((await db.user.findMany({ where: { id: { in: invites.map((i) => i.testerId) } } })).map((x) => [x.id, displayName(x)]));
   const expired = inviteExpired(t);
   const soon = t.openUntil && t.openUntil > new Date() && t.openUntil.getTime() - Date.now() < 3 * 86_400_000;
@@ -564,7 +564,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           seenAt={seenAt}
           options={{ devices: t.devices, languages: t.languages }}
           perks={perks}
-          testers={testers}
+          initial={invitePanelData ?? { worked: [], suggested: [], found: [], foundTotal: 0, capLine: "", searched: false }}
           sent={expired ? [] : invites.filter((i) => i.status === "sent").map((i) => ({ id: i.id, name: people.get(i.testerId) ?? "?", status: "waiting for them to join" }))}
         />
       )}

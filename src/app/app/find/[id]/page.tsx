@@ -57,7 +57,9 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   // anyone else opening the link reads "This test isn't available right now."
   const paused = testPaused(t.developer, t);
   const involved = !!mine || !!invite || t.developerId === u.id || (await db.application.count({ where: { testId: id, testerId: u.id } })) > 0 || (await db.invite.count({ where: { testId: id, testerId: u.id } })) > 0;
-  if (paused && !involved && !isAdmin(u)) {
+  // (Owner, Oct 28, batch 16 section 11) A block either way hides that developer's tests this tester was never part of (no contract, invite or application): the
+  // same line, nothing of the listing, never the reason.
+  if (((paused && !involved) || (blocked && !involved && t.developerId !== u.id)) && !isAdmin(u)) {
     return (
       <div className="mx-auto max-w-3xl space-y-6">
         <p><a href="/app/find">← All tests</a></p>
@@ -202,8 +204,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       </section>
 
       {ratedHere && <p className="info">{mine?.status === "left" && mine.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't join this test again."}</p>}
-      {mine && mine.status !== "working" && !ratedHere && canRejoin && !invite && <p className="info">{mine.endKind === "suspended" ? "You were removed from this test." : mine.status === "left" ? "You left this test." : "Your work on this test ended."} Ask to rejoin: if {dev} accepts, your session comes back with everything in it (work you sent, payments and chat), on the current listing.</p>}
-      {mine && mine.status !== "working" && !ratedHere && !canRejoin && !invite && <p className="info">You can&apos;t ask to rejoin this test.</p>}
+      {mine && mine.status !== "working" && !ratedHere && canRejoin && !invite && !blocked && <p className="info">{mine.endKind === "suspended" ? "You were removed from this test." : mine.status === "left" ? "You left this test." : "Your work on this test ended."} Ask to rejoin: if {dev} accepts, your session comes back with everything in it (work you sent, payments and chat), on the current listing.</p>}
+      {mine && mine.status !== "working" && !ratedHere && !canRejoin && !invite && !blocked && <p className="info">You can&apos;t ask to rejoin this test.</p>}
       {t.developerId === u.id ? (
         <div className="card flex flex-wrap items-center gap-3">
           <p className="flex-1 text-slate-200">This is your own test: this is how testers see it. You can&apos;t test it yourself.</p>

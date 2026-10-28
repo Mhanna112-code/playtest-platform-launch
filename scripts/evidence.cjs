@@ -1900,6 +1900,9 @@ async function signIn(page, email) {
     await d.fill("#invite input[aria-label='Find testers']", `Ben Quill ${tag}`);
     await d.check(`#invite li[data-invite-row]:has-text('Ben Quill ${tag}') input`);
     await d.fill("#invite input[aria-label='Find testers']", `Quill ${tag}`);
+    // (Batch 16 section 12) The search asks the server after a short pause: wait for both rows.
+    await d.waitForSelector(`#invite [data-invite-found] li:has-text('Ana Quill ${tag}')`).catch(() => {});
+    await d.waitForSelector(`#invite [data-invite-found] li:has-text('Ben Quill ${tag}')`).catch(() => {});
     check("ticks survive the search; the count shows", (await d.locator("#invite input[type=checkbox]:checked").count()) === 2 && (await has(d, "#invite >> text=2 selected")));
     check("row: amber 'Doesn't list Korean, or Mac' and the grey detail", (await has(d, `#invite li[data-invite-row]:has-text('Ana Quill ${tag}') >> text=Doesn't list Korean, or Mac`)) && (await has(d, `#invite li[data-invite-row]:has-text('Ana Quill ${tag}') >> text=not rated by you · 0 tests with you`)));
     await d.locator("#invite").scrollIntoViewIfNeeded();
@@ -2006,7 +2009,7 @@ async function signIn(page, email) {
     // (Open until no longer has a fold in the overview: its past-date check is Edit's, above.)
     // End early reason.
     await d.click("section[aria-label='Test'] button:has-text('End early')");
-    await blurCheck(d, "#reason", "ab", "Not needed any more.", "End early: reason (5+ characters)", "Say why");
+    await blurCheck(d, "#reason", "", "Not needed any more.", "End early: reason (required; batch 16: the server's own line)", "Say why you're ending their work");
     // A call that took place: its length (up to 150%); written answers: the Pay amount.
     const call = await requestAndAccept(d, tp, T, S, 2);
     sql(`update "Call" set "startsAt" = (now() at time zone 'utc') - interval '2 hours', "devJoinedAt" = (now() at time zone 'utc') - interval '2 hours', "testerJoinedAt" = (now() at time zone 'utc') - interval '2 hours' where id = '${call}'`);
@@ -2026,7 +2029,7 @@ async function signIn(page, email) {
     const subB = sql(`select id from "Submission" where "contractId" = '${SB}' and kind = 'written'`);
     sql(`update "Submission" set "choiceOfferedAt" = (now() at time zone 'utc'), "choiceBy" = (now() at time zone 'utc') + interval '3 days' where id = '${subB}'`);
     await tb.goto(`/app/sessions/${SB}`);
-    await blurCheck(tb, "input[aria-label='Amount to charge']", "50", "8.00", "Charge amount (up to the listing)", "up to $10.00");
+    await blurCheck(tb, "input[aria-label='Amount to charge']", "50", "8.00", "Charge amount (up to the listing; batch 16: the server's own line)", "At most $10.00.");
     await shot(tb, "charge-amount-tester");
   });
 

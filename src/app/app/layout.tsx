@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { FieldChecks } from "@/components/FieldChecks";
 import { ArrowLeftRight, Bell, Compass, CreditCard, LayoutDashboard, MailCheck, MessagesSquare, PlusCircle, ShieldCheck, UserRound } from "lucide-react";
 import { headers } from "next/headers";
 import { after } from "next/server";
@@ -105,7 +104,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </p>
       )}
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">{children}</main>
-      <FieldChecks />
       <SessionWatch userId={u.id} name={name} restriction={restrictionKey(u, side)} />
       <TimeZoneSync stored={u.timeZone} />
       <HashJump />

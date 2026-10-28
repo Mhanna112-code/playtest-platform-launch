@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import { Err } from "@/components/Err";
+import { FormMistakes } from "@/components/FormMistakes";
+import { FIELD, errOf } from "@/lib/client";
 import { ScreenRecorder } from "@/components/ScreenRecorder";
 import { uploadToSession } from "@/lib/upload";
 
@@ -18,19 +19,19 @@ export function WrittenAttachments({ sessionId, items, canAdd }: { sessionId: st
   const files = uploaded.filter((i) => !i.video).length;
   async function add(file: File) {
     setErr("");
-    if (!file.type.startsWith("video/") && file.size > 25 * 1024 * 1024) return setErr("Files can be at most 25 MB.");
+    if (!file.type.startsWith("video/") && file.size > 25 * 1024 * 1024) return setErr(FIELD + "Files can be at most 25 MB.");
     setBusy(true);
     try {
       await uploadToSession(sessionId, file, file.name, "written", setPct);
       window.location.reload();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(errOf(e));
       setBusy(false);
       setPct(null);
     }
   }
   return (
-    <div className="space-y-2 rounded-lg border border-white/[0.08] p-3 text-sm" data-written-attachments="">
+    <div className="space-y-2 rounded-lg border border-white/[0.08] p-3 text-sm" data-written-attachments="" data-mistakes-root="">
       <p className="font-medium text-white">Files and recordings</p>
       {uploaded.length > 0 && (
         <ul className="space-y-1">
@@ -44,14 +45,15 @@ export function WrittenAttachments({ sessionId, items, canAdd }: { sessionId: st
           {files < 5 && (
             <label className="block">
               <span className="label">Attach a file (images, PDF, text or zip; 25 MB each, 5 at most) or a video</span>
-              <input type="file" accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,application/zip,video/*" disabled={busy} onChange={(e) => e.target.files?.[0] && add(e.target.files[0])} />
+              <input type="file" id={`attach-${sessionId}`} accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,application/zip,video/*" data-match="attach an image|video file|at most|file is empty" disabled={busy} onChange={(e) => e.target.files?.[0] && add(e.target.files[0])} />
             </label>
           )}
           <ScreenRecorder sessionId={sessionId} part="written" label="Record your screen" />
         </>
       )}
       {pct != null && <p className="note">Uploading… {pct}%</p>}
-      <Err text={err} />
+      {/* (Batch 16 section 10) A file mistake is red at the file box and listed. */}
+      <FormMistakes text={err} press="Attach" />
     </div>
   );
 }

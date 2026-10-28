@@ -44,14 +44,14 @@ export function RequestRows({ rows, setRows, minNow }: { rows: RowState[]; setRo
     <div className="space-y-2">
       {rows.map((r, i) => (
         <div key={i} className="flex flex-wrap items-center gap-2" data-request-row="">
-          <input type="datetime-local" min={minNow} data-msg="Pick a time in the future." aria-label={`Requested time ${i + 1}`} className="input max-w-xs" value={r.when} onChange={(e) => set(i, { when: e.target.value })} />
+          <input type="datetime-local" min={minNow} data-msg="Pick a time in the future." data-match="in the future|up to 3 times|exactly one time" aria-label={`Requested time ${i + 1}`} className="input max-w-xs" value={r.when} onChange={(e) => set(i, { when: e.target.value })} />
           <select aria-label={`Repeat ${i + 1}`} className="input w-auto" value={r.repeat} onChange={(e) => set(i, { repeat: e.target.value as RowState["repeat"] })}>
             <option value="once">Once</option>
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
           </select>
           {r.repeat !== "once" && (
-            <select aria-label={`How many calls ${i + 1}`} className="input w-auto" value={r.count} onChange={(e) => set(i, { count: e.target.value })}>
+            <select aria-label={`How many calls ${i + 1}`} className="input w-auto" data-match="repeat 2 to 8" value={r.count} onChange={(e) => set(i, { count: e.target.value })}>
               {[2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={String(n)}>{n} calls</option>)}
               <option value="forever">Forever</option>
             </select>

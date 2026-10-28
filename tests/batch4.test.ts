@@ -450,8 +450,9 @@ describe("follow-up 5, 7, 8, 9, 10) cards, the mistakes line, End early, profile
 
   it("'Fix the N mistakes above…' sits above the Save / Post button", () => {
     const form = src("app/app/tests/TestForm.tsx");
-    expect(form.indexOf("Fix the {errs.length")).toBeGreaterThan(0);
-    expect(form.indexOf("Fix the {errs.length")).toBeLessThan(form.indexOf('{busy ? "Saving…"'));
+    // (Batch 16 section 10) The list reads the red fields themselves (MistakeList: "Fix the N mistakes above, then press … again.").
+    expect(form.indexOf("<MistakeList press=")).toBeGreaterThan(0);
+    expect(form.indexOf("<MistakeList press=")).toBeLessThan(form.indexOf('{busy ? "Saving…"'));
   });
 
   it("the End early pop-up counts held calls and every unreviewed part", () => {

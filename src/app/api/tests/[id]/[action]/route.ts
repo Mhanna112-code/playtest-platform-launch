@@ -3,7 +3,7 @@ import { countsOf } from "@/lib/limits";
 import { gapsOf } from "@/lib/gaps";
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { devCancelCall, lowerCallLength, reportNoShow } from "@/lib/server/calls";
-import { cancelInvite, inviteGaps, inviteTesters } from "@/lib/server/invites";
+import { cancelInvite, inviteGaps, invitePanel, inviteTesters } from "@/lib/server/invites";
 import { answerRequest, cancelCallSet, devRequestTime } from "@/lib/server/requests";
 import { apply, askToRejoin, decideApplication, join, withdrawApplication } from "@/lib/server/joining";
 import { addDevSide, payExtra } from "@/lib/server/payments";
@@ -124,6 +124,9 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
       }
       case "invite-check":
         return ok(await inviteGaps(u.id, id, Array.isArray(body.testerIds) ? body.testerIds.map(String) : []));
+      case "invite-search":
+        // (Batch 16 section 12) The invite panel's lists over every tester: Suggested after the ticks, and the name search.
+        return ok(await invitePanel(u.id, id, { q: body.q, devices: body.devices, languages: body.languages }));
       case "cancel-invite":
         return ok(await cancelInvite(u, id, body));
       case "message": {

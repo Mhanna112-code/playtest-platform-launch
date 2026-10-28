@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ApiError, api, errOf } from "@/lib/client";
+import { ApiError, FIELD, api, errOf } from "@/lib/client";
 import { checkFields } from "@/components/FieldChecks";
+import { FormMistakes } from "@/components/FormMistakes";
 import { LIMITS } from "@/lib/limits";
 import { counterText, reasonTooLong } from "@/lib/rules";
 
@@ -32,19 +33,19 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   return (
-    <div ref={root} className="space-y-2">
+    <div ref={root} className="space-y-2" data-mistakes-root="">
       {side.text && <p data-dev-side="">Developer&apos;s side{side.at ? ` (added ${new Date(side.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })})` : ""}: “{side.text}”</p>}
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-sm" htmlFor={`total-${id}`}>Total pay for this piece</label>
         <span>$</span>
         <input id={`total-${id}`} className="input w-28" inputMode="decimal" aria-label="Total pay for this piece ($)" data-min={String(minCents / 100)} data-max={String(maxCents / 100)}
-          data-msg={`Enter an amount from ${dollars(minCents)} to ${dollars(maxCents)}, or leave it blank to keep the pay as it is.`} value={total} onChange={(e) => setTotal(e.target.value)} />
+          data-msg={`Enter an amount from ${dollars(minCents)} to ${dollars(maxCents)}, or leave it blank to keep the pay as it is.`} data-match="^(?!Keep it to)" value={total} onChange={(e) => setTotal(e.target.value)} />
         <span className="text-xs text-slate-500">{dollars(minCents)}-{dollars(maxCents)} · leave blank to keep it as it is</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-sm" htmlFor={`note-${id}`}>Note to both</label>
         {/* (Batch 15 section 20) Up to 1,000 characters, a live counter, red when over. */}
-        <textarea id={`note-${id}`} rows={2} className={`input w-72 max-w-full ${note.length > LIMITS.reason ? "field-bad" : ""}`} value={note} onChange={(e) => setNote(e.target.value)} />
+        <textarea id={`note-${id}`} rows={2} className={`input w-72 max-w-full ${note.length > LIMITS.reason ? "field-bad" : ""}`} data-match="^Keep it to" data-red-msg={note.length > LIMITS.reason ? reasonTooLong() : undefined} value={note} onChange={(e) => setNote(e.target.value)} />
         <span className={`block text-right text-xs ${note.length > LIMITS.reason ? "text-rose-300" : "text-slate-500"}`} data-reason-count="">{counterText(note.length, LIMITS.reason)}</span>
         {note.length > LIMITS.reason && <span className="err-field">{reasonTooLong()}</span>}
         <button
@@ -71,8 +72,10 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
         >
           Decide
         </button>
-        {msg && <span className={msg.ok ? "ok" : stopped && msg.text.startsWith("Your Decide") ? "info" : "err"} data-decide-msg="">{msg.text}</span>}
+        {msg && !msg.text.startsWith(FIELD) && <span className={msg.ok ? "ok" : stopped && msg.text.startsWith("Your Decide") ? "info" : "err"} data-decide-msg="">{msg.text}</span>}
       </div>
+      {/* (Batch 16 section 10) A mistake is red at its box and listed here. */}
+      <FormMistakes text={msg && !msg.ok && msg.text.startsWith(FIELD) ? msg.text : ""} press="Decide" />
     </div>
   );
 }

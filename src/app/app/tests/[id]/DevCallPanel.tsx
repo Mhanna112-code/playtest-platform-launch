@@ -2,6 +2,8 @@
 import { useRef, useState } from "react";
 import { checkFields, useLocalMin } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
+import { FormMistakes } from "@/components/FormMistakes";
+import { FIELD } from "@/lib/client";
 import { JoinCall } from "@/components/JoinCall";
 import { CalendarPlus } from "lucide-react";
 import { usePress } from "@/lib/usePress";
@@ -36,7 +38,9 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   const form = useRef<HTMLDivElement>(null);
   const minNow = useLocalMin(5);
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={error} link={typeof errData.requestId === "string" ? `req-${errData.requestId}` : undefined} /></div> : null);
+  // (Batch 16 section 10) A mistake in the request form is red at its box and listed under Request a time (not as a plain line).
+  const red = error.startsWith(FIELD);
+  const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={k === "request" && red ? "" : error} link={typeof errData.requestId === "string" ? `req-${errData.requestId}` : undefined} /></div> : null);
   const go = async (path: string, body: Record<string, unknown>, key: string) => {
     const r = await press<{ message?: string }>(`/api/tests/${testId}/${path}`, body, key);
     if (r) {
@@ -82,10 +86,11 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
         </fieldset>
       )}
       {canRequest && (
-        <div className="space-y-2 text-sm" ref={form}>
+        <div className="space-y-2 text-sm" ref={form} data-mistakes-root="">
           <RequestRows rows={rows} setRows={setRows} minNow={minNow} />
           <div className="flex flex-wrap items-end gap-2">
-            <label className="inline-flex items-center gap-1 text-sm">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max="180" data-whole="" data-msg="A live call lasts from 10 to 180 minutes." value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min <span className="text-xs text-slate-500">10–180</span></label>
+            <label className="inline-flex items-center gap-1 text-sm">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max="180" data-whole="" data-msg="A live call lasts from 10 to 180 minutes." data-required="" data-required-msg="Enter the call's length in minutes."
+              data-match="length in minutes|live call lasts" value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min <span className="text-xs text-slate-500">10–180</span></label>
             <button
               className="btn"
               disabled={busy || !filled.length || ticked.length === 0}
@@ -96,6 +101,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           </div>
           {ticked.length === 0 && <p className="note">Tick one or more testers to request a time.</p>}
           {box("request")}
+          <FormMistakes text={at === "request" && red ? error : ""} press="Request a time" />
         </div>
       )}
       {shown.length === 0 && canRequest && <p className="note">No calls or requests yet.</p>}

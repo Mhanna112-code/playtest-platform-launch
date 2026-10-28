@@ -15,6 +15,8 @@ import { BlockButton } from "@/components/BlockButton";
 import { ReportButton } from "@/components/ReportButton";
 import { MyExcerpts, ShownExcerpts } from "@/components/ExcerptList";
 import { myExcerpts, shownExcerpts } from "@/lib/server/excerpts";
+import { TesterTests } from "@/components/TesterTests";
+import { testerTestsFor } from "@/lib/server/testerTests";
 
 export const metadata = { title: "Tester · Playtest" };
 export const dynamic = "force-dynamic";
@@ -65,6 +67,8 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
           {!pr?.categories.length && !pr?.devices.length && <span className="text-sm text-slate-500">Interests and devices not filled in yet.</span>}
         </div>
       </section>
+      {/* (Owner, Oct 28, batch 16 section 15, clarified) Only for a developer viewing the profile: their OWN tests this tester joined. Not on the tester's own view, not for admins. */}
+      {viewer.isDeveloper && !mine && !isAdmin(viewer) && <TesterTests name={name} rows={await testerTestsFor(p.id, viewer.id)} />}
       {isAdmin(viewer) && !mine && <AdminPersonBoxes userId={p.id} adminId={viewer.id} developer={p.isDeveloper} tester={p.isTester} />}
       {/* (Owner, Oct 27) Block and Report live only on profiles: here, on the developer side. */}
       {viewer.isDeveloper && !mine && !off && (

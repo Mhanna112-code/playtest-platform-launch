@@ -4,7 +4,7 @@ import { ArrowRight, CalendarClock } from "lucide-react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { CancelMenu } from "@/components/CancelMenu";
 import { JoinCall } from "@/components/JoinCall";
-import { LongList } from "@/components/LongList";
+import { ScrollList } from "@/components/ScrollList";
 import { usePress } from "@/lib/usePress";
 
 export type DashCall = { id: string; testId: string; test: string; who: string; when: string; minutes: number; needsReason: boolean; joinable: boolean };
@@ -23,7 +23,7 @@ export function CallsBox({ calls, seenAt, restricted }: { calls: DashCall[]; see
       <h2 className="flex items-center gap-2 text-lg font-semibold text-white"><CalendarClock className="h-5 w-5 text-amber-300" /> Calls <span className="text-sm font-normal text-slate-400">soonest first</span></h2>
       {calls.length === 0 ? <p className="card text-sm text-slate-400">No booked calls.</p> : (
         <div className="card p-3">
-          <LongList shown={4} tall="max-h-72" className="divide-y divide-white/5">
+          <ScrollList size="lines" className="divide-y divide-white/5">
             {calls.map((c) => (
               <li key={c.id} className="space-y-1 py-2 text-sm" data-call-row={c.id}>
                 <div className="flex flex-wrap items-center gap-2">
@@ -38,7 +38,7 @@ export function CallsBox({ calls, seenAt, restricted }: { calls: DashCall[]; see
                 {at === c.id && <ChangesBox changes={changes} error={error} />}
               </li>
             ))}
-          </LongList>
+          </ScrollList>
         </div>
       )}
     </section>

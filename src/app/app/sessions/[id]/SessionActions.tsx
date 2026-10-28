@@ -1,8 +1,9 @@
 "use client";
 import { Err } from "@/components/Err";
+import { FormMistakes } from "@/components/FormMistakes";
 import { checkFields } from "@/components/FieldChecks";
 import { useRef, useState } from "react";
-import { api, errOf } from "@/lib/client";
+import { api, errOf, FIELD } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { NotSentTag, useKept } from "@/lib/useKept";
 import { restoreDraft } from "@/lib/answerSets";
@@ -32,12 +33,14 @@ function FormatBar({ target, onChange }: { target: React.RefObject<HTMLTextAreaE
 }
 
 /** One answer box with its formatting toolbar. */
-function AnswerBox({ id, value, onChange, rows = 3 }: { id: string; value: string; onChange: (v: string) => void; rows?: number }) {
+/** (Batch 16 section 10) A required answer left empty is red at its box, with the server's own line. */
+export const ANSWER_REQUIRED = "Answer every required question before sending.";
+function AnswerBox({ id, value, onChange, rows = 3, required }: { id: string; value: string; onChange: (v: string) => void; rows?: number; required?: boolean }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   return (
     <div className="space-y-1">
       <FormatBar target={ref} onChange={onChange} />
-      <textarea ref={ref} id={id} rows={rows} className="input" value={value} onChange={(e) => onChange(e.target.value)} />
+      <textarea ref={ref} id={id} rows={rows} className="input" value={value} onChange={(e) => onChange(e.target.value)} {...(required ? { "data-required": "", "data-required-msg": ANSWER_REQUIRED } : {})} />
     </div>
   );
 }
@@ -68,7 +71,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   async function send(e: React.FormEvent) {
     e.preventDefault();
     if (!canSend) return;
-    if (length > WRITTEN_MAX_CHARS) return setMsg({ ok: false, text: `Your written answers can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters in all (now ${length.toLocaleString("en-US")}).` });
+    if (length > WRITTEN_MAX_CHARS) return setMsg({ ok: false, text: FIELD + `Your written answers can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters in all (now ${length.toLocaleString("en-US")}).` });
     setBusy(true);
     setMsg(null);
     try {
@@ -88,7 +91,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
         <div key={i}>
           {/* (Batch 15 section 3) A long question sits in a scroll box about 6 lines tall. */}
           <label className={`label ${qOptional(q) ? "" : "req"}`} htmlFor={`a${i}`}><ScrollText text={qText(q)} label={`Question ${i + 1}`} />{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</label>
-          <AnswerBox id={`a${i}`} value={answers[i]} onChange={(v) => setAnswers((all) => all.map((a, j) => (j === i ? v : a)))} />
+          <AnswerBox id={`a${i}`} required={!qOptional(q)} value={answers[i]} onChange={(v) => setAnswers((all) => all.map((a, j) => (j === i ? v : a)))} />
         </div>
       ))}
       <div>
@@ -100,7 +103,10 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       <span>{canSend && <button className="btn" disabled={busy || length > WRITTEN_MAX_CHARS}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && <NotSentTag />}</span>
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
-      {msg && (msg.ok ? <p className="ok">{msg.text}</p> : <Err text={msg.text} />)}
+      {msg?.ok && <p className="ok">{msg.text}</p>}
+      {/* (Batch 16 section 10) The server's "answer every required question" goes to the first empty required box. */}
+      <FormMistakes text={msg && !msg.ok ? msg.text : ""} press={update ? "Send my updated answers" : "Send my answers"}
+        find={(m) => (m === ANSWER_REQUIRED ? Array.from(document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-required-msg="${ANSWER_REQUIRED}"]`)).find((t) => !t.value.trim()) : null)} />
     </form>
   );
 }
@@ -149,10 +155,10 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
   const keep = useKept(`dispute:${kind}:${id}`, { reason }, reason === "", (v) => setReason(v.reason ?? ""));
   // The full app's fold (no separate mode): "Dispute the pay" opens the form in place.
   return (
-    <details className="space-y-2">
+    <details className="space-y-2" data-mistakes-root="">
       <summary className="cursor-pointer text-sm text-volt-300">Dispute the pay</summary>
       <label className="label req" htmlFor={`d-${id}`}>Why should the pay be higher? (the team and the developer read it)</label>
-      <textarea id={`d-${id}`} rows={3} className="input" maxLength={2000} data-min-chars="10" data-msg="Say why you think the pay should be higher (at least a sentence)." value={reason} onChange={(e) => setReason(e.target.value)} />
+      <textarea id={`d-${id}`} rows={3} className="input" maxLength={2000} data-required="" data-required-msg="Say why you think the pay should be higher (at least a sentence)." data-min-chars="10" data-msg="Say why you think the pay should be higher (at least a sentence)." data-match="pay should be higher" value={reason} onChange={(e) => setReason(e.target.value)} />
       <p className="text-xs text-slate-500">10–2,000 characters</p>
       <p className="note">You can dispute this once. Our team decides; a decision can only raise the pay, {limit}.</p>
       <button
@@ -181,7 +187,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
       {disabledNote && <p className="note" data-owed-note="">{disabledNote}</p>}
       {keep.restored && <NotSentTag />}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
-      <Err text={err} />
+      <FormMistakes text={err} press="Send the dispute" />
     </details>
   );
 }

@@ -8,12 +8,32 @@ import { roomUrl } from "./calls";
 
 // Block (owner rule): either side can block the other. At once: their sessions together end (sent work stays payable
 // and reviewable; disputes still allowed), booked calls between them are cancelled, neither can book or join a call with
-// the other, no invites or joins to the blocker's tests, and chat between them closes. Never revealed to the blocked
+// the other, no invites or joins to the blocker's tests, pending applications and rejoin asks between them close (batch 16
+// section 11), and chat between them closes. Whoever blocked whom, the tester no longer sees that developer's other tests. Never revealed to the blocked
 // person, who only reads neutral lines. Unblock from Account → Blocked people (nothing reopens by itself).
 
 /** Is there a block either way between these two people? */
 export async function blockedEitherWay(a: string, b: string) {
   return (await db.block.count({ where: { OR: [{ blockerId: a, blockedId: b }, { blockerId: b, blockedId: a }] } })) > 0;
+}
+/** (Owner, Oct 28, batch 16 section 11) The one neutral line for a join, an apply or a rejoin ask across a block (never says why). */
+export const NOT_TAKING_LINE = "This test isn't taking new testers right now.";
+/** Was this tester part of the test before (a contract, an invite or an application, whatever became of it)? */
+export async function wasPartOf(testerId: string, testId: string) {
+  const [c, i, a] = await Promise.all([
+    db.contract.count({ where: { testId, testerId } }),
+    db.invite.count({ where: { testId, testerId } }),
+    db.application.count({ where: { testId, testerId } }),
+  ]);
+  return c + i + a > 0;
+}
+/**
+ * (Batch 16 section 11) A block either way hides that developer's tests the tester was never part of: a direct link reads "This test isn't available
+ * right now." (like a paused test for someone not involved). Tests they were part of stay as they are.
+ */
+export async function hiddenByBlock(testerId: string, t: { id: string; developerId: string }) {
+  if (testerId === t.developerId || !(await blockedEitherWay(testerId, t.developerId))) return false;
+  return !(await wasPartOf(testerId, t.id));
 }
 export const iBlocked = async (me: string, other: string) => (await db.block.count({ where: { blockerId: me, blockedId: other } })) > 0;
 
@@ -49,9 +69,26 @@ export async function blockUser(me: { id: string; email: string; name: string },
   await (await import("./requests")).closeRequests({ contractIds: contracts.map((c) => c.id) }, "the session ended");
   await db.termsOffer.updateMany({ where: { status: "open", contractId: { in: contracts.map((c) => c.id) } }, data: { status: "superseded", decidedAt: now } });
   await db.invite.updateMany({ where: { status: "sent", OR: [{ testerId: otherId, test: { developerId: me.id } }, { testerId: me.id, test: { developerId: otherId } }] }, data: { status: "cancelled" } });
+  // (Owner, Oct 28, batch 16 section 11) Pending applications and rejoin asks between them close, like invites. The tester reads the neutral line; the developer nothing.
+  // (Application has no relations: its tests are found by developer first.)
+  const pairs = [{ tester: otherId, dev: me.id }, { tester: me.id, dev: otherId }];
+  for (const p of pairs) {
+    const tests = await db.test.findMany({ where: { developerId: p.dev }, select: { id: true, title: true } });
+    const apps = await db.application.findMany({ where: { status: "pending", testerId: p.tester, testId: { in: tests.map((t) => t.id) } } });
+    if (!apps.length) continue;
+    await db.application.updateMany({ where: { id: { in: apps.map((a) => a.id) } }, data: { status: "closed", closedReason: "blocked", decidedAt: now } });
+    const tester = await db.user.findUnique({ where: { id: p.tester }, select: { email: true } });
+    for (const a of apps) {
+      const title = tests.find((t) => t.id === a.testId)?.title ?? "";
+      if (tester) await notify(tester.email, appClosedLine(title), [appClosedLine(title)], `/app/find/${a.testId}`, { testId: a.testId });
+    }
+  }
   for (const c of contracts) await (await import("./tests")).spotOpened(c.testId);
   return { blocked: true, ended: contracts.length };
 }
+
+/** The tester's line when a block closed their application: "“Harbor Run”: your application was closed." */
+export const appClosedLine = (title: string) => `“${title}”: your application was closed.`;
 
 export async function unblockUser(me: { id: string }, otherId: string) {
   await db.block.deleteMany({ where: { blockerId: me.id, blockedId: otherId } });

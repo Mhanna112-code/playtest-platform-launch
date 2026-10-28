@@ -1,12 +1,13 @@
 "use client";
 import { useState } from "react";
-import { Err } from "@/components/Err";
+import { FormMistakes } from "@/components/FormMistakes";
 import { api, errOf } from "@/lib/client";
 import { announceAuth } from "@/components/SessionWatch";
 
 /**
  * A signed-out form (log in, sign up, forgot, reset): posts its fields as JSON; a form mistake shows red, a refusal
- * blue; on success it goes to `next` (or shows `done`).
+ * blue; on success it goes to `next` (or shows `done`). (Batch 16 section 10) A mistake is red at its field (each box's data-match names the
+ * server lines that belong to it) and listed under the button.
  */
 export function AuthForm(p: { announce?: "in"; path: string; extra?: Record<string, string>; next?: string; done?: React.ReactNode; submit: string; busy: string; children: React.ReactNode; footer?: React.ReactNode }) {
   const [busy, setBusy] = useState(false);
@@ -37,8 +38,8 @@ export function AuthForm(p: { announce?: "in"; path: string; extra?: Record<stri
   return (
     <form method="post" onSubmit={onSubmit} className="card space-y-4" noValidate>
       {p.children}
-      <Err text={err} />
       <button className="btn w-full" disabled={busy}>{busy ? p.busy : p.submit}</button>
+      <FormMistakes text={err} press={p.submit} />
       {p.footer}
     </form>
   );

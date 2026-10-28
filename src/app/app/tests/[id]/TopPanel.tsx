@@ -5,6 +5,8 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
 import { KeyRound, Pencil, Play, Repeat } from "lucide-react";
 import { checkFields } from "@/components/FieldChecks";
+import { FormMistakes } from "@/components/FormMistakes";
+import { FIELD } from "@/lib/client";
 import { CategoryBadges } from "@/components/Category";
 import { PartBadges, StatusPill } from "@/components/Ui";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -23,7 +25,8 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
   /** (Batch 15 section 39) The Alerts types this state can still have (a paused or stopped test shows fewer); omitted: all. */ alertKeys?: string[];
   /** (Batch 15 section 29) After Stop / End early from the restricted view: on to the dashboard top with "Done: …". */ doneTo?: string }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
-  const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={error} didntGo={k === "stop" || k === "end-early"} /> : null);
+  // (Batch 16 section 10) End early's mistakes are red at their box and listed under its button, not as a plain line.
+  const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={k === "end-early" && error.startsWith(FIELD) ? "" : error} didntGo={k === "stop" || k === "end-early"} /> : null);
   const [open, setOpen] = useState<"" | "end" | "next">("");
   // End early: the full app's ticks and "All", one reason, and a confirm dialog before it presses.
   const [picked, setPicked] = useState<string[]>([]);
@@ -126,8 +129,8 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
         </div>
         {openErr && <p className="err">{openErr}</p>}
         {open === "end" && (
-          <div className="space-y-3 rounded-lg border border-white/10 p-3 text-sm" data-end-early="">
-            <fieldset className="max-h-56 space-y-1.5 overflow-y-auto pr-1" aria-label="Testers still working">
+          <div className="space-y-3 rounded-lg border border-white/10 p-3 text-sm" data-end-early="" data-mistakes-root="">
+            <fieldset id="end-early-testers" className="max-h-56 space-y-1.5 overflow-y-auto pr-1" aria-label="Testers still working" data-field-group="" data-match="tick at least one tester" data-red-msg={noTick ? "Tick at least one tester." : undefined}>
               <label className="flex items-center gap-2 text-slate-300"><input type="checkbox" checked={allPicked} onChange={(e) => { setNoTick(false); setPicked(e.target.checked ? p.working.map((w) => w.contractId) : []); }} /> All ({p.working.length})</label>
               {p.working.map((w) => (
                 <label key={w.contractId} className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-slate-200">
@@ -143,7 +146,7 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
             <div>
               <label className="label req" htmlFor="reason">Why? (each tester you tick reads it)</label>
               {/* (Owner, Oct 30, batch 15 section 22) Required, up to 10,000 characters with a counter; no 5-character minimum. */}
-              <textarea id="reason" rows={3} className="input" placeholder="e.g. We have what we need for this build: thank you!" value={reason} onChange={(e) => setReason(e.target.value)} />
+              <textarea id="reason" rows={3} className="input" placeholder="e.g. We have what we need for this build: thank you!" data-required="" data-required-msg="Say why you're ending their work (they read it)." data-match="ending their work|keep it to" value={reason} onChange={(e) => setReason(e.target.value)} />
               <p className={`text-xs ${reason.length > LIMITS.endEarlyReason ? "text-rose-300" : "text-slate-500"}`} data-end-count="">{reason.length.toLocaleString("en-US")} / {LIMITS.endEarlyReason.toLocaleString("en-US")}</p>
             </div>
             <p className="note">Their work ends now. What they already sent still waits for you to pay; calls ahead are cancelled.</p>
@@ -173,6 +176,7 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
               </ConfirmButton>
             </div>
             {box("end-early")}
+            <FormMistakes text={at === "end-early" && error.startsWith(FIELD) ? error : ""} press="End their work now" />
           </div>
         )}
         {open === "next" && (

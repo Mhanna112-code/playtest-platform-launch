@@ -5965,5 +5965,41 @@
     "group": "b15extra",
     "order": 44010,
     "size": "phone"
+  },
+  "b16-10-two-red.png": {
+    "caption": "Post went to the title; the title and the Mature why are red, and the list under the button links to each",
+    "kind": "image",
+    "title": "§10 Two mistakes",
+    "section": "Post a test",
+    "group": "b16mistakes",
+    "order": 32001,
+    "size": "desktop"
+  },
+  "b16-10-mistakes.webm": {
+    "caption": "Mature “idk” and an empty title: Post goes to the title, both are red and listed; fixing the title removes its bullet; the Mature bullet jumps to its box; fixing it, the list goes",
+    "kind": "video",
+    "title": "§10 A press with mistakes",
+    "section": "Post a test",
+    "group": "b16mistakes",
+    "order": 32002,
+    "size": "desktop"
+  },
+  "b16-10-two-red-phone.png": {
+    "caption": "Post went to the title; the title and the Mature why are red, and the list under the button links to each",
+    "kind": "image",
+    "title": "§10 Two mistakes",
+    "section": "Post a test",
+    "group": "b16mistakes",
+    "order": 32001,
+    "size": "phone"
+  },
+  "b16-10-mistakes-phone.webm": {
+    "caption": "Mature “idk” and an empty title: Post goes to the title, both are red and listed; fixing the title removes its bullet; the Mature bullet jumps to its box; fixing it, the list goes",
+    "kind": "video",
+    "title": "§10 A press with mistakes",
+    "section": "Post a test",
+    "group": "b16mistakes",
+    "order": 32002,
+    "size": "phone"
   }
 }

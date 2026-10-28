@@ -1,18 +1,34 @@
 "use client";
 // The full app's site-wide field checks (components/field-checks.tsx there), for lean's fields: as soon as you leave a
 // box (or pick a date) the same check the button would run happens right away; a box with a problem is outlined in red
-// with its message under it, and clears as soon as what's typed is fine. Rules come from the box itself:
-//   - number boxes: data-min / data-max (and data-zero-ok: 0 is allowed too), data-msg for the message;
+// with its message under it. Rules come from the box itself:
+//   - number boxes: data-min / data-max (and data-zero-ok: 0 is allowed too), data-msg for the message (data-min-msg / data-max-msg
+//     when below / above differ, matching the server's own lines);
 //   - date / time boxes: min / max (data-msg, e.g. "Pick a time in the future.");
 //   - text: maxLength, data-min-chars (counted after trimming), and data-required (+ data-required-msg): blank is red.
 // Presses that aren't form submits call checkFields(root) first: every box in it is checked and marked.
-import { useEffect, useState } from "react";
+// (Owner, Oct 28, batch 16 section 10) ONE rule for every form: a mistake shows at its field (red box, red line), from the client check or the
+// server (markServerMistakes, the same text); a field stays red until its OWN value is fixed (re-checked as it's typed in once it's red; editing
+// another field never clears it); a press goes to the first red field and puts the cursor in it; the list under the button (MistakeList) is read
+// from the red fields themselves, so the two always agree. A field a component marks red itself carries data-red-msg (its line's text).
+import { useEffect, useRef, useState } from "react";
 
-type Field = HTMLInputElement | HTMLTextAreaElement;
-const isField = (el: EventTarget | null): el is Field => el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
-const hasRules = (el: Field) => el.dataset.required != null || el.dataset.min != null || el.dataset.max != null || el.dataset.minChars != null || (el instanceof HTMLInputElement && (el.type === "date" || el.type === "datetime-local") && (!!el.min || !!el.max));
+type Field = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+const isField = (el: EventTarget | null): el is Field => el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
+/** What the server's mistake was about: kept against the value the field had then (a changed value clears it; the client rules then decide). */
+const server = new WeakMap<Element, { msg: string; value: string }>();
+const hasRules = (el: Element) =>
+  server.has(el) ||
+  (isField(el) && (el.dataset.required != null || el.dataset.min != null || el.dataset.max != null || el.dataset.minChars != null || (el instanceof HTMLInputElement && (el.type === "date" || el.type === "datetime-local") && (!!el.min || !!el.max))));
 
-function ruleMessage(el: Field): string {
+/** A box's value (a tick: whether it's ticked); a group of boxes (data-field-group): all of theirs. */
+const valueOf = (el: Element): string => {
+  if (el instanceof HTMLInputElement && (el.type === "checkbox" || el.type === "radio")) return String(el.checked);
+  if (isField(el)) return el.value;
+  return JSON.stringify(Array.from(el.querySelectorAll("input, select, textarea")).map((x) => valueOf(x)));
+};
+
+function clientMessage(el: Field): string {
   const v = el.value.trim();
   const msg = el.dataset.msg;
   // (Design doc 4) A required box left blank is red at the field (on blur and on submit).
@@ -31,7 +47,8 @@ function ruleMessage(el: Field): string {
     if (!Number.isFinite(n)) return msg ?? "Enter a number.";
     if (el.dataset.whole != null && !Number.isInteger(n)) return msg ?? "Enter a whole number.";
     if (el.dataset.zeroOk != null && n === 0) return "";
-    if (n < min || n > max) return msg ?? `From ${min} to ${max}.`;
+    if (n < min) return el.dataset.minMsg ?? msg ?? `From ${min} to ${max}.`;
+    if (n > max) return el.dataset.maxMsg ?? msg ?? `From ${min} to ${max}.`;
     return "";
   }
   if (el.dataset.minChars != null) {
@@ -41,18 +58,42 @@ function ruleMessage(el: Field): string {
   return "";
 }
 
-const notes = new WeakMap<Field, HTMLElement>();
-let ids = 0;
+function ruleMessage(el: Element): string {
+  const own = isField(el) && !el.disabled ? clientMessage(el) : "";
+  if (own) return own;
+  const s = server.get(el);
+  if (s && s.value === valueOf(el)) return s.msg;
+  if (s) server.delete(el);
+  return "";
+}
 
-/** Checks one box and shows / clears its red message. Returns whether it's fine. */
-export function showField(el: Field) {
+const notes = new WeakMap<Element, HTMLElement>();
+let ids = 0;
+let queued = false;
+/** Tells every list under a button that the red fields changed. */
+function changed() {
+  if (queued || typeof window === "undefined") return;
+  queued = true;
+  queueMicrotask(() => {
+    queued = false;
+    window.dispatchEvent(new Event("field-mistakes"));
+  });
+}
+
+/** Checks one box (or group) and shows / clears its red message. Returns whether it's fine. */
+export function showField(el: Element) {
   const message = ruleMessage(el);
   let note = notes.get(el);
   if (!message) {
-    el.removeAttribute("aria-invalid");
-    el.classList.remove("field-bad");
-    note?.remove();
-    notes.delete(el);
+    // Only what this file marked is cleared here (a component's own red line, data-red-msg, is the component's).
+    if (note) {
+      el.removeAttribute("aria-invalid");
+      el.removeAttribute("aria-describedby");
+      el.classList.remove("field-bad");
+      note.remove();
+      notes.delete(el);
+      changed();
+    }
     return true;
   }
   el.setAttribute("aria-invalid", "true");
@@ -63,45 +104,108 @@ export function showField(el: Field) {
     note.setAttribute("role", "alert");
     note.setAttribute("data-field-error", "");
     note.className = "mt-1 w-full basis-full text-sm font-medium text-rose-300";
-    el.insertAdjacentElement("afterend", note);
+    // A box inside a wrapper marked data-note-after (e.g. the password box with its Show button) gets its line under the wrapper.
+    (el.closest("[data-note-after]") ?? el).insertAdjacentElement("afterend", note);
     el.setAttribute("aria-describedby", note.id);
     notes.set(el, note);
   }
-  note.textContent = message;
+  if (note.textContent !== message) note.textContent = message;
+  changed();
   return false;
 }
 
-/** Before a press: every box with rules inside `root` is checked and marked; false when any is wrong (the first gets the focus). */
+/** The fields red right now inside `root`, top to bottom, each with the text of its red line. */
+export function redFields(root: Element | null): { el: HTMLElement; text: string }[] {
+  if (!root) return [];
+  const out: { el: HTMLElement; text: string }[] = [];
+  for (const el of Array.from(root.querySelectorAll<HTMLElement>('[aria-invalid="true"], [data-red-msg]'))) {
+    // A box inside a smaller box with its own list (data-mistakes-root inside `root`) belongs to that list only.
+    const own = el.closest("[data-mistakes-root]");
+    if (own && own !== root && root.contains(own)) continue;
+    const note = notes.get(el);
+    const described = el.getAttribute("aria-describedby");
+    const text = (note?.isConnected ? note.textContent : "") || el.dataset.redMsg || (described ? document.getElementById(described.split(" ")[0])?.textContent : "") || "";
+    if (text && !out.some((x) => x.el === el)) out.push({ el, text });
+  }
+  return out;
+}
+
+/** Scrolls to a red field and puts the cursor in it (a group: its first box). */
+export function focusField(el: HTMLElement) {
+  const target = isField(el) ? el : el.querySelector<HTMLElement>("input:not([disabled]), select:not([disabled]), textarea:not([disabled])") ?? el;
+  el.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  target.focus?.({ preventScroll: true });
+}
+/** A press with mistakes goes to the FIRST red field, top to bottom. */
+export function focusFirstMistake(root: Element | null) {
+  const first = redFields(root)[0];
+  if (first) focusField(first.el);
+  return !!first;
+}
+/** Tells the list under the button of this `root` that a press was made (it shows from then on). */
+export function announcePress(root: Element | null) {
+  if (root && typeof window !== "undefined") window.dispatchEvent(new CustomEvent("mistakes-press", { detail: root }));
+}
+
+/** Before a press: every box with rules inside `root` is checked and marked; false when any is wrong (the first red field gets the cursor). */
 export function checkFields(root: Element | null) {
   if (!root) return true;
   let ok = true;
-  for (const el of Array.from(root.querySelectorAll("input, textarea"))) {
-    if (!isField(el) || !hasRules(el) || el.disabled) continue;
-    if (!showField(el)) {
-      if (ok) el.focus();
-      ok = false;
-    }
+  for (const el of Array.from(root.querySelectorAll("input, textarea, select, [data-field-group]"))) {
+    if (!hasRules(el) || (isField(el) && el.disabled)) continue;
+    if (!showField(el)) ok = false;
+  }
+  if (redFields(root).length) ok = false;
+  if (!ok) {
+    announcePress(root);
+    focusFirstMistake(root);
   }
   return ok;
 }
 
+/**
+ * The server's field mistakes: each message goes to its field (the box in `root` whose data-match pattern fits it, or `find`), red with that text,
+ * until that field's value changes. Returns the messages that belong to no field (they stay in the list without a link).
+ */
+export function markServerMistakes(root: Element | null, messages: string[], find?: (msg: string) => Element | null | undefined) {
+  if (!root) return messages;
+  const fields = Array.from(root.querySelectorAll<HTMLElement>("[data-match]"));
+  const orphans: string[] = [];
+  for (const msg of messages) {
+    const el = find?.(msg) ?? fields.find((f) => new RegExp(f.dataset.match!, "i").test(msg)) ?? null;
+    if (!el || !root.contains(el)) {
+      orphans.push(msg);
+      continue;
+    }
+    // One line per field: a box already red with its own (client) line keeps it.
+    if (notes.get(el)?.isConnected && !server.has(el) && ruleMessage(el)) continue;
+    server.set(el, { msg, value: valueOf(el) });
+    showField(el);
+  }
+  announcePress(root);
+  return orphans;
+}
+
 export function FieldChecks() {
   useEffect(() => {
-    const touched = new WeakSet<Field>();
+    const groupOf = (el: Element) => el.closest("[data-field-group]");
+    // Once a box is red it's re-checked as it's typed in (the line updates, and goes when it's fixed); so is its group.
+    const recheck = (el: Element) => {
+      if (notes.has(el) || server.has(el)) showField(el);
+      const g = groupOf(el);
+      if (g && (notes.has(g) || server.has(g))) showField(g);
+    };
     const onLeave = (e: FocusEvent) => {
       if (!isField(e.target) || !hasRules(e.target)) return;
-      touched.add(e.target);
       showField(e.target);
     };
-    // While typing a message never appears: a marked box clears as soon as it's fine.
     const onType = (e: Event) => {
-      if (!isField(e.target) || !hasRules(e.target) || !touched.has(e.target)) return;
-      if (!ruleMessage(e.target)) showField(e.target);
+      if (isField(e.target)) recheck(e.target);
     };
     const onChange = (e: Event) => {
-      if (!isField(e.target) || !hasRules(e.target)) return;
-      touched.add(e.target);
-      showField(e.target);
+      if (!isField(e.target)) return;
+      if (hasRules(e.target)) showField(e.target);
+      recheck(e.target);
     };
     // A form submit checks every box in it first (the press is stopped when one is wrong).
     const onSubmit = (e: Event) => {
@@ -125,6 +229,59 @@ export function FieldChecks() {
     };
   }, []);
   return null;
+}
+
+/** "Fix the mistake above, then press Save again." / "Fix the 2 mistakes above, …". */
+export const fixLine = (n: number, press: string) => `Fix the ${n === 1 ? "mistake" : `${n} mistakes`} above, then press ${press} again.`;
+
+/**
+ * (Batch 16 section 10) The list under a button: the heading and one bullet per field red right now (the same text as its line), each a link to its
+ * field; then any server mistake that belongs to no field. It shows once a press was made in its form (or box: the nearest data-mistakes-root) and
+ * follows the fields live: fixing a field removes its bullet at the same moment, and the list goes with the last one. With no red field, a mistake
+ * that belongs to no field shows as a plain red line.
+ */
+export function MistakeList({ press, orphans = [], shown }: { press: string; orphans?: string[]; shown?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pressed, setPressed] = useState(false);
+  const [items, setItems] = useState<{ el: HTMLElement; text: string }[]>([]);
+  useEffect(() => {
+    const rootOf = () => ref.current?.closest("[data-mistakes-root], form") ?? null;
+    const read = () => setItems(redFields(rootOf()));
+    const onPress = (e: Event) => {
+      const r = (e as CustomEvent<Element>).detail;
+      const mine = rootOf();
+      if (mine && r && (r.contains(mine) || mine.contains(r))) setPressed(true);
+      read();
+    };
+    read();
+    window.addEventListener("field-mistakes", read);
+    window.addEventListener("mistakes-press", onPress);
+    return () => {
+      window.removeEventListener("field-mistakes", read);
+      window.removeEventListener("mistakes-press", onPress);
+    };
+  }, []);
+  const on = pressed || !!shown;
+  const extra = orphans.filter((o) => !items.some((i) => i.text === o));
+  const n = items.length + extra.length;
+  return (
+    <div ref={ref} data-mistake-list="" className="space-y-1" hidden={!on || n === 0}>
+      {on && n > 0 && items.length > 0 && (
+        <>
+          <p className="err-field">{fixLine(n, press)}</p>
+          <ul className="err-field list-disc pl-5">
+            {items.map((i, k) => (
+              <li key={k}>
+                <a href={i.el.id ? `#${i.el.id}` : "#"} className="text-rose-300 underline decoration-rose-300/50 hover:text-rose-200" data-mistake-link="" onClick={(e) => { e.preventDefault(); focusField(i.el); }}>{i.text}</a>
+              </li>
+            ))}
+            {extra.map((o) => <li key={o}>{o}</li>)}
+          </ul>
+        </>
+      )}
+      {on && n > 0 && items.length === 0 && extra.map((o) => <p key={o} className="err-field" role="alert">{o}</p>)}
+    </div>
+  );
 }
 
 /** A picker's min, set after the page loads (the viewer's own time): "" on the server. */

@@ -1,5 +1,5 @@
 "use client";
-import { Err } from "@/components/Err";
+import { FormMistakes } from "@/components/FormMistakes";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, errOf, newPressId } from "@/lib/client";
@@ -38,7 +38,7 @@ export function Chat({ path, extra = {}, messages, other, title, closed, closedN
     count.current = messages.length;
   }, [messages.length]);
   return (
-    <div className="card flex h-[70vh] flex-col p-0">
+    <div className="card flex h-[70vh] flex-col p-0" data-mistakes-root="">
       <div className="border-b border-white/10 px-5 py-3">
         <p className="font-semibold text-white">{other}</p>
         <p className="text-xs text-slate-400">{title}</p>
@@ -89,12 +89,13 @@ export function Chat({ path, extra = {}, messages, other, title, closed, closedN
             }
           }}
         >
-          <input className="input" aria-label={`Message ${other}`} placeholder={`Message ${other}…`} value={text} onChange={(e) => { if (e.target.value !== text) pressId.current = null; setText(e.target.value); }} />
+          <input id="chat-message" className="input" aria-label={`Message ${other}`} placeholder={`Message ${other}…`} data-match="type a message|keep a message" value={text} onChange={(e) => { if (e.target.value !== text) pressId.current = null; setText(e.target.value); }} />
           <button className="btn" disabled={busy || !text.trim()}>Send</button>
           {keep.restored && <span className="self-center"><NotSentTag /></span>}
         </form>
       )}
-      {err && <div className="px-5 pb-3"><Err text={err} /></div>}
+      {/* (Batch 16 section 10) A message mistake is red at the box (and listed); a refusal stays blue. */}
+      <div className="px-5 pb-3 empty:hidden"><FormMistakes text={err} press="Send" /></div>
     </div>
   );
 }
