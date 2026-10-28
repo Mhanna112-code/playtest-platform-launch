@@ -1,0 +1,4 @@
+<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />
+ ✓ tests/batch15-security.test.ts > M2: Pay more can't race past its cap or charge twice > two presses at once over the room: one goes through; the same press repeated charges once 511ms
+ Test Files  1 passed (1)
+      Tests  1 passed | 21 skipped (22)

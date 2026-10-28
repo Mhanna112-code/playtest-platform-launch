@@ -49,15 +49,16 @@ async function sentWork(over: Record<string, unknown> = {}) {
 describe("A3) a payment hold, a chargeback hold and a suspension are one state", () => {
   it("restrictionOf / devRestricted / restrictionKey", () => {
     expect(restrictionOf({})).toBeNull();
-    expect(restrictionOf({ suspendedAt: new Date(), holdStartedAt: new Date() })).toBe("suspended");
+    expect(restrictionOf({ devSuspendedAt: new Date(), holdStartedAt: new Date() })).toBe("suspended");
     expect(restrictionOf({ holdStartedAt: new Date(), holdReason: "chargeback" })).toBe("chargeback");
     expect(restrictionOf({ holdStartedAt: new Date(), holdReason: "unpaid" })).toBe("hold");
     const both = { isDeveloper: true, isTester: true, holdStartedAt: new Date(), side: "tester" };
     expect(devRestricted(both, "tester")).toBe(false);
     expect(devRestricted(both, "developer")).toBe(true);
-    expect(devRestricted({ ...both, suspendedAt: new Date() }, "tester")).toBe(true); // a suspension restricts the whole account
+    expect(devRestricted({ ...both, devSuspendedAt: new Date() }, "tester")).toBe(false); // (batch 15 section 16) a developer-side suspension leaves the tester side working
+    expect(devRestricted({ ...both, devSuspendedAt: new Date() }, "developer")).toBe(true);
     expect(restrictionKey({ isDeveloper: true, isTester: false, holdStartedAt: new Date(), holdReason: "chargeback" })).toBe("c");
-    expect(restrictionKey({ isDeveloper: true, isTester: false, suspendedAt: new Date(), holdStartedAt: new Date() })).toBe("sh");
+    expect(restrictionKey({ isDeveloper: true, isTester: false, devSuspendedAt: new Date(), holdStartedAt: new Date() })).toBe("sh");
     expect(restrictionKey({ isDeveloper: true, isTester: false })).toBe("");
   });
 
@@ -66,7 +67,7 @@ describe("A3) a payment hold, a chargeback hold and a suspension are one state",
       const { dev, testId, sessionId, tester } = await sentWork();
       const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 24 * 6);
       if (how === "hold") await startHold(dev.user.id, "unpaid");
-      else await db.user.update({ where: { id: dev.user.id }, data: { suspendedAt: new Date() } });
+      else await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
       const code = how === "hold" ? "held" : "suspended";
       for (const [action, body] of [["edit", { version: 1, fields: { title: "x" } }], ["stop", {}], ["end-early", { contractIds: [sessionId], reason: "Enough said" }], ["next-round", {}], ["invite", { testerIds: [tester.user.id] }], ["pay-extra", { contractId: sessionId, amount: "2.00" }], ["call-length", { callId: call.id, minutes: 20 }], ["message", { contractId: sessionId, body: "hi" }]] as const) {
         const r = await act(testId, action, dev.cookie, { seenAt: seen(), confirmed: true, ...body });
@@ -190,10 +191,10 @@ describe("E2, E3) stacking by kind and reminders in the summary email", () => {
     const live = await admin();
     await db.user.update({ where: { id: gone.user.id }, data: { deletedAt: new Date() } });
     const t = await makeUser({ tester: true });
-    await db.user.update({ where: { id: t.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: t.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     await db.appState.deleteMany({ where: { key: "suspended-reminder" } });
     await suspendedAccountsReminder();
-    expect((await lines(live.user.id)).some((l) => /suspended accounts? to review$/.test(l.text) && l.groupKey === "suspendedreview")).toBe(true);
+    expect((await lines(live.user.id)).some((l) => /suspended account sides? to review$/.test(l.text) && l.groupKey === "suspendedreview")).toBe(true);
     expect((await lines(gone.user.id)).length).toBe(0);
   });
 
@@ -238,7 +239,7 @@ describe("E5, E6, E7) names, Contact us, data requests", () => {
   it("Contact us works for suspended and held accounts and is limited to 5 a day (a blue 409 on the 6th)", async () => {
     const t = await makeUser({ tester: true });
     const d = await makeUser({ dev: true });
-    await db.user.update({ where: { id: t.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: t.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     await db.user.update({ where: { id: d.user.id }, data: { holdStartedAt: new Date(), holdReason: "unpaid" } });
     const send = (cookie: string) => helpPOST(req("/api/help", { cookie, body: { topic: "My account", message: "Please look at my account, thanks" } })).then(json);
     for (let i = 0; i < 5; i++) expect((await send(t.cookie)).status).toBe(200);
@@ -264,7 +265,7 @@ describe("E5, E6, E7) names, Contact us, data requests", () => {
     expect((await json(await blocksPOST(req("/api/blocks", { cookie: a.cookie, body: { userId: b.user.id } })))).body.error.code).toBe("held"); // Block waits
     expect((await json(await blocksPOST(req("/api/blocks", { cookie: a.cookie, body: { userId: b.user.id, action: "unblock" } })))).status).toBe(200);
     await db.block.create({ data: { blockerId: a.user.id, blockedId: b.user.id } });
-    await db.user.update({ where: { id: a.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: a.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     expect((await json(await blocksPOST(req("/api/blocks", { cookie: a.cookie, body: { userId: b.user.id, action: "unblock" } })))).body.error.code).toBe("suspended");
   });
 });
@@ -313,7 +314,7 @@ describe("D) testers", () => {
     const ids = async () => (await findTests(tester.user)).map((t) => t.id);
     expect(await ids()).toEqual(expect.arrayContaining([a.testId, b.testId, c.testId]));
     await db.user.update({ where: { id: a.dev.user.id }, data: { holdStartedAt: new Date(), holdReason: "unpaid" } });
-    await db.user.update({ where: { id: b.dev.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: b.dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     await db.test.update({ where: { id: c.testId }, data: { adminPausedAt: new Date() } });
     const now = await ids();
     for (const x of [a, b, c]) expect(now).not.toContain(x.testId);
@@ -350,14 +351,14 @@ describe("D) testers", () => {
     expect(await db.notification.count({ where: { userId: tester.user.id, reminderKey: `rate:${sessionId}` } })).toBe(0);
   });
 
-  it("'Chat with <name>' works both ways and is refused when a side is suspended or held (batch 6: a tester reads that chat is paused)", async () => {
+  it("'Chat with <name>' works both ways and is refused for the side that is suspended or held (batch 15 section 1: the other person can still open it)", async () => {
     const { dev, sessionId, tester } = await sentWork();
     const open = (cookie: string) => chatOpenPOST(req("/api/chat/open", { cookie, body: { contractId: sessionId } })).then(json);
     expect((await open(dev.cookie)).status).toBe(200);
     expect((await open(tester.cookie)).status).toBe(200);
     await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: new Date(), holdReason: "unpaid" } });
     expect((await open(dev.cookie)).body.error.message).toBe("Unable to chat with this tester.");
-    expect((await open(tester.cookie)).body.error.message).toBe("Chat is paused while the test is paused.");
+    expect((await open(tester.cookie)).status).toBe(200); // read-only for them: "Messages are paused for now."
     expect(src("components/PersonHover.tsx")).toContain("chat?: ReactNode");
     expect(src("app/app/tests/[id]/TestersJoined.tsx")).toContain("seat.chat");
   });

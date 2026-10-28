@@ -1,4 +1,4 @@
-import { devRestricted, type Restrictable } from "@/lib/restricted";
+import { devRestricted, testerRestricted, type Restrictable } from "@/lib/restricted";
 
 type Who = Restrictable & { isDeveloper: boolean; isTester: boolean; side?: string };
 
@@ -17,13 +17,12 @@ export const openForRestricted = (path: string) => {
 };
 
 /**
- * Is the account restricted on this side? A suspended tester, and a developer under a suspension, a payment hold or a chargeback hold (on their developer side).
- * An admin suspension closes both sides; a payment or chargeback hold restricts only the developer side, so an account with both sides keeps its tester side open.
+ * Is the account restricted on this side? A tester whose tester side is suspended, and a developer under a developer-side suspension, a payment hold or a chargeback
+ * hold. (Batch 15 section 16) Each restriction closes only its own side, so an account with both sides keeps the other side open.
  * A tester whose DEVELOPER is suspended or on hold is not restricted (their test is only paused).
  */
 export function restrictedOn(u: Who, side?: string | null) {
-  if (u.suspendedAt) return true;
-  return u.isDeveloper && devRestricted(u, side);
+  return testerRestricted(u, side) || devRestricted(u, side);
 }
 
 /** Pages whose side is the person's role in ONE contract (developer or tester there), not the address: the page itself decides from that role. */
@@ -36,6 +35,7 @@ const byRole = (p: string) => p.startsWith("/app/chat/") || p.startsWith("/app/c
 export function closedForSuspended(path: string, u: Who, side?: string | null, role?: "developer" | "tester") {
   const p = clean(path);
   if (!(p === "/app" || p.startsWith("/app/")) || openForRestricted(p)) return false;
-  if (!u.suspendedAt && !role && byRole(p) && u.isDeveloper && u.isTester) return false;
+  // A chat or call of an account with both sides: the page knows the role and decides, unless both sides are restricted.
+  if (!role && byRole(p) && u.isDeveloper && u.isTester) return restrictedOn(u, "developer") && restrictedOn(u, "tester");
   return restrictedOn(u, role ?? side);
 }

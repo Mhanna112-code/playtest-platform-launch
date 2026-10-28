@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { splitFee } from "@/lib/rules";
 import { getStripe, stripeOn } from "./stripe";
+import { isChoiceKey } from "./pressKeys";
 
 // (Owner, Oct 30, batch 15 section 9) Payments stuck "in progress". A Pay (or Pay more, or a tester's Charge) reserves its piece and a `pending` Payment, then charges
 // Stripe. If the answer from Stripe was lost (the server stopped, or the connection dropped) the payment stays pending. After 15 minutes it is checked: by the daily job,
@@ -21,16 +22,21 @@ export const PAYMENT_CHECKING = "We didn't hear back from the payment service, s
 
 type PieceKey = { submissionId?: string | null; callId?: string | null };
 
-/** The key a new press on this piece charges with: an interrupted press's key from the last 24 hours, else the press's own. */
+/**
+ * The key a new press on this piece charges with: an interrupted press's key from the last 24 hours, else the press's own. The interrupted row hands its key over (its
+ * payKey is cleared: (kind, payKey) is unique, batch 15 section 41, M2).
+ */
 export async function pressKeyFor(where: PieceKey, kinds: string[], fresh: string, tx: Prisma.TransactionClient = db, now = new Date()) {
   const key = where.submissionId ? { submissionId: where.submissionId } : { callId: where.callId ?? "" };
   const prev = await tx.payment.findFirst({ where: { ...key, kind: { in: kinds }, status: "failed", failure: INTERRUPTED, payKey: { not: null }, createdAt: { gt: new Date(now.getTime() - REUSE_MS) } }, orderBy: { createdAt: "desc" } });
-  return prev?.payKey ?? fresh;
+  if (!prev?.payKey) return fresh;
+  await tx.payment.update({ where: { id: prev.id }, data: { payKey: null } });
+  return prev.payKey;
 }
 
 /** The PaymentIntent a press created, by its metadata payKey (Stripe's search; the fake keeps its own list). */
 export async function findPaymentIntent(payKey: string): Promise<{ id: string; status: string; transfer_data?: { destination?: unknown } | null } | null> {
-  if (!stripeOn() || !/^[\w-]{1,120}$/.test(payKey)) return null;
+  if (!stripeOn() || !/^[\w:-]{1,200}$/.test(payKey)) return null;
   const r = await getStripe().paymentIntents.search({ query: `metadata['payKey']:'${payKey}'`, limit: 1 });
   return (r.data[0] as unknown as { id: string; status: string; transfer_data?: { destination?: unknown } | null }) ?? null;
 }
@@ -48,9 +54,9 @@ export async function recoverPayment(paymentId: string, now = new Date()) {
   const pi = p.payKey ? await findPaymentIntent(p.payKey) : null;
   if (pi?.status === "succeeded") {
     const tester = await db.user.findUniqueOrThrow({ where: { id: p.testerId } });
-    const result = { status: "charged", stripePaymentIntentId: pi.id, ...splitFee(p.amountCents), transferStatus: pi.transfer_data?.destination ? "sent" : tester.suspendedAt ? "held" : "waiting" };
+    const result = { status: "charged", stripePaymentIntentId: pi.id, ...splitFee(p.amountCents), transferStatus: pi.transfer_data?.destination ? "sent" : tester.testerSuspendedAt ? "held" : "waiting" };
     if (p.kind === "extra") await (await import("./payments")).finishExtraPay(p.id, result);
-    else if (p.payKey?.startsWith("choice-")) await (await import("./holds")).finishChoicePay(p.id, result);
+    else if (isChoiceKey(p.payKey)) await (await import("./holds")).finishChoicePay(p.id, result);
     else await (await import("./payments")).finishReviewPay(p.id, result);
     return "finished" as const;
   }

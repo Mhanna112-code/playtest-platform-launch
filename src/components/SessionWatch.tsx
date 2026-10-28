@@ -67,7 +67,7 @@ export function SessionWatch({ userId, restriction }: { userId: string; name?: s
   useEffect(() => {
     let alive = true;
     const check = async () => {
-      let s: { state: string; userId?: string; name?: string; suspended?: boolean; held?: boolean; holdReason?: string; developer?: boolean; tester?: boolean; side?: string };
+      let s: { state: string; userId?: string; name?: string; suspended?: boolean; testerSuspended?: boolean; held?: boolean; holdReason?: string; developer?: boolean; tester?: boolean; side?: string };
       try {
         s = await (await fetch("/api/account/status", { cache: "no-store" })).json();
       } catch {
@@ -84,7 +84,7 @@ export function SessionWatch({ userId, restriction }: { userId: string; name?: s
       else if (s.userId && s.userId !== userId) window.location.replace(landingOfNewSignIn()); // a different account signed in elsewhere: switch to it
       else {
         // The restriction on THIS page's side (a payment hold only restricts the developer side).
-        const who = { isDeveloper: !!s.developer, isTester: !!s.tester, side: s.side, suspendedAt: s.suspended ? "x" : null, holdStartedAt: s.held ? "x" : null, holdReason: s.holdReason };
+        const who = { isDeveloper: !!s.developer, isTester: !!s.tester, side: s.side, devSuspendedAt: s.suspended ? "x" : null, testerSuspendedAt: s.testerSuspended ? "x" : null, holdStartedAt: s.held ? "x" : null, holdReason: s.holdReason };
         const now = restrictionKey(who, sideFor(who, pathRef.current));
         if (now !== restrictionRef.current) {
           const before = restrictionRef.current;

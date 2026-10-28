@@ -42,7 +42,8 @@ export async function adminDailyEmails(now = new Date()) {
   // (Batch 10) The per-admin lists are read in a few queries for all admins at once (the daily job's run time no longer grows with each admin's own queries).
   const ids = admins.map((a) => a.id);
   const states = new Map((await db.appState.findMany({ where: { key: { in: ids.map((id) => `adminDaily:${id}`) } } })).map((x) => [x.key, x.value]));
-  const suspended = await db.user.findMany({ where: { suspendedById: { in: ids }, suspendedAt: { not: null }, deletedAt: null } });
+  // (Batch 15 section 16) The developer side is the one with paused tests.
+  const suspended = await db.user.findMany({ where: { devSuspendedById: { in: ids }, devSuspendedAt: { not: null }, deletedAt: null } });
   const suspendedTests = await db.test.findMany({ where: { developerId: { in: suspended.map((u) => u.id) }, status: { in: ["open", "closed"] } }, include: { developer: true } });
   const pausedByAdmins = await db.test.findMany({ where: { adminPausedById: { in: ids }, adminPausedAt: { not: null }, status: { in: ["open", "closed"] } }, include: { developer: true } });
   const done: string[] = [];
@@ -54,11 +55,11 @@ export async function adminDailyEmails(now = new Date()) {
     const items: string[] = [...openDisputes.filter((d) => d.createdAt > since).map(disputeLine), ...shared];
 
     // The accounts THIS admin suspended that still have paused tests.
-    for (const u of suspended.filter((x) => x.suspendedById === a.id)) {
+    for (const u of suspended.filter((x) => x.devSuspendedById === a.id)) {
       const tests = suspendedTests.filter((t) => t.developerId === u.id);
       const paused = tests.map((t) => ({ t, info: pauseClosesAt(t.developer, t) })).filter((x) => x.info);
       if (!paused.length) continue;
-      items.push(`You suspended ${displayName(u)} (${u.email}) on ${fmtDateTime(u.suspendedAt!)}: ${url(`/app/${u.isDeveloper ? "developers" : "testers"}/${u.id}`)}`);
+      items.push(`You suspended ${displayName(u)} (${u.email}) (developer side) on ${fmtDateTime(u.devSuspendedAt!)}: ${url(`/app/developers/${u.id}`)}`);
       for (const { t, info } of paused) items.push(`   paused test “${t.title}”: ${pauseCountdownLine(info!.at, info!.causes)} (${fmtDateTime(info!.at)}) ${url(`/app/find/${t.id}`)}`);
     }
     // The tests THIS admin paused that are still paused.

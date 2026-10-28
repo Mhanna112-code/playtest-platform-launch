@@ -152,7 +152,7 @@ describe("notification schedule", { timeout: 120_000 }, () => {
     const mails = await adminMails(adm.user.email);
     expect(mails.length).toBeGreaterThanOrEqual(1);
     const text = mails[0].text;
-    expect(text).toContain(`You suspended Nora Lane (${a.dev.user.email})`);
+    expect(text).toContain(`You suspended Nora Lane (${a.dev.user.email}) (developer side)`);
     expect(text).toMatch(/paused test “Harbor Run”: Closes on [A-Z][a-z]{2} \d{1,2} unless your account is cleared/);
     expect(text).toContain(`/app/find/${a.testId}`);
     expect(text).toMatch(/You paused “Harbor Run” on .+: Closes on .+ unless the team lifts the pause/);

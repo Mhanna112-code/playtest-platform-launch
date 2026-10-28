@@ -10,7 +10,8 @@ import { DeleteAccount } from "./DeleteAccount";
 import { MyExcerpts } from "@/components/ExcerptList";
 import { myExcerpts } from "@/lib/server/excerpts";
 import { PasswordForm } from "../profile/PasswordForm";
-import { devRestricted } from "@/lib/restricted";
+import { SignOutAll } from "@/components/SignOut";
+import { restrictedOn } from "@/lib/closedPages";
 import { devDeleteLines, testerDeleteFacts, testerDeleteLines } from "@/lib/server/deletion";
 
 export const metadata = { title: "Account · Playtest" };
@@ -25,7 +26,7 @@ export default async function AccountPage() {
   const dev = hasSide(u, "developer"), tester = hasSide(u, "tester");
   const side = sideFor(u, "/app/account");
   // (Owner, Oct 27) The profile editor is closed while the account is suspended or (as a developer) on hold; the other settings stay.
-  const profileClosed = !!u.suspendedAt || (dev && devRestricted(u, side));
+  const profileClosed = restrictedOn(u, side);
   const sides = [
     { side: "developer" as const, has: dev, title: "Developer", what: "Post tests and pay testers for feedback.", addLabel: "Start posting tests too" },
     { side: "tester" as const, has: tester, title: "Tester", what: "Test other people's products and get paid.", addLabel: "Start testing too" },
@@ -82,6 +83,12 @@ export default async function AccountPage() {
       {/* (Owner, Oct 29, batch 13) Settings lists the tester's excerpts with Remove; it stays open while suspended, so Remove works then too. */}
       {u.isTester && <MyExcerpts items={await myExcerpts(u.id)} />}
       <section id="password" className="scroll-mt-24"><PasswordForm hasPassword={!!u.passwordHash} /></section>
+      {/* (Batch 15 section 41, L6) */}
+      <section className="card space-y-2" data-sign-out-all="">
+        <h2 className="font-semibold text-white">Signed-in devices</h2>
+        <p className="text-sm text-slate-300">Signs this account out everywhere, this device included.</p>
+        <SignOutAll />
+      </section>
       {/* (Owner, Oct 28) A tester's pop-up carries their real numbers; a developer's blockers (DEFAULT) are listed with links. */}
       <DeleteAccount testerLines={tester ? testerDeleteLines(await testerDeleteFacts(u.id)) : undefined} devLines={dev ? await devDeleteLines(u.id) : []} subscriptionLine={subscribed(u) ? DELETE_ENDS_SUBSCRIPTION : ""} />
     </div>

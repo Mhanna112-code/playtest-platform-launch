@@ -1,0 +1,4 @@
+<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />
+ ✓ tests/batch15-security.test.ts > M4: outages on the server's clock > an alert more than 10 minutes off is refused; the key works in a header; over 24 hours waits for an admin 323ms
+ Test Files  1 passed (1)
+      Tests  1 passed | 21 skipped (22)

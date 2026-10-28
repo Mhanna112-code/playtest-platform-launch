@@ -1,0 +1,5 @@
+<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />
+ ✓ tests/batch15-security.test.ts > M5 and M6: R2 types and clean-up > the PUT signs content-type; the GET serves the stored type and disposition 4ms
+ ✓ tests/batch15-security.test.ts > M5 and M6: R2 types and clean-up > removing a recording deletes its file; the daily purge takes unfinished uploads and files with no row; 3 GB a day 391ms
+ Test Files  1 passed (1)
+      Tests  2 passed | 20 skipped (22)

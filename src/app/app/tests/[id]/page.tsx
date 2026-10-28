@@ -82,7 +82,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Batch 14 section 6) The read-only Access keys notice (only when the test uses keys).
   const keysView = await keyBoxes(id);
   // (Owner, Oct 26) A suspended developer sees only Cancel call, End early and Stop the test here; every other button is hidden.
-  const restricted = !!u.suspendedAt;
+  const restricted = !!u.devSuspendedAt;
   const keysEver = await db.accessKey.count({ where: { testId: id } });
   const keysLeft = keysEver > 0 ? await db.accessKey.count({ where: { testId: id, status: "free" } }) : null;
   const working = t.contracts.filter((c) => c.status === "working");
@@ -431,7 +431,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       )}
       </TestersJoined>
       {cbSteps && <ChargebackSteps steps={cbSteps} />}
-      {(u.holdStartedAt || (owedList.length > 0 && !u.suspendedAt)) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} chargeback={!!cbSteps} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />}
+      {(u.holdStartedAt || (owedList.length > 0 && !u.devSuspendedAt)) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} chargeback={!!cbSteps} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />}
       {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date())}</p>}
       <DevCallPanel
         testId={t.id}

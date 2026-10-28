@@ -2,7 +2,8 @@ import type Stripe from "stripe";
 import { db } from "@/lib/db";
 import { HttpError } from "./http";
 import { notify } from "./notify";
-import { chargePlatform, getStripe, stripeOn, type NeedsAction } from "./stripe";
+import { PAYMENTS_PROBLEM, chargePlatform, getStripe, isCardError, stripeOn, type NeedsAction } from "./stripe";
+import { serverKey } from "./pressKeys";
 import { receipt } from "./payments";
 import { recordEvent } from "./tests";
 import {
@@ -38,7 +39,7 @@ export async function launchState(now = new Date()): Promise<Launch> {
   return launchFrom(process.env.FREE_UNTIL?.trim() || null, now);
 }
 
-type SubRow = Parameters<typeof subscribed>[0] & { id: string; holdStartedAt?: Date | null; suspendedAt?: Date | null };
+type SubRow = Parameters<typeof subscribed>[0] & { id: string; holdStartedAt?: Date | null; devSuspendedAt?: Date | null };
 /** The perks: a subscription, or everything free during launch. */
 export async function hasPerks(u: SubRow, now = new Date()) {
   return subscribed(u, now) || (await launchState(now)).free;
@@ -91,7 +92,7 @@ export async function subscribe(dev: Dev, now = new Date()) {
   const u = await userOf(dev.id);
   if (!u.isDeveloper) throw new HttpError(403, "not_developer", "Only developers subscribe.");
   // (Section 8 item 3) Refused during a hold or a suspension.
-  if (u.holdStartedAt || u.suspendedAt) throw new HttpError(409, "restricted", SUBSCRIBE_WAITS);
+  if (u.holdStartedAt || u.devSuspendedAt) throw new HttpError(409, "restricted", SUBSCRIBE_WAITS);
   if (subscribed(u, now)) throw new HttpError(409, "already", u.subscriptionCanceling ? "Press Keep my subscription to keep it." : "You're already subscribed.");
   const launch = await launchState(now);
   if (launch.free && !launch.until) throw new HttpError(409, "free", "Everything is free during launch: there's nothing to subscribe to yet.");
@@ -107,7 +108,7 @@ export async function subscribe(dev: Dev, now = new Date()) {
         items: [{ price_data: { currency: "usd", product: await stripeProduct(stripe), unit_amount: SUBSCRIPTION_CENTS, recurring: { interval: "month" } } }],
         expand: ["latest_invoice.payment_intent"],
         ...(startsCharging > now ? { trial_end: Math.floor(startsCharging.getTime() / 1000) } : {}),
-      }, { idempotencyKey: `sub-${u.id}-${now.toISOString().slice(0, 10)}` });
+      }, { idempotencyKey: serverKey("sub", u.id, now.toISOString().slice(0, 10)) });
       id = s.id;
       const pi = (s.latest_invoice as unknown as { payment_intent?: { id: string; status: string; client_secret: string } } | null)?.payment_intent;
       if (s.status === "incomplete" && pi?.status === "requires_action") {
@@ -119,11 +120,17 @@ export async function subscribe(dev: Dev, now = new Date()) {
         throw new Error("incomplete");
       }
     } catch (e) {
-      throw new HttpError(402, "card_failed", "Your card was declined, so you're not subscribed. Update your card and try again.", { stripe: (e as Error).message });
+      // (Batch 15 section 41, M1) Only the card is a decline; anything else says payments have a problem (nothing charged).
+      if (e instanceof HttpError) throw e;
+      console.error("[stripe] subscribe failed:", (e as Error).message);
+      throw (e as Error).message === "incomplete" || isCardError(e) ? new HttpError(402, "card_failed", "Your card was declined, so you're not subscribed. Update your card and try again.") : new HttpError(503, "payments_problem", PAYMENTS_PROBLEM);
     }
   } else if (startsCharging <= now) {
     // (Section 4) A declined subscription payment never starts a hold. (Batch 11) The developer's own press: on-session, so the bank may ask them to confirm.
-    const r = await chargePlatform(u, SUBSCRIPTION_CENTS, `sub-${u.id}-${now.toISOString().slice(0, 10)}`, `Playtest subscription (${SUBSCRIPTION_PRICE})`, "press").catch(() => null);
+    const r = await chargePlatform(u, SUBSCRIPTION_CENTS, serverKey("sub", u.id, now.toISOString().slice(0, 10)), `Playtest subscription (${SUBSCRIPTION_PRICE})`, "press").catch((e) => {
+      if (e instanceof HttpError && e.code !== "card_failed") throw e;
+      return null;
+    });
     if (!r) throw new HttpError(402, "card_failed", "Your card was declined, so you're not subscribed. Update your card and try again.");
     if (r.status === "requires_action") {
       const row = await db.payment.create({ data: { kind: "subscription", developerId: u.id, testerId: u.id, amountCents: SUBSCRIPTION_CENTS, feeCents: SUBSCRIPTION_CENTS, testerCents: 0, transferStatus: "none", status: "needs_action", note: "sub:manual" } });
@@ -210,7 +217,7 @@ export async function pauseBilling(devId: string, now = new Date()) {
 /** (Section 5) The last hold or suspension lifted: the paid days left resume (the next renewal moves later by the paused time). */
 export async function resumeBilling(devId: string, now = new Date()) {
   const u = await userOf(devId);
-  if (!u.subscriptionPausedAt || u.holdStartedAt || u.suspendedAt) return false;
+  if (!u.subscriptionPausedAt || u.holdStartedAt || u.devSuspendedAt) return false;
   const gap = Math.max(0, now.getTime() - u.subscriptionPausedAt.getTime());
   const later = (d: Date | null) => (d ? new Date(d.getTime() + gap) : d);
   const renews = later(u.subscriptionRenewsAt);
@@ -262,7 +269,13 @@ export async function renewSubscriptions(now = new Date(), only?: string[]) {
     }
     // (Batch 11) A renewal the bank wants confirmed waits (3 days) instead of being charged again.
     if (await db.payment.count({ where: { developerId: u.id, kind: "subscription", status: "needs_confirmation" } })) continue;
-    const r = await chargePlatform(u, SUBSCRIPTION_CENTS, `subrenew-${u.id}-${now.toISOString().slice(0, 10)}`, `Playtest subscription (${SUBSCRIPTION_PRICE})`).catch(() => null);
+    // (Batch 15 section 41, M1) A renewal that fails for any reason but the card is tried again tomorrow (it never makes the subscription past due).
+    let problem = false;
+    const r = await chargePlatform(u, SUBSCRIPTION_CENTS, serverKey("subrenew", u.id, now.toISOString().slice(0, 10)), `Playtest subscription (${SUBSCRIPTION_PRICE})`).catch((e) => {
+      problem = !(e instanceof HttpError && e.code === "card_failed");
+      return null;
+    });
+    if (!r && problem) continue;
     if (r?.status === "requires_action") {
       const row = await db.payment.create({ data: { kind: "subscription", developerId: u.id, testerId: u.id, amountCents: SUBSCRIPTION_CENTS, feeCents: SUBSCRIPTION_CENTS, testerCents: 0, transferStatus: "none", status: "needs_confirmation" } });
       await (await import("./confirm")).awayAction(row.id, r as NeedsAction);

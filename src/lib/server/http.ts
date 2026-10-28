@@ -55,3 +55,14 @@ export async function handle(fn: () => Promise<Response>): Promise<Response> {
     return fail(500, "server", "Something went wrong on our side. Try again in a moment.");
   }
 }
+
+/** (Batch 15 section 41, L5) A plain form POST from this site's own page (its Origin, when the browser sends one, is this site). */
+export function sameOriginForm(req: Request, base: string) {
+  const origin = req.headers.get("origin");
+  if (!origin) return true; // older browsers; the SameSite=Lax cookie still keeps other sites' POSTs signed out
+  try {
+    return new URL(origin).host === new URL(base).host || sameOrigin(req, origin);
+  } catch {
+    return false;
+  }
+}

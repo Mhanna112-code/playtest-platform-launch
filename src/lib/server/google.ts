@@ -102,7 +102,16 @@ export async function finishGoogle(req: Request) {
   if (claims.email_verified !== true && claims.email_verified !== "true") throw new GoogleError("unverified");
   if (!isEmail(email)) throw new GoogleError("unverified");
 
-  const user = await db.user.upsert({ where: { email }, update: {}, create: { email, emailVerifiedAt: new Date() } });
+  // (Batch 15 section 41, H2) Google proves the address. An existing account that never confirmed it may have been made by someone else first (a pre-hijack): before
+  // Google signs into it, its password is cleared, every session ends, and any payout account is dropped; then the email counts as confirmed.
+  const existing = await db.user.findUnique({ where: { email } });
+  if (existing && !existing.emailVerifiedAt) {
+    await db.$transaction([
+      db.session.deleteMany({ where: { userId: existing.id } }),
+      db.user.update({ where: { id: existing.id }, data: { passwordHash: "", stripeAccountId: null, payoutsReady: false, payoutProblemAt: null, payoutRemindedAt: null, emailVerifiedAt: new Date() } }),
+    ]);
+  }
+  const user = existing ? await db.user.findUniqueOrThrow({ where: { id: existing.id } }) : await db.user.create({ data: { email, emailVerifiedAt: new Date() } });
   const session = await createSession(user.id);
   return { user, cookie: sessionCookie(session.token, session.expiresAt) };
 }

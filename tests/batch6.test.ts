@@ -36,7 +36,7 @@ const admin = async () => {
 const adm = (action: string, cookie: string, body: Record<string, unknown>) => adminPOST(req(`/api/admin/${action}`, { cookie, body }), { params: Promise.resolve({ action }) }).then(json);
 const edit = async (testId: string, cookie: string, fields: Record<string, unknown>) =>
   act(testId, "edit", cookie, { version: (await db.test.findUniqueOrThrow({ where: { id: testId } })).version, fields });
-const decline = () => setStripeForTests({ paymentIntents: { create: async () => { throw new Error("declined"); } } } as unknown as Stripe);
+const decline = () => setStripeForTests({ paymentIntents: { create: async () => { throw Object.assign(new Error("declined"), { type: "StripeCardError" }); } } } as unknown as Stripe);
 const withCard = (userId: string) => db.user.update({ where: { id: userId }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
 afterEach(() => setStripeForTests(null));
 
@@ -189,19 +189,19 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
   it("the paused notice says what still works (never why); the DEFAULTs live in one place", () => {
     // (Batch 10) The banner's wording: what works now, and what comes back when it resumes.
     expect(R.PAUSED_FOR_TESTERS).toContain("For now you can save drafts of your parts, charge or let go of work left unreviewed, dispute, rate, leave the test, and cancel booked calls.");
-    expect(R.PAUSED_FOR_TESTERS).toContain("Sending work, requesting calls and chat come back when it resumes.");
-    expect(R.PAUSED_FOR_TESTERS).not.toMatch(/hold|suspend|fail|chargeback/i);
-    expect(R.PAUSE_DEFAULTS).toEqual({ draftsEditable: true, chatClosed: true, teamPauseSameRules: true, shiftDeadlines: true });
+    expect(R.PAUSED_FOR_TESTERS).toContain("Sending work and requesting calls come back when it resumes."); // (batch 15 section 1: chat isn't paused by a paused test)
+    expect(R.PAUSED_FOR_TESTERS).not.toMatch(/hold|suspend|fail|chargeback|chat/i);
+    expect(R.PAUSE_DEFAULTS).toEqual({ draftsEditable: true, teamPauseSameRules: true, shiftDeadlines: true });
     expect(R.testerPaused({}, { adminPausedAt: new Date() })).toBe(true);
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("{pausedBanner}");
   });
 
   for (const kind of ["hold", "chargeback", "suspension", "team"] as const) {
-    it(`(${kind}) Send is refused, drafts still upload, chat is paused both ways; dispute, rate and leave still work`, async () => {
+    it(`(${kind}) Send is refused, drafts still upload; (batch 15) chat pauses only for a restricted person; dispute, rate and leave still work`, async () => {
       const { dev, testId, tester, sessionId } = await chargeOpen({ recordingCents: "5.00" });
       if (kind === "hold") await startHold(dev.user.id, "unpaid");
       if (kind === "chargeback") await startHold(dev.user.id, "chargeback");
-      if (kind === "suspension") await db.user.update({ where: { id: dev.user.id }, data: { suspendedAt: new Date() } });
+      if (kind === "suspension") await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date() } });
       if (kind === "team") await db.test.update({ where: { id: testId }, data: { adminPausedAt: new Date() } });
       const w = await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"] });
       expect(w.status).toBe(409);
@@ -210,14 +210,16 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
       // Drafts: a recording can still be uploaded (sent later).
       expect((await sact(sessionId, "recording-start", tester.cookie, { size: 1000, contentType: "video/mp4", filename: "a.mp4" })).status).toBe(200);
       const m = await sact(sessionId, "message", tester.cookie, { body: "Hello?" });
-      expect(m.body.error.message).toBe("Chat is paused while the test is paused.");
       if (kind === "team") {
-        // The developer's side is closed too (their presses on a team-paused test are refused before the chat's own check).
-        expect((await act(testId, "message", dev.cookie, { contractId: sessionId, body: "Hi" })).status).toBe(409);
-        const { sendMessage } = await import("@/lib/server/messages");
-        await expect(sendMessage(dev.user, sessionId, "Hi")).rejects.toThrow("Chat is paused while the test is paused.");
+        // (Batch 15 section 1) The team pausing a test never closes the chat, both ways.
+        expect(m.status).toBe(200);
+        expect((await act(testId, "message", dev.cookie, { contractId: sessionId, body: "Hi" })).status).toBe(200);
+      } else {
+        // The developer is restricted: the tester's Send is turned back neutrally (never why).
+        expect(m.body.error.message).toBe(R.CHAT_NOT_SENT);
+        expect(m.body.error.message).not.toMatch(/hold|suspend|fail/i);
       }
-      expect(src("app/app/chat/[id]/page.tsx")).toContain("closedNote={!blocked && paused ? CHAT_PAUSED : undefined}");
+      expect(src("app/app/chat/[id]/page.tsx")).toContain("closedNote={!blocked && paused ? CHAT_PAUSED_NOTE : undefined}");
       // Leave still works.
       expect((await sact(sessionId, "leave", tester.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
     });
@@ -259,12 +261,12 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
 
   it("Charge during an admin suspension with no hold is charged at once; a declined card starts a payment hold and the amount is owed", async () => {
     const one = await chargeOpen();
-    await db.user.update({ where: { id: one.dev.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: one.dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     const c = await sact(one.sessionId, "choose", one.tester.cookie, { submissionId: one.sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true });
     expect(c.status).toBe(200);
     expect(["charged", "not_set_up"]).toContain(c.body.status);
     const two = await chargeOpen();
-    await db.user.update({ where: { id: two.dev.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: two.dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     await withCard(two.dev.user.id);
     decline();
     const d = await sact(two.sessionId, "choose", two.tester.cookie, { submissionId: two.sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true });
@@ -299,12 +301,12 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
     expect((await db.payment.findFirstOrThrow({ where: { disputeId: held.d.id } })).status).not.toBe("owed");
 
     const susp = await disputed();
-    await db.user.update({ where: { id: susp.dev.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: susp.dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     await decideDispute(susp.a, susp.d.id, { total: "10.00" });
     expect(["charged", "not_set_up"]).toContain((await db.payment.findFirstOrThrow({ where: { disputeId: susp.d.id } })).status);
 
     const declined = await disputed();
-    await db.user.update({ where: { id: declined.dev.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: declined.dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     await withCard(declined.dev.user.id);
     decline();
     await decideDispute(declined.a, declined.d.id, { total: "10.00" });
@@ -337,7 +339,7 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
     const due0 = (await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt;
     const ou0 = (await db.test.findUniqueOrThrow({ where: { id: testId } })).openUntil!;
     // Suspended 5 days ago, then a hold 3 days ago; reinstated now (the hold stays), then the hold is lifted.
-    await db.user.update({ where: { id: dev.user.id }, data: { suspendedAt: new Date(Date.now() - 5 * DAY), holdStartedAt: new Date(Date.now() - 3 * DAY), holdReason: "unpaid", holdCount: 1 } });
+    await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(Date.now() - 5 * DAY), holdStartedAt: new Date(Date.now() - 3 * DAY), holdReason: "unpaid", holdCount: 1 } });
     await reinstateAccount(dev.user.id);
     const days = (a: Date, b: Date) => Math.round((a.getTime() - b.getTime()) / DAY);
     expect(days((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt, due0)).toBe(2);

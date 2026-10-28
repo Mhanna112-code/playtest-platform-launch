@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { devDeletedLine, REVIEW_DAYS, NOT_LISTED, CHAT_PAUSED, byTesterChoice, PAUSE_DEFAULTS, chargedDelayedLine, disputeLimitText, testerPaused } from "@/lib/rules";
+import { devDeletedLine, REVIEW_DAYS, NOT_LISTED, byTesterChoice, PAUSE_DEFAULTS, chargedDelayedLine, disputeLimitText, testerPaused } from "@/lib/rules";
 import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, MessagesSquare, Users, XCircle } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
@@ -74,7 +74,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const prevSets = prevSetsOf(c.prevSets);
   // (Batch 13) "Show an excerpt on your profile": paid written answers, never while the test has an NDA, one pending request per part.
   const excerptPending = written ? (await db.excerpt.count({ where: { submissionId: written.id, status: "pending" } })) > 0 : false;
-  const excerptPicks = written && !c.test.ndaText && !excerptPending && !u.suspendedAt ? await excerptChoices(written) : [];
+  const excerptPicks = written && !c.test.ndaText && !excerptPending && !u.testerSuspendedAt ? await excerptChoices(written) : [];
   const now = new Date();
   const seenAt = now.toISOString();
   const offer = await openOffer(c.id);
@@ -108,11 +108,11 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   // Live calls: the request panel shows only when there's something to do or see.
   const paused = testPaused(c.test.developer, c.test);
   // (Owner, Oct 28 afternoon) The paused-test rules (a hold, a chargeback hold or a suspension of the developer; the team's pause too by default): no sending (drafts still
-  // saved), no chat; Charge / Let it go, disputes, rating, leaving and cancelling calls carry on. Testers read only "paused".
+  // saved); Charge / Let it go, disputes, rating, leaving and cancelling calls carry on. Testers read only "paused". (Batch 15 section 1) Chat stays open: it pauses
+  // only while a person is restricted, and the chat page itself says so.
   const rulesPaused = testerPaused(c.test.developer, c.test);
-  const chatPaused = rulesPaused && PAUSE_DEFAULTS.chatClosed;
   const draftsShown = !rulesPaused || PAUSE_DEFAULTS.draftsEditable;
-  const meOff = !!u.suspendedAt;
+  const meOff = !!u.testerSuspendedAt;
   // (Owner, Oct 28 afternoon) Calls can be requested whether or not a live call is a listed part (one that isn't says so: its pay is up to the developer).
   const canRequestCall = !refusal && !blockedPair && !paused;
   const listedCall = callListed(c.test, c);
@@ -160,7 +160,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
     cancelCalls: aheadCalls.length > 0 && !blockedPair && !meOff,
     send: !refusal && !meOff && unpaidPart,
     requestCalls: !refusal && !meOff && !blockedPair && c.test.status !== "stopped",
-    chat: chatPaused && !meOff && !blockedPair,
+
     deadline: c.status === "working", // (batch 11) a working tester's deadline moves with the pause
   }) : "";
   // The full app's session page: one centred column; the header card (title, by, badges, Chat, Open the product), then a
@@ -189,7 +189,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         <div className="flex flex-wrap items-start gap-4">
           <div className="min-w-[12rem] flex-1">
             <p className="text-sm text-slate-400">by{" "}
-              <PersonHover name={dev} href={`/app/developers/${c.test.developerId}`} summary={[devRating || "No ratings yet"]} chat={!meOff && !chatPaused ? <ChatWithButton contractId={c.id} name={dev} /> : undefined} />
+              <PersonHover name={dev} href={`/app/developers/${c.test.developerId}`} summary={[devRating || "No ratings yet"]} chat={!meOff ? <ChatWithButton contractId={c.id} name={dev} /> : undefined} />
               {" "}· joined {fmtDate(c.joinedAt)}</p>
             <div className="mt-1 flex flex-wrap gap-2">
               {c.test.status === "stopped" && <span className="badge border-sky-300/40 text-sky-200"><span className="h-2 w-2 rounded-sm bg-sky-300" /> Stopped</span>}
@@ -201,8 +201,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
               {c.test.mature && <span className="badge border-rose-300/40 text-rose-200" title={c.test.matureWhy}>Mature (18+)</span>}
             </div>
           </div>
-          {!meOff && chatPaused && <p className="note" data-chat-paused="">{CHAT_PAUSED}</p>}
-          {!meOff && !chatPaused && <a href={`/app/chat/${c.id}`} className="btn-secondary relative min-w-0 max-w-full no-underline hover:no-underline"><MessagesSquare className="h-4 w-4 shrink-0" /> <span className="truncate">Chat with {dev}</span>
+          {!meOff && <a href={`/app/chat/${c.id}`} className="btn-secondary relative min-w-0 max-w-full no-underline hover:no-underline"><MessagesSquare className="h-4 w-4 shrink-0" /> <span className="truncate">Chat with {dev}</span>
             {unread > 0 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950" aria-label={`${unread} unread`}>{unread}</span>}
           </a>}
         </div>

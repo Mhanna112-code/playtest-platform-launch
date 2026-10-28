@@ -22,9 +22,9 @@ describe("chat reach and notifications", () => {
     const { dev, testId } = await setup();
     const c = await joined(testId, "Cara Diaz");
     expect((await act(testId, "message", c.tester.cookie, { testerId: c.tester.user.id, body: "Where do I start?" })).status).toBe(200);
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: "Cara Diaz · Harbor Run: Where do I start?" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: "Cara Diaz sent you a message on “Harbor Run”" } })).toBe(1); // (batch 15 section 20: never the message itself)
     expect((await act(testId, "message", dev.cookie, { contractId: c.sessionId, body: "Open the build" })).status).toBe(200);
-    expect(await db.notification.count({ where: { userId: c.tester.user.id, text: "Nora Lane · Harbor Run: Open the build" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: c.tester.user.id, text: "Nora Lane sent you a message on “Harbor Run”" } })).toBe(1);
   });
 
   it("past participants can still chat (plain bell); never after a block", async () => {

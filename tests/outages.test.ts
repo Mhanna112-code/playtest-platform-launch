@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { heartbeat, outageLine } from "@/lib/server/outages";
+import { heartbeat, outageLine, recordAlert } from "@/lib/server/outages";
 import { GET as healthGET } from "@/app/api/health/route";
 import { POST as alertPOST } from "@/app/api/health/alert/route";
 import { bookCall, joined, sact, setup } from "./fixtures";
@@ -40,15 +40,16 @@ describe("outages", () => {
       c: await db.contract.findUniqueOrThrow({ where: { id: sessionId } }),
       t: await db.test.findUniqueOrThrow({ where: { id: testId } }),
     };
-    // (Batch 15 section 10) The uptime service's alerts: down now, up 2 h 30 min later (the outage).
+    // (Batch 15 sections 10 and 41) The uptime service's alerts, on the server's clock: down now, up 2 h 30 min later (the outage).
     const start = new Date(Math.floor(Date.now() / 1000) * 1000);
     await db.appState.deleteMany({ where: { key: "outage-down" } });
     expect((await alert(1, start)).status).toBe(200);
+    await db.appState.update({ where: { key: "outage-down" }, data: { value: start.toISOString() } });
     const end = new Date(start.getTime() + 2.5 * H);
-    const r = await (await alert(2, end)).json();
-    expect(r.outage).not.toBeNull();
-    expect(r.outage.ms).toBe(2.5 * H);
-    expect((await (await alert(2, new Date(end.getTime() + MIN))).json()).outage).toBeNull(); // an up with no down records nothing new
+    const o = await recordAlert("up", end);
+    expect(o).not.toBeNull();
+    expect(o!.ms).toBe(2.5 * H);
+    expect(await recordAlert("up", new Date(end.getTime() + MIN))).toBeNull(); // an up with no down records nothing new
     expect(await db.outage.count()).toBe(1);
     const L = 2.5 * H;
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
@@ -119,16 +120,16 @@ describe("outages", () => {
     expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt.getTime()).toBe(due0);
     // A short down/up pair (10 minutes) records nothing either.
     const t0 = new Date(Math.floor(Date.now() / 1000) * 1000);
-    await alert(1, t0);
-    expect((await (await alert(2, new Date(t0.getTime() + 10 * MIN))).json()).outage).toBeNull();
+    await recordAlert("down", t0);
+    expect(await recordAlert("up", new Date(t0.getTime() + 10 * MIN))).toBeNull();
     expect(await db.outage.count()).toBe(0);
-    // A wrong key is refused.
+    // A wrong key is refused; the key also works in a header.
     expect((await alert(1, t0, "wrong")).status).toBe(403);
     // Down, then up 40 minutes later: one outage, and the tester's deadline moved 40 minutes.
-    await alert(1, t0);
-    await alert(1, new Date(t0.getTime() + 5 * MIN)); // a repeated down keeps the first start
-    const r = await (await alert(2, new Date(t0.getTime() + 40 * MIN))).json();
-    expect(r.outage.ms).toBe(40 * MIN);
+    await recordAlert("down", t0);
+    await recordAlert("down", new Date(t0.getTime() + 5 * MIN)); // a repeated down keeps the first start
+    const r = { outage: await recordAlert("up", new Date(t0.getTime() + 40 * MIN)) };
+    expect(r.outage!.ms).toBe(40 * MIN);
     expect(await db.outage.count()).toBe(1);
     expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt.getTime() - due0).toBe(40 * MIN);
   }, 90_000);

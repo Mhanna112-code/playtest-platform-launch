@@ -1,0 +1,5 @@
+<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />
+ ✓ tests/batch15-security.test.ts > L2: rate limits > forgot password: 10 per network an hour; waitlist: 5 92ms
+ ✓ tests/batch15-security.test.ts > L2: rate limits > chat: 30 messages a minute; kept forms: 50, the oldest dropped; clientIp uses the trusted hop 305ms
+ Test Files  1 passed (1)
+      Tests  2 passed | 20 skipped (22)

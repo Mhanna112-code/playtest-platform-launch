@@ -64,7 +64,7 @@ export async function invitable(devId: string, testId: string) {
       const inv = invites.find((i) => i.testerId === t.id);
       const n = active.find((a) => a.testerId === t.id)?._count._all ?? 0;
       // Greyed rows: already in, invited, or "Can't join this test" (suspended, or in 10 tests).
-      const grey = inTest.some((c) => c.testerId === t.id) ? "Already in this test" : inv ? `Invited ${fmt(inv.createdAt)}` : t.suspendedAt || n >= MAX_ACTIVE_TESTS ? "Can't join this test" : null;
+      const grey = inTest.some((c) => c.testerId === t.id) ? "Already in this test" : inv ? `Invited ${fmt(inv.createdAt)}` : t.testerSuspendedAt || n >= MAX_ACTIVE_TESTS ? "Can't join this test" : null;
       const mineAvg = mine.find((m) => m.rateeId === t.id)?._avg.stars ?? null;
       return {
         id: t.id, name: displayName(t), devices: t.profile?.devices ?? [], languages: t.profile?.languages ?? [], categories: t.profile?.categories ?? [],
@@ -133,7 +133,7 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
         const joined = contracts.find((c) => c.testerId === p.id && c.joinedAt > seenAt);
         if (joined) extra.push({ kind: "joined", text: `${name} joined this test, so ${pronouns(p.pronoun).subj}'s no longer in your invite list`.replace("they's", "they're"), createdAt: joined.joinedAt });
         // A ticked tester became greyed or removed since the page loaded.
-        if (p.suspendedAt && p.suspendedAt > seenAt) extra.push({ kind: "joined", text: `${name} can't be invited right now`, createdAt: p.suspendedAt });
+        if (p.testerSuspendedAt && p.testerSuspendedAt > seenAt) extra.push({ kind: "joined", text: `${name} can't be invited right now`, createdAt: p.testerSuspendedAt });
         const blockedSince = await tx.block.findFirst({ where: { createdAt: { gt: seenAt }, OR: [{ blockerId: dev.id, blockedId: p.id }, { blockerId: p.id, blockedId: dev.id }] } });
         if (blockedSince) extra.push({ kind: "joined", text: `${name} is no longer in your list`, createdAt: blockedSince.createdAt });
         const lastJoin = await tx.contract.findFirst({ where: { testerId: p.id, status: "working", joinedAt: { gt: seenAt } }, orderBy: { joinedAt: "desc" } });
@@ -162,7 +162,7 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
       if (invites.some((i) => i.testerId === p.id && i.status === "sent")) continue; // already invited
       const active = await tx.contract.count({ where: { testerId: p.id, status: "working" } });
       const blocked = (await tx.block.count({ where: { OR: [{ blockerId: dev.id, blockedId: p.id }, { blockerId: p.id, blockedId: dev.id }] } })) > 0;
-      const why = inviteTesterRefusal(name, { suspended: !!p.suspendedAt, blocked, deleted: !p.isTester, activeTests: active });
+      const why = inviteTesterRefusal(name, { suspended: !!p.testerSuspendedAt, blocked, deleted: !p.isTester, activeTests: active });
       if (why) {
         others.push(why);
         continue;
@@ -227,7 +227,7 @@ export async function reinviteAfterEdit(testId: string) {
     const active = await db.contract.count({ where: { testerId: p.id, status: "working" } });
     const blocked = (await db.block.count({ where: { OR: [{ blockerId: t.developerId, blockedId: p.id }, { blockerId: p.id, blockedId: t.developerId }] } })) > 0;
     if (!p.isTester) { skipped.push(`${name} (account closed)`); continue; }
-    if (p.suspendedAt || blocked) { skipped.push(`${name} (can't be invited right now)`); continue; }
+    if (p.testerSuspendedAt || blocked) { skipped.push(`${name} (can't be invited right now)`); continue; }
     if (active >= MAX_ACTIVE_TESTS) { skipped.push(`${name} (in ${MAX_ACTIVE_TESTS} tests)`); continue; }
     await db.invite.create({ data: { testId, testerId: p.id } });
     resent.push(name);

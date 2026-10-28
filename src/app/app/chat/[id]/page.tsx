@@ -4,9 +4,9 @@ import { ArrowLeft } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
 import { leaveIfClosed, requireOpenPage } from "@/lib/server/page-auth";
-import { chatMessages, markChatRead } from "@/lib/server/messages";
+import { chatMessages, chatRestriction, markChatRead } from "@/lib/server/messages";
 import { Chat } from "@/components/Chat";
-import { CHAT_PAUSED, PAUSE_DEFAULTS, testerPaused } from "@/lib/rules";
+import { CHAT_PAUSED_NOTE } from "@/lib/rules";
 import { AutoRefresh } from "@/components/AutoRefresh";
 
 export const metadata = { title: "Chat · Playtest" };
@@ -28,8 +28,10 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
   const deleted = c.tester.deletedAt != null || c.test.developer.deletedAt != null;
   const blocked = deleted || (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) > 0;
   const messages = await chatMessages(c.testId, c.testerId);
-  // (Owner, Oct 28 afternoon, DEFAULT PAUSE_DEFAULTS.chatClosed) Chat is closed both ways while the test is paused.
-  const paused = PAUSE_DEFAULTS.chatClosed && testerPaused(c.test.developer, c.test);
+  // (Owner, Oct 30, batch 15 section 1) Never closed because the test is paused: only while the OTHER person is restricted, and then it can still be read.
+  // (The restricted person's own chat pages are closed: leaveIfClosed above.)
+  const r = await chatRestriction(c.testId, c.testerId);
+  const paused = dev ? r.tester : r.developer;
   await markChatRead(u.id, c.testId, c.testerId);
   return (
     <div className="mx-auto max-w-3xl space-y-4">
@@ -37,7 +39,8 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
       <Link href={dev ? `/app/tests/${c.testId}#tester-${c.id}` : `/app/sessions/${c.id}`} className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white no-underline hover:no-underline"><ArrowLeft className="h-4 w-4" /> Back to {dev ? "the test" : "your session"}</Link>
       <Chat
         closed={blocked || paused}
-        closedNote={!blocked && paused ? CHAT_PAUSED : undefined}
+        closedNote={!blocked && paused ? CHAT_PAUSED_NOTE : undefined}
+        pausedNote={!blocked && paused}
         keepKey={`chat:${c.testId}:${c.testerId}`}
         path={dev ? `/api/tests/${c.testId}/message` : `/api/sessions/${c.id}/message`}
         extra={dev ? { contractId: c.id } : {}}

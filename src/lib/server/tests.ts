@@ -575,7 +575,7 @@ export async function nextRound(dev: U, testId: string, body: Record<string, unk
 export async function findTests(tester: U) {
   const tests = await db.test.findMany({
     where: {
-      status: "open", adminPausedAt: null, developerId: { notIn: [tester.id, ...(await blockPartners(tester.id))] }, developer: { suspendedAt: null, holdStartedAt: null },
+      status: "open", adminPausedAt: null, developerId: { notIn: [tester.id, ...(await blockPartners(tester.id))] }, developer: { devSuspendedAt: null, holdStartedAt: null },
       // Not joined, or LEFT (they can come back: not after rating, not if the developer ended them).
       contracts: { none: { testerId: tester.id, OR: [{ status: { not: "left" } }, { endKind: "rated" }] } },
       OR: [{ joinMode: { not: "invite" } }, { invites: { some: { testerId: tester.id, status: "sent" } } }],

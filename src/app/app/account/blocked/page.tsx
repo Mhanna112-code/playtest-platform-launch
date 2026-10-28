@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDate } from "@/lib/format";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { UnblockButton } from "@/components/BlockButton";
+import { anySuspended } from "@/lib/restricted";
 
 export const metadata = { title: "Blocked people · Playtest" };
 export const dynamic = "force-dynamic";
@@ -33,7 +34,7 @@ export default async function BlockedPage() {
                   <span className="text-xs text-slate-500">Blocked {fmtDate(b.createdAt)}</span>
                 </span>
                 {/* (Owner, Oct 27) Unblock works for a held account; a suspended one reads the list only. */}
-                {!u.suspendedAt && <UnblockButton userId={b.blockedId} />}
+                {!anySuspended(u) && <UnblockButton userId={b.blockedId} />}
               </li>
             );
           })}

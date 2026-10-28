@@ -18,7 +18,7 @@ describe("a listing change re-sends open invites", () => {
     const dee = await makeUser({ tester: true, name: "Dee Moss" });
     expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [ana.user.id, dee.user.id] })).status).toBe(200);
     const oldAna = await db.invite.findFirstOrThrow({ where: { testId, testerId: ana.user.id, status: "sent" } });
-    await db.user.update({ where: { id: dee.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: dee.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     // Spots only: nothing re-sent.
     expect((await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { spots: 5 } })).body.notReinvited).toEqual([]);
     expect(await db.invite.count({ where: { testId, status: "replaced" } })).toBe(0);

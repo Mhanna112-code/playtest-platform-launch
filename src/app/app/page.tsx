@@ -54,7 +54,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
   const side = sideFor(u, "/app");
   // (Owner, Oct 27) A suspension, a payment hold and a chargeback hold are one state for the developer's pages: ONE blue box at the very top says what happened and how to resume.
   const devOff = side === "developer" && u.isDeveloper && devRestricted(u, side);
-  const testerOff = side === "tester" && u.isTester && !!u.suspendedAt;
+  const testerOff = side === "tester" && u.isTester && !!u.testerSuspendedAt;
   const cbSteps = devOff && u.holdStartedAt ? await chargebackSteps(u.id) : null;
   // (Owner, Oct 29, batch 13) A restricted developer can't open test pages: their excerpt requests wait here, under the blue box, with Allow and Deny.
   const excerptBox = devOff ? await pendingForDeveloper(u.id) : [];
@@ -75,9 +75,11 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
           ))}
         </section>
       )}
-      {!u.suspendedAt && u.reinstatedAt && now.getTime() - u.reinstatedAt.getTime() < 3 * DAY && (
-        <p className="ok rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2" role="status" data-reinstated-box="">Your account is active again · {fmtDateTime(u.reinstatedAt)}</p>
-      )}
+      {/* (Batch 15 section 16) The side in use: its own reinstatement. */}
+      {(() => {
+        const back = side === "tester" ? (!u.testerSuspendedAt ? u.testerReinstatedAt : null) : !u.devSuspendedAt ? u.devReinstatedAt : null;
+        return back && now.getTime() - back.getTime() < 3 * DAY ? <p className="ok rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2" role="status" data-reinstated-box="">Your {u.isDeveloper && u.isTester ? `${side === "tester" ? "tester" : "developer"} account` : "account"} is active again · {fmtDateTime(back)}</p> : null;
+      })()}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm text-slate-400">Welcome back,</p>
@@ -85,7 +87,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
         </div>
         <div className="flex flex-wrap gap-2">
           {side === "developer" && !devOff && <Link className="btn" href="/app/tests/new"><PlusCircle className="h-4 w-4" /> Post a test</Link>}
-          {side === "tester" && !u.suspendedAt && <Link className="btn" href="/app/find"><Compass className="h-4 w-4" /> Find tests</Link>}
+          {side === "tester" && !u.testerSuspendedAt && <Link className="btn" href="/app/find"><Compass className="h-4 w-4" /> Find tests</Link>}
         </div>
       </div>
       {/* (NEXT-UI 6) One side at a time: the dashboard of the side in use (the header switch changes it). */}
@@ -247,7 +249,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
               const accepted = t.contracts.filter((c) => c.submissions.some((s) => s.review && !s.review.rejected)).length;
               const waiting = t.contracts.filter((c) => c.submissions.some((s) => !s.review) && !c.submissions.some((s) => s.review && !s.review.rejected)).length;
               const messages = t.contracts.reduce((n, c) => n + (unread.get(c.id) ?? 0), 0);
-              const paused = !!(user.holdStartedAt || user.suspendedAt || t.adminPausedAt);
+              const paused = !!(user.holdStartedAt || user.devSuspendedAt || t.adminPausedAt);
               // (Batch 9) Every reason: "Paused: payment hold · paused by the team".
               const why = pauseReasons(user, t);
               const nInvited = invitesBy.get(t.id) ?? 0, nApps = appsBy.get(t.id) ?? 0;
@@ -316,7 +318,7 @@ const PausedTag = () => <span className="badge border-amber-300/40 text-amber-20
 
 async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const userId = user.id;
-  const suspended = !!user.suspendedAt;
+  const suspended = !!user.testerSuspendedAt;
   const contracts = await db.contract.findMany({
     where: { testerId: userId },
     orderBy: { joinedAt: "desc" },
@@ -342,7 +344,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const byId = new Map(contracts.map((c) => [c.id, c]));
   const working = contracts.filter((c) => c.status === "working");
   const history = contracts.filter((c) => c.status !== "working");
-  const pausedTest = (t: { adminPausedAt: Date | null; developer: { holdStartedAt: Date | null; suspendedAt: Date | null } }) => testPaused(t.developer, t);
+  const pausedTest = (t: { adminPausedAt: Date | null; developer: { holdStartedAt: Date | null; devSuspendedAt: Date | null } }) => testPaused(t.developer, t);
   const byEnd = (a: (typeof contracts)[number], b: (typeof contracts)[number]) => (b.endedAt ?? b.joinedAt).getTime() - (a.endedAt ?? a.joinedAt).getTime();
   // (Owner, Oct 28) Tests the team's suspension removed the tester from: while suspended a read-only list; after reinstatement (no automatic re-invite) they sit at the top with
   // "You were removed from this test" and Ask to rejoin (only while the test is open, has a spot and isn't paused), until they ask or dismiss them. The developer can also invite

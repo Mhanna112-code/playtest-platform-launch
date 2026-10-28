@@ -5,7 +5,7 @@ import { Brand } from "@/components/Brand";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money } from "@/lib/format";
 import { requirePageUser } from "@/lib/server/page-auth";
-import { isAdmin } from "@/lib/server/session";
+import { ADMIN_PAUSED, adminAccount, isAdmin } from "@/lib/server/session";
 import { AdminButton } from "./AdminButton";
 import { PagedList } from "./PagedList";
 import { adminCases } from "@/lib/server/holds";
@@ -23,6 +23,8 @@ const rows = <T,>(p: Page<unknown>) => p as unknown as Page<T>;
 /** The admin dashboard, laid out like the developer and tester dashboards: open disputes first, then this admin's own actions, then the lists. */
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ dispute?: string; user?: string }> }) {
   const u = await requirePageUser();
+  // (Batch 15 section 35) A suspended admin keeps no admin access: the console says why.
+  if (adminAccount(u) && !isAdmin(u)) return <main className="wrap space-y-4"><Brand /><p className="info" data-admin-paused="">{ADMIN_PAUSED} Contact the owner if you think this is a mistake.</p></main>;
   if (!isAdmin(u)) notFound();
   const q = await searchParams;
   const [disputes, liftsP, mine, paused, chargebacks, decided, noShows, reportsP, usersP, testsP, paymentsP, waitlistP] = await Promise.all(
@@ -82,7 +84,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <ul className="space-y-1 text-sm">
             {outages.rows.map((o) => (
               <li key={o.id} data-outage-line>
-                {outageLine(o.startAt, o.endAt, o.ms)} <span className="text-slate-400">({lengthText(o.ms)}, recorded {fmtDateTime(o.recordedAt)})</span>
+                {o.needsApproval && !o.approvedAt ? (
+                  <span className="text-amber-200">Over 24 hours: the uptime service says the site was down from {fmtDateTime(o.startAt)} to {fmtDateTime(o.endAt)} ({lengthText(o.ms)}). Nothing has moved yet. <AdminButton action="approve-outage" id={o.id} label="Approve: move every timer" /></span>
+                ) : (
+                  <>{outageLine(o.startAt, o.endAt, o.ms)} <span className="text-slate-400">({lengthText(o.ms)}, recorded {fmtDateTime(o.recordedAt)}{o.approvedAt ? ", approved" : ""})</span></>
+                )}
               </li>
             ))}
           </ul>
@@ -96,7 +102,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           {focusUser && (
             <p className="scroll-mt-24 text-sm" id={`user-${focusUser.id}`}>
               {focusUser.email} · {displayName(focusUser)} · {[focusUser.isDeveloper && "developer", focusUser.isTester && "tester"].filter(Boolean).join(" + ") || "no role"}
-              {focusUser.suspendedAt ? ` · suspended ${fmtDateTime(focusUser.suspendedAt)}` : ""}
+              {focusUser.devSuspendedAt ? ` · suspended (developer side) ${fmtDateTime(focusUser.devSuspendedAt)}` : ""}
+              {focusUser.testerSuspendedAt ? ` · suspended (tester side) ${fmtDateTime(focusUser.testerSuspendedAt)}` : ""}
               {focusUser.deletedAt ? ` · deleted ${fmtDateTime(focusUser.deletedAt)}` : ""}
             </p>
           )}

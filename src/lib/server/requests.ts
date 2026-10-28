@@ -199,7 +199,7 @@ const refusalFor = (r: { status: string; updatedAt: Date; closedReason: string; 
 
 async function refusals(c: Ctx["c"], side: Side) {
   if (c.status !== "working") throw new HttpError(409, "closed", side === "tester" ? "Your session has ended." : `${displayName(c.tester)}'s session has ended.`);
-  if (testPaused(c.test.developer, c.test)) throw new HttpError(409, "paused", side === "tester" ? `${PAUSED_RIGHT_NOW} You can request calls once it resumes.` : c.test.developer.suspendedAt ? DEV_SUSPENDED : c.test.developer.holdStartedAt ? "Pay what you owe first." : "The team paused this test.");
+  if (testPaused(c.test.developer, c.test)) throw new HttpError(409, "paused", side === "tester" ? `${PAUSED_RIGHT_NOW} You can request calls once it resumes.` : c.test.developer.devSuspendedAt ? DEV_SUSPENDED : c.test.developer.holdStartedAt ? "Pay what you owe first." : "The team paused this test.");
   // (Owner) "Closed" only means no NEW testers: testers already in carry on, so calls work. Only a stopped test refuses.
   if (c.test.status === "stopped") throw new HttpError(409, "closed", "This test was stopped.");
   // (Owner, Oct 28 afternoon) Calls are allowed whether or not a live call is a listed part: one that isn't reads "Not listed" and its pay is up to the developer.

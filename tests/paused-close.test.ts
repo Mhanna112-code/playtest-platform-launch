@@ -21,7 +21,7 @@ const ago = (days: number) => new Date(Date.now() - days * DAY);
 const testOf = (id: string) => db.test.findUniqueOrThrow({ where: { id } });
 
 describe("paused tests close after 7 days (pure helpers)", () => {
-  const dev = (over: Record<string, unknown> = {}) => ({ holdStartedAt: null, holdReason: "", suspendedAt: null, ...over });
+  const dev = (over: Record<string, unknown> = {}) => ({ holdStartedAt: null, holdReason: "", devSuspendedAt: null, ...over });
   const test = (over: Record<string, unknown> = {}) => ({ status: "open", adminPausedAt: null, pauseCloseAt: null, pauseCloseSetAt: null, ...over });
 
   it("closes 7 days after the earliest cause began; the admin's date counts only for the pause it was set in", () => {
@@ -29,7 +29,7 @@ describe("paused tests close after 7 days (pure helpers)", () => {
     expect(pauseClosesAt(dev({ holdStartedAt: new Date() }), test({ status: "stopped" }))).toBeNull();
     expect(pauseClosesAt(dev({ holdStartedAt: new Date() }), test({ status: "draft" }))).toBeNull();
     const hold = ago(3), susp = ago(1);
-    const c = pauseClosesAt(dev({ holdStartedAt: hold, suspendedAt: susp }), test())!;
+    const c = pauseClosesAt(dev({ holdStartedAt: hold, devSuspendedAt: susp }), test())!;
     expect(c.at.getTime()).toBe(hold.getTime() + PAUSE_CLOSE_DAYS * DAY);
     expect(c.causes).toEqual(["hold", "suspension"]);
     const later = new Date(hold.getTime() + 12 * DAY);
@@ -81,7 +81,7 @@ describe("the daily job closes paused tests", () => {
     const { sessionId } = await joined(testId);
     const a = await admin();
     await suspendAccount(a.user.id, dev.user.id, "Testing");
-    await db.user.update({ where: { id: dev.user.id }, data: { suspendedAt: ago(8) } });
+    await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: ago(8), testerSuspendedAt: ago(8) } });
     await cron();
     expect((await testOf(testId)).pauseClosedReason).toBe("This test was closed because it stayed paused for 7 days: your account was suspended.");
     expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).endKind).toBe("closed");

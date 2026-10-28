@@ -7,7 +7,7 @@ const DAY = 86_400_000;
 
 export type PauseCause = "hold" | "chargeback" | "suspension" | "team";
 
-type Dev = { holdStartedAt?: Date | null; holdReason?: string | null; suspendedAt?: Date | null };
+type Dev = { holdStartedAt?: Date | null; holdReason?: string | null; devSuspendedAt?: Date | null };
 type Tst = { status: string; adminPausedAt?: Date | null; pauseCloseAt?: Date | null; pauseCloseSetAt?: Date | null; pausedSince?: Date | null };
 
 /** Why a test is paused right now (empty when it isn't). Only tests that are live (open or full) count. */
@@ -15,7 +15,7 @@ export function pauseCauses(dev: Dev, test: Tst): PauseCause[] {
   if (test.status !== "open" && test.status !== "closed") return [];
   const out: PauseCause[] = [];
   if (dev.holdStartedAt) out.push(dev.holdReason === "chargeback" ? "chargeback" : "hold");
-  if (dev.suspendedAt) out.push("suspension");
+  if (dev.devSuspendedAt) out.push("suspension");
   if (test.adminPausedAt) out.push("team");
   return out;
 }
@@ -26,7 +26,7 @@ export function pauseCauses(dev: Dev, test: Tst): PauseCause[] {
  */
 export function pauseSince(dev: Dev, test: Tst): Date | null {
   if (!pauseCauses(dev, test).length) return null;
-  const times = [dev.holdStartedAt, dev.suspendedAt, test.adminPausedAt, test.pausedSince].filter((d): d is Date => !!d).map((d) => d.getTime());
+  const times = [dev.holdStartedAt, dev.devSuspendedAt, test.adminPausedAt, test.pausedSince].filter((d): d is Date => !!d).map((d) => d.getTime());
   return new Date(Math.min(...times));
 }
 

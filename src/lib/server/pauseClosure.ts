@@ -44,7 +44,7 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
 /** The daily job: close every paused test whose closure date has come. */
 export async function closePausedTests(now = new Date()) {
   const tests = await db.test.findMany({
-    where: { status: { in: ["open", "closed"] }, OR: [{ adminPausedAt: { not: null } }, { developer: { OR: [{ holdStartedAt: { not: null } }, { suspendedAt: { not: null } }] } }] },
+    where: { status: { in: ["open", "closed"] }, OR: [{ adminPausedAt: { not: null } }, { developer: { OR: [{ holdStartedAt: { not: null } }, { devSuspendedAt: { not: null } }] } }] },
     include: { developer: true },
   });
   let n = 0;
@@ -77,7 +77,7 @@ export async function extendPauseClosure(testId: string, days: unknown, now = ne
 /** The admin page's list: every paused test with its closure date, soonest first. */
 export async function pausedTestsForAdmin() {
   const tests = await db.test.findMany({
-    where: { status: { in: ["open", "closed"] }, OR: [{ adminPausedAt: { not: null } }, { developer: { OR: [{ holdStartedAt: { not: null } }, { suspendedAt: { not: null } }] } }] },
+    where: { status: { in: ["open", "closed"] }, OR: [{ adminPausedAt: { not: null } }, { developer: { OR: [{ holdStartedAt: { not: null } }, { devSuspendedAt: { not: null } }] } }] },
     include: { developer: true },
   });
   return tests
@@ -127,7 +127,7 @@ export async function bellPausedTests(devId: string, now = new Date(), onlyDue =
 export async function pausedReminders(now = new Date()) {
   const since = new Date(now.getTime() - 20 * 3_600_000);
   const tests = await db.test.findMany({
-    where: { status: { in: ["open", "closed"] }, developer: { deletedAt: null }, OR: [{ adminPausedAt: { not: null } }, { developer: { OR: [{ holdStartedAt: { not: null } }, { suspendedAt: { not: null } }] } }] },
+    where: { status: { in: ["open", "closed"] }, developer: { deletedAt: null }, OR: [{ adminPausedAt: { not: null } }, { developer: { OR: [{ holdStartedAt: { not: null } }, { devSuspendedAt: { not: null } }] } }] },
     include: { developer: true },
     take: 5000,
   });

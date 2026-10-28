@@ -105,10 +105,10 @@ describe("batch 5 item 2: the 3-change limit covers the steps, NDA, questions, l
 });
 
 describe("batch 5 item 3: a restricted account's signed-in pages go to the dashboard", () => {
-  const susTester = { isDeveloper: false, isTester: true, suspendedAt: new Date() };
+  const susTester = { isDeveloper: false, isTester: true, testerSuspendedAt: new Date() };
   const heldDev = { isDeveloper: true, isTester: false, holdStartedAt: new Date(), holdReason: "unpaid" };
   const cbDev = { isDeveloper: true, isTester: false, holdStartedAt: new Date(), holdReason: "chargeback" };
-  const susDev = { isDeveloper: true, isTester: false, suspendedAt: new Date() };
+  const susDev = { isDeveloper: true, isTester: false, devSuspendedAt: new Date() };
   const closedPaths = ["/app/tests/x", "/app/tests/x/edit", "/app/tests/new", "/app/testers/x", "/app/developers/x", "/app/sessions/x", "/app/calls/x", "/app/find", "/app/find/x", "/app/messages", "/app/chat/x", "/app/profile"];
   const openPaths = ["/app", "/app/payments", "/app/account", "/app/account/blocked", "/app/help", "/app/notifications", "/app/switch"];
 
@@ -134,13 +134,13 @@ describe("batch 5 item 3: a restricted account's signed-in pages go to the dashb
     expect(closedForSuspended("/app/chat/x", both, "developer", "developer")).toBe(true);
     expect(closedForSuspended("/app/chat/x", both, "developer", "tester")).toBe(false);
     expect(closedForSuspended("/app/calls/x", both, "tester", "developer")).toBe(true);
-    const bothSuspended = { ...both, suspendedAt: new Date() };
+    const bothSuspended = { ...both, devSuspendedAt: new Date(), testerSuspendedAt: new Date() };
     for (const p of closedPaths) expect(closedForSuspended(p, bothSuspended, "tester"), p).toBe(true);
     expect(restrictedOn(both, "tester")).toBe(false);
     expect(restrictedOn(both, "developer")).toBe(true);
     expect(restrictedOn(bothSuspended, "tester")).toBe(true);
     // The live move needs no change: a suspended tester's key is "s", so SessionWatch moves every open page to the dashboard top.
-    expect(restrictionKey(susTester, "tester")).toBe("s");
+    expect(restrictionKey(susTester, "tester")).toBe("t"); // (batch 15) "t": the tester side
   });
 
   it("a tester whose developer is suspended or on hold is not restricted: they keep their session page", async () => {

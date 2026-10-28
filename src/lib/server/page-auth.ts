@@ -24,7 +24,7 @@ export async function requireOpenPage(path: string) {
 }
 
 /** The same for a page whose side is the person's role in one contract (a chat, a call): checked once the page knows the role. */
-export function leaveIfClosed(u: { isDeveloper: boolean; isTester: boolean; side?: string; suspendedAt?: Date | null; holdStartedAt?: Date | null; holdReason?: string | null }, path: string, role: "developer" | "tester") {
+export function leaveIfClosed(u: { isDeveloper: boolean; isTester: boolean; side?: string; devSuspendedAt?: Date | null; testerSuspendedAt?: Date | null; holdStartedAt?: Date | null; holdReason?: string | null }, path: string, role: "developer" | "tester") {
   if (closedForSuspended(path, u, sideFor(u, path), role)) redirect("/app");
 }
 

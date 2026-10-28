@@ -35,7 +35,7 @@ const sub = (cookie: string, action: string) => subPOST(req("/api/payments/subsc
 const post = (cookie: string, over: Record<string, unknown> = {}) => testsPOST(req("/api/tests", { cookie, body: listingBody(over) })).then(json);
 const adm = (action: string, cookie: string, body: Record<string, unknown>) => adminPOST(req(`/api/admin/${action}`, { cookie, body }), { params: Promise.resolve({ action }) }).then(json);
 const ok = () => setStripeForTests({ paymentIntents: { create: async () => ({ id: "pi_" + randomUUID(), status: "succeeded" }) } } as unknown as Stripe);
-const decline = () => setStripeForTests({ paymentIntents: { create: async () => { throw new Error("declined"); } } } as unknown as Stripe);
+const decline = () => setStripeForTests({ paymentIntents: { create: async () => { throw Object.assign(new Error("declined"), { type: "StripeCardError" }); } } } as unknown as Stripe);
 const withCard = (userId: string) => db.user.update({ where: { id: userId }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
 const userOf = (id: string) => db.user.findUniqueOrThrow({ where: { id } });
 /** A developer with a saved card, subscribed (charged through the tests' Stripe stand-in). */

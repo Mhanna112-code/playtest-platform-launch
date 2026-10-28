@@ -158,7 +158,7 @@ describe("call length and payment problems on a call", () => {
     await db.user.update({ where: { id: tester.user.id }, data: { stripeAccountId: "acct_" + randomUUID(), payoutsReady: true } });
     let decline = true;
     setStripeForTests({
-      paymentIntents: { create: async () => { if (decline) throw new Error("declined"); return { id: "pi_" + randomUUID(), status: "succeeded" }; } },
+      paymentIntents: { create: async () => { if (decline) throw Object.assign(new Error("declined"), { type: "StripeCardError" }); return { id: "pi_" + randomUUID(), status: "succeeded" }; } },
       webhooks: { constructEvent: (raw: string) => JSON.parse(raw) },
     } as unknown as Stripe);
     const r = await pay(dev.cookie, { kind: "call", id: call.id, amount: "15.00", tickedCents: 1500 });
@@ -238,7 +238,7 @@ describe("newest owner rules", () => {
     await mk(800);
     await mk(2000);
     await startHold(dev.user.id, "unpaid");
-    setStripeForTests({ paymentIntents: { create: async (p: { amount: number }) => { if (p.amount === 2000) throw new Error("declined"); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
+    setStripeForTests({ paymentIntents: { create: async (p: { amount: number }) => { if (p.amount === 2000) throw Object.assign(new Error("declined"), { type: "StripeCardError" }); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
     const { payOwed, owedLines } = await import("@/lib/server/holds");
     expect((await owedLines(dev.user.id)).map((l) => l.text)).toEqual(expect.arrayContaining([expect.stringMatching(/^Ana Silva's written answers \$8\.00 · card declined /), expect.stringMatching(/\$20\.00 · card declined /)]));
     const r = await payOwed(dev.user);
@@ -264,7 +264,7 @@ describe("Pay what you owe stops once when the total changed", () => {
     const first = await press({ seenTotalCents: 800, seenIds: [seenOne.id] });
     expect(first.status).toBe(409);
     expect(first.body.error.changes[0].text).toBe("Another payment failed meanwhile: Ana Silva's written answers $5.00. New total $13.00. Press again to pay $13.00.");
-    setStripeForTests({ paymentIntents: { create: async (p: { amount: number }) => { if (p.amount === 500) throw new Error("Your card has insufficient funds."); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
+    setStripeForTests({ paymentIntents: { create: async (p: { amount: number }) => { if (p.amount === 500) throw Object.assign(new Error("Your card has insufficient funds."), { type: "StripeCardError" }); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
     // (NEXT-UI 12b) The second press names the total the box showed; something newer than the box stops it again.
     const third = await mk(300);
     const again = await press({ seenTotalCents: first.body.error.totalCents, seenIds: first.body.error.ids, confirmed: true });
@@ -274,7 +274,7 @@ describe("Pay what you owe stops once when the total changed", () => {
     expect(third.id).toBeTruthy();
     const second = await press({ seenTotalCents: again.body.error.totalCents, seenIds: again.body.error.ids, confirmed: true });
     expect(second.body.paid).toBe(2);
-    expect(second.body.stillFailing[0]).toMatch(/\$5\.00 · card declined .+ \(Your card has insufficient funds\)$/);
+    expect(second.body.stillFailing[0]).toMatch(/\$5\.00 · card declined .+ \(Your card was declined\.?\)$/); // (batch 15 section 41, L4) plain words, never Stripe's raw text
     expect(second.body.lifted).toBe(false);
   });
 });

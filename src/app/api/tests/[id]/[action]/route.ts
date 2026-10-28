@@ -69,7 +69,8 @@ async function adminRefusal(req: Request, userId: string, testId: string, action
   // and problem report) goes on under its own rules.
   if (t.adminStoppedAt && !STOPPED_ALLOWS.has(action)) throw new HttpError(409, "admin_stopped", "The team stopped this test.", { failed: await failedLine(req) });
   if (t.adminStoppedAt) return;
-  if (t.adminPausedAt && action !== "stop") throw new HttpError(409, "admin_paused", "The team paused this test: you can only stop it.", { failed: await failedLine(req) });
+  // (Batch 15 section 1) Chat is never closed by a paused test.
+  if (t.adminPausedAt && action !== "stop" && action !== "message") throw new HttpError(409, "admin_paused", "The team paused this test: you can only stop it.", { failed: await failedLine(req) });
 }
 
 async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, action: string, body: Record<string, unknown>) {
@@ -123,7 +124,7 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
       case "cancel-invite":
         return ok(await cancelInvite(u, id, body));
       case "message": {
-        const m = body.testerId ? await sendChat(u, id, String(body.testerId), body.body) : await sendMessage(u, String(body.contractId ?? ""), body.body);
+        const m = body.testerId ? await sendChat(u, id, String(body.testerId), body.body, body.clientId) : await sendMessage(u, String(body.contractId ?? ""), body.body, body.clientId);
         return ok({ id: m.id });
       }
       case "join": {

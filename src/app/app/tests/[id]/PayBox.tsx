@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { checkFields } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
 import { money, toCents } from "@/lib/format";
+import { newPressId } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
 import { confirmWithBank, needsBank } from "@/lib/bankConfirm";
 import { NOT_LISTED, NO_LISTING_CALL_RATE_CAP_CENTS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PAY_TICK_LINE, PAY_WAITS } from "@/lib/rules";
@@ -37,7 +38,7 @@ export function PayBox(p: { kind: "submission" | "call"; id: string; name: strin
   const [bankErr, setBankErr] = useState("");
   // (NEXT-UI 10) The note typed and not sent is kept on the server ("Not sent yet").
   const keep = useKept(`${more ? "more" : "reject"}:${p.kind}:${p.id}`, { reason }, reason === "", (v) => setReason(v.reason ?? ""));
-  const payKey = useMemo(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()), []);
+  const payKey = useMemo(() => newPressId(), []);
   const cents = toCents(amount);
   const below = listed && cents != null && cents < p.listingCents!;
   const over = cents != null && cents > PAY_TICK_CENTS;

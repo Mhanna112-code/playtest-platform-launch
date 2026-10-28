@@ -68,7 +68,8 @@ export async function bell(userId: string, text: string, link: string, about?: s
 /** Everyone who is an admin (flagged, or listed in ADMIN_EMAILS). */
 export async function adminUsers() {
   const listed = (process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-  return db.user.findMany({ where: { deletedAt: null, OR: [{ isAdmin: true }, ...(listed.length ? [{ email: { in: listed } }] : [])] }, select: { id: true, email: true } });
+  // (Batch 15 sections 35 and 41) Listed emails count only once confirmed; a suspended admin gets nothing.
+  return db.user.findMany({ where: { deletedAt: null, devSuspendedAt: null, testerSuspendedAt: null, OR: [{ isAdmin: true }, ...(listed.length ? [{ email: { in: listed }, emailVerifiedAt: { not: null } }] : [])] }, select: { id: true, email: true } });
 }
 
 /**

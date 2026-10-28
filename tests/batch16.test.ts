@@ -54,7 +54,7 @@ describe("A) Chat with <name> on the hover card and the profile", () => {
     expect((await open(dev.cookie, sessionId)).body.error.message).toBe("Unable to chat with this tester.");
     await db.block.deleteMany({ where: { blockerId: dev.user.id } });
     // Refused for other reasons (the developer suspended): the same words.
-    await db.user.update({ where: { id: dev.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     expect((await open(dev.cookie, sessionId)).body.error.message).toBe("Unable to chat with this tester.");
   });
 
@@ -167,12 +167,13 @@ describe("B) reminders", () => {
     await db.appState.deleteMany({ where: { key: "suspended-reminder" } });
     await suspendedAccountsReminder();
     await suspendedAccountsReminder(); // the same day: not again
-    const mine = (await lines(a.user.id)).filter((l) => /suspended accounts? to review$/.test(l.text));
+    // (Batch 15 section 16) The line counts suspended sides.
+    const mine = (await lines(a.user.id)).filter((l) => /suspended account sides? to review$/.test(l.text));
     expect(mine.length).toBe(1);
-    expect(mine[0].text).toMatch(/^\d+ suspended accounts to review$/);
+    expect(mine[0].text).toMatch(/^\d+ suspended account sides to review$/);
     await db.appState.update({ where: { key: "suspended-reminder" }, data: { value: new Date(Date.now() - 25 * 3_600_000).toISOString() } });
     await suspendedAccountsReminder();
-    expect((await lines(a.user.id)).filter((l) => /suspended accounts? to review$/.test(l.text)).length).toBe(2);
+    expect((await lines(a.user.id)).filter((l) => /suspended account sides? to review$/.test(l.text)).length).toBe(2);
   });
 });
 

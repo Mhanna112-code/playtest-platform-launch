@@ -24,11 +24,17 @@ model User {
   /// (NEWEST+7) bcrypt hash ("" = no password yet: set one through Forgot password)
   passwordHash    String    @default("")
   emailVerifiedAt DateTime?
-  suspendedAt DateTime?
-  suspendNote String    @default("")
-  /// (Design doc 11.4) The admin who suspended the account, and when it was lifted (the "Your account is active again" notice)
-  suspendedById String?
-  reinstatedAt  DateTime?
+  /// (Owner, Oct 30, batch 15 section 16) Suspensions are per side. The developer side keeps the old columns (suspendedAt, suspendNote, suspendedById, reinstatedAt);
+  /// the tester side has its own set. A developer-side suspension pauses their tests; a tester-side one removes them from the tests they're in.
+  devSuspendedAt   DateTime? @map("suspendedAt")
+  devSuspendNote   String    @default("") @map("suspendNote")
+  /// (Design doc 11.4) The admin who suspended that side, and when it was lifted (the "Your account is active again" notice)
+  devSuspendedById String?   @map("suspendedById")
+  devReinstatedAt  DateTime? @map("reinstatedAt")
+  testerSuspendedAt   DateTime?
+  testerSuspendNote   String    @default("")
+  testerSuspendedById String?
+  testerReinstatedAt  DateTime?
   /// (Design doc 2, 10) A deleted account: when, by whom ("self" | "admin") and why. History stays; nothing else of it works.
   deletedAt     DateTime?
   deletedBy     String    @default("")
@@ -438,8 +444,12 @@ model Payment {
   /// press on the same piece within 24 hours of an interrupted one reuses it, so nothing is charged twice. And when it was last checked (at most once a minute).
   payKey       String?
   checkedAt    DateTime?
+  /// (Batch 15 section 41, C1 and M2) The press this payment came from ("press:<developer>:<uuid>", "extra:press:…"): a repeat of the same press finds it
+  pressKey     String?
   createdAt    DateTime @default(now())
 
+  @@unique([kind, payKey])
+  @@unique([kind, pressKey])
   @@index([developerId])
   @@index([testerId])
   @@index([status, createdAt])
@@ -539,8 +549,11 @@ model Message {
   senderId   String
   sender     User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
   body       String
+  /// (Batch 15 section 13) The press id the page sent with this message: a repeat of the same unconfirmed press never posts twice
+  clientId   String?
   createdAt  DateTime @default(now())
 
+  @@unique([senderId, clientId])
   @@index([contractId, createdAt])
   @@index([testId, testerId, createdAt])
 }
@@ -631,6 +644,13 @@ model Notification {
   createdAt DateTime  @default(now())
 
   @@index([userId, createdAt])
+}
+
+/// (Batch 15 section 41, L3) Stripe webhook events already handled: a repeated delivery is skipped.
+model StripeEvent {
+  id         String   @id
+  type       String
+  receivedAt DateTime @default(now())
 }
 
 /// Small app-wide values (e.g. when the last admin digest went out).
@@ -802,6 +822,10 @@ model Outage {
   endAt      DateTime
   ms         Int
   recordedAt DateTime @default(now())
+  /// (Batch 15 section 41, M4) Longer than 24 hours: nothing moves until an admin approves it
+  needsApproval Boolean   @default(false)
+  approvedAt    DateTime?
+  approvedById  String?
 }
 
 /// (Design doc 5) A test's access keys. status: "free" (available) | "inuse" (a working tester has it) | "broken" (that tester reported it) |
@@ -842,6 +866,8 @@ model AccountEvent {
   kind      String
   byId      String?
   note      String   @default("")
+  /// (Batch 15 section 16) For suspensions and reinstatements: "developer" | "tester" ("" = the whole account, before batch 15)
+  side      String   @default("")
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])

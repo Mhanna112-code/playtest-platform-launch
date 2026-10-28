@@ -22,6 +22,13 @@ export default function setup() {
   if (!url || !schema) throw new Error("No test database schema");
   const env = { ...process.env, DATABASE_URL: url, DIRECT_URL: url };
   const cwd = path.resolve(__dirname, "..");
+  const clear = () => execSync("npx prisma db execute --stdin --schema prisma/schema.prisma", { cwd, env, input: truncateSql(schema), stdio: ["pipe", "pipe", "pipe"] });
+  // Empty it first too, so a new migration never meets an earlier run's rows (the first run has no tables yet: nothing to empty).
+  try {
+    clear();
+  } catch {
+    // no schema yet
+  }
   execSync("npx prisma migrate deploy", { cwd, env, stdio: "pipe" });
-  execSync("npx prisma db execute --stdin --schema prisma/schema.prisma", { cwd, env, input: truncateSql(schema), stdio: ["pipe", "pipe", "pipe"] });
+  clear();
 }

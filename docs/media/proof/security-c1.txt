@@ -1,0 +1,5 @@
+<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />
+ ✓ tests/batch15-security.test.ts > C1: press keys can't collide with the server's own keys > a Pay's key must be a UUID, and is stored wrapped for the developer; a forged 'choice:' / 'dispute-' key is refused 467ms
+ ✓ tests/batch15-security.test.ts > C1: press keys can't collide with the server's own keys > the tester's Charge uses its own 'choice:' key, which no developer press can take 212ms
+ Test Files  1 passed (1)
+      Tests  2 passed | 20 skipped (22)

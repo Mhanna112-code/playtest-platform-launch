@@ -14,6 +14,7 @@ import { devGate, devGateIfSeen, devOwes, recordEvent } from "./tests";
 import { logEvent } from "./live";
 import { testerGate } from "./testerGate";
 import { PAYMENT_CHECKING, pressKeyFor } from "./recovery";
+import { clientPressKey, serverKey } from "./pressKeys";
 
 type U = { id: string; email: string; name: string; pronoun: string; isAdmin?: boolean };
 
@@ -46,10 +47,11 @@ async function loadPiece(tx: Prisma.TransactionClient, kind: string, id: string)
  * gate (test-wide, since the page loaded), then the amount rules and the "charged now" tick (Pay) or a reason (Reject).
  * Pay reserves the piece, charges once (idempotent by payKey) and records the payment; Reject charges nothing.
  */
-export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { holdStartedAt?: Date | null; suspendedAt?: Date | null }, body: Record<string, unknown>) {
+export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { holdStartedAt?: Date | null; devSuspendedAt?: Date | null }, body: Record<string, unknown>) {
   const reject = body.action === "reject";
   const kind = String(body.kind ?? ""), id = String(body.id ?? "");
-  const payKey = typeof body.payKey === "string" && /^[\w-]{8,80}$/.test(body.payKey) ? body.payKey : "";
+  // (Batch 15 section 41, C1) The page's press id is a UUID, wrapped as "press:<developer>:<uuid>": it can never be a server key ("choice:", "dispute:" ...).
+  const payKey = clientPressKey(dev.id, body.payKey);
   if (!payKey) throw new HttpError(400, "bad_request", "This page is out of date. Refresh to see the latest.");
   const done = await db.review.findUnique({ where: { payKey } });
   if (done) return { reviewId: done.id, amountCents: done.amountCents, rejected: done.rejected, repeated: true }; // the same press again: never twice
@@ -62,8 +64,8 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
   const rateCents = body.rate === undefined || body.rate === null || body.rate === "" ? null : toCents(body.rate);
 
   // (Owner, Oct 27) Pay and Reject are unavailable during ANY payment hold, chargeback hold or suspension (the route refuses first; this is the backstop).
-  const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, suspendedAt: true } });
-  if (devNow.suspendedAt || devNow.holdStartedAt) throw new HttpError(403, devNow.suspendedAt ? "suspended" : "held", devNow.suspendedAt ? "Your account is suspended: Pay and Reject wait until it is lifted." : PAY_WAITS);
+  const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, devSuspendedAt: true } });
+  if (devNow.devSuspendedAt || devNow.holdStartedAt) throw new HttpError(403, devNow.devSuspendedAt ? "suspended" : "held", devNow.devSuspendedAt ? "Your account is suspended: Pay and Reject wait until it is lifted." : PAY_WAITS);
 
   const reserved = await db.$transaction(async (tx) => {
     const piece = await loadPiece(tx, kind, id);
@@ -109,7 +111,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     const payment = reject
       ? null
       : await tx.payment.create({
-          data: { kind: kind === "call" ? "call" : "review", submissionId: piece.where.submissionId ?? null, callId: piece.where.callId ?? null, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amountCents!, feeCents: 0, testerCents: 0, status: "pending", payKey: stripeKey },
+          data: { kind: kind === "call" ? "call" : "review", submissionId: piece.where.submissionId ?? null, callId: piece.where.callId ?? null, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amountCents!, feeCents: 0, testerCents: 0, status: "pending", payKey: stripeKey, pressKey: payKey },
         });
     if (reject) await recordEvent(tx, c.testId, "rejected", `You rejected ${name}'s ${piece.label}`, false, {}, c.id);
     return { rev, payment, c, piece, name };
@@ -181,7 +183,7 @@ export async function finishReviewPay(paymentId: string, result: { status: strin
   );
   if (rev.amountCents > 0) await receipt(dev.email, `${name}'s ${piece.label}`, rev.amountCents, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
   // A suspended tester is paid later (their share is held): said neutrally, never why.
-  return { reviewId: rev.id, amountCents: rev.amountCents, status: result.status, rejected: false, paidSoFarCents: await paidSoFar(c.id), ...(c.tester.suspendedAt && rev.amountCents > 0 ? { later: `${name} will receive it later` } : {}) };
+  return { reviewId: rev.id, amountCents: rev.amountCents, status: result.status, rejected: false, paidSoFarCents: await paidSoFar(c.id), ...(c.tester.testerSuspendedAt && rev.amountCents > 0 ? { later: `${name} will receive it later` } : {}) };
 }
 
 /** Tester: dispute once, on any part the developer reviewed (batch 10: listed or not, any amount, $0 included, or a Reject). */
@@ -267,7 +269,7 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
     // Charged at once, also during an admin suspension with no hold (owner, Oct 28 afternoon): a declined card starts a payment hold and the raise is owed.
     let result;
     try {
-      result = await charge(c.test.developer, c.tester, extra, `dispute-${d.id}`, `Playtest: dispute decision on “${c.title}”`);
+      result = await charge(c.test.developer, c.tester, extra, serverKey("dispute", d.id), `Playtest: dispute decision on “${c.title}”`);
       if (result.status === "requires_action") {
         // (Batch 11) The developer's bank wants them to confirm: it waits 3 days for their Confirm in Payments (the tester reads "Payment may be delayed").
         const row = await db.payment.create({ data: { ...owedRow, status: "needs_confirmation" } });
@@ -398,31 +400,40 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   const paidReview = await db.review.findFirst({ where: piece.where });
   if (!paidReview || paidReview.rejected) throw new HttpError(409, "not_paid", "Pay this part first: Pay more is for a part you've already paid.");
   // (Owner, Oct 27) Unavailable during ANY payment hold, chargeback hold or suspension (the route refuses first; this is the backstop).
-  const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { suspendedAt: true } });
-  if (devNow.suspendedAt) throw new HttpError(403, "suspended", "Your account is suspended: extra pay waits until it is lifted.");
+  const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { devSuspendedAt: true } });
+  if (devNow.devSuspendedAt) throw new HttpError(403, "suspended", "Your account is suspended: extra pay waits until it is lifted.");
   await (await import("./holds")).devHoldRefusal(dev.id, "pay");
   if ((await blockedEitherWay(dev.id, c.testerId)) || !testerPayable(c.tester)) throw new HttpError(409, "unavailable", "This payment isn't available.");
   const amount = toCents(body.amount);
   const check = checkExtraPay(amount, typeof body.tickedCents === "number" ? body.tickedCents : null, body.over200 === true || body.understood === true);
   if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
   const note = typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
-  // (Batch 9 section 6) Per piece: listed, 100% of the listing at most (never more than the max); unlisted, 100% of the max on top of the Pay.
-  const room = await pieceRoom(piece);
-  if (amount! > room.roomCents) throw new HttpError(400, "over_cap", overRoomLine(piece, room));
   const card = cardRefusal(dev);
   if (card) throw new HttpError(409, "no_card", card);
-  await db.$transaction((tx) => devGate(tx, testId, body));
-  const payKey = typeof body.payKey === "string" && /^[\w-]{8,80}$/.test(body.payKey) ? body.payKey : randomUUID();
+  // (Batch 15 section 41, C1) The page's press id (a UUID) wrapped for this developer; "extra:" makes it the Pay more's own.
+  const extraKey = serverKey("extra", clientPressKey(dev.id, body.payKey) ?? `press:${dev.id}:${randomUUID()}`);
   const name = displayName(c.tester);
-  const label = piece.label;
   const at = piece.kind === "call" ? { callId: piece.where.callId! } : { submissionId: piece.where.submissionId! };
-  // (Batch 15 section 13) The same press again (its answer was lost): never twice.
-  const again = await db.payment.findFirst({ where: { kind: "extra", ...at, payKey: { in: [`extra-${payKey}`] } } });
-  if (again && again.status !== "failed" && again.status !== "cancelled") return { paid: true, amountCents: again.amountCents, status: again.status, repeated: true };
-  // (Batch 15 section 9) An interrupted Pay more on this piece in the last 24 hours lends its key.
-  const stripeKey = await pressKeyFor(at, ["extra"], `extra-${payKey}`);
-  // (Batch 11) The row exists before the charge (pending), so a payment the bank wants confirmed counts toward the piece's cap while it waits.
-  const row = await db.payment.create({ data: { kind: "extra", contractId: c.id, ...at, note, developerId: dev.id, testerId: c.testerId, amountCents: amount!, feeCents: 0, testerCents: 0, status: "pending", payKey: stripeKey } });
+  // (Batch 15 section 41, M2) The repeat check, the room check and the reservation happen together under the test's row lock (as Pay does), and (kind, payKey) and
+  // (kind, pressKey) are unique, so two presses at once can never both pass the cap or charge twice.
+  const reserved = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
+    // (Batch 15 section 13) The same press again (its answer was lost): never twice. A press that failed without a charge can be pressed again.
+    const again = await tx.payment.findFirst({ where: { kind: "extra", pressKey: extraKey } });
+    if (again && again.status !== "failed" && again.status !== "cancelled") return { again };
+    if (again) await tx.payment.update({ where: { id: again.id }, data: { pressKey: null } });
+    // (Batch 9 section 6) Per piece: listed, 100% of the listing at most (never more than the max); unlisted, 100% of the max on top of the Pay.
+    const room = await pieceRoom(piece, tx);
+    if (amount! > room.roomCents) throw new HttpError(400, "over_cap", overRoomLine(piece, room));
+    await devGate(tx, testId, body);
+    // (Batch 15 section 9) An interrupted Pay more on this piece in the last 24 hours lends its key.
+    const stripeKey = await pressKeyFor(at, ["extra"], extraKey, tx);
+    // (Batch 11) The row exists before the charge (pending), so a payment the bank wants confirmed counts toward the piece's cap while it waits.
+    const row = await tx.payment.create({ data: { kind: "extra", contractId: c.id, ...at, note, developerId: dev.id, testerId: c.testerId, amountCents: amount!, feeCents: 0, testerCents: 0, status: "pending", payKey: stripeKey, pressKey: extraKey } });
+    return { row, stripeKey };
+  });
+  if ("again" in reserved && reserved.again) return { paid: true, amountCents: reserved.again.amountCents, status: reserved.again.status, repeated: true };
+  const { row, stripeKey } = reserved as { row: NonNullable<(typeof reserved)["row"]>; stripeKey: string };
   let result;
   try {
     const charging = (key: string) => charge(dev, c.tester, amount!, key, `Playtest: extra pay for ${name} on “${c.test.title}”`, "press");
@@ -430,8 +441,8 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
       result = await charging(stripeKey);
     } catch (e) {
       if (!(e instanceof HttpError && e.code === "idempotency")) throw e;
-      await db.payment.update({ where: { id: row.id }, data: { payKey: `extra-${payKey}` } });
-      result = await charging(`extra-${payKey}`);
+      await db.payment.update({ where: { id: row.id }, data: { payKey: extraKey } });
+      result = await charging(extraKey);
     }
   } catch (e) {
     if (e instanceof HttpError && e.code === "payment_unknown") throw new HttpError(502, "payment_unknown", PAYMENT_CHECKING);

@@ -113,11 +113,11 @@ describe("batch 13 sections 1-3: excerpt requests", () => {
     // A block either way: the request stays and can be decided.
     expect((await blocksPOST(req("/api/blocks", { cookie: s.tester.cookie, body: { userId: s.dev.user.id } })).then(json)).status).toBe(200);
     expect(await X.pendingForDeveloper(s.dev.user.id)).toHaveLength(1);
-    await db.user.update({ where: { id: s.dev.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: s.dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     expect(src("app/app/page.tsx")).toContain("const excerptBox = devOff ? await pendingForDeveloper(u.id) : [];");
     expect((await ex(s.dev.cookie, { action: "decide", excerptId: id, decision: "allow" })).status).toBe(200);
     // A suspended tester: no new request, Remove still works.
-    await db.user.update({ where: { id: s.tester.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: s.tester.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     expect((await ask(s.tester.cookie, s.sub.id)).status).toBe(403);
     expect((await ex(s.tester.cookie, { action: "remove", excerptId: id })).status).toBe(200);
   });
@@ -146,12 +146,12 @@ describe("batch 13 section 4: Rate and suspensions", () => {
   it("a suspended tester's Rate is refused (to the dashboard top) and hidden; back once the suspension lifts", async () => {
     const s = await paidWork();
     await act(s.testId, "stop", s.dev.cookie, { seenAt: seen(), confirmed: true });
-    await db.user.update({ where: { id: s.tester.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: s.tester.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     const r = await sact(s.sessionId, "rate", s.tester.cookie, { stars: 4 });
     expect(r.status).toBe(403);
     expect(r.body.error).toMatchObject({ code: "suspended", suspended: true });
     expect(src("app/app/sessions/[id]/page.tsx")).toContain('{rateBlock === "" && !meOff && (');
-    await db.user.update({ where: { id: s.tester.user.id }, data: { suspendedAt: null } });
+    await db.user.update({ where: { id: s.tester.user.id }, data: { devSuspendedAt: null, testerSuspendedAt: null } });
     expect((await sact(s.sessionId, "rate", s.tester.cookie, { stars: 4 })).status).toBe(200);
   });
 });

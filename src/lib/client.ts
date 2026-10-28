@@ -72,3 +72,15 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
   }
   return data as T;
 }
+
+/** (Batch 15 section 41, C1) A press id: a v4 UUID (the server accepts nothing else). Works where crypto.randomUUID doesn't (plain http on a LAN). */
+export function newPressId(): string {
+  const c = globalThis.crypto as Crypto;
+  if (typeof c.randomUUID === "function") return c.randomUUID();
+  const b = new Uint8Array(16);
+  c.getRandomValues(b);
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}

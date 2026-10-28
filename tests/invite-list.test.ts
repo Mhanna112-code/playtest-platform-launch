@@ -16,7 +16,7 @@ describe("invite list: greyed vs removed", () => {
     const blocked = await makeUser({ tester: true, name: "Dee Moss" });
     const gone = await makeUser({ tester: true, name: "Eve Ray" });
     await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [invited.user.id] });
-    await db.user.update({ where: { id: suspended.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: suspended.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     await blocksPOST(req("/api/blocks", { cookie: blocked.cookie, body: { userId: dev.user.id } }));
     await db.user.update({ where: { id: gone.user.id }, data: { isTester: false } });
     const list = await invitable(dev.user.id, testId);
@@ -34,7 +34,7 @@ describe("invite list: greyed vs removed", () => {
     const ben = await makeUser({ tester: true, name: "Ben Carter" });
     const pageLoaded = seen();
     await later();
-    await db.user.update({ where: { id: ben.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: ben.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     const r = await act(testId, "invite", dev.cookie, { seenAt: pageLoaded, testerIds: [ben.user.id] });
     expect(r.body.error.changes.map((c: { text: string }) => c.text)).toContain("Ben Carter can't be invited right now");
     const r2 = await act(testId, "invite", dev.cookie, { seenAt: pageLoaded, testerIds: [ben.user.id], confirmed: true });

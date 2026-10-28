@@ -133,12 +133,14 @@ describe("deleted accounts, page by page (owner, Oct 26)", () => {
 describe("bell reach (owner, Oct 26)", () => {
   it("a notice about another person reaches only while that person is in, or was in, one of the recipient's tests that is still open", async () => {
     const { dev, testId, sessionId, tester } = await withWork();
+    // (Batch 15 section 20) The bell line never carries the message itself.
     await sact(sessionId, "message", tester.cookie, { body: "First message" });
-    const before = await db.notification.count({ where: { userId: dev.user.id, text: { contains: "First message" } } });
-    expect(before).toBe(1);
+    const msgLines = () => db.notification.count({ where: { userId: dev.user.id, OR: [{ text: { contains: "sent you a message" } }, { text: { startsWith: "New message from" } }] } });
+    expect(await msgLines()).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "First message" } } })).toBe(0);
     await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
     await sact(sessionId, "message", tester.cookie, { body: "Second message" });
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "Second message" } } })).toBe(0);
+    expect(await msgLines()).toBe(1);
   });
 
   it("each bell line remembers its test (same-day lines about one test stack)", async () => {

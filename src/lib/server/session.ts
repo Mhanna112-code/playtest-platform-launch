@@ -61,9 +61,15 @@ export async function endSession(token: string | null) {
   if (token) await db.session.deleteMany({ where: { tokenHash: hashToken(token) } });
 }
 
-/** Admins: anyone flagged isAdmin, or listed in ADMIN_EMAILS. */
-export const isAdmin = (u: { email: string; isAdmin?: boolean }) => {
-  if (u.isAdmin) return true;
-  const list = (process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-  return list.includes(u.email.toLowerCase());
-};
+type AdminWho = { email: string; isAdmin?: boolean; emailVerifiedAt?: Date | null; devSuspendedAt?: Date | null; testerSuspendedAt?: Date | null; deletedAt?: Date | null };
+/** The emails in ADMIN_EMAILS, lower-cased. */
+export const adminEmails = () => (process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+/**
+ * Is this an admin account at all (flagged isAdmin, or listed in ADMIN_EMAILS with a CONFIRMED email: batch 15 section 41, H1, so registering an admin's address
+ * first gives nothing)? It says nothing about a suspension: see isAdmin.
+ */
+export const adminAccount = (u: AdminWho) => !u.deletedAt && (!!u.isAdmin || (!!u.emailVerifiedAt && adminEmails().includes(u.email.toLowerCase())));
+/** (Batch 15 section 35) An admin whose account is suspended (either side) loses admin access. */
+export const ADMIN_PAUSED = "Your account is paused.";
+/** Admins: an admin account that isn't suspended. */
+export const isAdmin = (u: AdminWho) => adminAccount(u) && !u.devSuspendedAt && !u.testerSuspendedAt;

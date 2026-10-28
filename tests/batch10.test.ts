@@ -123,22 +123,22 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
 });
 
 describe("batch 10 item 2: a paused test hides what doesn't work, with a banner that says what still does", () => {
-  const all = { drafts: true, charge: true, dispute: true, rate: true, leave: true, cancelCalls: true, send: true, requestCalls: true, chat: true };
-  it("the banner text, built from what is available (never hold, suspended, failed or chargeback)", () => {
+  const all = { drafts: true, charge: true, dispute: true, rate: true, leave: true, cancelCalls: true, send: true, requestCalls: true };
+  it("the banner text, built from what is available (never hold, suspended, failed or chargeback); (batch 15 section 1) it never mentions chat", () => {
     expect(R.pausedForTesters(all)).toBe(
-      "This test is paused right now. For now you can save drafts of your parts, charge or let go of work left unreviewed, dispute, rate, leave the test, and cancel booked calls. Sending work, requesting calls and chat come back when it resumes.",
+      "This test is paused right now. For now you can save drafts of your parts, charge or let go of work left unreviewed, dispute, rate, leave the test, and cancel booked calls. Sending work and requesting calls come back when it resumes.",
     );
     expect(R.PAUSED_FOR_TESTERS).toBe(R.pausedForTesters(all));
     const noCharge = R.pausedForTesters({ ...all, charge: false });
     expect(noCharge).not.toContain("charge or let go");
     expect(noCharge).toContain("For now you can save drafts of your parts, dispute, rate, leave the test, and cancel booked calls.");
     expect(R.pausedForTesters({ ...all, drafts: false, charge: false, dispute: false, rate: false, cancelCalls: false })).toBe(
-      "This test is paused right now. For now you can leave the test. Sending work, requesting calls and chat come back when it resumes.",
+      "This test is paused right now. For now you can leave the test. Sending work and requesting calls come back when it resumes.",
     );
     expect(R.pausedForTesters({ ...all, drafts: false, charge: false, dispute: false, cancelCalls: false, send: false, requestCalls: false })).toBe(
-      "This test is paused right now. For now you can rate and leave the test. Chat comes back when it resumes.",
+      "This test is paused right now. For now you can rate and leave the test.",
     );
-    for (const can of [all, { ...all, chat: false }, { ...all, leave: false, send: false }]) expect(R.pausedForTesters(can)).not.toMatch(/hold|suspend|fail|chargeback/i);
+    for (const can of [all, { ...all, leave: false, send: false }]) expect(R.pausedForTesters(can)).not.toMatch(/hold|suspend|fail|chargeback|chat/i);
   });
 
   it("the session page: the banner at the top; Send, the call-request tools, Join call and chat's message box hidden while paused", () => {
@@ -151,7 +151,7 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
     expect(page).toContain("(canRequestCall || (pendingReqs.length > 0 && !paused))");
     expect(page).toContain("const canRequestCall = !refusal && !blockedPair && !paused;");
     expect(page).toContain("joinable: !blockedPair && !paused && callJoinable(x, now)");
-    expect(page).toContain("chat={!meOff && !chatPaused ?");
+    expect(page).toContain("chat={!meOff ?");
     expect(src("app/app/chat/[id]/page.tsx")).toContain("closed={blocked || paused}");
     const actions = src("app/app/sessions/[id]/SessionActions.tsx");
     expect(actions).toContain("{canSend && <button className=\"btn\" disabled={busy || length > WRITTEN_MAX_CHARS}>");
@@ -164,7 +164,8 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
     const { dev, sessionId, tester } = await sentWork("10.00");
     await startHold(dev.user.id, "unpaid");
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"] })).body.error.message).toBe(R.PAUSED_SEND);
-    expect((await sact(sessionId, "message", tester.cookie, { body: "Hello?" })).body.error.message).toBe(R.CHAT_PAUSED);
+    // (Batch 15 section 1) The developer on a hold is the restricted person: the tester's Send is turned back neutrally.
+    expect((await sact(sessionId, "message", tester.cookie, { body: "Hello?" })).body.error.message).toBe(R.CHAT_NOT_SENT);
   });
 
   it("a tester's session page keeps refreshing while the developer is on a hold, and a suspension or the team's pause shows live", async () => {
@@ -201,7 +202,7 @@ describe("batch 10 item 4: paying what is owed while a suspension continues", ()
   it("the payment line instead of 'running again' (sent even with email Off); 'running again' only when nothing pauses the tests", async () => {
     const { dev } = await setup();
     await startHold(dev.user.id, "unpaid");
-    await db.user.update({ where: { id: dev.user.id }, data: { suspendedAt: new Date(), emailPref: "off" } });
+    await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date(), emailPref: "off" } });
     expect(await liftHoldIfClear(dev.user.id)).toBe(true);
     expect(R.STILL_SUSPENDED_LINE).toBe("Your payment went through. Your tests stay paused while your account is suspended.");
     expect(await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, text: R.STILL_SUSPENDED_LINE } })).toMatchObject({ mustEmail: true });
@@ -217,7 +218,7 @@ describe("batch 10 item 4: paying what is owed while a suspension continues", ()
   it("a chargeback hold cleared while suspended sends the same line", async () => {
     const { dev } = await setup();
     await startHold(dev.user.id, "chargeback");
-    await db.user.update({ where: { id: dev.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     await startCardVerification(await db.user.findUniqueOrThrow({ where: { id: dev.user.id } }));
     expect((await approveChargebackHold(dev.user.id)).lifted).toBe(true);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: R.STILL_SUSPENDED_LINE } })).toBe(1);
@@ -286,7 +287,7 @@ describe("batch 10 item 5: Pay what you owe updates live and never charges twice
 
   it("a declined retry goes back to owed (still listed), and the hold stays", async () => {
     const { dev, rows } = await heldWithFailed([800]);
-    setStripeForTests({ paymentIntents: { create: async () => { throw new Error("Your card was declined."); } } } as unknown as Stripe);
+    setStripeForTests({ paymentIntents: { create: async () => { throw Object.assign(new Error("Your card was declined."), { type: "StripeCardError" }); } } } as unknown as Stripe);
     const r = await payOwed(await db.user.findUniqueOrThrow({ where: { id: dev.user.id } }));
     expect(r).toMatchObject({ paid: 0, lifted: false });
     expect(await db.payment.findUniqueOrThrow({ where: { id: rows[0].id } })).toMatchObject({ status: "failed", settledAt: null });

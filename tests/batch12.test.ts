@@ -61,7 +61,7 @@ describe("batch 12 item 1: a developer can always delete their account", () => {
     await db.submission.update({ where: { id: sub.id }, data: { choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 7 * DAY) } });
     await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
     await deleteAccount(dev.user.id, "self");
-    setStripeForTests({ paymentIntents: { create: async () => { throw new Error("Your card was declined."); } } } as unknown as Stripe);
+    setStripeForTests({ paymentIntents: { create: async () => { throw Object.assign(new Error("Your card was declined."), { type: "StripeCardError" }); } } } as unknown as Stripe);
     const c = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true });
     expect(c.status).toBe(200);
     const p = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id, kind: "review" } });

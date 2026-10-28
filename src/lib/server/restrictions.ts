@@ -47,7 +47,7 @@ export const cancelCallsNearSuspension = cancelCallsNearPause;
 /** The daily job: later calls of a suspended or held developer are cancelled once the pause is still in force 3 days before them. */
 export async function cancelLatePauseCalls(now = new Date()) {
   let n = 0;
-  for (const u of await db.user.findMany({ where: { isDeveloper: true, OR: [{ suspendedAt: { not: null } }, { holdStartedAt: { not: null } }] }, select: { id: true } })) n += await cancelCallsNearPause(u.id, now);
+  for (const u of await db.user.findMany({ where: { isDeveloper: true, OR: [{ devSuspendedAt: { not: null } }, { holdStartedAt: { not: null } }] }, select: { id: true } })) n += await cancelCallsNearPause(u.id, now);
   return n;
 }
 export const cancelLateSuspensionCalls = cancelLatePauseCalls;
@@ -80,22 +80,48 @@ async function removeTester(u: { id: string; name: string; email: string; pronou
   await db.application.updateMany({ where: { testerId: u.id, status: "pending" }, data: { status: "withdrawn", decidedAt: new Date() } });
 }
 
-/** Admin: suspend an account (developer side, tester side, or both). */
-export async function suspendAccount(adminId: string, userId: string, note: string) {
+export type SuspendSide = "developer" | "tester";
+/** (Batch 15 section 16) The side an admin's Suspend or Reinstate is about: an account with both roles names it; a one-role account has only that side. */
+export function sideToSuspend(u: { isDeveloper: boolean; isTester: boolean }, asked: unknown): SuspendSide | null {
+  if (asked === "developer" || asked === "tester") return (asked === "developer" ? u.isDeveloper : u.isTester) ? asked : null;
+  if (u.isDeveloper && u.isTester) return null; // a mixed account must choose
+  return u.isTester ? "tester" : "developer";
+}
+const sideWord = (s: SuspendSide) => (s === "developer" ? "developer side" : "tester side");
+/** "Your developer account is paused" / "Your tester account is paused" (emails and bell, batch 15 section 16). */
+export const sidePausedLine = (s: SuspendSide) => `Your ${s} account is paused`;
+const fields = (s: SuspendSide) =>
+  s === "developer"
+    ? ({ at: "devSuspendedAt", note: "devSuspendNote", by: "devSuspendedById", back: "devReinstatedAt" } as const)
+    : ({ at: "testerSuspendedAt", note: "testerSuspendNote", by: "testerSuspendedById", back: "testerReinstatedAt" } as const);
+
+/**
+ * Admin: suspend ONE side of an account (owner, Oct 30, batch 15 section 16). To suspend both, the admin suspends each side. The developer side: their tests pause,
+ * billing pauses (batches 5-12). The tester side: they're removed from every test they're in. The other side keeps working.
+ */
+export async function suspendAccount(adminId: string, userId: string, note: string, asked?: unknown) {
   const u = await db.user.findUnique({ where: { id: userId } });
   if (!u) throw new HttpError(404, "not_found", "That account doesn't exist.");
-  if (u.suspendedAt) throw new HttpError(409, "already", "That account is already suspended.");
   if (u.deletedAt) throw new HttpError(409, "deleted", "That account was deleted.");
-  await db.user.update({ where: { id: userId }, data: { suspendedAt: new Date(), suspendNote: note, suspendedById: adminId, reinstatedAt: null } });
-  await accountEvent(userId, "suspended", adminId, note);
-  if (u.isDeveloper) {
+  const side = sideToSuspend(u, asked) ?? (u.isDeveloper || u.isTester ? null : "developer");
+  if (!side) throw new HttpError(400, "choose_side", "Choose the side to suspend: Developer side or Tester side.");
+  const f = fields(side);
+  // Two admins at once: the second is refused, naming the first (batch 15 section 21).
+  const claimed = await db.user.updateMany({ where: { id: userId, [f.at]: null }, data: { [f.at]: new Date(), [f.note]: note, [f.by]: adminId, [f.back]: null } });
+  if (claimed.count !== 1) {
+    const now = await db.user.findUniqueOrThrow({ where: { id: userId } });
+    const by = now[f.by] ? await db.user.findUnique({ where: { id: now[f.by]! }, select: { email: true } }) : null;
+    throw new HttpError(409, "already", `That account's ${sideWord(side)} is already suspended${by ? ` (by ${by.email})` : ""}.`);
+  }
+  await accountEvent(userId, "suspended", adminId, note, side);
+  if (side === "developer" && u.isDeveloper) {
     await markPaused({ developerId: userId }); // (batch 9) one clock per paused test
     await pauseDeveloper(u);
     await (await import("./subscription")).pauseBilling(userId);
   }
-  if (u.isTester) await removeTester(u, "suspended");
-  await notify(u.email, "Your account is paused", ["Your account is paused. Contact us in Settings if you think this is a mistake."], "/app/help", { always: true, group: "admindecision" });
-  return { ok: true };
+  if (side === "tester" && u.isTester) await removeTester(u, "suspended");
+  await notify(u.email, sidePausedLine(side), [`${sidePausedLine(side)}. Contact us in Settings if you think this is a mistake.`], "/app/help", { always: true, group: "admindecision" });
+  return { ok: true, side };
 }
 
 /** The held shares of a tester whose pay was charged during a suspension: sent now, or kept waiting for a payout account. */
@@ -114,17 +140,29 @@ export async function releaseHeldShares(testerId: string, ids?: string[]) {
   return { released: held.length, sent };
 }
 
-/** Admin: lift a suspension. */
-export async function reinstateAccount(userId: string) {
+/** Admin: lift the suspension of one side (batch 15 section 16). A one-role account, or an account with only one side suspended, needs no side named. */
+export async function reinstateAccount(userId: string, asked?: unknown, adminId: string | null = null) {
   const u = await db.user.findUnique({ where: { id: userId } });
   if (!u) throw new HttpError(404, "not_found", "That account doesn't exist.");
-  if (!u.suspendedAt) throw new HttpError(409, "not_suspended", "That account isn't suspended.");
-  const start = u.suspendedAt, now = new Date();
-  await db.user.update({ where: { id: userId }, data: { suspendedAt: null, suspendNote: "", suspendedById: null, reinstatedAt: now } });
-  await accountEvent(userId, "reinstated", u.suspendedById);
-  if (u.isDeveloper) {
+  const both = !!u.devSuspendedAt && !!u.testerSuspendedAt;
+  const side: SuspendSide | null = asked === "developer" || asked === "tester" ? asked : both ? null : u.devSuspendedAt ? "developer" : u.testerSuspendedAt ? "tester" : null;
+  if (!side) {
+    if (both) throw new HttpError(400, "choose_side", "Choose the side to reinstate: Developer side or Tester side.");
+    throw new HttpError(409, "not_suspended", "That account isn't suspended.");
+  }
+  const f = fields(side);
+  const start = u[f.at], now = new Date();
+  // Two admins at once: the second is refused, naming the first.
+  const lifted = start ? await db.user.updateMany({ where: { id: userId, [f.at]: start }, data: { [f.at]: null, [f.note]: "", [f.by]: null, [f.back]: now } }) : { count: 0 };
+  if (!start || lifted.count !== 1) {
+    const ev = await db.accountEvent.findFirst({ where: { userId, kind: "reinstated", side }, orderBy: { createdAt: "desc" } });
+    const by = ev?.byId ? await db.user.findUnique({ where: { id: ev.byId }, select: { email: true } }) : null;
+    throw new HttpError(409, "not_suspended", `That account's ${sideWord(side)} was already reinstated${by ? ` (by ${by.email})` : ""}.`);
+  }
+  await accountEvent(userId, "reinstated", adminId ?? u[f.by], "", side);
+  if (side === "developer" && u.isDeveloper) {
     // (Owner, Oct 28 afternoon, DEFAULT) Deadlines and Open until move on by the pause; a hold still on keeps the tests paused (they resume, and move on the rest, when it lifts).
-    const running = await db.$transaction((tx) => resumeTests(tx, userId, start, now, [u.holdStartedAt]));
+    const running = await db.$transaction((tx) => resumeTests(tx, userId, start!, now, [u.holdStartedAt]));
     if (!u.holdStartedAt) await chargeDeferred(userId);
     await (await import("./subscription")).resumeBilling(userId, now);
     const testers = await db.contract.findMany({ where: { status: "working", testId: { in: running } }, include: { tester: true } });
@@ -132,9 +170,10 @@ export async function reinstateAccount(userId: string) {
   }
   // (Owner, Oct 28) No automatic re-invite: the tests they were removed from wait on their dashboard with "You were removed from this test" and Ask to rejoin
   // (while the test is open, has a spot and isn't paused) until they ask or dismiss; the developer can also invite them again as usual.
-  if (u.isTester) await releaseHeldShares(userId);
-  await notify(u.email, "Your account is active again", ["Your account is active again."], "/app", { always: true, group: "admindecision" });
-  return { ok: true };
+  if (side === "tester" && u.isTester) await releaseHeldShares(userId);
+  const line = `Your ${side} account is active again`;
+  await notify(u.email, line, [`${line}.`], "/app", { always: true, group: "admindecision" });
+  return { ok: true, side };
 }
 
 // ---------- deletion ----------
@@ -187,11 +226,13 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
 export async function suspendedAccountsReminder(now = new Date()) {
   const state = await db.appState.findUnique({ where: { key: "suspended-reminder" } });
   if (state && now.getTime() - new Date(state.value).getTime() < DAY - 3_600_000) return 0; // daily, one line for all suspended accounts
-  const people = await db.user.findMany({ where: { suspendedAt: { not: null }, deletedAt: null }, select: { email: true, name: true, suspendedAt: true } });
+  // (Batch 15 section 16) Each suspended SIDE counts.
+  const people = await db.user.findMany({ where: { OR: [{ devSuspendedAt: { not: null } }, { testerSuspendedAt: { not: null } }], deletedAt: null }, select: { devSuspendedAt: true, testerSuspendedAt: true } });
   if (!people.length) return 0;
-  for (const a of await adminUsers()) await bell(a.id, `${people.length} suspended account${people.length === 1 ? "" : "s"} to review`, "/admin#users", undefined, { group: "suspendedreview", reminder: "suspended-review" });
+  const sides = people.reduce((n, p) => n + (p.devSuspendedAt ? 1 : 0) + (p.testerSuspendedAt ? 1 : 0), 0);
+  for (const a of await adminUsers()) await bell(a.id, `${sides} suspended account side${sides === 1 ? "" : "s"} to review`, "/admin#users", undefined, { group: "suspendedreview", reminder: "suspended-review" });
   await db.appState.upsert({ where: { key: "suspended-reminder" }, update: { value: now.toISOString() }, create: { key: "suspended-reminder", value: now.toISOString() } });
-  return people.length;
+  return sides;
 }
 
 // ---------- the team pausing or stopping one test (design doc 6 and 10) ----------
@@ -217,9 +258,9 @@ export async function unpauseTest(testId: string) {
   const start = t.adminPausedAt, now = new Date();
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
   await db.$transaction(async (tx) => {
-    await tx.test.update({ where: { id: testId }, data: { adminPausedAt: null, adminNote: "", ...(dev.holdStartedAt || dev.suspendedAt ? {} : { pausedSince: null }) } });
+    await tx.test.update({ where: { id: testId }, data: { adminPausedAt: null, adminNote: "", ...(dev.holdStartedAt || dev.devSuspendedAt ? {} : { pausedSince: null }) } });
     // (Owner, Oct 28 afternoon, DEFAULT) The same clock shift as a hold lift or a reinstatement (only the part not covered by the developer's own pause, if one is still on).
-    await shiftAfterPause(tx, t, start, now, [dev.holdStartedAt, dev.suspendedAt]);
+    await shiftAfterPause(tx, t, start, now, [dev.holdStartedAt, dev.devSuspendedAt]);
     await recordEvent(tx, testId, "resumed", "The team lifted the pause on this test", true);
   });
   await notify(dev.email, `The team lifted the pause on “${t.title}”`, [`The team lifted the pause on “${t.title}”: it is running again.`], `/app/tests/${testId}`, { own: true });

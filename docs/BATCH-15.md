@@ -492,6 +492,125 @@ Refusals (not stops) keep their own wording, but also start by naming the press:
 
 Build the allowed line from the buttons actually shown, so it can never list something hidden. Re-record the paused and stopped banners (team, hold, suspension, own stop), desktop and phone.
 
+## 38. The owner's answers on item 35's open gaps (Oct 30, added later)
+1. **Call Join window: keep the app's rule** (from 10 minutes before the start to 30 minutes after the booked END).
+   - **Join call** is available wherever the call is listed: the test page's Live session, the session page, the tester dashboard's Upcoming calls (item 35), and the developer dashboard's calls box (add Join there too).
+   - **A Join pressed on a call that was cancelled (or moved, or closed) since the page loaded** is refused under the button: "Your Join call didn't go through: <name> cancelled this call at 3:05 PM." The call's row then disappears live from upcoming lists (and moves to Past calls).
+2. **Invite-only tests are NEVER in Find tests,** not even for invited testers. Remove the "Invited" listing from `findTests`. Invited testers reach the test from their dashboard's invites, the bell or the email.
+   - If a test the tester already has on their dashboard becomes invite-only (an application they had, a past visit shown there), it stays there marked "Closed to new testers (invite only)". An open invite of theirs still works.
+3. **Next round stays refused after a team stop** (as built). Keep the tests. Item 37's stopped banner then never lists Next round for a team stop.
+
+Tests for each. Re-record the Find and Join scenarios.
+
+## 39. Paused and stopped tests: excerpts and Alerts (owner, Oct 30, added later; for items 23, 29 and 37)
+1. **Excerpts go through anything, including every pause and stop** (batch 13 §3). This corrects item 23, which wrongly hid Allow during a team pause; Allow is only hidden while the test has an NDA.
+   - The restricted/paused test view also shows that test's pending excerpt requests (Allow / Deny) and Take down for shown excerpts. None of them is ever stopped, routed or refused for the pause.
+   - For a team stop or pause, every refused press goes to the test page's red banner (item 37), and Stop and End early go through silently. That's confirmed.
+2. **Alerts on a paused test (any cause) stays, limited to the kinds that can still happen while paused** (this answers item 29's note). Cancel call is the only button there that can stop, and it stops once for any of these:
+   - Testers leaving;
+   - Call changes;
+   - Payments (Charge / Let it go, retries going through or failing, owed payments settled);
+   - Disputes (a tester filing one);
+   - Decisions by the team (dispute decisions, admin actions);
+   - Your saves and presses in another tab.
+
+   Hide Joins and applications, Work sent and Listing changes there, because they can't happen while paused. The menu keeps the developer's existing ticks. It only shows fewer types.
+
+3. **On a STOPPED test (developer or team stop)** the Alerts menu lists only: Payments (Charge / Let it go, retries going through or failing, owed payments settled); Disputes (a tester filing one); Decisions by the team (including dispute decisions); Your saves and presses in another tab. It doesn't show "Testers leaving" (nobody can leave a stopped test), Call changes (every call ahead is cancelled at the stop; owner's correction), Joins and applications, Work sent or Listing changes. Like the paused version, it keeps the developer's existing ticks and only shows fewer types.
+
+Tests, and a still of each limited menu (paused and stopped) for the report.
+
+## 40. The app measures each call's length; nobody enters it (owner, Oct 30, added later; relayed as "item 39", numbered 40 here because 39 was already taken)
+It replaces manual call-length logging and item 15's "log date" parts.
+- **Presence:** while the call page is open, each person's page sends a heartbeat every ~10 s. Store presence intervals per person per call (migration).
+- **Gaps:** a gap under 5 minutes (reload, a brief drop) counts as still present.
+- **Measured length:** the minutes both people were in the room at the same time, in whole minutes, capped at 150% of the booked length (as today).
+- **When it's final:** when both have left, or 30 minutes after the latest allowed end, whichever comes first. Until then the call's row says "Call in progress / measuring".
+- **Display everywhere a call's length shows:** "Length: 29 min (both in the call 2:21–2:50 PM)".
+- **The developer can only LOWER the length,** with a reason (required, and the tester reads it), in the call's Pay box: "Lower the length". They can never raise it. The tester can dispute the amount once, as usual.
+- **Remove:** "How long was the call?", "Enter the length", the 24-hour / log-date rule and its texts, `LENGTH_WAITS`, the log-date part of item 15, and "booked length is used if not entered". Calls already logged keep their logged minutes.
+- **Listed calls:** pay and Charge use the measured (or lowered) length × the contract rate. Charge still opens on the usual review date.
+- **Unlisted calls:** the weekly reminder becomes "Pay your calls" (stacked, until paid), and the cap is $200/h × the measured length, within item 34's $1,000 ceiling.
+- **Nobody measured** (no overlap at all): today's "nobody joined" auto-cancel rule applies.
+
+**Pay box for calls: Rate and Amount fill each other.**
+- Typing a rate fills Amount = rate × length.
+- Typing an amount fills Rate = amount ÷ length × 60, shown to the cent per hour.
+- Both are live. The last one typed wins on submit, and the server recomputes and checks the caps (per-hour and total) whichever was typed.
+
+**Tests:** overlap maths, gaps, the 150% cap, lowering with a reason, Charge using the measured length, and the rate/amount link.
+
+**Proof:** a recording of a two-person call (two browser contexts) showing the measured length afterwards, Lower with a reason, the tester's view, and the Rate/Amount boxes filling each other. Desktop and phone.
+
+## 41. Security fixes from the pre-launch audit (Oct 30, PRIORITY; relayed as "item 40", numbered 41 here)
+Build these BEFORE the remaining UI items. Tests for each; file:line refs are from commit 6b95a36.
+
+**Must fix before real money:**
+- **C1 payKey namespace collision.**
+  - **Problem:** the Pay route accepts any client `payKey` matching `^[\w-]{8,80}$` (payments.ts:52). It's stored as the unique `Review.payKey` and used as the Stripe idempotency key `pay-<key>`. The server's own keys share that namespace (`choice-${submissionId}` for a tester's Charge, holds.ts:640; `dispute-${d.id}` for raises, payments.ts:270). A developer can send `payKey="choice-<other submissionId>"` with a $0 Pay to block a tester's Charge for ever, or `dispute-<id>` to break an admin's raise. Recovery code also treats a `choice-` prefix as a Charge.
+  - **Fix:** require a UUID from the client and wrap it server-side (e.g. `press:<userId>:<uuid>`), give every server-made key its own prefix a client value can't produce, and update recovery to match. Apply this to every route that takes a client press key (Pay, Pay more, Pay what you owe, Charge, chat client ids…).
+- **H1 admin by email alone.** `isAdmin` matches `ADMIN_EMAILS` on email only (session.ts:65), and sign-up gives a session before email confirmation. Anyone who registers an admin address first gets full admin.
+  - **Fix:** grant admin via `ADMIN_EMAILS` only when `emailVerifiedAt` is set (or the `isAdmin` flag). `configProblems` fails the production build if `ADMIN_EMAILS` contains example.com or other placeholder values.
+- **H2 account pre-hijack via Google.** Sign-up with any email gives a session; Google sign-in into an existing unverified account reuses it unchanged (`upsert … update: {}`, google.ts:293); payout setup needs no confirmed email.
+  - **Fix:** when Google signs into an UNVERIFIED account: clear `passwordHash`, delete all its sessions, drop any `stripeAccountId`/payout state, then set `emailVerifiedAt`. Payout setup also requires a confirmed email.
+- **M1 every Stripe error counted as a decline.** `charge()` maps all but connection/API errors to `card_failed` (stripe.ts:138-156), so rate limits, bad keys or a restricted destination put honest developers on hold.
+  - **Fix:** only `type === "card_error"` is a decline. Any other error fails the press with "Payments are having a problem right now. Nothing was charged; try again shortly.", with no hold, nothing owed, and no raw Stripe text shown (also L4, holds.ts:307).
+- **M2 Pay more race.** The room check, repeat check and insert are separate (payments.ts:410-425), and `Payment.payKey` isn't unique.
+  - **Fix:** do it all inside a transaction with the same test row lock as `review()`, and add a unique index on `(kind, payKey)` (migration).
+- **M3 fail-open production settings:** these stop the production build (VERCEL_ENV=production or NODE_ENV=production), with `fakeOn()` also guarded by `NODE_ENV !== "production"`:
+  - no `STRIPE_SECRET_KEY` (otherwise every Pay is recorded as not_set_up and testers are told they were paid);
+  - no R2 settings at all (otherwise uploads go to local disk);
+  - `ALLOW_DEV_OUTBOX=1` (otherwise /dev/outbox is public and shows reset links). Also make /dev/outbox admin-only even outside production;
+  - `STRIPE_FAKE` on;
+  - a placeholder `HEALTH_KEY`, `ADMIN_EMAILS` or `EMAIL_FROM`;
+  - a missing `APP_URL`. `appUrl()` must never fall back to the request Host header in production.
+- **M4 fake outages.** `parseAlert` trusts `alertDateTime`/`alertDuration` (outages.ts:43-67).
+  - **Fix:** use the server's clock for down/up (store when the down alert arrived; the outage runs from then to the up alert's arrival); refuse alerts more than 10 minutes off server time; cap an outage at 24 hours (a longer one is recorded as "needs admin approval" and moves nothing until an admin approves it in the console); compare `HEALTH_KEY` in constant time, and accept it in a header as well as the query.
+
+**Before uploads open to the public:**
+- **M5 stored type ≠ declared type on R2.** The PUT presign doesn't sign `content-type` (storage.ts:39), and the GET has no response overrides.
+  - **Fix:** sign `content-type` in the PUT. Add `response-content-type=<stored type>` and `response-content-disposition` (attachment except image/* and video/*, which are inline) to the GET.
+- **M6 R2 grows without limit.** Removing a recording deletes the row but not the object (recordings.ts:79-82, 113).
+  - **Fix:** delete the R2 object on remove; the daily job purges uploads not finished within 3 hours, and objects whose rows are gone; a per-account daily upload quota of 3 GB, with the message "You've uploaded a lot today. Try again tomorrow."
+
+**Also:**
+- **L1 headers** in next.config: `poweredByHeader: false`; HSTS `max-age=63072000; includeSubDomains; preload`; Permissions-Policy (camera/microphone/display-capture for self and the call provider in use, geolocation=(), usb=(), payment for self + js.stripe.com).
+  - **CSP:** default-src 'self'; script-src 'self' 'unsafe-inline' https://js.stripe.com https://*.js.stripe.com (plus 'unsafe-eval' in dev only); style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.stripe.com plus the R2 host from R2_ACCOUNT_ID; media-src 'self' blob: plus the R2 host; connect-src 'self' https://api.stripe.com plus the R2 host; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com plus the call provider (check what the call room embeds); frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'.
+  - Check that every page still works under it (call room, Stripe pop-ups, recordings).
+- **L2 rate limits:** forgot password 10 per network per hour; chat 30 messages per minute per person; waitlist 5 per network per hour; kept drafts at most 50 keys per user, with the oldest dropped; `clientIp`: use Vercel's `x-real-ip` / the last trusted hop rather than the first `x-forwarded-for` value.
+- **L3 duplicates:** a webhook delivered twice must not repeat holds or emails (store processed Stripe event ids, unique, and skip repeats); a doubled Confirm likewise (claim it once).
+- **L5:** make `/app/switch` a POST (keep the link working through a small form); `/api/payments/card` and `/payout` create Stripe objects only on POST.
+- **L6:** add a "Sign out of all devices" button in Settings.
+- **Dependencies:** leave the next and prisma major upgrades for after launch. Note them in HANDOVER.
+
+**Proof:** captured test output for each item under docs/media/proof/security-*.txt, plus a short docs/media/proof/SECURITY.md listing each finding → fix → test.
+
+## 42. Calls that are over move to the tester's row and Call history (owner, Oct 30, added later; relayed as "item 41", numbered 42 here). It adjusts items 31 and 33.
+- **The developer's Live session panel shows only calls ahead and calls in progress.** No Past calls fold there any more (drop that part of item 33). The booked-calls scroll box per tester stays.
+- **Every call that's over** (took place, cancelled by either side, nobody joined, missed because of a pause or outage, skipped) moves to that tester's row in the Testers panel. It goes in item 31's "Calls (N)" fold, oldest last. Each call shows its outcome badge:
+  - "Took place · 29 min · paid $14.50" (with Pay / Pay more as in item 31);
+  - "Cancelled by Ana · 3:05 PM · <reason>";
+  - "Nobody joined";
+  - "Missed: the site was down";
+  - and so on.
+  - The fold scrolls when long.
+- **Tester side:** the session page's Live session keeps upcoming calls. Over calls (same list, same badges) go in a "Call history" fold on that page. The tester dashboard's History entry for an ended test includes them in its deal history.
+- **Bell lines and live-box lines about a call that's over** link to that call in the tester row (developer) or in Call history (tester), with the markJump highlight. Calls still ahead link to the Live session as now.
+- **Proof:** re-record Live session (upcoming only), a tester row with mixed call outcomes, and the tester's Call history. Desktop and phone.
+
+## 43. Deal history on both sides (owner, Oct 30, added later; relayed as "item 42", numbered 43 here)
+**Developer: a "Contract changes" panel on the test page** (folded, after Testers). One entry per Save that changed the terms or the names, newest first:
+- **Header:** date and time, and what changed (field names). Use item 24's rename entries for name changes.
+- **Before → after** for each changed field, with the same displays as the offer box: NDA and steps in scroll boxes, questions as "3 then +N more", parts and prices as terms lines.
+- **Who chose what:** "Switched: Ana Silva, Ben Okafor · Kept: Cam Lee · Not decided yet: Dee Marsh". Testers who left since are marked "(left)". Names are clickable to that tester's row.
+- **Effects on others:** "2 applications closed · 1 invite re-sent" (batch 14 §3).
+- Entries scroll when there are many. Updates are live.
+- Each tester row's "See their contract" stays: that tester's own path.
+
+**Tester: their own deal history** (session page Terms history, and the dashboard History entry for ended tests). Check it lists everything for THEM, in order: the terms they joined on; every offer, with what changed and what they chose (Switched / Kept / not decided), with dates; renames (item 24); their previous question sets (batch 13 §8); payments. It never shows other testers' choices.
+
+**Proof:** a recording of the developer's Contract changes panel after 3 saves with mixed switches and keeps, plus the tester's own history. Desktop and phone.
+
 ## Check and report
 - Migrations: `LoginAttempt`, `User.timeZone`, the stored "down" alert (or reuse `AppState`). Write them by hand and check them with the `prisma migrate diff ... --exit-code` command from BATCH-10. A stale Prisma client is then the only acceptable failure.
 - Run `NEXT_DIST_DIR=.next-build npm run check` until it's green.

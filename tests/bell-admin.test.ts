@@ -75,7 +75,8 @@ describe("bell stacking: same-day lines about one test stack, except the lines t
     const dl = await lines(dev.user.id);
     for (const re of [/will close later$/, /^The team lifted the pause/]) expect(dl.find((l) => re.test(l.text))?.own, String(re)).toBe(true);
     // (Owner, Oct 27) Lines of the same kind stack across tests: account paused / active again are "admin decisions"; a decided dispute is "disputes decided".
-    for (const re of [/^Your account is paused$/, /^Your account is active again$/]) expect(dl.find((l) => re.test(l.text)), String(re)).toMatchObject({ own: false, groupKey: "admindecision" });
+    for (const re of [/^Your developer account is paused$/, /^Your developer account is active again$/]) // (batch 15 section 16: the side is named)
+      expect(dl.find((l) => re.test(l.text)), String(re)).toMatchObject({ own: false, groupKey: "admindecision" });
     expect(dl.find((l) => /was decided$/.test(l.text))).toMatchObject({ own: false, groupKey: "disputedecided" });
     // (Owner, Oct 26) The team pausing or stopping your test stacks into one line a day across all your tests (their emails stay always-send).
     for (const re of [/^The team paused/, /^The team stopped/]) expect(dl.find((l) => re.test(l.text)), String(re)).toMatchObject({ own: false, groupKey: "team" });

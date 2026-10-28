@@ -17,7 +17,10 @@ describe("configProblems", () => {
       "Emails aren't being sent: RESEND_API_KEY is missing.",
       "CRON_SECRET is missing: the daily job can't run (reminders, Charge, retries).",
       "ADMIN_EMAILS is missing: nobody can open the admin console.",
-      "APP_URL is missing: links in emails and Stripe's return pages may point to the wrong address.",
+      "APP_URL is missing: set it to the site's https address (links in emails and Stripe's return pages use it).",
+      'STRIPE_SECRET_KEY is missing: every Pay would be recorded as "payments not set up" and testers told they were paid.',
+      "The R2 settings are missing: uploads would go to the server's own disk, which Vercel doesn't keep.",
+      "EMAIL_FROM is missing or a placeholder: set an address on your verified Resend domain.",
     ]);
     expect(msgs({ FREE_UNTIL: "next spring" })).toEqual([`FREE_UNTIL isn't a valid date ("next spring"). Developers stay free until it's fixed.`]);
     expect(msgs({ FREE_UNTIL: "2026-11-20" })[0]).toMatch(/^FREE_UNTIL is less than 30 days ahead/);
@@ -35,7 +38,7 @@ describe("configProblems", () => {
     expect(stops({ STRIPE_SECRET_KEY: "sk_live_x" })).toBe(3);
     expect(stops({ STRIPE_SECRET_KEY: "sk_test_x" })).toBe(0);
     expect(stops({ R2_ACCOUNT_ID: "a" })).toBe(1);
-    expect(stops({ NODE_ENV: "production" })).toBe(1); // the email key; the others warn
+    expect(stops({ NODE_ENV: "production" })).toBe(5); // (batch 15 section 41, M3) the email key, APP_URL, Stripe, R2 and EMAIL_FROM; the others warn
     expect(stops({ NODE_ENV: "production", VERCEL_ENV: "preview" })).toBe(0); // a preview build isn't the live site
   });
   it("the build script fails with the plain message", () => {
@@ -53,6 +56,20 @@ describe("configProblems", () => {
     expect(bad.out).toContain(`FREE_UNTIL isn't a valid date ("2026-13-45"). Developers stay free until it's fixed.`);
     expect(run({ FREE_UNTIL: "2027-06-01" }).code).toBe(0);
   });
+  it("(section 41, M3 and H1) fail-open production settings and placeholders stop the build", () => {
+    const live = { NODE_ENV: "production", RESEND_API_KEY: "re_x", APP_URL: "https://playtest.app", STRIPE_SECRET_KEY: "sk_live_x", STRIPE_ALLOW_LIVE: "1", STRIPE_PUBLISHABLE_KEY: "pk", STRIPE_WEBHOOK_SECRET: "a", STRIPE_CONNECT_WEBHOOK_SECRET: "b", R2_ACCOUNT_ID: "a", R2_ACCESS_KEY_ID: "b", R2_SECRET_ACCESS_KEY: "c", R2_BUCKET: "d", CRON_SECRET: "c", ADMIN_EMAILS: "ana@playtest.app", EMAIL_FROM: "Playtest <hi@playtest.app>", HEALTH_KEY: "k".repeat(40) };
+    const stopping = (over: Record<string, string>) => configProblems({ ...live, ...over }, NOW).filter((p) => p.stopsBuild).map((p) => p.message);
+    expect(stopping({})).toEqual([]);
+    expect(stopping({ ALLOW_DEV_OUTBOX: "1" })[0]).toMatch(/^ALLOW_DEV_OUTBOX=1 on the live site/);
+    expect(stopping({ STRIPE_FAKE: "1" })[0]).toMatch(/^STRIPE_FAKE=1 on the live site/);
+    expect(stopping({ ADMIN_EMAILS: "owner@example.com" })[0]).toMatch(/^ADMIN_EMAILS still has a placeholder/);
+    expect(stopping({ EMAIL_FROM: "Playtest <hello@example.com>" })[0]).toMatch(/^EMAIL_FROM is missing or a placeholder/);
+    expect(stopping({ HEALTH_KEY: "change-me-long-random-secret" })[0]).toMatch(/^HEALTH_KEY is a placeholder/);
+    expect(stopping({ R2_ACCOUNT_ID: "", R2_ACCESS_KEY_ID: "", R2_SECRET_ACCESS_KEY: "", R2_BUCKET: "" })[0]).toMatch(/^The R2 settings are missing/);
+    expect(stopping({ STRIPE_SECRET_KEY: "" })[0]).toMatch(/^STRIPE_SECRET_KEY is missing/);
+    expect(stopping({ APP_URL: "" })[0]).toMatch(/^APP_URL is missing/);
+  });
+
   it("the red box is the owner's; every admin sees it when OWNER_EMAIL is unset", () => {
     expect(seesConfigBox({ email: "ana@x.test" }, {})).toBe(true);
     expect(seesConfigBox({ email: "ana@x.test" }, { OWNER_EMAIL: "Owner@x.test" })).toBe(false);

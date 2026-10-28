@@ -97,7 +97,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {off && !/^\/app\/?(\?.*)?$/.test(path) && (
         <p className="mx-auto mt-4 max-w-6xl px-4" data-suspended-strip="">
           <span className="info block">
-            {u.suspendedAt ? <>Your account is {side === "tester" ? "paused" : "suspended"}. To appeal, use <Link href="/app/help" className="underline">Contact us</Link> in Settings.</> : u.holdReason === "chargeback" ? <>Your tests are paused after a chargeback. <Link href="/app/payments#chargeback-steps" className="underline">Follow the steps in Payments</Link>.</> : <>Your tests are paused until you pay what you owe. <Link href="/app/payments#owed" className="underline">Pay what you owe</Link>.</>}
+            {/* (Batch 15 section 16) The side in use names its own suspension. */}
+            {(side === "tester" ? u.testerSuspendedAt : u.devSuspendedAt) ? <>Your {u.isDeveloper && u.isTester ? `${side === "tester" ? "tester" : "developer"} account` : "account"} is {side === "tester" ? "paused" : "suspended"}. To appeal, use <Link href="/app/help" className="underline">Contact us</Link> in Settings.</> : u.holdReason === "chargeback" ? <>Your tests are paused after a chargeback. <Link href="/app/payments#chargeback-steps" className="underline">Follow the steps in Payments</Link>.</> : <>Your tests are paused until you pay what you owe. <Link href="/app/payments#owed" className="underline">Pay what you owe</Link>.</>}
           </span>
         </p>
       )}

@@ -8,8 +8,8 @@ import { email, json, makeUser, req, uniq } from "./helpers";
 
 // Batch 15 section 7: one sign-in message, attempt limits per email and per network, sign-up limit per network, and the no-password reset email.
 const ipOf = () => `203.0.113.${Math.floor(Math.random() * 200) + 1}-${uniq()}`;
-const login = (body: Record<string, unknown>, ip: string) => loginPOST(req("/api/auth/login", { body, headers: { "x-forwarded-for": `${ip}, 10.0.0.1` } })).then(json);
-const signup = (body: Record<string, unknown>, ip: string) => signupPOST(req("/api/auth/signup", { body, headers: { "x-forwarded-for": ip } })).then(json);
+const login = (body: Record<string, unknown>, ip: string) => loginPOST(req("/api/auth/login", { body, headers: { "x-forwarded-for": `198.51.100.7, ${ip}` } })).then(json);
+const signup = (body: Record<string, unknown>, ip: string) => signupPOST(req("/api/auth/signup", { body, headers: { "x-real-ip": ip } })).then(json);
 
 describe("sign-in (section 7)", () => {
   it("one message for no account, a deleted account, a Google sign-up and a wrong password", async () => {

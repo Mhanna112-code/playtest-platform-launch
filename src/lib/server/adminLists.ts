@@ -18,7 +18,7 @@ export type Page<T> = { rows: T[]; next: string | null; total: number };
 
 export type DisputeVM = { type?: "dispute"; id: string; at: string; head: string; money: string; said: string; open: boolean; decided: string; min: number; max: number };
 export type MineVM = { id: string; at: string; title: string; dev: string; why: string; when: string; testId: string };
-export type UserVM = { href: string; id: string; at: string; line: string; reports: number; state: "deleted" | "suspended" | "normal"; stateLine: string };
+export type UserVM = { href: string; id: string; at: string; line: string; reports: number; state: "deleted" | "suspended" | "normal"; stateLine: string; devSuspended?: boolean; testerSuspended?: boolean; isDeveloper?: boolean; isTester?: boolean };
 export type TestVM = { href: string; id: string; at: string; line: string; status: string; adminPaused: boolean; stopped: boolean; critical: number; closedLine: string };
 /** (Owner, Oct 28 afternoon) The per-field change counts on an admin test row: "NDA 3, steps 1". */
 const countsText = (v: unknown) => { const c = countsOf(v); return CRITICAL_KEYS.filter((k) => c[k] > 0).map((k) => `${CRITICAL_FIELDS[k]} ${c[k]}`).join(", "); };
@@ -100,10 +100,13 @@ export async function disputeRow(d: Awaited<ReturnType<typeof db.dispute.findMan
   };
 }
 
-/** Tests THIS admin paused or stopped, or whose developer this admin suspended, newest first. */
+/**
+ * Tests THIS admin paused or stopped, or whose developer this admin suspended, and (batch 15 section 35) the ACCOUNTS this admin suspended (per side) or deleted, newest
+ * first. An account row has no testId.
+ */
 async function mine(adminId: string, cursor: string | null): Promise<Page<MineVM & { date: Date }>> {
   const tests = await db.test.findMany({
-    where: { OR: [{ adminPausedById: adminId }, { adminStoppedById: adminId }, { developer: { suspendedById: adminId, suspendedAt: { not: null } } }] },
+    where: { OR: [{ adminPausedById: adminId }, { adminStoppedById: adminId }, { developer: { devSuspendedById: adminId, devSuspendedAt: { not: null } } }] },
     include: { developer: true },
   });
   const all: (MineVM & { date: Date })[] = [];
@@ -111,10 +114,23 @@ async function mine(adminId: string, cursor: string | null): Promise<Page<MineVM
     const reasons: { why: string; date: Date }[] = [];
     if (t.adminStoppedById === adminId) reasons.push({ why: "stopped by you", date: t.stoppedAt ?? t.adminStoppedAt ?? t.updatedAt });
     if (t.adminPausedById === adminId && t.adminPausedAt) reasons.push({ why: "paused by you", date: t.adminPausedAt });
-    if (t.developer.suspendedById === adminId && t.developer.suspendedAt) reasons.push({ why: "developer suspended by you", date: t.developer.suspendedAt });
+    if (t.developer.devSuspendedById === adminId && t.developer.devSuspendedAt) reasons.push({ why: "developer suspended by you", date: t.developer.devSuspendedAt });
     if (!reasons.length) continue;
     reasons.sort((a, b) => b.date.getTime() - a.date.getTime());
     all.push({ id: t.id, testId: t.id, date: reasons[0].date, at: reasons[0].date.toISOString(), title: t.title, dev: displayName(t.developer), why: reasons.map((r) => r.why).join(" · "), when: fmtDateTime(reasons[0].date) });
+  }
+  // (Batch 15 section 35) The accounts themselves: each side this admin suspended (still suspended), and each account this admin deleted.
+  const events = await db.accountEvent.findMany({ where: { byId: adminId, kind: { in: ["suspended", "deleted"] } }, orderBy: { createdAt: "desc" }, take: 500 });
+  const people = new Map((await db.user.findMany({ where: { id: { in: events.map((e) => e.userId) } } })).map((u) => [u.id, u]));
+  for (const e of events) {
+    const p = people.get(e.userId);
+    if (!p) continue;
+    if (e.kind === "suspended") {
+      const at = e.side === "tester" ? p.testerSuspendedAt : p.devSuspendedAt;
+      if (!at || at.getTime() > e.createdAt.getTime() + 5_000 || at.getTime() < e.createdAt.getTime() - 5_000) continue; // reinstated since (or suspended again by someone else)
+    }
+    const why = e.kind === "deleted" ? "account deleted by you" : `suspended by you (${e.side || "developer"} side)`;
+    all.push({ id: `acct-${e.id}`, testId: "", date: e.createdAt, at: e.createdAt.toISOString(), title: p.email, dev: displayName({ ...p, deletedAt: null }), why, when: fmtDateTime(e.createdAt) });
   }
   all.sort((a, b) => b.date.getTime() - a.date.getTime() || (a.id < b.id ? 1 : -1));
   return slice(all, (r) => r.date, cursor);
@@ -127,7 +143,14 @@ async function users(cursor: string | null): Promise<Page<UserVM>> {
     db.user.count(),
   ]);
   const page = list.slice(0, PAGE);
-  const names = new Map((await db.user.findMany({ where: { id: { in: page.map((u) => u.suspendedById).filter((x): x is string => !!x) } }, select: { id: true, email: true } })).map((u) => [u.id, u.email]));
+  const names = new Map((await db.user.findMany({ where: { id: { in: page.flatMap((u) => [u.devSuspendedById, u.testerSuspendedById]).filter((x): x is string => !!x) } }, select: { id: true, email: true } })).map((u) => [u.id, u.email]));
+  // (Batch 15 sections 16 and 21) Each suspended side, with the admin who did it ("an admin (deleted)" when that account is gone).
+  const sideLine = (x: (typeof page)[number], s: "developer" | "tester") => {
+    const at = s === "developer" ? x.devSuspendedAt : x.testerSuspendedAt;
+    const by = s === "developer" ? x.devSuspendedById : x.testerSuspendedById;
+    const note = s === "developer" ? x.devSuspendNote : x.testerSuspendNote;
+    return at ? `Suspended (${s} side) ${fmtDateTime(at)}${by ? ` by ${names.get(by) ?? "an admin (deleted)"}` : ""}${note ? ` · “${note}”` : ""}` : "";
+  };
   const reports = await reportCounts(page.map((u) => u.id));
   const rows: UserVM[] = page.map((x) => ({
     id: x.id,
@@ -135,10 +158,14 @@ async function users(cursor: string | null): Promise<Page<UserVM>> {
     line: `${x.email} · ${displayName(x)} · ${[x.isDeveloper && "developer", x.isTester && "tester"].filter(Boolean).join(" + ") || "no role"}${x.isDeveloper ? ` · ${adminSubLine(x)}` : ""}`,
     href: profileHref(x),
     reports: reports.get(x.id) ?? 0,
-    state: x.deletedAt ? "deleted" : x.suspendedAt ? "suspended" : "normal",
+    state: x.deletedAt ? "deleted" : x.devSuspendedAt || x.testerSuspendedAt ? "suspended" : "normal",
+    devSuspended: !!x.devSuspendedAt,
+    testerSuspended: !!x.testerSuspendedAt,
+    isDeveloper: x.isDeveloper,
+    isTester: x.isTester,
     stateLine: x.deletedAt
       ? `Deleted ${fmtDateTime(x.deletedAt)} by ${x.deletedBy === "admin" ? "the team" : "the owner of the account"}${x.deleteReason ? `: ${x.deleteReason}` : ""}`
-      : x.suspendedAt ? `suspended ${fmtDateTime(x.suspendedAt)}${x.suspendedById ? ` by ${names.get(x.suspendedById) ?? "an admin"}` : ""}${x.suspendNote ? ` · “${x.suspendNote}”` : ""}` : "",
+      : [sideLine(x, "developer"), sideLine(x, "tester")].filter(Boolean).join(" · "),
   }));
   const last = page[page.length - 1];
   return { rows, next: list.length > PAGE && last ? cur(last.createdAt, last.id) : null, total };
@@ -378,7 +405,7 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
   const ids = contracts.map((c) => c.id);
   const byContract = new Map(contracts.map((c) => [c.id, displayName(c.tester)]));
   const of = (cid: string | null) => (cid ? byContract.get(cid) ?? "a tester" : "");
-  const adminIds = [t.adminPausedById, t.adminStoppedById, t.developer.suspendedById].filter((x): x is string => !!x);
+  const adminIds = [t.adminPausedById, t.adminStoppedById, t.developer.devSuspendedById].filter((x): x is string => !!x);
   const admins = new Map((await db.user.findMany({ where: { id: { in: adminIds } }, select: { id: true, email: true } })).map((u) => [u.id, u.email]));
   const who = (id: string | null | undefined) => (id ? admins.get(id) ?? "an admin" : "an admin");
   const rows: Row[] = [];
@@ -396,7 +423,7 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
     if (t.adminPausedAt) rows.push(mk("admin-paused", t.id, t.adminPausedAt, `Paused by ${who(t.adminPausedById)}${t.adminNote ? `: ${t.adminNote}` : ""}`));
     if (t.adminStoppedAt) rows.push(mk("admin-stopped", t.id, t.adminStoppedAt, `Stopped by ${who(t.adminStoppedById)}${t.adminNote ? `: ${t.adminNote}` : ""}`));
     if (t.pauseClosedAt) rows.push(mk("pause-closed", t.id, t.pauseClosedAt, `Closed after being paused${t.adminStoppedById ? ` (by ${who(t.adminStoppedById)})` : " (by the daily job)"}: ${t.pauseClosedReason}`));
-    if (t.developer.suspendedAt) rows.push(mk("dev-suspended", t.id, t.developer.suspendedAt, `Its developer was suspended by ${who(t.developer.suspendedById)}`));
+    if (t.developer.devSuspendedAt) rows.push(mk("dev-suspended", t.id, t.developer.devSuspendedAt, `Its developer was suspended (developer side) by ${who(t.developer.devSuspendedById)}`));
   } else if (kind === "t-contracts") {
     for (const c of contracts) rows.push(mk("contract", c.id, c.joinedAt, `${displayName(c.tester)} joined on: ${termsLine(c)}`));
     for (const o of await db.termsOffer.findMany({ where: { testId } })) {

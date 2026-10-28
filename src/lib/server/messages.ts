@@ -2,7 +2,8 @@ import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
 import { HttpError } from "./http";
 import { notify } from "./notify";
-import { CHAT_PAUSED, PAUSE_DEFAULTS, testerPaused } from "@/lib/rules";
+import { CHAT_NOT_SENT } from "@/lib/rules";
+import { clientMessageId } from "./pressKeys";
 
 // Per-test chat between the developer and one tester (owner rule): open to testers in the test, invited testers
 // (open invite), applicants (pending) and past participants; never after a block. Bell: "Nora Lane · Harbor Run:
@@ -25,21 +26,29 @@ export async function chatAccess(userId: string, testId: string, testerId: strin
 export const CHAT_UNABLE = "Unable to chat with this tester.";
 
 /**
+ * (Owner, Oct 30, batch 15 sections 1 and 16) Who in this chat is restricted right now: the test's developer when their developer side is suspended or they're on a
+ * payment or chargeback hold; the tester when their tester side is suspended. Only chats where the person is on the restricted side are paused.
+ */
+export async function chatRestriction(testId: string, testerId: string) {
+  const test = await db.test.findUniqueOrThrow({ where: { id: testId }, select: { developer: { select: { devSuspendedAt: true, holdStartedAt: true, holdReason: true } } } });
+  const tester = await db.user.findUniqueOrThrow({ where: { id: testerId }, select: { testerSuspendedAt: true } });
+  return { developer: !!(test.developer.devSuspendedAt || test.developer.holdStartedAt), tester: !!tester.testerSuspendedAt, dev: test.developer };
+}
+
+/**
  * (Owner, Oct 26) "Chat with <name>" on a tester's hover card and profile (developer side): opens the same per-test chat as the Testers panel's Chat button.
  * Where a block exists either way, or the chat would otherwise be refused (a suspended or deleted account), the press says only "Unable to chat with this tester."
  */
 export const CHAT_UNABLE_DEV = "Unable to chat with this developer.";
-export async function openTesterChat(who: { id: string; suspendedAt?: Date | null; holdStartedAt?: Date | null }, body: Record<string, unknown>) {
+export async function openTesterChat(who: { id: string; devSuspendedAt?: Date | null; testerSuspendedAt?: Date | null; holdStartedAt?: Date | null }, body: Record<string, unknown>) {
   const c = await db.contract.findUnique({ where: { id: String(body.contractId ?? "") }, include: { test: { include: { developer: true } }, tester: true } });
   if (!c || (c.test.developerId !== who.id && c.testerId !== who.id)) throw new HttpError(404, "not_found", "That chat doesn't exist.");
   const a = await chatAccess(who.id, c.testId, c.testerId).catch(() => null);
-  // (Owner, Oct 27) "Chat with <name>" is on every hover card, both ways: the developer's on the Testers panel / dashboard seats, the tester's on the developer's name. It is refused (and hidden)
-  // while the viewer is suspended or held, and when the other side is suspended or a block exists, with the same words as before.
+  // (Owner, Oct 27) "Chat with <name>" is on every hover card, both ways. It is refused while the viewer is restricted on that side, or a block exists. (Batch 15 section 1)
+  // When the OTHER person is restricted the chat still opens: it can be read, and its box says messages are paused.
   if (c.testerId === who.id) {
-    if (!a || a.blocked || who.suspendedAt) throw new HttpError(409, "unable", CHAT_UNABLE_DEV);
-    if (PAUSE_DEFAULTS.chatClosed && testerPaused(c.test.developer, c.test)) throw new HttpError(409, "paused", CHAT_PAUSED);
-    if (c.test.developer.suspendedAt || c.test.developer.holdStartedAt) throw new HttpError(409, "unable", CHAT_UNABLE_DEV);
-  } else if (!a || a.blocked || who.suspendedAt || who.holdStartedAt || c.tester.suspendedAt) throw new HttpError(409, "unable", CHAT_UNABLE);
+    if (!a || a.blocked || who.testerSuspendedAt) throw new HttpError(409, "unable", CHAT_UNABLE_DEV);
+  } else if (!a || a.blocked || who.devSuspendedAt || who.holdStartedAt) throw new HttpError(409, "unable", CHAT_UNABLE);
   return { href: `/app/chat/${c.id}` };
 }
 
@@ -52,26 +61,52 @@ export async function chatFor(userId: string, contractId: string) {
 
 export const firstWords = (s: string, max = 60) => (s.length <= max ? s : s.slice(0, max).replace(/\s+\S*$/, "") + "…");
 
-export async function sendChat(user: { id: string; name: string; email: string }, testId: string, testerId: string, raw: unknown) {
+/** (Batch 15 sections 13 and 41) A chat message's press id: a UUID made when the person presses Send, kept only while that message isn't confirmed. */
+const readClientId = clientMessageId;
+/** (Batch 15 section 41, L2) At most this many messages a minute per person. */
+export const CHAT_PER_MINUTE = 30;
+export const CHAT_TOO_FAST = "You're sending messages very fast. Wait a minute, then send again.";
+
+export async function sendChat(user: { id: string; name: string; email: string }, testId: string, testerId: string, raw: unknown, clientIdRaw?: unknown) {
   const a = await chatAccess(user.id, testId, testerId);
   if (a.blocked) throw new HttpError(409, "closed", "This chat is closed.");
-  // (Owner, Oct 28 afternoon, DEFAULT) Closed both ways while the test is paused (the developer's Messages page is closed then).
-  if (PAUSE_DEFAULTS.chatClosed && testerPaused(await db.user.findUniqueOrThrow({ where: { id: a.test.developerId } }), a.test)) throw new HttpError(409, "paused", CHAT_PAUSED);
-  const body = typeof raw === "string" ? raw.trim().slice(0, 4000) : "";
+  // (Batch 15 section 13) The same press again (its answer was lost): the message it already posted, never a second one.
+  const clientId = readClientId(clientIdRaw);
+  if (clientId) {
+    const again = await db.message.findFirst({ where: { senderId: user.id, clientId } });
+    if (again) return again;
+  }
+  // (Owner, Oct 30, batch 15 section 1) Never closed because the TEST is paused: only while a person is restricted. The restricted person's own press is refused like Rate
+  // (the route's requireActive sends them to the dashboard top); the other person's Send is turned back with a neutral notice and the text is kept.
+  const r = await chatRestriction(testId, testerId);
+  const iAmDev = user.id === a.test.developerId;
+  if (iAmDev ? r.developer : r.tester) throw new HttpError(403, iAmDev && !r.dev.devSuspendedAt ? "held" : "suspended", iAmDev ? "Your tests are paused." : "Your account is paused.", { failed: `Your message on ${a.test.title} didn't go through`, [iAmDev && !r.dev.devSuspendedAt ? "held" : "suspended"]: true });
+  if (iAmDev ? r.tester : r.developer) throw new HttpError(409, "chat_paused", CHAT_NOT_SENT);
+  const body = typeof raw === "string" ? raw.trim() : "";
   if (!body) throw new HttpError(400, "empty", "Type a message first.");
-  const m = await db.message.create({ data: { testId, testerId, contractId: a.contract.id, senderId: user.id, body } });
+  if ((await db.message.count({ where: { senderId: user.id, createdAt: { gt: new Date(Date.now() - 60_000) } } })) >= CHAT_PER_MINUTE) throw new HttpError(429, "too_fast", CHAT_TOO_FAST);
+  if (body.length > CHAT_MAX) throw new HttpError(400, "too_long", `Keep a message to ${CHAT_MAX.toLocaleString("en-US")} characters.`);
+  const m = await db.message.create({ data: { testId, testerId, contractId: a.contract.id, senderId: user.id, body, clientId } }).catch(async (e) => {
+    // Two presses of the same message at once: the first one wins.
+    const again = clientId ? await db.message.findFirst({ where: { senderId: user.id, clientId } }) : null;
+    if (again) return again;
+    throw e;
+  });
   const toDev = user.id === testerId;
   const recipient = await db.user.findUniqueOrThrow({ where: { id: toDev ? a.test.developerId : testerId } });
   const from = displayName(user);
-  const line = a.active ? `${from} · ${a.test.title}: ${firstWords(body)}` : `New message from ${from}`;
+  // (Owner, Oct 30, batch 15 section 20) The bell never carries the message itself: it says who wrote, and the email has the text.
+  const line = a.active ? `${from} sent you a message on “${a.test.title}”` : `New message from ${from}`;
   const link = toDev ? `/app/tests/${testId}` : `/app/sessions/${a.contract.id}`;
   await notify(recipient.email, line, [line, "", body], link, { about: user.id });
   return m;
 }
+/** A chat message is at most this long. */
+export const CHAT_MAX = 4000;
 
-export async function sendMessage(user: { id: string; name: string; email: string }, contractId: string, raw: unknown) {
+export async function sendMessage(user: { id: string; name: string; email: string }, contractId: string, raw: unknown, clientId?: unknown) {
   const c = await chatFor(user.id, contractId);
-  return sendChat(user, c.testId, c.testerId, raw);
+  return sendChat(user, c.testId, c.testerId, raw, clientId);
 }
 
 export const chatMessages = (testId: string, testerId: string) =>

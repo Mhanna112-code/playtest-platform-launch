@@ -4,7 +4,7 @@ import { displayName, pronouns } from "@/lib/format";
 import { PAUSED_SEND, isLate, payByFrom, testerPaused } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
-import { ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_RECORDING_BYTES, MAX_RECORDINGS, deleteObject, headObject, isVideo, r2On, uploadTarget } from "./storage";
+import { ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_RECORDING_BYTES, MAX_RECORDINGS, deleteObject, deleteStored, headObject, isVideo, listStored, r2On, uploadTarget } from "./storage";
 import { ownContract, recordEvent, sessionRefusal } from "./tests";
 import { testerTermsGate } from "./terms";
 
@@ -35,11 +35,14 @@ export async function startRecording(tester: U, contractId: string, body: Record
   const mine = await db.recording.findMany({ where: { contractId, part: { in: ["recording", "written"] } }, select: { contentType: true, part: true } });
   if (video && part === "recording" && mine.filter((r) => r.part === "recording").length >= MAX_RECORDINGS) throw new HttpError(409, "too_many", TOO_MANY_RECORDINGS);
   if (video && part === "written" && mine.filter((r) => r.part === "written" && isVideo(r.contentType)).length >= MAX_RECORDINGS) throw new HttpError(409, "too_many", `You can attach at most ${MAX_RECORDINGS} recordings to your written answers.`);
+  // (Batch 15 section 41, M6) At most 3 GB of uploads per account a day.
+  const today = (await db.recording.aggregate({ where: { contract: { testerId: tester.id }, createdAt: { gt: new Date(Date.now() - 86_400_000) } }, _sum: { sizeBytes: true } }))._sum.sizeBytes ?? 0;
+  if (today + size > DAILY_UPLOAD_BYTES) throw new HttpError(429, "quota", UPLOAD_QUOTA_LINE);
   if (!video && mine.filter((r) => r.part === "written" && !isVideo(r.contentType)).length >= MAX_ATTACHMENTS) throw new HttpError(409, "too_many", `You can attach at most ${MAX_ATTACHMENTS} files to your written answers.`);
   const ext = filename.includes(".") ? filename.slice(filename.lastIndexOf(".")).toLowerCase() : ".mp4";
   const storageKey = `recordings/${contractId}/${randomBytes(12).toString("hex")}${ext}`;
   const rec = await db.recording.create({ data: { contractId, storageKey, filename, sizeBytes: size, contentType: type, part } });
-  return { recordingId: rec.id, uploadUrl: uploadTarget(rec.id, storageKey, size) };
+  return { recordingId: rec.id, uploadUrl: uploadTarget(rec.id, storageKey, size, type) };
 }
 
 export async function finishRecording(tester: U, contractId: string, body: Record<string, unknown>) {
@@ -61,6 +64,29 @@ export async function finishRecording(tester: U, contractId: string, body: Recor
   return { ok: true };
 }
 
+/** (Batch 15 section 41, M6) Uploads per account per day. */
+export const DAILY_UPLOAD_BYTES = 3 * 1024 * 1024 * 1024;
+export const UPLOAD_QUOTA_LINE = "You've uploaded a lot today. Try again tomorrow.";
+/**
+ * (Batch 15 section 41, M6) The daily job's clean-up: uploads not finished within 3 hours (row and file), then stored files whose row is gone. Returns how many files went.
+ */
+export async function purgeUploads(now = new Date()) {
+  let n = 0;
+  const stale = await db.recording.findMany({ where: { uploadedAt: null, createdAt: { lt: new Date(now.getTime() - 3 * 3_600_000) } }, select: { id: true, storageKey: true }, take: 1000 });
+  for (const r of stale) {
+    await deleteStored(r.storageKey);
+    await db.recording.delete({ where: { id: r.id } }).catch(() => null);
+    n++;
+  }
+  const keys = await listStored("recordings/").catch(() => [] as string[]);
+  for (let i = 0; i < keys.length; i += 500) {
+    const chunk = keys.slice(i, i + 500);
+    const known = new Set((await db.recording.findMany({ where: { storageKey: { in: chunk } }, select: { storageKey: true } })).map((r) => r.storageKey));
+    for (const k of chunk) if (!known.has(k)) { await deleteStored(k); n++; }
+  }
+  return n;
+}
+
 /** (Batch 15 section 6) An R2 upload whose stored object doesn't match what the browser claimed. */
 export const UPLOAD_UNFINISHED = "That upload didn't finish properly. Try again.";
 export const TOO_MANY_RECORDINGS = `You can add at most ${MAX_RECORDINGS} recordings. Remove one first.`;
@@ -79,7 +105,10 @@ export async function removeRecording(tester: U, contractId: string, body: Recor
   const sub = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });
   if (sub?.review) throw new HttpError(409, "paid", sub.review.rejected ? "Your recording was already reviewed, so it can't be changed." : "Your recording was already paid for, so it can't be changed. Send anything new in the chat.");
   if (rec.submissionId) await db.recording.update({ where: { id: rec.id }, data: { part: "removed" } });
-  else await db.recording.delete({ where: { id: rec.id } });
+  else {
+    await db.recording.delete({ where: { id: rec.id } });
+    await deleteStored(rec.storageKey); // (batch 15 section 41, M6) the file goes too
+  }
   return { removed: true };
 }
 
@@ -91,7 +120,7 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
   await testerTermsGate(contractId, displayName(c0.test.developer), body);
 
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
-  const { updated, late, subId } = await db.$transaction(async (tx) => {
+  const { updated, late, subId, gone: goneFiles } = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
     const t = await tx.test.findUniqueOrThrow({ where: { id: c.testId } });
@@ -109,11 +138,13 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
       ? await tx.submission.update({ where: { id: existing.id }, data })
       : await tx.submission.create({ data: { contractId, kind: "recording", agreedCents: c.recordingCents, ...data } });
     await tx.recording.updateMany({ where: { contractId, part: "recording", uploadedAt: { not: null } }, data: { submissionId: sub.id } });
-    // Recordings removed since the last Send leave the piece now.
+    // Recordings removed since the last Send leave the piece now (and storage: batch 15 section 41, M6).
+    const gone = await tx.recording.findMany({ where: { contractId, part: "removed" }, select: { storageKey: true } });
     await tx.recording.deleteMany({ where: { contractId, part: "removed" } });
     await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} recording`, false, {}, c.id);
-    return { updated: !!existing, late: data.late, subId: sub.id };
+    return { updated: !!existing, late: data.late, subId: sub.id, gone };
   });
+  for (const g of goneFiles) await deleteStored(g.storageKey);
   await notify(tester.email, `Work sent: your recording for “${c0.title}”`, [`Your recording was ${updated ? "updated" : "sent"} to ${displayName(c0.test.developer)}.`], `/app/sessions/${c0.id}#part-recording`);
   await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} a recording for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} screen recording${late ? " (late)" : ""}. Watch it and choose what to pay.`], `/app/tests/${c0.testId}#piece-${subId}`, { about: tester.id });
   return { sent: true };

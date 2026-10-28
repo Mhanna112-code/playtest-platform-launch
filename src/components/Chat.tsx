@@ -2,7 +2,7 @@
 import { Err } from "@/components/Err";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, ApiError, errOf } from "@/lib/client";
+import { api, ApiError, errOf, newPressId } from "@/lib/client";
 import { NotSentTag, useKept } from "@/lib/useKept";
 
 type Msg = { id: string; mine: boolean; who: string; body: string; at: string };
@@ -14,13 +14,20 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: 
  * The chat page's conversation, as the full app's: one card (the other person's name and the test in its header), the
  * messages with a day line between days (yours on the right in the brand colour), and the message box at the bottom.
  */
-export function Chat({ path, extra = {}, messages, other, title, closed, closedNote, keepKey }: { path: string; extra?: Record<string, unknown>; messages: Msg[]; other: string; title: string; closed?: boolean; /** Replaces "This chat is closed." (e.g. "Chat is paused while the test is paused.") */ closedNote?: string; keepKey: string }) {
+export function Chat({ path, extra = {}, messages, other, title, closed, closedNote, pausedNote, keepKey }: { path: string; extra?: Record<string, unknown>; messages: Msg[]; other: string; title: string; closed?: boolean; /** Replaces "This chat is closed." (e.g. "Messages are paused for now. You can still read this chat.") */ closedNote?: string; /** (Batch 15 section 1) The box is paused because the other person is restricted: it comes back live when that lifts. */ pausedNote?: boolean; keepKey: string }) {
   const router = useRouter();
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   // (Owner, Oct 26) A block (or a deleted account) while the page is open: the next send is refused with "This chat is closed." under Send and the box goes away.
   const [shut, setShut] = useState(false);
+  // (Owner, Oct 30, batch 15 section 1) The other person became restricted after the page loaded: the Send is turned back (the typed text is kept), the box hides live
+  // and comes back by itself once the page learns the restriction lifted.
+  const [pausedNow, setPausedNow] = useState(false);
+  useEffect(() => setPausedNow(false), [closed, pausedNote]);
+  // (Batch 15 section 13) One press id per message: made at the first Send of this text, kept while it isn't confirmed (a repeat after a lost answer posts once),
+  // and replaced once it is, so the same words sent again on purpose post again.
+  const pressId = useRef<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const count = useRef(0);
   // (NEXT-UI 10) The message typed and not sent is kept on the server (back after a reload / another device, "Not sent yet").
@@ -55,28 +62,34 @@ export function Chat({ path, extra = {}, messages, other, title, closed, closedN
         <div ref={bottom} />
       </div>
       {closed && !shut ? (
-        <p className="border-t border-white/10 px-5 py-3 text-sm text-slate-400" data-chat-closed="">{closedNote || "This chat is closed."}</p>
-      ) : shut ? null : (
+        <p className="border-t border-white/10 px-5 py-3 text-sm text-slate-400" data-chat-closed="" {...(pausedNote ? { "data-chat-paused": "" } : {})}>{closedNote || "This chat is closed."}</p>
+      ) : shut || pausedNow ? null : (
         <form
           className="flex items-end gap-2 border-t border-white/10 px-4 py-3"
           onSubmit={async (e) => {
             e.preventDefault();
             setBusy(true);
             setErr("");
+            pressId.current ??= newPressId();
             try {
-              await api(path, { ...extra, body: text });
+              await api(path, { ...extra, body: text, clientId: pressId.current });
+              pressId.current = null; // confirmed: the next message gets its own id
               setText("");
               await keep.clear();
               router.refresh();
             } catch (e2) {
               if (e2 instanceof ApiError && e2.code === "closed") setShut(true);
+              if (e2 instanceof ApiError && e2.code === "chat_paused") {
+                setPausedNow(true);
+                router.refresh();
+              }
               setErr(errOf(e2));
             } finally {
               setBusy(false);
             }
           }}
         >
-          <input className="input" aria-label={`Message ${other}`} placeholder={`Message ${other}…`} value={text} onChange={(e) => setText(e.target.value)} />
+          <input className="input" aria-label={`Message ${other}`} placeholder={`Message ${other}…`} value={text} onChange={(e) => { if (e.target.value !== text) pressId.current = null; setText(e.target.value); }} />
           <button className="btn" disabled={busy || !text.trim()}>Send</button>
           {keep.restored && <span className="self-center"><NotSentTag /></span>}
         </form>

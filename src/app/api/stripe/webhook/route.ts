@@ -10,7 +10,12 @@ export async function POST(req: Request) {
   // (Batch 15 section 5) Two endpoints share this URL: the platform's (STRIPE_WEBHOOK_SECRET) and Connect's (STRIPE_CONNECT_WEBHOOK_SECRET). Either secret is accepted.
   const verified = verifyWebhook(raw, req.headers.get("stripe-signature") ?? "");
   if (!verified) return new Response("Bad signature", { status: 400 });
-  const event = verified as unknown as { type: string; account?: string; data: { object: Record<string, unknown> } };
+  const event = verified as unknown as { id?: string; type: string; account?: string; data: { object: Record<string, unknown> } };
+  // (Batch 15 section 41, L3) Stripe can deliver an event twice: each event id is handled once.
+  if (typeof event.id === "string" && event.id) {
+    const fresh = await db.stripeEvent.create({ data: { id: event.id, type: event.type } }).then(() => true).catch(() => false);
+    if (!fresh) return Response.json({ received: true, duplicate: true });
+  }
   // (Batch 8) Stripe Billing: renewals, declined renewals and the end of a developer subscription.
   if (event.type === "invoice.paid" || event.type === "invoice.payment_failed" || event.type === "invoice.payment_action_required" || event.type === "customer.subscription.deleted") await (await import("@/lib/server/subscription")).subscriptionWebhook(event.type, event.data.object);
   if (event.type === "charge.dispute.created") {

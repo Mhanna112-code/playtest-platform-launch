@@ -77,8 +77,8 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
     case "mine": {
       const m = row as MineVM;
       return (
-        <p className="border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-mine-row={m.testId}>
-          <a href={`/app/find/${m.testId}`}>“{m.title}”</a> · {m.dev} · {m.why} · {m.when}
+        <p className="border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-mine-row={m.testId || m.id}>
+          {m.testId ? <a href={`/app/find/${m.testId}`}>“{m.title}”</a> : <span>{m.title}</span>} · {m.dev} · {m.why} · {m.when}
         </p>
       );
     }
@@ -94,14 +94,36 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
           </p>
           {u.state === "deleted" ? (
             <p className="text-xs text-rose-300">{u.stateLine}</p>
-          ) : u.state === "suspended" ? (
-            <p className="flex flex-wrap items-center gap-2"><b>{u.stateLine.split(" ")[0]}</b> <span className="line-clamp-2 max-w-full break-words" title={u.stateLine}>{u.stateLine.slice(u.stateLine.indexOf(" ") + 1)}</span> <AdminButton action="unsuspend" id={u.id} label="Lift the suspension" /></p>
           ) : (
-            <p className="flex flex-wrap items-center gap-2">
-              <PreviewButton id={u.id} />
-              <AdminButton action="suspend" id={u.id} label="Suspend" danger fields={[{ name: "note", label: "Why" }]} />
-              <AdminButton action="delete-account" id={u.id} label="Delete account" danger fields={[{ name: "note", label: "Why" }]} />
-            </p>
+            <>
+              {/* (Owner, Oct 30, batch 15 section 16) Each suspended side has its own line and Reinstate. */}
+              {(["developer", "tester"] as const).filter((s) => (s === "developer" ? u.devSuspended : u.testerSuspended)).map((s) => {
+                const line = u.stateLine.split(" · Suspended").map((x, i) => (i ? `Suspended${x}` : x)).find((x) => x.startsWith(`Suspended (${s} side)`)) ?? "";
+                return (
+                  <p key={s} className="flex flex-wrap items-center gap-2" data-suspended-side={s}>
+                    <b>Suspended ({s} side)</b> <span className="line-clamp-2 max-w-full break-words" title={line}>{line.replace(`Suspended (${s} side) `, "")}</span>
+                    <AdminButton action="unsuspend" id={u.id} label="Reinstate" extra={{ side: s }} />
+                  </p>
+                );
+              })}
+              {(() => {
+                const open = (["developer", "tester"] as const).filter((s) => (s === "developer" ? u.isDeveloper && !u.devSuspended : u.isTester && !u.testerSuspended));
+                const roles = (u.isDeveloper ? 1 : 0) + (u.isTester ? 1 : 0);
+                return (
+                  <p className="flex flex-wrap items-center gap-2">
+                    {(open.length > 0 || roles === 0) && <PreviewButton id={u.id} />}
+                    {/* A one-role account just shows Suspend; an account with both roles chooses the side. */}
+                    {open.length > 0 && (roles === 2 && open.length === 2 ? (
+                      <AdminButton action="suspend" id={u.id} label="Suspend" danger choice={{ name: "side", label: "Side to suspend", options: [{ value: "developer", label: "Developer side" }, { value: "tester", label: "Tester side" }] }} fields={[{ name: "note", label: "Why" }]} />
+                    ) : (
+                      <AdminButton action="suspend" id={u.id} label={roles === 2 ? `Suspend the ${open[0]} side` : "Suspend"} danger extra={{ side: open[0] }} fields={[{ name: "note", label: "Why" }]} />
+                    ))}
+                    {roles === 0 && <AdminButton action="suspend" id={u.id} label="Suspend" danger fields={[{ name: "note", label: "Why" }]} />}
+                    <AdminButton action="delete-account" id={u.id} label="Delete account" danger fields={[{ name: "note", label: "Why" }]} />
+                  </p>
+                );
+              })()}
+            </>
           )}
         </li>
       );

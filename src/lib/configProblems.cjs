@@ -45,10 +45,24 @@ function configProblems(env, now = new Date()) {
   if (prod) {
     if (!v("CRON_SECRET")) add("CRON_SECRET is missing: the daily job can't run (reminders, Charge, retries).");
     if (!v("ADMIN_EMAILS")) add("ADMIN_EMAILS is missing: nobody can open the admin console.");
-    if (!v("APP_URL")) add("APP_URL is missing: links in emails and Stripe's return pages may point to the wrong address.");
+    // (Batch 15 section 41, M3) Settings that would fail OPEN on the live site stop the deploy.
+    if (!v("APP_URL")) add("APP_URL is missing: set it to the site's https address (links in emails and Stripe's return pages use it).", true);
+    if (!sk) add("STRIPE_SECRET_KEY is missing: every Pay would be recorded as \"payments not set up\" and testers told they were paid.", true);
+    if (r2.length === 0) add("The R2 settings are missing: uploads would go to the server's own disk, which Vercel doesn't keep.", true);
+    if (v("ALLOW_DEV_OUTBOX") === "1") add("ALLOW_DEV_OUTBOX=1 on the live site: /dev/outbox would show reset links. Remove it.", true);
+    if (v("STRIPE_FAKE") === "1") add("STRIPE_FAKE=1 on the live site: remove it.", true);
+    if (placeholder(v("ADMIN_EMAILS"))) add(`ADMIN_EMAILS still has a placeholder ("${v("ADMIN_EMAILS")}"): put the real admins' emails.`, true);
+    if (!v("EMAIL_FROM") || placeholder(v("EMAIL_FROM")) || /resend\.dev/i.test(v("EMAIL_FROM"))) add("EMAIL_FROM is missing or a placeholder: set an address on your verified Resend domain.", true);
+    if (v("HEALTH_KEY") && weakKey(v("HEALTH_KEY"))) add("HEALTH_KEY is a placeholder or too short: use a long random value (at least 24 characters).", true);
   }
   if (v("OUTAGE_CHECKS") === "1" && !v("HEALTH_KEY")) add("OUTAGE_CHECKS=1 without HEALTH_KEY: the uptime service's alerts are refused, so outages are never recorded.");
   return out;
 }
+
+/** (Batch 15 section 41, H1 and M3) A value left from the template or an example. */
+function placeholder(s) {
+  return /@(example\.(com|org|net)|test|localhost|invalid)\b|change-?me|placeholder|your[-_ ]?(email|domain)|hello@example/i.test(s);
+}
+const weakKey = (s) => s.length < 24 || /change-?me|placeholder|secret$|^test/i.test(s);
 
 module.exports = { configProblems, isProduction };

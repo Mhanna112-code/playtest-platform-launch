@@ -62,19 +62,21 @@ describe("payments stuck in progress (section 9)", () => {
     s.state.charged = false;
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(502);
     const p = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } });
-    const before = await db.notification.count({ where: { userId: { in: [dev.user.id, tester.user.id] } } });
+    const aboutIt = () => db.notification.count({ where: { userId: { in: [dev.user.id, tester.user.id] }, OR: [{ text: { contains: "$10.00" } }, { text: { contains: "interrupt" } }, { text: { contains: "didn't go through" } }] } });
+    const before = await aboutIt();
     // The daily job checks it.
     await db.payment.update({ where: { id: p.id }, data: { createdAt: new Date(Date.now() - 20 * MIN) } });
     await runDaily(new Date());
     const cleared = await db.payment.findUniqueOrThrow({ where: { id: p.id } });
     expect(cleared).toMatchObject({ status: "failed", failure: INTERRUPTED });
     expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0);
-    expect(await db.notification.count({ where: { userId: { in: [dev.user.id, tester.user.id] } } })).toBe(before); // nobody gets a bell
+    expect(await aboutIt()).toBe(before); // nobody gets a bell
     // Pay again: it goes through, with the interrupted press's key (never a second charge).
     s.state.drop = false;
     const again = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     expect(again.status).toBe(200);
-    expect(s.keys).toEqual([`pay-${p.payKey}`, `pay-${p.payKey}`]);
+    // (Other tests' held developers may be retried by the daily job through the same stand-in: only this piece's presses count.)
+    expect(s.keys.filter((k) => k === `pay-${p.payKey}`)).toHaveLength(2);
     expect(await db.payment.count({ where: { submissionId: sub.id, status: "charged" } })).toBe(1);
   });
 

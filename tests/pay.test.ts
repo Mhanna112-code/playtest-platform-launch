@@ -106,7 +106,7 @@ describe("Stripe (test mode, faked)", () => {
       paymentIntents: {
         create: async (params: Record<string, unknown>, opts: Record<string, unknown>) => {
           calls.push({ ...params, idempotencyKey: opts.idempotencyKey });
-          if (fail) throw new Error("Your card was declined.");
+          if (fail) throw Object.assign(new Error("Your card was declined."), { type: "StripeCardError" });
           return { id: "pi_" + calls.length, status: "succeeded" };
         },
       },
@@ -217,7 +217,7 @@ describe("(NEXT-UI 27) Payments: Waiting for your review", () => {
 describe("(NEXT-UI 26) a suspended developer", () => {
   it("cannot Pay or Reject (both wait until the suspension is lifted); everything else (invite, Edit, chat, next round, calls) is refused with the suspended line", async () => {
     const { dev, sub, sessionId, testId, tester } = await sent();
-    await db.user.update({ where: { id: dev.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     const LINE = "Your account is suspended: your tests are paused. Contact us in Settings to appeal.";
     expect((await payReq(dev.cookie, { action: "reject", kind: "submission", id: sub.id, amount: "0", reason: "Nothing usable here" })).body.error.message).toBe(LINE);
     expect((await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe(LINE);
@@ -230,7 +230,7 @@ describe("(NEXT-UI 26) a suspended developer", () => {
     expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0);
     expect(await db.payment.count({ where: { submissionId: sub.id } })).toBe(0);
     // A tester never reads "suspended".
-    await db.user.update({ where: { id: tester.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: tester.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), startsAt: new Date(Date.now() + 72 * 3_600_000).toISOString() })).body.error.message).not.toMatch(/suspend/i);
   });
 });

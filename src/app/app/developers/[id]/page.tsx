@@ -10,7 +10,7 @@ import { BlockButton } from "@/components/BlockButton";
 import { ReportButton } from "@/components/ReportButton";
 import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
 import { isAdmin } from "@/lib/server/session";
-import { devRestricted } from "@/lib/restricted";
+import { anySuspended, devRestricted } from "@/lib/restricted";
 import { sideFor } from "@/lib/sides";
 import { testPaused } from "@/lib/rules";
 
@@ -46,7 +46,7 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
               <span className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Posting tests since {fmtDate(p.createdAt)}</span>
             </p>
           </div>
-          {mine && !devOff && !viewer.suspendedAt && <Link href="/app/profile" className="btn-secondary px-3 py-1.5 text-sm">Edit profile</Link>}
+          {mine && !devOff && !anySuspended(viewer) && <Link href="/app/profile" className="btn-secondary px-3 py-1.5 text-sm">Edit profile</Link>}
         </div>
         {mine && <p className="text-xs text-slate-500">This is how testers see your profile.</p>}
       </section>
@@ -57,7 +57,7 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
           <ul className="space-y-2">
             {open.map((t) => (
               <li key={t.id}>
-                {(devOff || (!mine && viewer.suspendedAt)) ? <div className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100"><span className="min-w-0 flex-1"><span className="block truncate font-medium text-white" title={t.title}>{t.title}</span></span></div> : <Link href={mine ? `/app/tests/${t.id}` : `/app/find/${t.id}`} className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100 no-underline hover:bg-white/[0.04] hover:no-underline">
+                {(devOff || (!mine && viewer.testerSuspendedAt)) ? <div className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100"><span className="min-w-0 flex-1"><span className="block truncate font-medium text-white" title={t.title}>{t.title}</span></span></div> : <Link href={mine ? `/app/tests/${t.id}` : `/app/find/${t.id}`} className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100 no-underline hover:bg-white/[0.04] hover:no-underline">
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium text-white">{t.title}</span>
                     <span className="flex items-start gap-1.5 text-xs text-slate-400">
@@ -72,7 +72,7 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
       </section>
       {isAdmin(viewer) && !mine && <AdminPersonBoxes userId={p.id} adminId={viewer.id} developer={p.isDeveloper} tester={p.isTester} />}
       {/* Block the developer, as in the full app: a small link at the bottom of their profile (testers only). */}
-      {viewer.isTester && !mine && !viewer.suspendedAt && !(await db.block.count({ where: { blockerId: viewer.id, blockedId: p.id } })) && (
+      {viewer.isTester && !mine && !viewer.testerSuspendedAt && !(await db.block.count({ where: { blockerId: viewer.id, blockedId: p.id } })) && (
         <div className="space-y-2 text-right text-xs text-slate-500">
           <ReportButton userId={p.id} name={name} reportedOn={reportedOn} />
           <BlockButton plain userId={p.id} name={name} effect="You won't see their tests or profile any more, and they can't invite you." />

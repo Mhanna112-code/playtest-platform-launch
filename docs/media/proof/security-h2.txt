@@ -1,0 +1,5 @@
+<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />
+ ✓ tests/batch15-security.test.ts > H2: Google into an unconfirmed account ends the pre-hijack > clears the password, every session and any payout account, then confirms the email 79ms
+ ✓ tests/batch15-security.test.ts > H2: Google into an unconfirmed account ends the pre-hijack > payout setup needs a confirmed email 0ms
+ Test Files  1 passed (1)
+      Tests  2 passed | 20 skipped (22)

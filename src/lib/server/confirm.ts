@@ -78,6 +78,9 @@ export async function confirmFinish(dev: { id: string; email: string }, paymentI
     if (p.status === "needs_action" || p.status === "paying") await release(p.id);
     throw new HttpError(402, "not_confirmed", BANK_NOT_CONFIRMED);
   }
+  // (Batch 15 section 41, L3) A doubled Confirm finishes it once: the first press claims it.
+  const claimed = await db.payment.updateMany({ where: { id: p.id, actionPi: p.actionPi }, data: { actionPi: null } });
+  if (claimed.count !== 1) return { done: true, repeated: true };
   return finish(p.id);
 }
 

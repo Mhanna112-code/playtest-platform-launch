@@ -42,7 +42,7 @@ function fakeStripe(opts: { mode?: "ok" | "decline" | "action" | "away-action"; 
         made.push(p);
         const id = "pi_" + randomUUID();
         const mode = opts.mode ?? "ok";
-        if (mode === "decline") throw new Error("Your card was declined.");
+        if (mode === "decline") throw Object.assign(new Error("Your card was declined."), { type: "StripeCardError" });
         if (mode === "action" && !p.off_session) return { id, status: "requires_action", client_secret: `${id}_secret` };
         if ((mode === "action" || mode === "away-action") && p.off_session) throw Object.assign(new Error("Authentication required."), { code: "authentication_required", raw: { payment_intent: { id, client_secret: `${id}_secret` } } });
         return { id, status: "succeeded" };
@@ -263,7 +263,7 @@ describe("batch 11 item 4: automatic retries during a hold", () => {
 
   it("a suspension is never lifted by a payment; a retry the bank wants confirmed waits for Confirm", async () => {
     const { dev } = await held();
-    await db.user.update({ where: { id: dev.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     fakeStripe({ mode: "away-action" });
     expect(await retryOwed(dev.user.id)).toMatchObject({ cents: 0 });
     const p = (await owed(dev.user.id))[0];
@@ -273,7 +273,7 @@ describe("batch 11 item 4: automatic retries during a hold", () => {
     expect((await confirm(dev.cookie, { paymentId: p.id })).status).toBe(200);
     const u = await db.user.findUniqueOrThrow({ where: { id: dev.user.id } });
     expect(u.holdStartedAt).toBeNull();
-    expect(u.suspendedAt).not.toBeNull();
+    expect(u.devSuspendedAt).not.toBeNull();
     expect(await db.notification.count({ where: { userId: dev.user.id, text: R.STILL_SUSPENDED_LINE } })).toBe(1);
   });
 });

@@ -8,7 +8,7 @@ import { TesterTiles } from "@/components/ProfileTiles";
 import { ChatWithButton } from "@/components/ChatWithButton";
 import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
 import { isAdmin } from "@/lib/server/session";
-import { devRestricted } from "@/lib/restricted";
+import { anySuspended, devRestricted } from "@/lib/restricted";
 import { sideFor } from "@/lib/sides";
 
 import { BlockButton } from "@/components/BlockButton";
@@ -49,7 +49,7 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
           <p className="flex flex-wrap items-center gap-2 text-sm text-slate-400"><CalendarDays className="h-4 w-4" /> Tester since {fmtDate(p.createdAt)}</p>
           {mine && <p className="text-xs text-slate-500">This is how developers see your profile.</p>}
         </div>
-        {mine && !off && !viewer.suspendedAt && <Link href="/app/profile" className="btn-secondary px-3 py-1.5 text-sm">Edit profile</Link>}
+        {mine && !off && !anySuspended(viewer) && <Link href="/app/profile" className="btn-secondary px-3 py-1.5 text-sm">Edit profile</Link>}
         {shared && <ChatWithButton contractId={shared.id} name={name} />}
       </section>
       <TesterTiles userId={p.id} />

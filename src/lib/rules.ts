@@ -494,8 +494,7 @@ export function shiftForHold<T extends Date | null>(d: T, holdStartedAt: Date, l
 export const PAUSE_DEFAULTS = {
   /** DEFAULT: drafts stay editable while paused (written answers typed and kept, recordings uploaded); only Send is refused. false = the forms hide while paused. */
   draftsEditable: true,
-  /** DEFAULT: chat is closed both ways while paused (the developer's Messages page is closed). false = chat stays open for the tester. */
-  chatClosed: true,
+
   /** DEFAULT: the team's pause of one test (admin pause) follows the same tester rules. false = testers keep sending and chatting in a team-paused test. */
   teamPauseSameRules: true,
   /** DEFAULT: when a pause lifts (a hold lift, a reinstatement, the team's unpause) working testers' deadlines and Open until move later by its length. false = they stay. */
@@ -505,7 +504,7 @@ export const PAUSE_DEFAULTS = {
 /** (Design doc 8) The tester is never told why a test is paused (no "hold", "suspended" ...). */
 export const PAUSED_RIGHT_NOW = "This test is paused right now.";
 /** What a tester can do on a paused test's session page right now (batch 10: the banner lists only these), and what comes back when it resumes. */
-export type PausedCan = { drafts: boolean; charge: boolean; dispute: boolean; rate: boolean; leave: boolean; cancelCalls: boolean; send: boolean; requestCalls: boolean; chat: boolean; /** (Batch 11) the tester has a deadline and it moves with the pause */ deadline?: boolean };
+export type PausedCan = { drafts: boolean; charge: boolean; dispute: boolean; rate: boolean; leave: boolean; cancelCalls: boolean; send: boolean; requestCalls: boolean; /** (Batch 11) the tester has a deadline and it moves with the pause */ deadline?: boolean };
 /** (Owner, Oct 29, batch 11) The banner's deadline line, when the tester has a deadline and PAUSE_DEFAULTS.shiftDeadlines is on. */
 export const PAUSED_DEADLINE_LINE = "Your deadline is paused too: it moves later by however long the pause lasts.";
 const listAnd = (xs: string[], oxford: boolean) => (xs.length <= 1 ? xs.join("") : xs.length === 2 ? `${xs[0]} and ${xs[1]}` : `${xs.slice(0, -1).join(", ")}${oxford ? "," : ""} and ${xs[xs.length - 1]}`);
@@ -513,27 +512,32 @@ const listAnd = (xs: string[], oxford: boolean) => (xs.length <= 1 ? xs.join("")
  * (Owner, Oct 29, batch 10) The blue banner at the top of a paused test's session page (never "hold", "suspended", "failed" or "chargeback"), built from what is actually
  * available, so it never offers a button that isn't there. With everything available:
  * "This test is paused right now. For now you can save drafts of your parts, charge or let go of work left unreviewed, dispute, rate, leave the test, and cancel booked calls.
- * Sending work, requesting calls and chat come back when it resumes."
+ * Sending work and requesting calls come back when it resumes." (Batch 15 section 1: a paused test no longer closes the chat, so the banner never mentions it.)
  */
 export function pausedForTesters(can: PausedCan) {
   const now = [can.drafts && "save drafts of your parts", can.charge && "charge or let go of work left unreviewed", can.dispute && "dispute", can.rate && "rate", can.leave && "leave the test", can.cancelCalls && "cancel booked calls"].filter((x): x is string => !!x);
-  const back = [can.send && "sending work", can.requestCalls && "requesting calls", can.chat && "chat"].filter((x): x is string => !!x);
+  const back = [can.send && "sending work", can.requestCalls && "requesting calls"].filter((x): x is string => !!x);
   const backLine = back.length ? ` ${listAnd(back, false).replace(/^./, (c) => c.toUpperCase())} ${back.length === 1 ? "comes" : "come"} back when it resumes.` : "";
   return `${PAUSED_RIGHT_NOW}${now.length ? ` For now you can ${listAnd(now, true)}.` : ""}${backLine}${can.deadline && PAUSE_DEFAULTS.shiftDeadlines ? ` ${PAUSED_DEADLINE_LINE}` : ""}`;
 }
 /** The full banner (everything available). */
-export const PAUSED_FOR_TESTERS = pausedForTesters({ drafts: true, charge: true, dispute: true, rate: true, leave: true, cancelCalls: true, send: true, requestCalls: true, chat: true });
+export const PAUSED_FOR_TESTERS = pausedForTesters({ drafts: true, charge: true, dispute: true, rate: true, leave: true, cancelCalls: true, send: true, requestCalls: true });
 /** (Owner, Oct 28 afternoon) Send (written answers, recordings) while the test is paused. */
 export const PAUSED_SEND = `${PAUSED_RIGHT_NOW} You can send this once it resumes.`;
-/** (Owner, Oct 28 afternoon, DEFAULT) Chat while the test is paused. */
-export const CHAT_PAUSED = "Chat is paused while the test is paused.";
+/**
+ * (Owner, Oct 30, batch 15 section 1) Chat is closed only while a PERSON is restricted, never because a test is paused. The other person can still open and read the chat;
+ * the message box is replaced by this neutral note (never "suspended", "hold" or "failed" about the other person).
+ */
+export const CHAT_PAUSED_NOTE = "Messages are paused for now. You can still read this chat.";
+/** The blue notice under Send when the other person became restricted after the page loaded (the typed text is kept). */
+export const CHAT_NOT_SENT = "Messages are paused for now, so this wasn't sent.";
 /** (Owner, Oct 28 afternoon) A Charge pressed while the developer is on a payment or chargeback hold: added to what they owe, paid when they pay it. */
 export const chargedDelayedLine = (cents: number) => `Charged ${money(cents)}. Payment may be delayed until the test resumes.`;
 /** Is a developer's test paused for its testers (a payment hold, the developer's suspension, or an admin pause)? */
-export const testPaused = (dev: { holdStartedAt?: Date | null; suspendedAt?: Date | null }, test?: { adminPausedAt?: Date | null } | null) => !!(dev.holdStartedAt || dev.suspendedAt || test?.adminPausedAt);
+export const testPaused = (dev: { holdStartedAt?: Date | null; devSuspendedAt?: Date | null }, test?: { adminPausedAt?: Date | null } | null) => !!(dev.holdStartedAt || dev.devSuspendedAt || test?.adminPausedAt);
 /** (Owner, Oct 28 afternoon) Do the paused-test tester rules apply (no sending, chat closed)? A team pause of one test counts only with PAUSE_DEFAULTS.teamPauseSameRules. */
-export const testerPaused = (dev: { holdStartedAt?: Date | null; suspendedAt?: Date | null }, test?: { adminPausedAt?: Date | null } | null) =>
-  !!(dev.holdStartedAt || dev.suspendedAt || (PAUSE_DEFAULTS.teamPauseSameRules && test?.adminPausedAt));
+export const testerPaused = (dev: { holdStartedAt?: Date | null; devSuspendedAt?: Date | null }, test?: { adminPausedAt?: Date | null } | null) =>
+  !!(dev.holdStartedAt || dev.devSuspendedAt || (PAUSE_DEFAULTS.teamPauseSameRules && test?.adminPausedAt));
 /**
  * (Owner, Oct 28 afternoon, DEFAULT) How far a pause that ran from `start` to `now` moves deadlines, Open until and review clocks. When another pause of the same test is still on
  * (`others`: the start of each), only the part before the earliest of them counts now: the rest is counted when that one lifts, so overlapping pauses never count twice.

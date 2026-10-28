@@ -9,7 +9,7 @@ import { openDispute } from "@/lib/server/payments";
 import { reportKeyBroken } from "@/lib/server/accessKeys";
 import { db } from "@/lib/db";
 import { displayName, fmtDate } from "@/lib/format";
-import { CHAT_PAUSED, PAUSE_DEFAULTS, PAUSED_SEND, testerPaused, testerRefusal } from "@/lib/rules";
+import { PAUSE_DEFAULTS, PAUSED_SEND, testerPaused, testerRefusal } from "@/lib/rules";
 import { leaveTest, sendWritten } from "@/lib/server/tests";
 import { requireActive, requireConfirmed } from "@/lib/server/users";
 
@@ -36,19 +36,16 @@ async function finalRefusal(userId: string, contractId: string, action: string) 
 
 /**
  * (Owner, Oct 28 afternoon) A paused test (the developer's payment hold, chargeback hold or suspension; the team's pause too, PAUSE_DEFAULTS.teamPauseSameRules): testers can't send
- * work or chat (PAUSE_DEFAULTS.chatClosed). Drafts can still be written and saved (PAUSE_DEFAULTS.draftsEditable: the written answers are kept as typed, recordings can be
- * uploaded); Charge / Let it go, disputes, rating, leaving and cancelling calls carry on under their own rules. Testers read only "paused".
+ * work. Drafts can still be written and saved (PAUSE_DEFAULTS.draftsEditable: the written answers are kept as typed, recordings can be uploaded); Charge / Let it go, disputes,
+ * rating, leaving and cancelling calls carry on under their own rules. Testers read only "paused". (Batch 15 section 1) Chat isn't closed by a paused test: only while a
+ * person is restricted (messages.ts).
  */
 const SEND_ACTIONS = new Set(["written", "recording-send"]);
 const DRAFT_ACTIONS = new Set(["recording-start", "recording-done", "recording-remove"]);
 async function pausedRefusal(userId: string, contractId: string, action: string) {
-  if (!SEND_ACTIONS.has(action) && !DRAFT_ACTIONS.has(action) && action !== "message") return;
-  const c = await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true, test: { select: { adminPausedAt: true, developer: { select: { suspendedAt: true, holdStartedAt: true } } } } } });
+  if (!SEND_ACTIONS.has(action) && !DRAFT_ACTIONS.has(action)) return;
+  const c = await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true, test: { select: { adminPausedAt: true, developer: { select: { devSuspendedAt: true, holdStartedAt: true } } } } } });
   if (!c || c.testerId !== userId || !testerPaused(c.test.developer, c.test)) return;
-  if (action === "message") {
-    if (PAUSE_DEFAULTS.chatClosed) throw new HttpError(409, "paused", CHAT_PAUSED);
-    return;
-  }
   if (SEND_ACTIONS.has(action) || !PAUSE_DEFAULTS.draftsEditable) throw new HttpError(409, "paused", PAUSED_SEND);
 }
 
@@ -96,7 +93,7 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
       case "recording-remove":
         return ok(await removeRecording(u, id, body));
       case "message": {
-        const m = await sendMessage(u, id, body.body);
+        const m = await sendMessage(u, id, body.body, body.clientId);
         return ok({ id: m.id });
       }
       case "terms":

@@ -3,6 +3,22 @@ import { LogOut } from "lucide-react";
 import { api } from "@/lib/client";
 import { announceAuth } from "@/components/SessionWatch";
 
+/** (Batch 15 section 41, L6) Settings: "Sign out of all devices". */
+export function SignOutAll() {
+  return (
+    <button
+      className="btn-secondary"
+      onClick={async () => {
+        await api("/api/auth/logout", { everywhere: true }).catch(() => null);
+        announceAuth("out");
+        window.location.href = "/login";
+      }}
+    >
+      <LogOut className="h-4 w-4" /> Sign out of all devices
+    </button>
+  );
+}
+
 /** The full app's log-out icon button. */
 export function SignOut() {
   return (

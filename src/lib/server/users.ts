@@ -47,20 +47,29 @@ export async function failedLine(req: Request, what?: string, piece?: { kind: st
   return `Your ${verb}${title ? ` on ${title}` : ""} didn't go through`;
 }
 
+/** (Batch 15 section 16) The side a press belongs to: `devSide: true` the developer side, `"auto"` the side in use, otherwise the tester side. An account without that side uses its other one. */
+export function pressSideOf(u: { isDeveloper: boolean; isTester: boolean; side?: string }, devSide?: boolean | "auto"): "developer" | "tester" {
+  const want = devSide === true ? "developer" : devSide === "auto" ? (u.isDeveloper && (!u.isTester || u.side !== "tester") ? "developer" : "tester") : "tester";
+  if (want === "tester" && !u.isTester && u.isDeveloper) return "developer";
+  if (want === "developer" && !u.isDeveloper && u.isTester) return "tester";
+  return want;
+}
+
 /**
- * `devSide`: the press belongs to the developer side (a test page, Post, Pay, Reject ...), so a payment or chargeback hold refuses it too.
- * `devOk`: a developer's press that still works while restricted (Cancel call).
+ * `devSide`: the press belongs to the developer side (a test page, Post, Pay, Reject ...), so a payment or chargeback hold refuses it too; `"auto"`: the side in use.
+ * `devOk`: a developer's press that still works while restricted (Cancel call; batch 15: Stop and End early from the restricted test page).
+ * (Owner, Oct 30, batch 15 section 16) A suspension refuses only the presses of its own side: a mixed account with the developer side suspended still tests normally.
  */
 export async function requireActive(req: Request, opts: { devOk?: boolean; devSide?: boolean | "auto"; what?: string; piece?: { kind: string; id: string } } = {}) {
   const u = await requireUser(req);
   const exempt = opts.devOk && u.isDeveloper;
   if (exempt) return u;
-  // The side the press belongs to decides the words (a mixed account reads the side it was pressed on).
-  const asDev = opts.devSide === true || (u.isDeveloper && (!u.isTester || u.side === "developer"));
-  if (u.suspendedAt) {
-    throw new HttpError(403, "suspended", asDev && u.isDeveloper ? DEV_SUSPENDED : SUSPENDED, { failed: await failedLine(req, opts.what, opts.piece), suspended: true });
+  const side = pressSideOf(u, opts.devSide);
+  const asDev = side === "developer";
+  if (asDev ? u.devSuspendedAt : u.testerSuspendedAt) {
+    throw new HttpError(403, "suspended", asDev ? DEV_SUSPENDED : SUSPENDED, { failed: await failedLine(req, opts.what, opts.piece), suspended: true });
   }
-  if (u.holdStartedAt && u.isDeveloper && (opts.devSide === true || (opts.devSide === "auto" && asDev))) {
+  if (u.holdStartedAt && u.isDeveloper && asDev && (opts.devSide === true || opts.devSide === "auto")) {
     throw new HttpError(403, "held", u.holdReason === "chargeback" ? DEV_CHARGEBACK : DEV_HELD, { failed: await failedLine(req, opts.what, opts.piece), held: true });
   }
   return u;

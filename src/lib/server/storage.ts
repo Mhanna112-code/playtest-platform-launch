@@ -24,19 +24,27 @@ const r2 = () => {
 export const r2On = () => !!r2();
 const uploadDir = () => path.resolve(process.env.UPLOAD_DIR || "uploads");
 
+/** AWS's URI encoding: everything but A-Z a-z 0-9 - _ . ~ */
+const awsEncode = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+
 /**
  * AWS Signature V4 query presign for R2 (region "auto"). (Batch 15 section 6) `contentLength`: a PUT signs `content-length` as a signed header, so R2 refuses a body of
- * any other size (the browser sets that header from the file it sends).
+ * any other size (the browser sets that header from the file it sends). (Batch 15 section 41, M5) `contentType`: a PUT signs `content-type` too, so the stored type is the
+ * declared one; `query`: extra signed query values (a GET's response-content-type / response-content-disposition overrides, a listing's prefix).
  */
-export function presign(method: "GET" | "PUT" | "HEAD" | "DELETE", key: string, expiresSec = 3600, contentLength?: number) {
+export function presign(method: "GET" | "PUT" | "HEAD" | "DELETE", key: string, expiresSec = 3600, contentLength?: number, opts: { contentType?: string; query?: Record<string, string> } = {}) {
   const c = r2()!;
   const host = `${c.account}.r2.cloudflarestorage.com`;
   const now = new Date();
   const amzDate = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
   const day = amzDate.slice(0, 8);
   const scope = `${day}/auto/s3/aws4_request`;
-  const pathPart = `/${c.bucket}/${key.split("/").map(encodeURIComponent).join("/")}`;
-  const headers: [string, string][] = contentLength != null ? [["content-length", String(contentLength)], ["host", host]] : [["host", host]];
+  const pathPart = key ? `/${c.bucket}/${key.split("/").map(awsEncode).join("/")}` : `/${c.bucket}`;
+  const headers: [string, string][] = [
+    ...(contentLength != null ? [["content-length", String(contentLength)] as [string, string]] : []),
+    ...(opts.contentType ? [["content-type", opts.contentType] as [string, string]] : []),
+    ["host", host],
+  ];
   const signedHeaders = headers.map(([k]) => k).join(";");
   const q = new URLSearchParams({
     "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
@@ -44,8 +52,9 @@ export function presign(method: "GET" | "PUT" | "HEAD" | "DELETE", key: string, 
     "X-Amz-Date": amzDate,
     "X-Amz-Expires": String(expiresSec),
     "X-Amz-SignedHeaders": signedHeaders,
+    ...(opts.query ?? {}),
   });
-  const sorted = [...q.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
+  const sorted = [...q.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => `${awsEncode(k)}=${awsEncode(v)}`).join("&");
   const canonical = [method, pathPart, sorted, headers.map(([k, v]) => `${k}:${v}\n`).join(""), signedHeaders, "UNSIGNED-PAYLOAD"].join("\n");
   const toSign = ["AWS4-HMAC-SHA256", amzDate, scope, createHash("sha256").update(canonical).digest("hex")].join("\n");
   const h = (k: Buffer | string, d: string) => createHmac("sha256", k).update(d).digest();
@@ -54,9 +63,47 @@ export function presign(method: "GET" | "PUT" | "HEAD" | "DELETE", key: string, 
   return `https://${host}${pathPart}?${sorted}&X-Amz-Signature=${sig}`;
 }
 
-/** Where the browser sends the file: a presigned R2 URL (signed for exactly `size` bytes), or this app's local upload route. */
-export const uploadTarget = (recordingId: string, key: string, size?: number) => (r2() ? presign("PUT", key, 3600, size) : `/api/recordings/${recordingId}/upload`);
-export const viewUrl = (recordingId: string, key: string) => (r2() ? presign("GET", key) : `/api/recordings/${recordingId}/file`);
+/** Where the browser sends the file: a presigned R2 URL (signed for exactly `size` bytes of exactly `contentType`), or this app's local upload route. */
+export const uploadTarget = (recordingId: string, key: string, size?: number, contentType?: string) =>
+  r2() ? presign("PUT", key, 3600, size, { contentType }) : `/api/recordings/${recordingId}/upload`;
+/** (Batch 15 section 41, M5) How a stored file is served: images and videos inline, everything else as a download. */
+export const dispositionOf = (contentType: string, filename: string) => `${contentType.startsWith("image/") || contentType.startsWith("video/") ? "inline" : "attachment"}; filename="${filename.replace(/["\\\r\n]/g, "")}"`;
+/** A file's address: on R2 a presigned GET that serves it with its stored type and disposition (never sniffed from the bytes); locally this app's file route. */
+export const viewUrl = (recordingId: string, key: string, contentType = "application/octet-stream", filename = "file") =>
+  r2() ? presign("GET", key, 3600, undefined, { query: { "response-content-type": contentType, "response-content-disposition": dispositionOf(contentType, filename) } }) : `/api/recordings/${recordingId}/file`;
+
+/** (Batch 15 section 41, M6) Delete a stored file wherever it lives (R2 or local disk); a missing one is fine. */
+export async function deleteStored(key: string) {
+  if (r2()) return deleteObject(key);
+  const file = path.join(uploadDir(), key);
+  if (file.startsWith(uploadDir())) await fs.rm(file, { force: true }).catch(() => null);
+}
+/** (Batch 15 section 41, M6) Every stored key under a prefix (R2's ListObjectsV2, or the local folder), for the daily clean-up of files with no row. */
+export async function listStored(prefix = "recordings/"): Promise<string[]> {
+  if (!r2()) {
+    const out: string[] = [];
+    const walk = async (dir: string) => {
+      for (const e of await fs.readdir(dir, { withFileTypes: true }).catch(() => [])) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) await walk(p);
+        else out.push(path.relative(uploadDir(), p).split(path.sep).join("/"));
+      }
+    };
+    await walk(path.join(uploadDir(), prefix));
+    return out;
+  }
+  const keys: string[] = [];
+  let token = "";
+  for (let i = 0; i < 50; i++) {
+    const r = await fetch(presign("GET", "", 300, undefined, { query: { "list-type": "2", prefix, ...(token ? { "continuation-token": token } : {}) } }));
+    if (!r.ok) break;
+    const xml = await r.text();
+    for (const m of xml.matchAll(/<Key>([^<]+)<\/Key>/g)) keys.push(m[1].replace(/&amp;/g, "&"));
+    token = /<NextContinuationToken>([^<]+)<\/NextContinuationToken>/.exec(xml)?.[1] ?? "";
+    if (!/<IsTruncated>true<\/IsTruncated>/.test(xml) || !token) break;
+  }
+  return keys;
+}
 
 /** (Batch 15 section 6) The stored object's real size on R2 (a HEAD request), or null when it isn't there. */
 export async function headObject(key: string): Promise<{ size: number } | null> {

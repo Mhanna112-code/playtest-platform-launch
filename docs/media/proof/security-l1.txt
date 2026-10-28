@@ -1,0 +1,4 @@
+<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />
+ ✓ tests/batch15-security.test.ts > L1: headers > HSTS, Permissions-Policy and the CSP are on every response; no x-powered-by 8ms
+ Test Files  1 passed (1)
+      Tests  1 passed | 21 skipped (22)

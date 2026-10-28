@@ -1,0 +1,12 @@
+<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />
+stderr | tests/batch15-security.test.ts > M1: only a card error is a decline > a rate limit (or any other Stripe problem) fails the Pay with the plain line: no hold, nothing owed, no raw Stripe text
+[stripe] charge failed: StripeRateLimitError Too many requests to api.stripe.com (req_123)
+ ✓ tests/batch15-security.test.ts > M1: only a card error is a decline > a rate limit (or any other Stripe problem) fails the Pay with the plain line: no hold, nothing owed, no raw Stripe text 407ms
+stderr | tests/batch15-security.test.ts > M1: only a card error is a decline > a card error is the decline: the hold starts
+[stripe] charge failed: StripeCardError Your card was declined.
+ ✓ tests/batch15-security.test.ts > M1: only a card error is a decline > a card error is the decline: the hold starts 219ms
+stderr | tests/batch15-security.test.ts > M1: only a card error is a decline > a tester's Charge with a Stripe problem: nothing charged, no hold, it can be pressed again
+[stripe] charge failed: StripeAuthenticationError boom
+ ✓ tests/batch15-security.test.ts > M1: only a card error is a decline > a tester's Charge with a Stripe problem: nothing charged, no hold, it can be pressed again 174ms
+ Test Files  1 passed (1)
+      Tests  3 passed | 19 skipped (22)

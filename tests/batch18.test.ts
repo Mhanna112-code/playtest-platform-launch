@@ -122,7 +122,7 @@ describe("Q) a declined payment starts the hold at once (no owed window)", () =>
     await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
     return { dev, tester, sessionId, testId, sub };
   }
-  const decline = () => setStripeForTests({ paymentIntents: { create: async () => { throw new Error("declined"); } } } as unknown as Stripe);
+  const decline = () => setStripeForTests({ paymentIntents: { create: async () => { throw Object.assign(new Error("declined"), { type: "StripeCardError" }); } } } as unknown as Stripe);
 
   it("a declined Pay starts the payment hold AT ONCE: no 3-day window, no daily retry, no 'Pay $X by' reminder; 'Your tests are paused' ignores Off and stacks with the day's hold lines", async () => {
     const { dev, sessionId, sub, tester } = await owing();

@@ -12,8 +12,8 @@ export const setStripeForTests = (s: Stripe | null) => {
   override = s;
 };
 
-/** STRIPE_FAKE=1: a local stand-in for evidence runs. Only without a real key and only on a localhost APP_URL. */
-export const fakeOn = () => process.env.STRIPE_FAKE === "1" && !process.env.STRIPE_SECRET_KEY?.trim() && /^http:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(process.env.APP_URL ?? "");
+/** STRIPE_FAKE=1: a local stand-in for evidence runs. Only without a real key, only on a localhost APP_URL, and (batch 15 section 41, M3) never in production. */
+export const fakeOn = () => process.env.NODE_ENV !== "production" && process.env.STRIPE_FAKE === "1" && !process.env.STRIPE_SECRET_KEY?.trim() && /^http:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(process.env.APP_URL ?? "");
 let fakeN = 0;
 /** (Batch 11) The fake's PaymentIntents that wait for the cardholder: "requires_action" until the page's simulated pop-up says yes or no. */
 // (Kept on globalThis: the dev server may load this module once per route, and the confirm route must see what the Pay route created.)
@@ -24,7 +24,7 @@ const fakeByKey: Map<string, string> = ((globalThis as { __fakeByKey?: Map<strin
 const fakeStripe = {
   paymentIntents: {
     create: async (p: { payment_method?: string; amount: number; off_session?: boolean; metadata?: { payKey?: string } }) => {
-      if (p.payment_method === "pm_card_declined" || (p.payment_method === "pm_card_partial" && p.amount === 1500)) throw new Error("Your card was declined.");
+      if (p.payment_method === "pm_card_declined" || (p.payment_method === "pm_card_partial" && p.amount === 1500)) throw Object.assign(new Error("Your card was declined."), { type: "StripeCardError", rawType: "card_error", code: "card_declined" });
       const id = `pi_fake_${Date.now()}_${++fakeN}`;
       if (p.metadata?.payKey) fakeByKey.set(p.metadata.payKey, id);
       if (!fakePis.has(id)) fakePis.set(id, "succeeded");
@@ -80,7 +80,7 @@ export function getStripe(): Stripe {
   return new Stripe(key);
 }
 
-type Party = { id: string; email: string; stripeCustomerId: string | null; stripePaymentMethodId: string | null; stripeAccountId: string | null; payoutsReady: boolean; suspendedAt?: Date | null };
+type Party = { id: string; email: string; stripeCustomerId: string | null; stripePaymentMethodId: string | null; stripeAccountId: string | null; payoutsReady: boolean; testerSuspendedAt?: Date | null };
 
 /** Before charging: the developer needs a saved card (only when Stripe is on). */
 export function cardRefusal(dev: Party) {
@@ -113,7 +113,7 @@ export async function charge(dev: Party, tester: Party, amountCents: number, pay
   const split = splitFee(amountCents);
   if (amountCents === 0) return { status: "charged", ...split, transferStatus: "none", stripePaymentIntentId: null };
   // (Design doc 11.2) A suspended tester's pay is charged, but their share is HELD until reinstatement (the admin refunds or releases it if it is never lifted).
-  const held = !!tester.suspendedAt;
+  const held = !!tester.testerSuspendedAt;
   if (!stripeOn()) return { status: "not_set_up", ...split, transferStatus: held ? "held" : "none", stripePaymentIntentId: null };
   const stripe = getStripe();
   const destination = !held && tester.stripeAccountId && tester.payoutsReady ? tester.stripeAccountId : null;
@@ -138,11 +138,33 @@ export async function charge(dev: Party, tester: Party, amountCents: number, pay
   } catch (e) {
     const na = needsActionOf(e);
     if (na) return { ...split, transferStatus: destination ? "sent" : held ? "held" : "waiting", ...na };
-    const msg = (e as { message?: string }).message ?? "unknown";
-    unknownOutcome(e);
-    console.error("[stripe] charge failed:", msg);
-    throw new HttpError(402, "card_failed", "Your card couldn't be charged. Update your card in Payments and press Pay again.", { stripe: msg });
+    throw chargeError(e, "Your card couldn't be charged. Update your card in Payments and press Pay again.");
   }
+}
+
+/** (Batch 15 section 41, M1) Shown when Stripe fails for any reason that isn't the card itself: nothing was charged, no hold, nothing owed. */
+export const PAYMENTS_PROBLEM = "Payments are having a problem right now. Nothing was charged; try again shortly.";
+/** Only Stripe's card errors are declines (a hold, an owed payment). */
+export const isCardError = (e: unknown) => {
+  const x = e as { type?: string; rawType?: string };
+  return x?.type === "StripeCardError" || x?.type === "card_error" || x?.rawType === "card_error";
+};
+/**
+ * The error a failed charge becomes: a lost answer (connection or Stripe's own error) is "payment_unknown" (it stays pending and is checked later, section 9); a key reused
+ * with other details is "idempotency"; a card error is "card_failed" (the decline: holds and owed payments follow); anything else (rate limits, keys, a restricted
+ * account...) is "payments_problem" with no hold. The raw Stripe text is only logged, never shown (L4).
+ */
+function chargeError(e: unknown, declined: string): HttpError {
+  if (e instanceof HttpError) return e;
+  const msg = (e as { message?: string }).message ?? "unknown";
+  console.error("[stripe] charge failed:", (e as { type?: string }).type ?? "", msg);
+  try {
+    unknownOutcome(e);
+  } catch (x) {
+    return x as HttpError;
+  }
+  if (isCardError(e)) return new HttpError(402, "card_failed", declined);
+  return new HttpError(503, "payments_problem", PAYMENTS_PROBLEM);
 }
 
 /**
@@ -173,9 +195,7 @@ export async function chargePlatform(dev: Party, amountCents: number, payKey: st
   } catch (e) {
     const na = needsActionOf(e);
     if (na) return na;
-    const msg = (e as { message?: string }).message ?? "unknown";
-    console.error("[stripe] platform charge failed:", msg);
-    throw new HttpError(402, "card_failed", "Your card couldn't be charged. Update your card in Payments and try again.", { stripe: msg });
+    throw chargeError(e, "Your card couldn't be charged. Update your card in Payments and try again.");
   }
 }
 

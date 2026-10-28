@@ -496,6 +496,8 @@ Find them with `grep -rn DEFAULT src` and in the batch files (`grep -n DEFAULT d
 
 - (Fixed in batch 15: the Connect webhook's own secret §5, outages from the uptime service's alerts §10, R2 upload sizes
   signed and checked §6, sign-in limits §7, admins can open disputed work §8, time zones in bell lines and emails §11.)
+- **Security (batch 15 §41).** The pre-launch audit's fixes are listed in [docs/media/proof/SECURITY.md](media/proof/SECURITY.md).
+  **Dependencies:** the Next.js and Prisma major upgrades were left for after launch on purpose; plan them as their own change.
 - **Long daily job.** `runDaily` does everything in one request, one row at a time. Watch Vercel's function time limit as
   data grows.
 - **No sign-in throttling.** Log-in has no attempt limit, and sign-up / log-in messages reveal whether an email has an

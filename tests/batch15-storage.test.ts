@@ -36,7 +36,7 @@ describe("R2 upload sizes (section 6)", () => {
     });
     const start = await sact(sessionId, "recording-start", tester.cookie, { size: 1000, contentType: "video/mp4", filename: "run.mp4" });
     expect(start.status).toBe(200);
-    expect(new URL(start.body.uploadUrl).searchParams.get("X-Amz-SignedHeaders")).toBe("content-length;host");
+    expect(new URL(start.body.uploadUrl).searchParams.get("X-Amz-SignedHeaders")).toBe("content-length;content-type;host"); // (section 41, M5: the type too)
     // The stored object is bigger than claimed: refused, the object and the row deleted.
     const done = await sact(sessionId, "recording-done", tester.cookie, { recordingId: start.body.recordingId });
     expect(done.status).toBe(409);

@@ -1,0 +1,5 @@
+<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />
+ ✓ tests/batch15-security.test.ts > H1: admin by a confirmed email only; a suspended admin has no access > ADMIN_EMAILS counts only once the email is confirmed 69ms
+ ✓ tests/batch15-security.test.ts > H1: admin by a confirmed email only; a suspended admin has no access > a suspended admin: every admin action is refused with 'Your account is paused.' 11ms
+ Test Files  1 passed (1)
+      Tests  2 passed | 20 skipped (22)

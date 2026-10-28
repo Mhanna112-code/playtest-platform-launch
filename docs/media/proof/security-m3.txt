@@ -1,0 +1,5 @@
+<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />
+ ✓ tests/batch15-security.test.ts > M3: fail-open settings > the fake Stripe never runs in production; appUrl never trusts the Host header there 3ms
+ ✓ tests/batch15-security.test.ts > M3: fail-open settings > /dev/outbox is for admins only 0ms
+ Test Files  1 passed (1)
+      Tests  2 passed | 20 skipped (22)

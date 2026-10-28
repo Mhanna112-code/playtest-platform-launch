@@ -124,11 +124,12 @@ describe("roles and tester profile", () => {
   });
   it("suspended users can't change anything", async () => {
     const { user, cookie } = await makeUser();
-    await db.user.update({ where: { id: user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     expect((await profilePOST(req("/api/profile", { cookie, body: { name: "Ana", isDeveloper: true } }))).status).toBe(403);
   });
   it("admins come from ADMIN_EMAILS or the flag", () => {
-    expect(isAdmin({ email: "OWNER@playtest.test" })).toBe(true);
+    expect(isAdmin({ email: "OWNER@playtest.test", emailVerifiedAt: new Date() })).toBe(true);
+    expect(isAdmin({ email: "OWNER@playtest.test" })).toBe(false); // (batch 15 section 41, H1) only once the email is confirmed
     expect(isAdmin({ email: "x@playtest.test" })).toBe(false);
     expect(isAdmin({ email: "x@playtest.test", isAdmin: true })).toBe(true);
   });

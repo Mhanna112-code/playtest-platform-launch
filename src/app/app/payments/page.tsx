@@ -27,6 +27,7 @@ const MESSAGES: Record<string, string> = {
   card: "We couldn't save the card. Try again.",
   payout: "We couldn't open the payout setup. Try again.",
   verify: "We couldn't verify the card. Try again or use another card.",
+  confirm: "Confirm your email first: payouts go only to a confirmed account. We sent you a link.",
 };
 
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; pending?: string }> }) {
@@ -85,7 +86,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         const launch = await launchState();
         return (
           <SubscriptionBox state={subState(u)} since={u.subscribedAt ? fmtSubDay(u.subscribedAt) : null} renews={u.subscriptionRenewsAt ? fmtSubDay(u.subscriptionRenewsAt) : null}
-            endedReason={u.subscriptionEndReason} seenAt={new Date().toISOString()} hasCard={!!u.stripePaymentMethodId} needsCard={on} restricted={!!(u.holdStartedAt || u.suspendedAt)}
+            endedReason={u.subscriptionEndReason} seenAt={new Date().toISOString()} hasCard={!!u.stripePaymentMethodId} needsCard={on} restricted={!!(u.holdStartedAt || u.devSuspendedAt)}
             launch={{ free: launch.free, until: launch.until ? fmtSubDay(launch.until) : null }}
             pastDueBy={u.subscriptionPastDueAt ? fmtSubDay(new Date(u.subscriptionPastDueAt.getTime() + RETRY_DAYS * 86_400_000)) : null} />
         );
@@ -95,7 +96,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
           <section id="card" className="card scroll-mt-24 space-y-3">
             <h2 className="flex items-center gap-2 font-semibold text-white"><CreditCard className="h-5 w-5 text-indigo-300" /> Your card</h2>
             <p className="text-sm text-slate-300">{u.stripePaymentMethodId ? "A card is saved." : "No card yet."} You&apos;re charged only when you press Pay, for exactly the amount you tick.</p>
-            {on && <a className="btn no-underline hover:no-underline" href="/api/payments/card"><CreditCard className="h-4 w-4" /> {u.stripePaymentMethodId ? "Change card" : "Add a card"}</a>}
+            {/* (Batch 15 section 41, L5) Stripe objects are made only on a POST. */}
+            {on && <form method="post" action="/api/payments/card"><button className="btn"><CreditCard className="h-4 w-4" /> {u.stripePaymentMethodId ? "Change card" : "Add a card"}</button></form>}
             <p className="flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck className="h-3.5 w-3.5" /> Card details are entered on Stripe&apos;s page and never reach this site.</p>
           </section>
           <section className="card space-y-3">
@@ -156,7 +158,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <p className="text-sm text-slate-300">
               {u.payoutsReady ? "Your payout account is connected. Each payment is sent to it." : u.stripeAccountId ? "Stripe still needs a few details before you can be paid." : "Connect a payout account to receive money for your work."}
             </p>
-            {on && !u.payoutsReady && <a className="btn no-underline hover:no-underline" href="/api/payments/payout"><Banknote className="h-4 w-4" /> {u.stripeAccountId ? "Continue setup" : "Connect a payout account"}</a>}
+            {on && !u.payoutsReady && <form method="post" action="/api/payments/payout"><button className="btn"><Banknote className="h-4 w-4" /> {u.stripeAccountId ? "Continue setup" : "Connect a payout account"}</button></form>}
             <p className="flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck className="h-3.5 w-3.5" /> Bank details go to Stripe and never reach this site.</p>
           </section>
           <section className="card space-y-3">

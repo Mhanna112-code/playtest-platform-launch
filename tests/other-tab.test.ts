@@ -307,7 +307,7 @@ describe("payments and disputes, only for this test", () => {
     await db.user.update({ where: { id: ana.tester.user.id }, data: { stripeAccountId: "acct_" + randomUUID(), payoutsReady: true } });
     let decline = true;
     setStripeForTests({
-      paymentIntents: { create: async () => { if (decline) throw new Error("declined"); return { id: "pi_" + randomUUID(), status: "succeeded" }; } },
+      paymentIntents: { create: async () => { if (decline) throw Object.assign(new Error("declined"), { type: "StripeCardError" }); return { id: "pi_" + randomUUID(), status: "succeeded" }; } },
       webhooks: { constructEvent: (raw: string) => JSON.parse(raw) },
     } as unknown as Stripe);
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: ana.sessionId } });

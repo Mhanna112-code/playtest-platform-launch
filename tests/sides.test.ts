@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { GET as switchGET } from "@/app/app/switch/route";
+import { POST as switchPOST } from "@/app/app/switch/route";
 import { hasBoth, sideFor, sideForPath, sideLink } from "@/lib/sides";
 import { makeUser, req } from "./helpers";
 
@@ -32,7 +32,8 @@ describe("sides", () => {
 
   it("the switch sets the side used last and goes to the page; it refuses a side the account doesn't have and open redirects", async () => {
     const u = await makeUser({ dev: true, tester: true, name: "Nora Lane" });
-    const go = (q: string, cookie = u.cookie) => switchGET(req(`/app/switch?${q}`, { cookie })).then((r) => ({ status: r.status, to: r.headers.get("location") ?? "" }));
+    // (Batch 15 section 41, L5) The change is a POST from this site (a link answers with a small form that sends it).
+    const go = (q: string, cookie = u.cookie) => switchPOST(new Request(`http://localhost:3400/app/switch?${q}`, { method: "POST", headers: { cookie, origin: "http://localhost:3400" } })).then((r) => ({ status: r.status, to: r.headers.get("location") ?? "" }));
     const r = await go("to=developer&next=%2Fapp%2Ftests%2Fabc");
     expect(r.to).toMatch(/\/app\/tests\/abc$/);
     expect((await db.user.findUniqueOrThrow({ where: { id: u.user.id } })).side).toBe("developer");

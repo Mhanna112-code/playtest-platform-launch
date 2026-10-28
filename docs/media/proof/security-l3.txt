@@ -1,0 +1,5 @@
+<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />
+ ✓ tests/batch15-security.test.ts > L3: duplicates > a webhook event delivered twice runs once 402ms
+ ✓ tests/batch15-security.test.ts > L3: duplicates > a doubled Confirm finishes the payment once 207ms
+ Test Files  1 passed (1)
+      Tests  2 passed | 20 skipped (22)

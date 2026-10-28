@@ -80,9 +80,9 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
   });
 
   it("(batch 5 item 3) the closed pages: every signed-in page except the dashboard, Payments, Settings and the bell list, for a restricted developer and a suspended tester", () => {
-    const dev = { isDeveloper: true, isTester: false, suspendedAt: new Date() };
+    const dev = { isDeveloper: true, isTester: false, devSuspendedAt: new Date() };
     const held = { isDeveloper: true, isTester: false, holdStartedAt: new Date() };
-    const tester = { isDeveloper: false, isTester: true, suspendedAt: new Date() };
+    const tester = { isDeveloper: false, isTester: true, testerSuspendedAt: new Date() };
     for (const u of [dev, held]) {
       for (const p of ["/app/tests/abc", "/app/tests/abc/edit", "/app/tests/new", "/app/messages", "/app/chat/x", "/app/profile", "/app/testers/x", "/app/developers/x", "/app/find", "/app/find/x", "/app/sessions/x", "/app/calls/x"]) expect(closedForSuspended(p, u), p).toBe(true);
       for (const p of ["/app", "/app/", "/app?failed=x", "/app/payments", "/app/help", "/app/account", "/app/account/blocked", "/app/notifications", "/app/switch"]) expect(closedForSuspended(p, u), p).toBe(false);
@@ -137,7 +137,7 @@ describe("a suspended tester (design doc 2 and 11.4)", () => {
     expect(await db.invite.count({ where: { testId: inviteOnly.testId, testerId: ana.tester.user.id, status: "sent" } })).toBe(0);
     expect(await db.notification.count({ where: { userId: ana.tester.user.id, text: { startsWith: "You're invited back" } } })).toBe(0);
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).transferStatus).toBe("waiting");
-    expect(await db.notification.count({ where: { userId: ana.tester.user.id, text: "Your account is active again" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: ana.tester.user.id, text: "Your tester account is active again" } })).toBe(1); // (batch 15 section 16: the side is named)
     // The removed tests wait on her dashboard with Ask to rejoin until she asks or dismisses them; asking takes the card away.
     expect((await db.contract.findUniqueOrThrow({ where: { id: sess2 } })).endKind).toBe("suspended");
     expect((await act(open.testId, "join", ana.tester.cookie, { listingVersion: 1 })).body.error.code).toBe("ask");

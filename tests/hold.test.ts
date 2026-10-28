@@ -25,7 +25,7 @@ describe("invites", () => {
     const ana = await makeUser({ tester: true, name: "Ana Silva", pronoun: "she" });
     const dee = await makeUser({ tester: true, name: "Dee Moss" });
     const ben = await makeUser({ tester: true, name: "Ben Carter", pronoun: "he" });
-    await db.user.update({ where: { id: ben.user.id }, data: { suspendedAt: new Date() } });
+    await db.user.update({ where: { id: ben.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     const r = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [ana.user.id, dee.user.id, ben.user.id] });
     expect(r.body.message).toBe("Invited Ana Silva and Dee Moss. Ben Carter can't be invited right now.");
     expect(await db.invite.count({ where: { testId, status: "sent" } })).toBe(2);

@@ -8,7 +8,7 @@ export async function POST(req: Request) {
   return handle(async () => {
     const u = await requireUser(req);
     // (Owner, Oct 26) "Pay what you owe" exists only during a payment hold: a suspension on its own never offers it.
-    if (u.suspendedAt && !u.holdStartedAt) throw new HttpError(403, "suspended", DEV_SUSPENDED, { suspended: true });
+    if (u.devSuspendedAt && !u.holdStartedAt) throw new HttpError(403, "suspended", DEV_SUSPENDED, { suspended: true });
     return ok(await payOwed(u, await readJson(req)));
   });
 }

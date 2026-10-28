@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { countingSince, countsOf, lockedFields, storedCounts } from "@/lib/limits";
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { decideDispute } from "@/lib/server/payments";
-import { isAdmin, requireUser } from "@/lib/server/session";
+import { ADMIN_PAUSED, adminAccount, isAdmin, requireUser } from "@/lib/server/session";
 import { sendWaitingTransfer } from "@/lib/server/stripe";
 import { approveHoldLift } from "@/lib/server/holds";
 import { approveChargebackHold } from "@/lib/server/chargeback";
@@ -16,6 +16,7 @@ export async function POST(req: Request, { params }: Ctx) {
   return handle(async () => {
     const { action } = await params;
     const u = await requireUser(req);
+    if (adminAccount(u) && !isAdmin(u)) throw new HttpError(403, "suspended", ADMIN_PAUSED); // (batch 15 section 35) a suspended admin
     if (!isAdmin(u)) throw new HttpError(403, "not_admin", "Only admins can do that.");
     const body = await readJson(req);
     const id = String(body.id ?? "");
@@ -26,10 +27,10 @@ export async function POST(req: Request, { params }: Ctx) {
         if (id === u.id) throw new HttpError(409, "self", "You can't pause your own account.");
         const note = typeof body.note === "string" ? body.note.trim().slice(0, 500) : "";
         if (note.length < 3) throw new HttpError(400, "bad_note", "Record why (it is kept with the suspension).");
-        return ok(await suspendAccount(u.id, id, note));
+        return ok(await suspendAccount(u.id, id, note, body.side));
       }
       case "unsuspend":
-        return ok(await reinstateAccount(id));
+        return ok(await reinstateAccount(id, body.side, u.id));
       case "preview-suspension":
         return ok(await previewSuspension(id));
       case "delete-account": {
@@ -67,6 +68,8 @@ export async function POST(req: Request, { params }: Ctx) {
       case "approve-chargeback":
         return ok(await approveChargebackHold(id));
       // A paused test closes after 7 days: the admin can move its date later (days, default 7) or close it now (id = the test).
+      case "approve-outage":
+        return ok(await (await import("@/lib/server/outages")).approveOutage(u.id, id));
       case "extend-pause":
         return ok(await extendPauseClosure(id, body.days));
       case "close-paused":

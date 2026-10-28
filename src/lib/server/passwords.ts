@@ -48,13 +48,22 @@ export const LOGIN_FAILS_PER_EMAIL = 5;
 export const LOGIN_FAILS_PER_NETWORK = 20;
 export const SIGNUPS_PER_NETWORK_HOUR = 10;
 /**
- * The network a press came from: the first address of x-forwarded-for (always set on Vercel), else x-real-ip. Without either header: "unknown" in production (counted
- * like any network), "" on a local dev server (no network limit, so local test runs and recordings can make many accounts; the per-email limit still applies).
+ * The network a press came from. (Batch 15 section 41, L2) Vercel's own `x-real-ip` first (the client can't set it), else the LAST hop of x-forwarded-for (the one our
+ * proxy appended; the first is whatever the client sent). Without either: "unknown" in production (counted like any network), "" on a local dev server (no network
+ * limit, so local test runs and recordings can make many accounts; the per-email limit still applies).
  */
 export function clientIp(req: Request) {
-  const fwd = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip")?.trim();
-  return (fwd || (process.env.NODE_ENV === "production" ? "unknown" : "")).slice(0, 100);
+  const hops = (req.headers.get("x-forwarded-for") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const ip = req.headers.get("x-real-ip")?.trim() || hops[hops.length - 1];
+  return (ip || (process.env.NODE_ENV === "production" ? "unknown" : "")).slice(0, 100);
 }
+/** (Batch 15 section 41, L2) A per-network limit on one kind of attempt: at most `max` in `windowMs`; each call that passes is recorded. */
+export async function networkLimit(kind: string, ip: string, max: number, windowMs: number, message: string, now = new Date()) {
+  if (!ip) return;
+  if ((await db.loginAttempt.count({ where: { kind, ip, at: { gt: new Date(now.getTime() - windowMs) } } })) >= max) throw new HttpError(429, "too_many", message);
+  await db.loginAttempt.create({ data: { email: "", ip, kind, ok: true, at: now } });
+}
+export const TOO_MANY_RESETS = "Too many reset requests from here. Try again in an hour.";
 /** 5 failed tries for one email, or 20 from one network, in 15 minutes pause sign-in for that email or network (even with the right password). */
 async function loginPaused(email: string, ip: string, now: Date) {
   const since = new Date(now.getTime() - LOGIN_WINDOW_MS);
@@ -112,9 +121,10 @@ export async function logIn(body: Record<string, unknown>, ip = "", now = new Da
 /** (Batch 15 section 7) The reset email for an account with no password (a Google sign-up). */
 export const NO_PASSWORD_YET = "Your account has no password yet. Choose one here:";
 
-/** "Forgot your password?": always the same answer, so it can't reveal who has an account. */
-export async function requestReset(body: Record<string, unknown>, base: string) {
+/** "Forgot your password?": always the same answer, so it can't reveal who has an account. (Batch 15 section 41, L2) At most 10 per network an hour. */
+export async function requestReset(body: Record<string, unknown>, base: string, ip = "") {
   const email = readEmail(body.email);
+  await networkLimit("forgot", ip, 10, 3_600_000, TOO_MANY_RESETS);
   const user = await db.user.findUnique({ where: { email } });
   if (user && !user.deletedAt && (await recentlySent(email, "reset")) < EMAILS_PER_HOUR) {
     const token = await issue(email, "reset", RESET_MINUTES * 60_000);
