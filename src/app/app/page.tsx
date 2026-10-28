@@ -464,7 +464,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       {chargeable.length > 0 && (
         <section className="space-y-3" id="charge-or-cancel">
           {sectionTitle(<Banknote className="h-5 w-5 text-amber-300" />, "Charge or cancel", chargeable.length)}
-          <p className="note">Parts the developer hasn&apos;t reviewed once {REVIEW_DAYS} days have passed since you sent them and the test&apos;s Open until has passed: charge for them, or let them go.</p>
+          <p className="note">Parts the developer hasn&apos;t reviewed once {REVIEW_DAYS} days have passed since you sent them and your deadline has passed: charge for them, or let them go.</p>
           <LongList shown={3} tall="max-h-72" className="space-y-2">
             {chargeable.map(({ c, parts }) => (
               <li key={c.id}>

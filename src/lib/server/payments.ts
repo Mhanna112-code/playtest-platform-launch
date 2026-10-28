@@ -71,9 +71,9 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
   // (Batch 9) A call's Pay: the rate typed ($/h), when one was. (Batch 15 section 40) Rate and Amount fill each other; the one typed last wins and the other is recomputed here.
   let rateCents = body.rate === undefined || body.rate === null || body.rate === "" ? null : toCents(body.rate);
 
-  // (Owner, Oct 27) Pay and Reject are unavailable during ANY payment hold, chargeback hold or suspension (the route refuses first; this is the backstop).
+  // (Owner, Oct 27) Pay is unavailable during ANY payment hold, chargeback hold or suspension (the route refuses first; this is the backstop).
   const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, devSuspendedAt: true } });
-  if (devNow.devSuspendedAt || devNow.holdStartedAt) throw new HttpError(403, devNow.devSuspendedAt ? "suspended" : "held", devNow.devSuspendedAt ? "Your account is suspended: Pay and Reject wait until it is lifted." : PAY_WAITS);
+  if (devNow.devSuspendedAt || devNow.holdStartedAt) throw new HttpError(403, devNow.devSuspendedAt ? "suspended" : "held", devNow.devSuspendedAt ? "Your account is suspended: Pay waits until it is lifted." : PAY_WAITS);
 
   const reserved = await db.$transaction(async (tx) => {
     const piece = await loadPiece(tx, kind, id);

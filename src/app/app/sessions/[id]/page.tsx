@@ -209,8 +209,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         {/* (Batch 15 sections 20 and 22) The developer's End early reason, in italics, scrolling when long (never in the bell line). */}
         {c.status === "ended" && c.endKind === "early" && c.endReason && <ReasonQuote text={c.endReason} />}
       </div>}
-      {!refusal && c.test.openUntil && c.test.openUntil > now && c.test.openUntil.getTime() - now.getTime() < 3 * 86_400_000 && (
-        <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(c.title, c.test.openUntil, now)}</p>
+      {/* (Batch 15 section 18) The tester's OWN deadline, not the test's Open until (the last day to join). */}
+      {!refusal && c.status === "working" && c.dueAt > now && c.dueAt.getTime() - now.getTime() < 3 * 86_400_000 && (
+        <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(c.title, c.dueAt, now)}</p>
       )}
       <section className="card space-y-4">
         <div className="flex flex-wrap items-start gap-4">
@@ -290,7 +291,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         <ul className="mt-3 space-y-1 text-sm text-slate-300">
           <li>Deliverables: {[c.writtenCents != null ? "written answers" : "", c.recordingCents != null ? "screen recording" : "", c.liveRateCents != null ? "live call" : ""].filter(Boolean).join(", ") || "none in your contract"}</li>
           <li>Prices (what you get): {termsLine(c, true)}</li>
-          <li>Due {fmtDate(c.dueAt)}{c.test.openUntil ? " (the test's Open until)" : ""}</li>
+          <li>Due {fmtDate(c.dueAt)}</li>
           {writtenQuestions(c).length > 0 && <li>Questions: <PlusMore items={writtenQuestions(c).map((q) => `“${qText(q)}”`)} /></li>}
           <li>Agreed {fmtDate(c.joinedAt)}. Everything above is fixed in your contract; if {dev} changes the listing later you choose Switch or Keep.</li>
         </ul>

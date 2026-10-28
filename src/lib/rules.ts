@@ -788,13 +788,16 @@ export function checkCancel(startsAt: Date, now: Date, reason: string): Check {
 const whenLong = (d: Date) => T(d, "dayTime");
 export const cancelLine = (name: string, startsAt: Date, reason: string) => `${name} cancelled the call on ${whenLong(startsAt)}${reason.trim() ? `: ${reason.trim()}` : "."}`;
 
-/** "⏱ Harbor Run closes in 2 days 4 hours: send your work before then." */
-export function closesInLine(title: string, openUntil: Date, now: Date) {
-  const mins = Math.max(0, Math.floor((openUntil.getTime() - now.getTime()) / 60_000));
+/**
+ * (Batch 15 section 18) The last-3-days line. A working tester reads their OWN deadline: "⏱ Your deadline on Harbor Run is in 2 days 4 hours: send your work before then."
+ * The developer reads when the test closes to new testers (Open until): "⏱ Harbor Run closes to new testers in 2 days 4 hours."
+ */
+export function closesInLine(title: string, at: Date, now: Date, who: "tester" | "developer" = "tester") {
+  const mins = Math.max(0, Math.floor((at.getTime() - now.getTime()) / 60_000));
   const d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60), m = mins % 60;
   const pl = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
   const left = d > 0 ? [pl(d, "day"), h ? pl(h, "hour") : ""].filter(Boolean).join(" ") : h > 0 ? [pl(h, "hour"), m ? pl(m, "minute") : ""].filter(Boolean).join(" ") : pl(Math.max(m, 1), "minute");
-  return `⏱ ${title} closes in ${left}: send your work before then.`;
+  return who === "developer" ? `⏱ ${title} closes to new testers in ${left}.` : `⏱ Your deadline on ${title} is in ${left}: send your work before then.`;
 }
 
 /** Summary emails: daily, weekly or monthly since the last one. */
@@ -826,9 +829,9 @@ export function checkDevSide(text: string, already: boolean): Check {
 export const choiceLine = (devName: string, kind: string, cents: number) =>
   `${devName} didn't review your ${kind === "recording" ? "recording" : "written answers"} in ${REVIEW_DAYS} days: charge ${money(cents)} or let it go`;
 /**
- * (Owner, Oct 26) When Charge / Let it go opens for a contract part sent and left unreviewed: only once BOTH (1) REVIEW_DAYS (7; batch 12) have passed since it was sent (payBy, which
- * outages and pauses move on) and (2) the test's Open until has passed. With no Open until, (2) is met when the test stops or closes, or the tester's work ends
- * (they left, their deadline passed, or their work was ended early). Returns when it opens (null while that is not known yet).
+ * (Owner, Oct 26; batch 15 section 18) When Charge / Let it go opens for a contract part sent and left unreviewed: only once BOTH (1) REVIEW_DAYS (7; batch 12) have passed since it
+ * was sent (payBy, which outages and pauses move on) and (2) the tester's own deadline (the contract's dueAt) has passed: the later of the two. Returns when it opens (null while
+ * that is not known yet).
  */
 export function chargeOpensAt(s: { payBy: Date | null }, test: { openUntil: Date | null; status: string }, contract: { status: string; dueAt: Date }, now = new Date()): Date | null {
   void test;

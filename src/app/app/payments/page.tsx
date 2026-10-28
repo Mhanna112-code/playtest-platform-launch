@@ -123,7 +123,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         <>
           <section id="sent" className="card scroll-mt-24 space-y-3">
             <h2 className="font-semibold text-white">Everything you sent</h2>
-            <p className="text-xs text-slate-500">Each part you sent, by test, newest first, and where its money is now. Any part the developer paid or rejected can be disputed once, on its session page.</p>
+            <p className="text-xs text-slate-500">Each part you sent, by test, newest first, and where its money is now. Whatever the developer paid for a part, $0 included, can be disputed once, on its session page.</p>
             {sent.every((c) => c.submissions.length + c.calls.filter((x) => x.review).length === 0) && <p className="text-sm text-slate-500">Nothing sent yet.</p>}
             <LongList as="div" shown={5} tall="max-h-[28rem]" className="space-y-3">
             {sent.filter((c) => c.submissions.length + c.calls.filter((x) => x.review).length > 0).map((c) => (

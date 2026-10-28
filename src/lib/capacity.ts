@@ -48,7 +48,7 @@ export function capacityCard(c: Capacity) {
   return {
     limit: `Can take up to ${c.limit} testers per test`,
     next: c.nextIn == null ? "The most that can be earned" : `Next: +10% after ${c.nextIn} more rating${c.nextIn === 1 ? "" : "s"}`,
-    rule: `It grows by 10% (at least 1 more) after every ${RATINGS_PER_STEP} new ratings, when at least half of them are ${GOOD_STARS} stars or more, or you've reviewed at least 90% of the work testers sent you yourself (partial pay and rejections count as reviews; a tester's Charge or Let it go doesn't); up to ${MAX_LIMIT}. Tests already above it keep their spots.`,
+    rule: `It grows by 10% (at least 1 more) after every ${RATINGS_PER_STEP} new ratings, when at least half of them are ${GOOD_STARS} stars or more, or you've reviewed at least 90% of the work testers sent you yourself (partial pay and $0 count as reviews; a tester's Charge or Let it go doesn't); up to ${MAX_LIMIT}. Tests already above it keep their spots.`,
   };
 }
 

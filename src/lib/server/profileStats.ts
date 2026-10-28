@@ -15,7 +15,7 @@ const pct = (x: number | null) => (x == null ? "-" : `${Math.round(x * 100)}%`);
 /** What each tile counts, said once under the tiles (the full app's footnote under its profile tiles). */
 export const DEV_FOOTNOTE =
   "Pays on average: the share of the listing paid for work in testers' contracts once decided (after any dispute); parts testers let go and work outside the contract don't count. " +
-  "Typical review: the median time from when the work was sent (or the call ended) to the developer's Pay or Reject. " +
+  "Typical review: the median time from when the work was sent (or the call ended) to the developer's Pay. " +
   "Rating: the average of testers' ratings, one per test, counted once they show.";
 export const TESTER_FOOTNOTE =
   "Accepted parts: the written answers, recordings and live calls developers paid for (in full or partly, including ones the tester charged after the review window), out of the ones sent. " +

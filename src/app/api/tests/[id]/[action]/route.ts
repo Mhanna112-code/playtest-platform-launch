@@ -58,7 +58,7 @@ const STOPPED_ALLOWS = new Set(["message", "rate", "dispute-side", "pay-extra", 
 const TESTER_SIDE = new Set(["join", "apply", "rejoin-ask", "withdraw-application", "my-gaps"]);
 
 /**
- * (Design doc 6) The team paused the test: the developer can only stop it. The team stopped it: every press the developer made
+ * (Design doc 6; batch 15 sections 23 and 37) The team paused the test: the developer can stop it, end testers' work early or cancel calls. The team stopped it: every press the developer made
  * fails and they are sent back to the test, where a permanent banner says so and names the press that failed.
  */
 async function adminRefusal(req: Request, userId: string, testId: string, action: string) {

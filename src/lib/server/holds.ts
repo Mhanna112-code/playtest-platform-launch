@@ -505,7 +505,7 @@ export async function runDaily(now = new Date()) {
     const c = s.contract, dev = c.test.developer;
     const auto = autoPayFor(s.agreedCents);
     if (auto == null) continue; // outside the contract: its own reminder every 3 days (below)
-    // (Owner, Oct 26) Charge / Let it go opens only when REVIEW_DAYS (7) have passed AND the test's Open until has passed (or, with none, the test or the tester's work ended).
+    // (Owner, Oct 26; batch 15 section 18) Charge / Let it go opens only when REVIEW_DAYS (7) have passed since it was sent AND the tester's own deadline has passed.
     if (!chargeIsOpen(s, c.test, c, now)) continue;
     // Once it opens: the developer is reminded daily until it's paid, rejected, charged or let go.
     const gone = !!c.tester.deletedAt;
@@ -717,7 +717,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
     if (byTesterChoice(s.review.reason)) throw new HttpError(409, "done", "You already chose for this.");
     throw new HttpError(409, "done", s.review.rejected ? `${displayName(dev)} rejected this meanwhile.` : `${displayName(dev)} paid ${money(s.review.amountCents)} for this meanwhile.`);
   }
-  if (!s.choiceOfferedAt) throw new HttpError(409, "not_yet", `You can choose once ${REVIEW_DAYS} days have passed since you sent it and the test's Open until has passed (with no Open until: once the test or your work has ended).`);
+  if (!s.choiceOfferedAt) throw new HttpError(409, "not_yet", `You can choose once ${REVIEW_DAYS} days have passed since you sent it and your deadline has passed.`);
   await testerTermsGate(contractId, displayName(dev), body);
   const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;
   if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");

@@ -192,7 +192,7 @@ describe("deleting an account (design doc 2, 9, 11.4)", () => {
 });
 
 describe("the team pausing or stopping a test (design doc 6)", () => {
-  it("paused: the developer can only stop it; testers see it paused. Stopped: every press fails and names the press", async () => {
+  it("paused: other presses are refused (Stop, End early and Cancel call still work); testers see it paused. Stopped: every press fails and names the press", async () => {
     const { dev, testId, sessionId, tester } = await withWork();
     const a = await admin();
     await adm("pause-test", a.cookie, { id: testId, note: "Reported" });

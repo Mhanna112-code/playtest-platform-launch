@@ -550,7 +550,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {!restricted && <ContractChanges entries={changeEntries} fmt={(iso) => fmtDateTime(new Date(iso))} />}
       {cbSteps && <ChargebackSteps steps={cbSteps} />}
       {(u.holdStartedAt || (owedList.length > 0 && !u.devSuspendedAt)) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} chargeback={!!cbSteps} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />}
-      {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date())}</p>}
+      {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date(), "developer")}</p>}
       <DevCallPanel
         testId={t.id}
         seenAt={seenAt}

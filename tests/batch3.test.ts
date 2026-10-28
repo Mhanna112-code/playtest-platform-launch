@@ -214,8 +214,9 @@ describe("newest owner rules", () => {
     expect(R.checkCancel(new Date(now.getTime() + 20 * 3_600_000), now, "").ok).toBe(false);
     expect(R.checkCancel(new Date(now.getTime() + 30 * 3_600_000), now, "").ok).toBe(true);
     expect(renderTimes(R.cancelLine("Ben Carter", call, "car trouble"), Intl.DateTimeFormat().resolvedOptions().timeZone)).toMatch(/^Ben Carter cancelled the call on Thu, Nov 5 at 3:00 PM \S+: car trouble$/);
-    expect(R.closesInLine("Harbor Run", new Date(now.getTime() + (2 * 24 + 4) * 3_600_000), now)).toBe("⏱ Harbor Run closes in 2 days 4 hours: send your work before then.");
-    expect(R.closesInLine("Harbor Run", new Date(now.getTime() + 5 * 3_600_000), now)).toBe("⏱ Harbor Run closes in 5 hours: send your work before then.");
+    expect(R.closesInLine("Harbor Run", new Date(now.getTime() + (2 * 24 + 4) * 3_600_000), now)).toBe("⏱ Your deadline on Harbor Run is in 2 days 4 hours: send your work before then.");
+    expect(R.closesInLine("Harbor Run", new Date(now.getTime() + 5 * 3_600_000), now)).toBe("⏱ Your deadline on Harbor Run is in 5 hours: send your work before then.");
+    expect(R.closesInLine("Harbor Run", new Date(now.getTime() + 5 * 3_600_000), now, "developer")).toBe("⏱ Harbor Run closes to new testers in 5 hours.");
     expect(R.emailDecision("weekly", false)).toBe("summary");
     expect(R.emailDecision("off", false)).toBe("skip");
     expect(R.summaryDue("weekly", new Date(now.getTime() - 3 * DAY), now)).toBe(false);

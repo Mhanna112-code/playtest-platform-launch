@@ -237,7 +237,7 @@ export async function suspendedAccountsReminder(now = new Date()) {
 
 // ---------- the team pausing or stopping one test (design doc 6 and 10) ----------
 
-/** Admin: pause one test. It behaves like a stop for the developer, who can only stop it; testers see it as paused. */
+/** Admin: pause one test. The developer can stop it, end testers' work early or cancel calls (batch 15 sections 23 and 37); testers see it as paused. */
 export async function pauseTest(adminId: string, testId: string, note: string) {
   const t = await db.test.findUnique({ where: { id: testId } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
@@ -249,7 +249,7 @@ export async function pauseTest(adminId: string, testId: string, note: string) {
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
   await (await import("./pauseClosure")).bellPausedTests(dev.id);
   // (Batch 15 section 20) Never the note in the bell line: it says what happened; the note is on the test page and in the email.
-  await notify(dev.email, `The team paused “${t.title}”`, [`The team paused “${t.title}”${note ? `: ${note}` : "."} You can only stop it for now.`, "Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
+  await notify(dev.email, `The team paused “${t.title}”`, [`The team paused “${t.title}”${note ? `: ${note}` : "."} For now you can stop it, end testers' work early, or cancel calls.`, "Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "team" });
   return { ok: true };
 }
 
