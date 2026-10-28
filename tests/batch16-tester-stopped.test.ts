@@ -44,7 +44,7 @@ describe("after a stop: what's gone is refused and names the press; what still w
     const reqRow = await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId, status: "pending" } });
     const opened = seen();
     await settle();
-    expect((await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
     const refused = async (action: string, body: Record<string, unknown>, press: string) => {
       const r = await sact(sessionId, action, tester.cookie, { seenAt: opened, ...body });
       expect(r.status, action).toBe(409);
@@ -83,7 +83,7 @@ describe("after a stop: what's gone is refused and names the press; what still w
     await settle();
     const opened = seen();
     await settle();
-    expect((await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
     expect(await db.call.count({ where: { contractId: sessionId, status: "cancelled", cancelledBy: "system" } })).toBe(1);
     const d = await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question in full.", seenAt: opened });
     expect(d.status, JSON.stringify(d.body)).toBe(200);

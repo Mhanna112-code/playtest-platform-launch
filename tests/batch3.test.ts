@@ -121,7 +121,7 @@ describe("live calls blocked during holds and on stopped/closed tests", () => {
 
   it("Stop the test and End early cancel that tester's booked calls with the exact line", async () => {
     const a = await withCall();
-    await act(a.testId, "stop", a.dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(a.testId, "stop", a.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     expect(await db.notification.count({ where: { userId: a.tester.user.id, text: { contains: "was cancelled because the test was stopped." } } })).toBe(1);
     const b = await withCall();
     await act(b.testId, "end-early", b.dev.cookie, { seenAt: seen(), confirmed: true, contractId: b.sessionId, reason: "We have enough" });
@@ -141,7 +141,7 @@ describe("live calls blocked during holds and on stopped/closed tests", () => {
     expect((await act(testId, "answer-request", dev.cookie, { seenAt: seen(), confirmed: true, contractId: sessionId, requestId: req.id, action: "accept" })).status).toBe(200);
     expect((await act(testId, "cancel-call", dev.cookie, { seenAt: seen(), confirmed: true, callId: call.id })).status).toBe(200);
     // Stopped: refused.
-    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: inHours(250) })).status).toBe(409);
   });
 });

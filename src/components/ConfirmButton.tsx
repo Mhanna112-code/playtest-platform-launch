@@ -6,7 +6,7 @@ import { LiveNotices } from "@/components/LiveNotices";
  * The full app's in-page confirm: a button that asks first in a small dialog on the page ("Leave this test?"), then
  * presses. The press's stop-once box or refusal still shows under this button.
  */
-export function ConfirmButton({ className, title, body, confirmLabel, onConfirm, disabled, before, live, children }: {
+export function ConfirmButton({ className, title, body, confirmLabel, onConfirm, disabled, before, live, confirmDisabled, confirmHint, children }: {
   className?: string;
   title: string;
   body: ReactNode;
@@ -17,6 +17,9 @@ export function ConfirmButton({ className, title, body, confirmLabel, onConfirm,
   before?: () => boolean;
   /** (Owner, Oct 26) Show live blue notices inside the dialog while it is open (Stop, End early). */
   live?: boolean;
+  /** (Batch 17 §15) The dialog's own confirm stays disabled until the dialog's form is ready (Stop's "Why?"), with this short grey line over it ("Say why first"). */
+  confirmDisabled?: boolean;
+  confirmHint?: string;
   children: ReactNode;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -30,9 +33,10 @@ export function ConfirmButton({ className, title, body, confirmLabel, onConfirm,
         <h2 id={`${id}-t`} className="font-semibold text-white">{title}</h2>
         <div id={`${id}-b`} className="mt-2 space-y-2 text-sm text-ink-300">{body}</div>
         {live && <div className="mt-3"><LiveNotices open={open} /></div>}
+        {confirmDisabled && confirmHint && <p className="mt-3 text-right text-xs text-slate-400" data-say-why="">{confirmHint}</p>}
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button type="button" className="btn-secondary px-3 py-1.5 text-sm" onClick={() => dialog.current?.close()} autoFocus>Cancel</button>
-          <button type="button" className="btn-danger px-3 py-1.5 text-sm" data-confirm={confirmLabel} onClick={() => { dialog.current?.close(); onConfirm(); }}>{confirmLabel}</button>
+          <button type="button" className="btn-danger px-3 py-1.5 text-sm" data-confirm={confirmLabel} disabled={confirmDisabled} onClick={() => { dialog.current?.close(); onConfirm(); }}>{confirmLabel}</button>
         </div>
       </dialog>
     </>

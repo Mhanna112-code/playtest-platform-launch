@@ -45,7 +45,7 @@ describe("post and edit", () => {
     const { testId } = await setup();
     const other = await makeUser({ dev: true });
     expect((await act(testId, "edit", other.cookie, { version: 1, fields: { title: "Mine" } })).status).toBe(404);
-    expect((await act(testId, "stop", other.cookie, { seenAt: seen() })).status).toBe(404);
+    expect((await act(testId, "stop", other.cookie, { reason: "We have what we need.", seenAt: seen() })).status).toBe(404);
   });
 });
 
@@ -90,7 +90,7 @@ describe("join and contract snapshots", () => {
     expect((await act(testId, "join", dev.cookie, { listingVersion: 1 })).status).toBe(403); // not a tester
     const s = await setup({ devices: ["Mac"] });
     expect((await act(s.testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toContain("This test needs one of: Mac");
-    await act(s.testId, "stop", s.dev.cookie, { seenAt: seen() });
+    await act(s.testId, "stop", s.dev.cookie, { reason: "We have what we need.", seenAt: seen() });
     expect((await act(s.testId, "join", ben.cookie, { listingVersion: 1, confirmed: true })).body.error.message).toBe("This test was stopped.");
   });
 });
@@ -130,9 +130,9 @@ describe("top panel stops once", () => {
     await sact(sessionId, "leave", tester.cookie);
     const r = await act(testId, "end-early", dev.cookie, { seenAt: pageLoaded, contractId: sessionId, reason: "Enough feedback", confirmed: true });
     expect(r.body.error.message).toBe("Ana Silva already left the test. Refresh to see the latest.");
-    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     await later();
-    expect((await act(testId, "stop", dev.cookie, { seenAt: seen() })).body.error.message).toBe("This test was stopped.");
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen() })).body.error.message).toBe("This test was stopped.");
   });
 });
 
@@ -150,7 +150,7 @@ describe("tester session", () => {
   it("stopping the test refuses later presses with the stop line", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
-    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     const r = await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     expect(r.body.error.message).toMatch(/^Nora Lane stopped the test on .+, so your Send didn't go through\. Work you sent is still reviewed\.$/); // (batch 16 section 24)
   });

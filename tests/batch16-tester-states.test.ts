@@ -29,7 +29,7 @@ async function scene(state: State, written: "paid" | "charge-open") {
   else await db.submission.update({ where: { id: sub.id }, data: { choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 7 * DAY), payBy: new Date(Date.now() - DAY) } });
   const rec = await db.submission.create({ data: { contractId: sessionId, kind: "recording", agreedCents: 1500, sentAt: new Date(), updatedAt: new Date(), payBy: new Date(Date.now() + 7 * DAY), devMarks: [] } });
   // The state, then the page loads.
-  if (state === "stopped") expect((await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+  if (state === "stopped") expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
   if (state === "ended early") expect((await act(testId, "end-early", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], reason: "We have enough" })).status).toBe(200);
   if (state === "left") expect((await sact(sessionId, "leave", tester.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
   if (state === "removed") {
@@ -81,7 +81,7 @@ describe("what still works goes through on the first press (section 25, tester)"
     await settle();
     const opened = seen();
     await settle();
-    expect((await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200); // cancels the call: not news for Rate
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200); // cancels the call: not news for Rate
     const r = await sact(sessionId, "rate", tester.cookie, { stars: 5, comment: "", seenAt: opened });
     expect(r.status, JSON.stringify(r.body)).toBe(200);
   });

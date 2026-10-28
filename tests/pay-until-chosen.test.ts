@@ -35,7 +35,7 @@ describe("Pay and Reject stay available until the tester chooses", () => {
   it("after the developer stopped the test", async () => {
     const { dev, testId } = await setup();
     const [a, b] = [(await piece(testId, "Ana Silva")).sub, (await piece(testId)).sub];
-    expect((await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
     expect((await pay(dev.cookie, payBody(a.id))).status).toBe(200);
     expect((await pay(dev.cookie, rejectBody(b.id))).status).toBe(200);
   });
@@ -84,7 +84,7 @@ describe("Pay and Reject stay available until the tester chooses", () => {
     expect(await db.review.count({ where: { submissionId: { in: [a.id, b.id] } } })).toBe(0);
     // Lifted: both work again, even on a stopped test.
     await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: null, testerSuspendedAt: null } });
-    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     expect((await pay(dev.cookie, payBody(a.id))).status).toBe(200);
     expect((await pay(dev.cookie, rejectBody(b.id))).status).toBe(200);
   });

@@ -45,7 +45,7 @@ describe("batch 7 item 2: a stopped test shows only what still works", () => {
     expect(page).not.toContain("so no calls can be requested or booked");
     expect(page).toContain('{t.status !== "stopped" && !restricted && (\n        <InvitePanel');
     const { dev, testId } = await setup();
-    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     const r = await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true });
     expect(r.status).toBe(200);
     expect((await db.test.findUniqueOrThrow({ where: { id: r.body.id } })).status).toBe("draft");
@@ -121,7 +121,7 @@ describe("batch 7 item 4: stop-once on every press still allowed", () => {
     const call = await bookCall(testId, dev.cookie, a.sessionId, a.tester.cookie, 48);
     await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 2 * 3_600_000), measuredMinutes: 30, measuredAt: new Date() } });
     await db.rating.create({ data: { testId, contractId: a.sessionId, side: "tester", raterId: a.tester.user.id, rateeId: dev.user.id, stars: 5 } });
-    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     const loaded = seen();
     await settle();
     await db.testEvent.create({ data: { testId, kind: "paid", text: "Ben Carter charged $1.00 for their recording", contractId: b.sessionId } });
@@ -158,7 +158,7 @@ describe("batch 7 item 4: stop-once on every press still allowed", () => {
       const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
       await db.submission.update({ where: { id: sub.id }, data: { choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 14 * DAY) } });
       const call = state === "paused" ? await bookCall(testId, dev.cookie, sessionId, tester.cookie, 24 * 6) : null;
-      if (state === "stopped") await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+      if (state === "stopped") await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
       else await startHold(dev.user.id, "unpaid");
       const loaded = seen();
       await settle();

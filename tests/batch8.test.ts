@@ -181,7 +181,7 @@ describe("batch 8 items 2-3: Payments, subscribe, cancel, keep", () => {
     expect((await db.test.findUniqueOrThrow({ where: { id: b.body.id } })).status).toBe("open");
     expect((await post(dev.cookie)).body.error.message).toBe(S.SECOND_TEST_LINE);
     // A page open at that moment: the next press stops once with "Your subscription ended."
-    const stop = await act(b.body.id, "stop", dev.cookie, { seenAt: loaded });
+    const stop = await act(b.body.id, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded });
     expect(stop.body.error.code).toBe("stop_once");
     expect(stop.body.error.changes.map((c: { text: string }) => c.text)).toContain("Your subscription ended.");
   });
@@ -337,7 +337,7 @@ describe("batch 8 item 6: free during launch", () => {
     await settle();
     setFreeUntil(new Date(Date.now() - 1000).toISOString());
     await freeLaunchNotices();
-    expect((await act(t.body.id, "stop", free.cookie, { seenAt: loaded })).body.error.changes.map((c: { text: string }) => c.text)).toContain("Free during launch ended: the extras need a subscription now.");
+    expect((await act(t.body.id, "stop", free.cookie, { reason: "We have what we need.", seenAt: loaded })).body.error.changes.map((c: { text: string }) => c.text)).toContain("Free during launch ended: the extras need a subscription now.");
     expect((await post(free.cookie)).body.error.message).toBe(S.SECOND_TEST_LINE);
   });
 });

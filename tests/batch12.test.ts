@@ -109,7 +109,7 @@ describe("batch 12 item 4: at most 10 open tests", () => {
     const eleventh = await post(dev.cookie, { title: "Eleven" });
     expect(eleventh.status).toBe(409);
     expect(eleventh.body.error.message).toBe(TOO_MANY_OPEN_LINE);
-    await act(ids[0], "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(ids[0], "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     expect((await post(dev.cookie, { title: "Eleven" })).status).toBe(200);
   });
 

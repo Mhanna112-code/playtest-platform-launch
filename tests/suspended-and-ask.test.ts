@@ -48,7 +48,7 @@ describe("a suspended developer keeps Cancel call, End early and Stop, with or w
     expect((await act(s.testId, "cancel-call", s.dev.cookie, { callId: call.id, seenAt: seen(), confirmed: true })).status).toBe(200);
     // (Owner, Oct 30, batch 15 section 29) End early and Stop work from the restricted view.
     expect((await act(s.testId, "end-early", s.dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], reason: "We have what we need" })).status).toBe(200);
-    expect((await act(s.testId, "stop", s.dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await act(s.testId, "stop", s.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
   });
 
   it("a payment hold alone: Pay is refused as well", async () => {

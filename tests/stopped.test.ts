@@ -29,7 +29,7 @@ describe("after the test is stopped", () => {
     const rec = await db.submission.create({ data: { contractId: sessionId, kind: "recording", agreedCents: 1000, sentAt: new Date(), updatedAt: new Date() } });
     const opened = seen();
     await later();
-    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     const d = await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: written.id, reason: "I answered everything properly", seenAt: seen(), confirmed: true });
     expect(d.status).toBe(200);
     const first = await pay(dev.cookie, { kind: "submission", id: rec.id, amount: "10.00", tickedCents: 1000, seenAt: opened });
@@ -45,7 +45,7 @@ describe("after the test is stopped", () => {
 
   it("the developer's other buttons are refused for good, naming the stop (batch 7: Next round still works)", async () => {
     const { dev, testId, sessionId } = await paidBelowListing();
-    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     const someone = await makeUser({ tester: true });
     for (const [action, body] of [["edit", { version: 1, fields: { title: "x" } }], ["invite", { testerIds: [someone.user.id] }], ["end-early", { contractIds: [sessionId], reason: "Enough thanks" }]] as const) {
       const r = await act(testId, action, dev.cookie, { seenAt: seen(), confirmed: true, ...body });
@@ -68,7 +68,7 @@ describe("after the test is stopped", () => {
     await pay(s.dev.cookie, { kind: "submission", id: rec.id, amount: "3.00", tickedCents: 300, reason: "Barely a recording", confirmed: true });
     const opened = seen();
     await later();
-    await act(s.testId, "stop", s.dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(s.testId, "stop", s.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     expect((await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: w.id, reason: "I answered everything properly", seenAt: opened })).status).toBe(200);
     const d1 = await db.dispute.findFirstOrThrow({ where: { submissionId: w.id } });
     expect((await act(s.testId, "dispute-side", s.dev.cookie, { disputeId: d1.id, text: "They skipped half of it", seenAt: seen(), confirmed: true })).status).toBe(200);
@@ -81,7 +81,7 @@ describe("after the test is stopped", () => {
 
   it("Rate: an open dispute blocks it until the team decides (final)", async () => {
     const { dev, tester, sessionId, testId, written } = await paidBelowListing();
-    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: written.id, reason: "I answered everything properly", seenAt: seen(), confirmed: true });
     const r = await sact(sessionId, "rate", tester.cookie, { stars: 4, comment: "ok", seenAt: seen(), confirmed: true });
     expect(r.status).toBe(409);

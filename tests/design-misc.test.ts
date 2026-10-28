@@ -140,7 +140,7 @@ describe("bell reach (owner, Oct 26)", () => {
     const msgLines = () => db.notification.count({ where: { userId: dev.user.id, OR: [{ text: { contains: "sent you a message" } }, { text: { startsWith: "New message from" } }] } });
     expect(await msgLines()).toBe(1);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "First message" } } })).toBe(0);
-    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     await sact(sessionId, "message", tester.cookie, { body: "Second message" });
     expect(await msgLines()).toBe(1);
   });
@@ -240,7 +240,7 @@ describe("a suspended developer's test page: its restricted view (batch 15 secti
       expect(r.body.error.failed, action).toMatch(/^Your .+ on Harbor Run didn't go through$/);
     }
     // (Owner, Oct 30, batch 15 section 29) Stop and End early work from the restricted view, silently.
-    for (const [action, body] of [["end-early", { contractIds: [sessionId], reason: "We have what we need" }], ["stop", {}]] as const) {
+    for (const [action, body] of [["end-early", { contractIds: [sessionId], reason: "We have what we need" }], ["stop", { reason: "We have what we need." }]] as const) {
       const r = await act(testId, action, dev.cookie, { seenAt: seen(), ...body });
       expect(r.status, action).toBe(200);
     }

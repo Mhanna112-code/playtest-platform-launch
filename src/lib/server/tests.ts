@@ -22,7 +22,7 @@ import { notify } from "./notify";
 import { offerNewTerms, testerTermsGate } from "./terms";
 import { testerGate } from "./testerGate";
 import { blockPartners } from "./blocks";
-import { callCancelledLine, rateStops } from "@/lib/rules";
+import { callCancelledLine, rateStops, STOP_NOTE_KIND, stopEventText, stopNoteText } from "@/lib/rules";
 
 type Tx = Prisma.TransactionClient;
 type U = { id: string; email: string; name: string; pronoun: string; isDeveloper: boolean; isTester: boolean; timeZone?: string | null };
@@ -627,6 +627,9 @@ async function pausedForDeveloper(tx: Tx, t: { adminPausedAt: Date | null }, dev
 
 export async function stopTest(dev: U, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
+  // (Batch 17 §15) A required "Why?" like End early's: at least one character, at most 10,000, refused beyond (never cut). Testers read it (also when paused or restricted).
+  const reason = readText(body.reason, LIMITS.stopReason, "bad_reason");
+  if (!reason) throw new HttpError(400, "bad_reason", "Say why you're stopping the test (testers read it).");
   let cancelled: Awaited<ReturnType<typeof cancelCallsAhead>> = [];
   const contracts = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
@@ -638,17 +641,20 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
     // (Owner, Oct 30, batch 15 sections 23, 29 and 37) While the test is paused (any cause) Stop goes through silently: no stop-once.
     if (!(await pausedForDeveloper(tx, t, dev.id))) await topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["stop"], keys: ["test"] });
     const cs = await tx.contract.findMany({ where: working(testId), include: { tester: true } });
-    await tx.contract.updateMany({ where: working(testId), data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The developer stopped the test." } });
+    // (Batch 17 §15) The reason is each ended contract's endReason, and an entry in each tester's contract changes (the marker that it's the developer's own reason).
+    await tx.contract.updateMany({ where: working(testId), data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: reason } });
+    if (cs.length) await tx.contractNote.createMany({ data: cs.map((c) => ({ contractId: c.id, kind: STOP_NOTE_KIND, text: stopNoteText(reason) })) });
     cancelled = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
     await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test was stopped", decidedAt: new Date() } });
     await tx.callSlot.updateMany({ where: { testId, status: "open" }, data: { status: "removed" } });
     await tx.invite.updateMany({ where: { testId, status: "sent" }, data: { status: "cancelled" } }); // (batch 16 section 32) a stop closes open invites
-    await recordEvent(tx, testId, "stopped", "The test was stopped", true, { status: "stopped", stoppedAt: new Date() });
+    await recordEvent(tx, testId, "stopped", stopEventText(reason), true, { status: "stopped", stoppedAt: new Date() });
     return cs;
   });
   await tellCancelled(cancelled, "stopped");
+  // (Batch 17 §15) The reason in full in the email, never in the bell line.
   for (const c of contracts)
-    await notify(c.tester.email, `“${c.title}” was stopped`, [`${displayName(dev)} stopped “${c.title}”. Your work on it has ended.`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { group: "tstopped" });
+    await notify(c.tester.email, `“${c.title}” was stopped`, [`${displayName(dev)} stopped “${c.title}”: “${reason}”`, "Your work on it has ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { group: "tstopped" });
   return { stopped: true, testers: contracts.length };
 }
 

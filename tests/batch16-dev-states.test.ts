@@ -72,7 +72,7 @@ describe("developer, stopped / closed or paused / held: what still works goes th
     expect((await sact(w.sessionId, "dispute", w.tester.cookie, { kind: "submission", id: w.sub.id, reason: "I answered every question fully" })).status).toBe(200);
     const d = await db.dispute.findFirstOrThrow({ where: { submissionId: w.sub.id } });
     await db.rating.create({ data: { testId: w.testId, contractId: b.sessionId, side: "tester", raterId: b.tester.user.id, rateeId: w.dev.user.id, stars: 5 } });
-    expect((await act(w.testId, "stop", w.dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await act(w.testId, "stop", w.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
     await later();
     const loaded = seen();
     await later();
@@ -108,7 +108,7 @@ describe("developer, stopped / closed or paused / held: what still works goes th
     await db.testEvent.create({ data: { testId, kind: "left", text: "Cara Diaz left the test" } });
     expect((await act(testId, "cancel-call", dev.cookie, { callId: call.id, seenAt: loaded })).status).toBe(200);
     expect((await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "Done", seenAt: loaded })).status).toBe(200);
-    expect((await act(testId, "stop", dev.cookie, { seenAt: loaded })).status).toBe(200);
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded })).status).toBe(200);
   });
 
   it("excerpt Allow / Deny: a big change in another tab stops them once on a running test, never on a stopped or paused one", async () => {
@@ -128,8 +128,8 @@ describe("developer, stopped / closed or paused / held: what still works goes th
     await later();
     const loaded = seen();
     await later();
-    expect((await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
-    expect((await act(testId, "stop", dev.cookie, { seenAt: loaded, tab: "B" })).body.error.code).toBe("stop_once");
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B" })).body.error.code).toBe("stop_once");
   });
 });
 

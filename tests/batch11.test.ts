@@ -140,7 +140,7 @@ describe("batch 11 item 2: the chargeback fee", () => {
     const line = "Your bank's chargeback of $10.00 was reversed: $25.00 refunded to your card.";
     expect(await db.testEvent.count({ where: { testId, kind: "payment", text: line } })).toBe(1);
     expect(R.DEV_STOP_KINDS).toContain("payment");
-    const stop = await act(testId, "stop", dev.cookie, { seenAt: loaded });
+    const stop = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded });
     expect(stop.body.error.changes.map((c: { text: string }) => c.text)).toContain(line);
   });
 

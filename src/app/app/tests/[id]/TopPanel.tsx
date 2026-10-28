@@ -14,6 +14,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { AlertsMenu } from "@/components/AlertsMenu";
 import { LIMITS } from "@/lib/limits";
 import { OctagonX } from "lucide-react";
+import { WhyBox } from "@/components/WhyBox";
 
 /** A working tester, for End early's rows and the Stop / End dialogs: what they sent, what is still to send, calls ahead. */
 type Tester = { contractId: string; name: string; sent: string[]; toSend: string[]; ahead: number; /** Sent parts and held calls not paid or rejected yet (what still waits for review). */ waiting: string[] };
@@ -35,6 +36,9 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
   const [picked, setPicked] = useState<string[]>([]);
   const [noTick, setNoTick] = useState(false);
   const [reason, setReason] = useState("");
+  // (Batch 17 §15) Stop the test's "Why?" (testers read it): required, like End early's.
+  const [stopReason, setStopReason] = useState("");
+  const stopReady = !!stopReason.trim() && stopReason.length <= LIMITS.stopReason;
   const [openErr] = useState("");
   const stopped = p.status === "stopped";
   const ahead = p.working.reduce((n, w) => n + w.ahead, 0);
@@ -91,7 +95,9 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
                 End early
               </button>}
               {/* Stop the test: the full app's "Are you sure?" pop-up first; the stop-once box shows right under it. */}
+              {/* (Batch 17 §15) The pop-up's "Why?" is required (also paused or restricted): its Stop stays disabled with "Say why first" until it has text. */}
               {!stopped && <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy} title={`Are you sure you want to stop “${p.title}”?`} confirmLabel="Stop the test"
+                confirmDisabled={busy || !stopReady} confirmHint={!stopReason.trim() ? "Say why first" : undefined}
                 body={(
                   <div className="space-y-2">
                     <p>{p.working.length ? <>The work of <strong className="text-white">{p.working.length === 1 ? "1 tester" : `${p.working.length} testers`}</strong> ends now.</> : "Nobody is working on it right now."}</p>
@@ -100,13 +106,16 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
                         <li>What they&apos;ve sent still waits for you to pay.</li>
                         {p.working.some((w) => w.toSend.length > 0) && <li>The parts they haven&apos;t sent close with no pay.</li>}
                         {ahead > 0 && <li>{ahead === 1 ? "The call still ahead is" : `The ${ahead} calls still ahead are`} cancelled.</li>}
+                        <li>Each of them is told, with your reason.</li>
                       </ul>
                     )}
                     <p>The test stops for good: it takes no new testers and can&apos;t be edited or reopened. You can still read everything and pay what was sent.</p>
+                    <WhyBox id="stop-reason" label="Why? (testers read it)" placeholder="e.g. We found what we needed in this build: thank you!" requiredMsg="Say why you're stopping the test (testers read it)."
+                      match="stopping the test|keep it to" value={stopReason} onChange={setStopReason} max={LIMITS.stopReason} countAttr="data-stop-count" />
                     <p className="font-medium text-white">This can&apos;t be undone.</p>
                   </div>
                 )}
-                onConfirm={() => go("stop")}>
+                onConfirm={() => go("stop", { reason: stopReason })}>
                 <OctagonX className="h-4 w-4" /> Stop the test
               </ConfirmButton>}
               {box("stop")}
@@ -146,12 +155,9 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
               ))}
             </fieldset>
             {noTick && <p className="err-field">Tick at least one tester.</p>}
-            <div>
-              <label className="label req" htmlFor="reason">Why? (each tester you tick reads it)</label>
-              {/* (Owner, Oct 30, batch 15 section 22) Required, up to 10,000 characters with a counter; no 5-character minimum. */}
-              <textarea id="reason" rows={3} className="input" placeholder="e.g. We have what we need for this build: thank you!" data-required="" data-required-msg="Say why you're ending their work (they read it)." data-match="ending their work|keep it to" value={reason} onChange={(e) => setReason(e.target.value)} />
-              <p className={`text-xs ${reason.length > LIMITS.endEarlyReason ? "text-rose-300" : "text-slate-500"}`} data-end-count="">{reason.length.toLocaleString("en-US")} / {LIMITS.endEarlyReason.toLocaleString("en-US")}</p>
-            </div>
+            {/* (Owner, Oct 30, batch 15 section 22) Required, up to 10,000 characters with a counter; no 5-character minimum. (Batch 17 §15) The same box as Stop's. */}
+            <WhyBox id="reason" label="Why? (each tester you tick reads it)" placeholder="e.g. We have what we need for this build: thank you!" requiredMsg="Say why you're ending their work (they read it)."
+              match="ending their work|keep it to" value={reason} onChange={setReason} max={LIMITS.endEarlyReason} countAttr="data-end-count" />
             <p className="note">Their work ends now. What they already sent still waits for you to pay; calls ahead are cancelled.</p>
             <div>
               {(!reason.trim() || !picked.length) && <p className="text-xs text-slate-400" data-say-why="">{!picked.length ? "Tick at least one tester first" : "Say why first"}</p>}

@@ -50,7 +50,7 @@ describe("Ask to rejoin (design doc 7.3, 8)", () => {
     expect((await ask(testId, tester.cookie)).body.error.message).toBe("You can't ask to rejoin this test.");
     // After a stop: no ask either.
     await db.contract.update({ where: { id: sessionId }, data: { dueAt: new Date(Date.now() + 3 * day) } });
-    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     expect((await ask(testId, tester.cookie)).status).toBe(409);
   });
 

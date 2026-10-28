@@ -46,7 +46,7 @@ describe("bell stacking: same-day lines about one test stack, except the lines t
     await startHold(dev.user.id, "unpaid");
     const { payOwed } = await import("@/lib/server/holds");
     await payOwed(dev.user);
-    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     const after = await lines(dev.user.id);
     // (Owner, Oct 27) Hold started / lifted lines are one KIND ("payhold"): they stack across tests, one entry a day.
     for (const text of ["Your tests are paused", "Your tests are running again"]) expect(after.find((l) => l.text === text), text).toMatchObject({ own: false, groupKey: "payhold" });

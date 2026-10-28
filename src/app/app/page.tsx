@@ -12,7 +12,7 @@ import { DeveloperTiles } from "@/components/ProfileTiles";
 import { StatTile } from "@/components/StatTile";
 import { CategoryBadges } from "@/components/Category";
 import { CategoryChips, CategoryTile, daysLeft, FeedbackBar, mainCategory, PartBadges, Seats, StatusPill } from "@/components/Ui";
-import { callJoinable, canAskToRejoin, chargeAmount, termsLine, testerShare, testPaused } from "@/lib/rules";
+import { callJoinable, canAskToRejoin, chargeAmount, termsLine, testerShare, testPaused, STOP_NOTE_KIND, stopReasonOf } from "@/lib/rules";
 import { ratingSummary } from "@/lib/server/ratings";
 import { unreadCount } from "@/lib/server/messages";
 import { asListing, findTests } from "@/lib/server/tests";
@@ -678,7 +678,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                       <li>{fmtDate(c.joinedAt)}: joined on {termsLine(c, true)}{c.ndaAcceptedAt ? ` · NDA accepted ${fmtDate(c.ndaAcceptedAt)}` : ""}</li>
                       {[
                         ...mine.map((o) => ({ at: o.createdAt, node: <li key={o.id}>{fmtDate(o.createdAt)}: new terms offered ({o.diff}): {o.status === "switched" ? "you switched" : o.status === "kept" ? "you kept yours" : o.status === "open" ? "waiting for your answer" : "replaced by a newer offer"}</li> })),
-                        ...histNotes.filter((n) => n.contractId === c.id).map((n) => ({ at: n.createdAt, node: <li key={n.id}>{fmtDate(n.createdAt)}: {n.text}</li> })),
+                        // (Batch 17 §15) The developer's Stop reason: in italics, in its scroll box.
+                        ...histNotes.filter((n) => n.contractId === c.id).map((n) => ({ at: n.createdAt, node: n.kind === STOP_NOTE_KIND ? <li key={n.id}>{fmtDate(n.createdAt)}: Test stopped<ReasonQuote text={stopReasonOf(n.text)} /></li> : <li key={n.id}>{fmtDate(n.createdAt)}: {n.text}</li> })),
                         ...histCalls.filter((x) => x.contractId === c.id && callIsOver(x)).map((x) => ({ at: x.startsAt, node: <li key={x.id} data-history-call="">{fmtDateTime(x.startsAt)}: call · {callOverBadge(x, { developer: displayName(c.test.developer), tester: "you" }, "tester", fmtTime, pays.filter((p) => p.callId === x.id).reduce((a, p) => a + p.amountCents, 0), callMinutesOf(x)).label}</li> })),
                         ...pays.map((p) => ({ at: p.createdAt, node: <li key={p.id}>{fmtDate(p.createdAt)}: paid {money(testerShare(p.amountCents))} to you</li> })),
                       ].sort((a, b) => a.at.getTime() - b.at.getTime()).map((x) => x.node)}

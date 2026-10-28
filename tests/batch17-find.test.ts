@@ -49,7 +49,7 @@ describe("No thanks on an invite follows batch 16 section 32 (section 4)", () =>
     expect(await db.invite.count({ where: { testerId: held.ana.user.id, status: "sent" } })).toBe(0);
 
     const stopped = await invited();
-    expect((await act(stopped.testId, "stop", stopped.dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await act(stopped.testId, "stop", stopped.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
     expect((await noThanks(stopped.inv.id, stopped.ana.cookie)).body.error).toMatchObject({ code: "invite_closed", message: "This test was stopped." });
 
     const ou = await invited();
@@ -150,7 +150,7 @@ describe("Find tests: the search box, for testers and admins (section 8)", () =>
     const paused = await mk("paused");
     await db.test.update({ where: { id: paused }, data: { adminPausedAt: new Date() } });
     const stoppedS = await setup({ title: `stopped ${tag}` });
-    expect((await act(stoppedS.testId, "stop", stoppedS.dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await act(stoppedS.testId, "stop", stoppedS.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
     const closed = await mk("closed");
     await db.test.update({ where: { id: closed }, data: { status: "stopped", pauseClosedAt: new Date() } });
     const draft = await mk("draft");
@@ -237,7 +237,7 @@ describe("developer profile's Open tests stays current (section 9)", () => {
     expect(await profileTestRefusal(o.testId, o.ana.user.id)).toBe(`This test closed to new testers on ${until.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}.`);
 
     const s = await devWithTest();
-    expect((await act(s.testId, "stop", s.dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await act(s.testId, "stop", s.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
     expect(await s.ids()).toEqual([]);
     expect(await profileTestRefusal(s.testId, s.ana.user.id)).toBe("This test was stopped.");
   });

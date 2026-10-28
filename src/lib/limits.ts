@@ -15,6 +15,8 @@ export const LIMITS = {
   reason: 1000,
   /** (Batch 15 section 22) End early's "Why?" */
   endEarlyReason: 10_000,
+  /** (Batch 17 §15) Stop the test's "Why?" (testers read it), like End early's */
+  stopReason: 10_000,
   /** (Batch 15 section 27) The developer's side of a dispute */
   devSide: 2000,
   categoriesMin: 1,

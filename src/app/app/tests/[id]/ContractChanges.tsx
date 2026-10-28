@@ -1,6 +1,6 @@
 import { money } from "@/lib/format";
 import { QuestionList } from "@/components/QuestionList";
-import { ScrollText } from "@/components/ScrollText";
+import { ReasonQuote, ScrollText } from "@/components/ScrollText";
 import { qText } from "@/lib/questions";
 
 export type ChangeEntry = {
@@ -37,12 +37,19 @@ const People = ({ list }: { list: ChangeEntry["chose"]["switched"] }) => (
  * (Owner, Oct 30, batch 15 section 43) The developer's "Contract changes" panel (folded, after Testers): one entry per Save that changed the terms or the names, newest
  * first: when and what, before → after (the offer box's displays), who switched / kept / hasn't decided, and the Save's effects on others. Scrolls when long.
  */
-export function ContractChanges({ entries, fmt }: { entries: ChangeEntry[]; fmt: (iso: string) => string }) {
-  if (!entries.length) return null;
+export function ContractChanges({ entries, fmt, stop }: { entries: ChangeEntry[]; fmt: (iso: string) => string; /** (Batch 17 §15) The developer's own Stop and the reason testers read. */ stop?: { at: string; reason: string } | null }) {
+  if (!entries.length && !stop) return null;
   return (
     <details className="card scroll-mt-24" id="contract-changes" data-contract-changes="">
-      <summary className="fold-chevron cursor-pointer font-semibold text-white">Contract changes ({entries.length})</summary>
+      <summary className="fold-chevron cursor-pointer font-semibold text-white">Contract changes ({entries.length + (stop ? 1 : 0)})</summary>
       <ol className="mt-3 max-h-[40rem] space-y-3 overflow-y-auto pr-1 text-sm">
+        {/* (Batch 17 §15) The Stop is the newest entry: when, and the reason the testers read (in italics, in its scroll box). */}
+        {stop && (
+          <li className="space-y-2 rounded-lg border border-white/10 p-3" data-change="stopped">
+            <p className="font-medium text-white">{fmt(stop.at)} · You stopped the test</p>
+            <ReasonQuote text={stop.reason} />
+          </li>
+        )}
         {entries.map((e) => (
           <li key={e.id} className="space-y-2 rounded-lg border border-white/10 p-3" data-change={e.id}>
             <p className="font-medium text-white">{fmt(e.at)} · {e.fields.map((f) => NAMES[f] ?? f).join(", ")}</p>

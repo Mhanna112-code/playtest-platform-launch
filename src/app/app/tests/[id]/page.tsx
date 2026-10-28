@@ -33,7 +33,7 @@ import { rowsOf, toJson } from "@/lib/callRows";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
-import { HOLD_APPROVAL_AFTER, NOT_LISTED, callListed, deletedNoPayoutsLine, joiningClosedLine, payMoreState, testEndedAt, testerPayable } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, NOT_LISTED, callListed, deletedNoPayoutsLine, joiningClosedLine, payMoreState, testEndedAt, testerPayable, STOP_NOTE_KIND, stopReasonOf } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
@@ -234,6 +234,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     const who = (st: string[]) => mine.filter((o) => st.includes(o.status)).map((o) => personOf(o.contractId)).filter((p): p is NonNullable<typeof p> => !!p);
     return { id: x.id, at: x.createdAt.toISOString(), fields: x.fields, before: x.before as Record<string, unknown>, after: x.after as Record<string, unknown>, effects: x.effects, chose: { switched: who(["switched"]), kept: who(["kept"]), undecided: who(["open"]) } };
   });
+  // (Batch 17 §15) The developer's own Stop and its reason, at the top of Contract changes (the team's Stop has its own banner).
+  const stopEvent = t.status === "stopped" && !t.adminStoppedAt ? await db.testEvent.findFirst({ where: { testId: id, kind: "stopped" }, orderBy: { createdAt: "desc" } }) : null;
+  const stopEntry = stopEvent && stopReasonOf(stopEvent.text) ? { at: stopEvent.createdAt.toISOString(), reason: stopReasonOf(stopEvent.text) } : null;
   // (Batch 15 section 29) The restricted view: Booked calls (ahead) with Cancel, and the open disputes waiting for the developer's side.
   const bookedAhead = t.contracts.flatMap((c) => c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => ({ id: x.id, who: displayName(c.tester), when: x.startsAt.toISOString(), minutes: x.minutes, needsReason: cancelNeedsReason(x.startsAt, now) }))).sort((a, b) => a.when.localeCompare(b.when));
   const banner = bannerCause ? (
@@ -538,7 +541,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {/* (Batch 15 section 24) Renames are recorded in each tester's contract changes. */}
                 {notesByContract.some((n) => n.contractId === c.id) && (
                   <ul className="note space-y-0.5" data-contract-notes="">
-                    {notesByContract.filter((n) => n.contractId === c.id).map((n) => <li key={n.id}>{n.text} · {fmtDateTime(n.createdAt)}</li>)}
+                    {notesByContract.filter((n) => n.contractId === c.id).map((n) => n.kind === STOP_NOTE_KIND
+                      ? <li key={n.id}>Test stopped · {fmtDateTime(n.createdAt)}<ReasonQuote text={stopReasonOf(n.text)} /></li> // (Batch 17 §15) the reason they read
+                      : <li key={n.id}>{n.text} · {fmtDateTime(n.createdAt)}</li>)}
                   </ul>
                 )}
                 {/* (Batch 13 section 8) Earlier SENT sets this tester replaced after switching to changed questions. */}
@@ -573,7 +578,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         </RowsBox>
       )}
       </TestersJoined>
-      {!restricted && <ContractChanges entries={changeEntries} fmt={(iso) => fmtDateTime(new Date(iso))} />}
+      {!restricted && <ContractChanges entries={changeEntries} stop={stopEntry} fmt={(iso) => fmtDateTime(new Date(iso))} />}
       {cbSteps && <ChargebackSteps steps={cbSteps} />}
       {(u.holdStartedAt || (owedList.length > 0 && !u.devSuspendedAt)) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} chargeback={!!cbSteps} verifyFirst={!!cbSteps && !cbSteps.cardVerified} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />}
       {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date(), "developer")}</p>}

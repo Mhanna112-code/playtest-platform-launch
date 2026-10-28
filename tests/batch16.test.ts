@@ -142,7 +142,7 @@ describe("B) reminders", () => {
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
     const prompt = (await lines(tester.user.id)).find((l) => /^Rate Nora Lane/.test(l.text))!;
     expect(prompt.own).toBe(false); // the test is open: it stacks with that test's same-day lines
-    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     await db.contract.update({ where: { id: sessionId }, data: { ratePromptedAt: new Date(Date.now() - 4 * DAY) } });
     await cron();
     await cron();

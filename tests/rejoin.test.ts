@@ -239,7 +239,7 @@ describe("when the test fills (correction 4) and no invite cap (correction 5)", 
     expect(await db.notification.count({ where: { userId: ben.user.id, text: "Harbor Run is full, so your application was closed." } })).toBe(1);
     expect(await db.notification.count({ where: { userId: dee.user.id, text: "Harbor Run is full right now. Your invite stays open; we'll tell you when a spot opens." } })).toBe(1);
     // The developer: the line stops once (all tabs); Accept on Ben's is refused for good.
-    const stop = await act(testId, "stop", dev.cookie, { seenAt: pageLoaded });
+    const stop = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: pageLoaded });
     expect(stop.body.error.changes.map((c: { text: string }) => c.text)).toContain("Harbor Run is full: closed 1 application. 2 invites stay open until a spot opens");
     const appB = await db.application.findFirstOrThrow({ where: { testId, testerId: ben.user.id } });
     expect((await act(testId, "application", dev.cookie, { applicationId: appB.id, action: "accept", seenAt: seen(), confirmed: true })).body.error.message).toMatch(/^Ben Carter's application closed when the test filled up at /);

@@ -303,7 +303,9 @@ function adminAccount() {
   }));
 }
 const adminDo = (admin, action, id, more = {}) => post(admin, `/api/admin/${action}`, { id, note: "Media pass check", ...more }).then((r) => ok(r, "admin " + action));
-const stopTest = (dev, id) => post(dev, `/api/tests/${id}/stop`, go).then((r) => ok(r, "stop"));
+/** (Batch 17 §15) Stop the test needs a reason testers read. */
+const STOP_WHY = "We found what we needed in this build: thank you!";
+const stopTest = (dev, id) => post(dev, `/api/tests/${id}/stop`, { ...go, reason: STOP_WHY }).then((r) => ok(r, "stop"));
 const nextRound = (dev, id) => post(dev, `/api/tests/${id}/next-round`, go).then((r) => ok(r, "next round"));
 /** Calls are requests: the developer requests a time, the tester accepts it → booked. Returns the call id. */
 async function bookCall(dev, tester, testId, sessionId, hoursAhead, minutes = 30) {
@@ -785,8 +787,9 @@ group("testpage", async () => {
   await dev.goto(`/app/tests/${t}`);
   await dev.click("button:has-text('Stop the test')");
   await dev.waitForSelector("dialog[open]");
+  await dev.fill("dialog[open] #stop-reason", STOP_WHY); // (Batch 17 §15) the required "Why?"
   await pause(dev, 500);
-  await shot(dev, "tp-stop-confirm", "Stop: confirm | Stop: the confirm pop-up “Are you sure you want to stop …?”");
+  await shot(dev, "tp-stop-confirm", "Stop: confirm | Stop: the confirm pop-up “Are you sure you want to stop …?” with its required “Why?” (testers read it)");
   await dev.click("dialog[open] button:has-text('Stop the test')");
   await dev.waitForSelector("text=This test is stopped.");
   await pause(dev, 1500);
@@ -861,6 +864,7 @@ group("tpvideo", async () => {
   await dev.goto(`/app/tests/${t}`);
   await dev.click("button:has-text('Stop the test')");
   await dev.waitForSelector("dialog[open]");
+  await dev.fill("dialog[open] #stop-reason", STOP_WHY); // (Batch 17 §15) the required "Why?"
   ok(await post(cam, `/api/sessions/${sC}/leave`, { ...go, reason: "Something came up" }), "leave");
   await pause(dev, 1500);
   await dev.click("dialog[open] button:has-text('Stop the test')");
@@ -2035,6 +2039,7 @@ group("stopped", async () => {
     await pause(D, 1500);
     await D.click("button:has-text('Stop the test')");
     await D.waitForSelector("dialog[open]");
+    await D.fill("dialog[open] #stop-reason", STOP_WHY); // (Batch 17 §15) the required "Why?"
     await pause(D, 1200);
     await D.click("dialog[open] button:has-text('Stop the test')");
     await D.waitForSelector("text=This test is stopped.");
@@ -2535,6 +2540,7 @@ group("plans2", async () => {
     // The second tab stops one test.
     await B.click("button:has-text('Stop the test')");
     await B.waitForSelector("dialog[open]");
+    await B.fill("dialog[open] #stop-reason", STOP_WHY); // (Batch 17 §15) the required "Why?"
     await pause(B, 800);
     await B.click("dialog[open] button:has-text('Stop the test')");
     await B.waitForSelector("text=This test is stopped.");
@@ -2946,6 +2952,7 @@ group("b15paused", async () => {
   await pause(D, 2000);
   await D.click("button:has-text('Stop the test')");
   await D.waitForSelector("dialog[open]");
+  await D.fill("dialog[open] #stop-reason", STOP_WHY); // (Batch 17 §15) the required "Why?"
   ok(await post(ana, `/api/sessions/${sA}/leave`, { ...go, reason: "Something came up" }), "leave (a change after the page loaded)");
   await D.click("dialog[open] button:has-text('Stop the test')");
   await D.waitForURL((u) => u.pathname === "/app", { timeout: 20000 }).catch(() => {});
@@ -3297,6 +3304,7 @@ group("b15extra", async () => {
     await pause(D, 1500);
     await D.click("button:has-text('Stop the test')");
     await D.waitForSelector("dialog[open]");
+    await D.fill("dialog[open] #stop-reason", STOP_WHY); // (Batch 17 §15) the required "Why?"
     await pause(D, 900);
     await D.click("dialog[open] button:has-text('Stop the test')");
     await D.waitForSelector("text=/stopped/i", { timeout: 20000 });
@@ -3329,7 +3337,12 @@ const dtLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2
 async function pressConfirm(page, button, confirmLabel) {
   await button.click();
   const dlg = page.locator("dialog[open]");
-  if (await dlg.waitFor({ state: "visible", timeout: 2500 }).then(() => true, () => false)) await dlg.locator("button", { hasText: confirmLabel }).last().click();
+  if (await dlg.waitFor({ state: "visible", timeout: 2500 }).then(() => true, () => false)) {
+    // (Batch 17 §15) Stop the test's pop-up has a required "Why?" (kept when the same pop-up is pressed again).
+    const why = dlg.locator("#stop-reason");
+    if ((await why.count()) && !(await why.inputValue())) await why.fill(STOP_WHY);
+    await dlg.locator("button", { hasText: confirmLabel }).last().click();
+  }
 }
 /** The largest plain scroll box on the page, marked for a picture. */
 async function biggestScroll(page) {

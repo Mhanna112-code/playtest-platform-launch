@@ -343,7 +343,7 @@ describe("D) testers", () => {
   it("rating reminders: every 3 days after a stop or close, for 2 weeks only", async () => {
     const { dev, testId, sessionId, tester, sub } = await sentWork();
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
-    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     await db.contract.update({ where: { id: sessionId }, data: { ratePromptedAt: new Date(Date.now() - 4 * DAY) } });
     await db.test.update({ where: { id: testId }, data: { stoppedAt: new Date(Date.now() - 4 * DAY) } });
     await ratingReminders(new Date());
@@ -406,7 +406,7 @@ describe("follow-up 2, 3) the team stopping a test", () => {
     const loaded = seen();
     await new Promise((r) => setTimeout(r, 30));
     expect((await aact(a.cookie, "stop-test", { id: testId, note: "Policy" })).status).toBe(200);
-    for (const [action, body] of [["edit", { version: 1, fields: { title: "x" } }], ["stop", {}], ["next-round", {}], ["invite", { testerIds: [sessionId] }], ["end-early", { contractIds: [sessionId], reason: "Enough said" }], ["request-time", { contractIds: [sessionId], startsAt: new Date(Date.now() + 48 * 3_600_000).toISOString() }]] as const) {
+    for (const [action, body] of [["edit", { version: 1, fields: { title: "x" } }], ["stop", { reason: "We have what we need." }], ["next-round", {}], ["invite", { testerIds: [sessionId] }], ["end-early", { contractIds: [sessionId], reason: "Enough said" }], ["request-time", { contractIds: [sessionId], startsAt: new Date(Date.now() + 48 * 3_600_000).toISOString() }]] as const) {
       const r = await act(testId, action, dev.cookie, { seenAt: loaded, ...body });
       expect(r.status, action).toBe(409);
       expect(r.body.error.code, action).toBe("admin_stopped");

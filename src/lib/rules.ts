@@ -560,6 +560,20 @@ export function stillWorksLine(c: { endKind: string; endedAt: Date | null }, dev
   return `${overHalf(c, devName, fmt)}${press ? `, so your ${press} didn't go through` : ""}.${list.length ? ` You can still ${andList(list)}.` : ""} Work you sent is still reviewed.`;
 }
 
+// ---------- (Batch 17 §15) The developer's Stop reason ----------
+
+/** The ContractNote kind recorded on every contract the developer's Stop ended (its text carries the reason; the team's Stop never writes one). */
+export const STOP_NOTE_KIND = "stopped";
+/** The entry in each stopped tester's contract changes: "Test stopped: “We have what we need.”". */
+export const stopNoteText = (reason: string) => `Test stopped: “${reason}”`;
+/** The test's timeline line (the admin's test timeline): "The developer stopped the test: “We have what we need.”". */
+export const stopEventText = (reason: string) => `The developer stopped the test: “${reason}”`;
+/** The reason back out of a stop note or timeline line ("" for any other line, e.g. an older stop with no reason or the team's stop). */
+export function stopReasonOf(text: string) {
+  const m = /^(?:Test stopped|The developer stopped the test): “([\s\S]*)”$/.exec(text);
+  return m ? m[1] : "";
+}
+
 
 // ---------- Edit version check ----------
 

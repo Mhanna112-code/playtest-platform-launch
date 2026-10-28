@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { LET_GO_BY_TESTER, chargedByTester, LIMITED_VIEW_LINE, WORK_OVER_PRESSES, stillWorksLine, workOver, devDeletedLine, NOT_LISTED, byTesterChoice, PAUSE_DEFAULTS, chargedDelayedLine, disputeLimitText, testerPaused } from "@/lib/rules";
+import { LET_GO_BY_TESTER, chargedByTester, LIMITED_VIEW_LINE, WORK_OVER_PRESSES, stillWorksLine, workOver, devDeletedLine, NOT_LISTED, byTesterChoice, PAUSE_DEFAULTS, chargedDelayedLine, disputeLimitText, testerPaused, STOP_NOTE_KIND, stopReasonOf } from "@/lib/rules";
 import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, MessagesSquare, Users, XCircle } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
@@ -233,6 +233,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       {refusal && !limited && <div className="info space-y-1" id="stopped-line" data-stopped-line="" {...(failedPress ? { "data-work-over-failed": failedPress } : {})}><p>{over ? stillWorksLine(c, dev, fmtDate, stillWorks, failedPress) : refusal}</p>
         {/* (Batch 15 sections 20 and 22) The developer's End early reason, in italics, scrolling when long (never in the bell line). */}
         {c.status === "ended" && c.endKind === "early" && c.endReason && <ReasonQuote text={c.endReason} />}
+        {/* (Batch 17 §15) The developer's Stop reason, the same way (only the developer's own Stop writes the note; the team's Stop reason is never shown here). */}
+        {c.status === "ended" && c.endKind === "stopped" && c.endReason && contractNotes.some((n) => n.kind === STOP_NOTE_KIND) && <ReasonQuote text={c.endReason} />}
       </div>}
       {/* (Batch 15 section 18) The tester's OWN deadline, not the test's Open until (the last day to join). */}
       {!refusal && c.status === "working" && c.dueAt > now && c.dueAt.getTime() - now.getTime() < 3 * 86_400_000 && (
@@ -339,7 +341,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                     <div className="mt-1 space-y-2"><NdaBox label="Before" text={o.fromNdaText} /><NdaBox label="Offered" text={o.ndaText} /></div></details>
                 )}
               </li>) })),
-              ...contractNotes.map((n) => ({ at: n.createdAt, key: n.id, node: <li key={n.id} data-history-line="">{`${fmtDateTime(n.createdAt)}: ${n.text}`}</li> })),
+              ...contractNotes.map((n) => ({ at: n.createdAt, key: n.id, node: n.kind === STOP_NOTE_KIND
+                ? <li key={n.id} data-history-line="">{`${fmtDateTime(n.createdAt)}: Test stopped`}<ReasonQuote text={stopReasonOf(n.text)} /></li> // (Batch 17 §15) the reason in its scroll box
+                : <li key={n.id} data-history-line="">{`${fmtDateTime(n.createdAt)}: ${n.text}`}</li> })),
               ...prevSetsOf(c.prevSets).map((p) => ({ at: new Date(p.until), key: `set-${p.until}`, node: <li key={`set-${p.until}`} data-history-line="">{`${fmtDate(new Date(p.until))}: your questions changed; your earlier answers are kept under “Previous questions and answers”`}</li> })),
               ...historyPays.map((p) => ({ at: p.createdAt, key: p.id, node: <li key={p.id} data-history-line="">{`${fmtDate(p.createdAt)}: ${p.kind === "extra" ? "paid more" : p.kind === "dispute" ? "the team raised the pay by" : "paid"} ${money(p.amountCents)} for your ${p.callId ? "live call" : subKinds.get(p.submissionId ?? "") ?? "work"} (you get ${money(testerShare(p.amountCents))})`}</li> })),
             ].sort((a, b) => a.at.getTime() - b.at.getTime()).map((x) => x.node)}

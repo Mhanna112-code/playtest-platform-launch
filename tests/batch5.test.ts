@@ -52,7 +52,7 @@ describe("batch 5 item 1: 'See their contract' under a pressed button", () => {
     expect((await sact(sessionId, "terms", tester.cookie, { offerId: offer.id, choice: "switch", seenAt: seen(), confirmed: true })).status).toBe(200);
     const { devChanges, asLines } = await import("@/lib/server/live");
     expect(asLines(await devChanges(dev.user.id, testId, new Date(pageLoaded), "", db, { all: true }))).toContainEqual(expect.objectContaining({ text: "Ana Silva switched to the new terms", kind: "terms", contract: sessionId }));
-    const r = await act(testId, "stop", dev.cookie, { seenAt: pageLoaded });
+    const r = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: pageLoaded });
     expect(r.status).toBe(200);
     const box = src("components/ChangesBox.tsx");
     expect(box).toContain('c.kind === "terms" && c.contract && <> <ContractLink contract={c.contract} /></>');
@@ -233,7 +233,7 @@ describe("batch 5 item 5: Rate's stop-once lines", () => {
     const open = await sact(sessionId, "rate", tester.cookie, { stars: 4, seenAt: pageLoaded });
     expect(open.body.error.code).toBe("stop_once");
     expect(open.body.error.changes.map((c: { text: string }) => c.text)).toContain("Nora Lane changed the description");
-    expect((await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
     pageLoaded = seen();
     await settle();
     await db.testEvent.create({ data: { testId, kind: "info", text: "Nora Lane changed the description again" } });
@@ -260,7 +260,7 @@ describe("batch 5 item 5: Rate's stop-once lines", () => {
     const open = await act(testId, "rate", dev.cookie, { contractId: sessionId, stars: 5, seenAt: pageLoaded });
     expect(open.body.error.code).toBe("stop_once");
     expect(open.body.error.changes.map((c: { text: string }) => c.text).join(" ")).toMatch(/Ben Carter joined/);
-    expect((await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
     pageLoaded = seen();
     await settle();
     await db.testEvent.create({ data: { testId, kind: "joined", text: "Cara Diaz joined" } });

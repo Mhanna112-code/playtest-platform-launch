@@ -114,7 +114,7 @@ describe("batch 14 section 4: a quieter Switch / Keep", () => {
     expect(live.map((e) => e.text)).toEqual(["2 testers switched to the new terms"]);
     expect(R.switchedLine(1, "Ana Silva")).toBe("Ana Silva switched to the new terms");
     // A press with a page loaded before the switches goes through.
-    expect((await act(testId, "stop", dev.cookie, { seenAt: since.toISOString() })).status).toBe(200);
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: since.toISOString() })).status).toBe(200);
     expect(src("lib/alerts.ts")).not.toContain('case "terms"');
   });
 });

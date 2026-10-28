@@ -113,11 +113,11 @@ describe("big changes from another tab stop every press once (section 21)", () =
     await later();
     const loaded = seen();
     await later();
-    expect((await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
     expect((await devLive(dev.cookie, testId, loaded, "B")).filter((t) => /another tab/.test(t))).toEqual([]);
-    const b = await act(testId, "stop", dev.cookie, { seenAt: loaded, tab: "B" });
+    const b = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B" });
     expect(texts(b)).toEqual(["You stopped the test in another tab"]);
-    const b2 = await act(testId, "stop", dev.cookie, { seenAt: loaded, tab: "B", ...again() });
+    const b2 = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B", ...again() });
     expect(b2.body.error.message).toMatch(/^This test was stopped\./);
   });
 
@@ -170,7 +170,7 @@ describe("big changes from another tab stop every press once (section 21)", () =
     const d = await act(testId, "application", dev.cookie, { applicationId: app.id, action: "decline", seenAt: loaded, tab: "B" });
     expect(d.body.error).toMatchObject({ message: "You already declined this application." });
     expect(d.body.error.changes).toBeUndefined();
-    expect((await act(testId, "stop", dev.cookie, { seenAt: loaded, tab: "B" })).status).toBe(200); // an Edit Save and a Decline elsewhere never stop it
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B" })).status).toBe(200); // an Edit Save and a Decline elsewhere never stop it
     expect(src("lib/server/excerpts.ts")).toContain('"You already allowed this excerpt."');
     expect(src("lib/rules.ts")).toContain('no("You already sent your side.")');
   });

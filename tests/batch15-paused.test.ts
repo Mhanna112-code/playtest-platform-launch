@@ -57,7 +57,7 @@ describe("the restricted view (sections 29 and 37)", () => {
     expect((await act(testId, "cancel-call", dev.cookie, { callId: call.id, reason: "Can't make it", seenAt: loaded })).body.error.code).toBe("stop_once");
     expect((await act(testId, "next-round", dev.cookie, { seenAt: loaded })).body.error.code).toBe("suspended");
     expect((await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "We have enough", seenAt: loaded })).status).toBe(200);
-    expect((await act(testId, "stop", dev.cookie, { seenAt: loaded })).status).toBe(200);
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded })).status).toBe(200);
     expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).status).toBe("stopped");
     void a;
   });
@@ -69,7 +69,7 @@ describe("the restricted view (sections 29 and 37)", () => {
     expect(e.body.error.code).toBe("admin_paused");
     expect(e.body.error.failed).toBe("Your Save on Harbor Run didn't go through");
     expect((await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "Paused anyway", seenAt: loaded })).status).toBe(200);
-    expect((await act(testId, "stop", dev.cookie, { seenAt: loaded })).status).toBe(200);
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded })).status).toBe(200);
   });
 
   it("(section 39) a paused test's Alerts list only what can still happen; a stopped one fewer still", () => {

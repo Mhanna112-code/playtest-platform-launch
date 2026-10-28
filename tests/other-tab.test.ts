@@ -51,7 +51,7 @@ describe("reason E: your own actions in another tab", () => {
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, tab: "tab-2" });
     // (Batch 16 section 21) A Pay in another tab is a big change: it stops every press here once (Stop included), as "You … in another tab".
-    const r = await act(testId, "stop", dev.cookie, { seenAt: pageLoaded, tab: "tab-1" });
+    const r = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: pageLoaded, tab: "tab-1" });
     expect(texts(r)).toEqual(["You paid Ana Silva $10.00 for the written answers in another tab"]);
     // The tab that paid is never stopped by it.
     expect((await act(testId, "next-round", dev.cookie, { seenAt: pageLoaded, tab: "tab-2" })).body.error?.code).not.toBe("stop_once");
@@ -289,7 +289,7 @@ describe("payments and disputes, only for this test", () => {
     await fail(ana.sessionId, dev.user.id, ana.tester.user.id, subA.id);
     const line = expect.stringMatching(/^Payment failed on Harbor Run: \$8\.00 to Ana Silva for the written answers · pay what you owe in Payments$/);
     expect((await live(dev.cookie, `test:${B}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([line]);
-    expect(texts(await act(B, "stop", dev.cookie, { seenAt: pageLoaded }))).toEqual([line]);
+    expect(texts(await act(B, "stop", dev.cookie, { reason: "We have what we need.", seenAt: pageLoaded }))).toEqual([line]);
     const v = (await db.test.findUniqueOrThrow({ where: { id: B } })).version;
     const e = await act(B, "edit", dev.cookie, { version: v, fields: { description: "y" }, seenAt: pageLoaded });
     expect(e.body.error.code).toBe("changed");

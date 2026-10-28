@@ -17,7 +17,7 @@ describe("session page after the test is stopped or the work is ended", () => {
     const offer = await db.termsOffer.findFirstOrThrow({ where: { contractId: sessionId } });
     await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: atHours(60) });
     const reqRow = await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId, status: "pending" } });
-    expect((await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
 
     const lines = (await live(tester.cookie, `session:${sessionId}`, opened)).body.changes.map((c: { text: string }) => c.text);
     expect(lines).toContain("Nora Lane stopped the test");

@@ -129,7 +129,7 @@ describe("batch 13 sections 1-3: excerpt requests", () => {
   it("stopping keeps requests; deleting: a tester's go, a developer's pending ones close (shown ones stay)", async () => {
     const s = await paidWork();
     const id = (await ask(s.tester.cookie, s.sub.id)).body.id;
-    await act(s.testId, "stop", s.dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(s.testId, "stop", s.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     expect((await db.excerpt.findUniqueOrThrow({ where: { id } })).status).toBe("pending");
     const t2 = await paidWork();
     const shown = (await ask(t2.tester.cookie, t2.sub.id)).body.id;
@@ -149,7 +149,7 @@ describe("batch 13 sections 1-3: excerpt requests", () => {
 describe("batch 13 section 4: Rate and suspensions", () => {
   it("a suspended tester's Rate is refused (to the dashboard top) and hidden; back once the suspension lifts", async () => {
     const s = await paidWork();
-    await act(s.testId, "stop", s.dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(s.testId, "stop", s.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     await db.user.update({ where: { id: s.tester.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     const r = await sact(s.sessionId, "rate", s.tester.cookie, { stars: 4 });
     expect(r.status).toBe(403);

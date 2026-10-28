@@ -52,7 +52,7 @@ describe("invites", () => {
     await joined(testId, "Eve Ray");
     const full = await act(testId, "invite", dev.cookie, { seenAt: pageLoaded, testerIds: [ben.user.id], confirmed: true });
     expect(full.body.error.message).toBe("Harbor Run is full. Add spots to invite more people.");
-    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [ben.user.id], confirmed: true })).body.error.message).toMatch(/^This test was stopped on .+, so nobody can be invited\.$/);
   });
 });
