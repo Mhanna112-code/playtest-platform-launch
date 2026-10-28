@@ -16,6 +16,7 @@ export function pressLabelOf(path: string): string {
   if ((p[1] === "tests" || p[1] === "sessions") && p[3]) return PRESS_VERBS[p[3]] ?? "press";
   if (p[1] === "tests" && !p[2]) return "Post the test";
   if (p[1] === "payments" && p[2] === "owed") return "Pay what you owe";
+  if (p[1] === "invites" && p[2]) return "No thanks"; // (batch 17 section 4) an invite's No thanks
   return "press";
 }
 

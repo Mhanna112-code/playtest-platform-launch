@@ -128,7 +128,8 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const off = (await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
   const rest = r.go ? [] : off ? r.changes.filter((e) => CONTRACT_KINDS.has(e.kind)) : r.changes;
   const list = [...terms, ...rest].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  if (list.length) throw new HttpError(409, "stop_once", tail, { changes: asLines(list), tail, top: terms.length > 0 });
+  // (Batch 17 section 13) `alertsOff`: the box drops "Turn off alerts" and "You can turn these stops off below" when Alerts is already Off.
+  if (list.length) throw new HttpError(409, "stop_once", tail, { changes: asLines(list), tail, top: terms.length > 0, alertsOff: !!off });
 }
 
 /** "weekly calls from Thu, Nov 5, 3:00 PM" / "a call (pick one of 3 times)" / "a call for Thu, Nov 5, 3:00 PM". */

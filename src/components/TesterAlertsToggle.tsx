@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { BellOff, Bell } from "lucide-react";
 import { api } from "@/lib/client";
+import { setTesterAlertsOff } from "@/lib/testerAlerts";
 
 /**
  * (Owner, Oct 30, batch 15 section 26) The tester's one-press Alerts, at the top right of the session page, saved per tester for all their tests.
@@ -13,6 +14,8 @@ export const ALERTS_OFF_LINE = "Stops a press only for: new terms, your key mark
 export function TesterAlertsToggle({ off: start }: { off: boolean }) {
   const [off, setOff] = useState(start);
   const [err, setErr] = useState("");
+  // (Batch 17 section 13) The stop boxes on this page know the state shown here.
+  useEffect(() => setTesterAlertsOff(off), [off]);
   useEffect(() => {
     const on = (e: Event) => setOff(!!(e as CustomEvent<{ off: boolean }>).detail?.off);
     window.addEventListener("tester-alerts", on);

@@ -10,6 +10,10 @@ import { ratingSummary } from "@/lib/server/ratings";
 import { byMostTimeToFinish, perTesterLine, termsLine, testerDaysOf, testerShare } from "@/lib/rules";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { asListing, findTests, needsLines } from "@/lib/server/tests";
+import { isAdmin } from "@/lib/server/session";
+import { adminFindTests, ADMIN_FIND_LIMIT } from "@/lib/server/findSearch";
+import { findQuery, noFindMatchLine, statesFrom, type TestState } from "@/lib/findSearch";
+import { FindSearch, StateTicks } from "./FindSearch";
 
 export const metadata = { title: "Find tests · Playtest" };
 export const dynamic = "force-dynamic";
@@ -17,7 +21,19 @@ export const dynamic = "force-dynamic";
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 const PARTS = { written: "Written answers", recording: "Screen recording", live: "Live call" } as const;
 
-type Sp = { category?: string; device?: string; part?: string; sort?: string; mine?: string };
+type Sp = { category?: string; device?: string; part?: string; sort?: string; mine?: string; q?: string; states?: string };
+
+/** (Batch 17 section 8) The state badge on an admin's card. */
+const STATE_TONE: Record<TestState, string> = {
+  Open: "border-emerald-400/40 text-emerald-200",
+  Full: "border-amber-300/40 text-amber-200",
+  "Joining closed": "border-amber-300/40 text-amber-200",
+  Paused: "border-sky-300/40 text-sky-200",
+  Stopped: "border-rose-300/40 text-rose-200",
+  Closed: "border-rose-300/40 text-rose-200",
+  Draft: "border-white/20 text-slate-300",
+  "Invite only": "border-indigo-400/40 text-indigo-200",
+};
 
 /** The cheapest fixed part (what the tester gets), else the live rate: the big "from $8.00" figure on a card. */
 function fromText(t: { writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null }) {
@@ -29,14 +45,19 @@ const topPrice = (t: { writtenCents: number | null; recordingCents: number | nul
 
 export default async function FindPage({ searchParams }: { searchParams: Promise<Sp> }) {
   const u = await requireOpenPage("/app/find"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
-  if (!u.isTester) redirect("/app/profile");
+  // (Owner, Oct 28, batch 17 section 8) Admins get Find tests too: every test, each card with its state, tick boxes for the states; never Join / Apply.
+  const admin = isAdmin(u);
+  if (!u.isTester && !admin) redirect("/app/profile");
   const sp = await searchParams;
-  const [open, profile] = await Promise.all([findTests(u), db.testerProfile.findUnique({ where: { userId: u.id } })]);
+  const typed = findQuery(sp.q);
+  const ticked = admin ? statesFrom(sp.states) : [];
+  const found = admin ? await adminFindTests(typed, ticked) : null;
+  const [open, profile] = await Promise.all([found ? found.tests : findTests(u, typed), admin ? null : db.testerProfile.findUnique({ where: { userId: u.id } })]);
   const devRatings = new Map(await Promise.all([...new Set(open.map((t) => t.developerId))].map(async (id) => [id, (await ratingSummary(id)).line] as const)));
-  const invitedTo = new Set((await db.invite.findMany({ where: { testerId: u.id, status: "sent", testId: { in: open.map((t) => t.id) } } })).map((i) => i.testId));
+  const invitedTo = admin ? new Set<string>() : new Set((await db.invite.findMany({ where: { testerId: u.id, status: "sent", testId: { in: open.map((t) => t.id) } } })).map((i) => i.testId));
   // The full app's filters: category chips, then Device / Part / Sort by / Show. "Everything" is the default (a test the
   // profile doesn't fit is listed with what it needs).
-  const matchMine = sp.mine === "1";
+  const matchMine = !admin && sp.mine === "1";
   const counts: Record<string, number> = {};
   for (const t of open) for (const c of t.categories) counts[c] = (counts[c] ?? 0) + 1;
   const shown = open
@@ -47,17 +68,25 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
   // (Owner, Oct 28, batch 16 section 3) "Most time to finish": the days each new tester gets (the card's "N days per tester"), most first; ties: the later Open until
   // first (more time left to join); tests without Open until last.
   else if (sp.sort === "deadline") shown.sort(byMostTimeToFinish);
+  // What the search box, the tick boxes and the chips keep from each other.
+  const params: Record<string, string | undefined> = { category: sp.category, device: sp.device, part: sp.part, sort: sp.sort, mine: admin ? undefined : sp.mine, q: typed || undefined, states: admin ? sp.states : undefined };
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-white">Find tests</h1>
-        <p className="text-slate-400">Apps, websites and games looking for feedback. You earn the amount shown as each part of your work is accepted.</p>
+        <p className="text-slate-400">{admin ? "Every test, whatever its state. A card opens the test's page with the team's boxes." : "Apps, websites and games looking for feedback. You earn the amount shown as each part of your work is accepted."}</p>
       </div>
 
-      <CategoryChips basePath="/app/find" params={{ ...sp }} counts={counts} total={open.length} />
+      {/* (Batch 17 section 8) The search box at the top; it works together with the chips and the filters (the search runs on the server). */}
+      <FindSearch params={params} />
+      {admin && <StateTicks params={params} ticked={ticked} />}
+
+      <CategoryChips basePath="/app/find" params={params} counts={counts} total={open.length} />
 
       <form className="card flex flex-wrap items-end gap-3 p-4">
         {sp.category && <input type="hidden" name="category" value={sp.category} />}
+        {typed && <input type="hidden" name="q" value={typed} />}
+        {admin && sp.states && <input type="hidden" name="states" value={sp.states} />}
         <div>
           <label className="label" htmlFor="device">Device</label>
           <select className="input w-44" id="device" name="device" defaultValue={sp.device ?? ""}>
@@ -80,30 +109,38 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
             <option value="deadline">Most time to finish</option>
           </select>
         </div>
-        <div>
-          <label className="label" htmlFor="mine">Show</label>
-          <select className="input w-52" id="mine" name="mine" defaultValue={matchMine ? "1" : "0"}>
-            <option value="1">Matching my profile</option>
-            <option value="0">Everything</option>
-          </select>
-        </div>
+        {!admin && (
+          <div>
+            <label className="label" htmlFor="mine">Show</label>
+            <select className="input w-52" id="mine" name="mine" defaultValue={matchMine ? "1" : "0"}>
+              <option value="1">Matching my profile</option>
+              <option value="0">Everything</option>
+            </select>
+          </div>
+        )}
         <button className="btn">Apply</button>
       </form>
 
-      {shown.length === 0 ? (
+      {found?.more && <p className="text-xs text-slate-500" data-find-cap="">Showing the newest {ADMIN_FIND_LIMIT} tests: search to narrow.</p>}
+      {shown.length === 0 && typed ? (
+        <p className="card text-sm text-slate-400" data-find-none="">{noFindMatchLine(typed, admin)}</p>
+      ) : shown.length === 0 ? (
         <div className="card flex flex-col items-center gap-2 py-12 text-center">
           <SearchX className="h-10 w-10 text-slate-600" />
-          <p className="font-medium text-slate-300">No open tests match right now</p>
-          <p className="text-sm text-slate-500">
-            {matchMine ? <>Try <Link href="/app/find?mine=0">showing everything</Link>, or </> : "Try "}
-            <Link href="/app/profile">adding more devices and languages</Link>.
-          </p>
+          <p className="font-medium text-slate-300">{admin ? "No tests match these ticks" : "No open tests match right now"}</p>
+          {!admin && (
+            <p className="text-sm text-slate-500">
+              {matchMine ? <>Try <Link href="/app/find?mine=0">showing everything</Link>, or </> : "Try "}
+              <Link href="/app/profile">adding more devices and languages</Link>.
+            </p>
+          )}
         </div>
       ) : (
         <ul className="grid gap-4 md:grid-cols-2">
           {shown.map((t) => {
-            const gaps = needsLines(t, profile);
+            const gaps = admin ? [] : needsLines(t, profile);
             const left = t.spots - t._count.contracts;
+            const state = "state" in t ? t.state : null;
             return (
               <li key={t.id}>
                 <Link href={`/app/find/${t.id}`} className="card card-hover flex h-full gap-4 text-ink-100 no-underline hover:no-underline">
@@ -118,22 +155,24 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
                       <div className="text-right">
                         <p className="text-lg font-bold text-emerald-300">{fromText(t)}</p>
                         <p className="text-xs text-slate-400">{termsLine(asListing(t), true)}</p>
-                        <p className="text-xs text-slate-500">{plural(left, "spot")} open to you</p>
+                        <p className="text-xs text-slate-500">{admin ? `${Math.max(0, left)} of ${t.spots} spots open` : `${plural(left, "spot")} open to you`}</p>
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
+                      {state && <span className={`badge ${STATE_TONE[state]}`} data-test-state={state}>{state}</span>}
                       <CategoryBadges categories={t.categories} />
                       <PartBadges written={t.writtenCents != null} recording={t.recordingCents != null} live={t.liveRateCents != null} />
                       {t.devices.length > 0 && <span className="badge" title={t.devices.join(" · ")}><Monitor className="h-3.5 w-3.5" /> {t.devices.slice(0, 3).join(" · ")}{t.devices.length > 3 ? ` +${t.devices.length - 3} more` : ""}</span>}
                       {t.languages.length > 0 && <span className="badge" title={t.languages.join(" · ")}><Languages className="h-3.5 w-3.5" /> {t.languages.slice(0, 3).join(" · ")}{t.languages.length > 3 ? ` +${t.languages.length - 3} more` : ""}</span>}
-                      <span className="badge">{t.joinMode === "invite" ? "Invitation only" : t.joinMode === "apply" ? "Approved only" : "Anyone can join"}</span>
+                      {state !== "Invite only" && <span className="badge">{t.joinMode === "invite" ? "Invitation only" : t.joinMode === "apply" ? "Approved only" : "Anyone can join"}</span>}
                       {/* (Batch 15 section 18) "14 days per tester · join by Nov 20" */}
                       {t.openUntil && <span className="badge" data-per-tester="">{perTesterLine(t.testerDays ?? testerDaysOf(t.createdAt, t.openUntil), t.openUntil, (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }))}</span>}
                       {t.mature && <span className="badge border-rose-300/40 text-rose-200">Mature (18+)</span>}
                       {t.ndaText && <span className="badge">NDA</span>}
                       {invitedTo.has(t.id) && <span className="badge border-emerald-400/40 text-emerald-200">Invited</span>}
                     </div>
-                    {t.contracts.some((c) => c.status === "left") && <p className="note">You left this test</p>}
+                    {admin && <p className="text-xs text-slate-500">Posted {fmtDate(t.createdAt)}</p>}
+                    {"contracts" in t && t.contracts.some((c) => c.status === "left") && <p className="note">You left this test</p>}
                     {gaps.slice(0, 3).map((g) => <p key={g} className="text-sm text-amber-300" title={g}>{g}</p>)}
                     {gaps.length > 3 && <p className="text-sm text-amber-300">+{gaps.length - 3} more</p>}
                   </div>

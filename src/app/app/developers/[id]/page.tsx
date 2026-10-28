@@ -13,7 +13,8 @@ import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
 import { isAdmin } from "@/lib/server/session";
 import { anySuspended, devRestricted } from "@/lib/restricted";
 import { sideFor } from "@/lib/sides";
-import { profileOpenTests } from "@/lib/server/profileOpenTests";
+import { openTestsV, profileOpenTests } from "@/lib/server/profileOpenTests";
+import { AutoRefresh } from "@/components/AutoRefresh";
 
 
 export const metadata = { title: "Developer · Playtest" };
@@ -55,12 +56,14 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
       <DeveloperTiles userId={p.id} />
       <section className="card space-y-3">
         <h2 className="font-semibold text-white">Open tests</h2>
+        {/* (Owner, Oct 28, batch 17 section 9) Seen by someone else, the list stays current on the page's poll (and when shown again with Back). */}
+        {!mine && !isAdmin(viewer) && <AutoRefresh query={`profile=${p.id}`} v={openTestsV(open)} />}
         {/* (Owner, Oct 28, batch 16 section 14) Every open test, in a plain scroll box (no "Show N more"). */}
         {open.length === 0 ? <p className="text-sm text-slate-400">No open tests right now.</p> : (
           <ScrollList className="space-y-2">
             {open.map((t) => (
               <li key={t.id}>
-                {(devOff || (!mine && viewer.testerSuspendedAt)) ? <div className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100"><span className="min-w-0 flex-1"><span className="block truncate font-medium text-white" title={t.title}>{t.title}</span></span></div> : <Link href={mine ? `/app/tests/${t.id}` : `/app/find/${t.id}`} className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100 no-underline hover:bg-white/[0.04] hover:no-underline">
+                {(devOff || (!mine && viewer.testerSuspendedAt)) ? <div className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100"><span className="min-w-0 flex-1"><span className="block truncate font-medium text-white" title={t.title}>{t.title}</span></span></div> : <Link href={mine ? `/app/tests/${t.id}` : isAdmin(viewer) ? `/app/find/${t.id}` : `/app/find/${t.id}?from=profile`} className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100 no-underline hover:bg-white/[0.04] hover:no-underline">
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium text-white">{t.title}</span>
                     <span className="flex items-start gap-1.5 text-xs text-slate-400">

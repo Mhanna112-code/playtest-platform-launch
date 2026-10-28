@@ -739,10 +739,11 @@ export async function nextRound(dev: U, testId: string, body: Record<string, unk
 
 // ---------- tester: find and join ----------
 
-/** Open tests the tester can join (not their own, not full, not already joined). */
-export async function findTests(tester: U) {
+/** Open tests the tester can join (not their own, not full, not already joined). (Batch 17 section 8) `q`: the search box (test, product or developer name). */
+export async function findTests(tester: U, q?: unknown) {
   const tests = await db.test.findMany({
     where: {
+      ...(await import("./findSearch")).testSearchWhere(q),
       status: "open", adminPausedAt: null, developerId: { notIn: [tester.id, ...(await blockPartners(tester.id))] }, developer: { devSuspendedAt: null, holdStartedAt: null },
       // Not joined, or LEFT (they can come back: not after rating, not if the developer ended them).
       contracts: { none: { testerId: tester.id, OR: [{ status: { not: "left" } }, { endKind: "rated" }] } },

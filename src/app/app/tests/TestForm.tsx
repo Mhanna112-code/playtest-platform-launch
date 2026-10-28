@@ -218,8 +218,9 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
     const left = markServerMistakes(formRef.current, messages, (m) => {
       const k = fieldOfMistake(m);
       const el = k ? fieldEl(k) : null;
-      // A box already red with this very line (the keys' own line) isn't marked twice.
-      return el && el.dataset.redMsg === m ? null : el;
+      // A box already red with this very line (the keys' own line) isn't marked twice. (Batch 17 section 13) The keys' line is this page's own, even before the
+      // press has re-rendered the box red: shown once, under the Free box.
+      return el && (el.dataset.redMsg === m || (k === "keys" && !!keyLine && keyLine.includes(m))) ? null : el;
     });
     const shownLocked = new Set(lockedNow.map(criticalLine));
     setOrphans(left.filter((m) => !(isCriticalLine(m) && shownLocked.has(m))));

@@ -24,6 +24,7 @@ import { developerStats } from "@/lib/server/profileStats";
 import { sideLink } from "@/lib/sides";
 import { canAskToRejoin, leftText } from "@/lib/rules";
 import { heldBrokenKey } from "@/lib/server/accessKeys";
+import { profileTestRefusal } from "@/lib/server/profileOpenTests";
 
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
@@ -36,13 +37,26 @@ const STEPS = {
   live: "Request a call time, try it live while the developer watches",
 };
 
-export default async function ListingPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ListingPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?: Promise<{ from?: string }> }) {
   const { id } = await params;
+  const from = (await searchParams)?.from;
   const u = await requireOpenPage("/app/find"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
   const t = await db.test.findUnique({ where: { id }, include: { developer: true } });
-  if (!t || t.status === "draft") notFound();
+  // (Batch 17 section 8) The team opens any test from their Find tests, drafts too.
+  if (!t || (t.status === "draft" && !isAdmin(u))) notFound();
   const mine = await db.contract.findUnique({ where: { testId_testerId: { testId: id, testerId: u.id } } });
   if (mine && mine.status === "working") redirect(`/app/sessions/${mine.id}`);
+  // (Owner, Oct 28, batch 17 section 9) A press on a developer profile's "Open tests" from a page opened before the test left that list: the usual refusal,
+  // nothing of the listing (the profile drops it when shown again).
+  const gone = from === "profile" && !isAdmin(u) ? await profileTestRefusal(id, u.id) : "";
+  if (gone) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-6">
+        <p><a href={`/app/developers/${t.developerId}`}>← Back to the profile</a></p>
+        <p className="card note" data-unavailable="" data-profile-gone="">{gone}</p>
+      </div>
+    );
+  }
   const testersIn = await db.contract.count({ where: { testId: id, status: "working" } });
   const profile = await db.testerProfile.findUnique({ where: { userId: u.id } });
   const gaps = needsLines(t, profile);
@@ -209,7 +223,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       {ratedHere && <p className="info">{mine?.status === "left" && mine.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't join this test again."}</p>}
       {mine && mine.status !== "working" && !ratedHere && canRejoin && !invite && !blocked && <p className="info">{mine.endKind === "suspended" ? "You were removed from this test." : mine.status === "left" ? "You left this test." : "Your work on this test ended."} Ask to rejoin: if {dev} accepts, your session comes back with everything in it (work you sent, payments and chat), on the current listing.</p>}
       {mine && mine.status !== "working" && !ratedHere && !canRejoin && !invite && !blocked && <p className="info">You can&apos;t ask to rejoin this test.</p>}
-      {t.developerId === u.id ? (
+      {/* (Batch 17 section 8) The team never gets Join / Apply. */}
+      {isAdmin(u) && t.developerId !== u.id ? null : t.developerId === u.id ? (
         <div className="card flex flex-wrap items-center gap-3">
           <p className="flex-1 text-slate-200">This is your own test: this is how testers see it. You can&apos;t test it yourself.</p>
           <a href={sideLink(u, `/app/tests/${t.id}`)} className="btn-secondary no-underline hover:no-underline">Manage it as the developer <ArrowRight className="h-4 w-4" /></a>
@@ -227,7 +242,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       ) : (
         <>{gaps.map((g) => <p key={g} className="info">{g}</p>)}</>
       )}
-      {t.developerId === u.id || !u.isTester || closed || blocked || ratedHere ? null : (
+      {t.developerId === u.id || isAdmin(u) || !u.isTester || closed || blocked || ratedHere ? null : (
         <div>
           <JoinBox
             rejoin={canRejoin}

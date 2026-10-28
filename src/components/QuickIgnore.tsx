@@ -1,7 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { alertLabel } from "@/lib/alerts";
 import { api } from "@/lib/client";
+import { setTesterAlertsOff, testerAlertsAreOff } from "@/lib/testerAlerts";
 
 /**
  * (Design doc 6) Under a developer's stop box: how to stop being stopped for what is listed ("You can turn these stops off in Alerts on the test
@@ -23,14 +24,23 @@ export function QuickIgnore({ alerts }: { alerts: string[] }) {
   );
 }
 
-/** (Batch 15 sections 26 and 44) Under a tester's stop box: the quick "Turn off alerts" (new terms from the developer and a key marked as working still stop: CONTRACT_KINDS). */
+/**
+ * (Batch 15 sections 26 and 44) Under a tester's stop box: the quick "Turn off alerts" (new terms from the developer and a key marked as working still stop: CONTRACT_KINDS).
+ * (Owner, Oct 28, batch 17 section 13) With Alerts already Off, neither line shows (only "Press <button> again to go ahead." / the terms tail remain).
+ */
 export function TesterAlertsOff({ show }: { show: boolean }) {
   const [done, setDone] = useState(false);
-  if (!show) return null;
+  const [off, setOff] = useState(testerAlertsAreOff);
+  useEffect(() => {
+    const on = (e: Event) => setOff(!!(e as CustomEvent<{ off: boolean }>).detail?.off);
+    window.addEventListener("tester-alerts", on);
+    return () => window.removeEventListener("tester-alerts", on);
+  }, []);
+  if (!show || (off && !done)) return null;
   return (
     <div className="mt-1 space-y-1 text-xs text-sky-200/90" data-quick-alerts-off="">
       <p>You can turn these stops off below, or with Alerts at the top of your test&apos;s page. New terms from the developer and a key marked as working still stop.</p>
-      <button type="button" className="btn-ghost !rounded-md !px-2 !py-0.5 text-xs" disabled={done} onClick={() => void api("/api/account/tester-alerts", { off: true }).then(() => { setDone(true); window.dispatchEvent(new CustomEvent("tester-alerts", { detail: { off: true } })); }).catch(() => null)}>{done ? "Alerts are off" : "Turn off alerts"}</button>
+      <button type="button" className="btn-ghost !rounded-md !px-2 !py-0.5 text-xs" disabled={done} onClick={() => void api("/api/account/tester-alerts", { off: true }).then(() => { setDone(true); setTesterAlertsOff(true); window.dispatchEvent(new CustomEvent("tester-alerts", { detail: { off: true } })); }).catch(() => null)}>{done ? "Alerts are off" : "Turn off alerts"}</button>
     </div>
   );
 }

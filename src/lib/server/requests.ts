@@ -348,8 +348,9 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   });
   await db.$transaction((tx) => recordEvent(tx, c.testId, "requested", `${displayName(c.tester)} requested ${kind.rows.length === 1 && kind.rows[0].repeat !== "once" ? `${kindWords(kind.rows)} from` : "a call for"} ${fmtDateTime(kind.startsAt)}`, false, {}, contractId));
   // (Batch 15 section 35) The developer's bell: "<name> asked for a call: <time(s)>", stacked with the day's other request lines; each time in the reader's own zone.
+  // (Batch 17 section 4) It opens the Live session's Call requests panel with this request highlighted, like the Needs you row (batch 16 section 35).
   const when = kind.rows.map((x) => `${T(x.startsAt)}${x.repeat === "once" ? "" : x.repeat === "daily" ? " (daily)" : " (weekly)"}`).join(" or ");
-  await bell(c.test.developerId, `${displayName(c.tester)} asked for a call: ${when}`, `/app/tests/${c.testId}#needs-you`, c.testerId, { group: "callrequests" });
+  await bell(c.test.developerId, `${displayName(c.tester)} asked for a call: ${when}`, `/app/tests/${c.testId}#req-${r.id}`, c.testerId, { group: "callrequests" });
   return { requested: true, id: r.id };
 }
 

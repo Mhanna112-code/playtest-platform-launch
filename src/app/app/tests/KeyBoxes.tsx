@@ -62,10 +62,11 @@ export function KeyBoxes({ data, typed, onType, onBlur, openSpots, line, warning
         <div className="space-y-1.5 rounded-xl border border-white/10 p-3" data-keys-free="">
           <label className="text-sm font-medium text-white" htmlFor="keysFree">Free <span className="font-normal text-slate-400" data-free-head="">({n} key{n === 1 ? "" : "s"} · {openSpots} open spot{openSpots === 1 ? "" : "s"})</span></label>
           <textarea id="keysFree" rows={Math.min(8, Math.max(3, n + 1))} className={"input font-mono text-xs" + (line ? " field-bad" : "")} data-red-msg={line || undefined} value={typed} onBlur={onBlur} onChange={(e) => onType(e.target.value)} placeholder={"KEY-3333\nKEY-4444"} />
+          {/* (Owner, Oct 28, batch 17 section 13) The red line shows once, here under the Free box. */}
+          {line && <p className="err-field" role="alert" data-keys-line="">{line}</p>}
           <p className="text-xs text-slate-500">One key per line. Delete a line to remove that key; type a new line to add one.</p>
         </div>
       </div>
-      {line && <p className="err-field" role="alert">{line}</p>}
       {/* (Batch 15 section 44) Warning only: never a mistake, never blocks Save, not counted in "Fix the N mistakes". */}
       {warnings.length > 0 && (
         <ul className="space-y-0.5 rounded-lg border border-amber-300/40 bg-amber-400/10 px-3 py-1.5 text-xs text-amber-100" data-key-warnings="">

@@ -1,14 +1,15 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { bankCheckOpen } from "@/lib/bankConfirm";
 
 /**
  * Keeps an open page current: polls a fingerprint every 20 s and refreshes the page's data when it changes (`refresh={false}`: only watches, e.g. on Edit, which must keep what was typed).
  * (Owner, Oct 28) When the TEAM stops the test while a developer's test page or Edit is open, the page moves to the top of the test page at once (where the banner stays), not after a refused press.
  */
-export function AutoRefresh({ query, refresh = true }: { query: string; refresh?: boolean }) {
+export function AutoRefresh({ query, refresh = true, v }: { query: string; refresh?: boolean; /** (Batch 17 section 9) The fingerprint the page was rendered with: a page shown again from the browser's cache (Back) refreshes at its first poll if it changed since. */ v?: string }) {
   const router = useRouter();
-  const last = useRef<string | null>(null);
+  const last = useRef<string | null>(v ?? null);
   const stopped = useRef<boolean | null>(null);
   useEffect(() => {
     let alive = true;
@@ -25,6 +26,8 @@ export function AutoRefresh({ query, refresh = true }: { query: string; refresh?
           return;
         }
         stopped.current = !!adminStopped;
+        // (Batch 17 §11) While the bank's check is open inline, the page waits: a refresh could move the piece (and the check) away from under the developer.
+        if (refresh && bankCheckOpen()) return;
         // A suspension / hold is routed by SessionWatch (a hard move to the dashboard): refreshing a page the server is about to redirect would race it.
         if (refresh && !restricted && last.current !== null && v !== last.current && alive) {
           router.refresh();

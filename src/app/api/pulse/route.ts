@@ -27,6 +27,14 @@ export async function GET(req: Request) {
       const full = open.filter((i) => (working.find((w) => w.testId === i.testId)?._count._all ?? 0) >= i.test.spots).map((i) => i.id);
       return ok({ v: [invs.map((i) => `${i.id}:${i.status}:${i.updatedAt.getTime()}:${i.test.status}`).join(","), full.join(",")].join("|"), restricted: false });
     }
+    // (Owner, Oct 28, batch 17 section 9) A developer's profile seen by someone else: its "Open tests" as this viewer may see them (a test filling up, pausing,
+    // stopping, passing Open until, turning invite only for them or their invite closing leaves the list; a newly open test appears).
+    const profileId = q.get("profile");
+    if (profileId) {
+      const { profileOpenTestsV } = await import("@/lib/server/profileOpenTests");
+      const { isAdmin } = await import("@/lib/server/session");
+      return ok({ v: await profileOpenTestsV(profileId, u, isAdmin(u)), restricted: false });
+    }
     let testId = q.get("test") ?? "";
     const sessionId = q.get("session") ?? "";
     if (sessionId) {
