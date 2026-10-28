@@ -12,7 +12,7 @@ import { api, ApiError, isFieldError } from "@/lib/client";
 import { NotSentTag, useKept } from "@/lib/useKept";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
-import { keyNeedLine, parseKeys } from "@/lib/keys";
+import { keyNeedLine, parseKeys, tickedInUseLine } from "@/lib/keys";
 import { HIGH_PART_CENTS, HIGH_PART_TICK, type Listing } from "@/lib/rules";
 import { toCents } from "@/lib/format";
 import { KeyBoxes, type KeysData } from "./KeyBoxes";
@@ -179,9 +179,13 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
   // Keys: every open spot needs a free key.
   const spotsN = Number(f.spots);
   const freeAfter = edit ? (keysData?.free.filter((k) => !keysRemove.includes(k.value)).length ?? 0) + parseKeys(keysText).filter((v) => !keysData?.free.some((k) => k.value === v)).length : parseKeys(keysText).length;
-  const openN = edit ? Math.max(0, spotsN - edit.testersIn) : spotsN;
+  // The working testers follow the test live (testers joining while Edit is open take open spots and free keys).
+  const testersIn = edit ? (keysData?.testersIn ?? edit.testersIn) : 0;
+  const openN = edit ? Math.max(0, spotsN - testersIn) : spotsN;
   const usesKeys = edit ? (keysData?.uses ?? false) || parseKeys(keysText).length > 0 : parseKeys(keysText).length > 0;
-  const keyLine = usesKeys && Number.isInteger(spotsN) && spotsN > 0 ? keyNeedLine(openN, freeAfter) : "";
+  // A key ticked for removal that a joining tester was given meanwhile is red (it can't be removed), never dropped silently.
+  const tickedInUse = edit ? keysRemove.filter((v) => keysData?.inUse.some((k) => k.value === v)) : [];
+  const keyLine = [...tickedInUse.map(tickedInUseLine), usesKeys && Number.isInteger(spotsN) && spotsN > 0 ? keyNeedLine(openN, freeAfter) : ""].filter(Boolean).join(" ");
   const showOn = (k: string) => pressed || blurred.has(k);
 
   // Server mistakes by field (red at the field).
@@ -282,6 +286,8 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
         setErrs(Array.isArray(err.data.errors) ? (err.data.errors as string[]) : []);
         if (typeof err.data.version === "number") setVersion(err.data.version);
         if (err.data.criticalCounts) setCritCounts(countsOf(err.data.criticalCounts));
+        // The In use / Free boxes and the open spots follow at once (not at the next 20-second refresh).
+        if (edit) void api<{ keys: KeysData }>(`/api/tests/${edit.id}/listing`).then((r) => setKeysData(r.keys)).catch(() => null);
         if (err.data.current) applyElsewhere(err.data.current as Listing, typeof err.data.now === "string" ? err.data.now : new Date().toISOString(), err.data.keys ? { free: (err.data.keys as { free: string[] }).free } : null);
       }
       else if (err instanceof ApiError && !isFieldError(err)) {
@@ -468,7 +474,7 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
             {showOn("openUntil") && redLine(ouLine)}
           </div>
         </div>
-        {edit && edit.testersIn > 0 && <p className="note">{edit.testersIn} tester{edit.testersIn === 1 ? " is" : "s are"} in: spots can&apos;t go below that.</p>}
+        {edit && testersIn > 0 && <p className="note">{testersIn} tester{testersIn === 1 ? " is" : "s are"} in: spots can&apos;t go below that.</p>}
         <div>
           <label className="label" htmlFor="joinMode">How testers join{!perks && <> <span className="text-xs font-normal text-slate-400">Approved only:</span> <SubscribersTag /></>}</label>
           <select id="joinMode" className="input max-w-xs" value={f.joinMode} onChange={(e) => set({ joinMode: e.target.value })}>

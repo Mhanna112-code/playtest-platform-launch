@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
-import { keyNeedLine, keyRefusal, keyReportedLine, KEY_MAX_LENGTH, parseKeys, repeatedKeys } from "@/lib/keys";
+import { keyNeedLine, keyRefusal, keyReportedLine, KEY_MAX_LENGTH, parseKeys, repeatedKeys, tickedInUseLine } from "@/lib/keys";
 import { HttpError } from "./http";
 import { logEvent } from "./live";
 
@@ -30,7 +30,9 @@ export async function keyBoxes(testId: string) {
     .map((k) => ({ id: k.id, value: k.value, broken: k.status === "broken", tester: displayName(k.contract!.tester), contractId: k.contractId! }));
   const spots = (await db.test.findUniqueOrThrow({ where: { id: testId }, select: { spots: true } })).spots;
   const open = await openSpotsOf(db, testId, spots);
-  return { free, inUse, open, uses: keys.length > 0, now: new Date().toISOString() };
+  // testersIn: the working testers now, so Edit counts the open spots live as testers join.
+  const testersIn = await db.contract.count({ where: { testId, status: "working" } });
+  return { free, inUse, open, testersIn, uses: keys.length > 0, now: new Date().toISOString() };
 }
 
 /**
@@ -104,6 +106,8 @@ export async function planKeyChange(tx: Tx, testId: string, add: string[], remov
       if (why) errors.push(why);
     } else toAdd.push(v);
   }
+  // A key ticked for removal that a tester was given meanwhile (in use, or reported since) is red, never dropped silently.
+  for (const v of remove) if (existing.some((k) => k.value === v && (k.status === "inuse" || k.status === "broken"))) errors.push(tickedInUseLine(v));
   const removable = existing.filter((k) => k.status === "free" && remove.includes(k.value));
   const alreadyGone = remove.filter((v) => !existing.some((k) => k.value === v && k.status === "free"));
   const free = existing.filter((k) => k.status === "free").length - removable.length + toAdd.length;

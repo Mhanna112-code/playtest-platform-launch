@@ -5,6 +5,8 @@ export type KeysData = {
   free: { id: string; value: string }[];
   inUse: { id: string; value: string; broken: boolean; tester: string; contractId: string }[];
   open: number;
+  /** The working testers now (the open spots follow them live). */
+  testersIn?: number;
   uses: boolean;
 };
 
@@ -29,6 +31,13 @@ export function KeyBoxes({ data, removed, onRemove, typed, onType, onBlur, openS
                 <li key={k.id} className={`flex flex-wrap items-center justify-between gap-2 ${k.broken ? "text-slate-500 line-through" : "text-slate-200"}`} title={k.broken ? `${k.tester} reported this key as not working` : undefined}>
                   <span className="font-mono">{k.value}</span>
                   <span className="text-xs no-underline">{k.tester}{k.broken ? " · not working" : ""}</span>
+                  {/* A key ticked for removal here that a joining tester was given meanwhile: red until the tick is dropped. */}
+                  {removed.includes(k.value) && (
+                    <span className="flex basis-full items-center justify-between gap-2 text-xs text-rose-300 no-underline" data-ticked-in-use={k.value}>
+                      Ticked to remove here, but given to {k.tester} meanwhile
+                      <button type="button" className="btn-ghost !rounded-md !px-1.5 !py-0.5 text-xs" aria-label={`Keep ${k.value}`} onClick={() => onRemove(k.value, false)}>Keep</button>
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>

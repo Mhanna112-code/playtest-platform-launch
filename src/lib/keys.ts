@@ -27,6 +27,9 @@ export function keyNeedLine(openSpots: number, freeKeys: number) {
   return short > 0 ? `Add ${short} more key${short === 1 ? "" : "s"}: ${plural(openSpots, "open spot")}, ${plural(freeKeys, "free key")}.` : "";
 }
 
+/** (Report pass, the keys race) A key ticked for removal in Edit that a joining tester was given meanwhile: it stays, and the Save says so. */
+export const tickedInUseLine = (value: string) => `${value} was given to a tester after you ticked it, so it's in use now and can't be removed. Press Keep next to it.`;
+
 /** Why a typed key can't be added ("" when it can). `status` is the state of the same key already on this test, if any. */
 export function keyRefusal(value: string, status: string | null) {
   if (!status) return "";
