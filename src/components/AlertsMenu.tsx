@@ -19,7 +19,8 @@ export function AlertsMenu({ ignored: start }: { ignored: string[] }) {
   return (
     <details className="relative" data-alerts-menu="">
       <summary className="btn-secondary cursor-pointer list-none px-3 py-1.5 text-sm"><BellOff className="h-4 w-4" /> Alerts{ignored.length ? ` (${ignored.length} off)` : ""}</summary>
-      <div className="absolute right-0 z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] space-y-1.5 rounded-2xl border border-white/15 bg-slate-900 p-3 text-sm shadow-2xl">
+      {/* On phones the button can sit at the left edge: the menu opens in the page under it instead of hanging off-screen. */}
+      <div className="absolute right-0 z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] max-sm:static max-sm:w-full max-sm:max-w-none space-y-1.5 rounded-2xl border border-white/15 bg-slate-900 p-3 text-sm shadow-2xl">
         <p className="text-xs text-slate-400">Tick what should <b>not</b> stop your buttons. A payment hold or pause, a closed tester account, a stopped test and final refusals always stop.</p>
         {ALERT_TYPES.map((a) => (
           <label key={a.key} className="flex cursor-pointer items-center gap-2 text-slate-200">
