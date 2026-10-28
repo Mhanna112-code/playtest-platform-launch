@@ -33,8 +33,10 @@ export const ndaHiddenLine = (test: string) => `Hidden while ${test} has an NDA`
 /** How the quote names its source: the product's name, or (ticked "Don't name the product") the kind of test it was. */
 export function excerptSource(x: { hideProduct: boolean; test: { productName: string; title: string; categories: string[] } }) {
   if (!x.hideProduct) return x.test.productName || x.test.title;
-  const cat = (x.test.categories[0] ?? "").toLowerCase();
-  return cat ? `a ${cat} test` : "a test";
+  // "an education test", "an AI test" (AI keeps its capitals).
+  const first = x.test.categories[0] ?? "";
+  const cat = first === "AI" ? "AI" : first.toLowerCase();
+  return cat ? `${/^[aeiou]/i.test(cat) ? "an" : "a"} ${cat} test` : "a test";
 }
 
 /** Whitespace tidied, for comparing a trimmed quote with the answer it came from. */
