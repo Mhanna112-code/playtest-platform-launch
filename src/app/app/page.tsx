@@ -22,6 +22,9 @@ import { devRestricted, restrictionsOf } from "@/lib/restricted";
 import { PayoutBanner } from "@/components/PayoutBanner";
 import { CallsBox } from "./CallsBox";
 import { JoinCall } from "@/components/JoinCall";
+import { ReasonQuote } from "@/components/ScrollText";
+import { DisputeSide } from "./tests/[id]/DisputeSide";
+import { disputesForSide } from "@/lib/server/disputes";
 import { DismissRemoved } from "./DismissRemoved";
 import { LongList } from "@/components/LongList";
 import { rejoinAskLine } from "@/lib/server/joining";
@@ -41,9 +44,9 @@ const plural = (n: number, w: string) => `${num(n)} ${w}${n === 1 ? "" : "s"}`;
 const pays = (t: Parameters<typeof termsLine>[0]) => termsLine({ ...t, testerDays: null }, true); // (batch 15: termsLine adds days only when given)
 const DAY = 86_400_000;
 
-export default async function AppHome({ searchParams }: { searchParams: Promise<{ category?: string; failed?: string }> }) {
+export default async function AppHome({ searchParams }: { searchParams: Promise<{ category?: string; failed?: string; done?: string }> }) {
   const u = await requirePageUser();
-  const { category, failed } = await searchParams;
+  const { category, failed, done } = await searchParams;
   if (!u.isDeveloper && !u.isTester)
     return (
       <>
@@ -60,14 +63,34 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
   const cbSteps = devOff && u.holdStartedAt ? await chargebackSteps(u.id) : null;
   // (Owner, Oct 29, batch 13) A restricted developer can't open test pages: their excerpt requests wait here, under the blue box, with Allow and Deny.
   const excerptBox = devOff ? await pendingForDeveloper(u.id) : [];
+  // (Owner, Oct 30, batch 15 section 27) A restricted developer's open disputes waiting for their side (optional, never stopped): their own box under the blue box.
+  const disputeBox = devOff ? await disputesForSide(u.id) : [];
   return (
     <div className="space-y-8">
       {(devOff || testerOff) && (
         <RestrictedBox failed={failed} developer={devOff} tester={testerOff} kinds={restrictionsOf(u)} steps={cbSteps?.remaining} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />
       )}
+      {/* (Batch 15 section 29) After Stop or End early from a restricted test page. */}
+      {done && /^Done: /.test(done) && <p className="ok rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2" role="status" data-done-line="">{done.slice(0, 300)}</p>}
+      {disputeBox.length > 0 && (
+        <section className="card space-y-3" id="dispute-sides" data-dispute-box="">
+          <h2 className="font-semibold text-white">Disputes: add your side</h2>
+          {/* More than 3: a scroll box about 3 items tall. */}
+          <div className={`space-y-2 ${disputeBox.length > 3 ? "max-h-[30rem] overflow-y-auto pr-1" : ""}`} data-scroll={disputeBox.length > 3 ? "disputes" : undefined}>
+            {disputeBox.map((d) => (
+              <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
+                <p className="text-slate-300"><b className="text-white">{d.name}</b> disputed what you paid for {d.what} on “{d.testTitle}”:</p>
+                <ReasonQuote text={d.reason} />
+                <DisputeSide seenAt={now.toISOString()} testId={d.testId} disputeId={d.id} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       {excerptBox.length > 0 && (
         <section className="card space-y-3" id="excerpt-requests" data-excerpt-box="">
           <h2 className="font-semibold text-white">Excerpt requests</h2>
+          <div className={`space-y-2 ${excerptBox.length > 3 ? "max-h-[30rem] overflow-y-auto pr-1" : ""}`}>
           {excerptBox.map((x) => (
             <div key={x.id} id={`excerpt-${x.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
               <p className="text-slate-300"><b className="text-white">{x.tester}</b> would like to show this from “{x.testTitle}” on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
@@ -75,6 +98,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
               <ExcerptDecision excerptId={x.id} />
             </div>
           ))}
+          </div>
         </section>
       )}
       {/* (Batch 15 section 16) The side in use: its own reinstatement. */}
@@ -266,7 +290,8 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
                       <div className="min-w-0 space-y-2">
                         {t.productName && <p className="kicker">{t.productName}</p>}
                         {/* Under a suspension or a hold the test pages are closed: the card doesn't open. */}
-                        <p>{restricted ? title : <Link href={t.status === "draft" ? `/app/tests/new?draft=${t.id}` : `/app/tests/${t.id}`} className={`${CARD_LINK} no-underline hover:no-underline`}>{title}</Link>}</p> {/* (Owner, Oct 28 evening) a draft opens in Post a test */}
+                        {/* (Batch 15 section 29) A restricted developer's cards open the test's restricted view (a draft still doesn't open). */}
+                        <p>{restricted && t.status === "draft" ? title : <Link href={t.status === "draft" ? `/app/tests/new?draft=${t.id}` : `/app/tests/${t.id}`} className={`${CARD_LINK} no-underline hover:no-underline`}>{title}</Link>}</p> {/* (Owner, Oct 28 evening) a draft opens in Post a test */}
                         <div className="flex flex-wrap gap-2">
                           {t.status === "stopped" ? <StatusPill status="stopped" /> : paused ? <span className="badge border-amber-300/40 text-amber-200"><span className="h-2 w-2 rounded-full bg-amber-300" /> Paused{why ? `: ${why}` : ""}</span> : <StatusPill status={t.status} full={inIt.length >= t.spots} />} {/* (Owner, Oct 28 afternoon) open with a free spot: "Accepting testers"; open and full: "Full"; Draft, Paused, Stopped and Closed as before */}
                           {owedTests.has(t.id) && <span className="badge border-rose-300/40 text-rose-200">Payment failed</span>}

@@ -84,7 +84,8 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
     const held = { isDeveloper: true, isTester: false, holdStartedAt: new Date() };
     const tester = { isDeveloper: false, isTester: true, testerSuspendedAt: new Date() };
     for (const u of [dev, held]) {
-      for (const p of ["/app/tests/abc", "/app/tests/abc/edit", "/app/tests/new", "/app/messages", "/app/chat/x", "/app/profile", "/app/testers/x", "/app/developers/x", "/app/find", "/app/find/x", "/app/sessions/x", "/app/calls/x"]) expect(closedForSuspended(p, u), p).toBe(true);
+      expect(closedForSuspended("/app/tests/abc", u)).toBe(false); // (batch 15 section 29) the restricted view
+      for (const p of ["/app/tests/abc/edit", "/app/tests/new", "/app/messages", "/app/chat/x", "/app/profile", "/app/testers/x", "/app/developers/x", "/app/find", "/app/find/x", "/app/sessions/x", "/app/calls/x"]) expect(closedForSuspended(p, u), p).toBe(true);
       for (const p of ["/app", "/app/", "/app?failed=x", "/app/payments", "/app/help", "/app/account", "/app/account/blocked", "/app/notifications", "/app/switch"]) expect(closedForSuspended(p, u), p).toBe(false);
     }
     for (const p of ["/app/find", "/app/find/x", "/app/profile", "/app/messages", "/app/chat/x", "/app/sessions/x", "/app/calls/x", "/app/testers/x", "/app/developers/x"]) expect(closedForSuspended(p, tester), p).toBe(true);
@@ -92,7 +93,7 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
     expect(closedForSuspended("/app/payments", tester)).toBe(false);
     // A hold restricts only the developer side of an account with both.
     const both = { isDeveloper: true, isTester: true, holdStartedAt: new Date(), side: "tester" };
-    expect(closedForSuspended("/app/tests/abc", both, "developer")).toBe(true);
+    expect(closedForSuspended("/app/tests/abc/edit", both, "developer")).toBe(true);
     expect(closedForSuspended("/app/find", both, "tester")).toBe(false);
     expect(closedForSuspended("/app/messages", both, "tester")).toBe(false);
     expect(closedForSuspended("/app/messages", both, "developer")).toBe(true);

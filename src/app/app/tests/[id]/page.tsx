@@ -8,7 +8,11 @@ import { callsLeftCents } from "@/lib/server/callMoney";
 import { callsLeftWarning } from "@/lib/callMeasure";
 import { fmtTime } from "@/lib/format";
 import { ReasonQuote } from "@/components/ScrollText";
-import { requireOpenDevPage } from "@/lib/server/page-auth";
+import { requireOpenPage } from "@/lib/server/page-auth";
+import { devRestricted } from "@/lib/restricted";
+import { PAUSED_ALERTS, STOPPED_ALERTS } from "@/lib/alerts";
+import { TestBanner, allowedLine, type BannerCause } from "./TestBanner";
+import { RestrictedCalls } from "./RestrictedCalls";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
 import { unreadCount } from "@/lib/server/messages";
 import { DevCallPanel, type DevCall, type DevTester } from "./DevCallPanel";
@@ -60,9 +64,10 @@ export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
 
 export default async function TestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ failed?: string; saved?: string; offered?: string; skipped?: string; closed?: string; resent?: string; spotclosed?: string; spots?: string }> }) {
-  const u = await requireOpenDevPage(); // first: a restricted developer is sent to the dashboard before anything else runs
-  await (await import("@/lib/server/calls")).sweepNobodyJoined();
   const { id } = await params;
+  // First: a restricted developer may open a test page only in its restricted view (batch 15 section 29); every other page sends them to the dashboard top.
+  const u = await requireOpenPage(`/app/tests/${id}`);
+  await (await import("@/lib/server/calls")).sweepNobodyJoined();
   await (await import("@/lib/server/recovery")).checkStuck({ testId: id }); // (batch 15 section 9) payments stuck "in progress"
   const { saved, offered, skipped, closed, resent, failed } = await searchParams;
   const seenAt = new Date().toISOString();
@@ -87,8 +92,13 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const next = await db.test.findFirst({ where: { previousId: id }, select: { id: true } });
   // (Batch 14 section 6) The read-only Access keys notice (only when the test uses keys).
   const keysView = await keyBoxes(id);
-  // (Owner, Oct 26) A suspended developer sees only Cancel call, End early and Stop the test here; every other button is hidden.
-  const restricted = !!u.devSuspendedAt;
+  // (Owner, Oct 30, batch 15 sections 23, 29 and 37) ANY pause (the team's, a payment or chargeback hold, a developer-side suspension) shows the restricted view: the
+  // overview with Stop and End early, Booked calls with Cancel, the excerpt requests and the disputes. Only the banner's title and reason differ by cause.
+  const accountPaused = devRestricted(u, "developer");
+  const teamPaused = !!t.adminPausedAt && t.status !== "stopped";
+  const restricted = accountPaused || teamPaused;
+  const bannerCause: BannerCause | null = t.adminStoppedAt ? "team-stopped" : teamPaused ? "team-paused" : u.devSuspendedAt ? "suspended" : u.holdStartedAt ? (u.holdReason === "chargeback" ? "chargeback" : "hold") : t.status === "stopped" ? "stopped" : null;
+  const bannerReason = bannerCause === "team-paused" || bannerCause === "team-stopped" ? t.adminNote : bannerCause === "suspended" ? u.devSuspendNote : "";
   const keysEver = await db.accessKey.count({ where: { testId: id } });
   const keysLeft = keysEver > 0 ? await db.accessKey.count({ where: { testId: id, status: "free" } }) : null;
   const working = t.contracts.filter((c) => c.status === "working");
@@ -211,6 +221,72 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     const who = (st: string[]) => mine.filter((o) => st.includes(o.status)).map((o) => personOf(o.contractId)).filter((p): p is NonNullable<typeof p> => !!p);
     return { id: x.id, at: x.createdAt.toISOString(), fields: x.fields, before: x.before as Record<string, unknown>, after: x.after as Record<string, unknown>, effects: x.effects, chose: { switched: who(["switched"]), kept: who(["kept"]), undecided: who(["open"]) } };
   });
+  // (Batch 15 section 29) The restricted view: Booked calls (ahead) with Cancel, and the open disputes waiting for the developer's side.
+  const bookedAhead = t.contracts.flatMap((c) => c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => ({ id: x.id, who: displayName(c.tester), when: x.startsAt.toISOString(), minutes: x.minutes, needsReason: cancelNeedsReason(x.startsAt, now) }))).sort((a, b) => a.when.localeCompare(b.when));
+  const banner = bannerCause ? (
+    <TestBanner cause={bannerCause} reason={bannerReason} failed={failed}
+      allowed={restricted ? allowedLine(true, { stop: t.status !== "stopped", endEarly: t.status !== "stopped" && working.length > 0, cancelCalls: bookedAhead.length > 0 }) : allowedLine(false, { nextRound: !t.adminStoppedAt && !next })} />
+  ) : null;
+  if (restricted) {
+    return (
+      <>
+        <AutoRefresh query={`test=${t.id}`} />
+        {banner}
+        <TopPanel
+          id={t.id} title={t.title} productName={t.productName} ignoredAlerts={u.ignoredAlerts} restricted mature={t.mature} nda={!!t.ndaText} keysLeft={null}
+          parts={{ written: t.writtenCents != null, recording: t.recordingCents != null, live: t.liveRateCents != null }} paused status={t.status}
+          terms={termsLine({ ...asListing(t), testerDays: t.testerDays })} openUntil={t.openUntil ? t.openUntil.toISOString() : null} version={t.version} seenAt={seenAt}
+          nextRoundId={null} teamStopped={!!t.adminStoppedAt} perks={perks} spotsLine={`${working.length} of ${t.spots} spots used`} full={working.length >= t.spots}
+          joinMode={t.joinMode} deadlineDays={t.deadlineDays} categories={t.categories}
+          alertKeys={t.status === "stopped" ? [...STOPPED_ALERTS] : [...PAUSED_ALERTS]}
+          doneTo={accountPaused ? "/app" : undefined}
+          working={working.map((c) => ({
+            contractId: c.id, name: displayName(c.tester),
+            sent: [...(c.submissions.some((x) => x.kind === "written") ? ["written answers"] : []), ...(c.submissions.some((x) => x.kind === "recording") ? ["recording"] : [])],
+            toSend: [...(c.writtenCents != null && !c.submissions.some((x) => x.kind === "written") ? ["written answers"] : []), ...(c.recordingCents != null && !c.submissions.some((x) => x.kind === "recording") ? ["recording"] : [])],
+            ahead: c.calls.filter((x) => x.status === "booked" && x.startsAt > now).length,
+            waiting: [...c.submissions.filter((x) => !x.review).map((x) => (x.kind === "recording" ? "recording" : "written answers")), ...(c.calls.some((x) => tookPlace(x) && !x.review) ? ["live call"] : [])],
+          }))}
+        />
+        <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" />
+        <RestrictedCalls testId={t.id} seenAt={seenAt} calls={bookedAhead} />
+        {/* (Batch 15 section 39) Excerpts go through anything: Allow / Deny (hidden while the test has an NDA, as always) and Take down. */}
+        {(excerptReqs.length > 0 || shownEx.length > 0) && (
+          <section className="card space-y-2" data-restricted-excerpts="">
+            <h2 className="font-semibold text-white">Excerpts</h2>
+            {excerptReqs.map((x) => (
+              <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm" data-excerpt-request="">
+                <p className="text-slate-300"><b className="text-white">Excerpt request</b> · {x.tester} would like to show this on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
+                <ClampText text={`“${x.text}”`} className="text-slate-200" />
+                <ExcerptDecision excerptId={x.id} />
+              </div>
+            ))}
+            {shownEx.map((e) => (
+              <div key={e.id} className="flex flex-wrap items-start gap-2 text-sm" data-shown-excerpt="">
+                <span className="min-w-0 flex-1"><span className="text-slate-400">On a tester&apos;s profile: </span><ClampText text={`“${e.text}”`} className="text-slate-200" /></span>
+                <ExcerptRemove excerptId={e.id} label="Take down" body="It leaves the tester's profile at once, and they're told." />
+              </div>
+            ))}
+          </section>
+        )}
+        {/* (Batch 15 section 27) The developer's side of a dispute: optional, never stopped, works while paused or restricted. */}
+        {disputesWaiting.length > 0 && (
+          <section className="card space-y-2" data-restricted-disputes="">
+            <h2 className="font-semibold text-white">Disputes: add your side</h2>
+            <div className="max-h-[36rem] space-y-2 overflow-y-auto pr-1">
+              {disputesWaiting.map((d) => (
+                <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
+                  <p className="text-slate-300"><b className="text-white">{d.name}</b> disputed what you paid for {d.what} · waiting for the team:</p>
+                  <ReasonQuote text={d.reason} />
+                  <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </>
+    );
+  }
   const needsCount = pieces.length + apps.length + needsRequests.length + disputesWaiting.length + excerptReqs.length;
   return (
     <>
@@ -221,6 +297,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         productName={t.productName}
         ignoredAlerts={u.ignoredAlerts}
         restricted={restricted}
+        alertKeys={t.status === "stopped" ? [...STOPPED_ALERTS] : undefined}
         mature={t.mature}
         nda={!!t.ndaText}
         keysLeft={keysLeft}
@@ -251,17 +328,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         }))}
       />
       {t.pauseClosedAt && <p role="alert" className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100" data-pause-closed="">{t.pauseClosedReason}</p>}
-      {/* (Design doc 6) A stopped test: one short line saying what can still be done. */}
-      {t.status === "stopped" && <p className="note" data-stopped-line="">This test is stopped. You can still pay for work testers already sent, chat with them, rate testers, and read their answers.</p>}
-      {/* (Design doc 6) The team stopped or paused this test: a permanent banner at the top of the overview, naming any press that failed. */}
-      {(t.adminStoppedAt || t.adminPausedAt) && (
-        <section role="alert" data-admin-banner={t.adminStoppedAt ? "stopped" : "paused"} className="rounded-2xl border border-rose-400/50 bg-rose-500/10 p-4 text-sm text-rose-100">
-          <p className="font-semibold">{t.adminStoppedAt ? "The team stopped this test." : "The team paused this test: it behaves like a stop, and you can only stop it."}</p>
-          {t.adminNote && <ClampText text={t.adminNote} />}
-          {failed && <p className="mt-1">{failed}.</p>}
-          <p className="mt-1 text-rose-100/80">What testers sent still waits for you to pay. If you think this is a mistake, use Contact us in Settings.</p>
-        </section>
-      )}
+      {/* (Batch 15 section 37) A stopped test (the developer's or the team's): the one red banner, with what still works at the bottom. */}
+      {banner}
       {/* (Design doc 6) The order: overview, the live updates box, the yellow keys notice, then the panels. */}
       <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" />
       <KeysNotice testId={t.id} keys={keysView.uses && !restricted ? keysView : null} />

@@ -12,6 +12,10 @@ export const ALERT_TYPES = [
   { key: "own", label: "Your saves and presses in another tab" },
   { key: "listing", label: "Listing changes" },
 ] as const;
+/** (Owner, Oct 30, batch 15 section 39) The Alerts a paused test (any cause) still lists: what can still happen while paused. */
+export const PAUSED_ALERTS = ["leaving", "calls", "payments", "disputes", "admin", "own"] as const;
+/** A stopped test (the developer's or the team's stop): every call ahead was cancelled at the stop, and nobody can leave. */
+export const STOPPED_ALERTS = ["payments", "disputes", "admin", "own"] as const;
 export type AlertKey = (typeof ALERT_TYPES)[number]["key"];
 export const alertLabel = (k: string) => ALERT_TYPES.find((a) => a.key === k)?.label ?? k;
 

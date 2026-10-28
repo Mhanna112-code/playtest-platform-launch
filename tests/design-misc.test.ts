@@ -228,7 +228,7 @@ describe("chat after a block (owner, Oct 26)", () => {
 });
 
 describe("a suspended developer's test page (owner, Oct 26)", () => {
-  it("only Cancel call goes through; everything else (End early and Stop too) is refused and names the press", async () => {
+  it("(batch 15 section 29) Cancel call, End early and Stop go through; everything else is refused and names the press", async () => {
     const { dev, testId, sessionId } = await withWork();
     const a = await admin();
     await adm("suspend", a.cookie, { id: dev.user.id, note: "Spam" });
@@ -237,11 +237,11 @@ describe("a suspended developer's test page (owner, Oct 26)", () => {
       expect(r.body.error.code, action).toBe("suspended");
       expect(r.body.error.failed, action).toMatch(/^Your .+ on Harbor Run didn't go through$/);
     }
-    // (Owner, Oct 27) No Stop and no End early while suspended (paused tests close after 7 days anyway, and stopping would cut off testers' unsent work).
+    // (Owner, Oct 30, batch 15 section 29) Stop and End early work from the restricted view, silently.
     for (const [action, body] of [["end-early", { contractIds: [sessionId], reason: "We have what we need" }], ["stop", {}]] as const) {
-      const r = await act(testId, action, dev.cookie, { seenAt: seen(), confirmed: true, ...body });
-      expect(r.body.error.code, action).toBe("suspended");
+      const r = await act(testId, action, dev.cookie, { seenAt: seen(), ...body });
+      expect(r.status, action).toBe(200);
     }
-    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).status).toBe("open");
+    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).status).toBe("stopped");
   });
 });

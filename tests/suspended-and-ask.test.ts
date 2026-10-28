@@ -36,7 +36,7 @@ describe("a suspended developer keeps Cancel call, End early and Stop, with or w
     expect((await adm("suspend", a.cookie, { id: s.dev.user.id, note: "Spam" })).status).toBe(200);
     if (hold) await startHold(s.dev.user.id, "unpaid");
     // Pay and Reject are refused whatever the hold; nothing is recorded.
-    for (const body of [{ kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 }, { action: "reject", kind: "submission", id: sub.id, reason: "No" }]) {
+    for (const body of [{ kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 }, { amount: "0", kind: "submission", id: sub.id, reason: "No thanks" }]) {
       const r = await pay(s.dev.cookie, body);
       expect(r.status).toBe(403);
       expect(r.body.error.code).toBe("suspended");
@@ -46,9 +46,9 @@ describe("a suspended developer keeps Cancel call, End early and Stop, with or w
     expect((await owed(s.dev.cookie)).status).toBe(hold ? 200 : 403);
     // The three presses that stay.
     expect((await act(s.testId, "cancel-call", s.dev.cookie, { callId: call.id, seenAt: seen(), confirmed: true })).status).toBe(200);
-    // (Owner, Oct 27) End early and Stop are refused too (paused tests close after 7 days anyway; stopping would cut off testers' unsent work).
-    expect((await act(s.testId, "end-early", s.dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], reason: "We have what we need" })).body.error.code).toBe("suspended");
-    expect((await act(s.testId, "stop", s.dev.cookie, { seenAt: seen(), confirmed: true })).body.error.code).toBe("suspended");
+    // (Owner, Oct 30, batch 15 section 29) End early and Stop work from the restricted view.
+    expect((await act(s.testId, "end-early", s.dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], reason: "We have what we need" })).status).toBe(200);
+    expect((await act(s.testId, "stop", s.dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
   });
 
   it("a payment hold alone: Pay is refused as well", async () => {

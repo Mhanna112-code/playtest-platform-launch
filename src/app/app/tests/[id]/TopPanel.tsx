@@ -9,6 +9,7 @@ import { CategoryBadges } from "@/components/Category";
 import { PartBadges, StatusPill } from "@/components/Ui";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { AlertsMenu } from "@/components/AlertsMenu";
+import { LIMITS } from "@/lib/limits";
 import { OctagonX } from "lucide-react";
 
 /** A working tester, for End early's rows and the Stop / End dialogs: what they sent, what is still to send, calls ahead. */
@@ -18,7 +19,9 @@ type Tester = { contractId: string; name: string; sent: string[]; toSend: string
  * The test page's top title panel: the developer's big buttons (Stop the test, End early, Next round).
  * Its stop-once box sits directly under this panel.
  */
-export function TopPanel(p: { joinClosedLine?: string; id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean }) {
+export function TopPanel(p: { joinClosedLine?: string; id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean;
+  /** (Batch 15 section 39) The Alerts types this state can still have (a paused or stopped test shows fewer); omitted: all. */ alertKeys?: string[];
+  /** (Batch 15 section 29) After Stop / End early from the restricted view: on to the dashboard top with "Done: …". */ doneTo?: string }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
   const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={error} didntGo={k === "stop" || k === "end-early"} /> : null);
   const [open, setOpen] = useState<"" | "end" | "next">("");
@@ -38,6 +41,9 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
     if (!r) return;
     // (Owner, Oct 28 evening) Next round creates the draft and goes straight to Post a test with it.
     if (action === "next-round" && r.id) window.location.href = `/app/tests/new?draft=${r.id}`;
+    // (Batch 15 section 29) A restricted developer's Stop / End early: the dashboard top says it's done.
+    else if (p.doneTo && (action === "stop" || action === "end-early"))
+      window.location.href = `${p.doneTo}?done=${encodeURIComponent(action === "stop" ? `Done: you stopped ${p.title}.` : `Done: you ended ${picked.length === 1 ? "1 tester's" : `${picked.length} testers'`} work on ${p.title}.`)}`;
     else window.location.reload();
   }
 
@@ -68,7 +74,7 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
           {(
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               {!p.restricted && !stopped && <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.id}/edit`}><Pencil className="h-4 w-4" /> Edit</a>}
-              {!p.restricted && <AlertsMenu ignored={p.ignoredAlerts ?? []} />}
+              {(!p.restricted || p.alertKeys) && <AlertsMenu ignored={p.ignoredAlerts ?? []} keys={p.alertKeys} />}
               {p.restricted || p.teamStopped || p.status === "draft" ? null : p.nextRoundId ? (
                 <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.nextRoundId}`}><Repeat className="h-4 w-4" /> Go to the next round</a>
               ) : (
@@ -136,11 +142,14 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
             {noTick && <p className="err-field">Tick at least one tester.</p>}
             <div>
               <label className="label req" htmlFor="reason">Why? (each tester you tick reads it)</label>
-              <textarea id="reason" rows={2} className="input" maxLength={500} data-min-chars="5" data-msg="Say why you're ending their work (they read it)." placeholder="e.g. We have what we need for this build: thank you!" value={reason} onChange={(e) => setReason(e.target.value)} />
+              {/* (Owner, Oct 30, batch 15 section 22) Required, up to 10,000 characters with a counter; no 5-character minimum. */}
+              <textarea id="reason" rows={3} className="input" placeholder="e.g. We have what we need for this build: thank you!" value={reason} onChange={(e) => setReason(e.target.value)} />
+              <p className={`text-xs ${reason.length > LIMITS.endEarlyReason ? "text-rose-300" : "text-slate-500"}`} data-end-count="">{reason.length.toLocaleString("en-US")} / {LIMITS.endEarlyReason.toLocaleString("en-US")}</p>
             </div>
             <p className="note">Their work ends now. What they already sent still waits for you to pay; calls ahead are cancelled.</p>
             <div>
-              <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy} confirmLabel="End their work now"
+              {(!reason.trim() || !picked.length) && <p className="text-xs text-slate-400" data-say-why="">{!picked.length ? "Tick at least one tester first" : "Say why first"}</p>}
+              <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy || !reason.trim() || !picked.length || reason.length > LIMITS.endEarlyReason} confirmLabel="End their work now"
                 title={`End the work of ${chosen.length === 1 ? chosen[0].name : `${chosen.length} testers`} now?`}
                 before={() => {
                   if (!picked.length) { setNoTick(true); return false; }

@@ -16,7 +16,7 @@ import { HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL } from "@/lib/rules";
 export const PAGE = 25;
 export type Page<T> = { rows: T[]; next: string | null; total: number };
 
-export type DisputeVM = { type?: "dispute"; id: string; at: string; head: string; money: string; said: string; open: boolean; decided: string; min: number; max: number };
+export type DisputeVM = { type?: "dispute"; id: string; at: string; head: string; money: string; said: string; open: boolean; decided: string; min: number; max: number; devSide?: string; devSideAt?: string | null; dev?: string };
 export type MineVM = { id: string; at: string; title: string; dev: string; why: string; when: string; testId: string };
 export type UserVM = { href: string; id: string; at: string; line: string; reports: number; state: "deleted" | "suspended" | "normal"; stateLine: string; devSuspended?: boolean; testerSuspended?: boolean; isDeveloper?: boolean; isTester?: boolean };
 export type TestVM = { href: string; id: string; at: string; line: string; status: string; adminPaused: boolean; stopped: boolean; critical: number; closedLine: string };
@@ -92,7 +92,11 @@ export async function disputeRow(d: Awaited<ReturnType<typeof db.dispute.findMan
     type: "dispute" as const,
     head: `${c ? labelled(displayName(c.tester), flagged.has(c.testerId)) : "?"} vs ${c ? labelled(displayName(c.test.developer), flagged.has(c.test.developerId)) : "?"} · ${c?.title ?? ""} · ${what}`,
     money: `${base} · Paid for this piece ${money(r?.amountCents)}${r?.rejected ? " (rejected)" : ""}${partSoFar}`,
-    said: `Tester: “${d.reason}”${r?.reason ? ` · Developer's note when ${r.rejected ? "rejecting" : "paying"}: “${r.reason}”` : ""}${d.devSide ? ` · Developer's side: “${d.devSide}”` : ""}`,
+    // (Batch 15 section 27) The developer's side shows on its own line ("added <time>"), live.
+    said: `Tester: “${d.reason}”${r?.reason ? ` · Developer's note when ${r.rejected ? "rejecting" : "paying"}: “${r.reason}”` : ""}`,
+    devSide: d.devSide,
+    devSideAt: d.devSideAt ? d.devSideAt.toISOString() : null,
+    dev: c ? displayName(c.test.developer) : "",
     open: d.status === "open",
     decided: d.status === "open" ? "" : `Decided ${d.decidedAt ? fmtDateTime(d.decidedAt) : ""}: ${money(d.decidedCents)} in all${d.decisionNote ? ` · “${d.decisionNote}”` : ""}`,
     min,

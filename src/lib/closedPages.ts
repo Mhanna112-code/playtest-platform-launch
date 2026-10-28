@@ -10,6 +10,9 @@ type Who = Restrictable & { isDeveloper: boolean; isTester: boolean; side?: stri
  */
 export const OPEN_FOR_RESTRICTED = ["/app", "/app/payments", "/app/account", "/app/help", "/app/notifications", "/app/switch"] as const;
 
+/** (Owner, Oct 30, batch 15 section 29) A test page opens for a restricted developer in its restricted view (overview, Stop, End early, Booked calls); Edit and Post stay closed. */
+export const isTestPage = (path: string) => /^\/app\/tests\/(?!new$)[^/]+$/.test(clean(path));
+
 const clean = (path: string) => path.split(/[?#]/)[0].replace(/\/$/, "") || "/";
 export const openForRestricted = (path: string) => {
   const p = clean(path);
@@ -35,6 +38,7 @@ const byRole = (p: string) => p.startsWith("/app/chat/") || p.startsWith("/app/c
 export function closedForSuspended(path: string, u: Who, side?: string | null, role?: "developer" | "tester") {
   const p = clean(path);
   if (!(p === "/app" || p.startsWith("/app/")) || openForRestricted(p)) return false;
+  if (isTestPage(p) && !testerRestricted(u, role ?? side)) return false; // its restricted view (the page decides what shows)
   // A chat or call of an account with both sides: the page knows the role and decides, unless both sides are restricted.
   if (!role && byRole(p) && u.isDeveloper && u.isTester) return restrictedOn(u, "developer") && restrictedOn(u, "tester");
   return restrictedOn(u, role ?? side);

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { displayName, fmtDateTime, money, toCents } from "@/lib/format";
+import { displayName, fmtDateTime, fmtTime, money, toCents } from "@/lib/format";
 import { LET_GO_BY_TESTER, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, checkDisputeDecision, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, extraCapCents, overListingLine, overMaxLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare } from "@/lib/rules";
 import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
@@ -241,6 +241,12 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
     const by = d.decidedById ? await db.user.findUnique({ where: { id: d.decidedById } }) : null;
     throw new HttpError(409, "decided", `This dispute was already decided${by ? ` by ${displayName(by)}` : ""}${d.decidedAt ? ` at ${fmtDateTime(d.decidedAt)}` : ""}.`);
   }
+  // (Owner, Oct 30, batch 15 section 27) The developer added their side after this admin's page loaded: Decide stops once so they can read it.
+  const seen = typeof body.seenAt === "string" ? new Date(body.seenAt) : null;
+  if (seen && !isNaN(seen.getTime()) && body.confirmed !== true && d.devSideAt && d.devSideAt > seen) {
+    const dev = (await db.contract.findUnique({ where: { id: d.contractId }, include: { test: { include: { developer: true } } } }))?.test.developer;
+    throw new HttpError(409, "stop_once", "Press Decide again to go ahead.", { changes: [{ text: `${dev ? displayName(dev) : "The developer"} added their side at ${fmtTime(d.devSideAt)}: read it, then press Decide again.`, at: d.devSideAt }], devSide: d.devSide });
+  }
   const { review, other, listing, unlisted } = await disputeBounds(d);
   // A blank box keeps the pay as it is.
   const blank = body.total === undefined || body.total === null || String(body.total).trim() === "";
@@ -311,10 +317,10 @@ export async function addDevSide(dev: U, testId: string, body: Record<string, un
   const c = d ? await db.contract.findUnique({ where: { id: d.contractId }, include: { test: true } }) : null;
   if (!d || !c || c.testId !== testId || c.test.developerId !== dev.id) throw new HttpError(404, "not_found", "That dispute doesn't exist.");
   if (d.status !== "open") throw new HttpError(409, "decided", "This dispute was already decided.");
-  const text = typeof body.text === "string" ? body.text.trim().slice(0, 2000) : "";
+  // (Owner, Oct 30, batch 15 section 27) Optional, never stopped (no stop-once), up to 2,000 characters (refused beyond, never cut).
+  const text = readText(body.text, LIMITS.devSide, "dev_side");
   const ok = checkDevSide(text, !!d.devSideAt);
   if (!ok.ok) throw new HttpError(ok.message.startsWith("You already") ? 409 : 400, "dev_side", ok.message);
-  await devGateIfSeen(testId, body);
   await db.dispute.update({ where: { id: d.id }, data: { devSide: text, devSideAt: new Date() } });
   return { ok: true };
 }

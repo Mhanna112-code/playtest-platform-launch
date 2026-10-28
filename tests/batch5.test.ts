@@ -109,12 +109,14 @@ describe("batch 5 item 3: a restricted account's signed-in pages go to the dashb
   const heldDev = { isDeveloper: true, isTester: false, holdStartedAt: new Date(), holdReason: "unpaid" };
   const cbDev = { isDeveloper: true, isTester: false, holdStartedAt: new Date(), holdReason: "chargeback" };
   const susDev = { isDeveloper: true, isTester: false, devSuspendedAt: new Date() };
-  const closedPaths = ["/app/tests/x", "/app/tests/x/edit", "/app/tests/new", "/app/testers/x", "/app/developers/x", "/app/sessions/x", "/app/calls/x", "/app/find", "/app/find/x", "/app/messages", "/app/chat/x", "/app/profile"];
+  // (Batch 15 section 29) A test page itself (/app/tests/x) opens for a restricted developer in its restricted view.
+  const closedPaths = ["/app/tests/x/edit", "/app/tests/new", "/app/testers/x", "/app/developers/x", "/app/sessions/x", "/app/calls/x", "/app/find", "/app/find/x", "/app/messages", "/app/chat/x", "/app/profile"];
   const openPaths = ["/app", "/app/payments", "/app/account", "/app/account/blocked", "/app/help", "/app/notifications", "/app/switch"];
 
   it("only the dashboard, Payments, Settings and the bell list stay open: for a suspended tester and a suspended or held developer", () => {
     for (const u of [susTester, heldDev, cbDev, susDev]) {
       for (const p of closedPaths) expect(closedForSuspended(p, u), `${p} ${JSON.stringify(u)}`).toBe(true);
+      expect(closedForSuspended("/app/tests/x", u)).toBe(u === susTester);
       for (const p of openPaths) expect(closedForSuspended(p, u), p).toBe(false);
     }
     for (const p of openPaths) expect(openForRestricted(p), p).toBe(true);
@@ -126,7 +128,8 @@ describe("batch 5 item 3: a restricted account's signed-in pages go to the dashb
   it("a hold keeps the tester side of an account with both sides open; an admin suspension closes both; the page decides a chat or call by the role in it", () => {
     const both = { isDeveloper: true, isTester: true, holdStartedAt: new Date(), holdReason: "unpaid", side: "tester" };
     for (const p of ["/app/find", "/app/find/x", "/app/sessions/x", "/app/developers/x"]) expect(closedForSuspended(p, both, "tester"), p).toBe(false);
-    for (const p of ["/app/tests/x", "/app/tests/new", "/app/testers/x"]) expect(closedForSuspended(p, both, "developer"), p).toBe(true);
+    for (const p of ["/app/tests/x/edit", "/app/tests/new", "/app/testers/x"]) expect(closedForSuspended(p, both, "developer"), p).toBe(true);
+    expect(closedForSuspended("/app/tests/x", both, "developer")).toBe(false); // (batch 15 section 29) its restricted view
     expect(closedForSuspended("/app/profile", both, "tester")).toBe(false);
     expect(closedForSuspended("/app/profile", both, "developer")).toBe(true);
     // A chat or call: the layout leaves it to the page, which knows the role.
@@ -159,7 +162,8 @@ describe("batch 5 item 3: a restricted account's signed-in pages go to the dashb
       expect(src(f), f).toContain("requireOpenPage(");
       expect(src(f), f).toContain("leaveIfClosed(u,");
     }
-    for (const f of ["app/app/tests/[id]/page.tsx", "app/app/tests/[id]/edit/page.tsx", "app/app/tests/new/page.tsx"]) expect(src(f), f).toContain("requireOpenDevPage()");
+    for (const f of ["app/app/tests/[id]/edit/page.tsx", "app/app/tests/new/page.tsx"]) expect(src(f), f).toContain("requireOpenDevPage()");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("requireOpenPage(`/app/tests/${id}`)");
     const layout = src("app/app/layout.tsx");
     expect(layout).toContain("const off = restrictedOn(u, side);");
     for (const link of ['side === "developer" && !off', 'side === "tester" && !off', "{!off && <Link", "const messagesLink = off ? null"]) expect(layout, link).toContain(link);

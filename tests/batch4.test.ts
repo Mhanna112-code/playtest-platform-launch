@@ -69,7 +69,8 @@ describe("A3) a payment hold, a chargeback hold and a suspension are one state",
       if (how === "hold") await startHold(dev.user.id, "unpaid");
       else await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
       const code = how === "hold" ? "held" : "suspended";
-      for (const [action, body] of [["edit", { version: 1, fields: { title: "x" } }], ["stop", {}], ["end-early", { contractIds: [sessionId], reason: "Enough said" }], ["next-round", {}], ["invite", { testerIds: [tester.user.id] }], ["pay-extra", { contractId: sessionId, amount: "2.00" }], ["call-length", { callId: call.id, minutes: 20 }], ["message", { contractId: sessionId, body: "hi" }]] as const) {
+      // (Batch 15 section 29) Stop and End early now work from the restricted view (tested in batch15-paused); everything else is refused.
+      for (const [action, body] of [["edit", { version: 1, fields: { title: "x" } }], ["next-round", {}], ["invite", { testerIds: [tester.user.id] }], ["pay-extra", { contractId: sessionId, amount: "2.00" }], ["lower-length", { callId: call.id, minutes: 20, reason: "We stopped early." }], ["message", { contractId: sessionId, body: "hi" }]] as const) {
         const r = await act(testId, action, dev.cookie, { seenAt: seen(), confirmed: true, ...body });
         expect(r.status, `${how} ${action}`).toBe(403);
         expect(r.body.error.code, `${how} ${action}`).toBe(code);
@@ -430,7 +431,9 @@ describe("follow-up 4) the redirect for a restricted developer", () => {
   it("is decided before anything else renders, by the layout and by the page itself, and the pulse says restricted", async () => {
     const layout = src("app/app/layout.tsx");
     expect(layout.indexOf("closedForSuspended(path, u, side)")).toBeLessThan(layout.indexOf("db.notification.count"));
-    for (const f of ["app/app/tests/[id]/page.tsx", "app/app/tests/[id]/edit/page.tsx", "app/app/tests/new/page.tsx"]) expect(src(f), f).toContain("requireOpenDevPage");
+    for (const f of ["app/app/tests/[id]/edit/page.tsx", "app/app/tests/new/page.tsx"]) expect(src(f), f).toContain("requireOpenDevPage");
+    // (Batch 15 section 29) The test page opens in its restricted view: decided first, by the page's own path.
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("const u = await requireOpenPage(`/app/tests/${id}`);");
     expect(src("components/SessionWatch.tsx")).toContain('window.location.replace("/app")');
     const { dev, testId } = await setup();
     await startHold(dev.user.id, "unpaid");

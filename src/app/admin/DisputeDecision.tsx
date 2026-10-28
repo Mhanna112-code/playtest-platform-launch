@@ -1,6 +1,6 @@
 "use client";
-import { useRef, useState } from "react";
-import { api, errOf } from "@/lib/client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ApiError, api, errOf } from "@/lib/client";
 import { checkFields } from "@/components/FieldChecks";
 import { LIMITS } from "@/lib/limits";
 import { counterText, reasonTooLong } from "@/lib/rules";
@@ -12,14 +12,28 @@ const dollars = (c: number) => `$${(c / 100).toFixed(2)}`;
  * what was already paid for that part on other pieces (max; batch 10: for an unlisted part, its max of $1000 or $200/h × the logged minutes, minus what was already paid). Blank keeps the pay as it is. Range hint next to the box,
  * red at the box when it is left with an amount outside it.
  */
-export function DisputeDecision({ id, minCents, maxCents }: { id: string; minCents: number; maxCents: number }) {
+export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", sideAt: sideAt0 = null, dev = "The developer" }: { id: string; minCents: number; maxCents: number; side?: string; sideAt?: string | null; dev?: string }) {
   const root = useRef<HTMLDivElement>(null);
+  // (Owner, Oct 30, batch 15 section 27) The developer's side appears live ("added <time>"); a Decide pressed before reading one that arrived after the page loaded stops once.
+  const loaded = useMemo(() => new Date().toISOString(), []);
+  const [side, setSide] = useState({ text: side0, at: sideAt0 });
+  const [stopped, setStopped] = useState(false);
+  useEffect(() => {
+    if (side.text) return;
+    const t = setInterval(async () => {
+      if (document.visibilityState !== "visible") return;
+      const r = await fetch(`/api/admin/dispute?id=${encodeURIComponent(id)}`, { cache: "no-store" }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+      if (r && r.devSide) setSide({ text: r.devSide, at: r.devSideAt });
+    }, 10_000);
+    return () => clearInterval(t);
+  }, [id, side.text]);
   const [total, setTotal] = useState("");
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   return (
     <div ref={root} className="space-y-2">
+      {side.text && <p data-dev-side="">Developer&apos;s side{side.at ? ` (added ${new Date(side.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })})` : ""}: “{side.text}”</p>}
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-sm" htmlFor={`total-${id}`}>Total pay for this piece</label>
         <span>$</span>
@@ -41,11 +55,15 @@ export function DisputeDecision({ id, minCents, maxCents }: { id: string; minCen
             setBusy(true);
             setMsg(null);
             try {
-              await api("/api/admin/decide", { id, total, note });
+              await api("/api/admin/decide", { id, total, note, seenAt: loaded, confirmed: stopped });
               setMsg({ ok: true, text: "Done." });
               setTimeout(() => window.location.reload(), 600);
             } catch (e) {
-              setMsg({ ok: false, text: errOf(e) });
+              if (e instanceof ApiError && e.code === "stop_once") {
+                setStopped(true);
+                if (typeof e.data.devSide === "string") setSide((s) => ({ text: e.data.devSide as string, at: s.at ?? new Date().toISOString() }));
+                setMsg({ ok: false, text: `Your Decide didn't go through. ${((e.data.changes as { text: string }[]) ?? []).map((c) => c.text).join(" ")}` });
+              } else setMsg({ ok: false, text: errOf(e) });
             } finally {
               setBusy(false);
             }
@@ -53,7 +71,7 @@ export function DisputeDecision({ id, minCents, maxCents }: { id: string; minCen
         >
           Decide
         </button>
-        {msg && <span className={msg.ok ? "ok" : "err"}>{msg.text}</span>}
+        {msg && <span className={msg.ok ? "ok" : stopped && msg.text.startsWith("Your Decide") ? "info" : "err"} data-decide-msg="">{msg.text}</span>}
       </div>
     </div>
   );

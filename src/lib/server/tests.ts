@@ -513,13 +513,21 @@ export async function tellCancelled(list: { email: string; startsAt: Date; contr
   for (const c of list) await notify(c.email, callCancelledLine(c.startsAt, why), [callCancelledLine(c.startsAt, why)], `/app/sessions/${c.contractId}${c.callId ? `#call-${c.callId}` : ""}`);
 }
 
+/** (Batch 15 section 37) Is this test paused for its developer right now (the team's pause, a payment or chargeback hold, a developer-side suspension)? */
+async function pausedForDeveloper(tx: Tx, t: { adminPausedAt: Date | null }, devId: string) {
+  if (t.adminPausedAt) return true;
+  const d = await tx.user.findUnique({ where: { id: devId }, select: { holdStartedAt: true, devSuspendedAt: true } });
+  return !!(d?.holdStartedAt || d?.devSuspendedAt);
+}
+
 export async function stopTest(dev: U, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
   let cancelled: Awaited<ReturnType<typeof cancelCallsAhead>> = [];
   const contracts = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped." + (await staleNote(testId, body.seenAt)));
-    await topPanelGate(tx, testId, body);
+    // (Owner, Oct 30, batch 15 sections 23, 29 and 37) While the test is paused (any cause) Stop goes through silently: no stop-once.
+    if (!(await pausedForDeveloper(tx, t, dev.id))) await topPanelGate(tx, testId, body);
     const cs = await tx.contract.findMany({ where: working(testId), include: { tester: true } });
     await tx.contract.updateMany({ where: working(testId), data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The developer stopped the test." } });
     cancelled = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
@@ -560,7 +568,8 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
       if (c.status !== "working") throw new HttpError(409, "gone", `${name}'s work already ended.` + (await staleNote(testId, body.seenAt)));
       list.push(c);
     }
-    await topPanelGate(tx, testId, body);
+    // (Batch 15 sections 23, 29 and 37) While paused (any cause) End early goes through silently too.
+    if (!(await pausedForDeveloper(tx, lockedTest, dev.id))) await topPanelGate(tx, testId, body);
     for (const c of list) {
       await tx.contract.update({ where: { id: c.id }, data: { status: "ended", endKind: "early", endedAt: new Date(), endReason: reason } });
       cancelled = cancelled.concat(await cancelCallsAhead(tx, [c.id], "The developer ended the work early."));

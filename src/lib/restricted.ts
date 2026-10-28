@@ -47,8 +47,13 @@ export function testerRestricted(u: Restrictable & { isDeveloper?: boolean; isTe
   return !u.isDeveloper || using === "tester";
 }
 
-/** The press verbs that still work for a restricted developer (everything else is refused on the server): only Cancel call, from the dashboard's Calls box. */
-export const RESTRICTED_OK_ACTIONS = new Set(["cancel-call"]);
+/**
+ * The press verbs that still work for a restricted developer (everything else is refused on the server). (Owner, Oct 30, batch 15 sections 27, 29 and 37) Stop the
+ * test, End early and Cancel call, from the restricted view of a test page (and Cancel call from the dashboard's Calls box); and the developer's side of a dispute.
+ */
+export const RESTRICTED_OK_ACTIONS = new Set(["cancel-call", "stop", "end-early", "dispute-side"]);
+/** (Batch 15 section 23) What still works on a test the team paused (the same pair, plus chat and the side of a dispute). */
+export const TEAM_PAUSED_OK_ACTIONS = new Set(["stop", "end-early", "cancel-call", "message", "dispute-side"]);
 
 /** What a refused press tells the developer (the blue box at the dashboard top says the rest). */
 export const RESTRICTED_LINE: Record<DevRestriction, string> = {

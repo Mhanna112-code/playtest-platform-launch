@@ -12,7 +12,7 @@ import { startedCounting, asListing, deleteDraft, editTest, endEarly, nextRound,
 import { keyBoxes } from "@/lib/server/accessKeys";
 import { getUserFromRequest } from "@/lib/server/session";
 import { failedLine, requireActive, requireConfirmed } from "@/lib/server/users";
-import { RESTRICTED_OK_ACTIONS } from "@/lib/restricted";
+import { RESTRICTED_OK_ACTIONS, TEAM_PAUSED_OK_ACTIONS } from "@/lib/restricted";
 
 // (Owner, Oct 27) Email confirmation is needed only for Post a test (its own route), Join (which is also accepting an invite) and Apply. A blocked press is a blue notice under the button with Resend the link.
 const NEEDS_CONFIRMED = new Set(["join", "apply", "post-draft"]);
@@ -21,7 +21,7 @@ import { logTestAction } from "@/lib/server/actionText";
 
 type Ctx = { params: Promise<{ id: string; action: string }> };
 
-/** (Owner, Oct 27) A suspended or held developer: only Cancel call works (from the dashboard's Calls box). No Stop, no End early. */
+/** (Owner, Oct 30, batch 15 section 29) A suspended or held developer: Stop, End early and Cancel call (and the side of a dispute). */
 const SUSPENDED_OK = RESTRICTED_OK_ACTIONS;
 
 /** (Design doc 5) The Edit page's live view of the test: its listing and version, and the In use / Free access keys. */
@@ -70,7 +70,8 @@ async function adminRefusal(req: Request, userId: string, testId: string, action
   if (t.adminStoppedAt && !STOPPED_ALLOWS.has(action)) throw new HttpError(409, "admin_stopped", "The team stopped this test.", { failed: await failedLine(req) });
   if (t.adminStoppedAt) return;
   // (Batch 15 section 1) Chat is never closed by a paused test.
-  if (t.adminPausedAt && action !== "stop" && action !== "message") throw new HttpError(409, "admin_paused", "The team paused this test: you can only stop it.", { failed: await failedLine(req) });
+  // (Batch 15 sections 23 and 37) A test the team paused: Stop, End early and Cancel call (and chat, and the side of a dispute); every other press goes to the banner.
+  if (t.adminPausedAt && !TEAM_PAUSED_OK_ACTIONS.has(action)) throw new HttpError(409, "admin_paused", "The team paused this test: you can stop it, end testers' work early, or cancel calls.", { failed: await failedLine(req) });
 }
 
 async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, action: string, body: Record<string, unknown>) {

@@ -126,7 +126,8 @@ describe("batch 7 item 4: stop-once on every press still allowed", () => {
     stops(await pay(dev.cookie, { kind: "submission", id: subA.id, amount: "10.00", tickedCents: 1000, seenAt: loaded }), "pay");
     stops(await act(testId, "pay-extra", dev.cookie, { contractId: b.sessionId, submissionId: subB.id, amount: "2.00", tickedCents: 200, seenAt: loaded }), "extra pay");
     stops(await act(testId, "lower-length", dev.cookie, { callId: call.id, minutes: 25, reason: "We stopped early.", seenAt: loaded }), "lower the length");
-    stops(await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "They skipped two answers", seenAt: loaded }), "dispute side");
+    // (Batch 15 section 27) The side of a dispute never stops.
+    expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "They skipped two answers", seenAt: loaded })).status).toBe(200);
     stops(await act(testId, "rate", dev.cookie, { contractId: a.sessionId, stars: 4, seenAt: loaded }), "rate");
   });
 

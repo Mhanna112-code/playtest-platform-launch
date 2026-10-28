@@ -51,7 +51,10 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
           <p><b>{d.head}</b></p>
           <p>{d.money}</p>
           <p>{d.said}</p>
-          {d.open ? <DisputeDecision id={d.id} minCents={d.min} maxCents={d.max} /> : <p className="note">{d.decided}</p>}
+          {d.open ? <DisputeDecision id={d.id} minCents={d.min} maxCents={d.max} side={d.devSide ?? ""} sideAt={d.devSideAt ?? null} dev={d.dev ?? "The developer"} /> : <>
+            {d.devSide && <p>Developer&apos;s side: “{d.devSide}”</p>}
+            <p className="note">{d.decided}</p>
+          </>}
         </div>
       );
     }
