@@ -52,7 +52,7 @@ describe("Edit (design doc 5)", () => {
     const { dev, testId } = await setup({ openUntil: new Date(Date.now() + 20 * day).toISOString().slice(0, 10) });
     const r = await edit(testId, dev.cookie, { openUntil: new Date(Date.now() + 40 * day).toISOString().slice(0, 10) });
     expect(r.status).toBe(400);
-    expect(r.body.error.message).toBe("Open until can be at most 30 days from today.");
+    expect(r.body.error.message).toMatch(/^Open until can be at most 30 days after the test opened \([A-Z][a-z]{2} \d{1,2}\)\.$/); // (batch 16 section 16) 30 days after the test opened
     expect((await edit(testId, dev.cookie, { openUntil: new Date(Date.now() + 25 * day).toISOString().slice(0, 10) })).status).toBe(200);
     const shorter = await edit(testId, dev.cookie, { openUntil: new Date(Date.now() + 15 * day).toISOString().slice(0, 10) });
     expect(shorter.status).toBe(400);

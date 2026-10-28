@@ -14,7 +14,7 @@ import { NotSentTag, useKept } from "@/lib/useKept";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { keyNeedLine, parseKeys, tickedInUseLine } from "@/lib/keys";
-import { DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, testerDaysHint, type Listing } from "@/lib/rules";
+import { OPEN_UNTIL_MAX_LINE, editTesterDaysHint, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, testerDaysHint, type Listing } from "@/lib/rules";
 /** The browser's own date (YYYY-MM-DD) and zone. */
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone ?? ""; } catch { return ""; } };
@@ -101,6 +101,8 @@ type EditProps = {
   criticalCounts: CriticalCounts; everJoined: boolean;
   /** When the test opened (the deadline must leave 3 days inside Open until from here). */
   openedAt: string;
+  /** (Batch 16 section 16) The last day Open until can reach (30 days after the test opened), and each tester's days now. */
+  capDay?: string; testerDays?: number;
 };
 
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -361,6 +363,8 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
   };
   const tomorrow = useLocalMin(24 * 60, true), in3 = useLocalMin(3 * 24 * 60, true), monthOut = useLocalMin(30 * 24 * 60, true);
   const minOpen = edit ? tomorrow : in3;
+  // (Batch 16 section 16) Edit: up to 30 days after the test opened (a date already past it stays as it is: it just can't move later).
+  const capMax = edit?.capDay ? (base.openUntil && base.openUntil.slice(0, 10) > edit.capDay ? base.openUntil.slice(0, 10) : edit.capDay) : monthOut;
   const limit = spotsLimit ?? LIMITS.spots.max;
   const redLine = (t: string) => (t ? <p className="err-field mt-1" role="alert">{t}</p> : null);
 
@@ -512,9 +516,12 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
             {spotsLimit != null && <p className="mt-1 text-xs text-slate-500">{limitHint(spotsLimit)}</p>}
           </div>
           <div>
-            {text("openUntil", "Open until (last day to join)", { req: true, type: "date", cls: "max-w-[12rem]", hint: edit ? "only later, up to 30 days from today" : "3 to 30 days from today", attrs: { min: minOpen, max: monthOut, "data-msg": edit ? "Open until must be a date in the future." : OPEN_UNTIL_RANGE, "data-max-msg": "Open until can be at most 30 days from today.", "data-required-msg": OPEN_UNTIL_RANGE, ...(showOn("openUntil") && ouLine ? { "data-red-msg": ouLine } : {}) } })}
+            {text("openUntil", "Open until (last day to join)", { req: true, type: "date", cls: "max-w-[12rem]", hint: edit?.capDay ? openUntilCapHint(edit.capDay) : edit ? "only later, up to 30 days from today" : "3 to 30 days from today", attrs: { min: minOpen, max: capMax, "data-msg": edit ? "Open until must be a date in the future." : OPEN_UNTIL_RANGE, "data-max-msg": edit?.capDay ? openUntilCapLine(edit.capDay) : OPEN_UNTIL_MAX_LINE, "data-required-msg": OPEN_UNTIL_RANGE, ...(showOn("openUntil") && ouLine ? { "data-red-msg": ouLine } : {}) } })}
             {/* (Owner, Oct 30, batch 15 section 18) Live: "Each tester gets the same time from when they join: today to this date (14 days)." */}
-            {f.openUntil && /^\d{4}-\d{2}-\d{2}$/.test(f.openUntil) && daysBetween(localToday(), f.openUntil) > 0 && <p className="mt-1 text-xs text-slate-400" data-tester-days="">{testerDaysHint(daysBetween(localToday(), f.openUntil))}</p>}
+            {/* (Batch 16 section 16) Edit: what each tester gets after the change (their days now + the extension); Post: today to this date. */}
+            {f.openUntil && /^\d{4}-\d{2}-\d{2}$/.test(f.openUntil) && (edit?.testerDays != null
+              ? <p className="mt-1 text-xs text-slate-400" data-tester-days="">{editTesterDaysHint(edit.testerDays, Math.max(0, daysBetween(base.openUntil.slice(0, 10), f.openUntil)))}</p>
+              : daysBetween(localToday(), f.openUntil) > 0 && <p className="mt-1 text-xs text-slate-400" data-tester-days="">{testerDaysHint(daysBetween(localToday(), f.openUntil))}</p>)}
             {showOn("openUntil") && redLine(ouLine)}
           </div>
         </div>

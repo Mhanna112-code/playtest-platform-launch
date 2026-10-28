@@ -218,6 +218,21 @@ export const counterText = (n: number, max: number) => `${n.toLocaleString("en-U
 
 /** (Batch 12 section 6; batch 15 section 18) Open until's range on Post. */
 export const OPEN_UNTIL_RANGE = "Set Open until (the last day to join) 3 to 30 days from today.";
+/** Post: at most 30 days from today. */
+export const OPEN_UNTIL_MAX_LINE = "Open until can be at most 30 days from today.";
+/**
+ * (Owner, Oct 28, batch 16 section 16) The cap on Edit: Open until can be at most 30 days after the test (or its current Next round) OPENED, in the developer's
+ * own date (the same moment tester days count from), so tester days never pass 30. Pause and outage shifts may still move it past the cap.
+ */
+export const openUntilCapDay = (openedAt: Date, tz?: string | null) => new Date(openedAt.getTime() + 30 * 86_400_000).toLocaleDateString("en-CA", { timeZone: safeZone(tz) });
+const capLabel = (capDay: string) => new Date(`${capDay}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+/** "Open until can be at most 30 days after the test opened (Dec 6)." (the field's red line and the server's message) */
+export const openUntilCapLine = (capDay: string) => `Open until can be at most 30 days after the test opened (${capLabel(capDay)}).`;
+/** Edit's hint next to Open until: "only later, up to Dec 6 (30 days after the test opened)". */
+export const openUntilCapHint = (capDay: string) => `only later, up to ${capLabel(capDay)} (30 days after the test opened)`;
+/** Edit's live hint: what each tester gets after the change: "Each tester gets 19 days from when they join (14 now + 5)." */
+export const editTesterDaysHint = (now: number, more: number) =>
+  more > 0 ? `Each tester gets ${now + more} days from when they join (${now} now + ${more}).` : `Each tester gets ${now} day${now === 1 ? "" : "s"} from when they join.`;
 
 // ---------- (Owner, Oct 30, batch 15 section 18) Every tester gets the same number of days; Open until is the last day to JOIN ----------
 
@@ -293,7 +308,9 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
     if (!d) errs.push(OPEN_UNTIL_RANGE);
     else if (isNaN(d.getTime())) errs.push("Enter the Open until date like 2026-12-01.");
     else if (d.toISOString().slice(0, 10) <= day(0)) errs.push("Open until must be a date in the future.");
-    else if (d.toISOString().slice(0, 10) > day(LIMITS.openUntilMaxDays)) errs.push(`Open until can be at most ${LIMITS.openUntilMaxDays} days from today.`);
+    // (Batch 16 section 16) Edit: at most 30 days after the test opened (a test already past it keeps its date; it just can't move later). Post: 30 days from today.
+    else if (ctx.edit && ctx.openedAt && d.toISOString().slice(0, 10) > openUntilCapDay(ctx.openedAt, ctx.tz)) errs.push(openUntilCapLine(openUntilCapDay(ctx.openedAt, ctx.tz)));
+    else if (!(ctx.edit && ctx.openedAt) && d.toISOString().slice(0, 10) > day(LIMITS.openUntilMaxDays)) errs.push(OPEN_UNTIL_MAX_LINE);
     else if (!ctx.edit && d.toISOString().slice(0, 10) < day(LIMITS.openUntilMinDays)) errs.push(OPEN_UNTIL_RANGE);
   }
   // (4) Product name and the test's own name: 60 characters each; the instructions 1,000, required.

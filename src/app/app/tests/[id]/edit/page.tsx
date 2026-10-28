@@ -1,5 +1,6 @@
 import { hasPerks } from "@/lib/server/subscription";
 import { countsOf } from "@/lib/limits";
+import { openUntilCapDay, testerDaysOf } from "@/lib/rules";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireOpenDevPage } from "@/lib/server/page-auth";
@@ -38,7 +39,7 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
           <p className="note">Edit changes the listing for new testers only. Testers already in keep the contract they joined on.</p>
           <TestForm
             init={asListing(t)}
-            edit={{ id, version: t.version, testersIn, draft: t.status === "draft", seenAt, keys: await keyBoxes(id), criticalCounts: countsOf(t.criticalCounts), everJoined: !!(await startedCounting(t)) /* (batch 14) first join, application or invite */, openedAt: t.createdAt.toISOString() }}
+            edit={{ id, version: t.version, testersIn, draft: t.status === "draft", seenAt, keys: await keyBoxes(id), criticalCounts: countsOf(t.criticalCounts), everJoined: !!(await startedCounting(t)) /* (batch 14) first join, application or invite */, openedAt: t.createdAt.toISOString(), capDay: openUntilCapDay(t.createdAt, u.timeZone), testerDays: t.openUntil ? t.testerDays ?? testerDaysOf(t.createdAt, t.openUntil) : undefined }}
             spotsLimit={(await testerCapacity(u.id)).limit}
             perks={await hasPerks(u)}
           />

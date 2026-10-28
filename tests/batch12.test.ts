@@ -164,7 +164,7 @@ describe("batch 12 item 6: Open until is required and is every tester's deadline
     const a = await joined(testId);
     expect((await db.contract.findUniqueOrThrow({ where: { id: a.sessionId } })).dueAt.getTime()).toBe(t.openUntil!.getTime());
     const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
-    expect((await act(testId, "edit", dev.cookie, { version: v, fields: { openUntil: day(31) } })).body.error.message).toBe("Open until can be at most 30 days from today.");
+    expect((await act(testId, "edit", dev.cookie, { version: v, fields: { openUntil: day(31) } })).body.error.message).toMatch(/^Open until can be at most 30 days after the test opened \([A-Z][a-z]{2} \d{1,2}\)\.$/); // (batch 16 section 16)
     expect((await act(testId, "edit", dev.cookie, { version: v, fields: { openUntil: day(20) }, seenAt: seen(), confirmed: true })).status).toBe(200);
     const t2 = await db.test.findUniqueOrThrow({ where: { id: testId } });
     expect((await db.contract.findUniqueOrThrow({ where: { id: a.sessionId } })).dueAt.getTime()).toBe(t2.openUntil!.getTime());
