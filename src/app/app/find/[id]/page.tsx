@@ -25,6 +25,7 @@ import { sideLink } from "@/lib/sides";
 import { canAskToRejoin, leftText } from "@/lib/rules";
 import { heldBrokenKey } from "@/lib/server/accessKeys";
 import { profileTestRefusal } from "@/lib/server/profileOpenTests";
+import { inviteOnlyHidden, noteJoinPageVisit } from "@/lib/server/testVisits";
 
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
@@ -46,6 +47,8 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
   if (!t || (t.status === "draft" && !isAdmin(u))) notFound();
   const mine = await db.contract.findUnique({ where: { testId_testerId: { testId: id, testerId: u.id } } });
   if (mine && mine.status === "working") redirect(`/app/sessions/${mine.id}`);
+  // (Owner, Oct 28, batch 17 §18) A tester opening the join page of a test they're not in (never joined): "Tests visited" on their dashboard, last visit first.
+  await noteJoinPageVisit(u, t, isAdmin(u));
   // (Owner, Oct 28, batch 17 section 9) A press on a developer profile's "Open tests" from a page opened before the test left that list: the usual refusal,
   // nothing of the listing (the profile drops it when shown again).
   const gone = from === "profile" && !isAdmin(u) ? await profileTestRefusal(id, u.id) : "";
@@ -74,7 +77,10 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
   const involved = !!mine || !!invite || t.developerId === u.id || (await db.application.count({ where: { testId: id, testerId: u.id } })) > 0 || (await db.invite.count({ where: { testId: id, testerId: u.id } })) > 0;
   // (Owner, Oct 28, batch 16 section 11) A block either way hides that developer's tests this tester was never part of (no contract, invite or application): the
   // same line, nothing of the listing, never the reason.
-  if (((paused && !involved) || (blocked && !involved && t.developerId !== u.id)) && !isAdmin(u)) {
+  // (Owner, Oct 28, batch 17 §18) An open invite-only test for a tester who isn't invited, applying or in it (as from a profile, batch 17 §9): the same line,
+  // nothing of the listing ("Invite only" on their Tests visited card). A tester who was in it before keeps the page as it is (Ask to rejoin).
+  const inviteOnly = !isAdmin(u) && (await inviteOnlyHidden(t, u.id));
+  if (((paused && !involved) || inviteOnly || (blocked && !involved && t.developerId !== u.id)) && !isAdmin(u)) {
     return (
       <div className="mx-auto max-w-3xl space-y-6">
         <p><a href="/app/find">← All tests</a></p>
@@ -144,7 +150,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
 
       {/* (An invitation shows here, as in the full app: who invited you, how long you'd have, No thanks.) */}
       {invite && !blocked && (
-        <section className="card flex flex-wrap items-start gap-3 border-emerald-400/30">
+        <section className="card flex flex-wrap items-start gap-3 border-emerald-400/30" id="invitation">
           <div className="min-w-0 flex-1 space-y-1">
             <p className="font-semibold text-white">{dev} invited you</p>
             <p className="text-sm text-slate-300" data-join-deadline="">Your deadline: {dueIfNow}</p>

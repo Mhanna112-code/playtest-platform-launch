@@ -74,7 +74,8 @@ for (const who of ["the developer blocks the tester", "the tester blocks the dev
 describe("the pages (section 11)", () => {
   it("the listing hides a blocked developer's test the tester was never part of, with the paused test's line; the profile is not found", () => {
     const page = src("app/app/find/[id]/page.tsx");
-    expect(page).toContain("if (((paused && !involved) || (blocked && !involved && t.developerId !== u.id)) && !isAdmin(u)) {");
+    // (Batch 17 §18) The same line also covers an open invite-only test for a tester who isn't invited, applying or in it.
+    expect(page).toContain("if (((paused && !involved) || inviteOnly || (blocked && !involved && t.developerId !== u.id)) && !isAdmin(u)) {");
     expect(page).toContain("This test isn&apos;t available right now.");
     expect(src("app/app/developers/[id]/page.tsx")).toMatch(/db\.block\.count\(\{ where: \{ OR: \[\{ blockerId: viewer\.id, blockedId: p\.id \}, \{ blockerId: p\.id, blockedId: viewer\.id \}\] \} \}\)/);
   });

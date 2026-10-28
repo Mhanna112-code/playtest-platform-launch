@@ -31,6 +31,7 @@ import { disputesForSide } from "@/lib/server/disputes";
 import { DismissRemoved } from "./DismissRemoved";
 import { ScrollList } from "@/components/ScrollList";
 import { DevSearch } from "./DevSearch";
+import { TestsVisited } from "./TestsVisited";
 import { devSearchRows } from "@/lib/server/testerSearch";
 import { rejoinAskLine } from "@/lib/server/joining";
 import { pronouns } from "@/lib/format";
@@ -620,6 +621,9 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
           <ScrollList className="space-y-2">{left.map((c) => leftCard(c))}</ScrollList>
         </section>
       )}
+
+      {/* (Batch 17 §18) Join pages opened but never joined, with each test's state now (live on the dashboard's poll). */}
+      {!suspended && <TestsVisited testerId={userId} />}
 
       {!suspended && (
         <section className="space-y-3">

@@ -107,6 +107,8 @@ model User {
   chatReads ChatRead[]
   keptForms KeptForm[]
   excerpts  Excerpt[]
+  /// (Batch 17 §18) Join pages this tester opened while not in the test ("Tests visited")
+  testVisits TestVisit[]
 }
 
 /// (Batch 15 section 7) Sign-in and sign-up attempts, for the limits (5 failed tries per email or 20 per network in 15 minutes; 10 new accounts per network an hour).
@@ -238,6 +240,7 @@ model Test {
   invites   Invite[]
   accessKeys AccessKey[]
   excerpts   Excerpt[]
+  visits     TestVisit[]
   /// Open until heads-up notices sent (3 days and 1 day before)
   notified3d Boolean @default(false)
   /// Countdown notices already sent for Open until: "1m" | "1w" | "3d" | "1d". (Batch 16 section 1) Also each working tester's own deadline marks,
@@ -992,4 +995,19 @@ model Excerpt {
 
   @@index([testerId, status])
   @@index([testId, status])
+}
+
+/// (Batch 17 §18) A test whose join page this tester opened while not in it (no contract): the tester dashboard's "Tests visited", most recent visit first.
+/// One row per tester and test (`visitedAt` = the last visit). Remove deletes the row; opening the join page again brings it back.
+model TestVisit {
+  id        String   @id @default(cuid())
+  testerId  String
+  tester    User     @relation(fields: [testerId], references: [id], onDelete: Cascade)
+  testId    String
+  test      Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  visitedAt DateTime @default(now())
+
+  @@unique([testerId, testId])
+  @@index([testerId, visitedAt])
+  @@index([testId])
 }

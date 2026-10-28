@@ -27,6 +27,12 @@ export async function GET(req: Request) {
       const full = open.filter((i) => (working.find((w) => w.testId === i.testId)?._count._all ?? 0) >= i.test.spots).map((i) => i.id);
       return ok({ v: [invs.map((i) => `${i.id}:${i.status}:${i.updatedAt.getTime()}:${i.test.status}`).join(","), full.join(",")].join("|"), restricted: false });
     }
+    // (Batch 17 §18) The tester dashboard's "Tests visited": a listed test's state changing (filling, pausing, stopping, an invite or application of theirs…), a card
+    // removed in another tab or a test joined refreshes it.
+    if (q.get("visited")) {
+      const { visitedTestsV } = await import("@/lib/server/testVisits");
+      return ok({ v: await visitedTestsV(u.id), restricted: false });
+    }
     // (Owner, Oct 28, batch 17 section 9) A developer's profile seen by someone else: its "Open tests" as this viewer may see them (a test filling up, pausing,
     // stopping, passing Open until, turning invite only for them or their invite closing leaves the list; a newly open test appears).
     const profileId = q.get("profile");
