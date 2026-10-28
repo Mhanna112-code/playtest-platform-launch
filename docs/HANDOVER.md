@@ -83,10 +83,10 @@ Written Oct 27, 2026, from a read of the code at commit `5f057a3` (batch 14).
 | **Tests and Edit** | Post, edit (with the per-field 3-change limit), drafts and Next round, stop, end early; the contract snapshot; Switch / Keep offers; question sets | server/tests, server/terms, `src/lib/limits.ts`, `src/lib/answerSets.ts`, `src/lib/questions.ts`, `src/lib/byQuestion.ts`, `app/app/tests/TestForm.tsx`, `tests/new`, `tests/[id]/edit`, `api/tests/route.ts`, `api/tests/[id]/[action]` | `createTest`, `editTest`, `postDraft`, `openDraft`, `deleteDraft`, `stopTest`, `endEarly`, `nextRound`, `parseListing`, `stampCounting`, `startedCounting`, `CLOSING_FIELDS`, `INFO_FIELDS`; limits: `CRITICAL_FIELDS`, `PART_FIELDS`, `countsOf`, `countersOf`, `lockedFields`, `countingSince`, `criticalLine`; rules: `checkListing`, `contractSnapshot`, `editCheck`, `termsDiff`; terms: `offerNewTerms`, `decideTerms`, `testerTermsGate`; answer sets: `itemsOf`, `prevSetsOf`, `carryOver`, `pushPrev` |
 | **Joining, invites, applications** | Join, Apply, invite-only, Ask to rejoin, Leave, test capacity, invites and their re-send after an edit | server/joining, server/invites, server/tests (`joinTest`, `leaveTest`), server/capacity, `src/lib/capacity.ts`, `src/lib/gaps.ts`, `app/app/find/[id]/JoinBox.tsx`, `tests/[id]/Applications.tsx`, `InvitePanel.tsx`, `api/invites/[id]` | `join`, `apply`, `withdrawApplication`, `decideApplication`, `askToRejoin`, `joinRefusal`, `listingGate`, `closeApplicationsAfterEdit`, `joinTest`, `closeOnFull`, `leaveTest`, `invitable`, `inviteTesters`, `cancelInvite`, `reinviteAfterEdit`; rules: `joinCheck`, `inviteTestRefusal`, `inviteTesterRefusal`, `canAskToRejoin` |
 | **Access keys** | Keys typed in Edit; the oldest free key is given at join; testers report a broken key; the read-only Access keys notice | server/accessKeys, `src/lib/keys.ts`, `tests/KeyBoxes.tsx`, `tests/[id]/KeysNotice.tsx`, `sessions/[id]/KeyBox.tsx` | `assignKeyAtJoin`, `keyBoxes`, `reportKeyBroken`, `planKeyChange`, `applyKeyChange`, `checkTypedKeys`, `openSpotsOf`; `parseKeys`, `keyRefusal` |
-| **Calls and requests** | Call requests from either side (once, daily, weekly, Forever), booking, cancelling, joining the room, call length, no-shows, `.ics` files | server/requests, server/calls, server/blocks (`joinCall`, `callStatus`), `src/lib/callRows.ts`, `src/lib/ics.ts`, `tests/[id]/DevCallPanel.tsx`, `sessions/[id]/TesterCallPanel.tsx`, `components/CallRequests.tsx`, `app/app/calls/[id]/CallRoom.tsx`, `api/calls/[id]/*` | `devRequestTime`, `testerRequestTime`, `answerRequest`, `closeRequests`, `cancelCallSet`, `topUpForeverSets`, `devCancelCall`, `testerCancelCall`, `setCallLength`, `reportNoShow`, `sweepNobodyJoined`, `joinCall`; rules: `canCancelCall`, `checkCancel`, `joinCallRefusal`, `callJoinable`, `callOutcome`, `checkActualMinutes` |
+| **Calls and requests** | Call requests from either side (once, daily, weekly, Forever), booking, cancelling, joining the room, measured call length, no-shows, `.ics` files | server/requests, server/calls, server/blocks (`joinCall`, `callStatus`), `src/lib/callRows.ts`, `src/lib/ics.ts`, `tests/[id]/DevCallPanel.tsx`, `sessions/[id]/TesterCallPanel.tsx`, `components/CallRequests.tsx`, `app/app/calls/[id]/CallRoom.tsx`, `api/calls/[id]/*` | `devRequestTime`, `testerRequestTime`, `answerRequest`, `closeRequests`, `cancelCallSet`, `topUpForeverSets`, `devCancelCall`, `testerCancelCall`, `lowerCallLength`, `heartbeat`, `finishMeasuring`, `reportNoShow`, `sweepNobodyJoined`, `joinCall`; `src/lib/callMeasure.ts`: `measureOverlap`, `measureIsFinal`, `callMinutesOf`, `callLengthLine`, `callOverBadge`, `callIsOver`, `CALLS_TOTAL_CENTS`; server/callMoney: `callsUsedCents`, `callsLeftCents`, `ceilingRefusal`; rules: `canCancelCall`, `checkCancel`, `joinCallRefusal`, `callJoinable` (batch 15 §15, §34, §40, §42: the app measures each call from the call page's heartbeats, `api/calls/[id]/presence`; nobody enters a length) |
 | **Submissions, recordings, attachments** | Written answers (formatted, up to 50,000 characters, stored as question sets), the Recording part (up to 5 recordings sent together), files and recordings attached to written parts, kept drafts | server/tests (`sendWritten`), server/recordings, server/storage, server/kept, `src/lib/upload.ts`, `src/lib/markdown.ts`, `src/lib/useKept.tsx`, `components/Formatted.tsx`, `ScreenRecorder.tsx`, `sessions/[id]/RecordingUpload.tsx`, `WrittenAttachments.tsx`, `api/recordings/[id]/upload`, `api/recordings/[id]/file`, `api/kept` | `sendWritten`, `startRecording`, `finishRecording`, `removeRecording`, `sendRecording`, `canView`, `uploadTarget`, `viewUrl`, `saveLocal`, `readLocal`, `r2On`, `uploadToSession`, `parseFormatted`, `getKept`, `setKept`; rules: `checkWrittenLength`, `WRITTEN_MAX_CHARS` |
-| **Review, Pay and caps** | One Pay box per piece (Pay, Reject, Pay more), the ticks, notes, call rate, per-piece and unlisted caps, the 20% fee | server/payments, server/stripe (`charge`), rules, `tests/[id]/NeedsYou.tsx`, `PayBox.tsx`, `CallLength.tsx`, `api/review/route.ts`, `api/tests/[id]/[action]` (`pay-extra`) | `review`, `finishReviewPay`, `payExtra`, `finishExtraPay`, `pieceRoom`, `paidSoFar`, `unlistedCallsPaid`; rules: `checkPay`, `payTicks`, `checkExtraPay`, `pieceMaxCents`, `extraCapCents`, `splitFee`, `NO_LISTING_WORK_CAP_CENTS`, `NO_LISTING_CALL_RATE_CAP_CENTS`, `NO_LISTING_CALLS_TOTAL_CENTS`, `EXTRA_PAY_CAP_PERCENT` |
-| **Charge and disputes** | The tester's Charge / Let it go once the review window passes; disputes on any reviewed part; the developer's side; the admin's decision | server/holds (`chooseOutcome`), server/payments, rules, `sessions/[id]/ChoiceBox.tsx`, `tests/[id]/DisputeSide.tsx`, `app/admin/DisputeDecision.tsx` | `chooseOutcome`, `openDispute`, `addDevSide`, `decideDispute`, `disputeBounds`; rules: `chargeOpensAt`, `chargeIsOpen`, `chargeAmount`, `canDispute`, `checkDisputeDecision`, `checkDevSide`, `REVIEW_DAYS` |
+| **Review, Pay and caps** | One Pay box per piece (Pay and Pay more; batch 15 §30: no Reject, $0 needs a reason), the ticks, notes, call rate and amount filling each other, "Lower the length", per-piece caps and the $1,000 for a tester's calls, the 20% fee | server/payments, server/callMoney, server/stripe (`charge`), rules, `tests/[id]/NeedsYou.tsx`, `PayBox.tsx`, `api/review/route.ts`, `api/tests/[id]/[action]` (`pay-extra`, `lower-length`) | `review`, `finishReviewPay`, `payExtra`, `finishExtraPay`, `pieceRoom`, `overRoomLine`, `paidSoFar`; rules: `checkPay`, `REASON_WHEN_UNDER_LISTING`, `ZERO_PAY_REASON`, `payUnderLine`, `paidZeroLine`, `payTicks`, `checkExtraPay`, `pieceMaxCents`, `extraCapCents`, `splitFee`, `NO_LISTING_WORK_CAP_CENTS`, `NO_LISTING_CALL_RATE_CAP_CENTS`, `EXTRA_PAY_CAP_PERCENT`; callMeasure: `amountFromRate`, `rateFromAmount`, `overCeilingLine` |
+| **Charge and disputes** | The tester's Charge / Let it go once the review date passes (written answers, recordings and, batch 15 §15, listed calls); disputes on any reviewed part; the developer's side (optional, never stopped, works while restricted: batch 15 §27); the admin's decision (stops once for a side that arrived after the admin's page loaded) | server/holds (`chooseOutcome`), server/payments, rules, `sessions/[id]/ChoiceBox.tsx`, `tests/[id]/DisputeSide.tsx`, `app/admin/DisputeDecision.tsx` | `chooseOutcome`, `openDispute`, `addDevSide`, `decideDispute`, `disputeBounds`; rules: `chargeOpensAt`, `chargeIsOpen`, `chargeAmount`, `canDispute`, `checkDisputeDecision`, `checkDevSide`, `REVIEW_DAYS` |
 | **Holds, chargebacks, retries, bank confirmation** | A declined charge starts a payment hold at once; chargebacks (with the $15 fee) start a chargeback hold; Pay what you owe; daily retries (max 7); the 3D Secure card check; "your bank wants to confirm" (press and away); won chargebacks | server/holds, server/chargeback, server/confirm, server/stripe, `src/lib/bankConfirm.ts`, `src/lib/pause.ts`, `components/OwedBox.tsx`, `ChargebackSteps.tsx`, `app/app/payments/ConfirmList.tsx`, `api/payments/owed`, `api/payments/confirm`, `api/payments/verify-card`, `api/stripe/webhook` | `declinedPayment`, `startHold`, `owed`, `owedLines`, `payOwed`, `retryOwed`, `liftHoldIfClear`, `approveHoldLift`, `chargeDeferred`, `chargebackOpened`, `chargebackWon`, `shiftAfterPause`, `resumeTests`; `chargebackSteps`, `startCardVerification`, `finishCardVerification`, `approveChargebackHold`; `pressAction`, `awayAction`, `confirmStart`, `confirmFinish`, `release`, `expireActions`, `pieceLocked`; `chargePlatform`, `refundPayment`, `sendWaitingTransfer` |
 | **Suspensions and restricted pages** | Admin suspension and reinstatement; a held or suspended developer is "restricted" (pages closed, presses refused except a short list); team pause and stop of one test; 7-day close of paused tests; testers' paused rules | server/restrictions, server/users (`requireActive`), server/pauseClosure, server/page-auth, `src/lib/restricted.ts`, `src/lib/closedPages.ts`, `src/lib/pause.ts`, `components/RestrictedBox.tsx`, `app/app/CallsBox.tsx` | `suspendAccount`, `reinstateAccount`, `previewSuspension`, `pauseTest`, `unpauseTest`, `adminStopTest`, `cancelCallsNearPause`, `cancelLatePauseCalls`, `releaseHeldShares`, `requireActive`, `failedLine`, `closePausedTest`, `closePausedTests`, `extendPauseClosure`, `pausedReminders`; `restrictionOf`, `devRestricted`, `RESTRICTED_OK_ACTIONS`, `OPEN_FOR_RESTRICTED`, `closedForSuspended`, `restrictedOn`, `requireOpenPage`; rules: `pausedForTesters`, `testerPaused`, `PAUSE_DEFAULTS` |
 | **Deletion** | Self or admin deletion: leaves tests, cancels calls, invites and applications, ends the subscription, closes excerpt requests; the warnings with real numbers | server/restrictions (`deleteAccount`), server/deletion, server/excerpts (`excerptsOnDelete`), server/subscription (`endOnDelete`), `app/app/account/DeleteAccount.tsx`, `api/account/delete` | `deleteAccount`, `devDeleteLines`, `testerDeleteFacts`, `testerDeleteLines`, `excerptsOnDelete`, `endOnDelete`; rules: `testerPayable`, `PAYABLE_TESTER`, `devDeletedLine`, `deletedNoPayoutsLine` |
@@ -94,8 +94,8 @@ Written Oct 27, 2026, from a read of the code at commit `5f057a3` (batch 14).
 | **Excerpts** | A tester asks to show a short quote of paid written work on their profile; the developer allows or denies; hidden while the test has an NDA | server/excerpts, `components/Excerpts.tsx`, `ExcerptList.tsx`, `api/excerpts` | `requestExcerpt`, `decideExcerpt`, `removeExcerpt`, `excerptChoices`, `excerptSource`, `shownExcerpts`, `myExcerpts`, `pendingForDeveloper` |
 | **Notifications, bell stacking, emails** | Every update is a bell line; lines stack per test per day or per kind per day; emails are summaries sent by the daily job; a few lines ignore email Off; admin daily email | server/notify, server/email, server/adminDaily, `src/lib/bell.ts`, `src/lib/alerts.ts`, `app/app/notifications/BellList.tsx`, `AlertSettings.tsx`, `components/AlertsMenu.tsx`, `api/notifications/read`, `api/account/notify`, `api/account/alerts`, `app/dev/outbox` | `notify`, `bell`, `inReach`, `sendSummaries`, `adminUsers`, `sendEmail`, `outboxEnabled`, `adminDailyEmails`, `bellKey`, `GROUP_TITLES`, `groupTitle`, `ALERT_TYPES`, `alertOf`; rules: `summaryDue` |
 | **Live updates and stop-once** | Open pages poll a fingerprint and refresh; a live top box lists changes; every press sends a "seen" marker and is stopped once if something it hadn't shown changed; tabs stay signed in as the same account | `api/pulse`, `api/live`, `components/AutoRefresh.tsx`, `LiveTop.tsx`, `LiveNotices.tsx`, `SessionWatch.tsx`, `ShellWatch.tsx`, `ChangesBox.tsx`, `src/lib/live.ts`, `src/lib/usePress.ts`, `src/lib/topStop.ts`, server/live, server/testerGate, server/actionText, server/tests (`devGate`) | `devGate`, `devGateIfSeen`, `testerGate`, `testerChanges`, `devChanges`, `ownChanges`, `logAction`, `logEvent`, `recordEvent`, `withRenamed`, `asLines`, `logTestAction`, `logTesterAction`, `joinPageChanges`; rules: `stopOnce`, `DEV_STOP_KINDS`, `DEV_QUIET_KINDS`, `DEV_EXEMPT_KINDS`, `TESTER_EXEMPT_KINDS`; client: `usePress`, `seenNow`, `useLiveAppend`, `announceAuth` |
-| **Outages** | Off unless `OUTAGE_CHECKS=1`. An outside checker pings `/api/health?key=...`; a gap over 15 minutes between pings is recorded once and every running timer moves by it | server/outages, `api/health` | `heartbeat`, `recordOutage`, `outageLines`, `outageChecksOn`, `healthKeyOk`, `OUTAGE_MIN_MS` |
-| **The admin console** | Disputes, decided, my actions, users, tests, no-shows, payments, waitlist, reports, holds and chargebacks, paused tests; suspend, pause, stop, approve, release or refund a held share, send a waiting payout, Allow 3 more | `app/admin/page.tsx`, `AdminBoxes.tsx`, `AdminButton.tsx`, `DisputeDecision.tsx`, `PagedList.tsx`, `PreviewButton.tsx`, `api/admin/[action]`, `api/admin/more`, server/adminLists, server/reports | `adminPage`, `disputeRow`, `testRow`, `userTotals`, `KINDS`, `adminCases` (holds.ts), `reportPerson`, `reportCounts`, `accountEvent`. Actions in `api/admin/[action]`: `decide`, `suspend`, `unsuspend`, `preview-suspension`, `delete-account`, `pause-test`, `unpause-test`, `stop-test`, `release-share`, `refund-share`, `allow-critical-changes`, `approve-hold`, `approve-chargeback`, `extend-pause`, `close-paused`, `transfer` |
+| **Outages** | Off unless `OUTAGE_CHECKS=1`. Batch 15 §10: outages come from the uptime service's own alerts (`POST /api/health/alert`, a down then an up on the server's clock); the keyed ping only writes heartbeats for information. One over 24 hours waits for an admin's Approve | server/outages, `api/health`, `api/health/alert`, the admin console's Outages | `recordAlert`, `parseAlert`, `alertRefusal`, `recordOutage`, `approveOutage`, `adminOutages`, `outageLines`, `outageChecksOn`, `healthKeyOk`, `healthKeyOf` |
+| **The admin console** | Disputes, decided, my actions, users, tests, no-shows, payments, waitlist, reports, holds and chargebacks, paused tests; suspend, pause, stop, approve, release or refund a held share, send a waiting payout, Allow 3 more | `app/admin/page.tsx`, `AdminBoxes.tsx`, `AdminButton.tsx`, `DisputeDecision.tsx`, `PagedList.tsx`, `PreviewButton.tsx`, `api/admin/[action]`, `api/admin/more`, server/adminLists, server/reports | `adminPage`, `disputeRow` (with "See the work", batch 15 §8), `testRow`, `adminEmails` (batch 15 §21: every admin action is an `AdminAction` row and admin views name the admin by email), `userTotals`, `KINDS` (with `contact`), `adminCases` (holds.ts), `reportPerson`, `reportCounts`, `accountEvent`. Actions in `api/admin/[action]`: `decide`, `suspend`, `unsuspend`, `preview-suspension`, `delete-account`, `pause-test`, `unpause-test`, `stop-test`, `release-share`, `refund-share`, `allow-critical-changes`, `approve-hold`, `approve-chargeback`, `approve-outage`, `extend-pause`, `close-paused`, `transfer`, `contact-replied` |
 | **The daily jobs** | One cron route runs everything time-based (section 5) | `api/cron/daily/route.ts`, server/holds (`runDaily`) | `runDaily` |
 | Other | Ratings, chat, blocks, reports, profiles, waitlist, Contact us | server/ratings, server/messages, server/blocks, server/reports, server/profileStats, server/waitlist, `api/help` | `testerRate`, `devRate`, `rateBlocker`, `ratingReminders`, `sendChat`, `chatAccess`, `unreadCount`, `blockUser`, `reportPerson`, `developerStats`, `testerStats`, `joinWaitlist` |
 
@@ -119,10 +119,10 @@ Behaviour for each area is in the guide: [Edit test](DESIGN-DOC.md#edit-test),
 - **Kinds.** `DEV_STOP_KINDS` lists what stops a developer; `DEV_QUIET_KINDS` (`terms`, `key`) are live-box lines that
   never stop (batch 14 §4, §6); `DEV_EXEMPT_KINDS` and `TESTER_EXEMPT_KINDS` document every other event kind and why it
   doesn't stop. Add a new event kind to one of these lists.
-- **Client.** `usePress` keeps the box state and the `boxAt` marker; `ChangesBox` renders the blue box under the button;
+- **Client.** `usePress` keeps the box state and the `boxAt` marker; `ChangesBox` renders the blue box under the button (batch 15 §36: "Your <button> didn't go through.", "Since you opened this page:", the Alerts lines, bold "Press <button> again to go ahead."; the label comes from `src/lib/pressLabels.ts`, refusals read "Your <button> didn't go through: <reason>");
   `LiveTop` shows the live top box and advances the "seen" marker (`seenNow`), so a press only stops for what the page
   hadn't shown.
-- **Exceptions.** Excerpt requests ignore stop-once (batch 13 §3). A drop in the open-test count never stops (batch 12 §4).
+- **Exceptions.** Excerpt requests ignore stop-once (batch 13 §3). A drop in the open-test count never stops (batch 12 §4). Batch 15: Leave and Block never stop (§25); the developer's side of a dispute never stops (§27); Stop and End early go through silently while a test is paused for any cause (§29, §37); a tester with Alerts Off (`User.testerAlertsOff`, §26) is stopped only by changes to their contract (`CONTRACT_KINDS`: a terms offer, their key marked working).
 
 ---
 
@@ -137,15 +137,19 @@ All in `prisma/schema.prisma`. Status fields are plain strings; the values below
 | `Session` | A signed-in browser (hash only) | `expiresAt` |
 | `TesterProfile` | A tester's devices, languages, categories, bio | |
 | `Test` | A listing | `status` `"draft"\|"open"\|"closed"\|"stopped"` ("Full" and "Paused" are derived); `joinMode` `"anyone"\|"apply"\|"invite"`; `adminPausedAt`, `adminStoppedAt`; `pausedSince`, `pauseCloseAt`, `pauseClosedAt`; `criticalCounts` (JSON: one count per limited field plus `since`); `version` (any change, checked by Edit) and `listingVersion` (terms, checked by Join); `openUntil` (every tester's deadline since batch 12) |
-| `TestEvent` | What happened on a test: feeds stop-once boxes and the live top box | `kind`: see `DEV_STOP_KINDS` / `DEV_EXEMPT_KINDS` in rules |
+| `TestEvent` | What happened on a test: feeds stop-once boxes and the live top box | `kind`: see `DEV_STOP_KINDS` / `DEV_EXEMPT_KINDS` in rules; `link` (batch 15 §35: the row a live line opens, e.g. a new dispute's) |
 | `Contract` | A tester's place in a test; a snapshot of the terms at join | `status` `"working"\|"left"\|"ended"`; `endKind` `"early"\|"stopped"\|"closed"`; `termsSwitchedAt`; `prevSets` (JSON, earlier question sets) |
 | `Submission` | Sent (or drafted) written answers or the Recording part; one per contract and kind | `kind` `"written"\|"recording"`; `answers` (JSON set `[{question, required, answer}]`); `agreedCents` (null = not listed); `payBy`, `choiceOfferedAt`, `choiceBy`; `setUntil` |
 | `Recording` | One uploaded file (video or attachment) | `part` `"recording"\|"written"`; `uploadedAt` (null while uploading); `submissionId` |
-| `Review` | The developer's one Pay or Reject on a piece (submission or call) | `rejected`, `auto`, `payKey` (unique: one charge per press), `rateCents` |
+| `Review` | The developer's one Pay on a piece (submission or call; batch 15: $0 with a reason, no Reject; old rows may still be `rejected`) | `rejected`, `auto`, `payKey` (unique: one charge per press), `rateCents` |
 | `Payment` | Every charge or attempted charge | `kind` `"review"\|"call"\|"extra"\|"dispute"\|"chargeback"\|"subscription"`; `status` `"pending"\|"charged"\|"not_set_up"\|"failed"\|"owed"\|"paying"\|"needs_action"\|"needs_confirmation"\|"refunded"` (code also reads `"deferred"`); `transferStatus` `"none"\|"sent"\|"waiting"\|"held"\|"refunded"`; `chargeback` `""\|"open"\|"resolved"\|"won"`; `repaysId`; `actionPi`, `actionBy` |
 | `Dispute` | A tester's dispute of one reviewed piece | `status` `"open"\|"decided"\|"withdrawn"`; `devSide`; `decidedCents` |
 | `CallSlot` | The time slot behind a call (created when a request is booked) | `status` `"open"\|"booked"\|"removed"` |
-| `Call` | One booked call | `status` `"booked"\|"cancelled"`; `cancelledBy` (`"tester"`, `"system"`, ...); `actualMinutes`, `lengthNote`; `noShowBy` `"developer"\|"tester"`; `setId` |
+| `Call` | One booked call | `status` `"booked"\|"cancelled"`; `cancelledBy` (`"tester"`, `"system"`, ...); batch 15 §40: `measuredMinutes`, `measuredFrom`, `measuredTo`, `measuredAt` (null = in progress / measuring), `actualMinutes` + `lengthNote` (a length lowered with its reason, or one logged before measuring); §15: `payBy`, `choiceOfferedAt`, `choiceBy`, `devMarks`, `remindedAt`, `devRemindedAt`; `noShowBy` `"developer"\|"tester"`; `setId` |
+| `CallPresence` | Batch 15 §40: one stretch a person had the call page open (heartbeats every ~10 s; a gap of 5 minutes starts a new one) | `side` `"developer"\|"tester"`; `startAt`, `endAt` |
+| `TestChange` | Batch 15 §43: one Save that changed the terms or the names (the developer's Contract changes) | `fields`, `before`, `after`, `effects`; offers it made carry `TermsOffer.changeId` |
+| `ContractNote` | Batch 15 §24: a non-offer entry in one tester's contract changes | `kind` `"renamed"` |
+| `AdminAction` | Batch 15 §21: every admin action with the admin who did it | `action` (the admin route's action), `targetId` |
 | `CallRequest` | "Request a time" from either side | `fromSide` `"developer"\|"tester"`; `status` `"pending"\|"booked"\|"declined"\|"withdrawn"\|"closed"\|"taken"`; `rows` (JSON) |
 | `CallSet` | A daily or weekly run of calls | `repeat` `"daily"\|"weekly"`; `count` (0 = Forever); `status` `"active"\|"cancelled"\|"ended"` |
 | `Message` | Per-test chat between the developer and one tester | |
@@ -163,10 +167,10 @@ All in `prisma/schema.prisma`. Status fields are plain strings; the values below
 | `Rating` | One rating per side per contract | `side` `"tester"\|"developer"`; `revealedAt` |
 | `Heartbeat` | A keyed `/api/health` ping | |
 | `Outage` | A recorded gap of over 15 minutes | `startAt` (unique), `ms` |
-| `AccessKey` | One access key of a test | `status` `"free"\|"inuse"\|"broken"\|"held"\|"retired"` |
+| `AccessKey` | One access key of a test | `status` `"free"\|"inuse"\|"broken"\|"held"\|"retired"`; batch 15 §44-45: `reusedFrom`, `reusedBroken` (typed back from a tester who left or finished), `brokenDismissedAt` (the developer's Dismiss, per report), `fixedAt` (marked working) |
 | `Report` | "Report <name>", one per pair | |
 | `AccountEvent` | Admin history of holds and suspensions | `kind` `"hold"\|"hold-lifted"\|"hold-approved"\|"suspended"\|"reinstated"` |
-| `ContactMessage` | A Contact us message (for the 5-a-day limit) | |
+| `ContactMessage` | A Contact us message (up to 50,000 characters; the admin list) | `repliedById`, `repliedAt` |
 | `Excerpt` | A tester's excerpt request or shown excerpt | `status` `"pending"\|"shown"\|"denied"\|"closed"`; `hideProduct` |
 
 Some schema comments are older than the code (for example `criticalCounts` still says prices and the build link are not
@@ -264,21 +268,23 @@ on the same day should not repeat notices, but test that before scheduling it mo
 | 4 | Sent work past its review window: daily developer reminders; open Charge / Let it go for the tester; tester reminders | inline, using `chargeIsOpen`, `choiceLine` |
 | 5 | The admins' daily email | `adminDailyEmails` (server/adminDaily) |
 | 6 | Paused-test reminders, then close tests paused for 7 days | `pausedReminders`, `closePausedTests` (server/pauseClosure) |
-| 7 | Open until countdown notices | inline, `countdownDue`, `headsUpLine` |
-| 8 | Reminders before Charge opens (1 week, 3 days, 1 day) | inline, `chargeOpensAt` |
-| 9 | Reminders for unlisted work (every 3 days, for `UNLISTED_REMIND_DAYS`) | inline |
+| 4b | Batch 15 §15: a listed call past its review date: daily developer reminders; Charge / Let it go for the tester (measured length × rate, within the $1,000) | `callCharges` |
+| 7 | Open until countdown notices (batch 15 §18: the developer reads when the test closes to new testers; each working tester their own deadline) | inline, `countdownDue`, `joinClosingLine`, `ownDeadlineLine` |
+| 8 | Batch 15 §2: the developer's review reminders, the same for listed and unlisted parts and listed calls (1 month if it was over a month away, 3, 2 and 1 weeks, 3 days, 1 day before the review date) | inline, `reviewMarksFor`, `reviewMarkDue` |
+| 9 | Batch 15 §15/§40: unlisted calls: one weekly "Pay your calls" line per developer, stacked across tests, until paid | `payYourCalls` |
 | 10 | Daily invite reminders | inline, `INVITE_REMIND_DAYS` |
 | 11 | Book the next calls of Forever sets | `topUpForeverSets` (server/requests) |
 | 12 | Cancel a restricted developer's calls 3 days ahead; payout-problem reminders; the suspended-accounts review reminder | `cancelLatePauseCalls`, `payoutReminders`, `suspendedAccountsReminder` (server/restrictions) |
 | 13 | Manual subscription renewals; free-during-launch notices | `renewSubscriptions`, `freeLaunchNotices` (server/subscription) |
 | 14 | Application reminders, rating reminders | `dailyReminders` (internal to holds.ts), `ratingReminders` (server/ratings) |
+| 14b | Batch 15: payments stuck in progress (§9), unfinished uploads and orphan files (§41 M6), old sign-in attempts (§7), applications and invites after Open until (§18) | `checkStuck`, `purgeUploads`, `cleanLoginAttempts`, `closeJoiningAfterOpenUntil` |
 | 15 | Send every pending email (summaries, end-of-day payment and must-send emails) | `sendSummaries` (server/notify) |
 
 **Not in the cron:**
 
 - `GET /api/pulse` (polled about every 20 s by pages with `AutoRefresh`) also runs `sweepNobodyJoined`, so calls
-  nobody joined are cancelled within a minute or so while anyone has such a page open.
-- `GET /api/health?key=HEALTH_KEY` writes heartbeats and records outages (only with `OUTAGE_CHECKS=1`).
+  nobody joined are cancelled, and (batch 15 §40) measured lengths become final, within a minute or so while anyone has such a page open.
+- `GET /api/health?key=HEALTH_KEY` writes heartbeats for information; outages come from `POST /api/health/alert` (only with `OUTAGE_CHECKS=1`).
 - Stripe webhooks drive chargebacks, Billing renewals and payout status.
 - Bell lines are written at the moment of the action. **Emails are only sent by step 15**, so "end-of-day email" in the
   guide means "when the daily job runs". The exceptions are sent at once: reset and confirmation links, Contact us
@@ -389,6 +395,22 @@ create the shadow database it needs. Migrations are therefore written **by hand*
 5. Production: `npm run db:deploy` (`prisma migrate deploy`) with `DATABASE_URL` and `DIRECT_URL` pointing at Neon.
    Nothing runs it automatically at build time today.
 
+### Batch 15 migrations (not yet applied to the dev database)
+
+Batch 15 adds thirteen migrations, `20261031090000_login_attempts_time_zone` through `20261031210000_admin_actions`:
+login attempts and time zones, payment recovery, suspension sides, chat client ids, security keys, Contact us messages,
+tester days, call measuring (`CallPresence`, with a backfill that marks past calls as measured from their logged
+length), tester alerts, contract changes, key reports, event links and admin actions. To apply them to the
+local dev database: stop `npm run dev` (port 3400), then in PowerShell
+
+```powershell
+$env:DATABASE_URL="postgresql://postgres@localhost:5499/playtest_lite"; $env:DIRECT_URL=$env:DATABASE_URL
+npx prisma migrate deploy
+npx prisma generate
+```
+
+and start `npm run dev` again. (Set `DIRECT_URL` too: the schema's `directUrl` is what migrate uses.)
+
 On a fresh, healthy Postgres cluster (a new machine, Docker, Neon) none of this is needed: `npm run db:migrate`
 (`prisma migrate dev`) works as normal, and the hand-written migrations stay valid.
 
@@ -480,13 +502,17 @@ Find them with `grep -rn DEFAULT src` and in the batch files (`grep -n DEFAULT d
 | Item | Where to flip it | Batch |
 | --- | --- | --- |
 | Drafts stay editable while a test is paused | `PAUSE_DEFAULTS.draftsEditable` in `src/lib/rules.ts` | 6 §4 |
-| Chat closed both ways while paused | `PAUSE_DEFAULTS.chatClosed` in `src/lib/rules.ts` | 6 §4 |
 | A team pause of one test follows the same tester rules | `PAUSE_DEFAULTS.teamPauseSameRules` in `src/lib/rules.ts` | 6 §4 |
 | Deadlines and Open until move later when a pause lifts | `PAUSE_DEFAULTS.shiftDeadlines` in `src/lib/rules.ts` (used by `pauseShiftMs`) | 6 §4 |
 | The Rate button has no end date | `rateBlocker` in `src/lib/server/ratings.ts` | 4 D4 |
-| No Stop or End early while restricted (only Cancel call) | `RESTRICTED_OK_ACTIONS` in `src/lib/restricted.ts` | 4 A3 |
-| Unlisted work: reminders only for 7 days after sending | `UNLISTED_REMIND_DAYS` in `src/lib/rules.ts` | 9 §2, 12 §6 |
-| At most 300 characters per question | `LIMITS.questionChars` in `src/lib/limits.ts` | 13 §9 |
+| Restricted or paused: Stop, End early and Cancel call (Stop and End early silent); holds count as restricted | `RESTRICTED_OK_ACTIONS`, `TEAM_PAUSED_OK_ACTIONS` in `src/lib/restricted.ts`, `pausedForDeveloper` in server/tests | 15 §23, §29, §37 |
+| Paying less than the listing still needs a reason | `REASON_WHEN_UNDER_LISTING` in `src/lib/rules.ts` (owner: true) | 15 §30 |
+| A refused press on a team-paused test goes to the test page's banner | `api()` in `src/lib/client.ts` (`admin_paused` routing) | 15 §23 |
+| The review date is the later of the tester's own deadline and sent (or the call) + 7 days, whatever stops or leaves | `chargeOpensAt` / `reviewDateOf` in `src/lib/rules.ts` | 15 §18 |
+| A tester who finished counts as "no longer working" for typing their key back | `keyRefusal` in `src/lib/keys.ts` | 15 §19 |
+| The first live update never scrolls mid-task (a pill instead) | `LiveTop.tsx` | 15 §28 |
+| A key marked working stops the tester's next press even with Alerts Off | `CONTRACT_KINDS` in server/testerGate | 15 §45 |
+| At most 20,000 characters per question and for the steps | `LIMITS.question`, `LIMITS.whatToDo` in `src/lib/limits.ts` | 15 §3, §17 |
 | A deleted tester with no payout account: their sent work leaves Needs you | `testerPayable` / `PAYABLE_TESTER` in `src/lib/rules.ts`, the check in `review` (server/payments) | 11 §1 |
 | A newly sent question set is priced at the current contract's written price | `sendWritten` in `src/lib/server/tests.ts` | 13 §8 |
 | Quiet Switch / Keep for the developer (never a stop) | `DEV_QUIET_KINDS` in `src/lib/rules.ts` | 14 §4 |
@@ -500,12 +526,11 @@ Find them with `grep -rn DEFAULT src` and in the batch files (`grep -n DEFAULT d
   **Dependencies:** the Next.js and Prisma major upgrades were left for after launch on purpose; plan them as their own change.
 - **Long daily job.** `runDaily` does everything in one request, one row at a time. Watch Vercel's function time limit as
   data grows.
-- **No sign-in throttling.** Log-in has no attempt limit, and sign-up / log-in messages reveal whether an email has an
-  account.
-- **Admins can't open recordings** (`canView` allows only the tester and the test's developer), which may matter for
-  disputes.
-- **Server-side dates use the server's time zone** (UTC on Vercel) in bell lines and emails, and bell stacking days are
-  UTC days (`dayKey`).
+- (Fixed in batch 15: sign-in attempt limits and one message, §7; admins open disputed work, §8; each reader's own time zone, §11.) Bell
+  stacking days are still UTC days (`dayKey`).
+- **Batch 15 interpretations** are listed in the batch's final report (and in the commit messages): steps aren't part of the terms offer box; the
+  review date ignores stops and leaves; `dueAt` uses the end of the join day in UTC; the dashboards have no live box, so §28's scroll applies to the
+  test page, Edit and the session page; a pending excerpt request has no time of its own in the dashboard's Needs you (it sorts as new).
 
 ---
 
