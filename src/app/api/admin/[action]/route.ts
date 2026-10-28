@@ -9,7 +9,8 @@ import { sendWaitingTransfer } from "@/lib/server/stripe";
 import { approveHoldLift } from "@/lib/server/holds";
 import { approveChargebackHold } from "@/lib/server/chargeback";
 import { closePausedTest, extendPauseClosure } from "@/lib/server/pauseClosure";
-import { adminStopTest, deleteAccount, pauseTest, previewSuspension, reinstateAccount, releaseHeldShares, suspendAccount, unpauseTest } from "@/lib/server/restrictions";
+import { adminStopTest, deleteAccount, pauseTest, previewSuspension, reinstateAccount, releaseHeldShares, seenFromBody, suspendAccount, unpauseTest } from "@/lib/server/restrictions";
+import { withAccountState } from "@/lib/server/accountState";
 import { refundPayment } from "@/lib/server/stripe";
 
 type Ctx = { params: Promise<{ action: string }> };
@@ -49,17 +50,19 @@ async function run(u: Awaited<ReturnType<typeof requireUser>>, action: string, i
         if (id === u.id) throw new HttpError(409, "self", "You can't pause your own account.");
         const note = readText(body.note, LIMITS.reason, "bad_note");
         if (note.length < 3) throw new HttpError(400, "bad_note", "Record why (it is kept with the suspension).");
-        return ok(await suspendAccount(u.id, id, note, body.side));
+        // (Batch 17 §6) `since`: when the admin's Preview (or the page) was loaded; a refusal carries the account's state now (the row or profile updates).
+        return ok(await withAccountState(id, () => suspendAccount(u.id, id, note, body.side, seenFromBody(body))));
       }
       case "unsuspend":
-        return ok(await reinstateAccount(id, body.side, u.id));
+        return ok(await withAccountState(id, () => reinstateAccount(id, body.side, u.id, seenFromBody(body))));
       case "preview-suspension":
-        return ok(await previewSuspension(id));
+        // (Batch 17 §6) The Preview's time: Suspend and Reinstate send it back.
+        return ok({ ...(await previewSuspension(id)), at: new Date().toISOString() });
       case "delete-account": {
         if (id === u.id) throw new HttpError(409, "self", "Use Settings to delete your own account.");
         const reason = readText(body.note, LIMITS.reason, "bad_note");
         if (reason.length < 3) throw new HttpError(400, "bad_note", "Record why (it is kept with the deletion).");
-        return ok(await deleteAccount(id, "admin", reason));
+        return ok(await withAccountState(id, () => deleteAccount(id, "admin", reason)));
       }
       case "pause-test":
         return ok(await pauseTest(u.id, id, readText(body.note, LIMITS.reason, "bad_note")));

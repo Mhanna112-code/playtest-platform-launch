@@ -54,6 +54,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       <div className="flex items-center gap-4">
         <Brand />
         <Link href="/app">Back to the app</Link>
+        {/* (Batch 17 section 8) Every test, searchable, with its state. */}
+        <Link href="/app/find" data-admin-find="">Find tests</Link>
       </div>
       <h1 className="text-3xl font-bold tracking-tight text-white">Admin</h1>
       {/* (Batch 15 section 12) The settings problems: only the owner (OWNER_EMAIL) sees them; every admin when it's unset. */}
@@ -98,7 +100,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       {(focusDispute || focusUser) && (
         <section className="card space-y-2" id="focus" data-focus="">
           <h2 className="text-lg font-semibold text-white">Opened from a link</h2>
-          {focusDispute && <PagedList kind="disputes" initial={{ rows: [focusDispute], next: null, total: 1 }} />}
+          {focusDispute && <PagedList kind="disputes" initial={{ rows: [focusDispute], next: null, total: 1 }} fixed />}
           {focusUser && (
             <p className="scroll-mt-24 text-sm" id={`user-${focusUser.id}`}>
               {focusUser.email} · {displayName(focusUser)} · {[focusUser.isDeveloper && "developer", focusUser.isTester && "tester"].filter(Boolean).join(" + ") || "no role"}
@@ -111,33 +113,28 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       )}
 
       <section className="card scroll-mt-24 space-y-3" id="disputes">
-        <h2 className="text-lg font-semibold text-white">Open disputes ({disputes.total})</h2>
         <p className="note">Newest first. A decision can only raise the pay, up to the listing amount. The extra is charged to the developer. Stripe card disputes are handled by hand in the Stripe dashboard.</p>
-        <PagedList kind="disputes" initial={rows(disputes)} empty="No open disputes." scroll />
+        <PagedList kind="disputes" title="Open disputes" initial={rows(disputes)} empty="No open disputes." />
       </section>
 
       <section className="card scroll-mt-24 space-y-3" id="lifts">
-        <h2 className="text-lg font-semibold text-white">Lifts ({liftsP.total})</h2>
         <p className="note">A payment hold from the 4th onward needs an Approve to lift, even after the developer paid what they owe. Newest first. The first press wins.</p>
-        <PagedList kind="lifts" initial={rows(liftsP)} empty="No lifts waiting." scroll />
+        <PagedList kind="lifts" title="Lifts" initial={rows(liftsP)} empty="No lifts waiting." />
       </section>
 
       <section className="card scroll-mt-24 space-y-3" id="chargebacks">
-        <h2 className="text-lg font-semibold text-white">Chargeback holds ({chargebacks.total})</h2>
         <p className="note">After a chargeback the developer verifies a card with 3D Secure and pays what they owe; paying alone never lifts the hold. Approve once both are done.</p>
-        <PagedList kind="chargebacks" initial={rows(chargebacks)} />
+        <PagedList kind="chargebacks" title="Chargeback holds" initial={rows(chargebacks)} />
       </section>
 
       <section className="card scroll-mt-24 space-y-3" id="mine">
-        <h2 className="text-lg font-semibold text-white">Your actions ({mine.total})</h2>
         <p className="note">Tests you paused or stopped, or whose developer you suspended. Newest first.</p>
-        <PagedList kind="mine" initial={rows(mine)} empty="You haven't paused, stopped or suspended anything." scroll />
+        <PagedList kind="mine" title="Your actions" initial={rows(mine)} empty="You haven't paused, stopped or suspended anything." />
       </section>
 
       <section className="card scroll-mt-24 space-y-3" id="paused-tests">
-        <h2 className="text-lg font-semibold text-white">Paused tests ({paused.total})</h2>
         <p className="note">A paused test closes by itself after 7 days, whatever the cause (a payment hold, a chargeback hold, a suspension or a team pause). Soonest first. Extend moves its date later; Close now closes it like a Stop. Testers read only that the test ended; the developer is told why.</p>
-        <PagedList kind="paused" initial={rows(paused)} />
+        <PagedList kind="paused" title="Paused tests" initial={rows(paused)} />
       </section>
 
       <section className="card space-y-3">
@@ -161,25 +158,21 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </section>
 
       <section className="card scroll-mt-24 space-y-3" id="decided">
-        <h2 className="text-lg font-semibold text-white">Decided disputes ({decided.total})</h2>
-        <PagedList kind="decided" initial={rows(decided)} empty="None yet." scroll />
+        <PagedList kind="decided" title="Decided disputes" initial={rows(decided)} empty="None yet." />
       </section>
 
       {/* (Batch 15 section 21) Contact us: newest first, each message in a scroll box; who replied. */}
       <section className="card scroll-mt-24 space-y-3" id="contact">
-        <h2 className="text-lg font-semibold text-white">Contact us ({contactP.total})</h2>
-        <PagedList kind="contact" initial={rows(contactP)} empty="No messages." scroll />
+        <PagedList kind="contact" title="Contact us" initial={rows(contactP)} empty="No messages." />
       </section>
 
-      <section className="card space-y-3" id="reports">
-        <h2 className="scroll-mt-24 text-lg font-semibold text-white">Reports ({reportsP.total})</h2>
+      <section className="card scroll-mt-24 space-y-3" id="reports">
         <p className="note">What people reported about each other from a profile (once per pair). The reported person is not told.</p>
-        <PagedList kind="reports" initial={rows(reportsP)} empty="None." />
+        <PagedList kind="reports" title="Reports" initial={rows(reportsP)} empty="None." />
       </section>
 
-      <section className="card space-y-3">
-        <h2 id="no-shows" className="scroll-mt-24 text-lg font-semibold text-white">No-show reports ({noShows.total})</h2>
-        <PagedList kind="noshows" initial={rows(noShows)} />
+      <section className="card scroll-mt-24 space-y-3" id="no-shows">
+        <PagedList kind="noshows" title="No-show reports" initial={rows(noShows)} />
       </section>
 
       <section className="card space-y-3">
@@ -190,8 +183,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             {fmtDateTime(p.createdAt)} · {people.get(p.testerId)} · {money(p.testerCents)} <AdminButton action="transfer" id={p.id} label="Send now" />
           </p>
         ))}
-        <h3 className="font-semibold text-white">Latest payments</h3>
-        <PagedList kind="payments" initial={rows(paymentsP)} />
+        <PagedList kind="payments" title="Latest payments" level={3} initial={rows(paymentsP)} />
       </section>
 
       <section className="card space-y-3" id="held-shares">
@@ -218,14 +210,13 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         );
       })()}
 
-      <section className="card space-y-3" id="users">
-        <h2 className="text-lg font-semibold text-white">Accounts ({usersP.total})</h2>
-        <PagedList kind="users" initial={rows(usersP)} />
+      {/* (Batch 17 §5) Accounts and Tests: a search box and tick boxes above each scroll box. */}
+      <section className="card scroll-mt-24 space-y-3" id="users">
+        <PagedList kind="users" title="Accounts" initial={rows(usersP)} />
       </section>
 
-      <section className="card space-y-3" id="tests">
-        <h2 className="text-lg font-semibold text-white">Tests ({testsP.total})</h2>
-        <PagedList kind="tests" initial={rows(testsP)} />
+      <section className="card scroll-mt-24 space-y-3" id="tests">
+        <PagedList kind="tests" title="Tests" initial={rows(testsP)} />
       </section>
     </main>
   );

@@ -13,16 +13,21 @@ import { callMinutesOf } from "@/lib/callMeasure";
 import { itemsOf } from "@/lib/answerSets";
 import { writtenQuestions as writtenQuestionsOf } from "./tests";
 import type { DisputedWork } from "@/app/admin/DisputeWork";
+import type { Prisma } from "@prisma/client";
+import { accountStates, type AccountState } from "./accountState";
 
-// (Owner, Oct 26) The admin dashboard's lists. Every long list is a page of 25 with Previous / Next (keyset by date: newest first; the lists ordered by
-// closure date go soonest first). Rows are plain, already-formatted view models so the same loaders serve the page and /api/admin/more.
+// (Owner, Oct 26) The admin dashboard's lists, 25 rows at a time (keyset by date: newest first; the lists ordered by closure date go soonest first). Rows are
+// plain, already-formatted view models so the same loaders serve the page and /api/admin/more. (Batch 17 §7) Each list is a scroll box that loads the next 25
+// near its end (the same cursors); (Batch 17 §5) Accounts and Tests also take a search and tick boxes, applied here, over every row.
 
 export const PAGE = 25;
 export type Page<T> = { rows: T[]; next: string | null; total: number };
 
 export type DisputeVM = { work?: DisputedWork | null; type?: "dispute"; id: string; at: string; head: string; money: string; said: string; open: boolean; decided: string; min: number; max: number; devSide?: string; devSideAt?: string | null; dev?: string };
 export type MineVM = { id: string; at: string; title: string; dev: string; why: string; when: string; testId: string };
-export type UserVM = { href: string; id: string; at: string; line: string; reports: number; state: "deleted" | "suspended" | "normal"; stateLine: string; devSuspended?: boolean; testerSuspended?: boolean; isDeveloper?: boolean; isTester?: boolean };
+export type UserVM = { href: string; id: string; at: string; line: string; reports: number; state: "deleted" | "suspended" | "normal"; stateLine: string; devSuspended?: boolean; testerSuspended?: boolean; isDeveloper?: boolean; isTester?: boolean; acct: AccountState };
+/** (Batch 17 §5) A search and ticks on the Accounts or Tests list (see lib/adminScroll.ts). */
+export type ListFilter = { q?: string; ticks?: string[] };
 export type TestVM = { href: string; id: string; at: string; line: string; status: string; adminPaused: boolean; stopped: boolean; critical: number; closedLine: string };
 /** (Owner, Oct 28 afternoon) The per-field change counts on an admin test row: "NDA 3, steps 1". */
 const countsText = (v: unknown) => { const c = countsOf(v); return CRITICAL_KEYS.filter((k) => c[k] > 0).map((k) => `${CRITICAL_FIELDS[k]} ${c[k]}`).join(", "); };
@@ -165,41 +170,51 @@ async function mine(adminId: string, cursor: string | null): Promise<Page<MineVM
   return slice(all, (r) => r.date, cursor);
 }
 
-async function users(cursor: string | null): Promise<Page<UserVM>> {
+/** (Batch 17 §5) Name or email, any part, case-insensitive; ticks: a role group (Developer / Tester) and a state group (Suspended / On a hold / Deleted), each matching ANY ticked box. */
+export function userWhere(f?: ListFilter): Prisma.UserWhereInput {
+  const and: Prisma.UserWhereInput[] = [];
+  const q = f?.q?.trim();
+  if (q) and.push({ OR: [{ email: { contains: q, mode: "insensitive" } }, { name: { contains: q, mode: "insensitive" } }] });
+  const t = new Set(f?.ticks ?? []);
+  const roles: Prisma.UserWhereInput[] = [...(t.has("developer") ? [{ isDeveloper: true }] : []), ...(t.has("tester") ? [{ isTester: true }] : [])];
+  const states: Prisma.UserWhereInput[] = [
+    ...(t.has("suspended") ? [{ devSuspendedAt: { not: null } }, { testerSuspendedAt: { not: null } }] : []),
+    ...(t.has("hold") ? [{ holdStartedAt: { not: null } }] : []),
+    ...(t.has("deleted") ? [{ deletedAt: { not: null } }] : []),
+  ];
+  if (roles.length) and.push({ OR: roles });
+  if (states.length) and.push({ OR: states });
+  return and.length ? { AND: and } : {};
+}
+
+async function users(cursor: string | null, f?: ListFilter): Promise<Page<UserVM>> {
   const c = parse(cursor);
+  const where = userWhere(f);
   const [list, total] = await Promise.all([
-    db.user.findMany({ where: olderThan("createdAt", c), orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: PAGE + 1 }),
-    db.user.count(),
+    db.user.findMany({ where: { AND: [where, olderThan("createdAt", c)] }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: PAGE + 1 }),
+    db.user.count({ where }),
   ]);
   const page = list.slice(0, PAGE);
-  const names = new Map((await db.user.findMany({ where: { id: { in: page.flatMap((u) => [u.devSuspendedById, u.testerSuspendedById]).filter((x): x is string => !!x) } }, select: { id: true, email: true } })).map((u) => [u.id, u.email]));
-  // (Batch 15 sections 16 and 21) Each suspended side, with the admin who did it ("an admin (deleted)" when that account is gone).
-  const sideLine = (x: (typeof page)[number], s: "developer" | "tester") => {
-    const at = s === "developer" ? x.devSuspendedAt : x.testerSuspendedAt;
-    const by = s === "developer" ? x.devSuspendedById : x.testerSuspendedById;
-    const note = s === "developer" ? x.devSuspendNote : x.testerSuspendNote;
-    return at ? `Suspended (${s} side) ${fmtDateTime(at)}${by ? ` by ${names.get(by) ?? "an admin (deleted)"}` : ""}${note ? ` · “${note}”` : ""}` : "";
-  };
+  // (Batch 15 sections 16 and 21; batch 17 §6) Each suspended side with the admin who did it, and who deleted it: the same state the profile's admin view shows.
+  const states = await accountStates(page);
   const reports = await reportCounts(page.map((u) => u.id));
-  // (Batch 15 section 21) The admin who deleted an account, by email.
-  const delActs = await db.adminAction.findMany({ where: { action: "delete-account", targetId: { in: page.filter((x) => x.deletedAt).map((x) => x.id) } } });
-  const delName = await adminEmails(delActs.map((a) => a.adminId));
-  const deletedBy = new Map(delActs.map((a) => [a.targetId, delName(a.adminId)]));
-  const rows: UserVM[] = page.map((x) => ({
-    id: x.id,
-    at: x.createdAt.toISOString(),
-    line: `${x.email} · ${displayName(x)} · ${[x.isDeveloper && "developer", x.isTester && "tester"].filter(Boolean).join(" + ") || "no role"}${x.isDeveloper ? ` · ${adminSubLine(x)}` : ""}`,
-    href: profileHref(x),
-    reports: reports.get(x.id) ?? 0,
-    state: x.deletedAt ? "deleted" : x.devSuspendedAt || x.testerSuspendedAt ? "suspended" : "normal",
-    devSuspended: !!x.devSuspendedAt,
-    testerSuspended: !!x.testerSuspendedAt,
-    isDeveloper: x.isDeveloper,
-    isTester: x.isTester,
-    stateLine: x.deletedAt
-      ? `Deleted ${fmtDateTime(x.deletedAt)} by ${x.deletedBy === "admin" ? deletedBy.get(x.id) ?? "the team" : "the owner of the account"}${x.deleteReason ? `: ${x.deleteReason}` : ""}`
-      : [sideLine(x, "developer"), sideLine(x, "tester")].filter(Boolean).join(" · "),
-  }));
+  const rows: UserVM[] = page.map((x) => {
+    const acct = states.get(x.id)!;
+    return {
+      id: x.id,
+      at: x.createdAt.toISOString(),
+      line: `${x.email} · ${displayName(x)} · ${[x.isDeveloper && "developer", x.isTester && "tester"].filter(Boolean).join(" + ") || "no role"}${x.isDeveloper ? ` · ${adminSubLine(x)}` : ""}`,
+      href: profileHref(x),
+      reports: reports.get(x.id) ?? 0,
+      state: x.deletedAt ? "deleted" : x.devSuspendedAt || x.testerSuspendedAt ? "suspended" : "normal",
+      devSuspended: !!x.devSuspendedAt,
+      testerSuspended: !!x.testerSuspendedAt,
+      isDeveloper: x.isDeveloper,
+      isTester: x.isTester,
+      acct,
+      stateLine: acct.deleted || (["developer", "tester"] as const).filter((s) => acct.suspended[s]).map((s) => `Suspended (${s} side) ${acct.suspended[s]}`).join(" · "),
+    };
+  });
   const last = page[page.length - 1];
   return { rows, next: list.length > PAGE && last ? cur(last.createdAt, last.id) : null, total };
 }
@@ -223,11 +238,36 @@ export async function testRow(t: Awaited<ReturnType<typeof db.test.findMany<{ in
   };
 }
 
-async function tests(cursor: string | null): Promise<Page<TestVM>> {
+/**
+ * (Batch 17 §5) Test name, product name or the developer's name or email, any part, case-insensitive; ticks (ANY of): Open (taking testers, not paused), Joining
+ * closed (closed to new testers, or past Open until), Paused (any cause: a hold, a suspension or the team), Stopped / closed, Draft.
+ */
+export function testWhere(f?: ListFilter, now = new Date()): Prisma.TestWhereInput {
+  const and: Prisma.TestWhereInput[] = [];
+  const q = f?.q?.trim();
+  if (q) {
+    const has = { contains: q, mode: "insensitive" as const };
+    and.push({ OR: [{ title: has }, { productName: has }, { developer: { OR: [{ name: has }, { email: has }] } }] });
+  }
+  const t = new Set(f?.ticks ?? []);
+  const notPaused: Prisma.TestWhereInput = { pausedSince: null, adminPausedAt: null };
+  const states: Prisma.TestWhereInput[] = [
+    ...(t.has("open") ? [{ status: "open", ...notPaused, OR: [{ openUntil: null }, { openUntil: { gte: now } }] }] : []),
+    ...(t.has("joining-closed") ? [{ status: "closed", ...notPaused }, { status: "open", ...notPaused, openUntil: { lt: now } }] : []),
+    ...(t.has("paused") ? [{ status: { not: "stopped" }, OR: [{ pausedSince: { not: null } }, { adminPausedAt: { not: null } }] }] : []),
+    ...(t.has("stopped") ? [{ status: "stopped" }] : []),
+    ...(t.has("draft") ? [{ status: "draft", ...notPaused }] : []),
+  ];
+  if (states.length) and.push({ OR: states });
+  return and.length ? { AND: and } : {};
+}
+
+async function tests(cursor: string | null, f?: ListFilter): Promise<Page<TestVM>> {
   const c = parse(cursor);
+  const where = testWhere(f);
   const [list, total] = await Promise.all([
-    db.test.findMany({ where: olderThan("createdAt", c), orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: PAGE + 1, include: { developer: true, _count: { select: { contracts: true } } } }),
-    db.test.count(),
+    db.test.findMany({ where: { AND: [where, olderThan("createdAt", c)] }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: PAGE + 1, include: { developer: true, _count: { select: { contracts: true } } } }),
+    db.test.count({ where }),
   ]);
   const page = list.slice(0, PAGE);
   const last = page[page.length - 1];
@@ -335,15 +375,15 @@ async function chargebacks(cursor: string | null): Promise<Page<ChargebackVM & {
 }
 
 /** One page of one list. `adminId` is the admin looking (for "mine"). */
-export async function adminPage(kind: Kind, adminId: string, cursor: string | null, arg = ""): Promise<Page<unknown>> {
+export async function adminPage(kind: Kind, adminId: string, cursor: string | null, arg = "", filter?: ListFilter): Promise<Page<unknown>> {
   const p: Page<unknown> = await (async () => {
     switch (kind) {
       case "contact": return contact(cursor);
       case "disputes": return disputes("open", cursor);
       case "decided": return disputes("decided", cursor);
       case "mine": return mine(adminId, cursor);
-      case "users": return users(cursor);
-      case "tests": return tests(cursor);
+      case "users": return users(cursor, filter);
+      case "tests": return tests(cursor, filter);
       case "noshows": return noShows(cursor);
       case "payments": return payments(cursor);
       case "paused": return paused(cursor);

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { FIELD, api, errOf } from "@/lib/client";
+import { FIELD, api, errOf, isFieldError } from "@/lib/client";
 import { FormMistakes } from "@/components/FormMistakes";
 import { checkFields } from "@/components/FieldChecks";
 import { LIMITS } from "@/lib/limits";
@@ -8,9 +8,10 @@ import { counterText, reasonTooLong } from "@/lib/rules";
 
 /**
  * A small admin action: optional text/amount inputs, one button, the result or refusal in plain words. `extra`: fixed values sent with the press (e.g. the side of a
- * Reinstate); `choice`: a required pick shown before the inputs (batch 15 section 16: "Developer side" or "Tester side").
+ * Reinstate); `choice`: a required pick shown before the inputs (batch 15 section 16: "Developer side" or "Tester side"). `onRefused` (batch 17 §6): a refusal is
+ * handed to the caller (which shows it and updates the account's state) instead of showing next to the button; form mistakes stay red at their box.
  */
-export function AdminButton({ action, id, label, fields = [], danger, disabled, extra = {}, choice }: { action: string; id: string; label: string; fields?: { name: string; label: string; ph?: string }[]; danger?: boolean; disabled?: boolean; extra?: Record<string, string>; choice?: { name: string; label: string; options: { value: string; label: string }[] } }) {
+export function AdminButton({ action, id, label, fields = [], danger, disabled, extra = {}, choice, onRefused }: { action: string; id: string; label: string; fields?: { name: string; label: string; ph?: string }[]; danger?: boolean; disabled?: boolean; extra?: Record<string, string>; choice?: { name: string; label: string; options: { value: string; label: string }[] }; onRefused?: (e: unknown) => void }) {
   const [v, setV] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -51,7 +52,8 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
             setMsg({ ok: true, text: "Done." });
             setTimeout(() => window.location.reload(), 600);
           } catch (e) {
-            setMsg({ ok: false, text: errOf(e) });
+            if (onRefused && !isFieldError(e)) onRefused(e);
+            else setMsg({ ok: false, text: errOf(e) });
           } finally {
             setBusy(false);
           }

@@ -1,13 +1,14 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, errOf } from "@/lib/client";
+import { LIVE_POLL_MS, LOADING_LINE, SEARCHABLE, SEARCH_MAX, SEARCH_PAUSE_MS, atTop, endLine, headingText, isSearchKind, mergeTop, nearEnd, newRowsAhead, newRowsPill, searchOf } from "@/lib/adminScroll";
+import { AccountActions } from "./AccountActions";
 import { DisputeWork } from "./DisputeWork";
 import { ScrollText } from "@/components/ScrollText";
 import type { ContactVM } from "@/lib/server/adminLists";
 import type { ChargebackVM, DisputeVM, Kind, LiftVM, MineVM, Page, PausedVM, ReportVM, TestVM, TextVM, UserVM } from "@/lib/server/adminLists";
 import { AdminButton } from "./AdminButton";
 import { DisputeDecision } from "./DisputeDecision";
-import { PreviewButton } from "./PreviewButton";
 
 type AnyRow = ContactVM | DisputeVM | MineVM | UserVM | TestVM | TextVM | PausedVM | ChargebackVM | LiftVM | ReportVM;
 
@@ -99,39 +100,8 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
             {u.reports > 3 && <span className="badge ml-2 border-amber-300/40 text-amber-200">Reported more than 3 times</span>}
             {u.reports > 0 && u.reports <= 3 && <span className="ml-2 text-xs text-slate-500">{u.reports} report{u.reports === 1 ? "" : "s"}</span>}
           </p>
-          {u.state === "deleted" ? (
-            <p className="text-xs text-rose-300">{u.stateLine}</p>
-          ) : (
-            <>
-              {/* (Owner, Oct 30, batch 15 section 16) Each suspended side has its own line and Reinstate. */}
-              {(["developer", "tester"] as const).filter((s) => (s === "developer" ? u.devSuspended : u.testerSuspended)).map((s) => {
-                const line = u.stateLine.split(" · Suspended").map((x, i) => (i ? `Suspended${x}` : x)).find((x) => x.startsWith(`Suspended (${s} side)`)) ?? "";
-                return (
-                  <p key={s} className="flex flex-wrap items-center gap-2" data-suspended-side={s}>
-                    <b>Suspended ({s} side)</b> <span className="line-clamp-2 max-w-full break-words" title={line}>{line.replace(`Suspended (${s} side) `, "")}</span>
-                    <AdminButton action="unsuspend" id={u.id} label="Reinstate" extra={{ side: s }} />
-                  </p>
-                );
-              })}
-              {(() => {
-                const open = (["developer", "tester"] as const).filter((s) => (s === "developer" ? u.isDeveloper && !u.devSuspended : u.isTester && !u.testerSuspended));
-                const roles = (u.isDeveloper ? 1 : 0) + (u.isTester ? 1 : 0);
-                return (
-                  <p className="flex flex-wrap items-center gap-2">
-                    {(open.length > 0 || roles === 0) && <PreviewButton id={u.id} />}
-                    {/* A one-role account just shows Suspend; an account with both roles chooses the side. */}
-                    {open.length > 0 && (roles === 2 && open.length === 2 ? (
-                      <AdminButton action="suspend" id={u.id} label="Suspend" danger choice={{ name: "side", label: "Side to suspend", options: [{ value: "developer", label: "Developer side" }, { value: "tester", label: "Tester side" }] }} fields={[{ name: "note", label: "Why" }]} />
-                    ) : (
-                      <AdminButton action="suspend" id={u.id} label={roles === 2 ? `Suspend the ${open[0]} side` : "Suspend"} danger extra={{ side: open[0] }} fields={[{ name: "note", label: "Why" }]} />
-                    ))}
-                    {roles === 0 && <AdminButton action="suspend" id={u.id} label="Suspend" danger fields={[{ name: "note", label: "Why" }]} />}
-                    <AdminButton action="delete-account" id={u.id} label="Delete account" danger fields={[{ name: "note", label: "Why" }]} />
-                  </p>
-                );
-              })()}
-            </>
-          )}
+          {/* (Batch 17 §6) Suspend / Reinstate / Delete with the Preview check: the same component as a profile's admin view. */}
+          <AccountActions initial={u.acct} />
         </li>
       );
     }
@@ -197,56 +167,207 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
 }
 
 const LIST_KINDS = new Set<Kind>(["users", "tests", "payments", "u-payments", "u-payouts", "u-disputes", "u-chargebacks", "u-holds", "u-tests", "u-reports", "u-parts", "t-timeline", "t-contracts", "t-payments"]);
-const PAGE = 25; // (Owner, Oct 26) pages of 25 (the server's PAGE)
+
+type Filter = { q: string; ticks: string[] };
+const NO_FILTER: Filter = { q: "", ticks: [] };
+const sameFilter = (a: Filter, b: Filter) => a.q === b.q && a.ticks.join(",") === b.ticks.join(",");
 
 /**
- * (Owner, Oct 26) A long admin list in pages of 25 with Previous / Next under it and "1–25 of N". Pressing one fetches that page and replaces ONLY this list's
- * rows (no page reload); the pages are keyset by date. Each row keeps its anchor (dispute-ID, user-ID, test-ID) so a bell line or a link can open the exact row.
+ * (Batch 17 §7, replacing the owner's Oct 26 pages of 25) Every admin list is a scroll box about 10 rows tall that loads the next 25 as it nears its end (the same
+ * keyset cursors), with a "Loading…" row while it fetches and "That's all (N)" at the end. The heading keeps the total ("Accounts (1,204)"; with a search or ticks,
+ * "Accounts: 12 match"). (Batch 17 §5) Accounts and Tests have a search box and tick boxes above the box: they apply after a short pause, reload only this list and
+ * reset it to the top. Rows that arrive live while the box is scrolled down don't move it: a "3 new ↑" pill scrolls back to the top and shows them (at the top they
+ * go straight in). Each row keeps its anchor (dispute-ID, user-ID, test-ID) so a bell line or a link can open the exact row. Phones: the same box, full width.
+ * `fixed`: one pinned row (opened from a link): no live check and no end line.
  */
-export function PagedList({ kind, initial, empty = "None.", scroll = false, arg = "" }: { kind: Kind; initial: Page<AnyRow> | null; empty?: string; scroll?: boolean; arg?: string }) {
+export function PagedList({ kind, initial, empty = "None.", arg = "", title, level = 2, fixed = false }: { kind: Kind; initial: Page<AnyRow> | null; empty?: string; arg?: string; title?: string; level?: 2 | 3; fixed?: boolean }) {
+  const search = isSearchKind(kind) ? SEARCHABLE[kind] : null;
   const [rows, setRows] = useState<AnyRow[]>(initial?.rows ?? []);
   const [total, setTotal] = useState(initial?.total ?? 0);
-  // The cursor that fetched each page seen so far (page 1 = none) and the page now shown: Previous goes back to an earlier cursor, Next uses the page's own.
-  const [cursors, setCursors] = useState<(string | null)[]>([null]);
-  const [idx, setIdx] = useState(0);
   const [next, setNext] = useState<string | null>(initial?.next ?? null);
-  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(!initial);
   const [err, setErr] = useState("");
-  const go = async (to: number, cursor: string | null, trail: (string | null)[]) => {
-    setBusy(true);
-    setErr("");
-    try {
-      const r = await api<Page<AnyRow>>(`/api/admin/more?kind=${kind}&after=${encodeURIComponent(cursor ?? "")}${arg ? `&arg=${encodeURIComponent(arg)}` : ""}`);
-      setRows(r.rows);
-      setTotal(r.total);
-      setNext(r.next);
-      setCursors(trail);
-      setIdx(to);
-    } catch (e) {
-      setErr(errOf(e));
-    }
-    setBusy(false);
-  };
-  // Opened without rows (a lazy list): fetch its first page.
+  // What is typed and ticked, and the filter the rows shown are for (the heading and the cursor follow the applied one).
+  const [typed, setTyped] = useState("");
+  const [ticks, setTicks] = useState<string[]>([]);
+  const [applied, setApplied] = useState<Filter>(NO_FILTER);
+  // A fresh first page with rows ahead of the shown ones, held while the box is scrolled down (the pill).
+  const [pending, setPending] = useState<Page<AnyRow> | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  const seq = useRef(0); // bumped by each new filter: answers for an older one are dropped
+  const busy = useRef(false); // the next 25 are loading
+  const first = useRef(false); // a filter's first 25 are loading: no next 25 or live check meanwhile
+  const rowsRef = useRef(rows);
+  const appliedRef = useRef(applied);
   useEffect(() => {
-    if (!initial) void go(0, null, [null]);
+    rowsRef.current = rows;
+    appliedRef.current = applied;
+  }, [rows, applied]);
+
+  const url = useCallback(
+    (after: string | null, f: Filter) => `/api/admin/more?kind=${kind}&after=${encodeURIComponent(after ?? "")}${arg ? `&arg=${encodeURIComponent(arg)}` : ""}${f.q ? `&q=${encodeURIComponent(f.q)}` : ""}${f.ticks.length ? `&f=${encodeURIComponent(f.ticks.join(","))}` : ""}`,
+    [kind, arg],
+  );
+
+  /** The first 25 for a filter (or the lazy first load): replaces the rows and goes back to the top. */
+  const reload = useCallback(
+    async (f: Filter) => {
+      const my = ++seq.current;
+      first.current = true;
+      setLoading(true);
+      setErr("");
+      try {
+        const r = await api<Page<AnyRow>>(url(null, f));
+        if (my !== seq.current) return;
+        setRows(r.rows);
+        setTotal(r.total);
+        setNext(r.next);
+        setApplied(f);
+        appliedRef.current = f;
+        setPending(null);
+        if (box.current) box.current.scrollTop = 0;
+      } catch (e) {
+        if (my === seq.current) setErr(errOf(e));
+      }
+      if (my === seq.current) {
+        first.current = false;
+        setLoading(false);
+      }
+    },
+    [url],
+  );
+
+  /** The next 25 after the last row shown. */
+  const loadMore = useCallback(async () => {
+    if (busy.current || first.current || !next) return;
+    busy.current = true;
+    setLoading(true);
+    setErr("");
+    const my = seq.current;
+    try {
+      const r = await api<Page<AnyRow>>(url(next, appliedRef.current));
+      if (my !== seq.current) return;
+      setRows((prev) => {
+        const have = new Set(prev.map((x) => x.id));
+        return [...prev, ...r.rows.filter((x) => !have.has(x.id))];
+      });
+      setNext(r.next);
+      setTotal(r.total);
+    } catch (e) {
+      if (my === seq.current) setErr(errOf(e));
+    } finally {
+      busy.current = false;
+      if (my === seq.current) setLoading(false);
+    }
+  }, [next, url]);
+
+  /** Live rows go on top (from the pill, or straight in while the box is at its top). */
+  const takeTop = useCallback((fresh: Page<AnyRow>) => {
+    const m = mergeTop(fresh.rows, rowsRef.current);
+    setRows(m.rows);
+    if (m.replaced) setNext(fresh.next);
+    setTotal(fresh.total);
+    setPending(null);
+  }, []);
+
+  // Opened without rows (a lazy list): fetch its first 25.
+  useEffect(() => {
+    if (!initial) void reload(NO_FILTER);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const start = idx * PAGE;
+
+  // (Batch 17 §5) Search and ticks apply after a short pause; clearing both brings the full list back.
+  useEffect(() => {
+    if (!search) return;
+    const f: Filter = { q: searchOf(typed), ticks };
+    if (sameFilter(f, appliedRef.current)) return;
+    const t = setTimeout(() => void reload(f), SEARCH_PAUSE_MS);
+    return () => clearTimeout(t);
+  }, [typed, ticks, search, reload]);
+
+  // A box whose rows don't fill it yet keeps loading until they do or nothing is left.
+  useEffect(() => {
+    if (next && !loading && box.current && nearEnd(box.current)) void loadMore();
+  }, [rows, next, loading, loadMore]);
+
+  // (Batch 17 §7) Live rows: while the box is on screen and the tab visible, look at the first 25 again every 20 s.
+  useEffect(() => {
+    if (fixed) return;
+    let onScreen = true;
+    const io = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(([e]) => { onScreen = e.isIntersecting; });
+    if (io && wrap.current) io.observe(wrap.current);
+    const tick = async () => {
+      if (!onScreen || document.visibilityState !== "visible" || busy.current || first.current) return;
+      const my = seq.current;
+      try {
+        const r = await api<Page<AnyRow>>(url(null, appliedRef.current));
+        if (my !== seq.current) return;
+        setTotal(r.total);
+        if (!r.rows.length || !newRowsAhead(r.rows, rowsRef.current).length) return setPending(null);
+        if (!box.current || atTop(box.current)) takeTop(r);
+        else setPending(r);
+      } catch {
+        // offline: try again next time
+      }
+    };
+    const t = setInterval(tick, LIVE_POLL_MS);
+    return () => {
+      clearInterval(t);
+      io?.disconnect();
+    };
+  }, [fixed, url, takeTop]);
+
+  const filtered = applied.q !== "" || applied.ticks.length > 0;
+  const fresh = pending ? newRowsAhead(pending.rows, rows).length : 0;
   const body = rows.map((r) => <Row key={r.id} kind={kind} row={r} />);
+  const H = level === 2 ? "h2" : "h3";
   return (
-    <div className="space-y-2" data-paged={kind}>
-      {rows.length === 0 && <p className="note">{empty}</p>}
-      {rows.length > 0 && (
-        <div className={`${scroll ? "max-h-[26rem] overflow-y-auto pr-1" : ""}`} data-scroll-box={scroll ? kind : undefined}>
-          {LIST_KINDS.has(kind) ? <ul className="divide-y divide-white/5 text-sm">{body}</ul> : body}
+    <div className="w-full min-w-0 space-y-2" data-paged={kind} ref={wrap}>
+      {title && <H className={level === 2 ? "text-lg font-semibold text-white" : "font-semibold text-white"} data-list-heading={kind}>{headingText(title, total, filtered)}</H>}
+      {search && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-list-filters={kind}>
+          <input type="search" className="input w-full sm:w-80" aria-label={search.label} placeholder={search.placeholder} maxLength={SEARCH_MAX} value={typed} onChange={(e) => setTyped(e.target.value)} data-list-search={kind} />
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1" role="group" aria-label="Show only">
+            {search.ticks.map((t) => (
+              <label key={t.value} className="inline-flex items-center gap-1.5 text-sm text-slate-300">
+                <input type="checkbox" checked={ticks.includes(t.value)} onChange={(e) => setTicks((now) => (e.target.checked ? [...now, t.value] : now.filter((x) => x !== t.value)))} data-list-tick={t.value} /> {t.label}
+              </label>
+            ))}
+          </span>
         </div>
       )}
-      {(idx > 0 || next) && (
-        <div className="flex flex-wrap items-center gap-3" data-pager={kind}>
-          <button className="btn-ghost" disabled={busy || idx === 0} onClick={() => go(idx - 1, cursors[idx - 1], cursors.slice(0, idx))} data-prev={kind}>Previous</button>
-          <span className="text-sm text-slate-400" data-range={kind}>{rows.length ? `${start + 1}–${start + rows.length} of ${total}` : `0 of ${total}`}</span>
-          <button className="btn-ghost" disabled={busy || !next} onClick={() => go(idx + 1, next, [...cursors.slice(0, idx + 1), next])} data-next={kind}>Next</button>
+      {rows.length === 0 && !loading ? (
+        <p className="note">{filtered && search ? search.none : empty}</p>
+      ) : (
+        <div className="relative w-full">
+          {fresh > 0 && (
+            <button
+              type="button"
+              className="absolute left-1/2 top-2 z-10 -translate-x-1/2 rounded-full border border-sky-300/50 bg-sky-500/90 px-3 py-1 text-xs font-semibold text-white shadow-lg"
+              onClick={() => {
+                if (pending) takeTop(pending);
+                box.current?.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              data-new-rows={kind}
+            >
+              {newRowsPill(fresh)}
+            </button>
+          )}
+          <div
+            ref={box}
+            className="max-h-[23rem] w-full overflow-y-auto overscroll-contain pr-1"
+            onScroll={(e) => {
+              const b = e.currentTarget;
+              if (nearEnd(b)) void loadMore();
+              if (pending && atTop(b)) takeTop(pending);
+            }}
+            data-scroll-box={kind}
+          >
+            {LIST_KINDS.has(kind) ? <ul className="divide-y divide-white/5 text-sm">{body}</ul> : body}
+            {loading && <p className="py-2 text-center text-sm text-slate-400" data-loading-row={kind}>{LOADING_LINE}</p>}
+            {!loading && !next && !fixed && rows.length > 0 && <p className="py-2 text-center text-xs text-slate-500" data-end-line={kind}>{endLine(total)}</p>}
+          </div>
         </div>
       )}
       {err && <p className="err">{err}</p>}

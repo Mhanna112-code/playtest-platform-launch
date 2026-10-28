@@ -288,7 +288,7 @@ describe("R, W) the 4th payment hold needs an admin's Approve (in the Lifts box)
     const page = src("app/admin/page.tsx");
     expect(page).toContain("More than 3 holds"); // a label only when it applies; no exact count outside the profile totals
     expect(page).not.toContain("hold {x.holdCount}");
-    expect(page).toContain("Open disputes (");
+    expect(page).toContain('title="Open disputes"'); // (batch 17 §7) the scroll box's heading: "Open disputes (N)"
     expect(page).not.toContain("Open disputes and lifts");
     const at = (id: string) => page.indexOf(`id="${id}"`);
     const order = ["disputes", "lifts", "chargebacks", "mine", "paused-tests"].map(at);

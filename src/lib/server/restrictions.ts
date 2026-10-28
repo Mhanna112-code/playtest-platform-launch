@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { PAYOUT_LINE } from "@/lib/payout";
-import { displayName } from "@/lib/format";
+import { displayName, fmtDateTime } from "@/lib/format";
 import { callCancelledLine } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify } from "./notify";
@@ -98,21 +98,70 @@ const fields = (s: SuspendSide) =>
     ? ({ at: "devSuspendedAt", note: "devSuspendNote", by: "devSuspendedById", back: "devReinstatedAt" } as const)
     : ({ at: "testerSuspendedAt", note: "testerSuspendNote", by: "testerSuspendedById", back: "testerReinstatedAt" } as const);
 
+// ---------- (Batch 17 §6) The admin's view was older than the change ----------
+
+/** An admin's Suspend / Reinstate / any press on a deleted account (delete wins). */
+export const ACCOUNT_DELETED = "That account was deleted.";
+/** What the admin's Suspend or Reinstate was pressed on: when their Preview (or else the page, or the list's row) was loaded. */
+export type SeenFrom = { since: Date; from: "preview" | "page" };
+export function seenFromBody(body: Record<string, unknown>): SeenFrom | null {
+  const since = typeof body.since === "string" ? new Date(body.since) : null;
+  if (!since || isNaN(since.getTime())) return null;
+  return { since, from: body.from === "preview" ? "preview" : "page" };
+}
+const cap = (s: string) => (s.includes("@") ? s : s.charAt(0).toUpperCase() + s.slice(1)); // an email stays as it is
+/** "Since your Preview, bo@… reinstated that account's developer side at Oct 28, 3:10 PM." */
+export const changedSinceLine = (from: SeenFrom["from"], who: string, verb: "suspended" | "reinstated", side: SuspendSide, at: Date) =>
+  `${from === "preview" ? "Since your Preview" : "Since this page loaded"}, ${who} ${verb} that account's ${sideWord(side)} at ${fmtDateTime(at)}.`;
+/** "That account was deleted. bo@… deleted it at Oct 28, 3:10 PM." */
+export const deletedSinceLine = (who: string, at: Date) => `${ACCOUNT_DELETED} ${cap(who)} deleted it at ${fmtDateTime(at)}.`;
+const emailOf = async (id: string | null | undefined, none: string) => {
+  if (!id) return none;
+  const x = await db.user.findUnique({ where: { id }, select: { email: true, deletedAt: true } });
+  return !x || x.deletedAt ? "an admin (deleted)" : x.email;
+};
+
+/** A deleted account refuses Suspend and Reinstate; deleted after the admin's view: the line names who and when. */
+async function refuseDeleted(u: { id: string; deletedAt: Date | null; deletedBy: string }, seen: SeenFrom | null) {
+  if (!u.deletedAt) return;
+  if (!seen || u.deletedAt <= seen.since) throw new HttpError(409, "deleted", ACCOUNT_DELETED);
+  const act = u.deletedBy === "admin" ? await db.adminAction.findFirst({ where: { targetId: u.id, action: "delete-account" }, orderBy: { createdAt: "desc" } }) : null;
+  throw new HttpError(409, "deleted", deletedSinceLine(u.deletedBy === "self" ? "its owner" : await emailOf(act?.adminId, "an admin"), u.deletedAt));
+}
+
+/** Another admin suspended or reinstated this side after the admin's Preview (or page) was loaded: refused, naming who and when. */
+// The side's own times (written by this server, like `since`; never the database's clock) say what changed last: a suspension clears the reinstated time.
+async function refuseIfChangedSince(adminId: string, userId: string, side: SuspendSide, seen: SeenFrom | null) {
+  if (!seen) return;
+  const u = await db.user.findUnique({ where: { id: userId } });
+  if (!u) return;
+  const f = fields(side);
+  const suspendedAt = u[f.at], reinstatedAt = u[f.back];
+  if (suspendedAt && suspendedAt > seen.since && u[f.by] !== adminId) throw new HttpError(409, "changed_since", changedSinceLine(seen.from, await emailOf(u[f.by], "the team"), "suspended", side, suspendedAt));
+  if (!suspendedAt && reinstatedAt && reinstatedAt > seen.since) {
+    const ev = await db.accountEvent.findFirst({ where: { userId, kind: "reinstated", side: side === "developer" ? { in: ["developer", ""] } : "tester" }, orderBy: { createdAt: "desc" } });
+    if (ev?.byId !== adminId) throw new HttpError(409, "changed_since", changedSinceLine(seen.from, await emailOf(ev?.byId, "the team"), "reinstated", side, reinstatedAt));
+  }
+}
+
 /**
  * Admin: suspend ONE side of an account (owner, Oct 30, batch 15 section 16). To suspend both, the admin suspends each side. The developer side: their tests pause,
  * billing pauses (batches 5-12). The tester side: they're removed from every test they're in. The other side keeps working.
  */
-export async function suspendAccount(adminId: string, userId: string, note: string, asked?: unknown) {
+export async function suspendAccount(adminId: string, userId: string, note: string, asked?: unknown, seen: SeenFrom | null = null) {
   const u = await db.user.findUnique({ where: { id: userId } });
   if (!u) throw new HttpError(404, "not_found", "That account doesn't exist.");
-  if (u.deletedAt) throw new HttpError(409, "deleted", "That account was deleted.");
+  await refuseDeleted(u, seen);
   const side = sideToSuspend(u, asked) ?? (u.isDeveloper || u.isTester ? null : "developer");
   if (!side) throw new HttpError(400, "choose_side", "Choose the side to suspend: Developer side or Tester side.");
   const f = fields(side);
-  // Two admins at once: the second is refused, naming the first (batch 15 section 21).
-  const claimed = await db.user.updateMany({ where: { id: userId, [f.at]: null }, data: { [f.at]: new Date(), [f.note]: note, [f.by]: adminId, [f.back]: null } });
+  // (Batch 17 §6) Pressed on a Preview (or page) older than another admin's change to this side: refused, naming who and when.
+  await refuseIfChangedSince(adminId, userId, side, seen);
+  // Two admins at once: the second is refused, naming the first (batch 15 section 21). (Batch 17 §6) A Delete at the same moment wins.
+  const claimed = await db.user.updateMany({ where: { id: userId, [f.at]: null, deletedAt: null }, data: { [f.at]: new Date(), [f.note]: note, [f.by]: adminId, [f.back]: null } });
   if (claimed.count !== 1) {
     const now = await db.user.findUniqueOrThrow({ where: { id: userId } });
+    if (now.deletedAt) throw new HttpError(409, "deleted", ACCOUNT_DELETED);
     const by = now[f.by] ? await db.user.findUnique({ where: { id: now[f.by]! }, select: { email: true } }) : null;
     throw new HttpError(409, "already", `That account's ${sideWord(side)} is already suspended${by ? ` (by ${by.email})` : ""}.`);
   }
@@ -144,9 +193,10 @@ export async function releaseHeldShares(testerId: string, ids?: string[]) {
 }
 
 /** Admin: lift the suspension of one side (batch 15 section 16). A one-role account, or an account with only one side suspended, needs no side named. */
-export async function reinstateAccount(userId: string, asked?: unknown, adminId: string | null = null) {
+export async function reinstateAccount(userId: string, asked?: unknown, adminId: string | null = null, seen: SeenFrom | null = null) {
   const u = await db.user.findUnique({ where: { id: userId } });
   if (!u) throw new HttpError(404, "not_found", "That account doesn't exist.");
+  await refuseDeleted(u, seen); // (Batch 17 §6) delete wins
   const both = !!u.devSuspendedAt && !!u.testerSuspendedAt;
   const side: SuspendSide | null = asked === "developer" || asked === "tester" ? asked : both ? null : u.devSuspendedAt ? "developer" : u.testerSuspendedAt ? "tester" : null;
   if (!side) {
@@ -154,15 +204,22 @@ export async function reinstateAccount(userId: string, asked?: unknown, adminId:
     throw new HttpError(409, "not_suspended", "That account isn't suspended.");
   }
   const f = fields(side);
+  if (adminId) await refuseIfChangedSince(adminId, userId, side, seen); // (Batch 17 §6)
   const start = u[f.at], now = new Date();
   // Two admins at once: the second is refused, naming the first.
-  const lifted = start ? await db.user.updateMany({ where: { id: userId, [f.at]: start }, data: { [f.at]: null, [f.note]: "", [f.by]: null, [f.back]: now } }) : { count: 0 };
+  // (Batch 17 §6) The lift and its record commit together, so a second admin's refusal can always name who reinstated it.
+  const lifted = start
+    ? await db.$transaction(async (tx) => {
+        const r = await tx.user.updateMany({ where: { id: userId, [f.at]: start }, data: { [f.at]: null, [f.note]: "", [f.by]: null, [f.back]: now } });
+        if (r.count === 1) await tx.accountEvent.create({ data: { userId, kind: "reinstated", byId: adminId ?? u[f.by], note: "", side } });
+        return r;
+      })
+    : { count: 0 };
   if (!start || lifted.count !== 1) {
     const ev = await db.accountEvent.findFirst({ where: { userId, kind: "reinstated", side }, orderBy: { createdAt: "desc" } });
     const by = ev?.byId ? await db.user.findUnique({ where: { id: ev.byId }, select: { email: true } }) : null;
     throw new HttpError(409, "not_suspended", `That account's ${sideWord(side)} was already reinstated${by ? ` (by ${by.email})` : ""}.`);
   }
-  await accountEvent(userId, "reinstated", adminId ?? u[f.by], "", side);
   if (side === "developer" && u.isDeveloper) {
     // (Owner, Oct 28 afternoon, DEFAULT) Deadlines and Open until move on by the pause; a hold still on keeps the tests paused (they resume, and move on the rest, when it lifts).
     const running = await db.$transaction((tx) => resumeTests(tx, userId, start!, now, [u.holdStartedAt]));
