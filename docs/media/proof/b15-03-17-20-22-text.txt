@@ -1,0 +1,7 @@
+ ✓ tests/batch15-text.test.ts > long questions and steps (sections 3 and 17) > 20 questions of 20,000 characters and 20,000 characters of steps: posted, sent, switched and kept 768ms
+ ✓ tests/batch15-text.test.ts > long questions and steps (sections 3 and 17) > one character more is refused at the field: questions, steps 18ms
+ ✓ tests/batch15-text.test.ts > reasons and notes (section 20) > 1,000 characters; one more is refused at the field, never cut 261ms
+ ✓ tests/batch15-text.test.ts > reasons and notes (section 20) > no bell line carries a reason, a note, a dispute's text or a message (the emails do) 418ms
+ ✓ tests/batch15-text.test.ts > End early's reason (section 22) > required (one character is enough), at most 10,000; testers read it on the session page and in the email 124ms
+ Test Files  1 passed (1)
+      Tests  5 passed (5)

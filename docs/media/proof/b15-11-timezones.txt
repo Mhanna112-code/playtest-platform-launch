@@ -1,0 +1,7 @@
+ ✓ tests/batch15-tz.test.ts > time zones (section 11) > fmtFor names the zone; unknown is UTC 7ms
+ ✓ tests/batch15-tz.test.ts > time zones (section 11) > one line, two readers: each reads their own zone (bell and the email it goes in) 99ms
+ ✓ tests/batch15-tz.test.ts > time zones (section 11) > an outage's bell line is written in each person's zone 330ms
+ ✓ tests/batch15-tz.test.ts > time zones (section 11) > a developer in New York and a tester in Berlin: the same call in each one's bell 244ms
+ ✓ tests/batch15-tz.test.ts > time zones (section 11) > the browser's zone is stored (sign-in, and the layout's one call when it differs) 9ms
+ Test Files  1 passed (1)
+      Tests  5 passed (5)

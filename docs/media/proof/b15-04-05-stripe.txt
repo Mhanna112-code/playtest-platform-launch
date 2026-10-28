@@ -1,0 +1,5 @@
+ ✓ tests/batch15-stripe.test.ts > payout readiness (section 4) > ready = payouts on and the transfers capability active; charges_enabled doesn't matter 1ms
+ ✓ tests/batch15-stripe.test.ts > payout readiness (section 4) > refreshPayoutStatus uses the rule with Stripe's account object 97ms
+ ✓ tests/batch15-stripe.test.ts > Connect webhook secret (section 5) > accepts an event signed with either secret, and refuses a wrong one with 400 57ms
+ Test Files  1 passed (1)
+      Tests  3 passed (3)

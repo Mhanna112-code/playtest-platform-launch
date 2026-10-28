@@ -1,0 +1,11 @@
+ ✓ tests/batch15-days.test.ts > review reminders (section 2) > a part sent 20 days before its deadline: 2 weeks, 1 week, 3 days, 1 day (3 weeks is already past, the month never applies) 2ms
+ ✓ tests/batch15-days.test.ts > review reminders (section 2) > a part sent 2 days before its deadline: the review date is sent + 7; no duplicate on the sending day: 3 days, 1 day 0ms
+ ✓ tests/batch15-days.test.ts > review reminders (section 2) > 25 days away: 3 weeks, 2 weeks, 1 week, 3 days, 1 day; 40 days away adds the month 0ms
+ ✓ tests/batch15-days.test.ts > review reminders (section 2) > (fake clock, listed) the daily job sends each mark once on its day, then opens Charge 1994ms
+ ✓ tests/batch15-days.test.ts > review reminders (section 2) > (fake clock, unlisted) the daily job sends each mark once on its day, then stops, with no Charge 1479ms
+ ✓ tests/batch15-days.test.ts > tester days (section 18) > every tester gets the same days from when THEY join; joining closes at Open until; Edit +5 days moves everyone 178ms
+ ✓ tests/batch15-days.test.ts > tester days (section 18) > Charge opens from each tester's own deadline (or sent + 7, whichever is later); pending applications close at Open until 124ms
+ ✓ tests/batch15-days.test.ts > tester days (section 18) > wording: Post's hint, Find and the listing, the join page, terms lines 1ms
+ ✓ tests/batch15-days.test.ts > Open until in the developer's own date (section 32) > 8 PM in Chicago (already the next day in UTC): the picker's earliest date is accepted 4ms
+ Test Files  1 passed (1)
+      Tests  9 passed (9)

@@ -1,0 +1,7 @@
+ ✓ tests/outages.test.ts > outages > a down/up alert pair 15 minutes or more apart is recorded once; every running timer moves by its length; calls inside are missed 653ms
+ ✓ tests/outages.test.ts > outages > gated: with the setting off nothing is written; polls never write heartbeats; only the keyed ping does, and a gap never creates an outage 168ms
+ ✓ tests/outages.test.ts > outages > (batch 15 section 10) a 20-minute gap with no pings records nothing; a down/up pair 40 minutes apart records one outage and moves a deadline 173ms
+ ✓ tests/batch15-setup.test.ts > test schema cleanup > only ever clears a named, non-public schema 1ms
+ ✓ tests/batch15-setup.test.ts > test schema cleanup > runs against the test schema 54ms
+ Test Files  2 passed (2)
+      Tests  5 passed (5)

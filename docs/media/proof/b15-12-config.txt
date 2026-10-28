@@ -1,0 +1,8 @@
+ ✓ tests/batch15-config.test.ts > configProblems > lists each problem with its plain fix 3ms
+ ✓ tests/batch15-config.test.ts > configProblems > only bad values stop the build; missing optional settings warn 0ms
+ ✓ tests/batch15-config.test.ts > configProblems > the build script fails with the plain message 145ms
+ ✓ tests/batch15-config.test.ts > configProblems > (section 41, M3 and H1) fail-open production settings and placeholders stop the build 1ms
+ ✓ tests/batch15-config.test.ts > configProblems > the red box is the owner's; every admin sees it when OWNER_EMAIL is unset 0ms
+ ✓ tests/batch15-config.test.ts > configProblems > production without the email key: sendEmail throws, logs and never writes to the outbox (unless ALLOW_DEV_OUTBOX=1) 54ms
+ Test Files  1 passed (1)
+      Tests  6 passed (6)

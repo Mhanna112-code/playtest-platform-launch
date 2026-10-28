@@ -1,0 +1,4 @@
+ ✓ tests/batch15-storage.test.ts > R2 upload sizes (section 6) > the presigned PUT has content-length among its signed headers; a GET signs only the host 3ms
+ ✓ tests/batch15-storage.test.ts > R2 upload sizes (section 6) > finishing checks the stored object: too big is deleted with the row; the right size goes through 538ms
+ Test Files  1 passed (1)
+      Tests  2 passed (2)

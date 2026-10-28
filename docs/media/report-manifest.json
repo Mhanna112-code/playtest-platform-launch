@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-28T06:38:54.647Z",
+  "generated": "2026-10-28T12:50:14.877Z",
   "sizes": {
     "desktop": "1280x900",
     "phone": "375x812"
@@ -288,14 +288,14 @@
         },
         {
           "title": "Key in use",
-          "explanation": "A key in use can't be added again (red)",
+          "explanation": "A key in use by a working tester can't be added (red, as you type): “HR-1111 is in use by Ana Silva, so it can't be added.”",
           "kind": "image",
           "desktop": "edit-key-in-use.png",
           "phone": "edit-key-in-use-phone.png"
         },
         {
-          "title": "Reported or left keys",
-          "explanation": "Keys reported as not working or given to a tester who left can't be added again",
+          "title": "A key from a tester who left",
+          "explanation": "Cam left: his key HR-3333 can be typed back into Free, with a warning only (a “Reused” tag, never a mistake)",
           "kind": "image",
           "desktop": "edit-key-reported-left.png",
           "phone": "edit-key-reported-left-phone.png"
@@ -330,7 +330,7 @@
         },
         {
           "title": "Red and blue: spots and keys",
-          "explanation": "You ticked a key to remove; another tab added a spot (blue): now fewer free keys than open spots (red)",
+          "explanation": "You deleted a key's line; another tab added a spot (blue): now fewer free keys than open spots (red)",
           "kind": "image",
           "desktop": "edit-red-blue-spots-keys.png",
           "phone": "edit-red-blue-spots-keys-phone.png"
@@ -344,7 +344,7 @@
         },
         {
           "title": "Red and blue: keys",
-          "explanation": "You ticked one key to remove; another tab removed another (blue): the free keys no longer cover the open spots (red)",
+          "explanation": "You deleted one key's line; another tab removed another (blue): the free keys no longer cover the open spots (red)",
           "kind": "image",
           "desktop": "edit-red-blue-keys.png",
           "phone": "edit-red-blue-keys-phone.png"
@@ -372,7 +372,7 @@
         },
         {
           "title": "Tab A: the key boxes after the race",
-          "explanation": "The blue note says what the other tab changed; red marks K-2 (ticked here, given to Ben meanwhile) and too few free keys for the open spots",
+          "explanation": "The blue notes name what changed (“Ben Okafor joined and was given K-2”); red marks K-2 (deleted here, given to Ben meanwhile) and too few free keys; the box already shows the current keys with A's own edits",
           "kind": "image",
           "desktop": "keysrace-a-keys.png",
           "phone": "keysrace-a-keys-phone.png"
@@ -393,7 +393,7 @@
         },
         {
           "title": "Access keys race (two tabs)",
-          "explanation": "Tab A (left) ticks K-2, K-6, K-7 and types N-1; Ben and Cam join and get K-2 and K-3; tab B (right) removes K-4, K-5, K-8, adds B-1 and saves after its own blue notice; A's Save shows the blue notice and the red marks, the second press is refused, and A saves after pressing Keep on K-2 and adding a key",
+          "explanation": "Tab A (left) deletes K-2, K-6, K-7 and types N-1 in the Free box; Ben and Cam join and get K-2 and K-3; tab B (right) deletes K-4, K-5, K-8, adds B-1 and saves after its own blue notice; A's Save shows the blue notice and the red marks, the box refreshes with A's own edits, and A saves after adding a key",
           "kind": "video",
           "desktop": "keysrace.webm",
           "phone": "keysrace-phone.webm"
@@ -441,14 +441,14 @@
         },
         {
           "title": "Needs you",
-          "explanation": "Needs you, grouped per person: Pay or Reject for sent work, a call waiting for its length, a dispute waiting for your side",
+          "explanation": "Needs you, grouped per person: Pay for sent work, a call to pay for its measured length, a dispute waiting for your side",
           "kind": "image",
           "desktop": "tp-needs-you.png",
           "phone": "tp-needs-you-phone.png"
         },
         {
-          "title": "A dispute and a call to log",
-          "explanation": "A dispute waiting for the developer's side, and a call that happened waiting for its length",
+          "title": "A dispute and a call to pay",
+          "explanation": "A dispute waiting for the developer's side, and a call that happened, measured by the app",
           "kind": "image",
           "desktop": "tp-needs-dispute-call.png",
           "phone": "tp-needs-dispute-call-phone.png"
@@ -574,7 +574,7 @@
         },
         {
           "title": "Team pauses the test",
-          "explanation": "The team pauses the test: End early is refused (“you can only stop it”) and the banner explains",
+          "explanation": "The team pauses the test while Nora is on it: End early still goes through without a stop box (batch 15 §29), and the banner says what's paused and what still works",
           "kind": "video",
           "desktop": "tp-team-paused.webm",
           "phone": "tp-team-paused-phone.webm"
@@ -721,7 +721,7 @@
         },
         {
           "title": "The stopped test page",
-          "explanation": "No Edit, Stop, End early, Invite or call requests; Needs you (Pay, Reject, the call's length), the Testers panel, past calls, Alerts and Next round stay",
+          "explanation": "No Edit, Stop, End early, Invite or call requests; Needs you (Pay, the measured calls), the Testers panel, past calls, Alerts and Next round stay",
           "kind": "image",
           "desktop": "stopped-dev-page.png",
           "phone": "stopped-dev-page-phone.png"
@@ -1415,7 +1415,7 @@
         },
         {
           "title": "A suspended account",
-          "explanation": "The row says who suspended it, when and why, with Lift the suspension",
+          "explanation": "The row says who suspended it (by email), when and why, with Reinstate for that side",
           "kind": "image",
           "desktop": "admin-suspended-row.png",
           "phone": "admin-suspended-row-phone.png"
@@ -1506,7 +1506,7 @@
         },
         {
           "title": "A suspension already lifted",
-          "explanation": "Bo lifts a suspension Ada already lifted: “That account isn't suspended.”",
+          "explanation": "Bo presses Reinstate on a suspension Ada already lifted: “That account isn't suspended.”",
           "kind": "image",
           "desktop": "admins2-suspension.png",
           "phone": "admins2-suspension-phone.png"
@@ -1633,8 +1633,79 @@
     },
     {
       "title": "Outages",
-      "explanation": "An outage is detected by the outside health check: every clock moves later by its length, calls inside it are cancelled with no fault, and open pages say so.",
-      "cases": []
+      "explanation": "An outage comes from the uptime service's down and up alerts (batch 15): every clock moves later by its length, calls inside it are cancelled with no fault, and open pages say so.",
+      "cases": [
+        {
+          "title": "Before: the developer's call",
+          "explanation": "A call with Ana booked at the time the site is about to be found down",
+          "kind": "image",
+          "desktop": "outage-before-dev.png",
+          "phone": "outage-before-dev-phone.png"
+        },
+        {
+          "title": "After: the developer's page",
+          "explanation": "The live box: “The site was down from <a> to <b>. Deadlines and payment dates moved 20 min later.”",
+          "kind": "image",
+          "desktop": "outage-live-dev.png",
+          "phone": "outage-live-dev-phone.png"
+        },
+        {
+          "title": "After: the tester's page",
+          "explanation": "Ana's session page says the same in its live box",
+          "kind": "image",
+          "desktop": "outage-live-tester.png",
+          "phone": "outage-live-tester-phone.png"
+        },
+        {
+          "title": "An outage is found",
+          "explanation": "The developer's test page (left) and the tester's session page (right) are open when the health check finds a 20-minute gap: both say the site was down and every clock moved later",
+          "kind": "video",
+          "desktop": "outage-live.webm",
+          "phone": "outage-live-phone.webm"
+        },
+        {
+          "title": "After: the call",
+          "explanation": "The call inside the outage is cancelled “missed because the site was down”: never a no-show, nothing charged",
+          "kind": "image",
+          "desktop": "outage-after-dev.png",
+          "phone": "outage-after-dev-phone.png"
+        },
+        {
+          "title": "After: the tester's page",
+          "explanation": "Ana's call reads as missed because the site was down; her deadline moved 20 minutes later (UTC before / after: 2026-11-11 23:59 → 2026-11-12 00:19)",
+          "kind": "image",
+          "desktop": "outage-after-tester.png",
+          "phone": "outage-after-tester-phone.png"
+        },
+        {
+          "title": "The developer's bell",
+          "explanation": "The outage line (its own line) and the missed call",
+          "kind": "image",
+          "desktop": "outage-bell-dev.png",
+          "phone": "outage-bell-dev-phone.png"
+        },
+        {
+          "title": "The tester's bell",
+          "explanation": "The same two lines for Ana",
+          "kind": "image",
+          "desktop": "outage-bell-tester.png",
+          "phone": "outage-bell-tester-phone.png"
+        },
+        {
+          "title": "The admin's bell",
+          "explanation": "An admin who runs a test gets the same bell line as everyone affected",
+          "kind": "image",
+          "desktop": "outage-bell-admin.png",
+          "phone": "outage-bell-admin-phone.png"
+        },
+        {
+          "title": "The admin's Outages",
+          "explanation": "The console lists the outages recorded from the uptime service's down and up alerts, with their length",
+          "kind": "image",
+          "desktop": "outage-admin.png",
+          "phone": "outage-admin-phone.png"
+        }
+      ]
     },
     {
       "title": "Notifications and emails",
@@ -1751,6 +1822,670 @@
           "kind": "image",
           "desktop": "bells-block.png",
           "phone": "bells-block-phone.png"
+        }
+      ]
+    },
+    {
+      "title": "Launch fixes",
+      "explanation": "Batch 15, item by item (§ numbers are the items in docs/BATCH-15.md): measured calls and the Pay boxes, one $1,000 for a tester's calls, one rule for every pause, stop boxes that name the press, keys, admins, and the security audit's fixes. Items with nothing on screen link to their text proof.",
+      "cases": [
+        {
+          "title": "§1 Chat while the test is paused",
+          "explanation": "The team paused the test: the chat stays open for both",
+          "kind": "image",
+          "desktop": "b15-01-chat-paused-test.png",
+          "phone": "b15-01-chat-paused-test-phone.png"
+        },
+        {
+          "title": "§1 Chat while the developer is restricted",
+          "explanation": "“Messages are paused for now. You can still read this chat.”",
+          "kind": "image",
+          "desktop": "b15-01-chat-dev-suspended.png",
+          "phone": "b15-01-chat-dev-suspended-phone.png"
+        },
+        {
+          "title": "§2 and §35 The developer's daily lines",
+          "explanation": "Review reminders on one schedule, “N applications wait for your answer”, and a call to pay",
+          "kind": "image",
+          "desktop": "b15-02-dev-bell.png",
+          "phone": "b15-02-dev-bell-phone.png"
+        },
+        {
+          "title": "§2, §18 and §32 Review reminders, tester days, Open until in the developer's own date",
+          "explanation": "Fake-clock tests: the same reminders for listed and unlisted parts, each tester's own days, the evening date in Chicago",
+          "kind": "text",
+          "desktop": "proof/b15-02-18-32-days.txt",
+          "phone": null
+        },
+        {
+          "title": "§3, §17, §20 and §22 Long questions, steps, reasons and notes",
+          "explanation": "20,000-character questions and steps; reasons refused over their limit, never cut",
+          "kind": "text",
+          "desktop": "proof/b15-03-17-20-22-text.txt",
+          "phone": null
+        },
+        {
+          "title": "§4 and §5 Payout readiness and the Connect webhook secret",
+          "explanation": "A payout account is ready with payouts on and transfers active; either webhook secret is accepted",
+          "kind": "text",
+          "desktop": "proof/b15-04-05-stripe.txt",
+          "phone": null
+        },
+        {
+          "title": "§6 Upload sizes on R2",
+          "explanation": "The signed upload carries its exact length and type; an unfinished upload is refused",
+          "kind": "text",
+          "desktop": "proof/b15-06-storage.txt",
+          "phone": null
+        },
+        {
+          "title": "§7 One message for every wrong sign-in",
+          "explanation": "“Wrong email or password” (never which one)",
+          "kind": "image",
+          "desktop": "b15-07-wrong.png",
+          "phone": "b15-07-wrong-phone.png"
+        },
+        {
+          "title": "§7 Too many tries",
+          "explanation": "After several wrong passwords: “Too many tries. Wait 15 minutes or reset your password.”",
+          "kind": "image",
+          "desktop": "b15-07-too-many.png",
+          "phone": "b15-07-too-many-phone.png"
+        },
+        {
+          "title": "§7 Sign-in: one message, attempt limits",
+          "explanation": "Wrong email or password, the per-account and per-network limits, the no-password reset email",
+          "kind": "text",
+          "desktop": "proof/b15-07-signin.txt",
+          "phone": null
+        },
+        {
+          "title": "§8 See the work",
+          "explanation": "Each dispute row opens the piece as the developer sees it: the answers under their questions in the scroll box (a 10,000-character answer here)",
+          "kind": "image",
+          "desktop": "b15-08-see-the-work.png",
+          "phone": "b15-08-see-the-work-phone.png"
+        },
+        {
+          "title": "§9 Payments stuck in progress",
+          "explanation": "Found by their payKey and finished, left for the bank, or cleared; never charged twice",
+          "kind": "text",
+          "desktop": "proof/b15-09-recovery.txt",
+          "phone": null
+        },
+        {
+          "title": "§10 Outages from the uptime alerts",
+          "explanation": "A down/up pair records one outage; missing pings never do",
+          "kind": "text",
+          "desktop": "proof/b15-10-outages.txt",
+          "phone": null
+        },
+        {
+          "title": "§11 Nora's bell, in Chicago time",
+          "explanation": "“Booked: <day> at <time> CST”: each line is written in the reader's own zone",
+          "kind": "image",
+          "desktop": "b15-11-bell-chicago.png",
+          "phone": "b15-11-bell-chicago-phone.png"
+        },
+        {
+          "title": "§11 Ana's bell, in Tokyo time",
+          "explanation": "The same booking in her zone (JST)",
+          "kind": "image",
+          "desktop": "b15-11-bell-tokyo.png",
+          "phone": "b15-11-bell-tokyo-phone.png"
+        },
+        {
+          "title": "§11 Each person's own time zone",
+          "explanation": "Bell lines and emails written in the reader's zone, with the zone named",
+          "kind": "text",
+          "desktop": "proof/b15-11-timezones.txt",
+          "phone": null
+        },
+        {
+          "title": "§12 Settings checked loudly",
+          "explanation": "The build stops on a missing or placeholder production setting; the owner's red box lists the rest",
+          "kind": "text",
+          "desktop": "proof/b15-12-config.txt",
+          "phone": null
+        },
+        {
+          "title": "§13 No connection",
+          "explanation": "“You seem to be offline. Check your connection and try again.” under the button; the typed answers stay",
+          "kind": "image",
+          "desktop": "b15-13-offline.png",
+          "phone": "b15-13-offline-phone.png"
+        },
+        {
+          "title": "§13 A press repeated after a lost answer",
+          "explanation": "Every press acts once (press ids or the existing refusals)",
+          "kind": "text",
+          "desktop": "proof/b15-13-repeats.txt",
+          "phone": null
+        },
+        {
+          "title": "§14 The tester's previous set",
+          "explanation": "“Sent <date>” first, then “Draft (not sent)” with the edit she typed after sending; each a read-only fold",
+          "kind": "image",
+          "desktop": "b15-14-tester-sets.png",
+          "phone": "b15-14-tester-sets-phone.png"
+        },
+        {
+          "title": "§14 The developer's fold",
+          "explanation": "Only what was sent: the draft never reaches the developer",
+          "kind": "image",
+          "desktop": "b15-14-dev-sets.png",
+          "phone": "b15-14-dev-sets-phone.png"
+        },
+        {
+          "title": "§15 Charge opens for a call",
+          "explanation": "“Nora Lane didn't pay your call on <date> in 7 days: charge $12.50 or let it go” (the measured length × the rate)",
+          "kind": "image",
+          "desktop": "b15-15-charge-opens.png",
+          "phone": "b15-15-charge-opens-phone.png"
+        },
+        {
+          "title": "§16 Suspensions are per side",
+          "explanation": "Ivy's developer side is paused (“Your developer account is paused”); the switch to her tester side still works",
+          "kind": "image",
+          "desktop": "b15-16-dev-side.png",
+          "phone": "b15-16-dev-side-phone.png"
+        },
+        {
+          "title": "§18 and §38 Find tests",
+          "explanation": "“14 days per tester · join by <date>”; the invite-only test is never listed, not even for invited testers",
+          "kind": "image",
+          "desktop": "b15-18-find.png",
+          "phone": "b15-18-find-phone.png"
+        },
+        {
+          "title": "§18, §3 and §17 The join page",
+          "explanation": "“Your deadline: <date> (14 days from joining)”; a long question and 5,000-character steps in their scroll boxes",
+          "kind": "image",
+          "desktop": "b15-18-join-page.png",
+          "phone": "b15-18-join-page-phone.png"
+        },
+        {
+          "title": "§19 One Free box",
+          "explanation": "Every free key one per line (“Free (2 keys · 2 open spots)”); In use lists Ben's key, and greyed, Ana's and Cam's “(left)”",
+          "kind": "image",
+          "desktop": "b15-19-free-box.png",
+          "phone": "b15-19-free-box-phone.png"
+        },
+        {
+          "title": "§19 A working tester's key",
+          "explanation": "Red at once: “HR-2222 is in use by Ben Okafor, so it can't be added.”",
+          "kind": "image",
+          "desktop": "b15-19-in-use.png",
+          "phone": "b15-19-in-use-phone.png"
+        },
+        {
+          "title": "§21 Which admin",
+          "explanation": "The tests list names the admin by email: “stopped by admin+media1793185982848db15admin@playtest.test”; developers and testers still read “the team”",
+          "kind": "image",
+          "desktop": "b15-21-stopped-by.png",
+          "phone": "b15-21-stopped-by-phone.png"
+        },
+        {
+          "title": "§21 Contact us in the admin list",
+          "explanation": "A 50,000-character message in a scroll box about 8 lines tall, with Mark replied",
+          "kind": "image",
+          "desktop": "b15-21-contact.png",
+          "phone": "b15-21-contact-phone.png"
+        },
+        {
+          "title": "§21 Replied by",
+          "explanation": "The other admin sees who replied and when",
+          "kind": "image",
+          "desktop": "b15-21-replied.png",
+          "phone": "b15-21-replied-phone.png"
+        },
+        {
+          "title": "§22 End early waits for a reason",
+          "explanation": "The button stays disabled with “Say why first” until a reason and a tester are there; the counter reads 0 / 10,000",
+          "kind": "image",
+          "desktop": "b15-22-disabled.png",
+          "phone": "b15-22-disabled-phone.png"
+        },
+        {
+          "title": "§22 Ready",
+          "explanation": "With a reason (here about 2,200 characters) the button is enabled; the counter shows it",
+          "kind": "image",
+          "desktop": "b15-22-enabled.png",
+          "phone": "b15-22-enabled-phone.png"
+        },
+        {
+          "title": "§22 and §20 The tester reads why",
+          "explanation": "The reason in italics in a scroll box on his page (never in the bell line)",
+          "kind": "image",
+          "desktop": "b15-22-tester-reads.png",
+          "phone": "b15-22-tester-reads-phone.png"
+        },
+        {
+          "title": "§23 Save on a team-paused test",
+          "explanation": "Refused and routed to the test page: under the team's reason, the banner lists “Your Save on Harbor Run: lighthouse didn't go through.”",
+          "kind": "image",
+          "desktop": "b15-23-save-routed.png",
+          "phone": "b15-23-save-routed-phone.png"
+        },
+        {
+          "title": "§23 Stop goes through silently",
+          "explanation": "Ana left after the page loaded, yet Stop on the team-paused test went straight through, with no stop box",
+          "kind": "image",
+          "desktop": "b15-23-stopped.png",
+          "phone": "b15-23-stopped-phone.png"
+        },
+        {
+          "title": "§23 The team pauses a test while it's open",
+          "explanation": "Left, the test page: the banner appears and only Stop, End early and Cancel stay; right, Edit: Save is refused and lands on the test page banner with its line; after Ana leaves, Stop goes through silently",
+          "kind": "video",
+          "desktop": "b15-23-team-pause.webm",
+          "phone": "b15-23-team-pause-phone.webm"
+        },
+        {
+          "title": "§24 Renames in the tester row",
+          "explanation": "“Renamed: “Harbor Run · Harbor Run: first 3 levels” → “Harbor Run · Harbor Run: night harbors”” in each working tester's contract changes",
+          "kind": "image",
+          "desktop": "b15-24-rename-row.png",
+          "phone": "b15-24-rename-row-phone.png"
+        },
+        {
+          "title": "§25 Leave never stops",
+          "explanation": "The listing changed after the page loaded; Leave (after its own confirm) went through on the first press",
+          "kind": "image",
+          "desktop": "b15-25-leave.png",
+          "phone": "b15-25-leave-phone.png"
+        },
+        {
+          "title": "§26 The tester's Alerts toggle",
+          "explanation": "At the top right: “Alerts: On” and its line",
+          "kind": "image",
+          "desktop": "b15-26-toggle-on.png",
+          "phone": "b15-26-toggle-on-phone.png"
+        },
+        {
+          "title": "§26 Alerts: Off",
+          "explanation": "One press, saved for all Ben's tests: only new terms from the developer stop a press now",
+          "kind": "image",
+          "desktop": "b15-26-toggle-off.png",
+          "phone": "b15-26-toggle-off-phone.png"
+        },
+        {
+          "title": "§26 Alerts Off: the live box",
+          "explanation": "Nora paid Ben after his page loaded: the line shows greyed, since it won't stop anything",
+          "kind": "image",
+          "desktop": "b15-26-off-greyed.png",
+          "phone": "b15-26-off-greyed-phone.png"
+        },
+        {
+          "title": "§26 Alerts Off: Send goes through",
+          "explanation": "Ben pressed Send once after that payment: no stop box, his answers went straight through",
+          "kind": "image",
+          "desktop": "b15-26-off-goes.png",
+          "phone": "b15-26-off-goes-phone.png"
+        },
+        {
+          "title": "§26 New terms still stop",
+          "explanation": "With Alerts Off, a terms offer still stops the press: the page goes up to the offer box (Switch or Keep)",
+          "kind": "image",
+          "desktop": "b15-26-off-terms-stop.png",
+          "phone": "b15-26-off-terms-stop-phone.png"
+        },
+        {
+          "title": "§27 Disputes: add your side",
+          "explanation": "While suspended, the dashboard lists each open dispute with the tester's text and the Add your side box; more than 3 scroll",
+          "kind": "image",
+          "desktop": "b15-27-disputes-box.png",
+          "phone": "b15-27-disputes-box-phone.png"
+        },
+        {
+          "title": "§28 The first live update scrolls up",
+          "explanation": "Nora is at the bottom of the test page when Ben sends his answers: the page scrolls smoothly up to the live box and the new line flashes",
+          "kind": "video",
+          "desktop": "b15-28-scroll-up.webm",
+          "phone": "b15-28-scroll-up-phone.webm"
+        },
+        {
+          "title": "§28 Never mid-task",
+          "explanation": "Ana is typing when Nora pays her: no scroll; a small pill “1 new update ↑” shows instead and scrolls up when pressed",
+          "kind": "image",
+          "desktop": "b15-28-pill.png",
+          "phone": "b15-28-pill-phone.png"
+        },
+        {
+          "title": "§29 and §37 The restricted view",
+          "explanation": "A suspended developer opens the test from its card: the red banner (title, reason, what's allowed), the overview with Stop and End early, Booked calls with Cancel",
+          "kind": "image",
+          "desktop": "b15-29-restricted-view.png",
+          "phone": "b15-29-restricted-view-phone.png"
+        },
+        {
+          "title": "§29 Done",
+          "explanation": "Stop went through silently (no stop-once, whatever changed) and the dashboard top says “Done: you stopped Harbor Run: first 3 levels.”",
+          "kind": "image",
+          "desktop": "b15-29-done.png",
+          "phone": "b15-29-done-phone.png"
+        },
+        {
+          "title": "§29 A suspended developer's test page",
+          "explanation": "From the card to the restricted view; a call cancelled; Stop goes through and the dashboard says it's done",
+          "kind": "video",
+          "desktop": "b15-29-restricted.webm",
+          "phone": "b15-29-restricted-phone.webm"
+        },
+        {
+          "title": "§30 $0 needs a reason",
+          "explanation": "At $0 the note is required, in red at the box: “Say why you're paying $0 (the tester reads it).”",
+          "kind": "image",
+          "desktop": "b15-30-zero-reason.png",
+          "phone": "b15-30-zero-reason-phone.png"
+        },
+        {
+          "title": "§30 and §31 The Pay box live",
+          "explanation": "An amount over the cap turns red at once; $0 asks for a reason; a valid amount with its tick pays",
+          "kind": "video",
+          "desktop": "b15-31-paybox-video.webm",
+          "phone": "b15-31-paybox-video-phone.webm"
+        },
+        {
+          "title": "§30 An unlisted part",
+          "explanation": "No Reject anywhere: “This part isn't listed: pay any amount, $0 included. Ben Okafor can dispute the amount once.”",
+          "kind": "image",
+          "desktop": "b15-30-unlisted.png",
+          "phone": "b15-30-unlisted-phone.png"
+        },
+        {
+          "title": "§30 Paid $0, as the tester reads it",
+          "explanation": "“Paid $0: “<reason>”” on the part; it can be disputed once like any amount",
+          "kind": "image",
+          "desktop": "b15-30-paid-zero-tester.png",
+          "phone": "b15-30-paid-zero-tester-phone.png"
+        },
+        {
+          "title": "§31 The Pay box",
+          "explanation": "One green Pay; beside the amount the room left (“up to $10.00 above the listing”); the note is optional; “Ana Silva can dispute the amount once.”",
+          "kind": "image",
+          "desktop": "b15-31-paybox.png",
+          "phone": "b15-31-paybox-phone.png"
+        },
+        {
+          "title": "§31 Over the cap, red as you type",
+          "explanation": "$25.00 is more than the listing plus 100%: “This is more than you can pay above the listing (up to $10.00).” and Pay is disabled",
+          "kind": "image",
+          "desktop": "b15-31-paybox-over.png",
+          "phone": "b15-31-paybox-over-phone.png"
+        },
+        {
+          "title": "§33 and §42 Live session: calls ahead only",
+          "explanation": "Each tester's booked calls in a scroll box about 3 calls tall, soonest first; calls that are over moved to the tester's row",
+          "kind": "image",
+          "desktop": "b15-33-live-session.png",
+          "phone": "b15-33-live-session-phone.png"
+        },
+        {
+          "title": "§34 The warning",
+          "explanation": "“$100.00 left of the $1,000 for calls with Ana Silva on this test.”: small, no stop",
+          "kind": "image",
+          "desktop": "b15-34-warning.png",
+          "phone": "b15-34-warning-phone.png"
+        },
+        {
+          "title": "§34 Refused at the limit",
+          "explanation": "“Calls with Ana Silva on this test can come to at most $1,000; $100.00 is left, so this call can't be booked.”",
+          "kind": "image",
+          "desktop": "b15-34-refused.png",
+          "phone": "b15-34-refused-phone.png"
+        },
+        {
+          "title": "§34 One $1,000 for a tester's calls",
+          "explanation": "The warning under an hour's worth, then a 60-minute request at $150/h refused with what's left",
+          "kind": "video",
+          "desktop": "b15-34-ceiling.webm",
+          "phone": "b15-34-ceiling-phone.webm"
+        },
+        {
+          "title": "§34 The tester's wording",
+          "explanation": "“$100.00 left of the $1,000 for your calls on this test.”",
+          "kind": "image",
+          "desktop": "b15-34-tester.png",
+          "phone": "b15-34-tester-phone.png"
+        },
+        {
+          "title": "§35 and §38 Upcoming calls",
+          "explanation": "The tester dashboard's Upcoming calls has Join while the call can be joined",
+          "kind": "image",
+          "desktop": "b15-35-upcoming-join.png",
+          "phone": "b15-35-upcoming-join-phone.png"
+        },
+        {
+          "title": "§35 Missing needs on an invite row",
+          "explanation": "3 named, then “+2 more”",
+          "kind": "image",
+          "desktop": "b15-35-invite-pill.png",
+          "phone": "b15-35-invite-pill-phone.png"
+        },
+        {
+          "title": "§35 “+2 more” opened",
+          "explanation": "Every missing need, with “fewer” to fold it again",
+          "kind": "image",
+          "desktop": "b15-35-invite-pill-open.png",
+          "phone": "b15-35-invite-pill-open-phone.png"
+        },
+        {
+          "title": "§36 Every stop box names the press",
+          "explanation": "“Your Pay on Ana Silva's recording didn't go through.” · Since you opened this page: … · the Alerts line · bold “Press Pay again to go ahead.”",
+          "kind": "image",
+          "desktop": "b15-36-dev-box.png",
+          "phone": "b15-36-dev-box-phone.png"
+        },
+        {
+          "title": "§36 The tester's stop box",
+          "explanation": "Send stops once: “Your Send didn't go through.” · Nora Lane paid $15.00 for your recording · “Turn off alerts” · “Press Send again to go ahead.”",
+          "kind": "image",
+          "desktop": "b15-36-tester-box.png",
+          "phone": "b15-36-tester-box-phone.png"
+        },
+        {
+          "title": "§36 The tester's stop-once",
+          "explanation": "Ana has typed her answers; the developer pays her recording; Send stops once with the blue list; the second press sends",
+          "kind": "video",
+          "desktop": "b15-36-tester-stop-once.webm",
+          "phone": "b15-36-tester-stop-once-phone.webm"
+        },
+        {
+          "title": "§36 Charge stops once",
+          "explanation": "The developer changed the listing after the page loaded: Charge stops once and names itself",
+          "kind": "image",
+          "desktop": "b15-36-charge-stop.png",
+          "phone": "b15-36-charge-stop-phone.png"
+        },
+        {
+          "title": "§37 and §20 The team paused this test",
+          "explanation": "Title, the 1,000-character reason in italics in its scroll box, and at the bottom “For now you can stop this test, end testers' work early, or cancel calls.”",
+          "kind": "image",
+          "desktop": "b15-37-team-paused.png",
+          "phone": "b15-37-team-paused-phone.png"
+        },
+        {
+          "title": "§37 A payment hold",
+          "explanation": "“Your tests are paused until you pay what you owe.” on the same banner",
+          "kind": "image",
+          "desktop": "b15-37-hold.png",
+          "phone": "b15-37-hold-phone.png"
+        },
+        {
+          "title": "§37 Stopped by the developer",
+          "explanation": "“This test is stopped.” and what still works, built from the buttons shown (with Next round)",
+          "kind": "image",
+          "desktop": "b15-37-stopped.png",
+          "phone": "b15-37-stopped-phone.png"
+        },
+        {
+          "title": "§37 The team stopped this test",
+          "explanation": "The same banner; Next round isn't offered after a team stop, so the allowed line doesn't list it",
+          "kind": "image",
+          "desktop": "b15-37-team-stopped.png",
+          "phone": "b15-37-team-stopped-phone.png"
+        },
+        {
+          "title": "§38 A stale Join",
+          "explanation": "“Your Join call didn't go through: Nora Lane cancelled this call at <time>.” and the button leaves",
+          "kind": "image",
+          "desktop": "b15-38-stale-join.png",
+          "phone": "b15-38-stale-join-phone.png"
+        },
+        {
+          "title": "§39 Alerts on a paused test",
+          "explanation": "Only what can still happen: testers leaving, call changes, payments, disputes, the team's decisions, your own saves",
+          "kind": "image",
+          "desktop": "b15-39-alerts-paused.png",
+          "phone": "b15-39-alerts-paused-phone.png"
+        },
+        {
+          "title": "§39 Alerts on a stopped test",
+          "explanation": "Payments, disputes, the team's decisions and your own saves only",
+          "kind": "image",
+          "desktop": "b15-39-alerts-stopped.png",
+          "phone": "b15-39-alerts-stopped-phone.png"
+        },
+        {
+          "title": "§40 Both in the call",
+          "explanation": "The developer (left) and Ana (right, phone) in the call page: “the length is measured while you're both here”; each page tells the site every ~10 seconds",
+          "kind": "video",
+          "desktop": "b15-40-call-page.webm",
+          "phone": "b15-40-call-page-phone.webm"
+        },
+        {
+          "title": "§40 The measured length",
+          "explanation": "“Length: 29 min (both in the call …)”; the Pay box's Rate and Amount use it; “Lower the length” is under it",
+          "kind": "image",
+          "desktop": "b15-40-measured.png",
+          "phone": "b15-40-measured-phone.png"
+        },
+        {
+          "title": "§40 Rate and Amount fill each other",
+          "explanation": "Typing $40/h filled $19.33; typing $10.00 filled the rate back ($20.69/h); the one typed last wins on the server too",
+          "kind": "image",
+          "desktop": "b15-40-rate-amount.png",
+          "phone": "b15-40-rate-amount-phone.png"
+        },
+        {
+          "title": "§40 Rate and Amount, live",
+          "explanation": "A rate fills the amount (rate × 29 min); an amount fills the rate (to the cent per hour)",
+          "kind": "video",
+          "desktop": "b15-40-rate-amount-video.webm",
+          "phone": "b15-40-rate-amount-video-phone.webm"
+        },
+        {
+          "title": "§40 Lower the length",
+          "explanation": "Only lower, never raise; a reason is required and the tester reads it",
+          "kind": "image",
+          "desktop": "b15-40-lower.png",
+          "phone": "b15-40-lower-phone.png"
+        },
+        {
+          "title": "§40 Lowered",
+          "explanation": "“Length: 20 min (lowered from 29 min; both in the call …)” with the reason in italics; the Pay box now uses 20 minutes",
+          "kind": "image",
+          "desktop": "b15-40-lowered.png",
+          "phone": "b15-40-lowered-phone.png"
+        },
+        {
+          "title": "§40 The tester's view",
+          "explanation": "Ana reads the measured length, that it was lowered to 20 min, and why",
+          "kind": "image",
+          "desktop": "b15-40-tester-view.png",
+          "phone": "b15-40-tester-view-phone.png"
+        },
+        {
+          "title": "§41 The security audit's fixes",
+          "explanation": "Each finding, its fix and its test",
+          "kind": "text",
+          "desktop": "proof/SECURITY.md",
+          "phone": null
+        },
+        {
+          "title": "§42 The tester row's Calls (4)",
+          "explanation": "Took place · 29 min · paid $14.50 (with Pay more), Cancelled by Ana Silva · <time> with her reason, Nobody joined, Missed: the site was down",
+          "kind": "image",
+          "desktop": "b15-42-tester-row.png",
+          "phone": "b15-42-tester-row-phone.png"
+        },
+        {
+          "title": "§42 The tester's Call history",
+          "explanation": "The same calls and badges on Ana's session page; her Live session keeps only the calls ahead",
+          "kind": "image",
+          "desktop": "b15-42-call-history.png",
+          "phone": "b15-42-call-history-phone.png"
+        },
+        {
+          "title": "§43 Contract changes",
+          "explanation": "One entry per Save that changed terms or names, newest first: before → after, Switched / Kept / Not decided yet (names link to the rows), and each Save's effects",
+          "kind": "image",
+          "desktop": "b15-43-contract-changes.png",
+          "phone": "b15-43-contract-changes-phone.png"
+        },
+        {
+          "title": "§43 The tester's own deal history",
+          "explanation": "The terms she joined on, each offer and what she chose, the rename, her earlier questions, and payments, in order; never others' choices",
+          "kind": "image",
+          "desktop": "b15-43-tester-history.png",
+          "phone": "b15-43-tester-history-phone.png"
+        },
+        {
+          "title": "§44 Typed back, with a warning",
+          "explanation": "“HR-1111: reused, previously given to Ana Silva.” and “HR-3333: reported as broken by Cam Lee.”: a Reused tag, never a mistake",
+          "kind": "image",
+          "desktop": "b15-44-reused.png",
+          "phone": "b15-44-reused-phone.png"
+        },
+        {
+          "title": "§44 The notice chips",
+          "explanation": "“HR-1111 · reused (Ana Silva)” and “HR-3333 · reported as broken (Cam Lee)”",
+          "kind": "image",
+          "desktop": "b15-44-chips.png",
+          "phone": "b15-44-chips-phone.png"
+        },
+        {
+          "title": "§45 Keys that don't work",
+          "explanation": "“2 testers' keys don't work: Ben Okafor (HR-2222), Cam Lee (HR-3333)”, each with its tick and Works now; Select all; Dismiss selected",
+          "kind": "image",
+          "desktop": "b15-45-warning.png",
+          "phone": "b15-45-warning-phone.png"
+        },
+        {
+          "title": "§45 Two ticked, one works now",
+          "explanation": "“Dismiss 2”: Ben's key is marked as working again, Cam's warning is only hidden",
+          "kind": "image",
+          "desktop": "b15-45-ticked.png",
+          "phone": "b15-45-ticked-phone.png"
+        },
+        {
+          "title": "§45 Dismissed",
+          "explanation": "The warning is gone; HR-2222 is no longer crossed out, HR-3333 still is",
+          "kind": "image",
+          "desktop": "b15-45-dismissed.png",
+          "phone": "b15-45-dismissed-phone.png"
+        },
+        {
+          "title": "§45 The tester reads it",
+          "explanation": "“The developer marked your key as working.” (his next older-page press stops once for it, even with Alerts Off)",
+          "kind": "image",
+          "desktop": "b15-45-tester.png",
+          "phone": "b15-45-tester-phone.png"
+        },
+        {
+          "title": "The admin's daily lines",
+          "explanation": "The suspended accounts reminder (“N suspended account sides to review”) and the cases in the daily email",
+          "kind": "image",
+          "desktop": "b15-daily-admin.png",
+          "phone": "b15-daily-admin-phone.png"
+        },
+        {
+          "title": "At home: Stripe test mode, the Connect webhook, R2 and UptimeRobot",
+          "explanation": "The checks to do yourself before launch, in test mode",
+          "kind": "text",
+          "desktop": "proof/AT-HOME.md",
+          "phone": null
         }
       ]
     }

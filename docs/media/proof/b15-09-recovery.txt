@@ -1,0 +1,5 @@
+ ✓ tests/batch15-recovery.test.ts > payments stuck in progress (section 9) > charged before the answer was lost: found by its payKey after 15 minutes and finished as normal 496ms
+ ✓ tests/batch15-recovery.test.ts > payments stuck in progress (section 9) > not charged: cleared (review deleted, failed "interrupted", no bell), back in Needs you; a new press reuses the same key 494ms
+ ✓ tests/batch15-recovery.test.ts > payments stuck in progress (section 9) > left alone while the bank is confirming; a page-load check runs at most once a minute 190ms
+ Test Files  1 passed (1)
+      Tests  3 passed (3)

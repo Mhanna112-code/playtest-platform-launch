@@ -567,10 +567,11 @@ group("edit", async () => {
   await shot(dev, "edit-key-reported-left", "A key from a tester who left | Cam left: his key HR-3333 can be typed back into Free, with a warning only (a “Reused” tag, never a mistake)", "#keys");
 
   // Changed in another tab or device: A has Edit open; B saves the instructions and new keys.
+  // (Edit keeps unsent typing per form on the server: drop what the key checks above left, so both tabs open on the saved test.)
+  sql(`delete from "KeptForm" where key = 'test:edit:${t}' and "userId" = '${dev.uid}'`);
   const A = await rec(V, dev), B = await rec(V, dev);
   await A.goto(`/app/tests/${t}/edit`);
   await B.goto(`/app/tests/${t}/edit`);
-  // (Edit keeps unsent typing per form: clear what the key checks above left in the Add keys box.)
   await A.evaluate(() => window.scrollTo(0, 0));
   const fromA = at(A), fromB = at(B);
   await A.locator("#title").click();
@@ -687,14 +688,14 @@ group("testpage", async () => {
   const w = await busyTest("t");
   const { dev, ana, ben, cam, t, sA, sB, sC } = w;
   const admin = await adminAccount();
-  // Work to review, a call that happened (waiting for its length), calls booked and requested, a dispute.
+  // Work to review, a call that happened (measured by the app), calls booked and requested, a dispute.
   await sendWritten(ana, sA, ["The boat handling feels great.", "The second bridge: I couldn't tell where to go.", "Yes, if the map gets clearer."]);
   await sendWritten(cam, sC, ["Fun music.", "Nowhere really.", "Maybe."]);
   await rejectPiece(dev, subOf(sC), "The answers are too short to use.");
   ok(await post(cam, `/api/sessions/${sC}/dispute`, { ...go, kind: "submission", id: subOf(sC), reason: "I answered every question; the test didn't ask for long answers." }), "dispute");
   const past = await bookCall(dev, ben, t, sB, 26);
-  const utc = "(now() at time zone 'utc')";
-  own(`update "Call" set "startsAt" = ${utc} - interval '50 minutes', "devJoinedAt" = ${utc} - interval '50 minutes', "testerJoinedAt" = ${utc} - interval '49 minutes' where id = '${past}'`);
+  // (Batch 15 §40) The app measures the call from both people's time on the call page.
+  tookPlace(past, dev.uid, ben.uid, 50, 29);
   await bookCall(dev, ana, t, sA, 52);
   await bookCall(dev, ben, t, sB, 0.13); // starts in 8 minutes: Join shows
   ok(await post(dev, `/api/tests/${t}/request-time`, { ...go, contractIds: [sC], minutes: 45, times: [new Date(Date.now() + 74 * 3600000).toISOString()] }), "request a time");
@@ -720,8 +721,8 @@ group("testpage", async () => {
   // (Ben's call that already happened shows the "Covered time is up" pop-up: closed so it doesn't cover the pictures.)
   await closeTimerPopups(dev);
   await shot(dev, "tp-overview", "Overview | Overview: title, status, badges, terms and spots, Open until, and the Edit, Alerts, Next round, End early and Stop buttons", testPanel(dev));
-  await shot(dev, "tp-needs-you", "Needs you | Needs you, grouped per person: Pay or Reject for sent work, a call waiting for its length, a dispute waiting for your side", "#needs-you");
-  await shotSpan(dev, "tp-needs-dispute-call", "A dispute and a call to log | A dispute waiting for the developer's side, and a call that happened waiting for its length", "#needs-you [id^='item-dispute-']", dev.locator("#needs-you [data-needs-person]").filter({ hasText: "Ben Okafor" }).first());
+  await shot(dev, "tp-needs-you", "Needs you | Needs you, grouped per person: Pay for sent work, a call to pay for its measured length, a dispute waiting for your side", "#needs-you");
+  await shotSpan(dev, "tp-needs-dispute-call", "A dispute and a call to pay | A dispute waiting for the developer's side, and a call that happened, measured by the app", "#needs-you [id^='item-dispute-']", dev.locator("#needs-you [data-needs-person]").filter({ hasText: "Ben Okafor" }).first());
   await shot(dev, "tp-testers", "Testers panel | Testers: the avatar row with Ana's hover card, and one row per tester with parts sent, pay and their contract", "#testers-joined", async () => {
     await dev.locator("#testers-joined a[aria-label='Ana Silva: profile']").first().hover();
     await pause(dev, 700);
@@ -868,7 +869,7 @@ group("tpvideo", async () => {
   await pause(dev, 800);
   await shot(dev, "tp-stop-once-invite", "Invite stops once | Invite stops once: Fay removed iPhone and iPad from her profile after the page loaded", "#invite");
 
-  // The team pauses the test while the developer is on it: only Stop works.
+  // The team pauses the test while the developer is on it: Stop, End early and Cancel call still work (batch 15 §23, §29).
   {
     const t2 = await postTest(dev, { title: "Harbor Run: reef", spots: "3" });
     await join(ana, t2);
@@ -885,7 +886,7 @@ group("tpvideo", async () => {
     await D.waitForSelector("[data-test-banner]", { timeout: 15000 });
     await pause(D, 3500);
     await D.screenshot({ path: path.join(VTMP, "tp-paused-after.png"), fullPage: true });
-    finishVideo([{ file: await saveVideo(D, "tp-paused.webm"), from }], "tp-team-paused", "Team pauses the test | The team pauses the test: End early is refused (“you can only stop it”) and the banner explains");
+    finishVideo([{ file: await saveVideo(D, "tp-paused.webm"), from }], "tp-team-paused", "Team pauses the test | The team pauses the test while Nora is on it: End early still goes through without a stop box (batch 15 §29), and the banner says what's paused and what still works");
   }
 
 }, { section: "Developer test page" });
@@ -967,12 +968,16 @@ async function hook(action, email, more = {}) {
 }
 const piOf = (subId) => sql(`select "stripePaymentIntentId" from "Payment" where "submissionId" = '${subId}' and status = 'charged' order by "createdAt" desc limit 1`);
 /** Pay one sent piece through the API at its listed price (the developer's own press). */
+/** (Batch 15) On the fake Stripe, Pay needs a card: a developer with none gets the working test card (a decline set on purpose stays). */
+const ensureCard = (email) => own(`update "User" set "stripeCustomerId" = coalesce("stripeCustomerId", 'cus_fake_' || id), "stripePaymentMethodId" = 'pm_card_visa' where email = ${lit(email)} and "stripePaymentMethodId" is null`);
 async function apiPay(dev, subId, dollars) {
+  ensureCard(dev.email);
   const cents = Math.round(Number(dollars) * 100);
   return ok(await post(dev, "/api/review", { action: "pay", kind: "submission", id: subId, amount: dollars, tickedCents: cents, payKey: require("crypto").randomUUID(), seenAt: nowIso(), confirmed: true }), "pay");
 }
 /** Press Pay on one piece of the developer test page (the amount box starts at the listing; the every-payment tick). */
 async function payPiece(page, subId) {
+  if (page.email) ensureCard(page.email);
   const box = page.locator(`#piece-${subId}`);
   await box.scrollIntoViewIfNeeded();
   await box.locator("[data-pay-tick] input").first().check();
@@ -1687,6 +1692,8 @@ function formattedAnswer(n) {
 async function lightTester(email, name) {
   const c = await browser.newContext({ baseURL: BASE });
   const p = { context: () => c, email, name };
+  // (Batch 15 §7) The local sign-up count per network: cleared in the media database only, as account() does.
+  if (MEDIA_DB !== "playtest_lite") sql(`delete from "LoginAttempt" where kind = 'signup' and ip in ('::1', '127.0.0.1', '::ffff:127.0.0.1')`);
   const r = await post(p, "/api/auth/signup", { email, password: PASSWORD, role: "tester", name, acceptTerms: true });
   if (!r.ok) throw new Error("sign-up failed for " + email);
   own(`update "User" set "emailVerifiedAt" = (now() at time zone 'utc') where email = ${lit(email)}`);
@@ -2011,7 +2018,7 @@ group("stopped", async () => {
   sec("Developer test page");
   await nora.goto(`/app/tests/${t}`);
   await pause(nora, 800);
-  await shotFull(nora, "stopped-dev-page", "The stopped test page | No Edit, Stop, End early, Invite or call requests; Needs you (Pay, Reject, the call's length), the Testers panel, past calls, Alerts and Next round stay");
+  await shotFull(nora, "stopped-dev-page", "The stopped test page | No Edit, Stop, End early, Invite or call requests; Needs you (Pay, the measured calls), the Testers panel, past calls, Alerts and Next round stay");
   sec("Tester session page");
   await ana.goto(`/app/sessions/${sA}`);
   await pause(ana, 800);
@@ -2249,7 +2256,7 @@ async function pageTo(page, kind, selector, max = 40) {
 /** An admin button in a row: fill its fields (e.g. "Why") and press it; returns the text it shows next to it. */
 async function adminPress(page, row, label, fields = {}) {
   const span = row.locator("span", { has: page.locator("button", { hasText: label }) }).last();
-  for (const [aria, v] of Object.entries(fields)) await span.locator(`input[aria-label="${aria}"]`).fill(v);
+  for (const [aria, v] of Object.entries(fields)) await span.locator(`:is(input, textarea)[aria-label="${aria}"]`).fill(v); // (batch 15 §20) a reason is a textarea
   await span.locator("button", { hasText: label }).click();
   await span.locator(".ok, .err").first().waitFor({ timeout: 15000 });
   return span.locator(".ok, .err").first().innerText();
@@ -2309,8 +2316,8 @@ group("admin", async () => {
   await shot(admin, "admin-preview-suspension", "Preview a suspension | What suspending Nora would do right now, before pressing Suspend", uRow);
   await adminPress(admin, uRow, "Suspend", { Why: "Media pass check: several reports" });
   await admin.goto(`/admin?at=${Date.now()}#users`);
-  await shot(admin, "admin-suspended-row", "A suspended account | The row says who suspended it, when and why, with Lift the suspension", admin.locator(`[data-user-row="${nora.uid}"]`));
-  await adminPress(admin, admin.locator(`[data-user-row="${nora.uid}"]`), "Lift the suspension");
+  await shot(admin, "admin-suspended-row", "A suspended account | The row says who suspended it (by email), when and why, with Reinstate for that side", admin.locator(`[data-user-row="${nora.uid}"]`));
+  await adminPress(admin, admin.locator(`[data-user-row="${nora.uid}"]`), "Reinstate");
   await admin.goto(`/admin?at=${Date.now()}#users`);
   await adminPress(admin, admin.locator(`[data-user-row="${dee.uid}"]`), "Delete account", { Why: "Media pass check: asked by email" });
   await admin.goto(`/admin?at=${Date.now()}#users`);
@@ -2395,13 +2402,13 @@ group("admins2", async () => {
   await pause(L, 1500);
   const cases = [
     ["dispute", async (P) => { await P.locator(`#total-${d}`).fill("10.00"); await P.locator(`[data-dispute-row="${d}"] button`, { hasText: "Decide" }).click(); return P.locator(`[data-dispute-row="${d}"] .ok, [data-dispute-row="${d}"] .err`).first(); }, "A dispute already decided | Bo decides a dispute Ada decided a moment earlier: “This dispute was already decided by Ada Admin at <time>.”"],
-    ["suspension", async (P) => { const row = P.locator(`[data-user-row="${omar.uid}"]`); await row.scrollIntoViewIfNeeded(); await row.locator("button", { hasText: "Lift the suspension" }).click(); return row.locator(".ok, .err").first(); }, "A suspension already lifted | Bo lifts a suspension Ada already lifted: “That account isn't suspended.”"],
+    ["suspension", async (P) => { const row = P.locator(`[data-user-row="${omar.uid}"]`); await row.scrollIntoViewIfNeeded(); await row.locator("button", { hasText: "Reinstate" }).click(); return row.locator(".ok, .err").first(); }, "A suspension already lifted | Bo presses Reinstate on a suspension Ada already lifted: “That account isn't suspended.”"],
     ["pause", async (P) => { const row = P.locator(`[data-test-row="${t}"]`); await row.scrollIntoViewIfNeeded(); await row.locator("button", { hasText: "Lift the pause" }).click(); return row.locator(".ok, .err").first(); }, "A pause already lifted | Bo lifts the team's pause Ada already lifted: “That test isn't paused by the team.”"],
     ["approve", async (P) => { const row = P.locator(`[data-lift-row="${nora.uid}"]`); await row.scrollIntoViewIfNeeded(); await row.locator("button", { hasText: "Approve" }).click(); return row.locator(".ok, .err").first(); }, "An Approve already pressed | Bo approves a lift Ada already approved: “This lift was already approved by Ada Admin at <time>.”"],
-    ["deleted", async (P) => { const row = P.locator(`[data-user-row="${dee.uid}"]`); await row.scrollIntoViewIfNeeded(); const span = row.locator("span", { has: P.locator("button", { hasText: "Suspend" }) }).last(); await span.locator("input").fill("Media pass check"); await span.locator("button", { hasText: "Suspend" }).click(); return span.locator(".ok, .err").first(); }, "An account already deleted | Ada deleted Dee's account; Bo suspends it from his older page: “That account was deleted.”"],
+    ["deleted", async (P) => { const row = P.locator(`[data-user-row="${dee.uid}"]`); await row.scrollIntoViewIfNeeded(); const span = row.locator("span", { has: P.locator("button", { hasText: "Suspend" }) }).last(); await span.locator("textarea").fill("Media pass check"); await span.locator("button", { hasText: "Suspend" }).click(); return span.locator(".ok, .err").first(); }, "An account already deleted | Ada deleted Dee's account; Bo suspends it from his older page: “That account was deleted.”"],
   ];
   for (const [key, press, caption] of cases) {
-    if (key === "deleted") { const span = L.locator(`[data-user-row="${dee.uid}"] span`, { has: L.locator("button", { hasText: "Delete account" }) }).last(); await span.scrollIntoViewIfNeeded(); await span.locator("input").fill("Media pass check: asked by email"); await span.locator("button", { hasText: "Delete account" }).click(); await span.locator(".ok, .err").first().waitFor(); }
+    if (key === "deleted") { const span = L.locator(`[data-user-row="${dee.uid}"] span`, { has: L.locator("button", { hasText: "Delete account" }) }).last(); await span.scrollIntoViewIfNeeded(); await span.locator("textarea").fill("Media pass check: asked by email"); await span.locator("button", { hasText: "Delete account" }).click(); await span.locator(".ok, .err").first().waitFor(); }
     else { const m = await press(L); await m.waitFor({ timeout: 15000 }); }
     await pause(L, 1200);
     const msg = await press(R);
@@ -2818,10 +2825,12 @@ group("b15stops", async () => {
   await ben.locator("#a0").fill("Second try: the fog level is still too dark.");
   ok(await post(nora, "/api/review", { kind: "submission", id: subOf(sB), amount: "15.00", tickedCents: 1500, payKey: require("crypto").randomUUID(), ...go }), "pay Ben");
   await waitLive(ben, "[data-live-top]");
+  await pause(ben, 800);
+  await shot(ben, "b15-26-off-greyed", "§26 Alerts Off: the live box | Nora paid Ben after his page loaded: the line shows greyed, since it won't stop anything", "[data-live-top]");
   await ben.click("button:has-text('Send my updated answers'), button:has-text('Send my answers')");
-  await ben.waitForSelector("p.ok", { timeout: 15000 }).catch(() => {});
+  await ben.locator("p.ok").or(ben.locator("text=/^Sent [A-Z]/")).first().waitFor({ timeout: 15000 }).catch(() => {});
   await pause(ben, 1200);
-  await shotSpan(ben, "b15-26-off-goes", "§26 Alerts Off: Send goes through | Nora paid Ben after his page loaded: the live box shows it greyed (it won't stop anything) and Send went straight through", "[data-live-top]", ben.locator("p.ok").first(), 12, 16);
+  await shot(ben, "b15-26-off-goes", "§26 Alerts Off: Send goes through | Ben pressed Send once after that payment: no stop box, his answers went straight through", "#part-written");
   await apiEdit(nora, t, { writtenCents: "12.00" });
   await ben.locator("#a0").fill("Third try.");
   await ben.click("button:has-text('Send my updated answers'), button:has-text('Send my answers')");
@@ -3117,6 +3126,120 @@ group("b15daily", async () => {
   await shot(admin, "b15-daily-admin", "The admin's daily lines | The suspended accounts reminder (“N suspended account sides to review”) and the cases in the daily email", bellList(admin));
 }, { section: LF, fake: true });
 
+
+group("b15extra", async () => {
+  const nora = await account(`dev+media${TS}lx@playtest.test`, "Nora Lane", "developer", "she");
+  setCard(nora.email, "pm_card_visa");
+  const ana = await account(`tester+media${TS}lxa@playtest.test`, "Ana Silva", "tester", "she");
+  // §14 Previous questions: what was sent, and the draft typed after it.
+  const qs = ["What did you like?", "Where did you get stuck?", "Would you play level 4?"];
+  const t = await postTest(nora, { questions: qs, spots: "4", liveRateCents: "30.00" });
+  const sA = await join(ana, t);
+  await sendWritten(ana, sA, ["The music.", "The second bridge.", "Yes."]);
+  ok(await post(ana, "/api/kept", { key: `written:${sA}`, data: { answers: ["The music, and the lights at night (edited after sending).", "The second bridge.", "Yes."], notes: "", questions: qs } }), "draft");
+  await apiEdit(nora, t, { questions: [qs[0], "Where did you get lost?", qs[2]] });
+  const offer = sql(`select id from "TermsOffer" where "contractId" = '${sA}' and status = 'open' order by "createdAt" desc limit 1`);
+  ok(await post(ana, `/api/sessions/${sA}/terms`, { ...go, choice: "switch", offerId: offer }), "switch");
+  await open(ana, `/app/sessions/${sA}`, "[data-prev-sets]");
+  await ana.locator("[data-prev-set] > summary").first().click();
+  await ana.locator("[data-prev-version] > summary").nth(1).click().catch(() => {});
+  await pause(ana, 600);
+  await shot(ana, "b15-14-tester-sets", "§14 The tester's previous set | “Sent <date>” first, then “Draft (not sent)” with the edit she typed after sending; each a read-only fold", "[data-prev-sets]");
+  await sendWritten(ana, sA, ["The music, and the lights at night.", "Near the lighthouse.", "Yes."]);
+  await open(nora, `/app/tests/${t}`, "[data-prev-sets]");
+  await nora.locator("[data-prev-set] > summary").first().click();
+  await pause(nora, 600);
+  await shot(nora, "b15-14-dev-sets", "§14 The developer's fold | Only what was sent: the draft never reaches the developer", nora.locator("[data-prev-sets]").first());
+  // §11 Each person's own time zone in bell lines: Nora in Chicago, Ana in Tokyo, the same booked call.
+  own(`update "User" set "timeZone" = 'America/Chicago' where email = ${lit(nora.email)}`);
+  own(`update "User" set "timeZone" = 'Asia/Tokyo' where email = ${lit(ana.email)}`);
+  await bookCall(nora, ana, t, sA, 50);
+  await openBell(nora);
+  await shot(nora, "b15-11-bell-chicago", "§11 Nora's bell, in Chicago time | “Booked: <day> at <time> CST”: each line is written in the reader's own zone", bellList(nora));
+  await openBell(ana);
+  await shot(ana, "b15-11-bell-tokyo", "§11 Ana's bell, in Tokyo time | The same booking in her zone (JST)", bellList(ana));
+  // §28 The first live update scrolls up to the live box, once; while typing, a pill instead.
+  const ben = await account(`tester+media${TS}lxb@playtest.test`, "Ben Okafor", "tester", "he");
+  const sB = await join(ben, t);
+  const D = await rec(V, nora);
+  await open(D, `/app/tests/${t}`, "main");
+  await D.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  const fromD = at(D);
+  await pause(D, 1500);
+  await sendWritten(ben, sB, ["Smooth sailing.", "The fog.", "Yes."]);
+  await waitLive(D, "[data-live-top]");
+  await pause(D, 3000);
+  finishVideo([{ file: await saveVideo(D, "b15-28-scroll.webm"), from: fromD }], "b15-28-scroll-up", "§28 The first live update scrolls up | Nora is at the bottom of the test page when Ben sends his answers: the page scrolls smoothly up to the live box and the new line flashes");
+  const T = await rec(V, ana);
+  await open(T, `/app/sessions/${sA}`, "#a0");
+  await T.locator("#a1").scrollIntoViewIfNeeded();
+  await T.locator("#a1").click();
+  await T.keyboard.type("Typing my answer…", { delay: 40 });
+  ok(await post(nora, "/api/review", { kind: "submission", id: subOf(sA), amount: "10.00", tickedCents: 1000, payKey: require("crypto").randomUUID(), ...go }), "pay Ana");
+  await waitLive(T, "[data-live-pill]");
+  await pause(T, 800);
+  await shot(T, "b15-28-pill", "§28 Never mid-task | Ana is typing when Nora pays her: no scroll; a small pill “1 new update ↑” shows instead and scrolls up when pressed");
+  await T.context().close();
+  // §7 Sign-in: one message, then the attempt limit.
+  const L = await ctx(V);
+  await L.goto("/login");
+  for (let i = 0; i < 6; i++) {
+    await L.fill("input[type=email]", ana.email);
+    await L.fill("input[type=password]", "not-the-password-" + i);
+    await L.click("form button:has-text('Log in')");
+    await pause(L, 900);
+    if (i === 0) await shot(L, "b15-07-wrong", "§7 One message for every wrong sign-in | “Wrong email or password” (never which one)", "form");
+  }
+  await shot(L, "b15-07-too-many", "§7 Too many tries | After several wrong passwords: “Too many tries. Wait 15 minutes or reset your password.”", "form");
+  // §35 The invite pill names 3, then “+N more” that opens.
+  const kelp = await postTest(nora, { title: "Kelp Forest: devices", devices: ["iPhone", "iPad", "Android phone", "Android tablet", "Mac"], languages: ["English"], spots: "3" });
+  const dee = await account(`tester+media${TS}lxd@playtest.test`, "Dee Marsh", "tester", "they", { devices: ["Windows PC"], languages: ["English"] });
+  await open(nora, `/app/tests/${kelp}`, "#invite");
+  await nora.click("#invite > summary");
+  await nora.fill("#invite input[aria-label='Find testers']", "Dee Marsh");
+  await pause(nora, 1200);
+  await nora.locator(`#invite li[data-invite-row="${dee.uid}"] [data-tag-more]`).waitFor();
+  await pause(nora, 800);
+  await shot(nora, "b15-35-invite-pill", "§35 Missing needs on an invite row | 3 named, then “+2 more”", nora.locator(`#invite li[data-invite-row="${dee.uid}"]`), () => nora.locator(`#invite li[data-invite-row="${dee.uid}"]`).scrollIntoViewIfNeeded());
+  await nora.locator(`#invite li[data-invite-row="${dee.uid}"] [data-tag-more] button`).click().catch(() => {});
+  await pause(nora, 500);
+  await shot(nora, "b15-35-invite-pill-open", "§35 “+2 more” opened | Every missing need, with “fewer” to fold it again", nora.locator(`#invite li[data-invite-row="${dee.uid}"]`));
+  // §23 The team pauses a test while the developer has the test page (left) and Edit (right) open: the buttons go live, Save is refused and routed
+  // to the banner, and Stop goes through silently even after a tester's change.
+  {
+    const admin = await adminAccount();
+    const tp = await postTest(nora, { title: "Harbor Run: lighthouse", spots: "3" });
+    const sP = await join(ana, tp);
+    await join(ben, tp);
+    const D = await rec(V, nora), E = await rec(V, nora);
+    await open(D, `/app/tests/${tp}`, "#needs-you, main");
+    await open(E, `/app/tests/${tp}/edit`, "#title");
+    const fromD = at(D), fromE = at(E);
+    await E.locator("#title").click();
+    await E.keyboard.press("End");
+    await typeSlow(E, "#title", " (night)");
+    await pause(D, 1200);
+    await adminDo(admin, "pause-test", tp, { note: "Media pass check: a tester reported the build link opens a different game." });
+    await saveBtn(E).click();
+    await E.waitForURL((u) => u.pathname === `/app/tests/${tp}`, { timeout: 20000 });
+    await E.waitForSelector("[data-test-banner]");
+    await waitLive(D, "[data-test-banner]", 30000);
+    await pause(D, 2000);
+    await shot(E, "b15-23-save-routed", "§23 Save on a team-paused test | Refused and routed to the test page: under the team's reason, the banner lists “Your Save on Harbor Run: lighthouse didn't go through.”", "[data-test-banner]");
+    ok(await post(ana, `/api/sessions/${sP}/leave`, { ...go, reason: "Busy this week" }), "leave (a change after the page loaded)");
+    await pause(D, 1500);
+    await D.click("button:has-text('Stop the test')");
+    await D.waitForSelector("dialog[open]");
+    await pause(D, 900);
+    await D.click("dialog[open] button:has-text('Stop the test')");
+    await D.waitForSelector("text=/stopped/i", { timeout: 20000 });
+    await pause(D, 2500);
+    await shot(D, "b15-23-stopped", "§23 Stop goes through silently | Ana left after the page loaded, yet Stop on the team-paused test went straight through, with no stop box", "[data-test-banner]");
+    finishVideo([{ file: await saveVideo(D, "b15-23-d.webm"), from: fromD }, { file: await saveVideo(E, "b15-23-e.webm"), from: fromE }], "b15-23-team-pause",
+      "§23 The team pauses a test while it's open | Left, the test page: the banner appears and only Stop, End early and Cancel stay; right, Edit: Save is refused and lands on the test page banner with its line; after Ana leaves, Stop goes through silently");
+  }
+}, { section: LF, fake: true });
+
 // ---------- the report manifest ----------
 const SECTIONS = [
   ["Every page", "Rules every signed-in page follows: a page moves on its own when the account changes underneath it (deleted in another tab, a hold or suspension starting), and long lists stay short."],
@@ -3131,9 +3254,24 @@ const SECTIONS = [
   ["Settings and account", "Settings, Contact us and deleting an account, with the warnings that list what happens to unpaid work."],
   ["Admin console", "What the team can do: suspend, pause, stop, decide disputes, approve lifts, allow more changes, payouts, History, and what two admins see when they act at once."],
   ["Account states (holds, suspensions, deletion)", "What a payment hold, a chargeback hold, an admin suspension and a deletion do to every open page, live: routing to the dashboard top, closed pages and banners. Testers only ever read “paused”."],
-  ["Outages", "An outage is detected by the outside health check: every clock moves later by its length, calls inside it are cancelled with no fault, and open pages say so."],
+  ["Outages", "An outage comes from the uptime service's down and up alerts (batch 15): every clock moves later by its length, calls inside it are cancelled with no fault, and open pages say so."],
   ["Notifications and emails", "Bell lines as each person reads them, stacked by kind, and the emails they become, including the few sent even with email Off."],
   ["Launch fixes", "Batch 15, item by item (§ numbers are the items in docs/BATCH-15.md): measured calls and the Pay boxes, one $1,000 for a tester's calls, one rule for every pause, stop boxes that name the press, keys, admins, and the security audit's fixes. Items with nothing on screen link to their text proof."],
+];
+/** (Batch 15) Launch fixes proven in text (tests and settings), linked from the report. */
+const LAUNCH_TEXT = [
+  ["§2, §18 and §32 Review reminders, tester days, Open until in the developer's own date", "Fake-clock tests: the same reminders for listed and unlisted parts, each tester's own days, the evening date in Chicago", "proof/b15-02-18-32-days.txt"],
+  ["§3, §17, §20 and §22 Long questions, steps, reasons and notes", "20,000-character questions and steps; reasons refused over their limit, never cut", "proof/b15-03-17-20-22-text.txt"],
+  ["§4 and §5 Payout readiness and the Connect webhook secret", "A payout account is ready with payouts on and transfers active; either webhook secret is accepted", "proof/b15-04-05-stripe.txt"],
+  ["§6 Upload sizes on R2", "The signed upload carries its exact length and type; an unfinished upload is refused", "proof/b15-06-storage.txt"],
+  ["§7 Sign-in: one message, attempt limits", "Wrong email or password, the per-account and per-network limits, the no-password reset email", "proof/b15-07-signin.txt"],
+  ["§9 Payments stuck in progress", "Found by their payKey and finished, left for the bank, or cleared; never charged twice", "proof/b15-09-recovery.txt"],
+  ["§10 Outages from the uptime alerts", "A down/up pair records one outage; missing pings never do", "proof/b15-10-outages.txt"],
+  ["§11 Each person's own time zone", "Bell lines and emails written in the reader's zone, with the zone named", "proof/b15-11-timezones.txt"],
+  ["§12 Settings checked loudly", "The build stops on a missing or placeholder production setting; the owner's red box lists the rest", "proof/b15-12-config.txt"],
+  ["§13 A press repeated after a lost answer", "Every press acts once (press ids or the existing refusals)", "proof/b15-13-repeats.txt"],
+  ["§41 The security audit's fixes", "Each finding, its fix and its test", "proof/SECURITY.md"],
+  ["At home: Stripe test mode, the Connect webhook, R2 and UptimeRobot", "The checks to do yourself before launch, in test mode", "proof/AT-HOME.md"],
 ];
 function writeManifest(list) {
   const cases = new Map(); // base -> case
@@ -3152,6 +3290,13 @@ function writeManifest(list) {
     cases: [...cases.values()].filter((c) => c.section === title).sort((a, b) => a.order - b.order)
       .map((c) => ({ title: c.title || c.explanation.split(/[:.]/)[0], explanation: c.explanation, kind: c.kind, desktop: c.desktop, phone: c.phone })),
   }));
+  // (Batch 15) The Launch fixes section: the items with nothing on screen link to their text proofs; every case in item order (§ number).
+  const lf = sections.find((s) => s.title === "Launch fixes");
+  if (lf) {
+    for (const [title, explanation, file] of LAUNCH_TEXT) lf.cases.push({ title, explanation, kind: "text", desktop: file, phone: null });
+    const num = (c) => Number((/§(\d+)/.exec(c.title) || [0, 99])[1]);
+    lf.cases.sort((a, b) => num(a) - num(b));
+  }
   const unknown = [...new Set([...cases.values()].map((c) => c.section).filter((s) => !SECTIONS.some(([t]) => t === s)))];
   if (unknown.length) console.log("   ! manifest: unknown sections", unknown);
   fs.writeFileSync(path.join(OUT, "report-manifest.json"), JSON.stringify({ generated: new Date().toISOString(), sizes: { desktop: "1280x900", phone: "375x812" }, sections }, null, 2));

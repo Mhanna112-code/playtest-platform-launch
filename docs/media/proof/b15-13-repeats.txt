@@ -1,0 +1,5 @@
+ ✓ tests/batch15-repeats.test.ts > presses repeated after a lost answer (section 13) > every press goes through api(): no raw fetch for a press; offline says so under the button and the typed text stays 73ms
+ ✓ tests/batch15-repeats.test.ts > presses repeated after a lost answer (section 13) > Pay, Pay more, Charge, Let it go, Send, Join, Apply, Accept, Book, Rate and Join call: the same press twice does it once 589ms
+ ✓ tests/batch15-repeats.test.ts > presses repeated after a lost answer (section 13) > Charge and Let it go twice: once; Rate twice: once; Join call twice: the same room 501ms
+ Test Files  1 passed (1)
+      Tests  3 passed (3)

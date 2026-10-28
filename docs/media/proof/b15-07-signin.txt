@@ -1,0 +1,7 @@
+ ✓ tests/batch15-signin.test.ts > sign-in (section 7) > one message for no account, a deleted account, a Google sign-up and a wrong password 369ms
+ ✓ tests/batch15-signin.test.ts > sign-in (section 7) > 5 failed tries for one email in 15 minutes pause sign-in for it, even with the right password 422ms
+ ✓ tests/batch15-signin.test.ts > sign-in (section 7) > 20 failed tries from one network pause sign-in from it; the cleanup deletes attempts older than a day 169ms
+ ✓ tests/batch15-signin.test.ts > sign-in (section 7) > at most 10 new accounts per network an hour; a taken email keeps its own message 697ms
+ ✓ tests/batch15-signin.test.ts > sign-in (section 7) > Forgot your password? for an account with no password sends the first-password email; the page answers the same 11ms
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
