@@ -38,17 +38,17 @@ describe("notification schedule", { timeout: 120_000 }, () => {
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     const n = (t: string) => db.notification.count({ where: { userId: dev.user.id, text: { contains: t } } });
     // Charge opens at the later of 14 days after sending and Open until. Here Open until is 5 days off: the 1 month mark is already past, so only 1 week comes first.
-    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 5 * DAY) } });
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 5 * DAY) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() + 5 * DAY) } }); // (batch 15 section 18: the tester's own deadline)
     await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000), updatedAt: new Date(Date.now() - 14 * DAY) } });
     await cron();
     await cron();
     expect(await n("review Ana Silva's written answers within 1 week")).toBe(1);
     expect(await n("within 1 month")).toBe(0);
     // 2 days before: the 3 days mark; then 12 hours before: tomorrow.
-    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } });
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() + 2 * DAY) } }); // (batch 15 section 18: the tester's own deadline)
     await cron();
     expect(await n("review Ana Silva's written answers within 3 days")).toBe(1);
-    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 12 * 3_600_000) } });
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 12 * 3_600_000) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() + 12 * 3_600_000) } }); // (batch 15 section 18: the tester's own deadline)
     await cron();
     await cron();
     expect(await n("review Ana Silva's written answers by tomorrow")).toBe(1);
@@ -57,7 +57,7 @@ describe("notification schedule", { timeout: 120_000 }, () => {
     expect(await n("waited over 7 days")).toBe(0);
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).toBeNull();
     // Open until passes: it opens, and the developer is reminded daily.
-    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } });
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() - 1000) } }); // (batch 15 section 18: the tester's own deadline)
     await cron(); // opens: offer to the tester + first daily reminder to the developer
     await cron(); // same day: not again
     expect(await n("waited over 7 days")).toBe(1);
@@ -67,30 +67,19 @@ describe("notification schedule", { timeout: 120_000 }, () => {
     expect(await n("waited over 7 days")).toBe(2);
   });
 
-  it("with no Open until (an old test), Charge opens when the test stops (or the tester's work ends), 7 days after sending", async () => {
-    const { dev, testId } = await setup();
+  it("(batch 15 section 18) Charge opens at the later of sent + 7 days and the tester's own deadline (an old test with no Open until too)", async () => {
+    const { testId } = await setup();
     await db.test.update({ where: { id: testId }, data: { openUntil: null } }); // (batch 12) only old tests have none
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000) } });
+    await db.contract.update({ where: { id: sessionId }, data: { dueAt: new Date(Date.now() + DAY) } });
     await cron();
-    expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).toBeNull(); // the test is still running
-    await act(testId, "stop", dev.cookie, { seenAt: seen(), confirmed: true });
+    expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).toBeNull(); // the tester's deadline is still ahead
+    await db.contract.update({ where: { id: sessionId }, data: { dueAt: new Date(Date.now() - 1000) } });
     await cron();
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).not.toBeNull();
-    // The tester's own work ending (they left) opens it too.
-    const two = await setup();
-    await db.test.update({ where: { id: two.testId }, data: { openUntil: null } });
-    const j = await joined(two.testId, "Ben Carter", "he");
-    await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] });
-    const s2 = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
-    await db.submission.update({ where: { id: s2.id }, data: { payBy: new Date(Date.now() - 1000) } });
-    await cron();
-    expect((await db.submission.findUniqueOrThrow({ where: { id: s2.id } })).choiceOfferedAt).toBeNull();
-    expect((await sact(j.sessionId, "leave", j.tester.cookie)).status).toBe(200);
-    await cron();
-    expect((await db.submission.findUniqueOrThrow({ where: { id: s2.id } })).choiceOfferedAt).not.toBeNull();
   });
 
   it("invites: a bell DAILY until the tester joins or says No thanks (one stacked line across tests)", async () => {

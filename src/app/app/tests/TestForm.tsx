@@ -13,7 +13,10 @@ import { NotSentTag, useKept } from "@/lib/useKept";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { keyNeedLine, parseKeys, tickedInUseLine } from "@/lib/keys";
-import { HIGH_PART_CENTS, HIGH_PART_TICK, QUESTION_TOO_LONG, counterText, type Listing } from "@/lib/rules";
+import { HIGH_PART_CENTS, HIGH_PART_TICK, QUESTION_TOO_LONG, counterText, daysBetween, testerDaysHint, type Listing } from "@/lib/rules";
+/** The browser's own date (YYYY-MM-DD) and zone. */
+const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone ?? ""; } catch { return ""; } };
 import { ScrollText } from "@/components/ScrollText";
 import { toCents } from "@/lib/format";
 import { KeyBoxes, type KeysData } from "./KeyBoxes";
@@ -263,7 +266,8 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
     setRefusal("");
     try {
       if (!edit) {
-        const r = await api<{ id: string }>(draft ? `/api/tests/${draft.id}/post-draft` : "/api/tests", { ...toApi(f), accessKeys: keysText, confirmHigh: confirmHigh() });
+        // (Batch 15 section 32) The developer's time zone goes with the press: "today" and the 3 to 30 days are counted in it.
+        const r = await api<{ id: string }>(draft ? `/api/tests/${draft.id}/post-draft` : "/api/tests", { ...toApi(f), accessKeys: keysText, confirmHigh: confirmHigh(), timeZone: browserZone() });
         await keep.clear();
         window.location.href = `/app/tests/${r.id}`;
         return;
@@ -272,7 +276,7 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
       const fields: Record<string, unknown> = {};
       for (const k of touched) for (const a of API_FIELDS[k]) fields[a] = all[a];
       const r = await api<{ offered: number; notReinvited?: string[]; resent?: string[]; closedApps?: string[]; spotClosed?: string[]; spots?: number }>(`/api/tests/${edit.id}/edit`, {
-        version, fields, confirmHigh: confirmHigh(), seenAt: edit.seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}),
+        version, fields, confirmHigh: confirmHigh(), seenAt: edit.seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}), timeZone: browserZone(),
         keysAdd: parseKeys(keysText), keysRemove,
       });
       await keep.clear();
@@ -476,7 +480,9 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
             {spotsLimit != null && <p className="mt-1 text-xs text-slate-500">{limitHint(spotsLimit)}</p>}
           </div>
           <div>
-            {text("openUntil", "Open until (every tester's deadline)", { req: true, type: "date", cls: "max-w-[12rem]", hint: edit ? "only later, up to 30 days from today" : "3 to 30 days from today", attrs: { min: minOpen, max: monthOut, "data-msg": edit ? "Open until must be a date in the future." : "Set Open until 3 to 30 days from today: it's every tester's deadline too.", "data-max-msg": "Open until can be at most 30 days from today." } })}
+            {text("openUntil", "Open until (last day to join)", { req: true, type: "date", cls: "max-w-[12rem]", hint: edit ? "only later, up to 30 days from today" : "3 to 30 days from today", attrs: { min: minOpen, max: monthOut, "data-msg": edit ? "Open until must be a date in the future." : "Set Open until (the last day to join) 3 to 30 days from today.", "data-max-msg": "Open until can be at most 30 days from today." } })}
+            {/* (Owner, Oct 30, batch 15 section 18) Live: "Each tester gets the same time from when they join: today to this date (14 days)." */}
+            {f.openUntil && /^\d{4}-\d{2}-\d{2}$/.test(f.openUntil) && daysBetween(localToday(), f.openUntil) > 0 && <p className="mt-1 text-xs text-slate-400" data-tester-days="">{testerDaysHint(daysBetween(localToday(), f.openUntil))}</p>}
             {showOn("openUntil") && redLine(ouLine)}
           </div>
         </div>

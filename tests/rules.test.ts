@@ -126,8 +126,8 @@ describe("listing checks", () => {
   it("(batch 12 section 6) Open until is required, 3 to 30 days ahead on Post; within 30 days on Edit", () => {
     const now = new Date("2026-11-01T12:00:00Z");
     const l = (openUntil: string | null) => listing({ openUntil });
-    expect(checkListing(l(null), 0, now)).toEqual(["Set Open until 3 to 30 days from today: it's every tester's deadline too."]);
-    expect(checkListing(l("2026-11-03T23:59:59Z"), 0, now)).toEqual(["Set Open until 3 to 30 days from today: it's every tester's deadline too."]);
+    expect(checkListing(l(null), 0, now)).toEqual(["Set Open until (the last day to join) 3 to 30 days from today."]);
+    expect(checkListing(l("2026-11-03T23:59:59Z"), 0, now)).toEqual(["Set Open until (the last day to join) 3 to 30 days from today."]);
     expect(checkListing(l("2026-11-04T23:59:59Z"), 0, now)).toEqual([]);
     expect(checkListing(l("2026-12-01T23:59:59Z"), 0, now)).toEqual([]);
     expect(checkListing(l("2026-12-02T23:59:59Z"), 0, now)).toEqual(["Open until can be at most 30 days from today."]);

@@ -169,7 +169,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       {rejoining ? (
         <p className="text-sm text-slate-300">If {p.devName} accepts, your session comes back on the current listing with the time you had left{p.timeBack ? `: ${p.timeBack}` : ""}.</p>
       ) : (
-        // (Batch 12 section 6) Every tester's deadline is Open until.
+        // (Batch 15 section 18) Every tester gets the same days from when they join.
         <p className="text-sm text-slate-300" data-join-deadline="">Your deadline: {p.dueIfNow}</p>
       )}
     </div>

@@ -633,6 +633,13 @@ Tests, and a still of each for the report.
 
 - **Owner change (Oct 30, later): dismissing uses tick boxes, not an × per line.** Each warning row has a tick box: "☐ Ben Okafor · HR-2222", "☐ Cam Lee · HR-3333". At the top: "Select all (N)". Below them, one "Dismiss selected" button, disabled until something is ticked, reading "Dismiss 2" when two are ticked. The rest is unchanged.
 
+- **Owner change (Oct 30, later; items 44 and 45): the TESTER can't undo a report any more.** Remove "It works now" from item 44; they can still report a key once. The DEVELOPER decides instead, in this warning list:
+  - **Each warning row:** [select tick] "Ben Okafor · HR-2222" plus a "Works now" checkmark, unticked by default.
+  - **"Dismiss selected"** hides the selected rows. For any of them with "Works now" ticked, it also clears the key's broken mark: the key is no longer crossed out in Given, In use or the tester row; it can be reused without the "reported as broken" warning later; the tester's key notice changes from "Marked as not working" to "The developer marked your key as working". The tester gets one quiet live-box line (no bell, no stop-once), and can report the key again if it still fails.
+  - A selected row WITHOUT "Works now" is just hidden, and the key stays marked broken.
+  - Remove the developer's live-box line "Ana says their key works now" (there's no tester undo any more).
+  - **Follow-up (Oct 30, later):** the developer marking a tester's key as working is a normal stop-once change for THAT tester, not a quiet line. It shows in the tester's live top box (under the blue box); the tester's next press (Send, Charge, Dispute…) from a page loaded before it stops once and lists it under the button, in item 36's format; the tester's Alerts toggle (item 26) treats it as a contract-related change, so it still stops when Alerts is Off; still no bell.
+
 Tests, and a still (warning shown, then dismissed) for the report.
 
 ## Check and report

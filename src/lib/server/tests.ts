@@ -12,8 +12,9 @@ import { db } from "@/lib/db";
 import { LIMITS } from "@/lib/limits";
 import { displayName, fmtDate, fmtDateTime, pronouns, toCents } from "@/lib/format";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
+import { T, safeZone } from "@/lib/tz";
 import {
-  andList, testPaused, testerPaused, PAUSED_SEND, WRITTEN_MAX_CHARS, checkWrittenLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
+  andList, closedToNewLine, daysBetween, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, WRITTEN_MAX_CHARS, checkWrittenLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { gapsOf, gapsUnseen, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError, readText } from "./http";
@@ -24,7 +25,7 @@ import { blockPartners } from "./blocks";
 import { callCancelledLine } from "@/lib/rules";
 
 type Tx = Prisma.TransactionClient;
-type U = { id: string; email: string; name: string; pronoun: string; isDeveloper: boolean; isTester: boolean };
+type U = { id: string; email: string; name: string; pronoun: string; isDeveloper: boolean; isTester: boolean; timeZone?: string | null };
 
 // ---------- helpers ----------
 
@@ -223,7 +224,8 @@ async function checkPost(dev: U, body: Record<string, unknown>) {
   const l = parseListing(body) as Listing;
   if (!l.mature) l.matureWhy = "";
   const now = new Date();
-  const errs = checkListing(l, 0, now, { openedAt: now, confirmedHigh: confirmedHighOf(body) });
+  // (Batch 15 section 32) The press sends the developer's time zone (the account's stored one otherwise): "today" is their date.
+  const errs = checkListing(l, 0, now, { openedAt: now, confirmedHigh: confirmedHighOf(body), tz: tzOf(body, dev) });
   const cap = await testerCapacity(dev.id);
   if (Number.isInteger(l.spots) && l.spots > cap.limit && !errs.some((e) => e.startsWith("Spots"))) errs.push(overLimitText(cap.limit));
   const keys = checkTypedKeys(body.accessKeys);
@@ -249,8 +251,8 @@ export async function postDraft(dev: U, testId: string, body: Record<string, unk
     const t = await lockTest(tx, testId);
     if (t.status !== "draft") throw new HttpError(409, "not_draft", "This test is already open.");
     if (keys.length) await tx.accessKey.createMany({ data: keys.map((value) => ({ testId, value })) });
-    // It opens now: the deadline buffer and the dashboard order count from here.
-    await recordEvent(tx, testId, "opened", "The test opened for testers", true, { ...listingData(l), status: "open", createdAt: new Date() });
+    // It opens now: the deadline buffer and the dashboard order count from here; (batch 15 section 18) so do the tester days.
+    await recordEvent(tx, testId, "opened", "The test opened for testers", true, { ...listingData(l), status: "open", createdAt: new Date(), testerDays: testerDaysFor(l.openUntil, dev) });
     return tx.test.findUniqueOrThrow({ where: { id: testId } });
   });
 }
@@ -269,7 +271,7 @@ export async function createTest(dev: U, body: Record<string, unknown>) {
   const { l, keys } = await checkPost(dev, body);
   await postPerks(dev.id, l.joinMode);
   return db.$transaction(async (tx) => {
-    const t = await tx.test.create({ data: { ...listingData(l), developerId: dev.id, status: "open" } });
+    const t = await tx.test.create({ data: { ...listingData(l), developerId: dev.id, status: "open", testerDays: testerDaysFor(l.openUntil, dev) } });
     if (keys.length) await tx.accessKey.createMany({ data: keys.map((value) => ({ testId: t.id, value })) });
     return t;
   });
@@ -324,7 +326,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const fields = LISTING_FIELDS.filter((k) => JSON.stringify(current[k]) !== JSON.stringify(next[k]));
     // (Design doc 4/5) The Post rules, then the critical-change limit and the access keys: every red mistake is found FIRST
     // (a stop-once reason never hides one), and nothing saves while any remains.
-    const errs = checkListing(next, testersIn, new Date(), { changed: new Set(fields), openedAt: t.createdAt, edit: true, confirmedHigh: confirmedHighOf(body), saved: { writtenCents: t.writtenCents, recordingCents: t.recordingCents } });
+    const errs = checkListing(next, testersIn, new Date(), { changed: new Set(fields), openedAt: t.createdAt, edit: true, confirmedHigh: confirmedHighOf(body), saved: { writtenCents: t.writtenCents, recordingCents: t.recordingCents }, tz: tzOf(body, dev) });
     if (fields.includes("openUntil")) { const short = openUntilShortened(current.openUntil, next.openUntil, fmtDate); if (short) errs.push(short); }
     // (NEWEST+9) Raising spots above the capacity is refused; a test already above it keeps its spots.
     if (Number.isInteger(next.spots) && next.spots > current.spots && next.spots > cap.limit && !errs.some((e) => e.startsWith("Spots"))) errs.push(overLimitText(cap.limit));
@@ -363,10 +365,13 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (keysChanged) {
       await applyKeyChange(tx, testId, plan.toAdd, plan.removable);
     }
-    // (Owner, Oct 29, batch 12 section 6) Open until is every tester's deadline: moving it later moves every working tester's deadline with it.
-    if (fields.includes("openUntil") && next.openUntil) {
-      const ou = new Date(next.openUntil);
-      await tx.contract.updateMany({ where: { testId, status: "working", dueAt: { lt: ou } }, data: { dueAt: ou } });
+    // (Owner, Oct 30, batch 15 section 18) Moving Open until later by D days: tester days grow by D, and every working tester's deadline moves D days later.
+    if (fields.includes("openUntil") && next.openUntil && current.openUntil) {
+      const d = daysBetween(openUntilDay(current.openUntil), openUntilDay(next.openUntil));
+      if (d > 0) {
+        await tx.test.update({ where: { id: testId }, data: { testerDays: (t.testerDays ?? testerDaysOf(t.createdAt, current.openUntil, dev.timeZone)) + d } });
+        await tx.$executeRaw`UPDATE "Contract" SET "dueAt" = "dueAt" + ${d} * interval '1 day' WHERE "testId" = ${testId} AND status = 'working'`;
+      }
     }
     // (F) Listing info (description, devices, languages): shown to working testers and on the join page; stops once.
     const info = fields.filter((f) => INFO_FIELDS.includes(f));
@@ -420,7 +425,12 @@ export async function openDraft(dev: U, testId: string, body: Record<string, unk
   await devGateIfSeen(testId, body);
   if (t.status !== "draft") throw new HttpError(409, "not_draft", t.status === "stopped" ? "This test was stopped." : "This test is already open.");
   await postPerks(dev.id, t.joinMode, testId);
-  return db.$transaction((tx) => recordEvent(tx, testId, "opened", "The test opened for testers", true, { status: "open" }));
+  return db.$transaction((tx) => recordEvent(tx, testId, "opened", "The test opened for testers", true, { status: "open", testerDays: testerDaysFor(t.openUntil, dev) }));
+}
+
+/** (Batch 15 section 18) Tester days at the moment a test opens: today (the developer's date) to Open until. */
+function testerDaysFor(openUntil: Date | string | null, dev: { timeZone?: string | null }) {
+  return openUntil ? testerDaysOf(new Date(), openUntil, dev.timeZone) : null;
 }
 
 // ---------- developer: the top panel's big buttons (stop once) ----------
@@ -581,7 +591,10 @@ export async function findTests(tester: U) {
       status: "open", adminPausedAt: null, developerId: { notIn: [tester.id, ...(await blockPartners(tester.id))] }, developer: { devSuspendedAt: null, holdStartedAt: null },
       // Not joined, or LEFT (they can come back: not after rating, not if the developer ended them).
       contracts: { none: { testerId: tester.id, OR: [{ status: { not: "left" } }, { endKind: "rated" }] } },
-      OR: [{ joinMode: { not: "invite" } }, { invites: { some: { testerId: tester.id, status: "sent" } } }],
+      // (Owner, Oct 30, batch 15 section 38) Invite-only tests are never in Find, not even for invited testers (they reach them from their invites, the bell or the email).
+      joinMode: { not: "invite" },
+      // (Batch 15 section 18) After Open until the test is closed to everyone who hasn't joined: out of Find.
+      OR: [{ openUntil: null }, { openUntil: { gt: new Date() } }],
     },
     include: { _count: { select: { contracts: { where: { status: "working" } } } }, developer: { select: { name: true, email: true } }, contracts: { where: { testerId: tester.id }, select: { status: true } } },
     orderBy: { createdAt: "desc" },
@@ -652,7 +665,8 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     // (Design doc 7.3) Joining needs the NDA accepted (the time it was accepted is kept with the terms).
     const ndaAt = typeof body.ndaAcceptedAt === "string" && !isNaN(new Date(body.ndaAcceptedAt).getTime()) ? new Date(body.ndaAcceptedAt) : null;
     if (t.ndaText && body.ndaAccepted !== true && !ndaAt) throw new HttpError(400, "nda", "Accept the NDA to join.");
-    const snap = contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion }, new Date(), body.keepPrivate === true, ndaAt ?? new Date());
+    // (Batch 15 section 18) The tester's deadline: the day they join + the test's tester days (counted in the developer's time zone, like Open until).
+    const snap = contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion, testerDays: t.testerDays, tz: dev.timeZone }, new Date(), body.keepPrivate === true, ndaAt ?? new Date());
     const contract = old
       ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, dueAt: rejoinDue(old.dueAt, old.endedAt, new Date()), status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null } })
       : await tx.contract.create({ data: { testId, testerId: tester.id, ...snap } });
@@ -755,3 +769,32 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
 }
 
 export const eventLine = (e: { text: string; createdAt: Date }) => `${e.text} · ${fmtDateTime(e.createdAt)}`;
+
+/** (Batch 15 section 32) The developer's time zone for counting Open until's days: the one the press sent, else the account's. */
+export function tzOf(body: Record<string, unknown>, dev: { timeZone?: string | null }) {
+  const sent = typeof body.timeZone === "string" ? body.timeZone : "";
+  return sent && safeZone(sent) === sent ? sent : dev.timeZone ?? "";
+}
+
+/**
+ * (Owner, Oct 30, batch 15 section 18) Open until passed: the test is closed to everyone who hasn't joined. Pending applications and open invites close (as when it
+ * fills up), and each person is told once. Working testers carry on until their own deadlines. Run by the daily job (and safe to run again).
+ */
+export async function closeJoiningAfterOpenUntil(now = new Date()) {
+  const tests = await db.test.findMany({
+    where: { status: "open", openUntil: { lt: now }, OR: [{ invites: { some: { status: "sent" } } }, { id: { in: (await db.application.findMany({ where: { status: "pending" }, select: { testId: true }, distinct: ["testId"] })).map((a) => a.testId) } }] },
+    include: { developer: true },
+  });
+  let n = 0;
+  for (const t of tests) {
+    const apps = await db.application.findMany({ where: { testId: t.id, status: "pending" } });
+    const invs = await db.invite.findMany({ where: { testId: t.id, status: "sent" } });
+    await db.application.updateMany({ where: { id: { in: apps.map((a) => a.id) } }, data: { status: "closed", closedReason: "joining_closed", decidedAt: now } });
+    await db.invite.updateMany({ where: { id: { in: invs.map((i) => i.id) } }, data: { status: "cancelled" } });
+    const people = await db.user.findMany({ where: { id: { in: [...apps.map((a) => a.testerId), ...invs.map((i) => i.testerId)] } }, select: { id: true, email: true } });
+    const line = closedToNewLine(t.openUntil!, (d) => T(d, "date"));
+    for (const p of people) await notify(p.email, line, [line], `/app/find/${t.id}`);
+    n += apps.length + invs.length;
+  }
+  return n;
+}

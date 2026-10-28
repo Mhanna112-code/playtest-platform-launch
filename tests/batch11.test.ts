@@ -75,7 +75,7 @@ describe("batch 11 item 1: a deleted tester's sent work is still reviewed", () =
     await deleteAccount(tester.user.id, "self");
     // Charge would be open: 14 days passed and the test closed.
     await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000), updatedAt: new Date(Date.now() - 15 * DAY) } });
-    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } });
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() - 1000) } }); // (batch 15 section 18: the tester's own deadline)
     await runDaily();
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).toBeNull();
     expect(await db.notification.count({ where: { userId: dev.user.id, reminderKey: `unreviewed:${sub.id}`, text: { contains: "pay or reject it." } } })).toBe(1);

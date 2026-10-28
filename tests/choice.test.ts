@@ -21,7 +21,7 @@ async function waiting14() {
   const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
   await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000) } });
   // (Owner, Oct 26) Charge opens only when 14 days have passed AND the test's Open until has passed.
-  await db.test.update({ where: { id: s.testId }, data: { openUntil: new Date(Date.now() - 1000) } });
+  await db.test.update({ where: { id: s.testId }, data: { openUntil: new Date(Date.now() - 1000) } }); await db.contract.updateMany({ where: { testId: s.testId }, data: { dueAt: new Date(Date.now() - 1000) } }); // (batch 15 section 18: the tester's own deadline)
   return { ...s, ...j, sub };
 }
 

@@ -27,7 +27,7 @@ import { rejoinAskLine } from "@/lib/server/joining";
 import { pronouns } from "@/lib/format";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PAUSE_CLOSE_DAYS, pauseReasons } from "@/lib/pause";
-import { HOLD_APPROVAL_AFTER, REVIEW_DAYS, testerPayable } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, REVIEW_DAYS, joiningClosedLine, testerPayable } from "@/lib/rules";
 
 export const metadata = { title: "Home · Playtest" };
 export const dynamic = "force-dynamic";
@@ -36,7 +36,7 @@ export const dynamic = "force-dynamic";
 const CARD_LINK = "after:absolute after:inset-0 after:rounded-2xl focus-visible:outline-none focus-visible:after:outline focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-volt-300";
 const plural = (n: number, w: string) => `${num(n)} ${w}${n === 1 ? "" : "s"}`;
 /** What the tester gets, without the days ("Written $8.00 · Recording $9.60"). */
-const pays = (t: Parameters<typeof termsLine>[0]) => termsLine(t, true).split(" · ").slice(0, -1).join(" · ");
+const pays = (t: Parameters<typeof termsLine>[0]) => termsLine({ ...t, testerDays: null }, true); // (batch 15: termsLine adds days only when given)
 const DAY = 86_400_000;
 
 export default async function AppHome({ searchParams }: { searchParams: Promise<{ category?: string; failed?: string }> }) {
@@ -275,7 +275,8 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
                         <div className="flex flex-wrap gap-2">
                           <PartBadges written={t.writtenCents != null} recording={t.recordingCents != null} live={t.liveRateCents != null} />
                           <span className="badge">{t.joinMode === "invite" ? "Invite only" : t.joinMode === "apply" ? "Approved only" : "Anyone can join"}</span>
-                          {t.openUntil && <span className="badge">Open until {fmtDate(t.openUntil)}</span>}
+                          {/* (Batch 15 section 18) After Open until: "Joining closed · testers working until Dec 3". */}
+                          {t.openUntil && (t.openUntil < now ? <span className="badge border-amber-300/40 text-amber-200" data-joining-closed="">{joiningClosedLine(inIt.reduce<Date | null>((m, c) => (c.dueAt > now && (!m || c.dueAt > m) ? c.dueAt : m), null), (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }))}</span> : <span className="badge">Open until (last day to join) {fmtDate(t.openUntil)}</span>)}
                           {t._count.accessKeys > 0 && <span className="badge"><KeyRound className="h-3.5 w-3.5" /> {plural(keysFree.get(t.id) ?? 0, "key")} left</span>}
                           {nInvited > 0 && <span className="badge">{plural(nInvited, "invite")} waiting</span>}
                           {nApps > 0 && <span className="badge border-sky-300/40 text-sky-200">{plural(nApps, "application")}</span>}

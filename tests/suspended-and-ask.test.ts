@@ -88,7 +88,7 @@ describe("no Ask $ on sends (owner, Oct 26): the Pay box starts at the listing; 
     expect(chargeAmount(1000, 400)).toBe(600);
     const { sessionId, tester, sub, testId } = await sent();
     await db.submission.update({ where: { id: sub.id }, data: { askedCents: 300, payBy: new Date(Date.now() - 1000) } }); // old data
-    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } }); // Charge opens after Open until
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() - 1000) } }); // (batch 15 section 18: the tester's own deadline) // Charge opens after Open until
     await cron();
     expect((await newest(sub.id)).choiceOfferedAt).not.toBeNull();
     const tooMuch = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "12.00", tickedCents: 1200 });

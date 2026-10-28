@@ -43,7 +43,7 @@ describe("the tester rates the developer", () => {
     await db.submission.updateMany({ where: { contractId: b.sessionId }, data: { payBy: new Date(Date.now() - 60_000) } });
     // 14 days alone is not enough: Charge also needs the test's Open until to have passed.
     expect((await sact(b.sessionId, "rate", b.tester.cookie, { stars: 2 })).body.error.message).toContain("Rating opens once the developer has reviewed everything");
-    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 60_000) } });
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 60_000) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() - 60_000) } }); // (batch 15 section 18: the tester's own deadline)
     expect((await sact(b.sessionId, "rate", b.tester.cookie, { stars: 2 })).status).toBe(200);
   });
 

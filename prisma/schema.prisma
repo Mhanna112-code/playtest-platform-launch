@@ -209,8 +209,11 @@ model Test {
   liveRequired      Boolean @default(false)
   /// Each tester's deadline: days from their own join (late work is still allowed, marked "Sent late")
   deadlineDays  Int
-  /// After this date: no new joiners, no sending, no booking (null = no end date)
+  /// After this date: no new joiners, no sending, no booking (null = no end date). (Batch 15 section 18) The last day to JOIN.
   openUntil     DateTime?
+  /// (Owner, Oct 30, batch 15 section 18) Every tester's days: from when the test opened (posted, or a Next round opened) to Open until. Each tester's deadline is
+  /// the day they join + these days. Edit moving Open until later by D days adds D. (null on tests older than batch 15 that never got it)
+  testerDays    Int?
   /// Questions for written answers (array of strings)
   questions     Json     @default("[]")
   /// Who can join: "anyone" (Join) | "apply" (Apply to join; the developer accepts) | "invite" (invite only)

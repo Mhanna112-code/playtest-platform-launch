@@ -155,7 +155,7 @@ describe("batch 12 item 6: Open until is required and is every tester's deadline
     expect(src("app/app/tests/TestForm.tsx")).not.toContain("How long do new testers have?");
     expect(R.termsLine({ writtenCents: 1000, recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7 })).toBe("Written $10.00");
     expect(src("app/app/find/[id]/page.tsx")).toContain("Your deadline: {dueIfNow}");
-    expect(src("app/app/find/[id]/page.tsx")).toContain("(in ${leftText(dueAt.getTime() - Date.now(), true)})");
+    expect(src("app/app/find/[id]/page.tsx")).toContain("yourDeadlineLine(dueAt, days, utcDay)"); // (batch 15 section 18) "Dec 3 (14 days from joining)"
   });
 
   it("every tester's deadline is Open until, late joiners too; moving it later in Edit moves the working testers' deadlines; at most 30 days", async () => {
@@ -172,16 +172,15 @@ describe("batch 12 item 6: Open until is required and is every tester's deadline
 
   it("the review window is 7 days: Charge opens at the later of Open until and 7 days after sending; reminders 1 week / 3 days / 1 day", () => {
     expect(R.REVIEW_DAYS).toBe(7);
-    expect(R.UNLISTED_REMIND_DAYS).toBe(7);
     const sent = new Date("2026-11-01T00:00:00Z");
     const payBy = R.payByFrom(sent);
     expect(payBy.toISOString()).toBe("2026-11-08T00:00:00.000Z");
-    expect(R.chargeOpensAt({ payBy }, { openUntil: new Date("2026-11-05T23:59:59Z"), status: "open" }, { status: "working", dueAt: new Date() })!.toISOString()).toBe("2026-11-08T00:00:00.000Z");
-    expect(R.chargeOpensAt({ payBy }, { openUntil: new Date("2026-11-20T23:59:59Z"), status: "open" }, { status: "working", dueAt: new Date() })!.toISOString()).toBe("2026-11-20T23:59:59.000Z");
-    // No "in 1 month" for the review reminders.
+    // (Batch 15 section 18) The tester's own deadline takes Open until's place.
+    expect(R.chargeOpensAt({ payBy }, { openUntil: null, status: "open" }, { status: "working", dueAt: new Date("2026-11-05T23:59:59Z") })!.toISOString()).toBe("2026-11-08T00:00:00.000Z");
+    expect(R.chargeOpensAt({ payBy }, { openUntil: null, status: "open" }, { status: "working", dueAt: new Date("2026-11-20T23:59:59Z") })!.toISOString()).toBe("2026-11-20T23:59:59.000Z");
+    // (Batch 15 section 2) The review reminders have their own marks (REVIEW_MARKS); Open until's heads-ups keep MARKS.
     const opens = new Date(Date.now() + 29 * DAY);
     expect(R.countdownDue(opens, new Date(), [], new Date(Date.now() - 40 * DAY))?.mark).toBe("1m");
-    expect(R.countdownDue(opens, new Date(), [], new Date(Date.now() - 40 * DAY), true)).toBeNull();
     expect(R.choiceLine("Nora Lane", "written", 1000)).toBe("Nora Lane didn't review your written answers in 7 days: charge $10.00 or let it go");
   });
 

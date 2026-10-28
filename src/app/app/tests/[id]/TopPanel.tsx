@@ -18,7 +18,7 @@ type Tester = { contractId: string; name: string; sent: string[]; toSend: string
  * The test page's top title panel: the developer's big buttons (Stop the test, End early, Next round).
  * Its stop-once box sits directly under this panel.
  */
-export function TopPanel(p: { id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean }) {
+export function TopPanel(p: { joinClosedLine?: string; id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
   const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={error} didntGo={k === "stop" || k === "end-early"} /> : null);
   const [open, setOpen] = useState<"" | "end" | "next">("");
@@ -115,7 +115,8 @@ export function TopPanel(p: { id: string; title: string; status: string; terms: 
             </span>
           )}
           {/* (Owner, Oct 26) Open until is shown here as a date only; it changes through Edit. */}
-          {p.openUntil && <p className="text-xs text-slate-400" data-open-until="">Open until {new Date(p.openUntil).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}{new Date(p.openUntil).getTime() <= Date.now() ? " (passed)" : ""}</p>}
+          {/* (Batch 15 section 18) Open until is the last day to join; after it: "Joining closed · testers working until Dec 3". */}
+          {p.openUntil && (p.joinClosedLine ? <p className="text-xs text-amber-200" data-joining-closed="">{p.joinClosedLine}</p> : <p className="text-xs text-slate-400" data-open-until="">Open until (last day to join) {new Date(p.openUntil).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}</p>)}
         </div>
         {openErr && <p className="err">{openErr}</p>}
         {open === "end" && (

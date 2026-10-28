@@ -54,7 +54,8 @@ export async function requirePerk(devId: string, perk: Perk) {
 }
 
 /** Tests that count as open: Open, Full or Paused (status "open"). Drafts, Stopped and Closed don't. */
-export const openTestCount = (devId: string, exceptId = "") => db.test.count({ where: { developerId: devId, status: "open", ...(exceptId ? { id: { not: exceptId } } : {}) } });
+// (Batch 15 section 18, DEFAULT) A test whose joining has closed (Open until passed) no longer counts toward the open tests.
+export const openTestCount = (devId: string, exceptId = "") => db.test.count({ where: { developerId: devId, status: "open", OR: [{ openUntil: null }, { openUntil: { gt: new Date() } }], ...(exceptId ? { id: { not: exceptId } } : {}) } });
 /**
  * (Section 2) The free plan runs one open test at a time. (Owner, Oct 29, batch 12 section 4) Subscribers (and everyone during a free launch) at most MAX_OPEN_TESTS (10).
  * Counted on the server at the press: a test stopped in another tab meanwhile simply lets the post through (a drop in the count is never a stop-once reason).

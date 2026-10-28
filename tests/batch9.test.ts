@@ -103,16 +103,20 @@ describe("batch 9 item 2: an unlisted part has only Pay", () => {
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("{dev} paid $0 for this");
   });
 
-  it("(DEFAULT) the developer's reminders stop 7 days (batch 12) after it was sent; the row stays", async () => {
-    expect(R.UNLISTED_REMIND_DAYS).toBe(7);
-    const { dev, sub } = await sentWork(null);
-    await db.submission.update({ where: { id: sub.id }, data: { updatedAt: new Date(Date.now() - 4 * DAY) } });
+  it("(batch 15 section 2) the developer's reminders follow the review marks to the review date, then stop; the row stays", async () => {
+    const { dev, sub, sessionId } = await sentWork(null);
+    // Sent 5 days ago; the review date is the later of the tester's deadline and sent + 7 days. Make it 2 days ahead: the 3-day mark is due.
+    await db.submission.update({ where: { id: sub.id }, data: { updatedAt: new Date(Date.now() - 5 * DAY), payBy: new Date(Date.now() + 2 * DAY) } });
+    await db.contract.update({ where: { id: sessionId }, data: { dueAt: new Date(Date.now() + 1 * DAY) } });
     await runDaily();
-    const n = () => db.notification.count({ where: { userId: dev.user.id, reminderKey: `outside:${sub.id}` } });
+    const n = () => db.notification.count({ where: { userId: dev.user.id, reminderKey: `unreviewed:${sub.id}` } });
     expect(await n()).toBe(1);
-    await db.submission.update({ where: { id: sub.id }, data: { updatedAt: new Date(Date.now() - 15 * DAY), remindedAt: new Date(Date.now() - 4 * DAY) } });
+    // After the review date: no Charge for an unlisted part, and no more reminders.
+    await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - DAY) } });
+    await db.contract.update({ where: { id: sessionId }, data: { dueAt: new Date(Date.now() - DAY) } });
     await runDaily();
     expect(await n()).toBe(1);
+    expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).toBeNull();
     expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0);
   });
 });

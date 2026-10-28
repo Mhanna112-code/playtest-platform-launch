@@ -39,15 +39,16 @@ describe("newest addition", () => {
     expect(await db.notification.count({ where: { userId: dev.user.id, text: line } })).toBe(1);
   });
 
-  it("reminders for parts outside the contract come every 3 days", async () => {
-    expect(R.REMIND_DAYS).toBe(3);
+  it("(batch 15 section 2) parts outside the contract get the same review reminders as listed ones", async () => {
     const s = await setup({ writtenCents: null, questions: [] });
     const j = await joined(s.testId);
     await sact(j.sessionId, "written", j.tester.cookie, { answers: ["more"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
-    await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000), updatedAt: new Date(Date.now() - 4 * 86_400_000), remindedAt: new Date(Date.now() - 3 * 86_400_000) } });
+    // Sent 4 days ago with the review date 3 days ahead: the 3-day mark.
+    await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() + 3 * 86_400_000 - 60_000), updatedAt: new Date(Date.now() - 4 * 86_400_000) } });
+    await db.contract.update({ where: { id: j.sessionId }, data: { dueAt: new Date(Date.now() + 86_400_000) } });
     await cron();
-    expect(await db.notification.count({ where: { userId: s.dev.user.id, text: { contains: "still waits for you to pay or reject" } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: s.dev.user.id, text: { contains: "it isn't listed: any amount, $0 included" } } })).toBe(1);
   });
 
   it("the developer adds their side to a dispute once; it's kept for the admin", async () => {

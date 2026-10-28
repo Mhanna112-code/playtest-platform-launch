@@ -156,13 +156,13 @@ describe("daily job", () => {
     expect((await cronGET(new Request("http://localhost:3400/api/cron/daily"))).status).toBe(401);
   });
 
-  it("offers Charge / Let it go after 14 days unreviewed (the listing amount); never for parts outside the contract; not during a hold", async () => {
+  it("offers Charge / Let it go once the review date passes (the listing amount); never for parts outside the contract; not during a hold", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000) } });
-    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } }); // Charge opens only after Open until (Owner, Oct 26)
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() - 1000) } }); // (batch 15 section 18: the tester's own deadline) // Charge opens only after Open until (Owner, Oct 26)
     await startHold(dev.user.id, "unpaid");
     await cron();
     expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0); // clock paused
@@ -176,11 +176,13 @@ describe("daily job", () => {
     const j = await joined(x.testId);
     await sact(j.sessionId, "written", j.tester.cookie, { answers: ["more feedback"] });
     const xs = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
-    await db.submission.update({ where: { id: xs.id }, data: { payBy: new Date(Date.now() - 1000), updatedAt: new Date(Date.now() - 4 * 86_400_000) } });
+    // (Batch 15 section 2) Its review date passed: no Charge, never auto-paid, and its reminders have stopped (the row stays).
+    await db.submission.update({ where: { id: xs.id }, data: { payBy: new Date(Date.now() - 1000), updatedAt: new Date(Date.now() - 8 * 86_400_000) } });
+    await db.contract.update({ where: { id: j.sessionId }, data: { dueAt: new Date(Date.now() - 1000) } });
     await cron();
-    await cron(); // not reminded twice within 7 days
+    await cron();
     expect(await db.review.count({ where: { submissionId: xs.id } })).toBe(0);
-    expect(await db.notification.count({ where: { userId: x.dev.user.id, text: { contains: "still waits for you to pay or reject" } } })).toBe(1);
+    expect((await db.submission.findUniqueOrThrow({ where: { id: xs.id } })).choiceOfferedAt).toBeNull();
     // A stray ask on a send is ignored: Charge is always the listing.
     const z = await setup();
     const m = await joined(z.testId);
@@ -188,7 +190,7 @@ describe("daily job", () => {
     const zs = await db.submission.findFirstOrThrow({ where: { contractId: m.sessionId } });
     expect(zs.askedCents).toBeNull();
     await db.submission.update({ where: { id: zs.id }, data: { payBy: new Date(Date.now() - 1000) } });
-    await db.test.update({ where: { id: z.testId }, data: { openUntil: new Date(Date.now() - 1000) } });
+    await db.test.update({ where: { id: z.testId }, data: { openUntil: new Date(Date.now() - 1000) } }); await db.contract.updateMany({ where: { testId: z.testId }, data: { dueAt: new Date(Date.now() - 1000) } }); // (batch 15 section 18: the tester's own deadline)
     await cron();
     expect((await sact(m.sessionId, "choose", m.tester.cookie, { submissionId: zs.id, choice: "charge", tickedCents: 1000 })).body).toMatchObject({ amountCents: 1000 });
   });
@@ -202,13 +204,13 @@ describe("daily job", () => {
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Pay $" } } })).toBe(0); // no "Pay $X by ..." reminder
     const h = await setup();
     const hj = await joined(h.testId);
-    await db.test.update({ where: { id: h.testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } });
+    await db.test.update({ where: { id: h.testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } }); await db.contract.updateMany({ where: { testId: h.testId }, data: { dueAt: new Date(Date.now() + 2 * DAY) } }); // (batch 15 section 18: the tester's own deadline)
     await cron();
     const n = () => db.notification.count({ where: { userId: hj.tester.user.id, text: { contains: "closes on" } } });
     expect(await n()).toBe(1);
     await cron(); // not twice
     expect(await n()).toBe(1);
-    await db.test.update({ where: { id: h.testId }, data: { openUntil: new Date(Date.now() + 12 * 3_600_000) } });
+    await db.test.update({ where: { id: h.testId }, data: { openUntil: new Date(Date.now() + 12 * 3_600_000) } }); await db.contract.updateMany({ where: { testId: h.testId }, data: { dueAt: new Date(Date.now() + 12 * 3_600_000) } }); // (batch 15 section 18: the tester's own deadline)
     await cron();
     expect(await n()).toBe(2);
   });
@@ -219,7 +221,7 @@ describe("Open until", () => {
     const { dev, testId } = await setup({ deadlineDays: 2, openUntil: new Date(Date.now() + 5 * DAY).toISOString().slice(0, 10) });
     let v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     expect((await act(testId, "edit", dev.cookie, { version: v, fields: { openUntil: new Date(Date.now() + 9 * DAY).toISOString().slice(0, 10) } })).status).toBe(200);
-    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - DAY) } });
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - DAY) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() - DAY) } }); // (batch 15 section 18: the tester's own deadline)
     v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     const r = await act(testId, "edit", dev.cookie, { version: v, fields: { openUntil: new Date(Date.now() + 9 * DAY).toISOString().slice(0, 10) } });
     expect(r.body.error.message).toMatch(/^Joining closed on .+ \(Open until\), so it can't be extended\.$/);

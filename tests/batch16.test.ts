@@ -123,7 +123,7 @@ describe("B) reminders", () => {
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000) } });
-    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } });
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() - 1000) } }); // (batch 15 section 18: the tester's own deadline)
     await cron();
     const offer = (await lines(tester.user.id)).find((l) => /charge \$10\.00 or let it go$/.test(l.text))!;
     expect(offer.groupKey).toBe("charge");
@@ -306,7 +306,7 @@ describe("G, H) Charge opening and the cap", () => {
 
   it("the tester's Charge cap is the listing minus what was already paid for that part", async () => {
     const { dev, tester, sessionId, sub, testId } = await sentUnreviewed();
-    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } });
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() - 1000) } }); // (batch 15 section 18: the tester's own deadline)
     await db.payment.create({ data: { kind: "review", submissionId: sub.id, contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 400, feeCents: 80, testerCents: 320, status: "charged" } });
     await cron();
     const tooMuch = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "7.00", tickedCents: 700 });
@@ -316,7 +316,7 @@ describe("G, H) Charge opening and the cap", () => {
 
   it("Charge is refused until BOTH 14 days have passed and Open until has passed (the refusal says so)", async () => {
     const { tester, sessionId, sub, testId } = await sentUnreviewed();
-    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } });
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 2 * DAY) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() + 2 * DAY) } }); // (batch 15 section 18: the tester's own deadline)
     await cron();
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).toBeNull();
     const refused = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000 });

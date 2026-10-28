@@ -7,7 +7,7 @@ import { CategoryChips, CategoryTile, mainCategory, PartBadges } from "@/compone
 import { displayName, fmtDate, money } from "@/lib/format";
 import { DEVICES } from "@/lib/options";
 import { ratingSummary } from "@/lib/server/ratings";
-import { termsLine, testerShare } from "@/lib/rules";
+import { perTesterLine, termsLine, testerDaysOf, testerShare } from "@/lib/rules";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { asListing, findTests, needsLines } from "@/lib/server/tests";
 
@@ -116,7 +116,7 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
                       </div>
                       <div className="text-right">
                         <p className="text-lg font-bold text-emerald-300">{fromText(t)}</p>
-                        <p className="text-xs text-slate-400">{termsLine(asListing(t), true).split(" · ").slice(0, -1).join(" · ")}</p>
+                        <p className="text-xs text-slate-400">{termsLine(asListing(t), true)}</p>
                         <p className="text-xs text-slate-500">{plural(left, "spot")} open to you</p>
                       </div>
                     </div>
@@ -126,7 +126,8 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
                       {t.devices.length > 0 && <span className="badge" title={t.devices.join(" · ")}><Monitor className="h-3.5 w-3.5" /> {t.devices.slice(0, 3).join(" · ")}{t.devices.length > 3 ? ` +${t.devices.length - 3} more` : ""}</span>}
                       {t.languages.length > 0 && <span className="badge" title={t.languages.join(" · ")}><Languages className="h-3.5 w-3.5" /> {t.languages.slice(0, 3).join(" · ")}{t.languages.length > 3 ? ` +${t.languages.length - 3} more` : ""}</span>}
                       <span className="badge">{t.joinMode === "invite" ? "Invitation only" : t.joinMode === "apply" ? "Approved only" : "Anyone can join"}</span>
-                      {t.openUntil && <span className="badge">Open until {fmtDate(t.openUntil)}</span>}
+                      {/* (Batch 15 section 18) "14 days per tester · join by Nov 20" */}
+                      {t.openUntil && <span className="badge" data-per-tester="">{perTesterLine(t.testerDays ?? testerDaysOf(t.createdAt, t.openUntil), t.openUntil, (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }))}</span>}
                       {t.mature && <span className="badge border-rose-300/40 text-rose-200">Mature (18+)</span>}
                       {t.ndaText && <span className="badge">NDA</span>}
                       {invitedTo.has(t.id) && <span className="badge border-emerald-400/40 text-emerald-200">Invited</span>}

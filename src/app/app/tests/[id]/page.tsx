@@ -24,7 +24,7 @@ import { rowsOf, toJson } from "@/lib/callRows";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
-import { HOLD_APPROVAL_AFTER, NOT_LISTED, callListed, deletedNoPayoutsLine, testerPayable } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, NOT_LISTED, callListed, deletedNoPayoutsLine, joiningClosedLine, testerPayable } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
@@ -206,8 +206,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         parts={{ written: t.writtenCents != null, recording: t.recordingCents != null, live: t.liveRateCents != null }}
         paused={!!(u.holdStartedAt || t.adminPausedAt)}
         status={t.status}
-        terms={termsLine(asListing(t))}
+        terms={termsLine({ ...asListing(t), testerDays: t.testerDays })}
         openUntil={t.openUntil ? t.openUntil.toISOString() : null}
+        joinClosedLine={t.openUntil && t.openUntil < new Date() ? joiningClosedLine(t.contracts.filter((c) => c.status === "working" && c.dueAt > new Date()).reduce<Date | null>((m, c) => (!m || c.dueAt > m ? c.dueAt : m), null), (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })) : ""}
         version={t.version}
         seenAt={seenAt}
         nextRoundId={next?.id ?? null}

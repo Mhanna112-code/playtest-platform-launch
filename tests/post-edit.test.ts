@@ -36,7 +36,7 @@ describe("Post a test (design doc 4)", () => {
     const soon = new Date(Date.now() + 2 * day).toISOString().slice(0, 10);
     const r = await post(dev.cookie, { openUntil: soon });
     expect(r.status).toBe(400);
-    expect(r.body.error.message).toBe("Set Open until 3 to 30 days from today: it's every tester's deadline too.");
+    expect(r.body.error.message).toBe("Set Open until (the last day to join) 3 to 30 days from today.");
     const far = new Date(Date.now() + 12 * day).toISOString().slice(0, 10);
     expect((await post(dev.cookie, { openUntil: far })).status).toBe(200);
     expect((await post(dev.cookie, { spots: 3, accessKeys: "A1\nA2" })).body.error.message).toBe("Add 1 more key: 3 open spots, 2 free keys.");
