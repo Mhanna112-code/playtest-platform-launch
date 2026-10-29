@@ -45,6 +45,8 @@ function sameOrigin(req: Request, origin: string) {
 
 /** Run a route handler body; HttpErrors become plain-word JSON errors, anything else a generic one. */
 export async function handle(fn: () => Promise<Response>): Promise<Response> {
+  // (Batch 28 §1) Every API call is a heartbeat (at most one check a minute; only with OUTAGE_CHECKS=1). Never in the way of the call.
+  void import("./outages").then((m) => m.touchHeartbeat()).catch(() => null);
   try {
     return await fn();
   } catch (e) {

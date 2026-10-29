@@ -14,6 +14,11 @@ import { T, renderTimes } from "@/lib/tz";
 //   sweep, or at server start) is recorded as an outage for the gap;
 // - never twice for the same downtime: an outage overlapping one already recorded is merged into it (the union; only the part not yet applied moves the clocks, and the
 //   bell line sent for it is reworded to the merged times). The usual rules hold: 15 minutes or more, and over 24 hours waits for an admin's Approve.
+// (Owner, Oct 29, batch 28 sections 1 and 2) The heartbeat never moves anything on its own: a paused monitor, a lapsed plan or a local server restarted after 15 minutes
+// would otherwise move every timer. A heartbeat gap is only LISTED for the admins ("Possible outage: no checks from 3:10 PM to 3:42 PM (32 min). Nothing has moved."),
+// with Approve (move every timer, any length) and Dismiss. Any server activity counts as a heartbeat (page loads, API calls, the daily job, the sweep: touchHeartbeat),
+// so a gap means the server really answered nothing. An outage the uptime service reports is applied as before, with ITS span (never widened by a heartbeat gap); a
+// gap it overlaps is closed as covered by it. Two reports that overlap merge, and an extension of an applied outage that brings it over 24 hours waits for Approve.
 
 export const OUTAGE_MIN_MS = 15 * 60_000;
 const HEARTBEAT_EVERY_MS = 60_000;
@@ -94,13 +99,79 @@ export async function recordAlert(type: "down" | "up" | null, now = new Date(), 
   return recordGap(start, now);
 }
 
-/** (Batch 26 section 1) The AppState key holding when the 5-minute sweep last ran (the app's own heartbeat). */
+/** (Batch 26 section 1) The AppState key holding when the 5-minute sweep last ran (the app's own heartbeat; batch 28 §1: any server activity). */
 export const SWEEP_LAST_KEY = "sweep-last";
+/** (Batch 28 §1) A heartbeat gap waiting for the admins: AppState `gap:<start ISO>` holding its end (ISO). */
+export const GAP_PREFIX = "gap:";
+export type Gap = { id: string; startAt: Date; endAt: Date; ms: number };
+const gapOf = (row: { key: string; value: string }): Gap | null => {
+  const s = new Date(row.key.slice(GAP_PREFIX.length)), e = new Date(row.value);
+  return isNaN(s.getTime()) || isNaN(e.getTime()) ? null : { id: row.key, startAt: s, endAt: e, ms: e.getTime() - s.getTime() };
+};
+/** The heartbeat gaps waiting for the admins, oldest first. */
+export async function pendingGaps() {
+  const rows = await db.appState.findMany({ where: { key: { startsWith: GAP_PREFIX } } });
+  return rows.map(gapOf).filter((g): g is Gap => !!g).sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+}
+/** "Possible outage: no checks from 3:10 PM to 3:42 PM (32 min). Nothing has moved." (time tokens: the reader's zone) */
+export const gapLine = (g: { startAt: Date; endAt: Date; ms: number }) =>
+  `Possible outage: no checks from ${g.startAt.toDateString() === g.endAt.toDateString() ? T(g.startAt, "time") : T(g.startAt, "datetime")} to ${T(g.endAt, "time")} (${lengthText(g.ms)}). Nothing has moved.`;
 
 /**
- * (Batch 26 section 1) The app's own heartbeat, checked by every sweep (and at server start): it stores this run's time, and when the previous run was 15 minutes or more
- * ago the gap is recorded as an outage (merged with one the up alert already recorded). Only with OUTAGE_CHECKS=1. Two runs at once: only the one that moved the stored
- * time on records the gap. Returns the outage recorded or merged, or null.
+ * (Batch 28 §1) A heartbeat gap [start, end): never applied. Covered by an outage the uptime service reported: nothing. Otherwise listed for the admins (merged with a
+ * listed gap it overlaps). Returns the gap listed, or null.
+ */
+export async function noteGap(start: Date, end: Date): Promise<Gap | null> {
+  if (end.getTime() - start.getTime() < OUTAGE_MIN_MS) return null;
+  if (await db.outage.findFirst({ where: { startAt: { lte: end }, endAt: { gte: start } } })) return null; // covered by a reported outage
+  let s = start, e = end;
+  for (const g of await pendingGaps()) {
+    if (g.startAt > e || g.endAt < s) continue;
+    s = new Date(Math.min(s.getTime(), g.startAt.getTime()));
+    e = new Date(Math.max(e.getTime(), g.endAt.getTime()));
+    await db.appState.deleteMany({ where: { key: g.id } });
+  }
+  const key = `${GAP_PREFIX}${s.toISOString()}`;
+  await db.appState.upsert({ where: { key }, create: { key, value: e.toISOString() }, update: { value: e.toISOString() } });
+  return { id: key, startAt: s, endAt: e, ms: e.getTime() - s.getTime() };
+}
+
+/** (Batch 28 §1) An admin approves a listed gap: it becomes an outage and every timer moves by it (whatever its length: the admin decided). Once. */
+export async function approveGap(adminId: string, id: string) {
+  const row = id.startsWith(GAP_PREFIX) ? await db.appState.findUnique({ where: { key: id } }) : null;
+  const g = row ? gapOf(row) : null;
+  const HttpError = (await import("./http")).HttpError;
+  if (!g || (await db.appState.deleteMany({ where: { key: id, value: row!.value } })).count !== 1) throw new HttpError(409, "done", "That possible outage was already approved or dismissed.");
+  const long = g.ms > OUTAGE_APPROVE_OVER_MS;
+  let o;
+  try {
+    o = await db.outage.create({ data: { startAt: g.startAt, endAt: g.endAt, ms: g.ms, needsApproval: long, ...(long ? { approvedAt: new Date(), approvedById: adminId } : {}) } });
+  } catch {
+    throw new HttpError(409, "done", "An outage is already recorded from that time.");
+  }
+  await applyOutage(o);
+  return { ok: true };
+}
+
+/** (Batch 28 §1) An admin dismisses a listed gap: nothing moves, and it leaves the list. */
+export async function dismissGap(id: string) {
+  if (!id.startsWith(GAP_PREFIX) || (await db.appState.deleteMany({ where: { key: id } })).count !== 1) throw new (await import("./http")).HttpError(409, "done", "That possible outage was already approved or dismissed.");
+  return { ok: true };
+}
+
+/** (Batch 28 §1) Any server activity is a heartbeat: checked at most once a minute per server process (the sweep checks every run). */
+let lastTouch = 0;
+export function touchHeartbeat(now = Date.now(), force = false) {
+  // (Tests drive the heartbeat themselves: their own API calls don't touch it unless forced.)
+  if (!outageChecksOn() || (!force && (process.env.VITEST === "true" || now - lastTouch < HEARTBEAT_EVERY_MS))) return null;
+  lastTouch = now;
+  return sweepGap(new Date(now)).catch((e) => (console.error("[outage] heartbeat:", (e as Error).message), null));
+}
+
+/**
+ * (Batch 26 section 1) The app's own heartbeat, checked by every sweep (and at server start; batch 28 §1: any server activity): it stores this time, and when the
+ * previous one was 15 minutes or more ago the gap is listed for the admins (noteGap: batch 28 §1, never applied on its own). Only with OUTAGE_CHECKS=1. Two at once:
+ * only the one that moved the stored time on notes the gap. Returns the gap listed, or null.
  */
 export async function sweepGap(now = new Date()) {
   if (!outageChecksOn()) return null;
@@ -113,21 +184,30 @@ export async function sweepGap(now = new Date()) {
   if (!isNaN(last.getTime()) && now.getTime() <= last.getTime()) return null;
   const moved = await db.appState.updateMany({ where: { key: SWEEP_LAST_KEY, value: row.value }, data: { value: now.toISOString() } });
   if (moved.count !== 1 || isNaN(last.getTime())) return null;
-  return recordGap(last, now);
+  return noteGap(last, now);
 }
 
 /**
- * (Batch 26 section 1) A downtime [start, end) from either source. Overlapping an outage already recorded: merged into it (the union): the row grows, the part not yet
- * applied moves the clocks (when the outage was applied), and its bell lines are reworded; already covered: nothing. Otherwise recorded when 15 minutes or more.
+ * An outage the uptime service reported, [start, end). (Batch 28 §1) Heartbeat gaps it overlaps are closed as covered by it; its own span is applied (batch 28 §2:
+ * never widened by a gap). Overlapping an outage already recorded (another report): merged into it (the union): the part not yet applied moves the clocks (when the
+ * outage was applied) and its bell lines are reworded, except (batch 28 §2) an extension that brings an applied outage over 24 hours: that part waits for Approve as
+ * its own row. Already covered: nothing. Otherwise recorded when 15 minutes or more.
  */
 export async function recordGap(start: Date, end: Date) {
   if (end.getTime() <= start.getTime()) return null;
+  for (const g of await pendingGaps()) if (g.startAt <= end && g.endAt >= start) await db.appState.deleteMany({ where: { key: g.id } });
   const over = await db.outage.findFirst({ where: { startAt: { lte: end }, endAt: { gte: start } }, orderBy: { startAt: "asc" } });
   if (!over) return end.getTime() - start.getTime() >= OUTAGE_MIN_MS ? recordOutage(start, end) : null;
   const s = new Date(Math.min(over.startAt.getTime(), start.getTime())), e = new Date(Math.max(over.endAt.getTime(), end.getTime()));
   if (s.getTime() === over.startAt.getTime() && e.getTime() === over.endAt.getTime()) return over; // the same downtime: recorded once
   const ms = e.getTime() - s.getTime();
   const applied = !over.needsApproval || !!over.approvedAt;
+  if (applied && ms > OUTAGE_APPROVE_OVER_MS) {
+    // (Batch 28 §2) The new parts wait for an admin's Approve, each as its own row; the applied outage stays as it was.
+    if (s < over.startAt) await db.outage.create({ data: { startAt: s, endAt: over.startAt, ms: over.startAt.getTime() - s.getTime(), needsApproval: true } }).catch(() => null);
+    if (e > over.endAt) await db.outage.create({ data: { startAt: over.endAt, endAt: e, ms: e.getTime() - over.endAt.getTime(), needsApproval: true } }).catch(() => null);
+    return db.outage.findUnique({ where: { id: over.id } });
+  }
   let claimed;
   try {
     claimed = await db.outage.updateMany({ where: { id: over.id, startAt: over.startAt, endAt: over.endAt }, data: { startAt: s, endAt: e, ms, ...(applied ? {} : { needsApproval: ms > OUTAGE_APPROVE_OVER_MS }) } });
@@ -155,7 +235,8 @@ async function rewordBells(was: { startAt: Date; endAt: Date; ms: number; record
 export async function adminOutages() {
   const down = await db.appState.findUnique({ where: { key: DOWN_KEY } });
   const rows = await db.outage.findMany({ orderBy: { startAt: "desc" }, take: 10 });
-  return { downSince: down ? new Date(down.value) : null, rows };
+  // (Batch 28 §1) Heartbeat gaps waiting for Approve or Dismiss.
+  return { downSince: down ? new Date(down.value) : null, rows, gaps: await pendingGaps() };
 }
 
 /**
@@ -193,6 +274,8 @@ async function applyOutage(o: { startAt: Date; endAt: Date; ms: number }, opts: 
     await tx.$executeRaw`UPDATE "Submission" SET "choiceBy" = "choiceBy" + ${L} * interval '1 millisecond' WHERE "choiceBy" > (${start}::timestamptz AT TIME ZONE 'UTC')`;
     await tx.$executeRaw`UPDATE "Submission" SET "remindedAt" = "remindedAt" + ${L} * interval '1 millisecond' WHERE "remindedAt" IS NOT NULL`;
     await tx.$executeRaw`UPDATE "Submission" SET "devRemindedAt" = "devRemindedAt" + ${L} * interval '1 millisecond' WHERE "devRemindedAt" IS NOT NULL`;
+    // (Batch 28 §21) A call's review date (when a listed call is charged automatically) moves too.
+    await tx.$executeRaw`UPDATE "Call" c SET "payBy" = "payBy" + ${L} * interval '1 millisecond' WHERE "payBy" > (${start}::timestamptz AT TIME ZONE 'UTC') AND NOT EXISTS (SELECT 1 FROM "Review" r WHERE r."callId" = c.id)`;
     // Pay-by dates (3-day cut-off, which starts a hold) and daily retries.
     await tx.$executeRaw`UPDATE "Payment" SET "owedUntil" = "owedUntil" + ${L} * interval '1 millisecond' WHERE status = 'failed' AND "settledAt" IS NULL AND "owedUntil" > (${start}::timestamptz AT TIME ZONE 'UTC')`;
     await tx.$executeRaw`UPDATE "Payment" SET "retriedAt" = "retriedAt" + ${L} * interval '1 millisecond' WHERE status = 'failed' AND "settledAt" IS NULL AND "retriedAt" IS NOT NULL`;

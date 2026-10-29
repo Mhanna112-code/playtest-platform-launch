@@ -68,10 +68,10 @@ describe("email settings and the bell", () => {
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await db.user.update({ where: { id: tester.user.id }, data: { emailPref: "none" } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
-    // (Owner, Oct 27) The tester's "You were paid…" follows the setting like any payment line: On = the end-of-day payment email, Off = nothing.
+    // (Owner, Oct 29, batch 28 §18) The tester's "You were paid…" is a payment line: emailed the same evening whatever the setting, Off included.
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "paid you $10.00" }, payment: true } })).toBe(1);
     await cron();
-    expect(await db.outboxEmail.count({ where: { to: tester.user.email, text: { contains: "paid you $10.00" } } })).toBe(0);
+    expect(await db.outboxEmail.count({ where: { to: tester.user.email, text: { contains: "paid you $10.00" } } })).toBe(1);
     await db.user.update({ where: { id: dev.user.id }, data: { emailPref: "daily" } });
     await cron();
     const summary = await db.outboxEmail.findFirstOrThrow({ where: { to: dev.user.email, subject: { startsWith: "Your Playtest summary" } } });

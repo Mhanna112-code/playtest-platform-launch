@@ -151,7 +151,7 @@ describe("Q) a declined payment starts the hold at once (no owed window)", () =>
     // It ignores Off: it goes in the ONE end-of-day email, once.
     const mails = await db.outboxEmail.findMany({ where: { to: dev.user.email, text: { contains: "Your tests are paused" } } });
     expect(mails).toHaveLength(1);
-    expect(mails[0].subject).toMatch(/^Your Playtest account updates/);
+    expect(mails[0].subject).toMatch(/^Your Playtest payment updates/); // (batch 28 §18) the hold lines are payment lines
     // The tester reads only "delayed".
     expect((await lines(tester.user.id)).map((x) => x.text).join(" ")).not.toMatch(/failed|hold|chargeback|suspend/i);
   });
@@ -468,12 +468,12 @@ describe("the final list of emails that ignore Off, and each notification emaile
     const all = (await db.outboxEmail.findMany({ where: { to: u.user.email } })).map((m) => m.text);
     expect(all.filter((t) => t.includes("Pay $9.00 by")).length).toBe(1);
     expect(all.filter((t) => t.includes("Receipt: you paid $5.00")).length).toBe(1);
-    // Off: a payment line sends nothing at all; a must-send line sends in the one email.
+    // Off: (batch 28 §18) a payment line goes out the same evening anyway; a must-send line sends in the one email.
     const off = await makeUser({ dev: true });
     await db.user.update({ where: { id: off.user.id }, data: { emailPref: "off" } });
     await notify(off.user.email, "Receipt: you paid $7.00 for x", ["x"], "/app/payments", { payment: true });
     await sendSummaries();
-    expect(await db.outboxEmail.count({ where: { to: off.user.email } })).toBe(0);
+    expect((await db.outboxEmail.findMany({ where: { to: off.user.email } })).map((m) => m.subject)).toEqual(["Your Playtest payment updates: 1"]);
     await notify(off.user.email, "The team stopped “Harbor Run”", ["x"], "/app/tests/x", { always: true, group: "team" });
     await sendSummaries();
     expect((await db.outboxEmail.findMany({ where: { to: off.user.email } })).map((m) => m.text).join()).toContain("The team stopped");

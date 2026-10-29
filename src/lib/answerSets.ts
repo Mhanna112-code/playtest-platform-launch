@@ -25,7 +25,8 @@ export function itemsOf(stored: unknown, questions: string[] = []): SetItem[] {
   return stored.map((x, i) => {
     if (typeof x === "string") {
       const q = questions[i];
-      return { question: q != null ? qText(q) : `Question ${i + 1}`, required: q != null ? !qOptional(q) : true, answer: x };
+      // (Batch 28 §6) A question it can't find is not required (no "*" on a "Question N" placeholder).
+      return { question: q != null ? qText(q) : `Question ${i + 1}`, required: q != null ? !qOptional(q) : false, answer: x };
     }
     const o = (x ?? {}) as Partial<SetItem>;
     return { question: String(o.question ?? `Question ${i + 1}`), required: o.required !== false, answer: String(o.answer ?? "") };

@@ -47,7 +47,8 @@ export function AlertSettings({ emailPref }: { emailPref: string }) {
               ))}
             </div>
           )}
-          <p className="text-xs text-slate-500">Payment updates (failures, holds, retries, paid, rejected, delayed, payouts, chargebacks) also come in an end-of-day email, even on Weekly or Monthly. Some account emails always send.</p>
+          {/* (Owner, Oct 29, batch 28 §18) Payment lines are emailed the same evening whatever the setting, Off included. */}
+          <p className="text-xs text-slate-500" data-payment-emails="">Payment updates are always emailed the same evening. That includes receipts, payments, failures, holds, retries, delays, payouts and chargebacks, even with email Off, Weekly or Monthly. Some account emails always send.</p>
         </fieldset>
         <div className="flex flex-wrap items-center gap-3">
           <button className="btn" disabled={busy}>Save</button>

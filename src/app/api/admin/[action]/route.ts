@@ -94,6 +94,11 @@ async function run(u: Awaited<ReturnType<typeof requireUser>>, action: string, i
       // A paused test closes after 7 days: the admin can move its date later (days, default 7) or close it now (id = the test).
       case "approve-outage":
         return ok(await (await import("@/lib/server/outages")).approveOutage(u.id, id));
+      // (Batch 28 §1) A heartbeat gap: Approve moves every timer by it; Dismiss drops it (id = the gap).
+      case "approve-gap":
+        return ok(await (await import("@/lib/server/outages")).approveGap(u.id, id));
+      case "dismiss-gap":
+        return ok(await (await import("@/lib/server/outages")).dismissGap(id));
       case "extend-pause":
         return ok(await extendPauseClosure(id, body.days));
       case "close-paused":

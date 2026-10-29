@@ -36,6 +36,8 @@ export function leaveIfClosed(u: { isDeveloper: boolean; isTester: boolean; side
 export const requireOpenDevPage = () => requireOpenPage("/app/tests");
 
 export async function requirePageUser() {
+  // (Batch 28 §1) Every page load is a heartbeat (at most one check a minute; only with OUTAGE_CHECKS=1).
+  void import("./outages").then((m) => m.touchHeartbeat()).catch(() => null);
   const u = await getPageUser();
   if (!u) {
     // (Design doc 2) An account that was deleted meanwhile lands on the login page with a red notice.

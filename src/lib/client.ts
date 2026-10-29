@@ -44,6 +44,8 @@ export function blockedByTerms(path: string) {
 /** (Batch 27 section 1) Does this page show an open new-terms offer (the Switch / Keep box)? A blocked press then skips its own form checks: the offer comes first. */
 export const offerShown = () => typeof document !== "undefined" && !!document.getElementById("terms-offer");
 
+/** (Batch 28 §9) Sent when the server refuses a press because the state changed: the page redraws at once (AutoRefresh). */
+export const PRESS_REFUSED_EVENT = "press-refused";
 export async function api<T = unknown>(path: string, body?: unknown, method?: string): Promise<T> {
   if (body !== undefined && blockedByTerms(path)) throw new ApiError(409, ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST);
   // Every press sends the later of the page's render time and what the live top notice has shown (NEWEST+3).
@@ -96,6 +98,9 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
     if (e?.code === "stop_once" && typeof e.alertsOff === "boolean") setTesterAlertsOff(e.alertsOff);
     // (Batch 20 section 8) ... and the Alerts button and the other boxes on the page follow what the server says.
     if (e?.code === "stop_once" && typeof e.alertsOff === "boolean") publishTesterAlertsOff(e.alertsOff, false);
+    // (Owner, Oct 29, batch 28 §9) A press refused because the state changed (a block, a stop, a pause, an ended call, a closed request, already paid…): the page
+    // redraws at once, as its poll would (AutoRefresh; typed text kept), so the dead buttons go and the new state shows.
+    if (res.status === 409 && e?.code !== "stop_once" && e?.code !== ANSWER_TERMS_CODE && body !== undefined && typeof window !== "undefined") window.dispatchEvent(new Event(PRESS_REFUSED_EVENT));
     throw new ApiError(res.status, e?.code ?? "server", e?.message ?? (res.status === 413 ? "That's too much to send at once. Try a smaller amount." : "Something went wrong. Try again in a moment."), e ?? {});
   }
   // A press that went ahead with a note (e.g. "Done. Also: the test was renamed to ..."): kept for the page's top box

@@ -189,7 +189,7 @@ describe("the $1,000 ceiling for all of a tester's calls (section 34)", () => {
 });
 
 describe("Charge for a listed call, the weekly line for unlisted ones, rating (sections 15, 40)", () => {
-  it("a listed call left unpaid past its review date opens Charge at the measured length × rate", async () => {
+  it("a listed call left unpaid 7 days after it is charged automatically at the measured length × rate (batch 28 §21: no Charge)", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await withCard(dev.user.id);
@@ -199,14 +199,12 @@ describe("Charge for a listed call, the weekly line for unlisted ones, rating (s
     const c = await db.call.findUniqueOrThrow({ where: { id: call.id } });
     await db.contract.update({ where: { id: sessionId }, data: { dueAt: new Date(Date.now() - DAY) } });
     await runDaily(new Date(c.payBy!.getTime() + 60_000));
-    const after = await db.call.findUniqueOrThrow({ where: { id: call.id } });
-    expect(after.choiceOfferedAt).not.toBeNull();
-    const line = await db.notification.findFirstOrThrow({ where: { userId: tester.user.id, link: { contains: `#call-${call.id}` } }, orderBy: { createdAt: "desc" } });
-    expect(line.text).toMatch(/didn't pay your call on .* in 7 days: charge \$10\.00 or let it go/);
+    const after = await db.call.findUniqueOrThrow({ where: { id: call.id }, include: { review: true } });
+    expect(after.choiceOfferedAt).toBeNull();
+    expect(after.review).toMatchObject({ amountCents: 1000, auto: true });
     const ch = await sact(sessionId, "choose", tester.cookie, { callId: call.id, choice: "charge", amount: "10.00", tickedCents: 1000, seenAt: seen(), confirmed: true });
-    expect(ch.status).toBe(200);
-    expect(ch.body.amountCents).toBe(1000);
-    // Paid by the tester's Charge: rating opens.
+    expect(ch.status).toBe(409);
+    // Paid by the automatic charge: rating opens.
     expect(await rateBlocker(sessionId, "tester")).toBe("");
   });
 

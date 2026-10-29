@@ -12,6 +12,7 @@ import { startHold } from "@/lib/server/holds";
 import { approveChargebackHold, chargebackSteps } from "@/lib/server/chargeback";
 import { adminPage, type ChargebackVM } from "@/lib/server/adminLists";
 import { reservedAddedLine } from "@/lib/rules";
+import { renderTimes } from "@/lib/tz";
 import { json, makeUser, req } from "./helpers";
 import { joined, setup } from "./fixtures";
 
@@ -430,5 +431,256 @@ describe("batch 28 §20, §15, §14: a listed piece's cap is its listing plus th
     const line = renderTimes(unreviewedLine("Harbor Run", "Ana Silva", "written answers", new Date("2026-10-30T15:00:00Z"), new Date("2026-11-13T15:00:00Z")), "UTC");
     expect(line).toBe("“Harbor Run”: Ana Silva's written answers weren't reviewed by Oct 30: Ana Silva can now charge or let it go. You can still pay until they do (at the latest Nov 13).");
     expect(renderTimes(unreviewedLine("Harbor Run", "Ana Silva", "recording", new Date("2026-10-30T15:00:00Z"), null), "UTC")).toBe("“Harbor Run”: Ana Silva's recording wasn't reviewed by Oct 30: pay it.");
+  });
+});
+
+// ---------- §21: listed calls are charged automatically after 7 days ----------
+
+describe("batch 28 §21: a listed call not paid 7 days after it is charged automatically", () => {
+  async function heldCall(over: Record<string, unknown> = {}, minutes = 30) {
+    const { bookCall } = await import("./fixtures");
+    const s = await setup(over);
+    const j = await joined(s.testId);
+    const call = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie, 48);
+    await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 8 * DAY), actualMinutes: minutes, payBy: new Date(Date.now() - 60_000) } });
+    await db.user.update({ where: { id: s.dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
+    await db.user.update({ where: { id: j.tester.user.id }, data: { stripeAccountId: "acct_" + randomUUID().slice(0, 10), payoutsReady: true } });
+    return { ...s, ...j, call };
+  }
+  const run = async () => (await import("@/lib/server/holds")).autoChargeCalls(new Date());
+
+  it("charged once at day 7 (the sweep running twice): rate × measured minutes, off-session; the receipt and the tester's line", async () => {
+    const R = await import("@/lib/rules");
+    const st = strictStripe();
+    const x = await heldCall();
+    expect(await run()).toBe(1);
+    expect(await run()).toBe(0);
+    const made = st.of("pi.create");
+    expect(made).toHaveLength(1);
+    expect(made[0].p).toMatchObject({ amount: 1500, off_session: true });
+    expect(await db.review.findUniqueOrThrow({ where: { callId: x.call.id } })).toMatchObject({ amountCents: 1500, reason: R.AUTO_CHARGED_CALL, auto: true });
+    expect(await db.payment.findFirstOrThrow({ where: { callId: x.call.id } })).toMatchObject({ status: "charged", amountCents: 1500, transferStatus: "sent" });
+    const receipt = await db.notification.findFirstOrThrow({ where: { userId: x.dev.user.id, text: { startsWith: "Receipt: you paid $15.00 for Ana Silva's call on" } } });
+    expect(receipt.text).toContain("(charged automatically after 7 days)");
+    expect(await db.notification.count({ where: { userId: x.tester.user.id, text: { startsWith: "Nora Lane paid you $15.00 for your call on" } } })).toBe(1);
+  });
+
+  it("paid before: nothing is charged", async () => {
+    const st = strictStripe();
+    const x = await heldCall();
+    await db.review.create({ data: { callId: x.call.id, contractId: x.sessionId, amountCents: 1500, agreedCents: 1500, reason: "", payKey: randomUUID() } });
+    expect(await run()).toBe(0);
+    expect(st.of("pi.create")).toHaveLength(0);
+  });
+
+  it("the bank asks: it waits as Your bank wants you to confirm; declined: a payment hold; during a hold: added to what's owed", async () => {
+    strictStripe({ card: "3ds" });
+    const a = await heldCall();
+    expect(await run()).toBe(1);
+    expect(await db.payment.findFirstOrThrow({ where: { callId: a.call.id } })).toMatchObject({ status: "needs_confirmation" });
+
+    strictStripe({ card: "declined" });
+    const b = await heldCall();
+    await run();
+    expect(await db.payment.findFirstOrThrow({ where: { callId: b.call.id } })).toMatchObject({ status: "failed" });
+    expect(await userOf(b.dev.user.id)).toMatchObject({ holdReason: "unpaid" });
+    expect(await db.notification.count({ where: { userId: b.tester.user.id, text: { contains: "may be delayed" } } })).toBe(1);
+
+    const st = strictStripe();
+    const c = await heldCall();
+    await startHold(c.dev.user.id, "unpaid");
+    await run();
+    expect(st.of("pi.create")).toHaveLength(0);
+    expect(await db.payment.findFirstOrThrow({ where: { callId: c.call.id } })).toMatchObject({ status: "owed", amountCents: 1500 });
+  });
+
+  it("0 measured minutes: closed with nothing to pay; an unlisted call is untouched", async () => {
+    const R = await import("@/lib/rules");
+    const st = strictStripe();
+    const z = await heldCall({}, 0);
+    await run();
+    expect(await db.review.findUniqueOrThrow({ where: { callId: z.call.id } })).toMatchObject({ amountCents: 0, reason: R.AUTO_NOTHING_CALL });
+    const u = await heldCall({ liveRateCents: null });
+    await run();
+    expect(await db.review.count({ where: { callId: u.call.id } })).toBe(0);
+    expect(st.of("pi.create")).toHaveLength(0);
+  });
+
+  it("no Charge or Let it go for listed calls: an older page's press is refused; the pages say it's charged automatically", async () => {
+    const R = await import("@/lib/rules");
+    const x = await heldCall();
+    await db.call.update({ where: { id: x.call.id }, data: { choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 7 * DAY) } });
+    const r = await (await import("./fixtures")).sact(x.sessionId, "choose", x.tester.cookie, { callId: x.call.id, choice: "charge", seenAt: new Date().toISOString(), confirmed: true });
+    expect(r.body.error).toMatchObject({ code: "auto_charge", message: R.AUTO_CHARGE_NO_CHOICE });
+    expect(R.testerAutoChargeLine("Nora Lane", "Nov 5")).toBe("If Nora Lane doesn't pay by Nov 5, it's charged automatically.");
+    expect(R.autoChargeLine("Nov 5", 1500, 30, 3000)).toBe("If you don't pay by Nov 5, it's charged automatically: $15.00 (30 min × $30.00/h).");
+    const session = src("app/app/sessions/[id]/page.tsx");
+    expect(session).not.toContain("callId={x.id} devName={dev}");
+    expect(session).toContain("testerAutoChargeLine(dev,");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("autoChargeLine(fmtDate(x.x!.payBy)");
+    expect(R.PAY_RULES_TICK).toContain("and listed calls 7 days after they take place.");
+    expect(fs.readFileSync(path.resolve(__dirname, "../src/lib/termsOfUse.ts"), "utf8")).toContain("their card is charged automatically for its measured length at the call's rate");
+  });
+});
+
+// ---------- §18: payment emails go out even with email Off ----------
+
+describe("batch 28 §18: payment lines are emailed the same evening whatever the setting", () => {
+  it("email Off still gets the evening payment email, with only the payment lines", async () => {
+    const { notify, sendSummaries } = await import("@/lib/server/notify");
+    const u = await makeUser({ dev: true, name: "Nora Lane" });
+    await db.user.update({ where: { id: u.user.id }, data: { emailPref: "off" } });
+    await notify(u.user.email, "Receipt: you paid $8.00 for Ana Silva's written answers", ["x"], "/app/payments", { payment: true });
+    await notify(u.user.email, "Ana Silva sent written answers for “Harbor Run”", ["x"], "/app/tests/x");
+    await sendSummaries(new Date(), [u.user.id]);
+    const mail = await db.outboxEmail.findMany({ where: { to: u.user.email } });
+    expect(mail).toHaveLength(1);
+    expect(mail[0].subject).toBe("Your Playtest payment updates: 1");
+    expect(mail[0].text).toContain("Receipt: you paid $8.00 for Ana Silva's written answers");
+    expect(mail[0].text).not.toContain("sent written answers");
+    expect(await db.notification.count({ where: { userId: u.user.id, summarizedAt: null } })).toBe(1); // the other line stays in the bell only
+    await sendSummaries(new Date(), [u.user.id]);
+    expect(await db.outboxEmail.count({ where: { to: u.user.email } })).toBe(1); // once
+    expect(src("app/app/notifications/AlertSettings.tsx")).toContain("Payment updates are always emailed the same evening.");
+  });
+});
+
+// ---------- §1 and §2: the heartbeat never records an outage on its own; merging never widens one ----------
+
+describe("batch 28 §1 and §2: heartbeat gaps wait for an admin; an uptime report's span wins", () => {
+  const H = 3_600_000, MIN = 60_000;
+  beforeEach(async () => {
+    process.env.OUTAGE_CHECKS = "1";
+    await db.outage.deleteMany({});
+    await db.appState.deleteMany({ where: { OR: [{ key: { in: ["outage-down", "sweep-last"] } }, { key: { startsWith: "gap:" } }] } });
+  });
+  afterEach(async () => {
+    delete process.env.OUTAGE_CHECKS;
+    await db.appState.deleteMany({ where: { OR: [{ key: { in: ["outage-down", "sweep-last"] } }, { key: { startsWith: "gap:" } }] } });
+  });
+  const working = async () => {
+    const { testId } = await setup();
+    const { sessionId } = await joined(testId);
+    return sessionId;
+  };
+  const dueOf = async (sessionId: string) => (await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt.getTime();
+
+  it("a heartbeat gap alone: listed (\"Possible outage …\"), nothing moved; Approve moves every timer; Dismiss clears", async () => {
+    const O = await import("@/lib/server/outages");
+    const sessionId = await working();
+    const due0 = await dueOf(sessionId);
+    const t0 = new Date(Date.now() - 5 * H);
+    await O.sweepGap(t0);
+    const g = (await O.sweepGap(new Date(t0.getTime() + 32 * MIN)))!;
+    expect(g).toMatchObject({ ms: 32 * MIN });
+    expect(await dueOf(sessionId)).toBe(due0);
+    expect(await db.outage.count()).toBe(0);
+    expect(renderTimes(O.gapLine({ startAt: new Date("2026-10-29T15:10:00Z"), endAt: new Date("2026-10-29T15:42:00Z"), ms: 32 * MIN }), "UTC")).toBe("Possible outage: no checks from 3:10 PM UTC to 3:42 PM UTC (32 min). Nothing has moved.");
+    expect((await O.adminOutages()).gaps.map((x) => x.id)).toEqual([g.id]);
+    const a = await db.user.update({ where: { id: (await makeUser({ name: "Admin" })).user.id }, data: { isAdmin: true } });
+    await O.approveGap(a.id, g.id);
+    expect((await dueOf(sessionId)) - due0).toBe(32 * MIN);
+    expect(await db.outage.count()).toBe(1);
+    await expect(O.approveGap(a.id, g.id)).rejects.toMatchObject({ code: "done" }); // once
+    // A second gap, dismissed: nothing moves and it leaves the list.
+    await O.sweepGap(new Date(t0.getTime() + 2 * H));
+    const g2 = (await O.sweepGap(new Date(t0.getTime() + 3 * H)))!;
+    expect((await O.adminOutages()).gaps).toHaveLength(1);
+    await O.dismissGap(g2.id);
+    expect((await O.adminOutages()).gaps).toHaveLength(0);
+    expect((await dueOf(sessionId)) - due0).toBe(32 * MIN);
+    expect(src("app/admin/page.tsx")).toContain('<AdminButton action="dismiss-gap" id={g.id} label="Dismiss" />');
+    // Any server activity is a heartbeat (API calls and page loads).
+    expect(src("lib/server/http.ts")).toContain("m.touchHeartbeat()");
+    expect(src("lib/server/page-auth.ts")).toContain("m.touchHeartbeat()");
+    await db.appState.update({ where: { key: "sweep-last" }, data: { value: new Date(Date.now() - 20 * MIN).toISOString() } });
+    expect(await O.touchHeartbeat(Date.now(), true)).toMatchObject({ ms: expect.any(Number) });
+  });
+
+  it("an up alert overlapping a listed gap: applied once with the alert's span; the gap closed", async () => {
+    const O = await import("@/lib/server/outages");
+    const sessionId = await working();
+    const due0 = await dueOf(sessionId);
+    const t0 = new Date(Date.now() - 3 * H);
+    await O.sweepGap(t0);
+    await O.sweepGap(new Date(t0.getTime() + 60 * MIN)); // gap [t0, t0 + 60]
+    const o = await O.recordAlert("up", new Date(t0.getTime() + 40 * MIN), 20 * MIN); // the alert: [t0 + 20, t0 + 40]
+    expect(o).toMatchObject({ startAt: new Date(t0.getTime() + 20 * MIN), endAt: new Date(t0.getTime() + 40 * MIN), ms: 20 * MIN });
+    expect((await dueOf(sessionId)) - due0).toBe(20 * MIN);
+    expect((await O.adminOutages()).gaps).toHaveLength(0);
+  });
+
+  it("an applied 20-hour outage extended to 26 by another report: the extra waits for Approve", async () => {
+    const O = await import("@/lib/server/outages");
+    const sessionId = await working();
+    const due0 = await dueOf(sessionId);
+    const end = new Date(Date.now() - 2 * H);
+    const first = await O.recordAlert("up", end, 20 * H);
+    expect(first).toMatchObject({ needsApproval: false });
+    expect((await dueOf(sessionId)) - due0).toBe(20 * H);
+    // A second report: from the same start, 6 hours longer.
+    const second = await O.recordAlert("up", new Date(end.getTime() + 6 * H), 26 * H);
+    expect(second!.id).toBe(first!.id);
+    expect((await db.outage.findUniqueOrThrow({ where: { id: first!.id } })).ms).toBe(20 * H);
+    const extra = await db.outage.findFirstOrThrow({ where: { id: { not: first!.id } } });
+    expect(extra).toMatchObject({ startAt: end, ms: 6 * H, needsApproval: true, approvedAt: null });
+    expect((await dueOf(sessionId)) - due0).toBe(20 * H); // nothing more moved
+    const a = await db.user.update({ where: { id: (await makeUser({ name: "Admin" })).user.id }, data: { isAdmin: true } });
+    await O.approveOutage(a.id, extra.id);
+    expect((await dueOf(sessionId)) - due0).toBe(26 * H);
+  });
+});
+
+// ---------- §3 to §7 and §9: small leftovers ----------
+
+describe("batch 28 §3-§7 and §9", () => {
+  it("§3: a team Stop always reads with its time, in the reader's zone (the date added after 12 hours)", async () => {
+    const { sessionRefusal } = await import("@/lib/server/tests");
+    const at = new Date(Date.now() - 60_000);
+    const c = { status: "ended", endKind: "stopped", endedAt: at, tester: { timeZone: "America/Chicago" } };
+    const line = sessionRefusal(c, { openUntil: null, adminStoppedAt: at } as { openUntil: null }, "Nora Lane");
+    expect(line).toBe(`This test was stopped at ${at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" })}. Work you sent is still reviewed.`);
+    const old = new Date(Date.now() - 20 * 3_600_000);
+    expect(sessionRefusal({ ...c, endedAt: old }, { openUntil: null, adminStoppedAt: old } as { openUntil: null }, "Nora Lane", new Date(), "UTC")).toMatch(/^This test was stopped at \w{3}, \w{3} \d{1,2}, \d{1,2}:\d{2} [AP]M\./);
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("sessionRefusal(c, c.test, dev, new Date(), u.timeZone)");
+  });
+
+  it("§4: the stop box's times use the reader's saved zone; §5: the charge-opens line under a sent, listed part waiting for the developer", () => {
+    expect(src("components/ChangesBox.tsx")).toContain("const time = (iso: string) => fmtTimeIn(iso, savedZone());");
+    expect(src("components/TimeZoneSync.tsx")).toContain("__savedTz = stored");
+    const page = src("app/app/sessions/[id]/page.tsx");
+    expect(page).toContain("chargeOpensNote(dev, renderTimes(T(opens, \"date\"), u.timeZone))");
+  });
+
+  it("§6: a question the set can't find isn't required; By question has no notRequired", async () => {
+    const { itemsOf } = await import("@/lib/answerSets");
+    expect(itemsOf(["a", "b"], ["Only one?"])[1]).toEqual({ question: "Question 2", required: false, answer: "b" });
+    expect(src("lib/byQuestion.ts")).not.toContain("notRequired");
+  });
+
+  it("§9: a refused press redraws the page at once (typed text kept)", () => {
+    expect(src("lib/client.ts")).toContain("window.dispatchEvent(new Event(PRESS_REFUSED_EVENT))");
+    expect(src("components/AutoRefresh.tsx")).toContain("window.addEventListener(PRESS_REFUSED_EVENT, onRefused);");
+  });
+});
+
+describe("batch 28 §21: during a suspension the automatic charge waits for the reinstatement", () => {
+  it("added as waiting (deferred), charged when the account is clear, with its own receipt", async () => {
+    const { bookCall } = await import("./fixtures");
+    const st = strictStripe();
+    const s = await setup();
+    const j = await joined(s.testId);
+    const call = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie, 48);
+    await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 8 * DAY), actualMinutes: 30, payBy: new Date(Date.now() - 60_000) } });
+    await db.user.update({ where: { id: s.dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x", devSuspendedAt: new Date() } });
+    const { autoChargeCalls, chargeDeferred } = await import("@/lib/server/holds");
+    expect(await autoChargeCalls(new Date())).toBe(1);
+    expect(st.of("pi.create")).toHaveLength(0);
+    expect(await db.payment.findFirstOrThrow({ where: { callId: call.id } })).toMatchObject({ status: "deferred", amountCents: 1500 });
+    await db.user.update({ where: { id: s.dev.user.id }, data: { devSuspendedAt: null } });
+    await chargeDeferred(s.dev.user.id);
+    expect(await db.payment.findFirstOrThrow({ where: { callId: call.id } })).toMatchObject({ status: "charged" });
+    const r = await db.notification.findFirstOrThrow({ where: { userId: s.dev.user.id, text: { startsWith: "Receipt: you paid $15.00 for Ana Silva's call on" } } });
+    expect(r.text).toContain("(charged automatically after 7 days)");
   });
 });

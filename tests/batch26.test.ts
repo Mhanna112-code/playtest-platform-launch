@@ -46,7 +46,7 @@ describe("batch 26 section 1: a real outage is always recorded", () => {
     process.env.OUTAGE_CHECKS = "1";
     process.env.HEALTH_KEY = "b26-health-key";
     await db.outage.deleteMany({});
-    await db.appState.deleteMany({ where: { key: { in: ["outage-down", SWEEP_LAST_KEY] } } });
+    await db.appState.deleteMany({ where: { OR: [{ key: { in: ["outage-down", SWEEP_LAST_KEY] } }, { key: { startsWith: "gap:" } }] } });
   });
   afterEach(async () => {
     delete process.env.OUTAGE_CHECKS;
@@ -76,7 +76,7 @@ describe("batch 26 section 1: a real outage is always recorded", () => {
     expect((await import("@/lib/server/outages")).parseAlert({ alertType: "2", alertDuration: "*alertDuration*" }).durationMs).toBeNull();
   });
 
-  it("the heartbeat alone: a gap of 15 minutes or more between sweeps is recorded for the gap; under 15 minutes nothing", async () => {
+  it("the heartbeat alone (batch 28 §1): a gap of 15 minutes or more between sweeps is listed for the admins, nothing moves; under 15 minutes nothing", async () => {
     const sessionId = await working();
     const due0 = await dueOf(sessionId);
     const t0 = new Date(Date.now() - 3 * H);
@@ -84,28 +84,29 @@ describe("batch 26 section 1: a real outage is always recorded", () => {
     expect(await sweepGap(new Date(t0.getTime() + 10 * MIN))).toBeNull(); // 10 minutes: nothing
     expect(await sweepGap(new Date(t0.getTime() + 20 * MIN))).toBeNull(); // 10 more minutes since the last sweep: still nothing
     expect(await db.outage.count()).toBe(0);
-    const o = await sweepGap(new Date(t0.getTime() + 50 * MIN)); // 30 minutes without a sweep
-    expect(o).toMatchObject({ startAt: new Date(t0.getTime() + 20 * MIN), endAt: new Date(t0.getTime() + 50 * MIN), ms: 30 * MIN, needsApproval: false });
-    expect((await dueOf(sessionId)) - due0).toBe(30 * MIN);
+    const g = await sweepGap(new Date(t0.getTime() + 50 * MIN)); // 30 minutes without a sweep
+    expect(g).toMatchObject({ startAt: new Date(t0.getTime() + 20 * MIN), endAt: new Date(t0.getTime() + 50 * MIN), ms: 30 * MIN });
+    expect(await db.outage.count()).toBe(0);
+    expect(await dueOf(sessionId)).toBe(due0);
     // Gated: with OUTAGE_CHECKS off nothing is stored or recorded.
     delete process.env.OUTAGE_CHECKS;
     expect(await sweepGap(new Date(t0.getTime() + 2 * H))).toBeNull();
-    expect(await db.outage.count()).toBe(1);
+    expect(await db.outage.count()).toBe(0);
   });
 
-  it("both together record it once: the heartbeat gap first, then the up alert for the same downtime merges (one row, one bell line, the clocks moved by the union)", async () => {
+  it("the heartbeat gap first, then the up alert for the same downtime (batch 28 §2): the alert's span is applied once, and the gap is closed as covered by it", async () => {
     const sessionId = await working();
     const due0 = await dueOf(sessionId);
     const t0 = new Date(Date.now() - 2 * H);
     await sweepGap(t0);
     const end = new Date(t0.getTime() + 45 * MIN);
-    await sweepGap(end); // the gap [t0, t0 + 45]
-    // The up alert arrives a minute later saying it was down 50 minutes: from 4 minutes before the last sweep before it to a minute after the gap. Merged: the union.
+    await sweepGap(end); // the gap [t0, t0 + 45], listed
     const upAt = new Date(end.getTime() + MIN);
     const merged = await recordAlert("up", upAt, 50 * 60_000);
     expect(await db.outage.count()).toBe(1);
     expect(merged).toMatchObject({ startAt: new Date(t0.getTime() - 4 * MIN), endAt: upAt, ms: 50 * MIN });
     expect((await dueOf(sessionId)) - due0).toBe(50 * MIN);
+    expect(await db.appState.count({ where: { key: { startsWith: "gap:" } } })).toBe(0);
     // One bell line for the tester, reworded to the merged times.
     const tester = (await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).testerId;
     const bells = await db.notification.findMany({ where: { userId: tester, text: { startsWith: "The site was down from " } } });
@@ -116,23 +117,21 @@ describe("batch 26 section 1: a real outage is always recorded", () => {
     expect((await dueOf(sessionId)) - due0).toBe(50 * MIN);
   });
 
-  it("the up alert first, then the heartbeat's gap for the same downtime: still one outage", async () => {
+  it("the up alert first, then the heartbeat's gap for the same downtime: still one outage, with the alert's span (batch 28 §2)", async () => {
     const t0 = new Date(Date.now() - 2 * H);
     await sweepGap(t0);
     const o = await recordAlert("up", new Date(t0.getTime() + 30 * MIN), 25 * 60_000);
     expect(o).toMatchObject({ ms: 25 * MIN });
-    await sweepGap(new Date(t0.getTime() + 31 * MIN)); // the gap [t0, t0 + 31] overlaps it
+    expect(await sweepGap(new Date(t0.getTime() + 31 * MIN))).toBeNull(); // the gap [t0, t0 + 31] is covered by it: not listed
     expect(await db.outage.count()).toBe(1);
-    expect((await db.outage.findFirstOrThrow()).ms).toBe(31 * MIN);
+    expect((await db.outage.findFirstOrThrow()).ms).toBe(25 * MIN);
   });
 
   it("under 15 minutes nothing; over 24 hours waits for the admin's Approve (nothing moves)", async () => {
     const sessionId = await working();
     const due0 = await dueOf(sessionId);
     expect(await recordAlert("up", new Date(), 10 * 60_000)).toBeNull();
-    const t0 = new Date(Date.now() - 40 * H);
-    await sweepGap(t0);
-    const o = await sweepGap(new Date(t0.getTime() + 30 * H));
+    const o = await recordAlert("up", new Date(), 30 * H);
     expect(o).toMatchObject({ needsApproval: true, approvedAt: null });
     expect(o!.ms).toBeGreaterThan(OUTAGE_APPROVE_OVER_MS);
     expect(await dueOf(sessionId)).toBe(due0);
@@ -234,7 +233,9 @@ describe("batch 26 sections 5 to 8", () => {
     const dash = src("app/app/page.tsx");
     expect(dash).toContain("const listed = (s.kind === \"recording\" ? c.recordingCents : c.writtenCents) != null;");
     expect(dash).toContain("const opens = listed ? chargeOpensAt(s, c.test, c, now) : null;");
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("x.rateCents != null && x.payBy && x.payBy > now && <p className=\"text-xs text-slate-400\" data-charge-opens=\"\">");
+    // (Batch 28 §21) A listed call is charged automatically instead; (batch 28 §5) the sent part's line is on the session page too.
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("{x.rateCents != null && x.payBy && <p className=\"text-xs text-slate-400\" data-auto-charge=\"\">");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("data-charge-opens=\"\">{chargeOpensNote(dev,");
   });
 
   it("7: the invite panel's own check follows the test both ways (full, then a spot opens)", async () => {

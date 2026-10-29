@@ -3,7 +3,7 @@ import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
 import {
-  owedReceiptWhat, reservedAddedLine, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, chargeByLine, payByLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, choiceLine, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
+  owedReceiptWhat, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, chargeByLine, payByLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, choiceLine, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, sendSummaries } from "./notify";
@@ -211,6 +211,11 @@ async function deferredWhat(p: { kind: string; submissionId: string | null; call
   if (p.kind === "dispute") return "a team decision (charged after the pause)";
   const review = p.submissionId ? await db.review.findUnique({ where: { submissionId: p.submissionId } }) : p.callId ? await db.review.findUnique({ where: { callId: p.callId } }) : null;
   const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } }) : null;
+  // (Batch 28 §21) A listed call charged automatically while the account was suspended.
+  if (review?.reason === AUTO_CHARGED_CALL && c && p.callId) {
+    const call = await db.call.findUnique({ where: { id: p.callId }, select: { startsAt: true } });
+    return `${displayName(c.tester)}'s call on ${call ? T(call.startsAt, "date") : "?"} (charged automatically after ${REVIEW_DAYS} days)`;
+  }
   if (review?.reason === CHARGED_BY_TESTER && c) {
     const label = p.callId ? "call" : (await db.submission.findUnique({ where: { id: p.submissionId ?? "" }, select: { kind: true } }))?.kind === "recording" ? "recording" : "written answers";
     return `${displayName(c.tester)}'s ${label} (charged by them after ${REVIEW_DAYS} days)`;
@@ -515,7 +520,7 @@ export async function owedLines(devId: string) {
       ? { id: p.id, retry: true, amountCents: p.amountCents, until: null as string | null, source: "chargeback" as const, text: chargebackOwedLine(p.reversedCents) }
       : p.status === "owed" || (p.status === PAYING && !p.owedUntil)
         // (Owner, Oct 28 afternoon) Added while the tests were paused: never tried on the card yet.
-        ? { id: p.id, retry: true, amountCents: p.amountCents, until: null as string | null, source: "owed" as const, text: `${what} ${money(p.amountCents)} · ${p.kind === "dispute" ? "the team's dispute decision" : "charged by the tester"} while your tests were paused` }
+        ? { id: p.id, retry: true, amountCents: p.amountCents, until: null as string | null, source: "owed" as const, text: `${what} ${money(p.amountCents)} · ${p.kind === "dispute" ? "the team's dispute decision" : p.callId && (await db.review.findUnique({ where: { callId: p.callId }, select: { auto: true } }))?.auto ? "charged automatically" : "charged by the tester"} while your tests were paused` }
         : { id: p.id, retry: true, amountCents: p.amountCents, until: null as string | null, source: "failed" as const, text: failedLine(what, p.amountCents, p.createdAt) });
   }
   return out;
@@ -605,7 +610,7 @@ export async function runSweep(now = new Date(), co = closeOutMemo(now)) {
   await (await import("./email")).retryEmails(now).catch((e) => console.error("[email] retry:", (e as Error).message));
   await (await import("./chargeback")).expireReservations(now).catch((e) => console.error("[reserve] expire:", (e as Error).message));
   await (await import("./calls")).sweepNobodyJoined(now);
-  const choices = (await openCharges(now, co)) + (await callCharges(now, co));
+  const choices = (await openCharges(now, co)) + (await autoChargeCalls(now));
   await closeOutReminders(now, co);
   await reviewReminders(now, co);
   await (await import("./ratings")).ratingReminders(now);
@@ -630,9 +635,8 @@ async function runDailyLocked(now: Date) {
   if (stripeOn()) for (const u of await db.user.findMany({ where: { holdStartedAt: { not: null }, holdReason: { not: "chargeback" }, deletedAt: null, stripePaymentMethodId: { not: null } }, select: { id: true } })) await retryOwed(u.id, now).catch((e) => console.error("[retry]", (e as Error).message));
   // 1. Sent work past its review window: Charge / Let it go opens (batch 19 section 4: also every 5 minutes, runSweep).
   out.choices += await openCharges(now, co);
-  // 1b. (Owner, Oct 30, batch 15 sections 15 and 40) A LISTED call left unpaid past its review date (the later of the tester's deadline and the call + 7 days): reviewed like
-  // any other part. The developer is reminded daily; the tester can Charge (the measured or lowered length × the contract rate, within the $1,000 for calls) or Let it go.
-  out.choices += await callCharges(now, co);
+  // 1b. (Owner, Oct 29, batch 28 §21) A LISTED call not paid 7 days after it is charged automatically (rate × measured minutes, within the $1,000 for calls).
+  out.choices += await autoChargeCalls(now);
   // 1c. (Batch 17 §19) The reminders 3 days and 1 day before close-out, to whoever still has something open.
   await closeOutReminders(now, co);
   // 3a. (Owner, Oct 27) ONE daily email per admin that can't be turned off, sent only when it has something in it (see adminDaily.ts).
@@ -803,18 +807,18 @@ async function reviewReminders(now: Date, co: CloseOuts) {
     const earlier = reviewMarksFor(s.updatedAt, reviewDate!).filter((x) => x.at.getTime() <= m.at.getTime()).map((x) => x.mark).filter((x) => !s.devMarks.includes(x));
     await db.submission.update({ where: { id: s.id }, data: { devMarks: { push: earlier } } });
   }
-  // 5b. (Batch 15 section 15) Listed calls get the same review reminders, counting to their review date.
-  const upcomingCalls = await db.call.findMany({ where: { review: null, status: "booked", rateCents: { not: null }, choiceOfferedAt: null, payBy: { not: null }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, take: 2000 });
+  // 5b. (Owner, Oct 29, batch 28 §21) Listed calls: "pay it within 3 days / by tomorrow" before the automatic charge (7 days after the call, moved by pauses and outages).
+  const upcomingCalls = await db.call.findMany({ where: { review: null, status: "booked", rateCents: { not: null }, payBy: { not: null }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, take: 2000 });
   for (const x of upcomingCalls) {
-    const reviewDate = chargeOpensAt(x, x.contract.test, x.contract, now);
+    const chargeAt = x.payBy!;
     const sent = x.measuredAt ?? x.startsAt;
-    const m = reviewDate ? reviewMarkDue(sent, reviewDate, now, x.devMarks) : null;
-    if (!m || (await co.payClosed({ callId: x.id }))) continue; // (batch 17 §19) Pay closed: no reminders
-    const name = displayName(x.contract.tester);
-    const when = m.label === "tomorrow" ? "by tomorrow" : m.label.replace("in ", "within ");
-    await bell(x.contract.test.developerId, `“${x.contract.title}”: pay ${name}'s call on ${T(x.startsAt)} ${when}${x.contract.tester.deletedAt ? "" : ` (after that ${name} can charge or let it go)`}.`, `/app/tests/${x.contract.testId}#call-${x.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${x.id}` });
-    const earlier = reviewMarksFor(sent, reviewDate!).filter((y) => y.at.getTime() <= m.at.getTime()).map((y) => y.mark).filter((y) => !x.devMarks.includes(y));
+    const m = callMinutesOf(x) ? reviewMarkDue(sent, chargeAt, now, x.devMarks) : null;
+    if (!m) continue;
+    const earlier = reviewMarksFor(sent, chargeAt).filter((y) => y.at.getTime() <= m.at.getTime()).map((y) => y.mark).filter((y) => !x.devMarks.includes(y));
     await db.call.update({ where: { id: x.id }, data: { devMarks: { push: earlier } } });
+    if (m.label !== "tomorrow" && m.label !== "in 3 days") continue; // only the 3-day and 1-day marks
+    const when = m.label === "tomorrow" ? "by tomorrow" : "within 3 days";
+    await bell(x.contract.test.developerId, `“${x.contract.title}”: pay ${displayName(x.contract.tester)}'s call on ${T(x.startsAt)} ${when}.`, `/app/tests/${x.contract.testId}#call-${x.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${x.id}` });
   }
 }
 
@@ -909,38 +913,80 @@ export async function callChargeCap(x: { id: string; contractId: string; rateCen
   const left = await callsLeftCents(x.contractId, db, x.id);
   return { cents: Math.min(full, left), capped: left < full };
 }
+/** (Batch 28 §21) The tester's line when a listed call was charged automatically: "Nora Lane paid you $25.00 for your call on Oct 30." (without the end period, like bell titles). */
+export const autoPaidTesterLine = (dev: string, cents: number, at: Date) => `${dev} paid you ${money(cents)} for your call on ${T(at, "date")}`;
 /** The tester's line when Charge opens for a call ("… charge $X or let it go"; cut by the ceiling: "Charge $X (the $1,000 limit for calls on this test)"). */
 export const callChoiceLine = (devName: string, startsAt: Date, cents: number, capped: boolean) =>
   `${devName} didn't pay your call on ${T(startsAt)} in ${REVIEW_DAYS} days: ${capped ? chargeCappedLine(cents).replace(/^Charge/, "charge") : `charge ${money(cents)}`} or let it go`;
 
-async function callCharges(now: Date, co: CloseOuts) {
+/**
+ * (Owner, Oct 29, batch 28 §21; replaces Charge / Let it go for listed calls) A LISTED call not paid 7 days after it (its payBy, moved by pauses and outages) is charged
+ * automatically: rate × measured minutes, less what's paid, within the $1,000 for that tester's calls; off-session, as a payment made while the developer is away. Each
+ * call once: its review row is claimed first (unique per call), and the charge's key is the call's. Bank asks: "Your bank wants you to confirm" (3 days, then declined).
+ * Declined: a payment hold. During a hold: added to what's owed. A team pause waits. Nothing to charge (no measured time, or the $1,000 used): closed with $0.
+ * Listed calls whose Charge had already opened switch to this. Returns how many were charged.
+ */
+export async function autoChargeCalls(now: Date) {
   let n = 0;
-  const due = await db.call.findMany({ where: { review: null, status: "booked", rateCents: { not: null }, payBy: { lt: now }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } }, take: 1000 });
+  const due = await db.call.findMany({ where: { review: null, status: "booked", rateCents: { not: null }, payBy: { lt: now }, contract: { test: { adminPausedAt: null, developer: { deletedAt: null } }, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } }, take: 1000 });
   for (const x of due) {
-    const c = x.contract, dev = c.test.developer;
-    if (callMinutesOf(x) == null || !chargeIsOpen(x, c.test, c, now)) continue;
-    // (Batch 17 §19) As for sent parts: no "pay it" once the call's Pay closed, no Charge offered or reminded once its Charge closed.
-    const payShut = await co.payClosed({ callId: x.id }), chargeShut = await co.chargeClosed({ callId: x.id });
-    if (payShut && chargeShut) continue;
-    const name = displayName(c.tester), gone = !!c.tester.deletedAt;
-    if (!payShut && (!x.devRemindedAt || now.getTime() - x.devRemindedAt.getTime() >= 23 * 3_600_000)) {
-      await bell(dev.id, `“${c.title}”: ${name}'s call on ${T(x.startsAt)} waited over ${REVIEW_DAYS} days: pay it${gone ? "" : ` (${name} can now charge or let it go)`}.`, `/app/tests/${c.testId}#call-${x.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${x.id}` });
-      await db.call.update({ where: { id: x.id }, data: { devRemindedAt: now } });
-    }
-    if (gone || chargeShut) continue;
+    const minutes = callMinutesOf(x);
+    if (minutes == null || x.rateCents == null) continue;
+    const c = x.contract, dev = c.test.developer, name = displayName(c.tester);
+    // A charge waiting for the bank on this call (the developer's own press) is left to finish.
+    if (await (await import("./confirm")).pieceLocked({ callId: x.id })) continue;
+
     const cap = await callChargeCap(x);
-    if (cap.cents === 0) continue;
-    const line = callChoiceLine(displayName(dev), x.startsAt, cap.cents, cap.capped);
-    if (!x.choiceOfferedAt) {
-      await db.call.update({ where: { id: x.id }, data: { choiceOfferedAt: now, choiceBy: new Date(now.getTime() + REVIEW_DAYS * 86_400_000), remindedAt: now } });
-      await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${x.id}`, { group: "charge" });
-      await db.$transaction((tx) => recordEvent(tx, c.testId, "choice", `${name} can now charge or let go of their call on ${fmtDateTime(x.startsAt)}`, false, {}, c.id));
-      await (await import("./ratings")).maybePromptRating(c.id);
-      n++;
-    } else if (!x.remindedAt || now.getTime() - x.remindedAt.getTime() >= REMIND_DAYS * 86_400_000 - 3_600_000) {
-      await notify(c.tester.email, `Reminder: ${line}`, [line], `/app/sessions/${c.id}#call-${x.id}`, { group: "charge", reminder: `charge:${x.id}` });
-      await db.call.update({ where: { id: x.id }, data: { remindedAt: now } });
+    const amount = cap.cents >= MIN_CHARGE_CENTS ? cap.cents : 0;
+    const payKey = serverKey("autocall", x.id);
+    const review = await db.review.create({ data: { callId: x.id, contractId: c.id, amountCents: amount, agreedCents: callReference(x.rateCents, minutes).cents, rateCents: x.rateCents, reason: amount ? AUTO_CHARGED_CALL : AUTO_NOTHING_CALL, payKey, auto: true } }).catch(() => null);
+    if (!review) continue; // paid (or charged) meanwhile
+    if (!amount) {
+      await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${name}'s call on ${fmtDateTime(x.startsAt)} closed with nothing to pay`, false, {}, c.id));
+      continue;
     }
+    const what = `${name}'s call on ${T(x.startsAt, "date")} (charged automatically after ${REVIEW_DAYS} days)`;
+    if (dev.devSuspendedAt && !dev.holdStartedAt) {
+      // During a suspension: it waits and is charged when the account is clear (chargeDeferred on the reinstatement); the tester is paid then.
+      await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "deferred" } });
+      await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${name}'s call was charged automatically: ${money(amount)}`, false, {}, c.id));
+      n++;
+      continue;
+    }
+    if (dev.holdStartedAt) {
+      // During a hold: added to what's owed (as a tester's Charge is); the tester is paid when the developer pays it.
+      await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "owed" } });
+      await bell(dev.id, `${name}'s call on “${c.title}” was charged automatically (${money(amount)}): it was added to what you owe`, dev.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { payment: true, group: "payhold" });
+      await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${name}'s call was charged automatically: ${money(amount)}`, false, {}, c.id));
+      n++;
+      continue;
+    }
+    const row = await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "pending", payKey } });
+    try {
+      const r = await charge(dev, c.tester, amount, payKey, `Playtest: live call on “${c.title}” (charged automatically after ${REVIEW_DAYS} days)`);
+      if (r.status === "requires_action") {
+        await (await import("./confirm")).awayAction(row.id, r as NeedsAction);
+        await notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { payment: true, group: "tdelayed" });
+      } else {
+        await db.payment.update({ where: { id: row.id }, data: { status: r.status, stripePaymentIntentId: r.stripePaymentIntentId, ...(r.feeCents != null ? { feeCents: r.feeCents, testerCents: r.testerCents, transferStatus: r.transferStatus } : {}) } });
+        await receipt(dev.email, what, amount, r.status, `/app/tests/${c.testId}#call-${x.id}`);
+        const line = autoPaidTesterLine(displayName(dev), amount, x.startsAt);
+        await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${x.id}`, { payment: true, group: "tarrived" });
+      }
+    } catch (e) {
+      if (e instanceof HttpError && e.code === "payment_unknown") continue; // checked later by the stuck-payment check (recovery.ts)
+      if (!(e instanceof HttpError && e.code === "card_failed")) {
+        // Payments have a problem (not the card): nothing was charged; tried again on the next sweep.
+        await db.payment.delete({ where: { id: row.id } });
+        await db.review.delete({ where: { id: review.id } });
+        continue;
+      }
+      const failed = await db.payment.update({ where: { id: row.id }, data: { status: "failed", failure: (e as Error).message, owedUntil: new Date() } });
+      await notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { payment: true, group: "tdelayed" });
+      await declinedPayment(dev.id, failed.id, amount, `${name}'s call on “${c.title}”`);
+    }
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${name}'s call was charged automatically: ${money(amount)}`, false, {}, c.id));
+    n++;
   }
   return n;
 }
@@ -1055,6 +1101,8 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
     if (byTesterChoice(x.review.reason)) throw new HttpError(409, "done", "You already chose for this.");
     throw new HttpError(409, "done", `${displayName(dev)} paid ${money(x.review.amountCents)} for this meanwhile.`);
   }
+  // (Owner, Oct 29, batch 28 §21) A listed call is charged automatically: no Charge or Let it go (an older page's press).
+  if (x.rateCents != null) throw new HttpError(409, "auto_charge", AUTO_CHARGE_NO_CHOICE);
   // (Batch 17 §19) After the piece closed nothing is offered any more (even a piece whose Charge never opened).
   await chargeCloseOutGate({ callId: x.id });
   if (!x.choiceOfferedAt) throw new HttpError(409, "not_yet", `You can choose once ${REVIEW_DAYS} days have passed since the call and your deadline has passed.`);

@@ -92,19 +92,20 @@ export async function adminUsers() {
 /**
  * (Owner, Oct 26-27) Email is Off, or On with Daily / Weekly / Monthly. EVERY email is ONE email listing all the notifications since the last one, and each
  * notification is emailed at most once (it is marked summarized when it goes). People on Weekly or Monthly also get an end-of-day email holding only their payment
- * lines (and the must-send ones); the rest wait for their normal email. On Off, only the few must-send lines (mustEmail) go, in ONE end-of-day email.
+ * lines (and the must-send ones); the rest wait for their normal email. (Owner, Oct 29, batch 28 §18) On Off, the payment lines and the few must-send lines (mustEmail)
+ * go in ONE end-of-day email ("Your Playtest payment updates", or "account updates" when it holds a must-send line that isn't about a payment); nothing else.
  * The daily job runs this once a day, after every notification of the day exists.
  */
 export async function sendSummaries(now = new Date(), only?: string[]) {
   const users = await db.user.findMany({
-    where: { ...(only ? { id: { in: only } } : {}), notifications: { some: { summarizedAt: null, ...({ OR: [{ mustEmail: true }, { user: { emailPref: { in: ["daily", "weekly", "monthly"] } } }] } as object) } } },
+    where: { ...(only ? { id: { in: only } } : {}), notifications: { some: { summarizedAt: null, ...({ OR: [{ mustEmail: true }, { payment: true }, { user: { emailPref: { in: ["daily", "weekly", "monthly"] } } }] } as object) } } },
     select: { id: true, email: true, emailPref: true, lastSummaryAt: true },
   });
   const line = (n: { text: string; link: string }) => `• ${n.text}${n.link ? ` ${appUrl()}${n.link}` : ""}`;
   for (const u of users) {
     const off = !["daily", "weekly", "monthly"].includes(u.emailPref);
     const due = !off && summaryDue(u.emailPref, u.lastSummaryAt, now);
-    const only = off ? { mustEmail: true } : due ? {} : { OR: [{ payment: true }, { mustEmail: true }] };
+    const only = due ? {} : { OR: [{ payment: true }, { mustEmail: true }] };
     if (!off && !due && u.emailPref === "daily") continue; // (a daily person is not due again yet)
     const all = await db.notification.findMany({ where: { userId: u.id, summarizedAt: null, ...only }, orderBy: { createdAt: "asc" }, take: 200 });
     if (!all.length) continue;
@@ -114,7 +115,7 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
     const items = all.filter((n) => !n.reminderKey || !newest.has(n.reminderKey) || newest.get(n.reminderKey) === n.id);
     const dropped = all.filter((n) => !items.includes(n)).map((n) => n.id);
     try {
-      const subject = due ? `Your Playtest summary: ${items.length} update${items.length === 1 ? "" : "s"}` : off ? `Your Playtest account updates: ${items.length}` : `Your Playtest payment updates: ${items.length}`;
+      const subject = due ? `Your Playtest summary: ${items.length} update${items.length === 1 ? "" : "s"}` : off && items.some((n) => !n.payment) ? `Your Playtest account updates: ${items.length}` : `Your Playtest payment updates: ${items.length}`;
       await sendEmail({ to: u.email, subject, text: [...items.map(line), "", "Playtest"].join("\n") });
       await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped] } }, data: { summarizedAt: now } });
       if (due) await db.user.update({ where: { id: u.id }, data: { lastSummaryAt: now } });

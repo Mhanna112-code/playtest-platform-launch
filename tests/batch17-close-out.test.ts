@@ -193,7 +193,8 @@ describe("after close-out: Pay, Pay more, Charge and Let it go are refused; unpa
     await overdue(w.sub.id);
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "0", reason: "Not needed" })).body.error.message).toMatch(/^Pay closed on /);
     expect((await pay(w.dev.cookie, { kind: "call", id: call.id, amount: "15.00", tickedCents: 1500 })).body.error.message).toMatch(/^Pay closed on /);
-    expect((await sact(w.sessionId, "choose", w.tester.cookie, { callId: call.id, choice: "letgo", seenAt: seen() })).body.error.message).toMatch(/^Charge and Let it go closed on /);
+    // (Batch 28 §21) A listed call has no Charge or Let it go: it is charged automatically.
+    expect((await sact(w.sessionId, "choose", w.tester.cookie, { callId: call.id, choice: "letgo", seenAt: seen() })).body.error.message).toBe(R.AUTO_CHARGE_NO_CHOICE);
   });
 });
 
@@ -311,8 +312,8 @@ describe("the pages (section 19)", () => {
     expect(page).toContain('await pieceCloseOut(k, "tester", now)');
     expect(page).toContain("notPaidClosedLine(shutOn(sub.id))");
     expect(page).toContain("notPaidClosedLine(shutOn(x.id))");
-    expect(page.match(/!chargeShut\((sub|x)\.id\)/g)!.length).toBeGreaterThanOrEqual(5);
-    expect(page.match(/data-charge-closes=""/g)).toHaveLength(2);
+    expect(page.match(/!chargeShut\((sub|x)\.id\)/g)!.length).toBeGreaterThanOrEqual(3); // (batch 28 §21) no Charge for listed calls
+    expect(page.match(/data-charge-closes=""/g)).toHaveLength(1);
     expect(R.notPaidClosedLine("Dec 6, 2026")).toBe("Not paid (closed on Dec 6, 2026)");
     expect(R.chargeClosesLine("Dec 6, 2026")).toBe("Charge closes on Dec 6, 2026.");
   });

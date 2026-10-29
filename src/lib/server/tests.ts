@@ -12,7 +12,7 @@ import { testerCapacity } from "./capacity";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { LIMITS } from "@/lib/limits";
-import { displayName, fmtDate, fmtDateTime, pronouns, toCents } from "@/lib/format";
+import { displayName, fmtDate, fmtDateTime, pronouns, stopTimeIn, toCents } from "@/lib/format";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { T, safeZone } from "@/lib/tz";
 import {
@@ -905,9 +905,13 @@ export async function ownContract(testerId: string, contractId: string) {
   return c;
 }
 
-/** Why a tester's press can't happen any more (with the one line their page shows), or "". Late work is allowed. */
-export function sessionRefusal(c: { status: string; endKind: string; endedAt: Date | null }, test: { openUntil: Date | null }, devName: string, now = new Date()) {
-  return testerRefusal(c, test, devName, fmtDate, now);
+/**
+ * Why a tester's press can't happen any more (with the one line their page shows), or "". Late work is allowed. (Batch 28 §3) A team Stop always reads with its time
+ * ("This test was stopped at 3:10 PM."; the date added after 12 hours), in the reader's saved zone (`tz`, else the contract's tester's).
+ */
+export function sessionRefusal(c: { status: string; endKind: string; endedAt: Date | null; tester?: { timeZone?: string | null } | null }, test: { openUntil: Date | null }, devName: string, now = new Date(), tz?: string | null) {
+  const zone = tz !== undefined ? tz : c.tester?.timeZone ?? null;
+  return testerRefusal({ ...c, teamTime: c.endedAt ? stopTimeIn(c.endedAt, zone, now) : undefined }, test, devName, fmtDate, now);
 }
 
 export async function leaveTest(tester: U, contractId: string, body: Record<string, unknown> = {}) {

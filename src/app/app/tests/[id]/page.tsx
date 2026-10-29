@@ -37,7 +37,7 @@ import { HOLD_APPROVAL_AFTER, inviteBlocked, rateNeedsLine, NOT_LISTED, callList
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
-import { paidMostLine } from "@/lib/rules";
+import { autoChargeLine, paidMostLine } from "@/lib/rules";
 import { closedOut, payMoreClosesAt, pieceCloseOut } from "@/lib/server/closeOut";
 import { BankWaiting } from "@/components/BankWaiting";
 import { bankWaitingOnTest } from "@/lib/server/confirm";
@@ -453,6 +453,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   <p className="text-sm text-slate-200" data-call-length="">{lengthOf(x.x!)}</p>
                   {x.x!.actualMinutes != null && x.x!.lengthNote && <ReasonQuote text={x.x!.lengthNote} />}
                   <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.x!.id)?.box}
+                    /* (Owner, Oct 29, batch 28 §21) A listed call is charged automatically 7 days after it if it is not paid. */
+                    note={x.x!.rateCents != null && x.x!.payBy && x.x!.payBy > now ? autoChargeLine(fmtDate(x.x!.payBy), Math.min(callReference(x.x!.rateCents, callMinutesOf(x.x!)!).cents ?? 0, callsLeft.get(x.c.id) ?? Infinity), callMinutesOf(x.x!)!, x.x!.rateCents) : undefined}
                     minutes={callMinutesOf(x.x!)!} rateCents={x.x!.rateCents} warning={callsWarn.get(x.c.id)}
                     listingCents={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).cents}
                     listingText={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />

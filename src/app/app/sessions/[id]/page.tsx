@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { LET_GO_BY_TESTER, chargedByTester, LIMITED_VIEW_LINE, WORK_OVER_PRESSES, stillWorksLine, workOver, devDeletedLine, NOT_LISTED, byTesterChoice, PAUSE_DEFAULTS, chargedDelayedLine, disputeLimitText, testerPaused, STOP_NOTE_KIND, stopReasonOf, chargeOpensNote } from "@/lib/rules";
+import { LET_GO_BY_TESTER, chargedByTester, LIMITED_VIEW_LINE, WORK_OVER_PRESSES, stillWorksLine, workOver, devDeletedLine, NOT_LISTED, byTesterChoice, PAUSE_DEFAULTS, chargedDelayedLine, disputeLimitText, testerPaused, STOP_NOTE_KIND, stopReasonOf, chargeOpensNote, chargeOpensAt } from "@/lib/rules";
 import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, MessagesSquare, Users, XCircle } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, stopTimeIn } from "@/lib/format";
@@ -9,7 +9,7 @@ import { payMoreClosesAt } from "@/lib/server/closeOut";
 import { payClosedLine, testerPaidMostLine, testerPayMoreLine } from "@/lib/rules";
 import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, callsLeftWarning, MEASURING_LINE } from "@/lib/callMeasure";
 import { callsLeftCents } from "@/lib/server/callMoney";
-import { callChargeCap, callChoiceLine } from "@/lib/server/holds";
+import { testerAutoChargeLine } from "@/lib/rules";
 import { chargeClosesLine, closeOutSoon, notPaidClosedLine } from "@/lib/rules";
 import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
 import { fmtTime } from "@/lib/format";
@@ -86,7 +86,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (Batch 12 section 1) A developer who deleted their account.
   const devGone = !!c.test.developer.deletedAt;
   const devRealName = displayName({ ...c.test.developer, deletedAt: null });
-  const refusal = sessionRefusal(c, c.test, dev);
+  // (Batch 28 §3) A team Stop reads "This test was stopped at 3:10 PM." here too (the reader's saved zone).
+  const refusal = sessionRefusal(c, c.test, dev, new Date(), u.timeZone);
   // (Owner, Oct 28, batch 16 section 24) The test stopped (the developer or the team), closed, or this tester's work was ended early: the work is over. What's gone
   // (the offer, Send, uploads, the call tools, the key box, Leave) is hidden; a press of it from an old page comes back here, at the top, named in the stopped line.
   const over = workOver(c);
@@ -173,7 +174,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (Batch 15 section 42) Calls that are over (took place, cancelled, nobody joined, missed …) go in "Call history"; the Live session keeps the ones ahead or in progress.
   const overCalls = c.calls.filter((x) => callIsOver(x) || blockedPair).sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
   const callsWarning = callsLeftWarning(await callsLeftCents(c.id), listedCall ? c.liveRateCents : null, "tester", displayName(u));
-  const callCaps = new Map(await Promise.all(c.calls.filter((x) => x.choiceOfferedAt && !x.review).map(async (x) => [x.id, await callChargeCap(x)] as const)));
+
   // (Batch 17 §19) Each unpaid piece's own closing date for the tester (the test's close-out, or 14 days after its Charge opened if later, plus the time their tester side
   // was suspended): Charge and Let it go end then and the piece reads "Not paid (closed on <date>)"; its Charge box says when in its last 7 days.
   const openKeys: { submissionId?: string; callId?: string }[] = [...c.submissions.filter((x) => !x.review).map((x) => ({ submissionId: x.id })), ...c.calls.filter((x) => !x.review && x.status === "booked").map((x) => ({ callId: x.id }))];
@@ -221,7 +222,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   }) : "";
   // (Batch 16 section 24) What still works once the work is over, built from what is actually on the page (as the paused banner does).
   const stillWorks = {
-    charge: !meOff && !devGone && ([written, recording].some((x) => !!x && !x.review && !chargeShut(x.id) && (x.agreedCents ?? 0) > 0 && chargeAmount(x.agreedCents, partPaid.get(x.id) ?? 0) > 0) || c.calls.some((x) => !x.review && !chargeShut(x.id) && x.status === "booked" && callMinutesOf(x) != null && callListed(c.test, c))),
+    charge: !meOff && !devGone && ([written, recording].some((x) => !!x && !x.review && !chargeShut(x.id) && (x.agreedCents ?? 0) > 0 && chargeAmount(x.agreedCents, partPaid.get(x.id) ?? 0) > 0)),
     dispute: [written, recording].some((x) => x && !chargedOwed.has(x.id) && !delayedSubs.has(x.id) && disputable(x.review, x.dispute, x.id)) || c.calls.some((x) => !owedCalls.has(x.id) && disputable(x.review, x.dispute, x.id)),
     rate: rateBlock === "" && !meOff,
     excerpt: excerptPicks.length > 0,
@@ -400,6 +401,11 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                 {cents != null && <span className={`badge ${required ? "border-amber-300/40 text-amber-200" : ""}`}>{required ? "Required" : "Not required"}</span>}
               </p>
               <p className="text-slate-400">{cents == null ? NOT_LISTED : `In your contract · ${cents === 0 ? "free" : `${money(testerShare(cents))} for you`}`}{` · Paid so far ${money(sub ? partPaid.get(sub.id) ?? 0 : 0)}`}</p>
+              {/* (Batch 28 §5) A sent, listed part waiting for the developer: when Charge opens (like the dashboard rows and listed call rows). */}
+              {sub && !sub.review && sub.agreedCents != null && sub.agreedCents > 0 && !devGone && !chargeShut(sub.id) && !sub.choiceOfferedAt && (() => {
+                const opens = chargeOpensAt(sub, c.test, c, now);
+                return opens && opens > now ? <p className="text-xs text-slate-400" data-charge-opens="">{chargeOpensNote(dev, renderTimes(T(opens, "date"), u.timeZone))}</p> : null;
+              })()}
               {sub && <p className="text-xs text-slate-500">{partLine(sub.agreedCents, partPaid.get(sub.id) ?? 0)}</p>}
               {sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && canChoose && !chargeShut(sub.id) && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0 && (
                 <ChoiceBox paused={rulesPaused} seenAt={seenAt} sessionId={c.id} submissionId={sub.id} devName={dev} cents={chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0)} line={choiceLine(dev, key, chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0))} />
@@ -424,15 +430,11 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               <div key={x.id} className="space-y-1">
                 {/* (Owner, Oct 28, batch 16 section 40) One short grey line per call (the part line above has the rate and what's paid so far); blue only for a real notice. */}
                 <p className="text-xs text-slate-400" data-call-row="" data-call-length="">{fmtDateTime(x.startsAt)} · {callMinutesOf(x)} min · {chargeShut(x.id) ? notPaidClosedLine(shutOn(x.id)) : <>waiting for {dev} to pay</>}</p>
-                {/* (Batch 26 section 6) A listed call: Charge opens 7 days after the call (moved by pauses). */}
-                {!chargeShut(x.id) && x.rateCents != null && x.payBy && x.payBy > now && <p className="text-xs text-slate-400" data-charge-opens="">{chargeOpensNote(dev, renderTimes(T(x.payBy, "date"), u.timeZone))}</p>}
+                {/* (Owner, Oct 29, batch 28 §21) A listed call: charged automatically 7 days after the call (moved by pauses); no Charge or Let it go. */}
+                {x.rateCents != null && x.payBy && <p className="text-xs text-slate-400" data-auto-charge="">{testerAutoChargeLine(dev, renderTimes(T(x.payBy, "date"), u.timeZone))}</p>}
                 {failedCalls.has(x.id) && <p className="info">{DELAYED_CALL_LINE}</p>}
                 {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
-                {/* (Batch 15 section 15) A listed call left unpaid past its review date: Charge or Let it go, as a sent part. */}
-                {x.choiceOfferedAt && canChoose && !chargeShut(x.id) && (callCaps.get(x.id)?.cents ?? 0) > 0 && (
-                  <ChoiceBox paused={rulesPaused} seenAt={seenAt} sessionId={c.id} callId={x.id} devName={dev} cents={callCaps.get(x.id)!.cents} line={renderTimes(callChoiceLine(dev, x.startsAt, callCaps.get(x.id)!.cents, callCaps.get(x.id)!.capped), u.timeZone)} />
-                )}
-                {chargeSoon(x.id) && x.choiceOfferedAt && canChoose && (callCaps.get(x.id)?.cents ?? 0) > 0 && <p className="note" data-charge-closes="">{chargeSoon(x.id)}</p>}
+
               </div>
             ))}
             {c.calls.filter((x) => x.review).map((x) => (

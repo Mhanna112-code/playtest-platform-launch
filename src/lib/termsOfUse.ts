@@ -71,7 +71,7 @@ export const PAYMENT_RULES: { heading: string; text: string; example: string }[]
   },
   {
     heading: "Unreviewed work: Charge or Let it go",
-    text: `If a listed piece (or a listed call) isn't paid within ${REVIEW_DAYS} days of being sent (or of the call), and not before the tester's own deadline, the tester decides: Charge the developer's card up to what's left of the listing price, or Let it go. Nothing is charged automatically. A Charge over $200 needs a tick. Each piece gets at least ${CLOSE_OUT_DAYS} days of Charge.`,
+    text: `If a listed piece of work isn't paid within ${REVIEW_DAYS} days of being sent, and not before the tester's own deadline, the tester decides: Charge the developer's card up to what's left of the listing price, or Let it go. A Charge over $200 needs a tick. Each piece gets at least ${CLOSE_OUT_DAYS} days of Charge. A listed call works differently: if the developer hasn't paid it ${REVIEW_DAYS} days after it took place, their card is charged automatically for its measured length at the call's rate (within the $1,000 for that tester's calls), with no Charge or Let it go. Pauses and outages move these dates later.`,
     example: "Sent Nov 10 with a deadline of Nov 20: Charge opens Nov 20, the later of Nov 17 (7 days after sending) and the deadline.",
   },
   {
@@ -91,7 +91,7 @@ export const PAYMENT_RULES: { heading: string; text: string; example: string }[]
   },
   {
     heading: "Bank checks, declines, holds",
-    text: "When the developer presses Pay, Pay more, Pay what you owe, Subscribe or Verify a card and their bank wants to confirm it, the bank's check opens on the page; cancelled or failed, nothing is charged. A charge made while the developer isn't there (a tester's Charge, a dispute decision, a renewal) that the bank wants confirmed waits 3 days for the developer's confirmation, and the tester's pay is delayed meanwhile. A declined payment is owed: the developer's tests pause until they pay what they owe (it's retried once a day meanwhile, at most 7 times), and the tester's pay is delayed until then. A chargeback (the developer's bank reversing a payment) adds a $15 fee, and the tests stay paused until the developer verifies a card with 3D Secure and presses Pay what you owe, which reserves the amount on their card: it's taken when our team approves lifting the hold, and released if they don't approve or after about 7 days.",
+    text: "When the developer presses Pay, Pay more, Pay what you owe, Subscribe or Verify a card and their bank wants to confirm it, the bank's check opens on the page; cancelled or failed, nothing is charged. A charge made while the developer isn't there (a tester's Charge, a listed call's automatic charge, a dispute decision, a renewal) that the bank wants confirmed waits 3 days for the developer's confirmation, and the tester's pay is delayed meanwhile. A declined payment is owed: the developer's tests pause until they pay what they owe (it's retried once a day meanwhile, at most 7 times), and the tester's pay is delayed until then. A chargeback (the developer's bank reversing a payment) adds a $15 fee, and the tests stay paused until the developer verifies a card with 3D Secure and presses Pay what you owe, which reserves the amount on their card: it's taken when our team approves lifting the hold, and released if they don't approve or after about 7 days.",
     example: "A $10 payment reversed by the bank: $25 owed ($10 + the $15 chargeback fee).",
   },
   {

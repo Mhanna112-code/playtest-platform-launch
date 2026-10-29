@@ -10,7 +10,7 @@ import { AdminButton } from "./AdminButton";
 import { PagedList } from "./PagedList";
 import { adminCases } from "@/lib/server/holds";
 import { configProblems, seesConfigBox } from "@/lib/server/config";
-import { adminOutages, lengthText, outageLine } from "@/lib/server/outages";
+import { adminOutages, gapLine, lengthText, outageLine } from "@/lib/server/outages";
 import { T, renderTimes } from "@/lib/tz";
 import { emailHealth, emailsDownLine } from "@/lib/server/email";
 import { adminPage, disputeRow, type DisputeVM, type Page } from "@/lib/server/adminLists";
@@ -98,9 +98,19 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </section>
 
       {/* (Batch 15 section 10) Outages, from the uptime service's own down/up alerts: the open "down" and the latest recorded outages. */}
-      {(outages.downSince || outages.rows.length > 0) && (
+      {(outages.downSince || outages.rows.length > 0 || outages.gaps.length > 0) && (
         <section className="card space-y-2" id="outages" data-outages>
           <h2 className="text-lg font-semibold text-white">Outages</h2>
+          {/* (Owner, Oct 29, batch 28 §1) A heartbeat gap alone never moves anything: listed here for an admin to decide. */}
+          {outages.gaps.length > 0 && (
+            <ul className="space-y-1 text-sm" data-outage-gaps>
+              {outages.gaps.map((g) => (
+                <li key={g.id} className="text-amber-200" data-outage-gap>
+                  {renderTimes(gapLine(g), u.timeZone)} <AdminButton action="approve-gap" id={g.id} label="Approve: move every timer" /> <AdminButton action="dismiss-gap" id={g.id} label="Dismiss" />
+                </li>
+              ))}
+            </ul>
+          )}
           {outages.downSince && <p className="text-sm text-amber-200">The uptime service says the site has been down since {fmtDateTime(outages.downSince)}. The outage is recorded when it says the site is up again (if it lasted 15 minutes or more).</p>}
           <ul className="space-y-1 text-sm">
             {outages.rows.map((o) => (

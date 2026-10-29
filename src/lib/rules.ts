@@ -27,7 +27,8 @@ export const HIGH_PART_TICK = "I confirm this part pays more than $200.";
  * (Owner, Oct 28, batch 19 section 7) The required tick above Post the test (and posting a draft), and above Save on Edit while Save is enabled: "How payments work"
  * after it links to the Terms' payments section (a new tab). An unticked press is refused with PAY_RULES_TICK_MISSING, red at the tick.
  */
-export const PAY_RULES_TICK = "I understand that a tester can charge my card, up to the listing price, for work I haven't paid once 7 days have passed since they sent it and their own deadline has passed.";
+// (Owner, Oct 29, batch 28 §21) It covers the automatic charge of listed calls too.
+export const PAY_RULES_TICK = "I understand that a tester can charge my card, up to the listing price, for work I haven't paid once 7 days have passed since they sent it and their own deadline has passed, and listed calls 7 days after they take place.";
 export const PAY_RULES_LINK = "How payments work";
 export const PAY_RULES_TICK_MISSING = "Tick to confirm you understand how payments work.";
 /** The Terms' payments section (section 4, How payments work). */
@@ -1070,6 +1071,18 @@ export const chargeIsOpen = (...a: Parameters<typeof chargeOpensAt>) => {
   return !!at && at.getTime() <= (a[3] ?? new Date()).getTime();
 };
 export const CHARGED_BY_TESTER = `Charged by the tester after ${REVIEW_DAYS} days without a review.`;
+/**
+ * (Owner, Oct 29, batch 28 §21) A listed call not paid 7 days after it is charged automatically (rate × measured minutes): the reason stored on its review, and the closing
+ * reason when there was nothing to charge (no measured time, or the $1,000 for calls used).
+ */
+export const AUTO_CHARGED_CALL = `Charged automatically ${REVIEW_DAYS} days after the call.`;
+export const AUTO_NOTHING_CALL = "Closed with nothing to pay.";
+/** An older page's Charge or Let it go on a listed call. */
+export const AUTO_CHARGE_NO_CHOICE = "This call is charged automatically, so there's nothing to choose.";
+/** The developer's line in a listed call's Pay box: "If you don't pay by Nov 5, it's charged automatically: $25.00 (30 min × $50.00/h)." */
+export const autoChargeLine = (date: string, cents: number, minutes: number, rateCents: number) => `If you don't pay by ${date}, it's charged automatically: ${money(cents)} (${minutes} min × ${money(rateCents)}/h).`;
+/** The tester's line on a listed call waiting for pay: "If Nora Lane doesn't pay by Nov 5, it's charged automatically." */
+export const testerAutoChargeLine = (dev: string, date: string) => `If ${dev} doesn't pay by ${date}, it's charged automatically.`;
 /** (Batch 12 section 6) The reason stored on tester charges made before the review window dropped to 7 days. */
 export const CHARGED_BY_TESTER_14 = "Charged by the tester after 14 days without a review.";
 export const LET_GO_BY_TESTER = "Let go by the tester: nothing charged.";

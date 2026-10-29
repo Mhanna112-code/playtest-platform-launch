@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { pageBusy, watchTyping } from "@/lib/pageBusy";
 import { useRouter } from "next/navigation";
 import { bankCheckOpen } from "@/lib/bankConfirm";
+import { PRESS_REFUSED_EVENT } from "@/lib/client";
 import { publishIgnoredAlerts, publishTesterAlertsOff } from "@/lib/testerAlerts";
 
 /**
@@ -94,10 +95,19 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
       void tick();
     };
     window.addEventListener("pageshow", onShow);
+    // (Owner, Oct 29, batch 28 §9) A press refused because the state changed: redraw at once (the same as the poll's refresh; typed text and open boxes are kept),
+    // then check the fingerprint as usual. Not while the bank's check is open.
+    const onRefused = () => {
+      if (!alive || !refresh || bankCheckOpen()) return;
+      router.refresh();
+      void tick();
+    };
+    window.addEventListener(PRESS_REFUSED_EVENT, onRefused);
     return () => {
       alive = false;
       clearInterval(t);
       window.removeEventListener("pageshow", onShow);
+      window.removeEventListener(PRESS_REFUSED_EVENT, onRefused);
     };
   }, [query, router, refresh]);
   if (!waiting) return null;

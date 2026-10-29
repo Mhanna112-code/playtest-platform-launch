@@ -10,7 +10,8 @@ export function clientPressKey(userId: string, raw: unknown): string | null {
 }
 
 /** A server-made key: "<kind>:<parts…>". */
-export type ServerKeyKind = "choice" | "dispute" | "owed" | "cbowed" | "deferred" | "sub" | "subrenew" | "extra" | "cbwon";
+/** (Batch 28 §21) "autocall": a listed call charged automatically 7 days after it. */
+export type ServerKeyKind = "choice" | "dispute" | "owed" | "cbowed" | "deferred" | "sub" | "subrenew" | "extra" | "cbwon" | "autocall";
 export const serverKey = (kind: ServerKeyKind, ...parts: string[]) => `${kind}:${parts.join(":")}`;
 
 /** Is this the key of a tester's Charge (recovery finishes those differently)? */

@@ -15,10 +15,10 @@ describe("by question", () => {
       sheet({ contractId: "b", tester: "Ben Ito", questions: qs, answers: ["The map", "More levels"], status: "rejected" }),
       sheet({ contractId: "c", tester: "Cara Diaz", questions: qs, answers: ["Music", ""] }),
     ]);
-    expect(blocks.map((b) => [b.title, b.notRequired, b.required, b.answers.length])).toEqual([
-      ["What did you like?", false, true, 3],
-      ["Anything else?", true, false, 1],
-      ["Other notes", false, false, 1],
+    expect(blocks.map((b) => [b.title, b.required, b.answers.length])).toEqual([
+      ["What did you like?", true, 3],
+      ["Anything else?", false, 1],
+      ["Other notes", false, 1],
     ]);
     expect(blocks[0].answers.map((a) => [a.tester, a.text, a.status, a.paidCents])).toEqual([
       ["Ana Silva", "The boat", "paid", 1000],

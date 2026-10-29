@@ -11,10 +11,13 @@ import { ContractLink } from "@/components/ContractLink";
 import { lastPressLabel } from "@/lib/client";
 import { pressVerb, refusalLine } from "@/lib/pressLabels";
 import { ANSWER_TERMS_FIRST } from "@/lib/answerTerms";
+import { fmtTimeIn } from "@/lib/format";
+import { savedZone } from "@/components/TimeZoneSync";
 
 export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string; /** (Batch 16 section 19) the fields another tab changed (API names) */ fields?: string[]; /** (Batch 20 section 4) one line per thing: a newer line with the same key replaces it */ key?: string; /** (Batch 20 section 25) a live-box line that never stops a press */ quiet?: boolean };
 
-const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+/** (Batch 28 §4) Every time in the box is in the reader's saved zone (the browser's only when none is saved), like the stop lines. */
+const time = (iso: string) => fmtTimeIn(iso, savedZone());
 const DEFAULT_TAILS = new Set(["Press again to go ahead.", "Press again to go ahead"]);
 
 /**
