@@ -27,6 +27,16 @@ Today a tester's own press in another tab stops only the SAME press ("You also d
 - Live: these lines show in the top box and raise the pill. §11 (stopped / closed / paused keep stop-once) applies.
 - Tests: Send in tab A stops Charge in tab B once; a call request in A stops Dispute in B once; Apply in A stops Join on B's join page once; Rate in A refuses Rate in B plainly.
 
+## 20. Leftovers from the batch 27 design doc check (not launch-critical)
+- **Dashboard Join call and new terms:** a Join call from the tester dashboard's Upcoming calls refused with "Answer the new terms first: Switch or Keep." gives no way to the offer: add "Answer them on the session page →" opening the session page at the Switch / Keep box, highlighted.
+- **Charge / Let it go and new terms:** their stop box ends "Press again to send under your current terms, or switch first." (testerTermsGate, terms.ts); "send" reads oddly there: "Press again to go ahead under your current terms, or switch first."
+- **Admin Tests row text** (adminLists.ts testRow): "the team" fallback when an admin's name is missing; "at" before the time in the no-lift branch; pair a lift with the pause it ended (check order).
+- **A team-paused test closed after 7 days** (pauseClosure.ts keeps adminPausedAt): its admin row must read as closed, with no Lift the pause.
+- **Admin live check covers only the first 25 rows:** rows loaded further down by scrolling must follow pause changes too.
+- **One wording:** the form's "Pick a time in the future." vs the server's "Pick times in the future.": use "Pick a time in the future." everywhere.
+- **Local call lead:** the forms always use 1 minute in the browser (CALL_MIN_AHEAD_MINUTES isn't public); expose it as NEXT_PUBLIC_ or pass it from the server so form and server agree.
+- Fix the garbled characters in goNextRound's comment (tests.ts); confirm "Go to the next round" opens at once on a paused test (trace devGate's quiet state) and add a test.
+
 ## Check and report
 - Run `NEXT_DIST_DIR=.next-build npm run check`; it must be green. Migration only if needed (hand-written, checked with `prisma migrate diff` against playtest_lite_shadow with --exit-code, applied only to the local playtest_lite DB; say the 3400 server needs a restart).
 - Don't touch port 3400 (the owner uses it: write each file in one go). Don't edit docs/DESIGN-DOC.md. Never print secrets from .env.
