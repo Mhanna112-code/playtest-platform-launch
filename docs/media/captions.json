@@ -13939,5 +13939,581 @@
     "group": "b23d",
     "order": 100002,
     "size": "phone"
+  },
+  "stripe-card-saved.png": {
+    "caption": "Dana's Payments after Stripe Checkout (setup mode, test card 4242 4242 4242 4242, Link left unticked): “Card saved.” and “A card is saved. You're charged only when you press Pay, for exactly the amount you tick.” with Change card; Stripe (right, read from its API in test mode) has Dana's customer with “Card on file: visa •••• 4242” and “No payments yet”.",
+    "kind": "image",
+    "title": "Card saved in Stripe Checkout",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st1",
+    "order": 115001,
+    "size": "desktop"
+  },
+  "stripe-card-checkout.webm": {
+    "caption": "Dana presses Add a card, types the test card 4242 4242 4242 4242 into Stripe's own Checkout page (Link left unticked) and presses Save; back on Payments the card is saved, and Stripe's API (right) shows it on the customer.",
+    "kind": "video",
+    "title": "Add a card",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st1",
+    "order": 115002,
+    "size": "desktop"
+  },
+  "stripe-connect-onboarding.png": {
+    "caption": "Connect a payout account opens Stripe's own hosted Express onboarding in test mode: “You're using a test account with test data.”, “Let's get started” and “Use test phone number”.",
+    "kind": "image",
+    "title": "Stripe's Express onboarding",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st1",
+    "order": 115003,
+    "size": "desktop"
+  },
+  "stripe-connect-captcha.png": {
+    "caption": "In the recording's automated browser Stripe answers “Use test phone number” with an hCaptcha puzzle (“Please drag the shape to the loop that is closed”). The recording never solves CAPTCHAs, so the hosted onboarding stops here; the payout accounts below are finished through Stripe's API instead (test Custom accounts with Stripe's test identity and bank values).",
+    "kind": "image",
+    "title": "Stopped at Stripe's CAPTCHA",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st1",
+    "order": 115004,
+    "size": "desktop"
+  },
+  "stripe-connect-start.webm": {
+    "caption": "Ana presses Connect a payout account and lands on Stripe's hosted Express onboarding in test mode; the automated browser is given an hCaptcha puzzle at the first step, so the hosted onboarding stops there.",
+    "kind": "video",
+    "title": "Connect a payout account",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st1",
+    "order": 115005,
+    "size": "desktop"
+  },
+  "stripe-connect-ana-ready.png": {
+    "caption": "Ana's payout account finished through Stripe's API (a test Custom account with Stripe's test values); back on Payments by Stripe's return address the app reads it from Stripe: “Your payout account is connected.” Stripe (right): Ana “Payouts enabled · transfers active”, Ben “Onboarding not finished”.",
+    "kind": "image",
+    "title": "Ana's payouts are on",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st1",
+    "order": 115006,
+    "size": "desktop"
+  },
+  "stripe-connect-return.webm": {
+    "caption": "Ana comes back to Payments the way Stripe's onboarding returns them; the app asks Stripe and turns the payout account on. Ben's account (right) is still unfinished.",
+    "kind": "video",
+    "title": "Back from setup",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st1",
+    "order": 115007,
+    "size": "desktop"
+  },
+  "stripe-connect-ben-pending.png": {
+    "caption": "Ben came back from Stripe before finishing: the app asked Stripe, and Payments says “Stripe still needs a few details before you can be paid. Continue setup below.” with Continue setup.",
+    "kind": "image",
+    "title": "Ben's setup isn't finished",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st1",
+    "order": 115008,
+    "size": "desktop"
+  },
+  "stripe-pay-4242.png": {
+    "caption": "Dana presses Pay on Ana's written answers ($10.00): Ana's row reads “paid $10.00 of $10.00” and “Paid in all: $10.00”. Stripe shows the PaymentIntent “Succeeded” on visa •••• 4242, sent to Ana's connected account with a “platform fee $2.00”, and the $10.00 transfer to Ana less that fee: Ana keeps $8.00, the 80%.",
+    "kind": "image",
+    "title": "Pay with 4242: Succeeded, 80% to the tester",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st1",
+    "order": 115009,
+    "size": "desktop"
+  },
+  "stripe-pay-ben-waiting.png": {
+    "caption": "Dana pays Ben's answers too: Stripe shows the second PaymentIntent “Succeeded” with no connected account (the money stays on the platform) and no transfer to Ben, whose account is still “Onboarding not finished”.",
+    "kind": "image",
+    "title": "Paid before payout setup",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st1",
+    "order": 115010,
+    "size": "desktop"
+  },
+  "stripe-pay-video.webm": {
+    "caption": "Dana ticks and presses Pay on Ana's and then Ben's answers with the saved 4242 card; Stripe (right) shows each PaymentIntent arrive “Succeeded”: Ana's goes to their connected account with the platform's $2.00 fee, Ben's stays on the platform until Ben's setup is done.",
+    "kind": "video",
+    "title": "Pay, twice",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st1",
+    "order": 115011,
+    "size": "desktop"
+  },
+  "stripe-pay-receipt.png": {
+    "caption": "Dana's bell: “Receipt: you paid $10.00 for Ana Silva's written answers” and “Receipt: you paid $10.00 for Ben Okafor's written answers”.",
+    "kind": "image",
+    "title": "The receipts",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st1",
+    "order": 115012,
+    "size": "desktop"
+  },
+  "stripe-pay-ana-earnings.png": {
+    "caption": "Ana's Payments: “Written answers · Paid · you get $8.00”, “Your payout account is connected. Each payment is sent to it.” and “Your earnings · Total $8.00”.",
+    "kind": "image",
+    "title": "Ana's earnings",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st1",
+    "order": 115013,
+    "size": "desktop"
+  },
+  "stripe-waiting-before.png": {
+    "caption": "Ben's Payments before finishing payout setup: “You get $8.00 … delayed until your payout account is ready”; Stripe (right) has no transfer to Ben.",
+    "kind": "image",
+    "title": "Waiting for setup",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st1",
+    "order": 115014,
+    "size": "desktop"
+  },
+  "stripe-waiting-sent.png": {
+    "caption": "Ben's account is finished through Stripe's API; Stripe's account.updated webhook reaches the app (through `stripe listen`), which sends the $8.00 that waited: Payments says “Your payout account is connected.” and Stripe shows the $8.00 transfer to Ben and “Payouts enabled”.",
+    "kind": "image",
+    "title": "Sent when setup completes",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st1",
+    "order": 115015,
+    "size": "desktop"
+  },
+  "stripe-waiting-video.webm": {
+    "caption": "Ben's payout account is finished while their Payments is open; Stripe's webhook arrives and the app sends the $8.00 that waited: the transfer appears in Stripe (right).",
+    "kind": "video",
+    "title": "Waiting, then sent",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st1",
+    "order": 115016,
+    "size": "desktop"
+  },
+  "stripe-waiting-bell.png": {
+    "caption": "Ben's bell: “Your payout setup is done: $8.00 on its way.” (above the earlier “Dana Brooks paid you $10.00 for your written answers …”).",
+    "kind": "image",
+    "title": "Ben's notice",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st1",
+    "order": 115017,
+    "size": "desktop"
+  },
+  "stripe-3ds-card-saved.png": {
+    "caption": "Cleo saves the test card 4000 0027 6000 3184 in Stripe Checkout (Stripe's 3D Secure test page opened over Checkout and was completed); Stripe shows “Card on file: visa •••• 3184”.",
+    "kind": "image",
+    "title": "A card that always asks the bank",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st3",
+    "order": 116001,
+    "size": "desktop"
+  },
+  "stripe-3ds-checkout.webm": {
+    "caption": "Cleo types 4000 0027 6000 3184 into Stripe Checkout; Stripe's own 3D Secure test page opens over Checkout, Cleo completes it, and the card is saved.",
+    "kind": "video",
+    "title": "Saving the 3D Secure card",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st3",
+    "order": 116002,
+    "size": "desktop"
+  },
+  "stripe-decline-pay.png": {
+    "caption": "Eli presses Pay on Fay's answers with the test card 4000 0000 0000 0341 (saved fine, declines on charge): the page goes to the dashboard with “Your account is on hold · Your Pay on Tide Tracker: widgets was declined. · Your account is on hold because a payment was declined.”; Stripe shows the PaymentIntent “Failed” (declined: generic_decline).",
+    "kind": "image",
+    "title": "Declined under Pay: a payment hold",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st4",
+    "order": 117001,
+    "size": "desktop"
+  },
+  "stripe-decline-hold.png": {
+    "caption": "Eli's dashboard during the payment hold: “Your account is on hold”, “All your tests are paused. Testers stay in them …” and “To resume: Pay what you owe in Payments”. Stripe still shows the one failed PaymentIntent.",
+    "kind": "image",
+    "title": "The hold box",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st4",
+    "order": 117002,
+    "size": "desktop"
+  },
+  "stripe-decline-charge-added.png": {
+    "caption": "Gus presses Charge during the hold: Payments lists “Fay Lin's written answers $10.00 · card declined Oct 29” and “Gus Adler's written answers $10.00 · charged by the tester while your tests were paused” with “Pay what you owe ($20.00)”; nothing new in Stripe (still only Fay's failed PaymentIntent).",
+    "kind": "image",
+    "title": "A Charge during the hold is added",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st4",
+    "order": 117003,
+    "size": "desktop"
+  },
+  "stripe-decline-video.webm": {
+    "caption": "Eli's Pay on Fay's answers is declined by Stripe (Failed) and Eli's account goes on a payment hold; Gus's Charge during the hold is added to what's owed with no new payment in Stripe.",
+    "kind": "video",
+    "title": "Declined, then added",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st4",
+    "order": 117004,
+    "size": "desktop"
+  },
+  "stripe-decline-fay.png": {
+    "caption": "Fay's session page after the declined payment: “This test is paused right now …” and, on the written answers, “Payment for this part may be delayed.” (testers never read “hold” or “declined” about a developer).",
+    "kind": "image",
+    "title": "Fay's side",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st4",
+    "order": 117005,
+    "size": "desktop"
+  },
+  "stripe-retry-declined.png": {
+    "caption": "The daily automatic retry runs (the app's own retry, for this account only): Stripe shows two more PaymentIntents “Failed” on •••• 0341 (“Playtest: amount owed” and “Playtest: added to what you owe while your tests were paused”), and Payments reads “Last try: Thu, Oct 29, 11:50 AM · next try: Fri, Oct 30, 11:50 AM” with Pay what you owe ($20.00) still.",
+    "kind": "image",
+    "title": "The automatic retry declines",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st4",
+    "order": 117006,
+    "size": "desktop"
+  },
+  "stripe-retry-paid.png": {
+    "caption": "Eli changes the card to 4242 in Stripe Checkout and the app retries what's owed at once: Stripe shows both PaymentIntents “Succeeded” on •••• 4242 with the transfers to Fay and Gus; Payments no longer shows anything owed (“What you've paid · Total $20.00”) and the hold is lifted.",
+    "kind": "image",
+    "title": "The card change pays what's owed",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st4",
+    "order": 117007,
+    "size": "desktop"
+  },
+  "stripe-retry-video.webm": {
+    "caption": "The daily retry declines on 0341 (two more Failed in Stripe); Eli changes the card to 4242 in Stripe Checkout and the app retries at once: both payments Succeeded, the $20.00 owed goes to nothing and the hold lifts.",
+    "kind": "video",
+    "title": "Retries",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st4",
+    "order": 117008,
+    "size": "desktop"
+  },
+  "stripe-retry-bell.png": {
+    "caption": "Eli's bell, Payments and holds: one line for the money, “We charged your card $20.00 for what you owed: Fay Lin's written answers and Gus Adler's written answers.”, then “Your tests are running again”.",
+    "kind": "image",
+    "title": "One bell line for the retry",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st4",
+    "order": 117009,
+    "size": "desktop"
+  },
+  "stripe-cb-paid.png": {
+    "caption": "Ivy charges Hal for their answers; Hal's card is the test card 4000 0000 0000 0259: Stripe shows the PaymentIntent “Succeeded” with the transfer to Ivy, and this test card makes the bank dispute it moments later.",
+    "kind": "image",
+    "title": "Paid with 0259",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st5",
+    "order": 118001,
+    "size": "desktop"
+  },
+  "stripe-cb-hold.png": {
+    "caption": "Stripe opened a dispute (“fraudulent”, “needs response”) and sent charge.dispute.created: the app puts Hal on a chargeback hold, “Your bank reversed a payment, so your account is on a chargeback hold.” with the three steps and “Your bank reversed a $10 payment: $10 + $15 chargeback fee”, Pay what you owe ($25.00). Stripe shows the payment “Disputed”.",
+    "kind": "image",
+    "title": "The dispute arrives: chargeback hold",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st5",
+    "order": 118002,
+    "size": "desktop"
+  },
+  "stripe-cb-video.webm": {
+    "caption": "Ivy's charge on the 0259 card Succeeds; moments later Stripe's dispute reaches the app through the webhook and Hal's Payments turns into the chargeback steps.",
+    "kind": "video",
+    "title": "A dispute starts a chargeback hold",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st5",
+    "order": 118003,
+    "size": "desktop"
+  },
+  "stripe-away-tester-charge.png": {
+    "caption": "Ana presses Charge on their unpaid answers while Cleo is away: “Payment for this part may be delayed.” (Cleo's card needs the bank's check; testers never read why). The test reads “This test closed on Oct 28, 2026.” because the recording moved its dates so Charge could open.",
+    "kind": "image",
+    "title": "Ana charges",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st3",
+    "order": 116007,
+    "size": "desktop"
+  },
+  "stripe-3ds-waiting.png": {
+    "caption": "Ana's and Ben's Charges were made off-session and Stripe refused them with “authentication_required” (both “Failed” in Stripe, right). Cleo's test page shows under Ana's row: “Your bank wants you to confirm a $10.00 payment for Ana Silva's written answers, made while you were away. Confirm it by Sun, Nov 1, 11:29 AM.” with Confirm with your bank.",
+    "kind": "image",
+    "title": "Charged while away: the bank wants a check",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st3",
+    "order": 116008,
+    "size": "desktop"
+  },
+  "stripe-bug-verify-form.png": {
+    "caption": "No automatic retry ran during the chargeback hold (the app's daily retry for this account did nothing; Stripe has no new payment). Hal presses Verify a card: the button turns into “Verify this card” but Stripe's card form never appears, and pressing it says “Could not find a ready element to create a payment method from.” (src/components/ChargebackSteps.tsx).",
+    "kind": "image",
+    "title": "App bug: no card form under Verify a card",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st5",
+    "order": 118004,
+    "size": "desktop"
+  },
+  "stripe-cb-verify-frame.png": {
+    "caption": "Since the page's card form is missing, the same check is made through the app's own route (/api/payments/verify-card) with Stripe's test card 4000 0027 6000 3184: Stripe's “3D Secure 2 Test Page” opens (“Fail” / “Complete”).",
+    "kind": "image",
+    "title": "The bank's real 3D Secure page",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st5",
+    "order": 118005,
+    "size": "desktop"
+  },
+  "stripe-cb-verified.png": {
+    "caption": "After Complete, the app's finish step reads the SetupIntent from Stripe: “A card verified with 3D Secure” is ticked, and Pay what you owe ($25.00) can be pressed.",
+    "kind": "image",
+    "title": "Card verified",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st5",
+    "order": 118006,
+    "size": "desktop"
+  },
+  "stripe-3ds-pay-frame.png": {
+    "caption": "Cleo presses Pay on Dee's answers ($6.00, with the reason Dee reads: “Two of the answers were very short.”): the bank's check opens right under the button, Stripe's own “3D Secure 2 Test Page” (“Complete a required action for this test payment.”).",
+    "kind": "image",
+    "title": "Stripe's real 3D Secure frame under Pay",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st3",
+    "order": 116003,
+    "size": "desktop"
+  },
+  "stripe-3ds-pay-done.png": {
+    "caption": "After Complete on the bank's page, Dee's row reads “paid $6.00 of $10.00”; Stripe shows the $6.00 PaymentIntent “Succeeded” with “3D Secure: authenticated” and the $6.00 transfer to Dee (platform fee $1.20).",
+    "kind": "image",
+    "title": "Completed: paid",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st3",
+    "order": 116004,
+    "size": "desktop"
+  },
+  "stripe-3ds-pay-failed.png": {
+    "caption": "Cleo presses Pay on Eve's answers and presses Fail on the bank's page: under the button “Your bank didn't confirm the payment, so nothing was charged.”; Stripe shows that $10.00 PaymentIntent “Canceled”, with no transfer to Eve.",
+    "kind": "image",
+    "title": "Failed: nothing charged",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st3",
+    "order": 116005,
+    "size": "desktop"
+  },
+  "stripe-3ds-pay-video.webm": {
+    "caption": "Pay on Dee's answers opens Stripe's real 3D Secure page under the button: Complete, and it's paid (Stripe: Succeeded). Pay on Eve's answers: Fail, and nothing is charged (Stripe: Canceled).",
+    "kind": "video",
+    "title": "3D Secure under Pay",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st3",
+    "order": 116006,
+    "size": "desktop"
+  },
+  "stripe-3ds-frame.png": {
+    "caption": "Confirm with your bank opens Stripe's own 3D Secure test page inline, under the button (“Complete” / “Fail”).",
+    "kind": "image",
+    "title": "Stripe's real 3D Secure frame",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st3",
+    "order": 116009,
+    "size": "desktop"
+  },
+  "stripe-3ds-done.png": {
+    "caption": "After Complete, Ana's charge goes through: Ana's row reads “paid $10.00 of $10.00” and “Paid in all: $10.00”; Stripe shows that PaymentIntent “Succeeded” with “3D Secure: authenticated” and the $10.00 transfer to Ana.",
+    "kind": "image",
+    "title": "Completed: paid",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st3",
+    "order": 116010,
+    "size": "desktop"
+  },
+  "stripe-3ds-failed.png": {
+    "caption": "On Ben's charge the bank's check is failed (“Fail”): the box keeps Confirm with your bank and says “Your bank didn't confirm the payment, so nothing was charged.”; Stripe shows it “Failed” (payment_intent_authentication_failure).",
+    "kind": "image",
+    "title": "Failed: nothing charged",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st3",
+    "order": 116011,
+    "size": "desktop"
+  },
+  "stripe-3ds-video.webm": {
+    "caption": "Confirm with your bank on Ana's charge opens Stripe's real 3D Secure page: Complete, and it's paid (Stripe: Succeeded). On Ben's charge: Fail, and nothing is charged (Stripe: Failed).",
+    "kind": "video",
+    "title": "3D Secure under Confirm with your bank",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st3",
+    "order": 116012,
+    "size": "desktop"
+  },
+  "stripe-cb-reserved.png": {
+    "caption": "Pay what you owe opened the bank's check inline (completed) and reserved the money: “Reserved $25.00: it's taken when the team approves lifting your hold.”, two steps ticked; Stripe shows a $25.00 PaymentIntent “Uncaptured” (capture: manual, 3D Secure: authenticated).",
+    "kind": "image",
+    "title": "Reserved: Uncaptured",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st5",
+    "order": 118007,
+    "size": "desktop"
+  },
+  "stripe-cb-reserve-video.webm": {
+    "caption": "Hal's card check (Stripe's 3D Secure page, through the app's route since the form is missing), then Pay what you owe: the bank's check again inline, and the $25.00 is reserved, not taken (Stripe: Uncaptured).",
+    "kind": "video",
+    "title": "Verify, then reserve",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st5",
+    "order": 118008,
+    "size": "desktop"
+  },
+  "stripe-cb-admin-row.png": {
+    "caption": "The admin console's Chargeback holds: Hal's row reads “Chargeback hold: card verified ✓, owed reserved ✓ ($25.00 reserved)” with Approve and “Don't approve: release the reservation”; Stripe shows the reservation “Uncaptured”.",
+    "kind": "image",
+    "title": "The team's row",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st5",
+    "order": 118009,
+    "size": "desktop"
+  },
+  "stripe-cb-approved.png": {
+    "caption": "After Approve, Hal's Payments has no chargeback steps any more and lists “A reversed payment, paid again · $25.00”; Stripe shows the same $25.00 PaymentIntent “Succeeded” (“captured $25.00”).",
+    "kind": "image",
+    "title": "Approve takes it",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st5x",
+    "order": 118009.5,
+    "size": "desktop"
+  },
+  "stripe-cb-approve-video.webm": {
+    "caption": "The team presses Approve on Hal's row: the reservation is captured (Stripe: Uncaptured → Succeeded) and the hold lifts.",
+    "kind": "video",
+    "title": "Approve",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st5",
+    "order": 118011,
+    "size": "desktop"
+  },
+  "stripe-cb-notice.png": {
+    "caption": "Hal's bell: one line, “The team approved lifting your hold: the $25.00 reserved on your card was taken, and your tests are running again.”",
+    "kind": "image",
+    "title": "The single notice",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st5",
+    "order": 118012,
+    "size": "desktop"
+  },
+  "stripe-cb-declined.png": {
+    "caption": "The team presses Don't approve on Jo's row: the row is back to “card verified ✓, owed reserved ✗ ($25.00 owed, $0.00 reserved)” and the hold stays; Stripe shows that $25.00 PaymentIntent “Canceled”, nothing taken.",
+    "kind": "image",
+    "title": "Don't approve releases it",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st5",
+    "order": 118013,
+    "size": "desktop"
+  },
+  "stripe-cb-decline-video.webm": {
+    "caption": "The team presses Don't approve on Jo's row: the authorization is cancelled (Stripe: Uncaptured → Canceled) and the hold stays.",
+    "kind": "video",
+    "title": "Don't approve",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st5",
+    "order": 118014,
+    "size": "desktop"
+  },
+  "stripe-cb-expired.png": {
+    "caption": "Jo reserved again. Stripe can't be fast-forwarded 7 days, so the authorization was cancelled through Stripe's API as Stripe does when it lapses, and the app's expiry date was moved: Payments says “Your reservation expired: press Pay what you owe again so the team can approve it.” and Stripe shows both reservations “Canceled”.",
+    "kind": "image",
+    "title": "The reservation expired",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st5",
+    "order": 118015,
+    "size": "desktop"
+  },
+  "stripe-cb-expire-video.webm": {
+    "caption": "The authorization is cancelled through Stripe's API (as at its 7-day lapse) and the app's date moved: Jo's Payments shows the reservation expired and asks for Pay what you owe again.",
+    "kind": "video",
+    "title": "Expiry",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st5",
+    "order": 118016,
+    "size": "desktop"
+  },
+  "stripe-cb-expired-admin.png": {
+    "caption": "The admin's chargeback row for Jo: “card verified ✓, owed reserved ✗ ($25.00 owed, $0.00 reserved)” and “Reservation expired”.",
+    "kind": "image",
+    "title": "The team's row: Reservation expired",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st5",
+    "order": 118017,
+    "size": "desktop"
+  },
+  "stripe-away-stop.png": {
+    "caption": "Since Cleo's page opened, Dee disputed and another tab confirmed Ben's charge (Stripe: “Succeeded”, transfer to Ben). The first press of Confirm with your bank on Cid's charge stops once: “Your Confirm with your bank didn't go through. Since you opened this page: Dee Park disputed the pay for their written answers · 12:30 PM; Payment went through on Sky Lab: tutorial: $10.00 to Ben Okafor for the written answers · 12:31 PM … Press Confirm with your bank again to go ahead.”",
+    "kind": "image",
+    "title": "Confirm stops once",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st3",
+    "order": 116013,
+    "size": "desktop"
+  },
+  "stripe-away-frame.png": {
+    "caption": "The second press of Confirm with your bank opens Stripe's real 3D Secure page inline, under the button.",
+    "kind": "image",
+    "title": "The second press opens the check",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st3",
+    "order": 116014,
+    "size": "desktop"
+  },
+  "stripe-away-done.png": {
+    "caption": "Cid's charge went through after the bank's check: Stripe shows that PaymentIntent “Succeeded” with “3D Secure: authenticated” and the $10.00 transfer to Cid (all three away charges now Succeeded).",
+    "kind": "image",
+    "title": "Confirmed: paid",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st3",
+    "order": 116015,
+    "size": "desktop"
+  },
+  "stripe-away-video.webm": {
+    "caption": "Cid's Charge waits for Cleo's bank. Meanwhile Dee disputes and another tab confirms Ben's charge; Confirm with your bank on Cid's charge stops once naming both, the second press opens Stripe's 3D Secure page, Cleo completes it, and Stripe shows the payment Succeeded.",
+    "kind": "video",
+    "title": "Confirm with your bank stops once",
+    "section": "Stripe test mode (Oct 29)",
+    "group": "st3",
+    "order": 116016,
+    "size": "desktop"
+  },
+  "email-real-signup.png": {
+    "caption": "Left: the dashboard right after the sign-up form (the owner's alias marchanna111+ptdev5226809@gmail.com). Right: the same email read back from Resend's API by its id: “Confirm your email” from Playtest Platform <hello@playtestplatform.com>, “Welcome to Playtest! Confirm your email.” and “The link works for 48 hours.”, Resend status “delivered”.",
+    "kind": "image",
+    "title": "The sign-up confirmation, really sent",
+    "section": "Real emails (Oct 29)",
+    "group": "em",
+    "order": 121001,
+    "size": "desktop"
+  },
+  "email-real-bank.png": {
+    "caption": "Left: the developer's bell, “Your bank wants you to confirm a $10.00 payment. Confirm this payment by Nov 1, 2026.” Right: their email “Your Playtest summary: 3 updates” read back from Resend (delivered), carrying that line and its link to the test page.",
+    "kind": "image",
+    "title": "“Your bank wants you to confirm”, really sent",
+    "section": "Real emails (Oct 29)",
+    "group": "em",
+    "order": 121002,
+    "size": "desktop"
+  },
+  "email-real-receipt.png": {
+    "caption": "Left: the developer's bell after confirming with the bank, “Receipt: you paid $10.00 for Marc Tester's written answers”. Right: their next email “Your Playtest summary: 1 update” from Resend (delivered), with that receipt line.",
+    "kind": "image",
+    "title": "The payment receipt, really sent",
+    "section": "Real emails (Oct 29)",
+    "group": "em",
+    "order": 121003,
+    "size": "desktop"
+  },
+  "email-real-paid.png": {
+    "caption": "Left: the tester's bell, “Marc Tester Dev paid $10.00 for your written answers”. Right: their email “Your Playtest summary: 4 updates” from Resend (delivered), with “Payment for your work on … may be delayed” and then the paid line.",
+    "kind": "image",
+    "title": "The tester's paid line, really sent",
+    "section": "Real emails (Oct 29)",
+    "group": "em",
+    "order": 121004,
+    "size": "desktop"
+  },
+  "email-real-status.png": {
+    "caption": "All 5 emails of this part, each by its Resend id, read from Resend's API (GET /emails/{id}): two “Confirm your email” and three summaries, each to the owner's own marchanna111+pt… aliases, all “delivered”. Links in them point to the local recording server (localhost:3460).",
+    "kind": "image",
+    "title": "Resend's status for each email",
+    "section": "Real emails (Oct 29)",
+    "group": "em",
+    "order": 121005,
+    "size": "desktop"
   }
 }
