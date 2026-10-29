@@ -604,6 +604,7 @@ describe("batch 20 section 13: a change while the tester is typing raises the pi
     const v0 = await pulse();
     await later();
     expect((await act(testId, "request-time", dev.cookie, { contractIds: [j.sessionId], rows: [{ startsAt: atHours(80), repeat: "once", count: 1 }], minutes: "30", seenAt: seen(), confirmed: true })).status).toBe(200);
+    await later(); // the live route lists changes up to its own "now", and the database clock can run a few ms ahead of this process
     const live = await json(await liveGET(req(`/api/live?scope=session:${j.sessionId}&since=${encodeURIComponent(loaded)}`, { cookie: j.tester.cookie, method: "GET" })));
     expect(live.body.changes.map((c: { text: string }) => c.text).some((t: string) => t.startsWith("Nora Lane requested a call for "))).toBe(true);
     expect(await pulse()).not.toBe(v0);
@@ -947,6 +948,7 @@ describe("batch 20 section 25: a tester's Switch / Keep never stops the develope
       const offer = await db.termsOffer.findFirstOrThrow({ where: { contractId: x.sessionId, status: "open" } });
       await decideTerms({ id: x.tester.user.id }, x.sessionId, { offerId: offer.id, choice, seenAt: seen(), confirmed: true });
     }
+    await later(); // (as above: let the database clock's last write settle before the live route's "now")
     const live = await json(await liveGET(req(`/api/live?scope=test:${testId}&since=${encodeURIComponent(loaded)}`, { cookie: dev.cookie, method: "GET" })));
     const lines = live.body.changes as { text: string; quiet?: boolean }[];
     expect(lines.filter((l) => /terms/.test(l.text))).toEqual([expect.objectContaining({ text: "Ana Silva switched to the new terms", quiet: true })]);
