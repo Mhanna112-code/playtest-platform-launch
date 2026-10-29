@@ -55,12 +55,12 @@ Today nothing says it; the Pay more box just disappears at the cap, and the test
 - The tester's Dispute line stays: "Already paid the most a dispute could award, so there's nothing to dispute." (a dispute can only raise the pay up to the listing, minus what's already paid for that part).
 - Tests: both lines at and below the cap; after Pay more closed.
 
-## 15. A dispute can award up to the piece's cap, not just the listing (owner, Oct 29)
+## 15. A dispute can award up to the piece's cap, not just the listing (owner, Oct 29; the chat part confirmed by the owner)
 Today a team decision can raise a listed piece's pay only up to the listing (minus what was paid for that part on other pieces), so a recording listed at $10 and paid $20 can't be disputed. The owner: a tester and developer may have agreed more in chat. New rule:
 - **The decision range runs up to the piece's own cap** (the same cap Pay + Pay more have: for a listed part the listing plus its extra-pay room; for an unlisted part its cap; for a call, also within what's left of the $1,000 for that tester's calls), minus what that piece was already paid. A decision still only raises pay.
 - **Dispute is open while the piece is below its cap.** At the cap: "Already paid the most this piece can be paid, so there's nothing to dispute." (replaces the old line).
 - The admin form shows the new range ("$20.00 paid · can raise up to $20.00 more"); the server refuses outside it.
-- **The team can read the chat for a dispute (DEFAULT):** the admin's dispute view gets a read-only "Their chat on this test" fold (both people's messages, newest last, scroll box), so an agreement made in chat can be checked. The Terms' dispute paragraph says so: "To decide a dispute, our team can read the chat between the tester and the developer." (If the Terms text changes, follow how earlier Terms changes were versioned; nothing has launched.)
+- **The team can read the chat for a dispute (owner: yes):** the admin's dispute view gets a read-only "Their chat on this test" fold (both people's messages, newest last, scroll box), so an agreement made in chat can be checked. The Terms' dispute paragraph says so: "To decide a dispute, our team can read the chat between the tester and the developer." (If the Terms text changes, follow how earlier Terms changes were versioned; nothing has launched.)
 - Update every place that says "up to the listing" for disputes (design doc via the doc agent; the Terms; the landing page's "a decision can only raise the pay" stays true).
 - Tests: a listed part paid above the listing but below its cap can be disputed and raised to the cap; at the cap it's disabled with the new line; the admin sees the chat fold; the server refuses above the cap.
 
@@ -69,6 +69,9 @@ On real Stripe, Pay with a card that needs 3D Secure (4000 0027 6000 3184) creat
 
 ## 17. Waiting shares must not need the platform's available balance (found by the Stripe test-mode run)
 Sending a tester's waiting share later (payout setup finished, batch 22 §3) makes a separate Transfer from the platform's balance; on Stripe, money from a charge is "pending" for days, so the transfer fails with "insufficient available funds" (it did in test mode until the balance was topped up). In live mode this would fail for every waiting share for the first days. Fix: create those transfers with `source_transaction` set to the original charge (Stripe then sends the share as soon as that charge's funds are available, with no balance needed), keep them idempotent per share, and treat "pending" as sent-and-arriving for the tester ("$X on its way"). Check every other place a separate Transfer is made the same way (dispute decisions charged later, Approve paying testers after a chargeback hold, deferred charges). Tests (fake Stripe enforces source_transaction for transfers made after the charge).
+
+## 18. Payment emails go out even with email Off (owner, Oct 29)
+Today, with email Off only "Your Playtest account updates" lines are emailed; receipts, "You were paid…", the retry line and other payment lines aren't. New: payment lines are emailed the same evening whatever the setting, in "Your Playtest payment updates" (as Weekly / Monthly already do): Off, Daily (still inside the daily summary), Weekly and Monthly. The Notifications page's "How you're notified" text says so: "Payment updates are always emailed the same evening." Update the design doc's Emails rules and the bell table's email column (doc agent). Tests: email Off still gets the evening payment email; nothing else.
 
 ## Check and report
 - Run `NEXT_DIST_DIR=.next-build npm run check`; it must be green. Migration only if needed (hand-written, checked with `prisma migrate diff` against playtest_lite_shadow with --exit-code, applied only to the local playtest_lite DB; say the 3400 server needs a restart).
