@@ -73,6 +73,9 @@ The tester's "Your deadline on “<test>” is <date>: send your work before the
 - **Live:** the bell's number follows the same ~20-second check as the page, and when the tab comes back into focus, on every page (not only on navigation).
 - Tests: three lines in one stack → 1; expanding it → 0; visiting the page doesn't change the count; a new line in a read stack → 1 again; the number updates without navigation.
 
+## 29. Admin bell lines: one stack per kind, across tests (owner, Oct 29)
+Today "Dispute on <test>: <tester> says the pay should be higher (<dev>)", "New report: <a> reported <b>" and "Hold lift waiting: <dev> paid what they owe (More than 3 holds)" share one entry a day. Give each kind its own daily entry across all tests: "Disputes · 3 new", "Reports · 2 new", "Hold lifts waiting · 1", each line opening its own row in the admin console (marked). The other admin lines ("Emails aren't sending", outages) keep their own lines. Update the bell table (doc agent). Test: two disputes and a report on one day → two entries.
+
 ## Decided, no change (owner, Oct 29)
 - After a stop, End early, Leave, a block or a removal, a sent piece's review date stays the later of 7 days after sending and the tester's ORIGINAL deadline (the owner said no to opening Charge 7 days after the work ended). Don't change it.
 
