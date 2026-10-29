@@ -19,7 +19,7 @@ import type { RowJson } from "@/lib/callRows";
 import { alignedClash, describeRows, formClashInputs, madeBy, newRow, RequestRows, rowsPayload, type PressMade, type RowState } from "@/components/RequestRows";
 import { CallRequestsPanel, type PanelReq } from "@/components/CallRequestsPanel";
 import { jumpTo } from "@/lib/markJump";
-import { CallCheckLink } from "@/components/CallCheckLink";
+import { CallCheck } from "@/components/CallCheck";
 
 export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string; joinable?: boolean; report?: { byMe: boolean; note: string } | null; measuring?: string };
 /** A booked daily / weekly set: its line ("Weekly · Mon 3:00 PM (3 left)", or no count for Forever), and whether Cancel needs a reason. */
@@ -38,7 +38,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  * "N of 3 booked"; [Request a time] to everyone ticked; then per-tester blocks (ticked testers, or everyone with a call or
  * request when nothing is ticked): booked calls, daily/weekly sets as one line, waiting requests. Boxes under the button.
  */
-export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestReason = "", requests = [], elsewhere = [], checkUrl = "" }: { testId: string; seenAt: string; testers: DevTester[]; canRequest: boolean; noRequestReason?: string; /** (Batch 16 section 33) every waiting request, both directions */ requests?: PanelReq[]; elsewhere?: OtherCall[]; /** (Batch 18 section 13) this account's practice room */ checkUrl?: string }) {
+export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestReason = "", requests = [], elsewhere = [] }: { testId: string; seenAt: string; testers: DevTester[]; canRequest: boolean; noRequestReason?: string; /** (Batch 16 section 33) every waiting request, both directions */ requests?: PanelReq[]; elsewhere?: OtherCall[] }) {
   const router = useRouter();
   // (Batch 16 section 21) A call request, booking or cancellation from another tab stops a press touching it once: the panel shows it at once.
   const { press, changes, error, busy, at, errData } = usePress(seenAt, () => router.refresh());
@@ -115,7 +115,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
       {c.started && <ReportProblem path={`/api/tests/${testId}/no-show`} callId={c.id} otherName={t.name} seenAt={seenAt} reported={c.report ?? null} />}
       {box("cancel-" + c.id)}
       {box("noshow-" + c.id)}
-      <CallCheckLink url={checkUrl} className="w-full" />
+      <CallCheck className="w-full" />
       {c.joinable && <div className="w-full"><CallPresence callId={c.id} startsAt={c.when} minutes={c.minutes} /></div>}
       {c.joinable && <div className="w-full"><CallTimer startsAt={c.when} minutes={c.minutes} role="developer" label={`Call with ${t.name}`} /></div>}
     </li>

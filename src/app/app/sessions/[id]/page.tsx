@@ -16,7 +16,6 @@ import { ReasonQuote } from "@/components/ScrollText";
 import { TesterAlertsToggle } from "@/components/TesterAlertsToggle";
 import { adminAway, requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
-import { callCheckUrl, roomUrl } from "@/lib/server/calls";
 import { paidLines } from "@/lib/server/paid";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeForm, LeaveButton, WrittenForm } from "./SessionActions";
@@ -183,7 +182,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const infoChanged = (await db.testEvent.count({ where: { testId: c.testId, kind: "info", createdAt: { gt: c.joinedAt } } })) > 0;
   // (NEXT-UI 7) The calls, and the booked daily / weekly sets as one line each ("Weekly · Mon 3:00 PM (3 left)").
   // (Batch 15 section 42) The Live session: only calls ahead and calls in progress ("Call in progress / measuring" once started).
-  const mineCalls = c.calls.filter((x) => x.status === "booked" && !callIsOver(x) && !blockedPair).map((x) => ({ id: x.id, setId: x.setId, joinable: !paused && !refusal && callJoinable(x, now), when: x.startsAt.toISOString(), minutes: x.minutes, room: roomUrl(x), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, ended: false, report: x.noShowBy ? { byMe: x.noShowBy === "tester", note: x.noShowNote } : null, lengthText: x.startsAt <= now ? (paused || refusal ? IN_PROGRESS_TESTER : MEASURING_LINE) : "", reported: !!x.noShowBy, cancelled: cancelledText(x), rate: rateLabel(x.rateCents, c.liveRateCents), late: isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined }));
+  const mineCalls = c.calls.filter((x) => x.status === "booked" && !callIsOver(x) && !blockedPair).map((x) => ({ id: x.id, setId: x.setId, joinable: !paused && !refusal && callJoinable(x, now), when: x.startsAt.toISOString(), minutes: x.minutes, canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, ended: false, report: x.noShowBy ? { byMe: x.noShowBy === "tester", note: x.noShowNote } : null, lengthText: x.startsAt <= now ? (paused || refusal ? IN_PROGRESS_TESTER : MEASURING_LINE) : "", reported: !!x.noShowBy, cancelled: cancelledText(x), rate: rateLabel(x.rateCents, c.liveRateCents), late: isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined }));
   const callSets = await db.callSet.findMany({ where: { contractId: c.id } });
   const mineSets = [...new Set(c.calls.filter((x) => x.setId && x.status === "booked" && !x.review).map((x) => x.setId!))].flatMap((sid) => {
     const cs = c.calls.filter((x) => x.setId === sid && x.status === "booked" && !x.review).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
@@ -445,7 +444,6 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           {callsWarning && <p className="text-xs text-amber-200" data-calls-warning="">{callsWarning}</p>}
           <TesterCallPanel
             sessionId={c.id}
-            checkUrl={await callCheckUrl(u.id)}
             seenAt={seenAt}
             refusal={refusal}
             devName={dev}

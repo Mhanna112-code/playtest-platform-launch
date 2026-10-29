@@ -1,6 +1,7 @@
-// (Owner, Oct 30, batch 15 section 40) The app measures each call's length; nobody enters it. While the call page is open each person's page sends a heartbeat every
-// ~10 seconds; the site keeps each person's stretches of presence. The measured length is the whole minutes both were there at the same time (a gap under 5 minutes, a
-// reload or a brief drop, counts as still there), capped at 150% of the booked length. It's final when both have left, or 30 minutes after the latest allowed end.
+// (Owner, Oct 30, batch 15 section 40) The app measures each call's length; nobody enters it. (Batch 21 section 3) In the built-in call room each browser reports
+// while it is actually connected to the other (WebRTC "connected"); the site keeps each person's connected stretches. The measured length is the whole minutes both were
+// connected at the same time (a gap under 5 minutes, a reload or a brief drop, still counts as connected), capped at 150% of the booked length. It's final when the
+// server ends the call, when both have left, or 30 minutes after the latest allowed end.
 import { money } from "./format";
 import { CALL_MAX_MINUTES, CALL_MIN_MINUTES, callCharge } from "./rules";
 
@@ -54,7 +55,7 @@ export function measureOverlap(dev: Span[], tester: Span[], bookedMinutes: numbe
   return { minutes, ms, from: from == null ? null : new Date(from), to: to == null ? null : new Date(to) };
 }
 
-/** Whether the measured length is final now: both have left (each one's last heartbeat 5 minutes or more ago, both having joined), or the deadline passed. */
+/** Whether the measured length is final now: both have left (each one's last sign of being in the room 5 minutes or more ago, both having joined), or the deadline passed. */
 export function measureIsFinal(x: { startsAt: Date; minutes: number }, dev: Span[], tester: Span[], now: Date) {
   if (now.getTime() >= measureDeadline(x.startsAt, x.minutes).getTime()) return true;
   if (!dev.length || !tester.length) return false;
@@ -124,6 +125,7 @@ export function callOverBadge(x: OverCall, who: { developer: string; tester: str
       return { label: `Cancelled by ${by}${x.cancelledAt ? ` · ${fmtTime(x.cancelledAt)}` : ""}`, tone: "grey" as Tone, reason: note || undefined };
     }
     if (/^Nobody joined/.test(note)) return { label: "Nobody joined", tone: "grey" as Tone };
+    if (/^It couldn't connect/.test(note)) return { label: "Couldn't connect", tone: "grey" as Tone }; // (batch 21 section 4)
     if (/site was down/.test(note)) return { label: "Missed: the site was down", tone: "amber" as Tone };
     if (/paused/i.test(note)) return { label: "Missed: the test was paused", tone: "amber" as Tone };
     return { label: note ? `Cancelled: ${note.replace(/[.\s]+$/, "")}` : "Cancelled", tone: "grey" as Tone };
@@ -141,7 +143,7 @@ export const callIsOver = (x: { status: string; measuredAt: Date | null; actualM
 // ---------- (Owner, Oct 28 evening, batch 18 section 3) A call ends when its pay would pass the $1,000 for that tester's calls ----------
 // The 150% cap on the measured length stays. While a call is on, the app works out when its pay at the call's rate (the contract rate for a listed call, $200/h for an
 // unlisted one) would reach what's left of the $1,000 for that tester's calls on the test, and the call ends then for both sides: the call page says so, measuring stops
-// (the length is final, capped at that point) and Join is refused. The video room is outside the app, so people could keep talking there; those minutes never count.
+// (the length is final, capped at that point) and Join is refused. (Batch 21) The room is the app's own, so it really hangs up then for both.
 
 /** A call's pay for `minutes` at its rate (null: not listed, $200 an hour): what the $1,000 counts for it. */
 export const callPayCents = (rateCents: number | null, minutes: number) => (rateCents == null ? Math.round((UNLISTED_CALL_RATE_CENTS * minutes) / 60) : callCharge(rateCents, minutes));
@@ -154,8 +156,6 @@ export function capMinutesFor(rateCents: number | null, leftCents: number) {
   while (callPayCents(rateCents, m + 1) <= leftCents) m++;
   return m;
 }
-/** The call page's line shows from this long before the call ends at the $1,000. */
-export const CAP_WARN_MS = 10 * 60_000;
 /** Both people count as still in the call while each one's last heartbeat is this recent. */
 const HERE_MS = 3 * HEARTBEAT_MS;
 /**
@@ -165,16 +165,25 @@ const HERE_MS = 3 * HEARTBEAT_MS;
 export function capEnd(dev: Span[], tester: Span[], capMinutes: number, now: Date) {
   const m = measureOverlap(dev, tester, Number.POSITIVE_INFINITY);
   const capMs = capMinutes * 60_000;
-  if (m.to && m.ms >= capMs) return { reached: true, endsAt: new Date(m.to.getTime() - (m.ms - capMs)) };
   const last = (s: Span[]) => (s.length ? Math.max(...s.map((p) => p.endAt.getTime())) : Number.NEGATIVE_INFINITY);
   const here = now.getTime() - last(dev) <= HERE_MS && now.getTime() - last(tester) <= HERE_MS;
+  if (m.to && m.ms >= capMs) return { reached: true, endsAt: new Date(m.to.getTime() - (m.ms - capMs)), together: here };
   const endsAt = new Date((here && m.to ? m.to.getTime() : now.getTime()) + capMs - m.ms);
-  return { reached: here && endsAt.getTime() <= now.getTime(), endsAt };
+  return { reached: here && endsAt.getTime() <= now.getTime(), endsAt, together: here };
 }
-/** "This call ends at 3:42 PM: the $1,000 for calls with Ana on this test is reached." (`who`: the other person in the call). */
-export const capWarnLine = (time: string, who: string) => `This call ends at ${time}: the ${dollars(CALLS_TOTAL_CENTS)} for calls with ${who} on this test is reached.`;
-/** The call page once it ended there (it replaces the room, for both sides). */
-export const capEndedLine = (who: string) => `Call ended: the ${dollars(CALLS_TOTAL_CENTS)} for calls with ${who} on this test is reached. Minutes after this don't count.`;
+/** (Batch 21 section 2) The room's short warning, 2 minutes before a planned end (150% of the booked length or the $1,000): "This call ends at 3:42 PM." */
+export const END_WARN_MS = 2 * 60_000;
+export const endWarnLine = (time: string) => `This call ends at ${time}.`;
+/** (Batch 21 section 2) The call room once the server ended it at the $1,000 (both pages hang up; it can't be rejoined). `who`: the other person in the call. */
+export const capEndedLine = (who: string) => `Call ended: the ${dollars(CALLS_TOTAL_CENTS)} for calls with ${who} on this test is reached.`;
+/** (Batch 21 section 2) Ended at 150% of the booked length. */
+export const LENGTH_ENDED_LINE = "Call ended: it reached 150% of the booked time.";
+/** Ended by what closed it (a block, a pause, a stop, a leave, End early): "Call ended: the test is paused." (neutral: made from the closed-to-joins line). */
+export const closedEndedLine = (closedLine: string) => `Call ended: ${closedLine.replace(/^This test /, "the test ").replace(/^./, (c) => c.toLowerCase())}`;
+/** (Batch 21 section 1) Anyone who isn't the call's booked tester or developer, anyone more than 10 minutes before the start, and anyone after it ended. */
+export const CALL_NOT_AVAILABLE = "This call isn't available.";
+/** (Batch 21 section 4) The two browsers couldn't reach each other directly (no TURN relay, a strict network). Nothing is measured. */
+export const STRICT_NETWORK_LINE = "Couldn't connect directly (a strict network?). Try another network, or reschedule.";
 /** Join on a call that ended at the $1,000. */
 export const CALL_OVER_LINE = "This call is over.";
 

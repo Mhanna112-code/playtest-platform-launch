@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as joinPOST } from "@/app/api/calls/[id]/join/route";
 import { GET as statusGET } from "@/app/api/calls/[id]/status/route";
+import { GET as roomGET } from "@/app/api/calls/[id]/room/route";
 import { POST as blocksPOST } from "@/app/api/blocks/route";
 import * as R from "@/lib/rules";
 import { invitable } from "@/lib/server/invites";
@@ -12,6 +13,7 @@ import { json, makeUser, req } from "./helpers";
 import { act, bookCall, joined, sact, seen, setup } from "./fixtures";
 
 const join = (cookie: string, id: string) => joinPOST(req(`/api/calls/${id}/join`, { cookie, body: {} }), { params: Promise.resolve({ id }) }).then(json);
+const room = (cookie: string, id: string) => roomGET(req(`/api/calls/${id}/room?after=0`, { cookie }), { params: Promise.resolve({ id }) }).then(json);
 const status = (cookie: string, id: string) => statusGET(req(`/api/calls/${id}/status`, { cookie }), { params: Promise.resolve({ id }) }).then(json);
 
 async function booked(minutesFromNow: number) {
@@ -29,10 +31,13 @@ describe("calls / hold / block refinements", () => {
     expect((await sact(sessionId, "cancel-call", tester.cookie, { callId: call.id, reason: "late" })).body.error.message).toMatch(/^The call has started/);
   });
 
-  it("each side's first Join is recorded; the length defaults from both joined to the booked end", async () => {
+  it("each side's first time in the call room is recorded (batch 21: the room's first poll, not the Join press)", async () => {
     const { dev, tester, call } = await booked(-5);
     expect((await join(tester.cookie, call.id)).body.url).toBe(`/app/calls/${call.id}`);
     await join(dev.cookie, call.id);
+    expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).devJoinedAt).toBeNull();
+    expect((await room(tester.cookie, call.id)).status).toBe(200);
+    expect((await room(dev.cookie, call.id)).status).toBe(200);
     const c = await db.call.findUniqueOrThrow({ where: { id: call.id } });
     expect(c.devJoinedAt && c.testerJoinedAt).toBeTruthy();
     expect((await status(dev.cookie, call.id)).body.bothJoinedAt).toBeTruthy();

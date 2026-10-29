@@ -88,8 +88,8 @@ describe("batch 19 sections 3 and 6: the Terms of Use", () => {
   it("no “lower the length”: the call's length is measured; paying less needs a reason; the tester can dispute it once", () => {
     expect(page).not.toContain("can only lower it");
     const calls = PAYMENT_RULES.find((r) => r.heading === "Calls")!;
-    expect(calls.text).toContain("A call's length is measured by the app while both people have the call page open, up to 150% of the booked length and never past the $1,000 for that tester's calls. The developer pays by the hour at the call's rate; paying less needs a reason the tester reads, and the tester can dispute it once.");
-    expect(WHAT_CHANGED[0].points.some((p) => p.startsWith("A call's length is measured by the app while both people have the call page open"))).toBe(true);
+    expect(calls.text).toContain("A call's length is measured by the app while both people are connected in the call room, up to 150% of the booked length and never past the $1,000 for that tester's calls. The developer pays by the hour at the call's rate; paying less needs a reason the tester reads, and the tester can dispute it once.");
+    expect(WHAT_CHANGED[0].points.some((p) => p.startsWith("A call's length is measured by the app while both people are connected in the call room"))).toBe(true);
   });
 
   it("one “How payments work” section: the listed headings in order, each with a one-line example; DRAFT and version 2 kept; What changed says so", () => {

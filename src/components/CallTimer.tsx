@@ -1,6 +1,6 @@
 "use client";
-// The full app's call clock (components/call-timer.tsx there), counted from the booked start (the call runs in an outside
-// video room). Shows "starts in N min", then "N of M covered minutes" with a bar, and a reminder 5 minutes before the
+// The full app's call clock (components/call-timer.tsx there), counted from the booked start (shown next to Join call on the test
+// and session pages; the call room itself shows the measured minutes). Shows "starts in N min", then "N of M covered minutes" with a bar, and a reminder 5 minutes before the
 // covered time runs out and when it does. Lean rule: the covered time is 150% of the booked length (the cap on the measured
 // length, batch 15 section 40); past it, the extra time isn't paid.
 import { useEffect, useState } from "react";
@@ -45,13 +45,13 @@ export function CallTimer({ startsAt, minutes, role, label = "Live call" }: { st
       ? {
           key: "ending",
           title: `${covered - elapsed} minute${covered - elapsed === 1 ? "" : "s"} of covered time left`,
-          text: role === "tester" ? `The booking covers up to ${covered} minutes. Past that, the extra time isn't paid.` : `The measured length counts up to ${covered} minutes for this call. Past that, the extra time isn't paid.`,
+          text: `The call ends on its own once you've been connected for ${covered} minutes (150% of the booked time).`,
         }
       : stage === "over"
         ? {
             key: "over",
             title: "Covered time is up",
-            text: role === "tester" ? "You can keep going, but the extra time isn't paid." : `You can keep going; the measured length counts up to ${covered} minutes.`,
+            text: `The call ends on its own once you've been connected for ${covered} minutes.`,
           }
         : null;
 

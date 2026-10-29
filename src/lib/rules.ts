@@ -926,6 +926,8 @@ export const callListed = (test: { liveRateCents: number | null }, contract: { l
 /** (Owner, Oct 28 evening) The short label on both sides for a call (or any part) that isn't a listed part of the tester's contract; the $100 cap is said only when a Pay goes over it. */
 export const NOT_LISTED = "Not listed";
 export const NOBODY_JOINED = "Nobody joined, so the call was cancelled.";
+/** (Batch 21 section 4) Both opened the call room but their browsers never connected (a strict network): nothing was measured, the call is cancelled, no charge. */
+export const COULD_NOT_CONNECT = "It couldn't connect, so the call was cancelled.";
 
 /** A declined Pay, shown under that Pay button. */
 export const declinedLine = (name: string, cents: number, label: string) =>
@@ -1196,8 +1198,8 @@ export function joinCallRefusal(
 }
 
 /** (Owner, as in the full app) Join call shows only while the room can be joined: from 10 min before to 30 min after the end. */
-export function callJoinable(x: { status: string; startsAt: Date; minutes: number; cappedAt?: Date | null }, now = new Date()) {
-  if (x.status !== "booked" || x.cappedAt) return false; // (batch 18 section 3) a call that ended at the $1,000 can't be joined
+export function callJoinable(x: { status: string; startsAt: Date; minutes: number; cappedAt?: Date | null; endedAt?: Date | null }, now = new Date()) {
+  if (x.status !== "booked" || x.cappedAt || x.endedAt) return false; // (batch 18 section 3; batch 21 section 2) a call the server ended can't be joined
   const t = now.getTime(), s = x.startsAt.getTime();
   return t >= s - JOIN_OPENS_MIN * 60_000 && t <= s + (x.minutes + JOIN_CLOSES_AFTER_END_MIN) * 60_000;
 }
@@ -1389,9 +1391,9 @@ export function checkExtraPay(amountCents: number | null, tickedCents: number | 
 export const switchQuestionsLine = (sent: { agreedCents: number | null } | null | undefined) =>
   `Switching means answering the new questions: send your updated answers.${!sent ? "" : sent.agreedCents != null ? ` Answers you already sent stay payable at ${money(sent.agreedCents)}.` : " Answers you already sent stay payable."}`;
 
-// ---------- (Owner, Oct 28, batch 18 section 9) A call in progress keeps counting until the people on it leave ----------
-// A pause (any cause), a block, a suspension of either side, a leave, End early or a Stop never cuts a call already in progress: the people already on the call page keep
-// being measured until they leave (the 5-minute gap rule), or it hits 150% or the $1,000. Join and any re-Join are refused with the existing lines.
+// ---------- (Batch 18 section 9, replaced by batch 21 section 2) Calls in progress ----------
+// A pause (any cause), a block, a suspension of either side, a leave, End early or a Stop ends a call in progress at that moment, on the server (both rooms hang up;
+// the minutes measured up to then are kept and payable). Join and any re-Join are refused with the existing lines.
 export const IN_PROGRESS_DEV = "In progress: it ends when you both leave";
 export const IN_PROGRESS_TESTER = "In progress";
 /** The call page once its length is final: "Call ended at 3:42 PM." (neutral, for both sides). */
@@ -1400,20 +1402,28 @@ export const callEndedLine = (time: string) => `Call ended at ${time}.`;
 export const callInProgress = (x: { status: string; startsAt: Date; measuredAt: Date | null; actualMinutes: number | null }, now = new Date()) =>
   x.status === "booked" && x.startsAt.getTime() <= now.getTime() && !x.measuredAt && x.actualMinutes == null;
 /** Why nobody can (re-)join this call any more although it may still be in progress: the test paused or stopped, the session over, a block; "" when it's open. */
-export function callClosedToJoins(x: { paused: boolean; testStatus: string; contractStatus: string; blocked: boolean; side: "tester" | "developer" }) {
-  if (x.blocked) return "This call isn't available.";
-  if (x.paused) return "This test is paused.";
-  if (x.testStatus === "stopped") return "This test was stopped.";
-  if (x.contractStatus === "left") return x.side === "tester" ? "You left this test." : "They left the test.";
-  if (x.contractStatus === "ended") return x.side === "tester" ? "Your session ended." : "Their session ended.";
+export function callClosedToJoins(x: { paused: boolean; testStatus: string; contractStatus: string; blocked: boolean; side: "tester" | "developer"; endKind?: string }) {
+  return callClosedLineOf(callClosedKind(x), x.side, x.endKind);
+}
+/** (Batch 21 section 2) What closed a call (it ends a call in progress at that moment): a block, a pause (any cause), a stop, a leave, the session's end. */
+export type CallClosedKind = "blocked" | "paused" | "stopped" | "left" | "ended";
+export function callClosedKind(x: { paused: boolean; testStatus: string; contractStatus: string; blocked: boolean }): CallClosedKind | "" {
+  if (x.blocked) return "blocked";
+  if (x.paused) return "paused";
+  if (x.testStatus === "stopped") return "stopped";
+  if (x.contractStatus === "left") return "left";
+  if (x.contractStatus === "ended") return "ended";
   return "";
 }
-/** (Owner, Oct 28, batch 18 section 10) Under Join on the call page. */
-export const CALL_JOIN_LINE = "The call opens in Jitsi in a new tab. Keep this page open: it measures the call.";
-/** (Owner, Oct 28, batch 18 section 12) meet.jit.si asks the first person in a room to sign in as the host: the call page's line under Join, per side. */
-export const JITSI_HOST_DEV_LINE = "Join a few minutes early: Jitsi asks the host to sign in with Google, GitHub or Facebook.";
-export const jitsiWaitingLine = (dev: string) => `If Jitsi says it's waiting for the host, ${dev} is on the way: keep this page open.`;
-/** (Owner, Oct 28, batch 18 section 13) The private practice room link, from booking onward. */
+/** Each side's neutral line for it (never "hold" or "suspended"; a tester removed by a suspension reads that their session ended). */
+export function callClosedLineOf(kind: CallClosedKind | "" | string, side: "tester" | "developer", endKind = "") {
+  if (kind === "blocked") return "This call isn't available.";
+  if (kind === "paused") return "This test is paused.";
+  if (kind === "stopped") return "This test was stopped.";
+  if (kind === "left") return side === "tester" ? (endKind === "suspended" || endKind === "deleted" ? "Your session ended." : "You left this test.") : "They left the test.";
+  if (kind === "ended") return side === "tester" ? "Your session ended." : "Their session ended.";
+  return "";
+}
+/** (Owner, Oct 28, batch 18 section 13; batch 21 section 1) "Check your call setup", from booking onward: an in-app camera and microphone check (no call). */
 export const CALL_CHECK_LABEL = "Check your call setup";
-export const CALL_CHECK_LINE = "Sign in to Jitsi and test your camera and microphone ahead of time. Jitsi usually remembers you in this browser.";
-export const callCheckRoom = (checkId: string) => `https://meet.jit.si/playtest-check-${checkId}`;
+export const CALL_CHECK_NOTE = "Preview your camera and microphone before the call. Nothing is sent or recorded.";

@@ -46,7 +46,7 @@ model User {
   testerAlertsOff   Boolean   @default(false)
   payoutProblemAt   DateTime?
   payoutRemindedAt  DateTime?
-  /// (Batch 18 section 13) The account's private Jitsi practice room ("Check your call setup"): meet.jit.si/playtest-check-<this>. Random, made on first use.
+  /// (Batch 18 section 13) Unused since batch 21 replaced the Jitsi practice room with the in-app camera and microphone check (kept: no column drops).
   callCheckId       String?   @unique
   /// (Batch 18 section 1) The Terms of Use version this account accepted (at sign-up, or again from the box under Post / Join / Apply / Ask to rejoin), and when.
   /// 0 = never accepted (an account made before sign-up asked, or through Google). Compared with TERMS_VERSION (src/lib/termsOfUse.ts).
@@ -559,6 +559,13 @@ model Call {
   /// (Batch 18 section 3) When the call ended because its pay at the call's rate reached what was left of the $1,000 for that tester's calls on the test: the
   /// measured length is final at that point (capped there), the call page says so and Join is refused.
   cappedAt        DateTime?
+  /// (Batch 21 section 2) When the server ended the call for real (both pages hang up and the room can't be rejoined), and why: "length" (150% of the booked
+  /// length), "calls_cap" (the $1,000), or what closed it: "blocked" | "paused" | "stopped" | "left" | "ended". The measured length is final at that moment.
+  endedAt         DateTime?
+  endReason       String    @default("")
+  /// (Batch 21 section 3) Each side's latest poll of the call room (its page open): "here" for the other side, and "both have left" for the final length
+  devSeenAt       DateTime?
+  testerSeenAt    DateTime?
   /// (Batch 15 sections 15 and 40) A listed call's review clock: the call's end + 7 days (the review date is the later of this and the tester's deadline); moves with pauses
   payBy           DateTime?
   /// A listed call left unreviewed by its review date: the tester can Charge or Let it go (as a sent part)
@@ -573,11 +580,13 @@ model Call {
   review    Review?
   dispute   Dispute?
   presences CallPresence[]
+  signals   CallSignal[]
 
   @@index([contractId])
 }
 
-/// (Batch 15 section 40) One stretch of time a person had the call page open: heartbeats every ~10 s extend it; a gap of 5 minutes or more starts a new one.
+/// (Batch 15 section 40; batch 21 section 3) One stretch of time a person's browser was connected to the other's in the call room (WebRTC "connected"): each
+/// connected report extends it; a gap of 5 minutes or more starts a new one (a shorter gap still counts as connected when measuring).
 model CallPresence {
   id      String   @id @default(cuid())
   callId  String
@@ -589,6 +598,20 @@ model CallPresence {
   endAt   DateTime
 
   @@index([callId, userId])
+}
+
+/// (Batch 21 section 1) The call room's connection messages between the two browsers (offers, answers, candidates, camera and microphone state, "left"),
+/// relayed through the app by polling. Deleted when the call ends.
+model CallSignal {
+  id        Int      @id @default(autoincrement())
+  callId    String
+  call      Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+  fromId    String
+  kind      String
+  payload   String
+  createdAt DateTime @default(now())
+
+  @@index([callId, id])
 }
 
 /// (Owner, Oct 30, batch 15 section 43) One Save that changed the terms or the names: the developer's "Contract changes" panel. Who switched or kept comes from the

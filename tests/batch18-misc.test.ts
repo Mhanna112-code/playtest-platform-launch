@@ -21,11 +21,12 @@ const ANSWER = "The harbour level felt great, but the second boss was far too ha
 
 describe("batch 18 section 3: the call page", () => {
   it("shows the end line above the room, and the ended line in place of the room (for both sides, live)", () => {
+    // (Batch 21 section 2) The room's 2-minute warning comes with each poll; the server's end replaces the room for both.
     const room = src("app/app/calls/[id]/CallRoom.tsx");
-    expect(room).toContain("setCapLine(typeof r.capLine === \"string\" ? r.capLine : \"\");");
-    expect(room).toContain("{capLine && <p className=\"info\" role=\"status\" data-call-cap=\"\">{capLine}</p>}");
+    expect(room).toContain("setWarn(typeof data.warn === \"string\" ? data.warn : \"\");");
+    expect(room).toContain("{warn && <p className=\"info\" role=\"status\" data-call-warn=\"\">{warn}</p>}");
     expect(room).toContain("if (line) return <p className=\"info\" data-call-line=\"\">{line}</p>;");
-    expect(src("app/app/calls/[id]/page.tsx")).toContain("initialCapLine={s.capLine}");
+    expect(src("app/app/calls/[id]/page.tsx")).toContain("initialLine={s.line}");
     expect(src("components/JoinCall.tsx")).toContain("r.cancelled || r.capped");
   });
 });

@@ -18,7 +18,7 @@ describe("presses repeated after a lost answer (section 13)", () => {
     // The only raw fetches in pages and components are polls, heartbeats and draft keeping (never a press).
     const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
     const files = [...walk(path.resolve(__dirname, "../src/components")), ...walk(path.resolve(__dirname, "../src/app")).filter((f) => !f.includes(`${path.sep}api${path.sep}`))].filter((f) => f.endsWith(".tsx"));
-    for (const f of files) for (const m of fs.readFileSync(f, "utf8").matchAll(/fetch\(([^)]*)/g)) expect(m[1], f).toMatch(/status|presence|pulse|account\/status|account\/changes|admin\/dispute|kept/); // (batch 16 section 27) account/changes is a poll
+    for (const f of files) for (const m of fs.readFileSync(f, "utf8").matchAll(/fetch\(([^)]*)/g)) expect(m[1], f).toMatch(/status|presence|pulse|account\/status|account\/changes|admin\/dispute|kept|calls\/\$\{callId\}\/room/); // (batch 16 section 27) account/changes is a poll; (batch 21) the call room's relay
   });
 
   it("Pay, Pay more, Charge, Let it go, Send, Join, Apply, Accept, Book, Rate and Join call: the same press twice does it once", async () => {
@@ -77,12 +77,13 @@ describe("presses repeated after a lost answer (section 13)", () => {
     expect((await letgo()).status).toBe(200);
     expect((await letgo()).status).toBe(409);
     expect(await db.review.count({ where: { submissionId: sb.id } })).toBe(1);
-    // Join call twice: the same room, one first-join time.
+    // Join call twice: the same call page (batch 21: the built-in room).
     const call = await bookCall(testId, dev.cookie, a.sessionId, a.tester.cookie, 48);
     await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 60_000) } });
     const j = () => joinCallPOST(req(`/api/calls/${call.id}/join`, { cookie: a.tester.cookie, body: {} }), { params: Promise.resolve({ id: call.id }) }).then(json);
     const [j1, j2] = [await j(), await j()];
-    expect(j1.body.room).toBe(j2.body.room);
+    expect(j1.body.url).toBe(`/app/calls/${call.id}`);
+    expect(j2.body.url).toBe(j1.body.url);
     // Rate twice: one rating.
     await db.submission.update({ where: { id: sa.id }, data: {} });
     const rate = () => sact(b.sessionId, "rate", b.tester.cookie, { stars: 4, seenAt: seen(), confirmed: true });

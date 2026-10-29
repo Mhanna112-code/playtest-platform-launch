@@ -33,9 +33,10 @@ export const WHAT_CHANGED: { version: number; date: string; points: string[] }[]
       // (Batch 19 section 6) Folded into version 2: nothing has launched.
       "Payments section rewritten: every money rule is now in one place, section 4, How payments work, in short headed paragraphs with an example each.",
       // (Batch 19 section 3) The developer no longer lowers a call's length.
-      "A call's length is measured by the app while both people have the call page open, up to 150% of the booked length and never past the $1,000 for that tester's calls. The developer pays by the hour at the call's rate; paying less needs a reason the tester reads, and the tester can dispute it once (section 4, Calls).",
-      "A live call ends when its pay would pass what's left of the $1,000 for that tester's calls on the test; minutes after that don't count (section 4, Calls).",
-      "Every call uses its own Jitsi video room, opened from the call page; keep the call page open, it measures the call (section 7).",
+      "A call's length is measured by the app while both people are connected in the call room, up to 150% of the booked length and never past the $1,000 for that tester's calls. The developer pays by the hour at the call's rate; paying less needs a reason the tester reads, and the tester can dispute it once (section 4, Calls).",
+      "A live call ends for both people when it reaches 150% of the booked length or its pay would pass what's left of the $1,000 for that tester's calls on the test, and when a block, a pause, a suspension, a leave, End early or a stop happens; the minutes before that are paid as usual (section 4, Calls).",
+      // (Batch 21) Folded into version 2: nothing has launched.
+      "Calls happen in the app's own call room, on the call page, straight between the two browsers (section 7).",
       "When these terms change, you're asked to agree to the new version the next time you post a test, or join, apply, accept an invite or ask to rejoin (section 8).",
       // (Batch 20 section 5) Folded into version 2: nothing has launched.
       "You must be 18 or older to use Playtest. Signing up (with email or Google) asks you to confirm it (section 1).",
@@ -80,8 +81,8 @@ export const PAYMENT_RULES: { heading: string; text: string; example: string }[]
   },
   {
     heading: "Calls",
-    text: "A call's length is measured by the app while both people have the call page open, up to 150% of the booked length and never past the $1,000 for that tester's calls. The developer pays by the hour at the call's rate; paying less needs a reason the tester reads, and the tester can dispute it once. All of one tester's calls on a test can come to at most $1,000 together, listed or not, extra pay included: a call ends when its pay reaches what's left, and minutes after that don't count, even if people keep talking in the video room. A call that isn't listed is paid what the developer chooses, at most $200 an hour.",
-    example: "A call at $30 an hour where both people had the call page open for 50 minutes: $25.00.",
+    text: "A call's length is measured by the app while both people are connected in the call room, up to 150% of the booked length and never past the $1,000 for that tester's calls. The developer pays by the hour at the call's rate; paying less needs a reason the tester reads, and the tester can dispute it once. All of one tester's calls on a test can come to at most $1,000 together, listed or not, extra pay included: a call ends for both when its pay reaches what's left. A call that isn't listed is paid what the developer chooses, at most $200 an hour.",
+    example: "A call at $30 an hour where both people were connected for 50 minutes: $25.00.",
   },
   {
     heading: "Unlisted work",

@@ -63,7 +63,7 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
   {
     title: "7. Calls and recordings",
     points: [
-      "Calls run in the call's own Jitsi video room, opened from the call page on the site (keep that page open: it measures the call). Only the developer and tester of that call can join, from 10 minutes before the start until 30 minutes after the booked end. Who was in the call page and when is recorded (it measures the length); the team can read it when handling a report.",
+      "Calls run in the app's own call room, on the call page: video and sound go directly between the two browsers, and the app only passes along the messages that connect them. Only the developer and tester of that call can be in it, from 10 minutes before the start until the call ends. When the two browsers were connected is recorded (it measures the length); the team can read it when handling a report. Nothing in the call is recorded.",
       "Screen recordings are only seen by the developer and tester of that session, and by the team when handling a dispute or report.",
     ],
   },
