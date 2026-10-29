@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-29T18:49:14.191Z",
+  "generated": "2026-10-29T20:08:25.815Z",
   "sizes": {
     "desktop": "1280x900",
     "phone": "375x812"
@@ -6464,6 +6464,51 @@
           "phone": null
         }
       ]
+    },
+    {
+      "title": "Batch 25 (Oct 29)",
+      "explanation": "Batch 25 (docs/BATCH-25.md): confirm-by times in the developer's own time zone, one wording for a retried chargeback, the renewal's bell line opening its own row, and one bell line for an automatic retry.",
+      "cases": []
+    },
+    {
+      "title": "Batch 26 (Oct 29)",
+      "explanation": "Batch 26 (docs/BATCH-26.md and its commit's §13-15): a block ends a call, the team's Stop never names the developer, when Charge opens, Invite live, call requests closing live and naming the press, the sign-up ticks, the device pop-up closing with “Sent…”, questions not required by default and labelled previous sets.",
+      "cases": []
+    },
+    {
+      "title": "Batch 27 (Oct 29)",
+      "explanation": "Batch 27 (docs/BATCH-27.md): an open new-terms offer blocks Send and calls until Switch or Keep, “Go to the next round” stops once, the update pill with its arrow, admin Tests rows following the pause live, and calls 1 minute ahead locally.",
+      "cases": []
+    },
+    {
+      "title": "Batch 28 (Oct 29)",
+      "explanation": "Batch 28 (docs/BATCH-28.md): heartbeat gaps waiting for an admin, one team-Stop wording, the charge-opens line on the session page, a Charge after the reservation charged after the lift, a refused press redrawing at once, the can't-be-paid-more lines, disputes up to the piece's cap with the chat fold, payment emails with email Off, and listed calls charged automatically.",
+      "cases": []
+    },
+    {
+      "title": "Batch 29 (Oct 29)",
+      "explanation": "Batch 29 (docs/BATCH-29.md and its commits' §36-38): the same stop-once rules on stopped, closed and paused tests, your own changes in another tab, the bell's stacks and number, one-a-day money lines, only testers removing excerpts, the refusal line kept after a redraw, and a piece's cap as the part's max in all.",
+      "cases": []
+    },
+    {
+      "title": "Other devices",
+      "explanation": "The same account signed in on two devices (two separate browser sessions, each with its own sign-in, side by side): the top-box line, the pill with its arrow and count, the bell's number, and a press on the second device stopping once with “You … in another tab or device”; for the developer, the tester, and another person's change.",
+      "cases": []
+    },
+    {
+      "title": "Calls: paying",
+      "explanation": "Paying for calls: a listed call (the Pay box at the contract rate × measured minutes, a lower pay needing a reason, the automatic charge after 7 days, Pay more up to the call's cap) beside an unlisted call (any rate up to $200/h, $0 with a note, the weekly line, never charged automatically), on both sides.",
+      "cases": []
+    },
+    {
+      "title": "Caps",
+      "explanation": "The most a piece can be paid: a written part paid in steps up to $1,000 in all, the refusal over the room, the lines on both sides at the cap, Dispute at the cap, and the $1,000 for a tester's calls.",
+      "cases": []
+    },
+    {
+      "title": "Bell and emails",
+      "explanation": "The bell after batch 29: one entry per kind and day across tests (Ratings to give, Applications and invites, Joined, Deadlines, Pay now, Charge or let go, the bank line), the number counting entries with anything unread, and lines read only when opened.",
+      "cases": []
     }
   ]
 }
