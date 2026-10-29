@@ -4,11 +4,12 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import * as R from "@/lib/rules";
 import { fmtFor } from "@/lib/tz";
-import { finishMeasuring, heartbeat, roomUrl } from "@/lib/server/calls";
+import { JITSI_HOST_TIP, finishMeasuring, heartbeat, remindCallsSoon, roomUrl } from "@/lib/server/calls";
+import { bellKey } from "@/lib/bell";
 import { callStatus, joinCall } from "@/lib/server/blocks";
 import { act, bookCall, joined, sact, seen, setup } from "./fixtures";
 
-// Batch 18 sections 9 and 10 (owner, Oct 28): a call in progress keeps counting until the people on it leave; calls use only the app's Jitsi room.
+// Batch 18 sections 9, 10 and 12 (owner, Oct 28): a call in progress keeps counting until the people on it leave; calls use only the app's Jitsi room.
 const MIN = 60_000;
 const at = (base: Date, min: number) => new Date(base.getTime() + min * MIN);
 const src = (f: string) => fs.readFileSync(path.resolve(__dirname, "../src", f), "utf8");
@@ -102,5 +103,37 @@ describe("batch 18 section 10: calls use only the app's Jitsi room", () => {
     expect(room).toContain("{CALL_JOIN_LINE}");
     expect(room).not.toContain("<iframe");
     expect(src("lib/server/calls.ts")).not.toMatch(/slot\.link/);
+  });
+});
+
+describe("batch 18 section 12: get the Jitsi sign-in out of the way early", () => {
+  it("a reminder 15 minutes before, to both (the developer's with the tip), once, stacked in the test's day; none for a call booked less than 15 minutes ahead", async () => {
+    const s = await setup();
+    const j = await joined(s.testId);
+    const call = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie);
+    const startsAt = new Date(Date.now() + 14 * MIN);
+    await db.call.update({ where: { id: call.id }, data: { startsAt, createdAt: new Date(Date.now() - 2 * 86_400_000) } });
+    await remindCallsSoon();
+    await remindCallsSoon(); // once
+    const time = (tz: string | null) => fmtFor({ timeZone: tz }, startsAt, "time");
+    const tes = await db.notification.findMany({ where: { userId: j.tester.user.id, reminderKey: `call15:${call.id}` } });
+    expect(tes.map((n) => n.text)).toEqual([`Your call with Nora Lane on “Harbor Run” starts at ${time(j.tester.user.timeZone)}.`]);
+    expect(tes[0].link).toBe(`/app/sessions/${j.sessionId}#call-${call.id}`);
+    const dev = await db.notification.findMany({ where: { userId: s.dev.user.id, reminderKey: `call15:${call.id}` } });
+    expect(dev.map((n) => n.text)).toEqual([`Your call with Ana Silva on “Harbor Run” starts at ${time(s.dev.user.timeZone)}. Open it a few minutes early: Jitsi asks the first person to sign in with Google, GitHub or Facebook.`]);
+    expect(JITSI_HOST_TIP).toBe("Open it a few minutes early: Jitsi asks the first person to sign in with Google, GitHub or Facebook.");
+    expect(bellKey(dev[0])).toBe(`${s.testId}|${dev[0].createdAt.toISOString().slice(0, 10)}`); // stacks in that test's day
+    // Booked 10 minutes ahead: no reminder.
+    const late = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie, 72);
+    await db.call.update({ where: { id: late.id }, data: { startsAt: new Date(Date.now() + 10 * MIN), createdAt: new Date() } });
+    await remindCallsSoon();
+    expect(await db.notification.count({ where: { reminderKey: `call15:${late.id}` } })).toBe(0);
+  });
+
+  it("the call page's line under Join, per side", () => {
+    expect(R.JITSI_HOST_DEV_LINE).toBe("Join a few minutes early: Jitsi asks the host to sign in with Google, GitHub or Facebook.");
+    expect(R.jitsiWaitingLine("Nora Lane")).toBe("If Jitsi says it's waiting for the host, Nora Lane is on the way: keep this page open.");
+    expect(src("app/app/calls/[id]/page.tsx")).toContain("hostLine={amTester ? jitsiWaitingLine(other ? displayName(other) : \"the developer\") : JITSI_HOST_DEV_LINE}");
+    expect(src("app/app/calls/[id]/CallRoom.tsx")).toContain("{hostLine && <p className=\"note\" data-call-host-line=\"\">{hostLine}</p>}");
   });
 });

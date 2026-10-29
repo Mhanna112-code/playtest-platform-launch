@@ -1346,3 +1346,6 @@ export function callClosedToJoins(x: { paused: boolean; testStatus: string; cont
 }
 /** (Owner, Oct 28, batch 18 section 10) Under Join on the call page. */
 export const CALL_JOIN_LINE = "The call opens in Jitsi in a new tab. Keep this page open: it measures the call.";
+/** (Owner, Oct 28, batch 18 section 12) meet.jit.si asks the first person in a room to sign in as the host: the call page's line under Join, per side. */
+export const JITSI_HOST_DEV_LINE = "Join a few minutes early: Jitsi asks the host to sign in with Google, GitHub or Facebook.";
+export const jitsiWaitingLine = (dev: string) => `If Jitsi says it's waiting for the host, ${dev} is on the way: keep this page open.`;

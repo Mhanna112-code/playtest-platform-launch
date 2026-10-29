@@ -199,10 +199,46 @@ export async function callCapState(callId: string, now = new Date(), loaded?: Ca
  * "nobody joined" cancel applies. Checked on every page load / poll and by the daily job, so it is minute-accurate while anyone has a page open.
  */
 export async function sweepNobodyJoined(now = new Date()) {
+  await remindCallsSoon(now);
   const due = await db.$queryRaw<{ id: string }[]>`SELECT id FROM "Call" WHERE status = 'booked' AND "devJoinedAt" IS NULL AND "testerJoinedAt" IS NULL AND "noShowBy" IS NULL AND "measuredAt" IS NULL AND "actualMinutes" IS NULL AND NOT EXISTS (SELECT 1 FROM "CallPresence" p WHERE p."callId" = "Call".id) AND "startsAt" > (${new Date(now.getTime() - 7 * 86_400_000)}::timestamptz AT TIME ZONE 'UTC') AND "startsAt" + ("minutes" * interval '30 seconds') <= (${now}::timestamptz AT TIME ZONE 'UTC')`;
   for (const { id } of due) await cancelNobodyJoined(id, now);
   await finishMeasuring(now);
   return due.length;
+}
+
+// ---------- (Owner, Oct 28, batch 18 section 12) The reminder 15 minutes before each booked call ----------
+export const CALL_REMINDER_MIN = 15;
+/** "Your call with Ana on “Harbor Run” starts at 3:00 PM." (the time token is written in each reader's zone). */
+export const callReminderLine = (who: string, test: string, startsAt: Date) => `Your call with ${who} on “${test}” starts at ${T(startsAt, "time")}.`;
+export const JITSI_HOST_TIP = "Open it a few minutes early: Jitsi asks the first person to sign in with Google, GitHub or Facebook.";
+const reminderKey = (callId: string) => `call15:${callId}`;
+
+/**
+ * Bell and email (following each person's email setting) 15 minutes before a booked call, to both; the developer's adds the Jitsi sign-in tip. Once per call and person;
+ * none for a call booked less than 15 minutes ahead. Checked with the call sweep (every page load / poll, and the daily job).
+ */
+export async function remindCallsSoon(now = new Date()) {
+  const soon = new Date(now.getTime() + CALL_REMINDER_MIN * 60_000);
+  const calls = await db.call.findMany({
+    where: { status: "booked", startsAt: { gt: now, lte: soon } },
+    include: { contract: { include: { tester: true, test: { include: { developer: true } } } } },
+  });
+  let n = 0;
+  for (const call of calls) {
+    if (call.createdAt.getTime() > call.startsAt.getTime() - CALL_REMINDER_MIN * 60_000) continue; // booked less than 15 minutes ahead
+    const c = call.contract, dev = c.test.developer, tester = c.tester;
+    if (!(await db.notification.count({ where: { userId: tester.id, reminderKey: reminderKey(call.id) } }))) {
+      const line = callReminderLine(displayName(dev), c.title, call.startsAt);
+      await notify(tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: dev.id, reminder: reminderKey(call.id) });
+      n++;
+    }
+    if (!(await db.notification.count({ where: { userId: dev.id, reminderKey: reminderKey(call.id) } }))) {
+      const line = `${callReminderLine(displayName(tester), c.title, call.startsAt)} ${JITSI_HOST_TIP}`;
+      await notify(dev.email, line, [line], `/app/tests/${c.testId}#call-${call.id}`, { about: tester.id, reminder: reminderKey(call.id) });
+      n++;
+    }
+  }
+  return n;
 }
 
 async function cancelNobodyJoined(id: string, now: Date) {

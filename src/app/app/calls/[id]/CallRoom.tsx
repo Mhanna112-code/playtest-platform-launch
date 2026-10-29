@@ -6,7 +6,7 @@ import { CALL_JOIN_LINE } from "@/lib/rules";
  * The room (its heartbeats measure the call's length): closes at once (for both, in every tab) when the call is cancelled, either side blocks the other, or (batch 18
  * section 3) its pay reaches what's left of the $1,000 for that tester's calls on the test; from 10 minutes before that, a line says when it ends.
  */
-export function CallRoom({ callId, room, initialLine, initialBoth, initialCapLine = "" }: { callId: string; room: string; initialLine: string; initialBoth: string | null; initialCapLine?: string }) {
+export function CallRoom({ callId, room, initialLine, initialBoth, initialCapLine = "", hostLine = "" }: { callId: string; room: string; initialLine: string; initialBoth: string | null; initialCapLine?: string; /** (batch 18 section 12) the Jitsi host line for this side */ hostLine?: string }) {
   const [line, setLine] = useState(initialLine);
   const [both, setBoth] = useState(initialBoth);
   const [capLine, setCapLine] = useState(initialCapLine);
@@ -37,6 +37,7 @@ export function CallRoom({ callId, room, initialLine, initialBoth, initialCapLin
       {/* (Batch 18 section 10) The call runs in its Jitsi room, in a new tab; this page stays open and measures it. */}
       <a className="btn no-underline hover:no-underline" href={room} target="_blank" rel="noreferrer" data-call-join="">Join</a>
       <p className="note" data-call-join-line="">{CALL_JOIN_LINE}</p>
+      {hostLine && <p className="note" data-call-host-line="">{hostLine}</p>}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { onCallNow, roomUrl } from "@/lib/server/calls";
 import { leaveIfClosed, requireOpenPage, requirePageUser } from "@/lib/server/page-auth";
 import { CallRoom } from "./CallRoom";
 import { CallTimer } from "@/components/CallTimer";
+import { JITSI_HOST_DEV_LINE, jitsiWaitingLine } from "@/lib/rules";
 
 export const metadata = { title: "Live call · Playtest" };
 export const dynamic = "force-dynamic";
@@ -32,7 +33,7 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
         <p className="text-sm text-slate-400">“{call.contract.title}” · {fmtDateTime(call.startsAt)} · booked for {call.minutes} minutes (paid up to {Math.floor(call.minutes * 1.5)}) · the length is measured while you&apos;re both here.</p>
       </div>
       <CallTimer startsAt={call.startsAt.toISOString()} minutes={call.minutes} role={amTester ? "tester" : "developer"} />
-      <CallRoom callId={id} room={roomUrl(call)} initialLine={s.line} initialBoth={s.bothJoinedAt ? s.bothJoinedAt.toISOString() : null} initialCapLine={s.capLine} />
+      <CallRoom callId={id} room={roomUrl(call)} initialLine={s.line} initialBoth={s.bothJoinedAt ? s.bothJoinedAt.toISOString() : null} initialCapLine={s.capLine} hostLine={amTester ? jitsiWaitingLine(other ? displayName(other) : "the developer") : JITSI_HOST_DEV_LINE} />
     </div>
   );
 }

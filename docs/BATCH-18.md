@@ -45,12 +45,20 @@ When a pause (any cause), a block, a suspension of either side, a leave, End ear
 ## 10. Calls use only the app's Jitsi room (owner, Oct 28)
 Remove the developer's own call link option (slot.link: Zoom, Meet or any outside link) everywhere: the field on call times, `roomUrl`'s use of it, its wording and tests. Every call uses its Jitsi room (`https://meet.jit.si/playtest-<callId>`). Existing call times with a link keep working until they pass but no new link can be entered. On the call page, a short line under Join: "The call opens in Jitsi in a new tab. Keep this page open: it measures the call."
 
-## 11. A call's Pay box gets a Minutes box (owner, Oct 28)
-In a call's Pay box, next to "Rate ($/h)": **"Minutes"**, empty by default with the measured length as its placeholder ("52 (measured)"). Empty = the measured minutes are used, as today. A valid number typed there (1 up to 150% of the booked length, whole minutes) overrides the measured minutes for this payment, and Rate × Minutes fills the Amount (Amount typed last still wins and fills Rate, as today). Red at the box when invalid: "Enter whole minutes from 1 to <max>." The $1,000 for calls and the "up to" line apply to the result.
-- Paying for fewer minutes than measured, or below the contract rate × measured minutes on a listed call, needs the usual reason (the tester reads it).
-- The tester sees the minutes paid for: "Paid $X for 45 min (measured 52 min)".
-- Charge for a listed call still uses the measured minutes. Pay more on a call has no Minutes box (amount only).
-- Tests: empty uses measured; override up and down; invalid minutes; the reason when under; the $1,000 limit.
+## 11. (Dropped by the owner: no Minutes box. The call's Pay box stays Rate + Amount from the measured length, with the Note as today.)
+
+## 12. Calls: get the Jitsi sign-in out of the way early (owner, Oct 28)
+meet.jit.si asks the first person in a room to sign in (Google, GitHub or Facebook) as the host; the other waits on "Waiting for the host" until then.
+- **Reminder before each call** (new): bell and email (following the email setting) 15 minutes before a booked call, to both: "Your call with <name> on “<test>” starts at <time>." The developer's version adds: "Open it a few minutes early: Jitsi asks the first person to sign in with Google, GitHub or Facebook." Stacks in that test's day; no reminder for a call booked less than 15 minutes ahead.
+- **Call page lines:** developer, under Join (from the 10 minutes before): "Join a few minutes early: Jitsi asks the host to sign in with Google, GitHub or Facebook." Tester: "If Jitsi says it's waiting for the host, <dev> is on the way: keep this page open."
+- Join still opens 10 minutes before the start (unchanged); measuring only counts the booked time window as today.
+- Add the new bell line to the design doc's bell table later (not in this batch).
+
+## 13. "Check your call setup": a private Jitsi practice room (owner, Oct 28)
+- From the moment a call is booked, both people get a "Check your call setup" link (call page, the call's row in Live session / Call history, and the 15-minute reminder): it opens a private practice room in a new tab, `https://meet.jit.si/playtest-check-<random id per account>` (unguessable, the same for that account), where they can sign in to Jitsi as host and test camera and microphone. A short line next to it: "Sign in to Jitsi and test your camera and microphone ahead of time. Jitsi usually remembers you in this browser."
+- It never counts as a call, is never measured, and is unrelated to the booked room. **Join for the real call still opens only 10 minutes before the start** (unchanged).
+- Also on the developer's and tester's dashboards' Calls box, once per upcoming call.
+- No change to the call Pay box: the "× N min" next to Rate already shows the measured length; nothing is added twice.
 
 ## Check and report
 - Tests for each item. Run `NEXT_DIST_DIR=.next-build npm run check`; it must be green.
