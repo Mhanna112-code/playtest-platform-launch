@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime } from "@/lib/format";
 import { linesFor, notify } from "./notify";
-import { T, renderTimes } from "@/lib/tz";
+import { T, fmtIn, renderTimes } from "@/lib/tz";
 
 // (Owner, Oct 22, NEWEST+6; batch 15 section 10) Outages come from the uptime service's own alerts (POST /api/health/alert?key=...): a "down" is stored and the
 // matching "up" records the outage when it lasted 15 minutes or more. It is recorded once (unique start) and then every timer that was running moves later by its
@@ -114,8 +114,9 @@ export async function pendingGaps() {
   return rows.map(gapOf).filter((g): g is Gap => !!g).sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
 }
 /** "Possible outage: no checks from 3:10 PM to 3:42 PM (32 min). Nothing has moved." (time tokens: the reader's zone) */
-export const gapLine = (g: { startAt: Date; endAt: Date; ms: number }) =>
-  `Possible outage: no checks from ${g.startAt.toDateString() === g.endAt.toDateString() ? T(g.startAt, "time") : T(g.startAt, "datetime")} to ${T(g.endAt, "time")} (${lengthText(g.ms)}). Nothing has moved.`;
+/** (Batch 29 §37) Whether the start needs its date is decided in the reader's (admin's) zone, not the server's: a gap across the admin's midnight shows the date. */
+export const gapLine = (g: { startAt: Date; endAt: Date; ms: number }, timeZone?: string | null) =>
+  `Possible outage: no checks from ${fmtIn(timeZone, g.startAt, "date") === fmtIn(timeZone, g.endAt, "date") ? T(g.startAt, "time") : T(g.startAt, "datetime")} to ${T(g.endAt, "time")} (${lengthText(g.ms)}). Nothing has moved.`;
 
 /**
  * (Batch 28 §1) A heartbeat gap [start, end): never applied. Covered by an outage the uptime service reported: nothing. Otherwise listed for the admins (merged with a

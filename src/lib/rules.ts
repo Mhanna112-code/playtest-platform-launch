@@ -1426,26 +1426,22 @@ export const overCallsLine = (roomCents: number) => `This is more than you can p
 /** A piece's max: $1000 for written answers or a recording; $200/h × the logged minutes for a call. */
 export const pieceMaxCents = (kind: "submission" | "call", minutes = 0) => (kind === "call" ? Math.round((NO_LISTING_CALL_RATE_CAP_CENTS * minutes) / 60) : NO_LISTING_WORK_CAP_CENTS);
 /**
- * How much may be paid above the base on one piece in all (batch 9 section 6: counted PER PIECE across its Pay and every Pay more). (Owner, Oct 29, batch 28 §20) The
- * part's max, listed or not: a listed piece up to its listing plus the max ($1,000 for written answers or a recording; $200/h × the measured minutes for a call), an
- * unlisted one up to the max plus the max (the 100%-of-the-listing rule is gone). Calls also stay within what's left of the $1,000 for that tester's calls (pieceRoom).
+ * (Owner, Oct 29, batch 29 §38; corrects batch 28 §20) A piece's cap is the part's MAX IN TOTAL (Pay + every Pay more + any dispute raise), listed or not: $1,000 in all
+ * for written answers or a recording; $200/h × the measured minutes for a call (and still within the $1,000 for all of that tester's calls on the test, pieceRoom).
+ * A listed price at the max leaves no Pay more room (a listing above the max, which the forms don't allow, is still payable in full).
  */
-export const extraCapCents = (listingCents: number | null, maxCents: number) => {
-  void listingCents;
-  return maxCents;
-};
+export const pieceCapCents = (listingCents: number | null, maxCents: number) => Math.max(maxCents, listingCents ?? 0);
 /** (Batch 28 §14) The developer's line where Pay more was, once the piece reached its cap: "Paid the most this piece can be paid ($20.00)." */
 export const paidMostLine = (cents: number) => `Paid the most this piece can be paid (${money(cents)}).`;
 /**
  * (Batch 28 §14) The tester's line on a paid part. (A paid part can't be changed in this app, so the lines say what Pay more can still add rather than "an update".)
- * "Nora Lane has paid $10.00 for this. It can be paid more, up to $1,010.00 in all." / "This part is already paid the most it can be ($20.00)." / "Pay more closed on Nov 2."
+ * "Nora Lane has paid $10.00 for this. It can be paid more, up to $1,000.00 in all." / "This part is already paid the most it can be ($20.00)." / "Pay more closed on Nov 2."
  */
 export const testerPayMoreLine = (dev: string, paidCents: number, allCents: number) => `${dev} has paid ${money(paidCents)} for this. It can be paid more, up to ${money(allCents)} in all.`;
 export const testerPaidMostLine = (cents: number) => `This part is already paid the most it can be (${money(cents)}).`;
-/** The blocked wording for pay above the listing (a Pay above it, extra pay): Y is what can still be paid above it. */
-export const overListingLine = (roomCents: number) => `This is more than you can pay above the listing (up to ${money(roomCents).replace(/\.00$/, "")}).`;
-/** The same for a part that isn't listed: "above the max". */
-export const overMaxLine = (roomCents: number) => `This is more than you can pay above the max (up to ${money(roomCents).replace(/\.00$/, "")}).`;
+/** (Batch 29 §38) The same for a part that isn't listed: what's left of its max in all ("up to $990 more, $1,000 in all" once something is paid). */
+export const overMaxLine = (roomCents: number, totalCents: number = roomCents) =>
+  `This is more than this piece can be paid (up to ${money(roomCents).replace(/\.00$/, "")}${roomCents < totalCents ? ` more, ${money(totalCents).replace(/\.00$/, "")} in all` : ""}).`;
 export function checkExtraPay(amountCents: number | null, tickedCents: number | null, over200 = false): Check {
   if (amountCents == null || !Number.isInteger(amountCents) || amountCents <= 0) return no("Enter an amount like 7.50.");
   if (amountCents > EXTRA_PAY_MAX_CENTS) return amountCents > STRIPE_MAX_CENTS ? no(STRIPE_MAX_LINE) : no(`The most you can pay at once is ${money(EXTRA_PAY_MAX_CENTS)}.`);

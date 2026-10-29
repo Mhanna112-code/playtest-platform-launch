@@ -128,7 +128,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (Batch 9) Extra pays, with the developer's notes.
   const extraRows = await db.payment.findMany({ where: { contractId: c.id, kind: "extra", status: { in: ["charged", "not_set_up"] } }, select: { submissionId: true, callId: true, amountCents: true, note: true, createdAt: true }, orderBy: { createdAt: "asc" } });
   const disputeOwed = new Set(owedRows.filter((p) => p.kind === "dispute").map((p) => p.submissionId ?? p.callId ?? ""));
-  const owedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, callId: { not: null }, kind: { not: "dispute" }, OR: [{ status: "failed", settledAt: null, owedUntil: { not: null } }, { status: "needs_confirmation" }] }, select: { callId: true } })).map((p) => p.callId!));
+  // (Batch 29 §37) A listed call charged automatically during a hold ("owed") or a suspension ("deferred") isn't paid yet either: "may be delayed", never "paid".
+  const owedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, callId: { not: null }, kind: { not: "dispute" }, OR: [{ status: "failed", settledAt: null, owedUntil: { not: null } }, { status: { in: ["needs_confirmation", "owed", "deferred"] } }] }, select: { callId: true } })).map((p) => p.callId!));
   const failedCalls = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "failed", callId: { not: null } }, select: { callId: true } })).map((p) => p.callId!));
   const cancelledText = (x: { status: string; cancelledBy: string | null }) => (x.status !== "cancelled" ? "" : x.cancelledBy === "tester" ? "you cancelled it" : `cancelled by ${x.cancelledBy === "developer" ? dev : "the site"}`);
   // (NEWEST+5) Rating the developer.
@@ -426,12 +427,13 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             </p>
             <p className="text-slate-400">{c.liveRateCents == null ? NOT_LISTED : `In your contract · ${c.liveRateCents === 0 ? "free" : `${money(testerShare(c.liveRateCents))}/h for you`}`}{` · Paid so far ${money(liveCalls.reduce((a, x) => a + (partPaid.get(x.id) ?? 0), 0))}`}</p>
             {callsWarning && <p className="text-xs text-amber-200" data-calls-warning="">{callsWarning}</p>}
-            {c.calls.filter((x) => !x.review && x.status === "booked" && callMinutesOf(x) != null).map((x) => devGone ? <p key={x.id} className="info" data-dev-deleted="">Live call on {fmtDateTime(x.startsAt)}: {devDeletedLine(devRealName)}</p> : (
+            {c.calls.filter((x) => !x.review && x.status === "booked" && callMinutesOf(x) != null).map((x) => devGone && !(x.rateCents != null && c.test.developer.stripePaymentMethodId) ? <p key={x.id} className="info" data-dev-deleted="">Live call on {fmtDateTime(x.startsAt)}: {devDeletedLine(devRealName)}</p> : (
               <div key={x.id} className="space-y-1">
                 {/* (Owner, Oct 28, batch 16 section 40) One short grey line per call (the part line above has the rate and what's paid so far); blue only for a real notice. */}
                 <p className="text-xs text-slate-400" data-call-row="" data-call-length="">{fmtDateTime(x.startsAt)} · {callMinutesOf(x)} min · {chargeShut(x.id) ? notPaidClosedLine(shutOn(x.id)) : <>waiting for {dev} to pay</>}</p>
                 {/* (Owner, Oct 29, batch 28 §21) A listed call: charged automatically 7 days after the call (moved by pauses); no Charge or Let it go. */}
-                {x.rateCents != null && x.payBy && <p className="text-xs text-slate-400" data-auto-charge="">{testerAutoChargeLine(dev, renderTimes(T(x.payBy, "date"), u.timeZone))}</p>}
+                {/* (Batch 29 §37) Only while that date is ahead (a team-paused test past it shows nothing until the date moves on). */}
+                {x.rateCents != null && x.payBy && x.payBy > now && <p className="text-xs text-slate-400" data-auto-charge="">{testerAutoChargeLine(dev, renderTimes(T(x.payBy, "date"), u.timeZone))}</p>}
                 {failedCalls.has(x.id) && <p className="info">{DELAYED_CALL_LINE}</p>}
                 {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
 

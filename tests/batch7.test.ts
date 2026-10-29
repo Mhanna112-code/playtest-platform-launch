@@ -29,7 +29,7 @@ describe("batch 7 item 1: 'Not listed'", () => {
     expect(src("app/app/sessions/[id]/page.tsx")).not.toContain('"Not in your contract"');
     expect(src("app/app/tests/[id]/page.tsx")).not.toContain('"Not in their contract"');
     for (const f of ["app/app/tests/[id]/DevCallPanel.tsx", "app/app/sessions/[id]/page.tsx"]) expect(src(f), f).not.toContain("$100");
-    expect(R.overListingLine(10_000)).toBe("This is more than you can pay above the listing (up to $100).");
+    expect(R.overMaxLine(10_000)).toBe("This is more than this piece can be paid (up to $100).");
   });
 });
 

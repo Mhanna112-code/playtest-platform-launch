@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, fmtTime, money, toCents } from "@/lib/format";
-import { LET_GO_BY_TESTER, payClosedLine, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, checkDisputeDecision, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, extraCapCents, overListingLine, overMaxLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare } from "@/lib/rules";
+import { LET_GO_BY_TESTER, payClosedLine, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, checkDisputeDecision, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, pieceCapCents, overMaxLine, paidMostLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare } from "@/lib/rules";
 import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { adminUsers, bell, notify } from "./notify";
@@ -245,8 +245,8 @@ export async function disputeRoom(pieces: { submissionId?: string | null; callId
 
 /**
  * What an admin may decide for a dispute. (Owner, Oct 29, batch 28 §15) The total for THIS piece: MIN = what the piece was already paid (its Pay and every Pay more);
- * MAX = its cap, the same one Pay + Pay more have (pieceRoom: a listed part's listing plus its max, batch 28 §20; an unlisted part's max plus the max; an unlisted call
- * its max; a call also within what's left of the $1,000 for that tester's calls). A decision still only raises pay.
+ * MAX = its cap, the same one Pay + Pay more have (pieceRoom, batch 29 §38: the part's max in all, listed or not; a call also within what's left of the $1,000 for
+ * that tester's calls). A decision still only raises pay.
  */
 export async function disputeBounds(d: { submissionId: string | null; callId: string | null }) {
   const key = d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! };
@@ -386,24 +386,22 @@ const ABOVE_PAY = ["extra", "dispute"];
 export const NO_REJECT = "There's no Reject: pay any amount, $0 included (say why at $0).";
 /**
  * What can still be paid on ONE piece, with ONE Pay box (owner, Oct 29: batch 11 section 6 merged Extra pay into Pay; batch 12 section 2 the call caps).
- *   - Listed: (batch 28 §20) the listing plus the part's max above it ($1000, or $200/h × the logged minutes for a call).
- *   - Unlisted written answers or recording: the max ($1000) plus the max ($2000 in all).
- *   - Unlisted call: at most $200/h × its measured minutes, nothing above.
+ *   - (Batch 29 §38, correcting batch 28 §20) Every piece, listed or not: the part's max IN ALL (Pay + every Pay more + any dispute raise): $1,000 for written answers
+ *     or a recording; $200/h × the measured minutes for a call. A listed price at the max leaves no Pay more room.
  *   - (Batch 15 section 34) Any call, listed or not: all of the tester's calls on the test together at most $1,000 (extra pay counted).
- * `roomCents`: the most the next payment (the first Pay or a "Pay more") can be. `aboveRoomCents`: what is still left above the base (the listing, or the max), for the
- * blocked line. `callPoolRoomCents`: for a call, what is left of the $1,000 for the tester's calls (else null); `ceilingBinds`: that's what limits this payment.
+ * `roomCents`: the most the next payment (the first Pay or a "Pay more") can be. `aboveRoomCents`: for a listed piece, what is still left above the listing (for the
+ * blocked line). `callPoolRoomCents`: for a call, what is left of the $1,000 for the tester's calls (else null); `ceilingBinds`: that's what limits this payment.
  */
 export async function pieceRoom(piece: { where: PieceKey; listing: number | null; kind: "submission" | "call"; minutes: number; contractId?: string }, tx: Prisma.TransactionClient = db) {
   const key = piece.where.submissionId ? { submissionId: piece.where.submissionId } : { callId: piece.where.callId! };
   const maxCents = pieceMaxCents(piece.kind, piece.minutes);
-  const unlistedCall = piece.listing == null && piece.kind === "call";
-  const cap = unlistedCall ? 0 : extraCapCents(piece.listing, maxCents);
-  const base = piece.listing ?? maxCents;
+  const totalCapCents = pieceCapCents(piece.listing, maxCents);
   const rev = await tx.review.findFirst({ where: { ...key, rejected: false }, select: { amountCents: true } });
   const extras = (await tx.payment.aggregate({ where: { ...key, kind: { in: ABOVE_PAY }, status: { in: COUNTED } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
   const paidCents = (rev?.amountCents ?? 0) + extras;
-  const totalCapCents = base + cap;
-  const aboveRoomCents = Math.max(0, cap - Math.max(0, paidCents - base));
+  const base = piece.listing ?? 0;
+  const cap = Math.max(0, totalCapCents - base);
+  const aboveRoomCents = Math.max(0, totalCapCents - Math.max(paidCents, base));
   let roomCents = Math.max(0, totalCapCents - paidCents);
   let callPoolRoomCents: number | null = null;
   let ceilingBinds = false;
@@ -418,9 +416,9 @@ export async function pieceRoom(piece: { where: PieceKey; listing: number | null
 /** The blocked line for a payment over a piece's room (batch 9's wording; batch 15 section 34: a call over what's left of the $1,000 says so). */
 export function overRoomLine(piece: { listing: number | null; kind: "submission" | "call" }, room: Awaited<ReturnType<typeof pieceRoom>>) {
   if (room.ceilingBinds) return overCeilingLine(room.roomCents);
-  if (piece.listing != null) return overListingLine(room.aboveRoomCents);
-  if (piece.kind === "call") return overCallsLine(room.roomCents);
-  return overMaxLine(room.aboveRoomCents);
+  if (piece.listing == null && piece.kind === "call") return overCallsLine(room.roomCents);
+  // (Batch 29 §38) Listed or not: the piece's max in all (at it: batch 28 §14's line).
+  return room.roomCents <= 0 ? paidMostLine(room.paidCents) : overMaxLine(room.roomCents, room.totalCapCents);
 }
 
 /** The piece behind an Extra pay or a page's "up to $Y": a sent part or a held call. */
@@ -478,7 +476,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     const again = await tx.payment.findFirst({ where: { kind: "extra", pressKey: extraKey } });
     if (again && again.status !== "failed" && again.status !== "cancelled") return { again };
     if (again) await tx.payment.update({ where: { id: again.id }, data: { pressKey: null } });
-    // (Batch 9 section 6; batch 28 §20) Per piece: listed, the listing plus the part's max; unlisted, the max on top of the Pay.
+    // (Batch 9 section 6; batch 29 §38) Per piece: the part's max in all, listed or not.
     const room = await pieceRoom(piece, tx);
     const morePress = payPressOf(c.id, at);
     if (amount! > room.roomCents) {

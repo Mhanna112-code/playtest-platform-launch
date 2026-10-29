@@ -106,7 +106,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             <ul className="space-y-1 text-sm" data-outage-gaps>
               {outages.gaps.map((g) => (
                 <li key={g.id} className="text-amber-200" data-outage-gap>
-                  {renderTimes(gapLine(g), u.timeZone)} <AdminButton action="approve-gap" id={g.id} label="Approve: move every timer" /> <AdminButton action="dismiss-gap" id={g.id} label="Dismiss" />
+                  {renderTimes(gapLine(g, u.timeZone), u.timeZone)} <AdminButton action="approve-gap" id={g.id} label="Approve: move every timer" /> <AdminButton action="dismiss-gap" id={g.id} label="Dismiss" />
                 </li>
               ))}
             </ul>

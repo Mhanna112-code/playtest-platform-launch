@@ -16,7 +16,7 @@ import { receipt } from "./payments";
 import { testerTermsGate } from "./terms";
 import { recordEvent } from "./tests";
 import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
-import { callMinutesOf, chargeCappedLine } from "@/lib/callMeasure";
+import { callMinutesOf } from "@/lib/callMeasure";
 import { callReference } from "@/lib/rules";
 import { callsLeftCents } from "./callMoney";
 import { closedOut, pieceCloseOut } from "./closeOut";
@@ -198,7 +198,8 @@ export async function chargeDeferred(devId: string) {
       await tellArrived(p, tester.email, displayName(dev));
     } catch (e) {
       // (Batch 15 section 41, M1) Only a card error is a decline; any other problem leaves it waiting for the next time.
-      if (e instanceof HttpError && e.code === "card_failed") await declinedPayment(devId, p.id, p.amountCents, p.kind === "dispute" ? "a team decision" : "work you paid for during the pause");
+      // (Batch 29 §37) The decline names what it was ("Ana Silva's written answers on “Harbor Run”"), not "work you paid for during the pause" for a tester's Charge.
+      if (e instanceof HttpError && e.code === "card_failed") await declinedPayment(devId, p.id, p.amountCents, await declinedWhat(p));
     }
   }
 }
@@ -221,6 +222,19 @@ async function deferredWhat(p: { kind: string; submissionId: string | null; call
     return `${displayName(c.tester)}'s ${label} (charged by them after ${REVIEW_DAYS} days)`;
   }
   return "work you paid for during the pause";
+}
+
+/** (Batch 29 §37) What a deferred payment declined after a lift was: "a team decision", or the piece ("Ana Silva's written answers on “Harbor Run”", "Ana Silva's call on Nov 5 on “Harbor Run”"). */
+async function declinedWhat(p: { kind: string; submissionId: string | null; callId: string | null; contractId: string | null }) {
+  if (p.kind === "dispute") return "a team decision";
+  const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } }) : null;
+  if (!c) return "work you paid for during the pause";
+  if (p.callId) {
+    const call = await db.call.findUnique({ where: { id: p.callId }, select: { startsAt: true } });
+    return `${displayName(c.tester)}'s call${call ? ` on ${T(call.startsAt, "date")}` : ""} on “${c.title}”`;
+  }
+  const kind = (await db.submission.findUnique({ where: { id: p.submissionId ?? "" }, select: { kind: true } }))?.kind;
+  return `${displayName(c.tester)}'s ${kind === "recording" ? "recording" : "written answers"} on “${c.title}”`;
 }
 
 /**
@@ -915,10 +929,6 @@ export async function callChargeCap(x: { id: string; contractId: string; rateCen
 }
 /** (Batch 28 §21) The tester's line when a listed call was charged automatically: "Nora Lane paid you $25.00 for your call on Oct 30." (without the end period, like bell titles). */
 export const autoPaidTesterLine = (dev: string, cents: number, at: Date) => `${dev} paid you ${money(cents)} for your call on ${T(at, "date")}`;
-/** The tester's line when Charge opens for a call ("… charge $X or let it go"; cut by the ceiling: "Charge $X (the $1,000 limit for calls on this test)"). */
-export const callChoiceLine = (devName: string, startsAt: Date, cents: number, capped: boolean) =>
-  `${devName} didn't pay your call on ${T(startsAt)} in ${REVIEW_DAYS} days: ${capped ? chargeCappedLine(cents).replace(/^Charge/, "charge") : `charge ${money(cents)}`} or let it go`;
-
 /**
  * (Owner, Oct 29, batch 28 §21; replaces Charge / Let it go for listed calls) A LISTED call not paid 7 days after it (its payBy, moved by pauses and outages) is charged
  * automatically: rate × measured minutes, less what's paid, within the $1,000 for that tester's calls; off-session, as a payment made while the developer is away. Each
@@ -928,11 +938,15 @@ export const callChoiceLine = (devName: string, startsAt: Date, cents: number, c
  */
 export async function autoChargeCalls(now: Date) {
   let n = 0;
-  const due = await db.call.findMany({ where: { review: null, status: "booked", rateCents: { not: null }, payBy: { lt: now }, contract: { test: { adminPausedAt: null, developer: { deletedAt: null } }, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } }, take: 1000 });
+  // (Batch 29 §37) A developer who deleted their account is charged too, on the card they saved (as a tester's Charge was before batch 28 §21); with no saved card
+  // the call stays unpaid ("<dev> deleted their account, so this can't be paid.").
+  const due = await db.call.findMany({ where: { review: null, status: "booked", rateCents: { not: null }, payBy: { lt: now }, contract: { test: { adminPausedAt: null }, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } }, take: 1000 });
   for (const x of due) {
     const minutes = callMinutesOf(x);
     if (minutes == null || x.rateCents == null) continue;
     const c = x.contract, dev = c.test.developer, name = displayName(c.tester);
+    const gone = !!dev.deletedAt;
+    if (gone && !dev.stripePaymentMethodId) continue;
     // A charge waiting for the bank on this call (the developer's own press) is left to finish.
     if (await (await import("./confirm")).pieceLocked({ callId: x.id })) continue;
 
@@ -946,27 +960,35 @@ export async function autoChargeCalls(now: Date) {
       continue;
     }
     const what = `${name}'s call on ${T(x.startsAt, "date")} (charged automatically after ${REVIEW_DAYS} days)`;
-    if (dev.devSuspendedAt && !dev.holdStartedAt) {
+    // (Batch 29 §37) The tester's call reads "may be delayed" (never "failed" or "hold") while the money waits: the same line as for a declined charge.
+    const tellDelayed = () => notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { payment: true, group: "tdelayed" });
+    // (Batch 29 §37) The developer's event says what really happened (charged, waiting for the bank, declined, owed, waiting for the account).
+    const logged = (text: string) => db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${text}`, false, {}, c.id));
+    if (!gone && dev.devSuspendedAt && !dev.holdStartedAt) {
       // During a suspension: it waits and is charged when the account is clear (chargeDeferred on the reinstatement); the tester is paid then.
       await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "deferred" } });
-      await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${name}'s call was charged automatically: ${money(amount)}`, false, {}, c.id));
+      await tellDelayed();
+      await logged(`${name}'s call was charged automatically: ${money(amount)}, charged when your account is clear`);
       n++;
       continue;
     }
-    if (dev.holdStartedAt) {
+    if (!gone && dev.holdStartedAt) {
       // During a hold: added to what's owed (as a tester's Charge is); the tester is paid when the developer pays it.
       await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "owed" } });
       await bell(dev.id, `${name}'s call on “${c.title}” was charged automatically (${money(amount)}): it was added to what you owe`, dev.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { payment: true, group: "payhold" });
-      await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${name}'s call was charged automatically: ${money(amount)}`, false, {}, c.id));
+      await tellDelayed();
+      await logged(`${name}'s call was charged automatically: ${money(amount)}, added to what you owe`);
       n++;
       continue;
     }
     const row = await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "pending", payKey } });
+    let outcome = `${name}'s call was charged automatically: ${money(amount)}`;
     try {
       const r = await charge(dev, c.tester, amount, payKey, `Playtest: live call on “${c.title}” (charged automatically after ${REVIEW_DAYS} days)`);
       if (r.status === "requires_action") {
         await (await import("./confirm")).awayAction(row.id, r as NeedsAction);
-        await notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { payment: true, group: "tdelayed" });
+        await tellDelayed();
+        outcome = `${name}'s call was charged automatically: ${money(amount)}, waiting for your bank to confirm it`;
       } else {
         await db.payment.update({ where: { id: row.id }, data: { status: r.status, stripePaymentIntentId: r.stripePaymentIntentId, ...(r.feeCents != null ? { feeCents: r.feeCents, testerCents: r.testerCents, transferStatus: r.transferStatus } : {}) } });
         await receipt(dev.email, what, amount, r.status, `/app/tests/${c.testId}#call-${x.id}`);
@@ -982,10 +1004,12 @@ export async function autoChargeCalls(now: Date) {
         continue;
       }
       const failed = await db.payment.update({ where: { id: row.id }, data: { status: "failed", failure: (e as Error).message, owedUntil: new Date() } });
-      await notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { payment: true, group: "tdelayed" });
+      await tellDelayed();
+      // (A deleted developer: no hold to start; it stays "delayed" for the tester and is listed for the admins, as declinedPayment says.)
       await declinedPayment(dev.id, failed.id, amount, `${name}'s call on “${c.title}”`);
+      outcome = gone ? `The automatic charge for ${name}'s call (${money(amount)}) was declined` : `The automatic charge for ${name}'s call (${money(amount)}) was declined: it was added to what you owe`;
     }
-    await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${name}'s call was charged automatically: ${money(amount)}`, false, {}, c.id));
+    await logged(outcome);
     n++;
   }
   return n;

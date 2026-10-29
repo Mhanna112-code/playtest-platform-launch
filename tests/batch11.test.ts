@@ -301,22 +301,22 @@ describe("batch 11 item 5: the paused banner mentions the deadline", () => {
 describe("batch 11 item 6 (with batch 12 section 2): one Pay box, Pay more", () => {
   it("a listed piece: the first Pay can go above the listing within the cap; then Pay more until the cap; the tester's lines", async () => {
     const { dev, tester, testId, sessionId, sub } = await sentWork("20.00");
-    // (Batch 28 §20) The listing plus the part's max: $20 + $1,000.
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "1020.01", tickedCents: 102_001, over200: true })).body.error.message).toBe("This is more than you can pay above the listing (up to $1,000).");
+    // (Batch 29 §38) The part's max in all: $1,000.
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "1000.01", tickedCents: 100_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $1,000).");
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "30.00", tickedCents: 3000 })).status).toBe(200);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $30.00 for your written answers on “Harbor Run”" } })).toBe(1);
-    expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "990.01", tickedCents: 99_001, over200: true })).body.error.message).toBe("This is more than you can pay above the listing (up to $990).");
+    expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "970.01", tickedCents: 97_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $970 more, $1,000 in all).");
     expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "10.00", tickedCents: 1000, note: "Great" })).status).toBe(200);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $10.00 more for your written answers on “Harbor Run”" } })).toBe(1); // (batch 15 section 20: the note is in the email, not the bell)
   });
 
-  it("an unlisted written piece: up to $2000 in all; Pay more needs a first payment", async () => {
+  it("an unlisted written piece: up to $1000 in all (batch 29 §38); Pay more needs a first payment", async () => {
     const { dev, testId, sessionId, sub } = await sentWork(null);
     expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "5.00", tickedCents: 500 })).body.error.message).toBe("Pay this part first: Pay more is for a part you've already paid.");
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "2000.01", tickedCents: 200_001, over200: true })).body.error.message).toBe("This is more than you can pay above the max (up to $1,000).");
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "1500.00", tickedCents: 150_000, over200: true })).status).toBe(200);
-    expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "500.01", tickedCents: 50_001, over200: true })).status).toBe(400);
-    expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "500.00", tickedCents: 50_000, over200: true })).status).toBe(200);
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "1000.01", tickedCents: 100_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $1,000).");
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "750.00", tickedCents: 75_000, over200: true })).status).toBe(200);
+    expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "250.01", tickedCents: 25_001, over200: true })).status).toBe(400);
+    expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "250.00", tickedCents: 25_000, over200: true })).status).toBe(200);
   });
 
   it("unlisted calls: $200/h for the measured minutes with nothing above, and (batch 15 section 34) $1,000 for all of a tester's calls", async () => {

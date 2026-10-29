@@ -116,12 +116,17 @@ export async function disputeRow(d: Awaited<ReturnType<typeof db.dispute.findMan
   const flagged = await reportedOver3([d.testerId, c?.test.developerId ?? ""]);
   let min = 0, max = 0, range = "";
   const base = r?.agreedCents == null ? NOT_LISTED : `Listing ${money(r.agreedCents)}`;
-  if (d.status === "open" && r) {
+  // (Batch 29 §37) "Paid for this piece" is the same total as the range line: the Pay plus every Pay more (and a decision's raise once decided).
+  let paidForPiece = r?.amountCents ?? 0;
+  if (r) {
     // (Batch 28 §15) The range runs up to the piece's cap (the same as Pay + Pay more), less what the piece was already paid.
     const b = await disputeBounds(d);
-    min = b.min;
-    max = b.max;
-    range = disputeRangeLine(b.min, b.max - b.min);
+    paidForPiece = b.min;
+    if (d.status === "open") {
+      min = b.min;
+      max = b.max;
+      range = disputeRangeLine(b.min, b.max - b.min);
+    }
   }
   // (Owner, Oct 29, batch 28 §15) Their chat on this test, so an agreement made in chat can be checked (read-only; no read log).
   const chat = c ? await db.message.findMany({ where: { testId: c.testId, testerId: c.testerId }, orderBy: { createdAt: "asc" }, include: { sender: true }, take: 500 }) : [];
@@ -130,7 +135,7 @@ export async function disputeRow(d: Awaited<ReturnType<typeof db.dispute.findMan
     at: d.createdAt.toISOString(),
     type: "dispute" as const,
     head: `${c ? labelled(displayName(c.tester), flagged.has(c.testerId)) : "?"} vs ${c ? labelled(displayName(c.test.developer), flagged.has(c.test.developerId)) : "?"} · ${c?.title ?? ""} · ${what}`,
-    money: `${base} · Paid for this piece ${money(r?.amountCents)}${r?.rejected ? " (rejected)" : ""}`,
+    money: `${base} · Paid for this piece ${money(paidForPiece)}${r?.rejected ? " (rejected)" : ""}`,
     range,
     chat: chat.map((m) => ({ id: m.id, who: displayName(m.sender), at: fmtDateTime(m.createdAt), text: m.body })),
     work: await disputedWork(d),

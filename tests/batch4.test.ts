@@ -137,17 +137,17 @@ describe("A1, A2) declined payments and chargebacks", () => {
   });
 });
 
-describe("A8) the extra-pay cap (batch 9: per piece, $1000 max for an unlisted part, plus 100% of the max as extra pay)", () => {
-  it("a part with no listed price: (batch 11: one Pay box) at most $1000 plus $1000 above it, $2000 in all", async () => {
+describe("A8) the extra-pay cap (batch 9: per piece; batch 29 §38: $1000 in all for an unlisted part)", () => {
+  it("a part with no listed price: (batch 11: one Pay box) at most $1000 in all, Pay and Pay more together", async () => {
     const { dev, testId, sessionId, sub } = await sentWork({ writtenCents: null, questions: [] });
     expect(sub.agreedCents).toBeNull();
-    const over = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "2000.01", tickedCents: 200_001, over200: true });
+    const over = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "1000.01", tickedCents: 100_001, over200: true });
     expect(over.status).toBe(400);
-    expect(over.body.error.message).toBe("This is more than you can pay above the max (up to $1,000).");
+    expect(over.body.error.message).toBe("This is more than this piece can be paid (up to $1,000).");
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "600.00", tickedCents: 60_000, over200: true })).status).toBe(200);
-    const tooMuch = await act(testId, "pay-extra", dev.cookie, { seenAt: seen(), contractId: sessionId, submissionId: sub.id, amount: "1400.01", tickedCents: 140_001, over200: true, payKey: randomUUID() });
-    expect(tooMuch.body.error.message).toBe("This is more than you can pay above the max (up to $1,000).");
-    expect((await act(testId, "pay-extra", dev.cookie, { seenAt: seen(), contractId: sessionId, submissionId: sub.id, amount: "1400.00", tickedCents: 140_000, over200: true, payKey: randomUUID() })).status).toBe(200);
+    const tooMuch = await act(testId, "pay-extra", dev.cookie, { seenAt: seen(), contractId: sessionId, submissionId: sub.id, amount: "400.01", tickedCents: 40_001, over200: true, payKey: randomUUID() });
+    expect(tooMuch.body.error.message).toBe("This is more than this piece can be paid (up to $400 more, $1,000 in all).");
+    expect((await act(testId, "pay-extra", dev.cookie, { seenAt: seen(), contractId: sessionId, submissionId: sub.id, amount: "400.00", tickedCents: 40_000, over200: true, payKey: randomUUID() })).status).toBe(200);
   });
 });
 

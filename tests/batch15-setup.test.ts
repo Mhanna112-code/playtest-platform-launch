@@ -12,6 +12,8 @@ describe("test schema cleanup", () => {
   });
   it("runs against the test schema", async () => {
     const [{ s }] = await db.$queryRaw<{ s: string }[]>`select current_schema() as s`;
-    expect(s).toBe("test");
+    // (Batch 29) The schema TEST_DATABASE_URL names ("test" by default; a parallel builder uses its own, e.g. "test29"), never public.
+    expect(s).toBe(new URL(process.env.DATABASE_URL ?? "").searchParams.get("schema") ?? "test");
+    expect(s).not.toBe("public");
   });
 });

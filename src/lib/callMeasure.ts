@@ -105,8 +105,6 @@ export function callsLeftWarning(leftCents: number, rateCents: number | null, si
   if (leftCents >= hour) return "";
   return side === "developer" ? `${money(leftCents)} left of the ${dollars(CALLS_TOTAL_CENTS)} for calls with ${testerName} on this test.` : `${money(leftCents)} left of the ${dollars(CALLS_TOTAL_CENTS)} for your calls on this test.`;
 }
-/** A listed call's Charge cut by the ceiling. */
-export const chargeCappedLine = (cents: number) => `Charge ${money(cents)} (the ${dollars(CALLS_TOTAL_CENTS)} limit for calls on this test)`;
 /** A call payment over what's left of the ceiling. */
 export const overCeilingLine = (roomCents: number) => `This is more than you can pay for this call (up to ${money(roomCents)}: what's left of the ${dollars(CALLS_TOTAL_CENTS)} for calls on this test).`;
 

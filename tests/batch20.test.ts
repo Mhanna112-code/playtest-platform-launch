@@ -674,15 +674,17 @@ describe("batch 20 section 15: Dispute disabled when nothing more can be awarded
     const full = await paidAt("10.00", 1000);
     expect((await dispute(full.sessionId, full.tester.cookie, full.sub.id)).status).toBe(200);
   });
-  it("(server; batch 28 §15) an unlisted piece paid its max ($1,000) can still be disputed up to its cap ($2,000)", async () => {
-    const x = await paidAt("1000.00", 100000, { writtenCents: null });
+  it("(server; batch 29 §38) an unlisted piece paid below its max can be disputed; paid its max ($1,000 in all), there's nothing to dispute", async () => {
+    const x = await paidAt("900.00", 90000, { writtenCents: null });
     expect((await dispute(x.sessionId, x.tester.cookie, x.sub.id)).status).toBe(200);
+    const y = await paidAt("1000.00", 100000, { writtenCents: null });
+    expect((await dispute(y.sessionId, y.tester.cookie, y.sub.id)).body.error.message).toBe("Already paid the most this piece can be paid, so there's nothing to dispute.");
   });
   it("(server) a Pay more reaching the cap disables it (the page's poll brings it); the page uses the admin form's bounds", async () => {
     const x = await paidAt("8.00", 800);
     const { disputeRoom } = await import("@/lib/server/payments");
-    expect((await disputeRoom([{ submissionId: x.sub.id }])).get(x.sub.id)).toBe(100_200); // (batch 28 §20) $8 + $1,000, less the $8 paid
-    expect((await payMore(x.testId, x.dev.cookie, { contractId: x.sessionId, submissionId: x.sub.id, amount: "1000.00", tickedCents: 100_000, over200: true })).status).toBe(200);
+    expect((await disputeRoom([{ submissionId: x.sub.id }])).get(x.sub.id)).toBe(99_200); // (batch 29 §38) $1,000 in all, less the $8 paid
+    expect((await payMore(x.testId, x.dev.cookie, { contractId: x.sessionId, submissionId: x.sub.id, amount: "990.00", tickedCents: 99_000, over200: true })).status).toBe(200);
     expect((await payMore(x.testId, x.dev.cookie, { contractId: x.sessionId, submissionId: x.sub.id, amount: "2.00", tickedCents: 200 })).status).toBe(200);
     expect((await disputeRoom([{ submissionId: x.sub.id }])).get(x.sub.id)).toBe(0);
     expect((await dispute(x.sessionId, x.tester.cookie, x.sub.id)).body.error.message).toBe("Already paid the most this piece can be paid, so there's nothing to dispute.");

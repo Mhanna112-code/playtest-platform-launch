@@ -40,6 +40,11 @@ export const WHAT_CHANGED: { version: number; date: string; points: string[] }[]
       "When these terms change, you're asked to agree to the new version the next time you post a test, or join, apply, accept an invite or ask to rejoin (section 8).",
       // (Batch 20 section 5) Folded into version 2: nothing has launched.
       "You must be 18 or older to use Playtest. Signing up (with email or Google) asks you to confirm it (section 1).",
+      // (Batch 29 §37, the batch 28 points) Folded into version 2: nothing has launched.
+      "To decide a dispute, our team can read the chat between the tester and the developer (section 4, Paying for work).",
+      "A piece of work can be paid at most the part's maximum in all, listed or not: $1,000 for written answers or a recording, $200 an hour for a call's measured length. Pay, Pay more and a dispute decision all count toward it (section 4, Pay more).",
+      "A listed call the developer hasn't paid 7 days after it took place is charged to their card automatically; there's no Charge or Let it go for it (section 4, Calls).",
+      "Emails about payments are always sent the same evening, whatever your email setting, Off included (section 4, Bank checks, declines, holds).",
     ],
   },
 ];
@@ -66,8 +71,8 @@ export const PAYMENT_RULES: { heading: string; text: string; example: string }[]
   },
   {
     heading: "Pay more",
-    text: "After paying a piece, the developer can pay extra on it with Pay more, within the piece's cap: on a listed piece up to the part's maximum on top of its listing ($1,000 for written answers or a recording; $200 an hour for a call's measured length), on unlisted written answers or a recording up to $1,000 on top, and nothing extra on an unlisted call. All of one tester's calls on a test stay within $1,000 together. Pay more closes together with the test's last Pay or Charge.",
-    example: "A written part listed at $20 can get up to $20 extra.",
+    text: "After paying a piece, the developer can pay extra on it with Pay more, within the piece's cap: the part's maximum in all, listed or not ($1,000 for written answers or a recording; $200 an hour for a call's measured length), counting the first payment, every Pay more and any dispute decision. A listed price at the maximum leaves no room for Pay more. All of one tester's calls on a test stay within $1,000 together. Pay more closes together with the test's last Pay or Charge.",
+    example: "A written part listed at $20 can be paid up to $1,000 in all.",
   },
   {
     heading: "Unreviewed work: Charge or Let it go",
@@ -81,7 +86,7 @@ export const PAYMENT_RULES: { heading: string; text: string; example: string }[]
   },
   {
     heading: "Calls",
-    text: "A call's length is measured by the app while both people are connected in the call room, up to 150% of the booked length and never past the $1,000 for that tester's calls. The developer pays by the hour at the call's rate; paying less needs a reason the tester reads, and the tester can dispute it once. All of one tester's calls on a test can come to at most $1,000 together, listed or not, extra pay included: a call ends for both when its pay reaches what's left. A call that isn't listed is paid what the developer chooses, at most $200 an hour.",
+    text: `A call's length is measured by the app while both people are connected in the call room, up to 150% of the booked length and never past the $1,000 for that tester's calls. The developer pays by the hour at the call's rate; paying less needs a reason the tester reads, and the tester can dispute it once. All of one tester's calls on a test can come to at most $1,000 together, listed or not, extra pay included: a call ends for both when its pay reaches what's left. A call that isn't listed is paid what the developer chooses, at most $200 an hour. A listed call the developer hasn't paid ${REVIEW_DAYS} days after it took place is charged to their card automatically for its measured length at the call's rate (within the $1,000), with no Charge or Let it go.`,
     example: "A call at $30 an hour where both people were connected for 50 minutes: $25.00.",
   },
   {
@@ -91,7 +96,7 @@ export const PAYMENT_RULES: { heading: string; text: string; example: string }[]
   },
   {
     heading: "Bank checks, declines, holds",
-    text: "When the developer presses Pay, Pay more, Pay what you owe, Subscribe or Verify a card and their bank wants to confirm it, the bank's check opens on the page; cancelled or failed, nothing is charged. A charge made while the developer isn't there (a tester's Charge, a listed call's automatic charge, a dispute decision, a renewal) that the bank wants confirmed waits 3 days for the developer's confirmation, and the tester's pay is delayed meanwhile. A declined payment is owed: the developer's tests pause until they pay what they owe (it's retried once a day meanwhile, at most 7 times), and the tester's pay is delayed until then. A chargeback (the developer's bank reversing a payment) adds a $15 fee, and the tests stay paused until the developer verifies a card with 3D Secure and presses Pay what you owe, which reserves the amount on their card: it's taken when our team approves lifting the hold, and released if they don't approve or after about 7 days.",
+    text: "When the developer presses Pay, Pay more, Pay what you owe, Subscribe or Verify a card and their bank wants to confirm it, the bank's check opens on the page; cancelled or failed, nothing is charged. A charge made while the developer isn't there (a tester's Charge, a listed call's automatic charge, a dispute decision, a renewal) that the bank wants confirmed waits 3 days for the developer's confirmation, and the tester's pay is delayed meanwhile. A declined payment is owed: the developer's tests pause until they pay what they owe (it's retried once a day meanwhile, at most 7 times), and the tester's pay is delayed until then. A chargeback (the developer's bank reversing a payment) adds a $15 fee, and the tests stay paused until the developer verifies a card with 3D Secure and presses Pay what you owe, which reserves the amount on their card: it's taken when our team approves lifting the hold, and released if they don't approve or after about 7 days. Emails about payments (receipts, payments, declines, holds, delays, payouts and chargebacks) are always sent the same evening, whatever the email setting, Off included.",
     example: "A $10 payment reversed by the bank: $25 owed ($10 + the $15 chargeback fee).",
   },
   {
