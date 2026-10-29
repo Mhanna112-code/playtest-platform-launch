@@ -51,25 +51,31 @@ describe("the restricted view (sections 29 and 37)", () => {
     expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain("`Done: you stopped ${p.title}.`");
   });
 
-  it("a suspended developer: Cancel call stops once; End early and Stop go through silently despite a tester's change; other presses are refused", async () => {
+  // (Batch 29 section 11) End early and Stop now follow the running test's stop-once rules too: the suspension and the tester's change stop them once.
+  it("a suspended developer: Cancel call, End early and Stop stop once (the suspension and a tester's change), then go ahead; other presses are refused", async () => {
     const { dev, testId, a, b, call, loaded } = await busyTest();
     await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date() } });
     expect((await act(testId, "cancel-call", dev.cookie, { callId: call.id, reason: "Can't make it", seenAt: loaded })).body.error.code).toBe("stop_once");
     expect((await act(testId, "next-round", dev.cookie, { seenAt: loaded })).body.error.code).toBe("suspended");
-    expect((await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "We have enough", seenAt: loaded })).status).toBe(200);
-    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded })).status).toBe(200);
+    const e = await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "We have enough", seenAt: loaded });
+    expect(e.body.error.code).toBe("stop_once");
+    expect(e.body.error.changes[e.body.error.changes.length - 1].text).toMatch(/^Your developer account was suspended at /);
+    expect((await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "We have enough", seenAt: loaded, confirmed: true, boxAt: seen() })).status).toBe(200);
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen() })).status).toBe(200);
     expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).status).toBe("stopped");
     void a;
   });
 
-  it("the team's pause: the same pair goes through silently; any other press is refused and routed to the banner with its failed line", async () => {
+  it("the team's pause: the same pair stops once (the pause, a tester's change), then goes ahead; any other press is refused and routed to the banner with its failed line", async () => {
     const { dev, testId, b, loaded } = await busyTest();
     await db.test.update({ where: { id: testId }, data: { adminPausedAt: new Date(), adminNote: "Build link is broken" } });
     const e = await act(testId, "edit", dev.cookie, { version: 1, fields: { title: "x" }, seenAt: loaded });
     expect(e.body.error.code).toBe("admin_paused");
     expect(e.body.error.failed).toBe("Your Save on Harbor Run didn't go through");
-    expect((await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "Paused anyway", seenAt: loaded })).status).toBe(200);
-    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded })).status).toBe(200);
+    const p = await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "Paused anyway", seenAt: loaded });
+    expect(p.body.error.changes.map((c: { text: string }) => c.text)).toContainEqual(expect.stringMatching(/^The team paused this test at /));
+    expect((await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "Paused anyway", seenAt: loaded, confirmed: true, boxAt: seen() })).status).toBe(200);
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen() })).status).toBe(200);
   });
 
   it("(section 39) a paused test's Alerts list only what can still happen; a stopped one fewer still", () => {

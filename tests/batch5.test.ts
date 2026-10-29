@@ -210,15 +210,16 @@ describe("batch 5 item 4: no automatic re-invite after a tester's suspension", (
 });
 
 describe("batch 5 item 5: Rate's stop-once lines", () => {
-  it("open test: every kind; closed: only pay, reject, charge, let go, disputes (and the person's own presses about them)", () => {
+  it("open test: every kind; closed: only pay, reject, charge, let go, disputes (never your own presses in another tab: batch 29)", () => {
     const line = (kind: string, text = "x") => ({ kind, text, createdAt: new Date() });
-    for (const k of ["joined", "left", "sent", "booked", "cancelled", "info", "terms", "requested", "applied", "own"]) expect(rateStops(line(k), false), k).toBe(true);
+    for (const k of ["joined", "left", "sent", "booked", "cancelled", "info", "terms", "requested", "applied"]) expect(rateStops(line(k), false), k).toBe(true);
     for (const k of ["joined", "left", "sent", "booked", "cancelled", "info", "terms", "requested", "applied"]) expect(rateStops(line(k), true), k).toBe(false);
     for (const k of RATE_AFTER_CLOSE_KINDS) expect(rateStops(line(k), true), k).toBe(true);
-    expect(rateStops(line("own", "You also did this in another tab: paid Ana Silva $10.00 for the written answers"), true)).toBe(true);
-    expect(rateStops(line("own", "You also did this in another tab: let your recording go"), true)).toBe(true);
-    expect(rateStops(line("own", "You also did this in another tab: opened a dispute"), true)).toBe(true);
-    expect(rateStops(line("own", "You also did this in another tab: cancelled the call on Mon"), true)).toBe(false);
+    // (Batch 29 sections 12-13) Your own changes in another tab never stop Rate, open or closed.
+    for (const closed of [false, true]) {
+      expect(rateStops(line("own", "You paid Ana Silva $10.00 for the written answers in another tab"), closed)).toBe(false);
+      expect(rateStops(line("own", "You let your recording go in another tab"), closed)).toBe(false);
+    }
     expect(testClosedForRate({ status: "open" })).toBe(false);
     expect(testClosedForRate({ status: "stopped" })).toBe(true);
     expect(testClosedForRate({ status: "closed" })).toBe(true);

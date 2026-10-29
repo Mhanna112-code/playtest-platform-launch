@@ -95,8 +95,7 @@ export async function decideExcerpt(dev: { id: string; name: string; email: stri
   if (!x || x.test.developerId !== dev.id) throw new HttpError(404, "gone", ALREADY_DECIDED);
   // (Owner, Oct 28, batch 16 section 21) The same press already made (in another tab): a plain refusal, no stop box.
   if (x.status !== "pending") throw new HttpError(409, "decided", x.status === "shown" ? "You already allowed this excerpt." : x.status === "denied" ? "You already denied this excerpt." : ALREADY_DECIDED);
-  // A big change made in another tab (End early, Stop, a Pay, a call change) stops even Allow / Deny once.
-  await (await import("./tests")).bigOwnGate(dev.id, x.testId, body);
+  // (Owner, Oct 29, batch 29 section 12) Your own changes in another tab never stop Allow / Deny (the same decision made elsewhere is the plain refusal above).
   const done = await db.excerpt.updateMany({ where: { id: x.id, status: "pending" }, data: { status: allow ? "shown" : "denied", decidedAt: new Date() } });
   if (done.count !== 1) throw new HttpError(409, "decided", ALREADY_DECIDED);
   const hidden = allow && !!x.test.ndaText;

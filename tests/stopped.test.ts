@@ -57,8 +57,8 @@ describe("after the test is stopped", () => {
     expect((await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
   });
 
-  // (Owner, Oct 28, batch 16 section 25) On a stopped test the tester's Dispute goes through on the FIRST press, whatever changed (the developer's side included).
-  it("Dispute: goes through on the first press after the developer added their side; an already disputed piece is final", async () => {
+  // (Owner, Oct 29, batch 29 section 11) On a stopped test the tester's Dispute follows the running test's stop-once rules: the stop and the developer's side stop it once.
+  it("Dispute: stops once for the stop, and for the developer's side, then goes through; an already disputed piece is final", async () => {
     const s = await setup({ writtenCents: "10.00", recordingCents: "10.00", liveRateCents: null });
     const j = await joined(s.testId);
     await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] });
@@ -70,11 +70,18 @@ describe("after the test is stopped", () => {
     const opened = seen();
     await later();
     await act(s.testId, "stop", s.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
-    expect((await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: w.id, reason: "I answered everything properly", seenAt: opened })).status).toBe(200);
+    const first = await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: w.id, reason: "I answered everything properly", seenAt: opened });
+    expect(first.body.error.changes.map((c: { text: string }) => c.text)).toEqual([expect.stringMatching(/^Nora Lane stopped this test at /)]);
+    expect((await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: w.id, reason: "I answered everything properly", seenAt: opened, confirmed: true, boxAt: seen() })).status).toBe(200);
     const d1 = await db.dispute.findFirstOrThrow({ where: { submissionId: w.id } });
     expect((await act(s.testId, "dispute-side", s.dev.cookie, { disputeId: d1.id, text: "They skipped half of it", seenAt: seen(), confirmed: true })).status).toBe(200);
-    // Disputing the second piece with a page that predates the developer's side: goes through on the first press.
-    const go = await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: rec.id, reason: "The recording was fine really", seenAt: opened });
+    // Disputing the second piece with a page opened after the stop that predates the developer's side: stops once for it, then goes through.
+    const afterStop = await later().then(() => seen());
+    await db.dispute.update({ where: { id: d1.id }, data: { devSideAt: new Date(Date.now() + 10) } });
+    await later();
+    const side = await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: rec.id, reason: "The recording was fine really", seenAt: afterStop });
+    expect(side.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane added their side to your dispute"]);
+    const go = await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: rec.id, reason: "The recording was fine really", seenAt: afterStop, confirmed: true, boxAt: seen() });
     expect(go.status, JSON.stringify(go.body)).toBe(200);
     // Disputing the first piece again: final.
     expect((await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: w.id, reason: "Again, please look", seenAt: seen(), confirmed: true })).body.error.message).toMatch(/already disputed/);

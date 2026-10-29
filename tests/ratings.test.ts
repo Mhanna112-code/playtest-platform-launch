@@ -25,7 +25,7 @@ describe("the tester rates the developer", () => {
     expect((await sact(sessionId, "rate", tester.cookie, { stars: 4, comment: "x".repeat(501) })).status).toBe(400);
     expect((await sact(sessionId, "rate", tester.cookie, { stars: 4, comment: "Clear build, quick pay." })).status).toBe(200);
     // Final: no second rating, and the prompt never repeats.
-    expect((await sact(sessionId, "rate", tester.cookie, { stars: 1 })).body.error.message).toBe("You already rated this test.");
+    expect((await sact(sessionId, "rate", tester.cookie, { stars: 1 })).body.error.message).toBe("You already rated Nora Lane.");
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Rate Nora Lane" } } })).toBe(1);
   });
 

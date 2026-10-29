@@ -46,11 +46,14 @@ async function scene(state: State, written: "paid" | "charge-open") {
   return { dev, testId, tester, sessionId, sub, rec, opened };
 }
 
-describe("what still works goes through on the first press (section 25, tester)", () => {
+// (Owner, Oct 29, batch 29 section 11) Section 25's "goes through on the first press" is replaced: what still works follows the running test's stop-once rules.
+describe("what still works follows the running test's stop-once rules (batch 29 section 11, tester)", () => {
   for (const state of ["stopped", "ended early", "left", "removed", "paused"] as const) {
-    it(`${state}: Dispute and Charge / Let it go on the first press, though the developer paid something after the page loaded`, async () => {
+    it(`${state}: Dispute and Charge / Let it go stop once for a payment made after the page loaded, then go ahead`, async () => {
       const a = await scene(state, "paid");
-      const d = await sact(a.sessionId, "dispute", a.tester.cookie, { kind: "submission", id: a.sub.id, reason: "I answered every question in full.", seenAt: a.opened });
+      const d0 = await sact(a.sessionId, "dispute", a.tester.cookie, { kind: "submission", id: a.sub.id, reason: "I answered every question in full.", seenAt: a.opened });
+      expect(d0.body.error?.changes.map((x: { text: string }) => x.text), JSON.stringify(d0.body)).toEqual(["Nora Lane paid $15.00 for your recording"]);
+      const d = await sact(a.sessionId, "dispute", a.tester.cookie, { kind: "submission", id: a.sub.id, reason: "I answered every question in full.", seenAt: a.opened, confirmed: true, boxAt: seen() });
       expect(d.status, JSON.stringify(d.body)).toBe(200);
       // Refusals stay: a second dispute on the same piece.
       const again = await sact(a.sessionId, "dispute", a.tester.cookie, { kind: "submission", id: a.sub.id, reason: "I answered every question in full.", seenAt: a.opened });
@@ -62,7 +65,9 @@ describe("what still works goes through on the first press (section 25, tester)"
         expect(c.body.error.message).toBe("You can do this once your account is active again.");
         return;
       }
-      expect(c.status, JSON.stringify(c.body)).toBe(200);
+      expect(c.body.error?.code, JSON.stringify(c.body)).toBe("stop_once");
+      const c2 = await sact(b.sessionId, "choose", b.tester.cookie, { submissionId: b.sub.id, choice: "letgo", seenAt: b.opened, confirmed: true, boxAt: seen() });
+      expect(c2.status, JSON.stringify(c2.body)).toBe(200);
       expect((await sact(b.sessionId, "choose", b.tester.cookie, { submissionId: b.sub.id, choice: "letgo", seenAt: b.opened })).body.error.message).toBe("You already chose for this.");
     }, 60_000);
   }
@@ -93,7 +98,7 @@ describe("what still works goes through on the first press (section 25, tester)"
     expect((await sact(sessionId, "rate", tester.cookie, { stars: 5, comment: "", seenAt: opened, confirmed: true, boxAt: seen() })).status).toBe(200);
   });
 
-  it("paused: Cancel call and Leave go through on the first press", async () => {
+  it("paused: Cancel call stops once for a payment since the page loaded (batch 29 section 11); Leave never stops", async () => {
     const { dev, testId } = await setup({ recordingCents: "15.00" });
     const { tester, sessionId } = await joined(testId);
     await bookCall(testId, dev.cookie, sessionId, tester.cookie, 72);
@@ -104,7 +109,9 @@ describe("what still works goes through on the first press (section 25, tester)"
     const opened = seen();
     await settle();
     expect((await pay(dev.cookie, { kind: "submission", id: rec.id, amount: "15.00", tickedCents: 1500 })).status).toBe(200);
-    const c = await sact(sessionId, "cancel-call", tester.cookie, { callId: call.id, reason: "Something came up at work.", seenAt: opened });
+    const c0 = await sact(sessionId, "cancel-call", tester.cookie, { callId: call.id, reason: "Something came up at work.", seenAt: opened });
+    expect(c0.body.error?.code, JSON.stringify(c0.body)).toBe("stop_once");
+    const c = await sact(sessionId, "cancel-call", tester.cookie, { callId: call.id, reason: "Something came up at work.", seenAt: opened, confirmed: true, boxAt: seen() });
     expect(c.status, JSON.stringify(c.body)).toBe(200);
     const l = await sact(sessionId, "leave", tester.cookie, { seenAt: opened });
     expect(l.status, JSON.stringify(l.body)).toBe(200);
@@ -129,8 +136,8 @@ describe("what still works goes through on the first press (section 25, tester)"
 describe("a suspended tester's limited view of tests they were removed from (section 28)", () => {
   it("only Dispute, Charge, Let it go and Rate work; everything else and excerpt requests are refused while suspended; excerpts work after reinstating", async () => {
     const a = await scene("removed", "paid");
-    // Allowed (the dispute and the rate are covered above too).
-    expect((await sact(a.sessionId, "dispute", a.tester.cookie, { kind: "submission", id: a.sub.id, reason: "I answered every question in full.", seenAt: a.opened })).status).toBe(200);
+    // Allowed (the dispute and the rate are covered above too; batch 29 section 11: after its stop once for the payment).
+    expect((await sact(a.sessionId, "dispute", a.tester.cookie, { kind: "submission", id: a.sub.id, reason: "I answered every question in full.", seenAt: a.opened, confirmed: true, boxAt: seen() })).status).toBe(200);
     // Everything else stays refused while suspended.
     for (const [action, body] of [["message", { body: "hi" }], ["written", { answers: ["a", "b"] }], ["request-time", { startsAt: new Date(Date.now() + 3 * DAY).toISOString() }], ["leave", {}]] as const) {
       const r = await sact(a.sessionId, action, a.tester.cookie, { seenAt: a.opened, ...body });

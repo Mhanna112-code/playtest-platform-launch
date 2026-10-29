@@ -109,13 +109,16 @@ export async function listingGate(userId: string, testId: string, body: Record<s
   // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt).
   const boxAt = seenOf(body.boxAt);
   if (body.confirmed === true && !boxAt) return;
-  const raw = await joinPageChanges(userId, testId, body.confirmed === true ? boxAt!.toISOString() : body.seenAt, tabOf(body));
+  const raw0 = await joinPageChanges(userId, testId, body.confirmed === true ? boxAt!.toISOString() : body.seenAt, tabOf(body));
+  // (Batch 17 section 13) The tester's box drops "Turn off alerts" when their Alerts are already Off.
+  const alertsOff = !!(await db.user.findUnique({ where: { id: userId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
+  // (Owner, Oct 29, batch 29 section 13) Their own changes in another tab ("You applied to join in another tab") follow Alerts like the other tabs' lines: Off, they
+  // don't stop (the same press made there is a plain refusal).
+  const raw = alertsOff ? raw0.filter((e) => e.kind !== "own") : raw0;
   // (Batch 17 section 4) A full test keeps the invite open: No thanks just declines it (the test filling or a spot opening doesn't stop it).
   const changes = withRenamed(verb === "decline" ? raw.filter((e) => e.kind !== "full" && e.kind !== "spot_open") : raw, body);
   if (changes.length) {
     const tail = verb === "withdraw" || verb === "decline" ? "Press again to go ahead." : `Press again to ${verb} on the current listing.`;
-    // (Batch 17 section 13) The tester's box drops "Turn off alerts" when their Alerts are already Off.
-    const alertsOff = !!(await db.user.findUnique({ where: { id: userId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
     throw new HttpError(409, "stop_once", tail, { changes: changes.map((e) => ({ text: e.text, at: e.createdAt })), tail, alertsOff });
   }
 }

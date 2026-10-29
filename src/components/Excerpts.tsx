@@ -8,7 +8,7 @@ import { ChangesBox, type Change } from "@/components/ChangesBox";
 
 // (Owner, Oct 29, batch 13) Excerpt requests: the tester's picker, the developer's Allow / Deny, and Remove / Take down. None of them stops once: a press goes through
 // whatever changed meanwhile, and is refused only when the request (or excerpt) no longer exists, or (a request, an Allow) when the test now has an NDA.
-// (Owner, Oct 28, batch 16 section 21) The exception: a big change made in another tab (End early, Stop, a Pay, a call change) stops Allow / Deny once.
+// (Owner, Oct 29, batch 29 section 12) Allow / Deny never stop for your own changes in another tab (the same decision made there is a plain refusal).
 
 const MIN = 10, MAX = 500;
 

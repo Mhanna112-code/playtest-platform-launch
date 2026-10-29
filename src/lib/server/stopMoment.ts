@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTimeIn, fmtTimeIn } from "@/lib/format";
-import { stopMomentLine, type TestEventLike } from "@/lib/rules";
+import { pauseMomentLine, stopMomentLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { seenOf } from "./live";
 
@@ -45,6 +45,34 @@ export async function devStopSince(testId: string, contractId: string | null, lo
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { tester: true } });
   if (!c || c.testId !== testId || c.status !== "ended" || c.endKind !== "early" || !c.endedAt || c.endedAt <= loaded) return null;
   return { kind: "stop", text: stopMomentLine("developer", "early", c.endedAt, { dev: "", tester: displayName(c.tester) }, time, dateTime, now), createdAt: c.endedAt };
+}
+
+/**
+ * (Owner, Oct 29, batch 29 section 11) A pause the developer's page opened before it hasn't shown: the team's pause of this test, or the developer's hold or suspension
+ * (whichever began first after the page loaded and still holds). Like a stop, it stops the next press once ("The team paused this test at 3:10 PM."); the second goes ahead.
+ */
+export async function devPauseSince(testId: string, loaded: Date | null, now = new Date()): Promise<TestEventLike | null> {
+  if (!loaded) return null;
+  const t = await db.test.findUnique({ where: { id: testId }, select: { adminPausedAt: true, developer: { select: { timeZone: true, holdStartedAt: true, devSuspendedAt: true } } } });
+  if (!t) return null;
+  const causes = ([["team", t.adminPausedAt], ["hold", t.developer.holdStartedAt], ["suspended", t.developer.devSuspendedAt]] as const)
+    .filter((x): x is readonly ["team" | "hold" | "suspended", Date] => !!x[1] && x[1] > loaded)
+    .sort((a, b) => a[1].getTime() - b[1].getTime());
+  if (!causes.length) return null;
+  const [cause, at] = causes[0];
+  const tz = t.developer.timeZone;
+  return { kind: "stop", text: pauseMomentLine("developer", cause, at, (d) => fmtTimeIn(d, tz), (d) => fmtDateTimeIn(d, tz), now), createdAt: at };
+}
+
+/** (Batch 29 section 11) The same for a tester's page: "This test was paused at 3:10 PM." (testers read only "paused": never why, never "hold" or "suspended"). */
+export async function testerPauseSince(contractId: string, loaded: Date | null, now = new Date()): Promise<TestEventLike | null> {
+  if (!loaded) return null;
+  const c = await db.contract.findUnique({ where: { id: contractId }, select: { tester: { select: { timeZone: true } }, test: { select: { adminPausedAt: true, developer: { select: { holdStartedAt: true, devSuspendedAt: true } } } } } });
+  if (!c) return null;
+  const at = [c.test.adminPausedAt, c.test.developer.holdStartedAt, c.test.developer.devSuspendedAt].filter((d): d is Date => !!d && d > loaded).sort((a, b) => a.getTime() - b.getTime())[0];
+  if (!at) return null;
+  const tz = c.tester.timeZone;
+  return { kind: "stop", text: pauseMomentLine("tester", "team", at, (d) => fmtTimeIn(d, tz), (d) => fmtDateTimeIn(d, tz), now), createdAt: at };
 }
 
 /**
