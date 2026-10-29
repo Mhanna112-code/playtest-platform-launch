@@ -8,7 +8,7 @@ import { uploadToSession } from "@/lib/upload";
 type Item = { id: string; filename: string; size: number; uploaded: boolean; video: boolean; sent: boolean };
 
 /**
- * (Owner, Oct 29, batch 11) Files and recordings attached to the written part: up to 5 files of 25 MB (images, PDF, plain text, zip), plus screen recordings (recorded
+ * (Owner, Oct 29, batch 11) Files and recordings attached to the written part: up to 5 files of 500 MB each (batch 31 section 2; was 25 MB: images, PDF, plain text, zip), plus screen recordings (recorded
  * here with Record, or uploaded; they count toward the 5 recordings). They go to the developer with the written answers when they are sent.
  */
 export function WrittenAttachments({ sessionId, items, canAdd }: { sessionId: string; items: Item[]; canAdd: boolean }) {
@@ -19,7 +19,7 @@ export function WrittenAttachments({ sessionId, items, canAdd }: { sessionId: st
   const files = uploaded.filter((i) => !i.video).length;
   async function add(file: File) {
     setErr("");
-    if (!file.type.startsWith("video/") && file.size > 25 * 1024 * 1024) return setErr(FIELD + "Files can be at most 25 MB.");
+    if (!file.type.startsWith("video/") && file.size > 500 * 1024 * 1024) return setErr(FIELD + "Files can be at most 500 MB.");
     setBusy(true);
     try {
       await uploadToSession(sessionId, file, file.name, "written", setPct);
@@ -44,8 +44,8 @@ export function WrittenAttachments({ sessionId, items, canAdd }: { sessionId: st
         <>
           {files < 5 && (
             <label className="block">
-              <span className="label">Attach a file (images, PDF, text or zip; 25 MB each, 5 at most) or a video</span>
-              <input type="file" id={`attach-${sessionId}`} accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,application/zip,video/*" data-match="attach an image|video file|at most|file is empty" disabled={busy} onChange={(e) => e.target.files?.[0] && add(e.target.files[0])} />
+              <span className="label">Attach a file (images, PDF, text or zip; 500 MB each, 5 at most) or a video</span>
+              <input type="file" id={`attach-${sessionId}`} accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,application/zip,video/*" data-match="attach an image|video file|at most|file is empty" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; /* (batch 31 section 2) the same file can be picked again to retry */ if (f) add(f); }} />
             </label>
           )}
           <ScreenRecorder sessionId={sessionId} part="written" label="Record your screen" />

@@ -1636,7 +1636,7 @@ async function signIn(page, email) {
     await shot(adm, "admin");
   });
 
-  await flow("31", "NEWEST+9: tester capacity per test: the developer-only card, and spots above the limit refused in red at the field", async () => {
+  await flow("31", "Batch 31: a flat 10 testers per test: no tester-limit card, and spots above 10 refused in red at the field", async () => {
     const DEV31 = `dev31+${TS}@playtest.test`;
     const d = await ctx(DESKTOP);
     await signIn(d, DEV31);
@@ -1645,11 +1645,9 @@ async function signIn(page, email) {
     await d.check("text=post tests for my app, game or product");
     await d.click("text=Continue");
     await d.waitForSelector("text=Welcome back,");
-    check("dashboard: the card, for the developer", (await has(d, "#tester-limit >> text=Can take up to 10 testers per test")) && (await has(d, "#tester-limit >> text=Next: +10% after 10 more ratings")));
-    await d.locator("#tester-limit").scrollIntoViewIfNeeded();
-    await shot(d, "capacity-card-developer");
+    check("dashboard: no tester-limit card", (await d.locator("#tester-limit").count()) === 0);
     await d.goto("/app/profile");
-    check("own Profile: the card", await has(d, "#tester-limit >> text=Can take up to 10 testers per test"));
+    check("own Profile: no tester-limit card", (await d.locator("#tester-limit").count()) === 0 && !(await d.isVisible("text=Can take up to")));
     // Testers never see it (the profile as testers see it).
     const t = await ctx(PHONE);
     await signIn(t, `tester31+${TS}@playtest.test`);
@@ -1665,7 +1663,7 @@ async function signIn(page, email) {
     check("the profile testers see: no capacity card", (await t.locator("#tester-limit").count()) === 0 && !(await t.isVisible("text=testers per test")));
     // Post with 11 spots: red at the spots field; the limit shown next to it.
     await d.goto("/app/tests/new");
-    check("the limit next to the spots field", await has(d, "text=Limit: 10 testers per test"));
+    check("the limit next to the spots field", await has(d, "[data-spots-line] >> text=At most 10 testers per test."));
     await d.fill("#title", "Coral Maze");
     await d.fill("#productName", "Coral Maze");
     await d.fill("#description", "Find the way out.");
@@ -1673,7 +1671,7 @@ async function signIn(page, email) {
     await d.fill("#questions", "Where did you get lost?");
     await d.fill("#spots", "11");
     await d.click("button:has-text('Post the test')");
-    check("refused in red at the spots field", await has(d, "[data-field-error] >> text=You can take up to 10 testers per test right now."));
+    check("refused in red at the spots field", await has(d, "[data-field-error] >> text=At most 10 testers per test."));
     check("nothing posted", sql(`select count(*) from "Test" t join "User" u on u.id = t."developerId" where u.email = '${DEV31}'`) === "0");
     await d.locator("#spots").scrollIntoViewIfNeeded();
     await shot(d, "spots-over-limit-red-developer");

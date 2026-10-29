@@ -233,6 +233,12 @@ export const LISTING_FIELDS = [
 export const TERM_FIELDS = LISTING_FIELDS.filter((f) => f !== "spots");
 
 export const MAX_SPOTS = LIMITS.spots.max;
+/** (Owner, Oct 29, batch 31) Every test takes at most 10 testers: the line beside the spots field, and the refusal above it. */
+export const SPOTS_MAX_LINE = `At most ${MAX_SPOTS} testers per test.`;
+/** (Batch 31) A test that already has more than 10 spots keeps them: Edit can lower them, never raise them. */
+export const spotsKeptLine = (saved: number) => `${SPOTS_MAX_LINE} This test keeps its ${saved} spots: you can lower them, not raise them.`;
+/** (Batch 31) The most spots a test can have: 10, or what an older test already has (Edit). */
+export const spotsCap = (saved?: number | null) => Math.max(MAX_SPOTS, saved ?? 0);
 
 /** (Batch 15 section 32) The red messages at the field on Post and Edit. */
 export const QUESTION_TOO_LONG = `Keep each question to ${LIMITS.question.toLocaleString("en-US")} characters.`;
@@ -322,6 +328,8 @@ export type ListingCtx = {
   confirmedHigh?: readonly string[];
   /** Edit: the prices now saved (a saved price over $200 that is unchanged needs no tick). */
   saved?: { writtenCents: number | null; recordingCents: number | null };
+  /** (Batch 31) Edit: the spots now saved (a test above 10 keeps them; it can't go higher). */
+  savedSpots?: number;
 };
 
 /** Check a listing's values. Returns every problem, each in a plain sentence. */
@@ -360,7 +368,10 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
   if (l.mature && (l.matureWhy ?? "").trim().length < MATURE_WHY_MIN && (isNew("mature") || isNew("matureWhy"))) errs.push((l.matureWhy ?? "").trim() ? MATURE_WHY_SHORT : MATURE_WHY_REQUIRED);
   if ((l.ndaText ?? "").length > LIMITS.nda && isNew("ndaText")) errs.push(NDA_TOO_LONG);
   if (!l.categories?.length) errs.push("Tick at least one category.");
-  if (!Number.isInteger(l.spots) || l.spots < LIMITS.spots.min || l.spots > MAX_SPOTS) errs.push(`Spots must be a whole number from 1 to ${MAX_SPOTS}.`);
+  // (Owner, Oct 29, batch 31) At most 10 testers per test; an older test above 10 keeps its spots (Edit lowers them, never raises them).
+  const maxSpots = spotsCap(ctx.savedSpots);
+  if (!Number.isInteger(l.spots) || l.spots < LIMITS.spots.min) errs.push(`Spots must be a whole number from 1 to ${maxSpots}.`);
+  else if (l.spots > maxSpots) errs.push(maxSpots > MAX_SPOTS ? spotsKeptLine(maxSpots) : SPOTS_MAX_LINE);
   else if (l.spots < testersIn) errs.push(`Spots can't go below the ${testersIn} tester${testersIn === 1 ? "" : "s"} already in.`);
   if (l.writtenCents == null && l.recordingCents == null && l.liveRateCents == null) errs.push("Choose at least one kind of feedback.");
   const part = (c: number | null, name: string, field: "writtenCents" | "recordingCents", key: "written" | "recording") => {

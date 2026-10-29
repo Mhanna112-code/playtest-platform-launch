@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import * as R from "@/lib/rules";
-import { overLimitText } from "@/lib/capacity";
 import { keyNeedLine, keyRefusal } from "@/lib/keys";
 import { CRITICAL_KEYS, criticalLine } from "@/lib/limits";
 import { LISTING_MISTAKES, fieldOfMistake } from "@/lib/listingFields";
@@ -60,7 +59,8 @@ describe("every Post / Edit field mistake lands on its field (section 10)", () =
   it("each message from checkListing and the Post / Edit routes maps to a field; no misses", () => {
     const messages = [
       ...allListingMessages(),
-      overLimitText(5),
+      R.SPOTS_MAX_LINE,
+      R.spotsKeptLine(20),
       keyNeedLine(3, 1),
       keyRefusal("HR-1111", "free"),
       keyRefusal("HR-1111", "inuse", { working: true, name: "Ana Silva" }),
@@ -73,7 +73,8 @@ describe("every Post / Edit field mistake lands on its field (section 10)", () =
     expect(fieldOfMistake(R.MATURE_WHY_REQUIRED)).toBe("matureWhy");
     expect(fieldOfMistake(R.MATURE_WHY_SHORT)).toBe("matureWhy");
     expect(fieldOfMistake(keyNeedLine(3, 1))).toBe("keys");
-    expect(fieldOfMistake(overLimitText(5))).toBe("spots");
+    expect(fieldOfMistake(R.SPOTS_MAX_LINE)).toBe("spots");
+    expect(fieldOfMistake(R.spotsKeptLine(20))).toBe("spots");
     expect(fieldOfMistake("Choose at least one kind of feedback.")).toBe("parts");
     expect(fieldOfMistake("Add at least one question for the written answers.")).toBe("questions");
     expect(fieldOfMistake(R.partLowLine("written answers"))).toBe("writtenPrice");

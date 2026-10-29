@@ -6,7 +6,6 @@ import { db } from "@/lib/db";
 import { requireOpenDevPage } from "@/lib/server/page-auth";
 import { asListing, startedCounting } from "@/lib/server/tests";
 import { TestForm } from "../../TestForm";
-import { testerCapacity } from "@/lib/server/capacity";
 import { LiveTop } from "@/components/LiveTop";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { AlertsMenu } from "@/components/AlertsMenu";
@@ -40,7 +39,6 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
           <TestForm
             init={asListing(t)}
             edit={{ id, version: t.version, testersIn, draft: t.status === "draft", seenAt, keys: await keyBoxes(id), criticalCounts: countsOf(t.criticalCounts), everJoined: !!(await startedCounting(t)) /* (batch 14) first join, application or invite */, openedAt: t.createdAt.toISOString(), capDay: openUntilCapDay(t.createdAt, u.timeZone), testerDays: t.openUntil ? t.testerDays ?? testerDaysOf(t.createdAt, t.openUntil) : undefined }}
-            spotsLimit={(await testerCapacity(u.id)).limit}
             perks={await hasPerks(u)}
           />
           {/* (Design doc 5) Live updates from every page's rules show in a blue box under the Save button. */}

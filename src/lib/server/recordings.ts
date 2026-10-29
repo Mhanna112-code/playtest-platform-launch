@@ -13,7 +13,7 @@ type U = { id: string; email: string; name: string; pronoun: string };
 
 /**
  * Start an upload: checks the session can still send, the size (500 MB) and the count (5 recordings per session). (Owner, Oct 29, batch 11) `part: "written"` attaches it
- * to the written part instead: a screen recording (the same limits) or a file (at most 5, 25 MB each: images, PDF, plain text, zip).
+ * to the written part instead: a screen recording (the same limits) or a file (at most 5, 500 MB each: images, PDF, plain text, zip; batch 31 section 2, was 25 MB).
  */
 export async function startRecording(tester: U, contractId: string, body: Record<string, unknown>) {
   const c = await ownContract(tester.id, contractId);
@@ -28,7 +28,7 @@ export async function startRecording(tester: U, contractId: string, body: Record
     throw new HttpError(400, "bad_type", part === "written" ? "Attach an image, a PDF, a text file, a zip or a video." : "Choose a video file (for example .mp4 or .webm).");
   if (!Number.isFinite(size) || size <= 0) throw new HttpError(400, "empty", "That file is empty.");
   if (video && size > MAX_RECORDING_BYTES) throw new HttpError(413, "too_large", "Recordings can be at most 500 MB.");
-  if (!video && size > MAX_ATTACHMENT_BYTES) throw new HttpError(413, "too_large", "Files can be at most 25 MB.");
+  if (!video && size > MAX_ATTACHMENT_BYTES) throw new HttpError(413, "too_large", "Files can be at most 500 MB.");
   const paid = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: part } }, include: { review: true } });
   if (paid?.review) throw new HttpError(409, "paid", part === "written" ? "Your written answers were already paid for, so they can't be changed. Send anything new in the chat." : "Your recording was already paid for, so it can't be changed. Send anything new in the chat.");
   // (Owner, Oct 29, batch 13 section 7) The Recording part takes up to 5 recordings (a removed one frees its slot); videos attached to the written part count separately
@@ -63,6 +63,19 @@ export async function finishRecording(tester: U, contractId: string, body: Recor
   }
   await db.recording.update({ where: { id: rec.id }, data: { uploadedAt: new Date() } });
   return { ok: true };
+}
+
+/**
+ * (Batch 31 section 2) An upload that failed in the browser (the PUT to storage or Done): its row and any partial file go at once, so a retry starts clean (the slot is
+ * free, nothing shows as still uploading). Only this tester's own unfinished uploads; anything else is left alone.
+ */
+export async function abandonUpload(tester: U, contractId: string, body: Record<string, unknown>) {
+  await ownContract(tester.id, contractId);
+  const rec = await db.recording.findUnique({ where: { id: String(body.recordingId ?? "") } });
+  if (!rec || rec.contractId !== contractId || rec.uploadedAt) return { abandoned: false };
+  await db.recording.deleteMany({ where: { id: rec.id, uploadedAt: null } });
+  await deleteStored(rec.storageKey);
+  return { abandoned: true };
 }
 
 /** (Batch 15 section 41, M6) Uploads per account per day. */

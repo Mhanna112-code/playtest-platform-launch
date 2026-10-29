@@ -1,7 +1,7 @@
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { reportNoShow, testerCancelCall } from "@/lib/server/calls";
 import { sendMessage } from "@/lib/server/messages";
-import { finishRecording, sendRecording, removeRecording, startRecording } from "@/lib/server/recordings";
+import { abandonUpload, finishRecording, sendRecording, removeRecording, startRecording } from "@/lib/server/recordings";
 import { chooseOutcome } from "@/lib/server/holds";
 import { answerRequest, cancelCallSet, requestTime } from "@/lib/server/requests";
 import { decideTerms } from "@/lib/server/terms";
@@ -142,6 +142,8 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         return ok(await sendRecording(u, id, body));
       case "recording-remove":
         return ok(await removeRecording(u, id, body));
+      case "recording-abandon":
+        return ok(await abandonUpload(u, id, body));
       case "message": {
         const m = await sendMessage(u, id, body.body, body.clientId);
         return ok({ id: m.id });

@@ -3,7 +3,6 @@ import { db } from "@/lib/db";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { ProfileForm } from "./ProfileForm";
 import { ratingSummary } from "@/lib/server/ratings";
-import { CapacityCard } from "@/components/ProfileTiles";
 import { sideFor } from "@/lib/sides";
 import { ClampText } from "@/components/ClampText";
 import { LongList } from "@/components/LongList";
@@ -41,7 +40,6 @@ export default async function ProfilePage() {
       <AccountRefresh />
       <ProfileForm side={side ?? "tester"} seenAt={new Date().toISOString()} init={{ name: u.name, pronoun: u.pronoun, isDeveloper: u.isDeveloper, isTester: u.isTester, devices: p?.devices ?? [], categories: p?.categories ?? [], languages: p?.languages ?? [], bio: p?.bio ?? "" }} />
       <div className="mt-6 space-y-6">
-        {side === "developer" && u.isDeveloper && <CapacityCard userId={u.id} />}
         <section className="card space-y-2" aria-label="Your ratings">
           <h2 className="font-semibold text-white">Your ratings</h2>
           {rating.line ? <p className="text-slate-200">{rating.line}</p> : <p className="text-sm text-slate-400">No ratings yet.</p>}

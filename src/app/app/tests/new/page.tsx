@@ -5,7 +5,6 @@ import { asListing } from "@/lib/server/tests";
 import { requireOpenDevPage } from "@/lib/server/page-auth";
 import { needsTermsAgain } from "@/lib/termsOfUse";
 import { TestForm } from "../TestForm";
-import { testerCapacity } from "@/lib/server/capacity";
 
 export const metadata = { title: "Post a test · Playtest" };
 
@@ -24,7 +23,6 @@ export default async function NewTest({ searchParams }: { searchParams: Promise<
       <h1 className="text-3xl font-bold tracking-tight text-white">Post a test</h1>
       {draft && <p className="note" data-draft-note="">A draft: {draft.title}. Check the details, then press Post the test to open it for testers.</p>}
       <TestForm
-        spotsLimit={(await testerCapacity(u.id)).limit}
         draft={draft ? { id: draft.id } : undefined}
         perks={await hasPerks(u)}
         termsAgain={needsTermsAgain(u)}

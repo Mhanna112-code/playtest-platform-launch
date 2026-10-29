@@ -3,7 +3,7 @@
 Rule for all of it: match the full app (integration folder, localhost:3200) exactly; keep lean behaviour (LEAN-SPEC.md);
 add nothing the owner didn't ask for; list any non-exact pattern for approval.
 
-0. [DONE] EVERY input with a min and/or max (call length 10-180 min, rates $10-$200/h, prices, spots up to the tester limit,
+0. [DONE] EVERY input with a min and/or max (call length 10-180 min, rates $10-$200/h, prices, spots 1-10 (batch 31),
    repeat counts 2-8, comment lengths, Ask $, Charge amount up to the cap, etc.) shows its range briefly next to it
    ("10-180 min", "up to $14.00"), and shows the red error AS SOON AS the field loses focus with a bad value (and on
    submit), not only after pressing the button. Clears when fixed.

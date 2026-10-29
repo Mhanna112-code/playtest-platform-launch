@@ -81,7 +81,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
           <ScreenRecorder sessionId={sessionId} part="recording" />
           <label className="block text-sm">
             <span className="label">Or upload a recording (video, up to 500 MB; 5 at most)</span>
-            <input type="file" id={`recording-file-${sessionId}`} accept="video/*" disabled={busy} data-match="video file|500 MB|file is empty|upload a recording first" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+            <input type="file" id={`recording-file-${sessionId}`} accept="video/*" disabled={busy} data-match="video file|500 MB|file is empty|upload a recording first" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; /* (batch 31 section 2) the same file can be picked again to retry */ if (f) upload(f); }} />
           </label>
         </>
       )}

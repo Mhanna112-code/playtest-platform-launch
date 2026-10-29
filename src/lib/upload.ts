@@ -8,7 +8,21 @@ import { api } from "@/lib/client";
 export async function uploadToSession(sessionId: string, file: Blob, filename: string, part: "recording" | "written", onProgress?: (pct: number) => void) {
   const contentType = (file.type || (part === "recording" ? "video/mp4" : "application/octet-stream")).split(";")[0];
   const { recordingId, uploadUrl } = await api<{ recordingId: string; uploadUrl: string }>(`/api/sessions/${sessionId}/recording-start`, { filename, size: file.size, contentType, part });
-  await new Promise<void>((resolve, reject) => {
+  try {
+    await put(uploadUrl, file, contentType, onProgress);
+    await api(`/api/sessions/${sessionId}/recording-done`, { recordingId });
+  } catch (e) {
+    // (Batch 31 section 2) A failed upload leaves nothing behind: its row and any partial file go, so pressing again starts clean (best effort; the daily clean-up
+    // catches the rest).
+    await api(`/api/sessions/${sessionId}/recording-abandon`, { recordingId }).catch(() => null);
+    throw e;
+  }
+  return recordingId;
+}
+
+/** The PUT to storage (R2's presigned URL, or the local upload route), reporting its percentage. */
+function put(uploadUrl: string, file: Blob, contentType: string, onProgress?: (pct: number) => void) {
+  return new Promise<void>((resolve, reject) => {
     const x = new XMLHttpRequest();
     x.open("PUT", uploadUrl);
     x.setRequestHeader("content-type", contentType);
@@ -20,8 +34,7 @@ export async function uploadToSession(sessionId: string, file: Blob, filename: s
       reject(new Error(msg));
     };
     x.onerror = () => reject(new Error("The upload stopped. Check your connection and try again."));
+    x.onabort = () => reject(new Error("The upload stopped. Try again."));
     x.send(file);
   });
-  await api(`/api/sessions/${sessionId}/recording-done`, { recordingId });
-  return recordingId;
 }

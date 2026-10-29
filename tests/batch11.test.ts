@@ -369,13 +369,13 @@ describe("batch 11 item 7: the written part", () => {
     expect(src("components/AnswerSets.tsx")).toContain("<Formatted text={it.answer} className=\"text-slate-200\" />"); // (batch 26 section 15) indented under its question label
   });
 
-  it("files on the written part: images, PDF, text or zip, 25 MB, 5 at most; recordings too; they go with the answers", async () => {
+  it("files on the written part: images, PDF, text or zip, 500 MB (batch 31; was 25 MB), 5 at most; recordings too; they go with the answers", async () => {
     const s = await setup();
     const j = await joined(s.testId);
     const start = (body: Record<string, unknown>) => sact(j.sessionId, "recording-start", j.tester.cookie, body);
     expect((await start({ part: "written", filename: "a.exe", size: 10, contentType: "application/x-msdownload" })).body.error.code).toBe("bad_type");
     expect((await start({ part: "recording", filename: "a.pdf", size: 10, contentType: "application/pdf" })).body.error.code).toBe("bad_type");
-    expect((await start({ part: "written", filename: "big.pdf", size: 25 * 1024 * 1024 + 1, contentType: "application/pdf" })).body.error.message).toBe("Files can be at most 25 MB.");
+    expect((await start({ part: "written", filename: "big.pdf", size: 500 * 1024 * 1024 + 1, contentType: "application/pdf" })).body.error.message).toBe("Files can be at most 500 MB.");
     const ids: string[] = [];
     for (let i = 0; i < 5; i++) {
       const r = await start({ part: "written", filename: `shot${i}.png`, size: 100, contentType: "image/png" });

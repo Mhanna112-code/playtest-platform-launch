@@ -12,8 +12,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const rec = await db.recording.findUnique({ where: { id }, include: { contract: true } });
     if (!rec || rec.contract.testerId !== u.id) throw new HttpError(404, "not_found", "That upload doesn't exist.");
     if (rec.uploadedAt) throw new HttpError(409, "done", "This file was already uploaded.");
-    // (Batch 11) A file attached to a written part: 25 MB; a recording: 500 MB.
-    const size = isVideo(rec.contentType) ? await saveLocal(rec.storageKey, req.body, MAX_RECORDING_BYTES) : await saveLocal(rec.storageKey, req.body, MAX_ATTACHMENT_BYTES, "Files can be at most 25 MB.");
+    // (Batch 11; batch 31 section 2) A file attached to a written part: 500 MB (was 25 MB); a recording: 500 MB.
+    const size = isVideo(rec.contentType) ? await saveLocal(rec.storageKey, req.body, MAX_RECORDING_BYTES) : await saveLocal(rec.storageKey, req.body, MAX_ATTACHMENT_BYTES, "Files can be at most 500 MB.");
     await db.recording.update({ where: { id }, data: { sizeBytes: size } });
     return ok({ ok: true });
   });

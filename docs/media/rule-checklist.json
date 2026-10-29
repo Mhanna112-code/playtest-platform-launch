@@ -6899,10 +6899,10 @@
         },
         {
           "id": "tester-session-page-19",
-          "rule": "The written part takes up to 5 attachments of 25 MB each (images, PDF, plain text, zip), plus recordings.",
+          "rule": "The written part takes up to 5 attachments of 500 MB each (batch 31; was 25 MB) (images, PDF, plain text, zip), plus recordings.",
           "status": "tested",
           "tests": [
-            "tests/batch11.test.ts > files on the written part: images, PDF, text or zip, 25 MB, 5 at most; recordings too; they go with the answers"
+            "tests/batch11.test.ts > files on the written part: images, PDF, text or zip, 500 MB (batch 31; was 25 MB), 5 at most; recordings too; they go with the answers"
           ],
           "media": [],
           "code": "",
@@ -12114,12 +12114,12 @@
         },
         {
           "id": "limits-8",
-          "rule": "A written part: 50,000 characters for all its answers together, up to 5 attachments of 25 MB each (images, PDF, plain text, zip), plus recordings.",
+          "rule": "A written part: 50,000 characters for all its answers together, up to 5 attachments of 500 MB each (batch 31; was 25 MB) (images, PDF, plain text, zip), plus recordings.",
           "status": "tested+shown",
           "tests": [
             "tests/batch14.test.ts > the limit and the counter",
             "tests/batch11.test.ts > at most 50,000 characters in all (batch 14 section 5; was 10,000), counted live",
-            "tests/batch11.test.ts > files on the written part: images, PDF, text or zip, 25 MB, 5 at most; recordings too; they go with the answers"
+            "tests/batch11.test.ts > files on the written part: images, PDF, text or zip, 500 MB (batch 31; was 25 MB), 5 at most; recordings too; they go with the answers"
           ],
           "media": [
             "long-answer-counter.png"

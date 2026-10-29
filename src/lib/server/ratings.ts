@@ -128,11 +128,6 @@ export async function stillHidden(rows: { id: string; side: string; contractId: 
       .map((r) => r.id),
   );
 }
-/** When each of these tester ratings showed (or shows): for a developer's capacity. */
-export async function revealTimes(rows: { contractId: string; revealedAt: Date | null; createdAt: Date }[], now = new Date()) {
-  const states = await devRateStates(rows.filter((r) => !r.revealedAt).map((r) => r.contractId), now);
-  return rows.map((r) => r.revealedAt ?? states.get(r.contractId)?.revealAt ?? new Date(r.createdAt.getTime() + WINDOW_DAYS * DAY));
-}
 
 /** "4.6 ★ (12 ratings)" and the comments (never the rater's name); revealed ratings only. */
 export async function ratingSummary(userId: string) {

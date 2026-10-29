@@ -7,7 +7,6 @@ import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { Err } from "@/components/Err";
 import { mergeChanges, useLiveAppend } from "@/lib/live";
 import { QUESTIONS_RULE_LINE, qRequired, qStored, qText, questionLimitLine } from "@/lib/questions";
-import { limitHint } from "@/lib/capacity";
 import { MistakeList, focusFirstMistake, markServerMistakes, useLocalMin } from "@/components/FieldChecks";
 import { fieldOfMistake, isCriticalLine, type ListingField } from "@/lib/listingFields";
 import { Choices } from "@/components/Choices";
@@ -16,7 +15,7 @@ import { NotSentTag, useKept } from "@/lib/useKept";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { givenDeletedLine, keyGivenLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
-import { PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, type Listing } from "@/lib/rules";
+import { PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
 /** The browser's own date (YYYY-MM-DD) and zone. */
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone ?? ""; } catch { return ""; } };
@@ -115,7 +114,7 @@ type EditProps = {
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
 /** (Owner, Oct 28 evening) `draft`: a draft (a next round not opened yet) shown in Post a test: Post opens it for testers, and it can be deleted here. */
-export function TestForm({ init, edit, spotsLimit, draft, perks = true, termsAgain = false }: { init: Listing; edit?: EditProps; spotsLimit?: number; draft?: { id: string }; /** (Batch 8) false on the free plan: "Subscribers" on Approved-only */ perks?: boolean; /** (Batch 20 section 21) the account hasn't agreed to the current Terms: the tick shows above Post */ termsAgain?: boolean }) {
+export function TestForm({ init, edit, draft, perks = true, termsAgain = false }: { init: Listing; edit?: EditProps; draft?: { id: string }; /** (Batch 8) false on the free plan: "Subscribers" on Approved-only */ perks?: boolean; /** (Batch 20 section 21) the account hasn't agreed to the current Terms: the tick shows above Post */ termsAgain?: boolean }) {
   const [f, setF] = useState<F>(toForm(init));
   // What this tab last knew the test to be (Edit): fields that differ from it are "changed" (Save is faded when none are).
   const [base, setBase] = useState<F>(toForm(init));
@@ -477,7 +476,9 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true, termsAga
   const minOpen = edit ? tomorrow : in3;
   // (Batch 16 section 16) Edit: up to 30 days after the test opened (a date already past it stays as it is: it just can't move later).
   const capMax = edit?.capDay ? (base.openUntil && base.openUntil.slice(0, 10) > edit.capDay ? base.openUntil.slice(0, 10) : edit.capDay) : monthOut;
-  const limit = spotsLimit ?? LIMITS.spots.max;
+  // (Owner, Oct 29, batch 31) At most 10 testers per test; Edit: a test already above 10 keeps its saved spots (lower, never higher).
+  const limit = edit ? spotsCap(Number(base.spots) || 0) : MAX_SPOTS;
+  const spotsLine = limit > MAX_SPOTS ? spotsKeptLine(limit) : SPOTS_MAX_LINE;
   const redLine = (t: string) => (t ? <p className="err-field mt-1" role="alert">{t}</p> : null);
 
   return (
@@ -631,8 +632,8 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true, termsAga
         <h2>Who and how long</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            {text("spots", "Number of tester spots", { req: true, type: "number", cls: "max-w-[8rem]", hint: `1–${limit}`, attrs: { "data-min": "1", min: "1", step: "1", inputMode: "numeric", "data-max": String(limit), "data-whole": "", "data-msg": spotsLimit != null ? `You can take up to ${limit} testers per test right now.` : `Spots must be a whole number from 1 to ${limit}.` } })}
-            {spotsLimit != null && <p className="mt-1 text-xs text-slate-500">{limitHint(spotsLimit)}</p>}
+            {text("spots", "Number of tester spots", { req: true, type: "number", cls: "max-w-[8rem]", hint: `1–${limit}`, attrs: { "data-min": "1", min: "1", step: "1", inputMode: "numeric", "data-max": String(limit), "data-whole": "", "data-msg": `Spots must be a whole number from 1 to ${limit}.`, "data-max-msg": spotsLine } })}
+            <p className="mt-1 text-xs text-slate-500" data-spots-line="">{spotsLine}</p>
           </div>
           <div>
             {text("openUntil", "Open until (last day to join)", { req: true, type: "date", cls: "max-w-[12rem]", hint: edit?.capDay ? openUntilCapHint(edit.capDay) : edit ? "only later, up to 30 days from today" : "3 to 30 days from today", attrs: { min: minOpen, max: capMax, "data-msg": edit ? "Open until must be a date in the future." : OPEN_UNTIL_RANGE, "data-max-msg": edit?.capDay ? openUntilCapLine(edit.capDay) : OPEN_UNTIL_MAX_LINE, "data-required-msg": OPEN_UNTIL_RANGE, ...(showOn("openUntil") && ouLine ? { "data-red-msg": ouLine } : {}) } })}

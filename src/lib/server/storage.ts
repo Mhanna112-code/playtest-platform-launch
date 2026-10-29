@@ -10,8 +10,8 @@ import { HttpError } from "./http";
 
 export const MAX_RECORDING_BYTES = 500 * 1024 * 1024;
 export const MAX_RECORDINGS = 5;
-/** (Owner, Oct 29, batch 11) Files attached to a written part: at most 5, 25 MB each (images, PDF, plain text, zip). Recordings attached to it count as recordings. */
-export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+/** (Owner, Oct 29, batch 11; batch 31 section 2: was 25 MB) Files attached to a written part: at most 5, 500 MB each (images, PDF, plain text, zip). Recordings attached to it count as recordings. */
+export const MAX_ATTACHMENT_BYTES = 500 * 1024 * 1024;
 export const MAX_ATTACHMENTS = 5;
 export const ATTACHMENT_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "text/plain", "application/zip", "application/x-zip-compressed"];
 export const isVideo = (contentType: string) => contentType.startsWith("video/");

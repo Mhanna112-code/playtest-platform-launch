@@ -54,7 +54,7 @@ const SAME_TEXT: [string, string, string][] = [
   ["app/app/tests/[id]/DevCallPanel.tsx", "lib/server/requests.ts", "Enter the call's length in minutes."],
   ["app/app/tests/[id]/TopPanel.tsx", "lib/server/tests.ts", "Say why you're ending their work (they read it)."],
   ["app/app/sessions/[id]/RecordingUpload.tsx", "lib/server/recordings.ts", "Recordings can be at most 500 MB."],
-  ["app/app/sessions/[id]/WrittenAttachments.tsx", "lib/server/recordings.ts", "Files can be at most 25 MB."],
+  ["app/app/sessions/[id]/WrittenAttachments.tsx", "lib/server/recordings.ts", "Files can be at most 500 MB."],
   ["components/ReportButton.tsx", "lib/server/reports.ts", "Say what happened (the team reads it)."],
 ];
 

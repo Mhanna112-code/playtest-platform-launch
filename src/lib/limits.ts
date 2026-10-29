@@ -1,6 +1,6 @@
 // (Design doc 11.5) Every limit in one table. Pages and rules read their numbers from here; nothing else spells them out.
 export const LIMITS = {
-  spots: { min: 1, max: 50 }, // and the developer's own tester limit (10 to start, +10% per 10 good ratings, max 50)
+  spots: { min: 1, max: 10 }, // (Owner, Oct 29, batch 31) a flat 10 per test (the growing limit is gone); a test that already has more keeps them
   deadlineDays: { min: 1, max: 90 }, // a tester's deadline; it must also leave `deadlineBufferDays` inside Open until
   deadlineBufferDays: 3,
   openUntilMaxDays: 30, // (Owner, Oct 29, batch 12) required, 3 to 30 days after today on Post; Edit moves it only later, within 30 days of today

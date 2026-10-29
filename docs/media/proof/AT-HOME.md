@@ -32,7 +32,7 @@ in **test mode**, before launch. Nothing here needs a live key. Where a setting 
    `R2_SECRET_ACCESS_KEY` and `R2_BUCKET`.
 2. Bucket → Settings → **CORS policy**: allow `PUT` and `GET` from `https://<your domain>` with the headers `content-type` and `content-length`.
 3. As a tester, attach an image and record a short screen recording; send them. Both play or open for the developer.
-4. Sizes: try a file over 25 MB as an attachment: refused before upload. (A larger upload forced past the page is refused by R2 itself, because the signed URL
+4. Sizes: try a file over 500 MB as an attachment (batch 31; was 25 MB): refused before upload. (A larger upload forced past the page is refused by R2 itself, because the signed URL
    carries its exact length.)
 5. Types: a `.png` opens in the page; a `.zip` downloads (never shown inline).
 6. Clean-up: remove a recording from the part; within the next daily job its object is gone from the bucket.

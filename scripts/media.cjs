@@ -1956,12 +1956,12 @@ group("long", async () => {
 }, { section: "Tester session page" });
 
 group("many", async () => {
-  // Long names and titles in rows, and a test with 50 testers.
+  // Long names and titles in rows, and a test with 50 testers (batch 31: posted at 10, then raised in the data like a test from before the flat 10).
   const longDev = "Maximiliana Alexandrina Featherstonehaugh-Worthington";
   const nora = await account(`dev+media${TS}mn@playtest.test`, longDev, "developer", "she");
-  own(`update "User" set "testerLimit" = 50 where email = ${lit(nora.email)}`); // (as if earned: 50 is the most a developer can reach)
   const title = "Harbor Run: the first three harbors, the lighthouse and more";
-  const t = await postTest(nora, { productName: "Harbor Run: Lighthouse Edition for iPad", title, spots: "50", writtenCents: "10.00", liveRateCents: "30.00", openUntil: day(20) });
+  const t = await postTest(nora, { productName: "Harbor Run: Lighthouse Edition for iPad", title, spots: "10", writtenCents: "10.00", liveRateCents: "30.00", openUntil: day(20) });
+  own(`update "Test" set spots = 50 where id = ${lit(t)}`);
   const first = ["Ana", "Ben", "Cam", "Dee", "Eli", "Fay", "Gus", "Hana", "Ivo", "Jun"], last = ["Silva", "Okafor", "Lee", "Moss", "Novak", "Ito", "Hale", "Kowalczyk-Brennan", "Petrov", "Abernathy-Llewellyn"];
   const testers = [];
   for (let i = 0; i < 50; i++) {
