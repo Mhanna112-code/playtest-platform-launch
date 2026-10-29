@@ -99,7 +99,7 @@ function readRows(body: Record<string, unknown>): CallRow[] {
   const future = (d: Date) => {
     if (isNaN(d.getTime())) throw new HttpError(400, "bad_time", "Pick a time in the future.");
     // (Batch 27 section 6) At least CALL_MIN_AHEAD_MINUTES ahead: 5 in production, 1 by default when testing locally.
-    if (!farEnoughAhead(d)) throw new HttpError(400, "bad_time", "Pick times in the future.");
+    if (!farEnoughAhead(d)) throw new HttpError(400, "bad_time", "Pick a time in the future."); // (batch 29 section 20) the form's wording
     return d;
   };
   let rows: CallRow[];

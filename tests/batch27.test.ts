@@ -292,7 +292,7 @@ describe("batch 27 section 6: a call request may start 1 minute ahead outside pr
     expect((await act(s.testId, "request-time", s.dev.cookie, { contractIds: [j.sessionId], rows: [{ startsAt: soon, repeat: "once", count: 1 }], minutes: "30", seenAt: seen(), confirmed: true })).status).toBe(200);
     const tooSoon = new Date(Date.now() + 20_000).toISOString();
     const r = await sact(j.sessionId, "request-time", j.tester.cookie, { rows: [{ startsAt: tooSoon, repeat: "weekly", count: 2 }], minutes: "30", seenAt: seen(), confirmed: true });
-    expect(r.body.error).toMatchObject({ code: "bad_time", message: "Pick times in the future." });
+    expect(r.body.error).toMatchObject({ code: "bad_time", message: "Pick a time in the future." }); // (batch 29 section 20) one wording
   });
 
   it("production always keeps 5 minutes, whatever CALL_MIN_AHEAD_MINUTES says; locally the variable sets it", async () => {
@@ -310,7 +310,9 @@ describe("batch 27 section 6: a call request may start 1 minute ahead outside pr
     vi.unstubAllEnvs();
     vi.resetModules();
     expect(farEnoughAhead(new Date(Date.now() + 90_000))).toBe(true);
-    expect(src("lib/server/requests.ts")).toContain("if (!farEnoughAhead(d)) throw new HttpError(400, \"bad_time\", \"Pick times in the future.\");");
-    for (const f of ["components/CallRequests.tsx", "app/app/tests/[id]/DevCallPanel.tsx"]) expect(src(f), f).toContain("useLocalMin(CALL_MIN_AHEAD_MINUTES)");
+    expect(src("lib/server/requests.ts")).toContain("if (!farEnoughAhead(d)) throw new HttpError(400, \"bad_time\", \"Pick a time in the future.\");");
+    // (Batch 29 section 20) The forms take the server's lead as a prop (the browser can't read CALL_MIN_AHEAD_MINUTES).
+    expect(src("components/CallRequests.tsx")).toContain("useLocalMin(p.leadMinutes)");
+    expect(src("app/app/tests/[id]/DevCallPanel.tsx")).toContain("useLocalMin(leadMinutes)");
   });
 });
