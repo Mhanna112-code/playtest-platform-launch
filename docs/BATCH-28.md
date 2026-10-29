@@ -79,6 +79,17 @@ During a chargeback hold, "Verify a card" (src/components/ChargebackSteps.tsx) n
 ## 20. A listed piece's cap is its listing plus the part's max (owner, Oct 29; drops the 100%-of-listing rule)
 Extra pay above the listing is no longer limited to 100% of the listing: a listed piece can be paid up to its listing plus the part's max ($1,000 for written answers or a recording; $200/h × measured minutes for a call, within the $1,000 for that tester's calls). Unlisted pieces are unchanged. Pay / Pay more hints and refusals, §14's lines, §15's dispute range, the admin form, the Terms and the design doc follow.
 
+## 21. Listed calls are charged automatically after 7 days (owner, Oct 29; replaces Charge / Let it go for listed calls)
+How hourly platforms bill (Wyzant, Upwork): the measured time is charged unless the client acts within a review window.
+- **The week after a listed call** (from its end; it moves with pauses and outages like other review dates): the developer can Pay it themselves, any amount; below rate × measured minutes needs a reason the tester reads (as today), and the tester can dispute it once. Reminders: "“<test>”: pay <tester>'s call on <date> within 3 days / by tomorrow" at the marks still ahead (3 days, 1 day), and a line in the call's Pay box: "If you don't pay by <date>, it's charged automatically: $X (<N> min × $Y/h)."
+- **Not paid by then:** the app charges the developer's card for rate × measured minutes (within the $1,000 for that tester's calls), off-session, as a payment made while away: the developer's receipt "Receipt: you paid $X for <tester>'s call on <date> (charged automatically after 7 days)"; the tester's "<dev> paid you $X for your call on <date>." Bank asks → the dashboard's "Your bank wants you to confirm" box (3 days, then counts as declined); declined → a payment hold as for any declined charge (testers see "delayed", never "failed"). During a hold or suspension it's added to what's owed, as a tester's Charge is today.
+- **No Charge or Let it go for listed calls**, anywhere (session page, dashboard "Charge or cancel", reminders, bell lines); the tester's call row shows "If <dev> doesn't pay by <date>, it's charged automatically." A call with 0 measured minutes is closed with nothing to pay.
+- **Unlisted calls unchanged:** any amount ($0 included), the weekly "Pay your calls" line, no automatic charge, no end date.
+- Pay more on a call works as for other pieces, up to its cap (§20).
+- Existing local data: listed calls whose Charge already opened switch to the automatic charge at the next sweep.
+- Terms, HANDOVER and the design doc (doc agent): the automatic charge replaces Charge for listed calls; Post's Charge tick wording covers it ("…for work I haven't paid once 7 days have passed since they sent it and their own deadline has passed, and listed calls 7 days after they take place").
+- Tests: auto-charge at day 7 once (idempotent, the sweep running twice), paid before → nothing, bank asks, declined → hold, paused → added to owed, 0 minutes → nothing, unlisted untouched, no Charge/Let it go shown for listed calls.
+
 ## Check and report
 - Run `NEXT_DIST_DIR=.next-build npm run check`; it must be green. Migration only if needed (hand-written, checked with `prisma migrate diff` against playtest_lite_shadow with --exit-code, applied only to the local playtest_lite DB; say the 3400 server needs a restart).
 - Don't touch port 3400 (the owner uses it: write each file in one go). Don't edit docs/DESIGN-DOC.md. Never print secrets from .env.
