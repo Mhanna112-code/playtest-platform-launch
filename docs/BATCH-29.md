@@ -94,8 +94,8 @@ The developer's "The team paused / stopped “<test>”" and "“<test>” was c
 ## 34. Email rules for admins and testers (owner, Oct 29)
 - **The admin's end-of-day summary follows each admin's own email setting** (Daily / Weekly / Monthly / Off) instead of ignoring it: new disputes, hold lifts and chargeback holds waiting for Approve, call no-show and late reports. The console and the bell show all of it anyway.
 - **"Playtest: new chargeback of $X" stays sent right away, one email per chargeback, to every admin, whatever their setting** (Stripe's response deadline).
-- **Testers' deadline reminders at 3 days and 1 day before** ("Your deadline on “<test>” is <date>: send your work before then.") ignore the setting: they go in the end-of-day email, stacked across tests (the "Deadlines" entry, §27). The 1-month and 1-week ones still follow the setting.
-- Update the design doc's Emails table (doc agent). Tests: an admin with email Off gets no summary but does get the chargeback email; a tester with Off gets the 3-day deadline email, not the 1-week one.
+- **Testers' deadline reminders, all of them** (1 month, 1 week, 3 days and 1 day before: "Your deadline on “<test>” is <date>: send your work before then.") ignore the setting: they go in the end-of-day email, stacked across tests (the "Deadlines" entry, §27).
+- Update the design doc's Emails table (doc agent). Tests: an admin with email Off gets no summary but does get the chargeback email; a tester with Off gets every deadline reminder by email (end of day, stacked).
 
 ## 35. Storage running out: tell the admins, inside and outside the app (owner, Oct 29)
 - Once a day (the daily timed run) the app measures the database's size (pg_database_size) and the total size of stored uploads (from its own records of R2 files). Limits come from settings: `DB_STORAGE_LIMIT_GB` (e.g. 0.5 on Neon's free plan, the plan's size on a paid one) and `UPLOADS_LIMIT_GB` (the R2 budget); unset = not checked.
