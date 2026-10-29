@@ -42,6 +42,9 @@ Today a tester's own press in another tab stops only the SAME press ("You also d
 - **Rating lines get their own stack, on both sides:** "<tester> finished <test>. You can rate them…", the developer's reminders, the tester's "Rate <dev> on <test>" and its reminders no longer stack in "that test's day"; they stack in one "Ratings to give" entry per day across tests (like payments and holds), opening the dashboard's Ratings to give box. Update the bell table's "Stacks in" column (doc agent).
 - Tests: reminders on a running test; the new stack across two tests.
 
+## 22. Closing-soon reminders use the countdown schedule (owner, Oct 29)
+"Pay <tester>'s work on “<test>” by <date>" (developer) and "Charge or let go of your work on “<test>” by <date>" (tester) are sent today only 3 days and 1 day before a piece closes. Use the same countdown as the other reminders: 1 month before (only if the closing date was more than a month away when the piece's Charge opened), 1 week, 3 days and 1 day before; only the marks still ahead; never two for the same date; they move with pauses and outages; still emailed whatever the setting (money lines); still stacked in "Closing soon". Tests: a piece closing in 40 days gets all four; one closing in 5 days gets 3 days and 1 day.
+
 ## Decided, no change (owner, Oct 29)
 - After a stop, End early, Leave, a block or a removal, a sent piece's review date stays the later of 7 days after sending and the tester's ORIGINAL deadline (the owner said no to opening Charge 7 days after the work ended). Don't change it.
 
