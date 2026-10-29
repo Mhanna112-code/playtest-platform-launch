@@ -28,9 +28,17 @@ const fakeManual: Set<string> = ((globalThis as { __fakeManual?: Set<string> }).
 export const fakeExpire = (id: string) => { if (fakePis.has(id)) fakePis.set(id, "canceled"); };
 /** (Batch 15 section 9) The fake's PaymentIntents by their metadata payKey, for its search. */
 const fakeByKey: Map<string, string> = ((globalThis as { __fakeByKey?: Map<string, string> }).__fakeByKey ??= new Map<string, string>());
+/** (Batch 28 §10) The fake refuses what API 2026-09-30 refuses, as Stripe does, so a removed parameter can't come back unnoticed. */
+const refuseRemoved = (p: object, names: string[]) => {
+  const used = names.find((n) => n in p);
+  if (used) throw Object.assign(new Error(`The \`${used}\` parameter is no longer supported.`), { type: "StripeInvalidRequestError", rawType: "invalid_request_error", param: used });
+};
+/** (Batch 28 §17) The fake's charge behind each PaymentIntent (Stripe's latest_charge), for transfers made later from it. */
+const chargeOfPi = (id: string) => id.replace(/^pi_/, "ch_");
 const fakeStripe = {
   paymentIntents: {
     create: async (p: { payment_method?: string; amount: number; off_session?: boolean; capture_method?: string; metadata?: { payKey?: string } }) => {
+      refuseRemoved(p, ["payment_method_types"]);
       if (p.payment_method === "pm_card_declined" || (p.payment_method === "pm_card_partial" && p.amount === 1500)) throw Object.assign(new Error("Your card was declined."), { type: "StripeCardError", rawType: "card_error", code: "card_declined" });
       const id = `pi_fake_${Date.now()}_${++fakeN}`;
       if (p.metadata?.payKey) fakeByKey.set(p.metadata.payKey, id);
@@ -54,7 +62,7 @@ const fakeStripe = {
       fakePis.set(id, "succeeded");
       return { id, status: "succeeded", amount_received: p.amount_to_capture };
     },
-    retrieve: async (id: string) => ({ id, status: fakePis.get(id) ?? "succeeded", client_secret: `${id}_secret_fake` }),
+    retrieve: async (id: string) => ({ id, status: fakePis.get(id) ?? "succeeded", client_secret: `${id}_secret_fake`, latest_charge: chargeOfPi(id) }),
     search: async (q: { query: string }) => {
       const key = /metadata\['payKey'\]:'([^']+)'/.exec(q.query)?.[1] ?? "";
       const id = fakeByKey.get(key);
@@ -63,7 +71,13 @@ const fakeStripe = {
     cancel: async (id: string) => { fakePis.set(id, "canceled"); return { id, status: "canceled" }; },
   },
   refunds: { create: async () => ({ id: `re_fake_${++fakeN}` }) },
-  transfers: { create: async () => ({ id: `tr_fake_${++fakeN}` }) },
+  // (Batch 28 §17) A transfer made after the charge names that charge (source_transaction), as on Stripe: no platform balance is needed.
+  transfers: {
+    create: async (p: { source_transaction?: string }) => {
+      if (!p.source_transaction) throw Object.assign(new Error("You have insufficient available funds in your Stripe account."), { type: "StripeInvalidRequestError", code: "balance_insufficient" });
+      return { id: `tr_fake_${++fakeN}`, source_transaction: p.source_transaction };
+    },
+  },
   webhooks: { constructEvent: (raw: string, sig: string) => { if (sig !== "fake") throw new Error("bad signature"); return JSON.parse(raw); } },
 } as unknown as Stripe;
 
@@ -260,7 +274,7 @@ export async function sendWaitingShares(testerId: string) {
   for (const p of waiting) {
     if ((await db.payment.updateMany({ where: { id: p.id, transferStatus: "waiting" }, data: { transferStatus: "sending" } })).count !== 1) continue;
     try {
-      const t = await getStripe().transfers.create({ amount: p.testerCents, currency: "usd", destination: tester.stripeAccountId, metadata: { paymentId: p.id } }, { idempotencyKey: `transfer-${p.id}` });
+      const t = await transferShare(p, p.testerCents, tester.stripeAccountId);
       await db.payment.update({ where: { id: p.id }, data: { transferStatus: "sent", stripeTransferId: t.id } });
       cents += p.testerCents;
     } catch (e) {
@@ -274,6 +288,29 @@ export async function sendWaitingShares(testerId: string) {
   }
   return cents;
 }
+/**
+ * (Batch 28 §17) A tester's share sent after the charge (a share that waited for payout setup, a payment taken from a chargeback hold's reservation): the transfer names
+ * the original charge (`source_transaction`), so Stripe sends it as soon as that charge's money is available, with no platform balance needed (money from a charge is
+ * "pending" for days, and a plain transfer would fail with "insufficient available funds"). Created = on its way for the tester. One transfer per share (its key).
+ */
+export async function transferShare(p: { id: string; stripePaymentIntentId: string | null }, cents: number, destination: string) {
+  const stripe = getStripe();
+  const pi = p.stripePaymentIntentId ? await stripe.paymentIntents.retrieve(p.stripePaymentIntentId) : null;
+  const source = typeof pi?.latest_charge === "string" ? pi.latest_charge : pi?.latest_charge?.id;
+  if (!source) throw new Error(`no charge to send payment ${p.id}'s share from`);
+  return stripe.transfers.create({ amount: cents, currency: "usd", destination, source_transaction: source, metadata: { paymentId: p.id } }, { idempotencyKey: `share-${p.id}` });
+}
+
+/** (Batch 28 §17) The daily job: shares still waiting for a tester whose payout setup is done (a transfer that failed earlier) are sent again. */
+export async function resendWaitingShares() {
+  if (!stripeOn()) return 0;
+  const waiting = await db.payment.findMany({ where: { transferStatus: "waiting", status: "charged", testerCents: { gt: 0 } }, select: { testerId: true }, distinct: ["testerId"] });
+  const ready = await db.user.findMany({ where: { id: { in: waiting.map((p) => p.testerId) }, payoutsReady: true, stripeAccountId: { not: null } }, select: { id: true } });
+  let cents = 0;
+  for (const { id } of ready) cents += await sendWaitingShares(id).catch(() => 0);
+  return cents;
+}
+
 /** "Your payout setup is done: $8.00 on its way." */
 export const payoutDoneLine = (cents: number) => `Your payout setup is done: ${money(cents)} on its way.`;
 

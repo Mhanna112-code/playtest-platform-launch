@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, X } from "lucide-react";
 import { Err } from "@/components/Err";
 import { api, errOf } from "@/lib/client";
@@ -10,7 +10,8 @@ import type { Simulate } from "@/lib/bankConfirm";
 
 type Steps = { cardVerified: boolean; owedPaid: boolean; approved: boolean; remaining: string[] };
 
-type Elements = { create: (t: string) => { mount: (el: HTMLElement) => void }; submit: () => Promise<{ error?: { message?: string } }> };
+type CardElement = { mount: (el: HTMLElement) => void; on: (event: "ready", fn: () => void) => void; destroy: () => void };
+type Elements = { create: (t: "payment") => CardElement; submit: () => Promise<{ error?: { message?: string } }> };
 type StripeJs = {
   elements: (o: { mode: "setup"; currency: string; paymentMethodCreation: "manual"; paymentMethodTypes: string[] }) => Elements;
   createPaymentMethod: (o: { elements: Elements }) => Promise<{ error?: { message?: string }; paymentMethod?: { id: string } }>;
@@ -46,6 +47,19 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
     setTimeout(() => window.location.reload(), 1200);
   };
   const mount = useRef<HTMLDivElement>(null);
+  // (Batch 28 §19) Stripe's card form is mounted once its box is on the page (after the SetupIntent arrived), and "Verify this card" waits until the form is ready: a
+  // timer fired before React drew the box left nothing mounted, so every press failed ("Could not find a ready element to create a payment method from.").
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!form || !mount.current) return;
+    const el = form.elements.create("payment");
+    el.on("ready", () => setReady(true));
+    el.mount(mount.current);
+    return () => {
+      setReady(false);
+      el.destroy();
+    };
+  }, [form]);
   const row = (ok: boolean, text: string) => (
     <li className="flex items-center gap-2" data-step-ok={ok ? "yes" : "no"}>
       {ok ? <Check className="h-4 w-4 text-emerald-300" aria-label="done" /> : <X className="h-4 w-4 text-rose-300" aria-label="not yet" />} {text}
@@ -70,14 +84,13 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
       // (Batch 17 §11) The card form only makes the card; the server confirms it with return_url, so the bank's check comes back as a page shown inline.
       const elements = stripe.elements({ mode: "setup", currency: "usd", paymentMethodCreation: "manual", paymentMethodTypes: ["card"] });
       setForm({ stripe, elements, setupIntentId: r.setupIntentId ?? "" });
-      setTimeout(() => mount.current && elements.create("payment").mount(mount.current), 0);
     } catch (e) {
       setErr(errOf(e));
     }
     setBusy(false);
   }
   async function confirm() {
-    if (!form) return;
+    if (!form || !ready) return;
     setBusy(true);
     setErr("");
     try {
@@ -115,8 +128,8 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
       )}
       {form && (
         <div className="space-y-2">
-          <div ref={mount} />
-          <button className="btn" disabled={busy || bank.open || !!done} onClick={confirm}>Verify this card</button>
+          <div ref={mount} data-card-form="" className="min-h-[3rem] rounded-lg bg-white p-3" />
+          <button className="btn" disabled={busy || !ready || bank.open || !!done} onClick={confirm}>Verify this card</button>
         </div>
       )}
       {bank.view}

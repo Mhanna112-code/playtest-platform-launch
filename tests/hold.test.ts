@@ -141,7 +141,7 @@ describe("chargebacks (Stripe dispute webhook)", () => {
     setStripeForTests(null); // no Stripe here (dev): the card check is simulated
     expect((await verifyPOST(req("/api/payments/verify-card", { cookie: dev.cookie, body: {} }))).status).toBe(200); // simulated without Stripe
     // (Owner, Oct 27) The reversed $8.00 is owed again (batch 11: with the $15 fee): Approve waits for it to be paid with "Pay what you owe".
-    expect((await approve()).body.error.message).toBe("Not yet: $23.00 is owed but $0.00 is reserved.");
+    expect((await approve()).body.error.message).toBe("Not yet: nothing is reserved ($23.00 is owed).");
     // (Batch 23 section 6) Pay what you owe reserves it (recorded as reserved without Stripe); the team's Approve takes it.
     const paid = await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })));
     expect(paid.body).toMatchObject({ paid: 0, stillFailing: [], reservedCents: 2300 });

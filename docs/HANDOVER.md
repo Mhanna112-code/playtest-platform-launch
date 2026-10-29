@@ -242,6 +242,16 @@ Two endpoints at the same URL (both listed in `.env.example`):
   `STRIPE_CONNECT_WEBHOOK_SECRET`. A tester's payout account is ready when `payouts_enabled` and the `transfers` capability is
   `active` (batch 15 §4; `charges_enabled` doesn't matter for these receive-only accounts).
 
+**API version (batch 28 §10).** The installed stripe-node 23 speaks API `2026-09-30.endive`; every call and webhook field was checked against it
+(and against Stripe test mode). Create both endpoints with that API version. On it, PaymentIntents take `allowed_payment_method_types` (the old
+`payment_method_types` is refused), an invoice has no `payment_intent` or `subscription` (`subscriptionWebhook` reads
+`parent.subscription_details.subscription` and asks Stripe for `invoice.payments`; the old fields are still read for an endpoint on an older version),
+Subscribe confirms the first invoice's PaymentIntent itself with `return_url` (a `default_incomplete` subscription leaves it unconfirmed), and a
+cancelled Subscribe check cancels the subscription (Stripe refuses to cancel an invoice's PaymentIntent). (Batch 28 §17) A tester's share sent after
+the charge (a share that waited for payout setup, a payment taken from a chargeback hold's reservation) is a transfer with `source_transaction` set to
+that charge: it needs no available platform balance and arrives when that charge's money does; the daily job sends again any share still waiting for a
+tester whose setup is done.
+
 ### Settings checked loudly (batch 15 §12)
 
 `configProblems()` (`src/lib/configProblems.cjs`) lists every settings problem with a plain fix. `npm run build` runs

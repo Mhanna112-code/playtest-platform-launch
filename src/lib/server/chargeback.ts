@@ -4,8 +4,8 @@ import { displayName, money } from "@/lib/format";
 import { HttpError } from "./http";
 import { logEvent } from "./live";
 import { bell, notify } from "./notify";
-import { PAYMENTS_PROBLEM, authorize, bankReturnUrl, checkUrlOf, fakeOn, getStripe, stripeOn } from "./stripe";
-import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, PRESS_ACTION_MS, RESERVE_DAYS, RESERVE_EXPIRED, reserveShortLine, splitFee } from "@/lib/rules";
+import { PAYMENTS_PROBLEM, authorize, bankReturnUrl, checkUrlOf, fakeOn, getStripe, stripeOn, transferShare } from "./stripe";
+import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, PRESS_ACTION_MS, RESERVE_DAYS, RESERVE_EXPIRED, splitFee } from "@/lib/rules";
 import { liftHoldIfClear, owed, tellArrived } from "./holds";
 import { receipt } from "./payments";
 
@@ -25,6 +25,8 @@ export type ChargebackSteps = {
   /** (Batch 23 section 6) What is reserved on the card now, and what is owed beyond it (Pay what you owe's amount). */
   reservedCents: number;
   uncoveredCents: number;
+  /** (Batch 28 §8) Added to what is owed after the reservation: charged on the verified card right after the team's Approve lifts the hold (no second reservation). */
+  addedCents: number;
   /** The last reservation lapsed (about 7 days, no Approve): Payments asks for Pay what you owe again. */
   expired: boolean;
   approved: boolean;
@@ -40,13 +42,14 @@ export async function chargebackSteps(devId: string): Promise<ChargebackSteps | 
   const rs = await reserveState(devId);
   const owedCents = owing.reduce((a, p) => a + p.amountCents, 0);
   const uncoveredCents = owing.filter((p) => !rs.covered.has(p.id)).reduce((a, p) => a + p.amountCents, 0);
-  const cardVerified = !!u.chargebackCardVerifiedAt, owedPaid = uncoveredCents === 0, approved = !!u.chargebackApprovedAt;
+  // (Owner, Oct 29, batch 28 §8) Pay what you owe reserves once: with a reservation in place the step is done; anything added since is charged after the lift.
+  const cardVerified = !!u.chargebackCardVerifiedAt, owedPaid = uncoveredCents === 0 || rs.reservedCents > 0, approved = !!u.chargebackApprovedAt;
   const remaining = [
     ...(cardVerified ? [] : ["Verify a card with 3D Secure"]),
     ...(owedPaid ? [] : [`Pay what you owe (${money(uncoveredCents)})`]),
     ...(approved ? [] : ["Wait for the team's approval"]),
   ];
-  return { cardVerified, owedPaid, owedCents, reservedCents: rs.reservedCents, uncoveredCents, expired: rs.expired && !rs.reservedCents, approved, remaining };
+  return { cardVerified, owedPaid, owedCents, reservedCents: rs.reservedCents, uncoveredCents, addedCents: rs.reservedCents > 0 ? uncoveredCents : 0, expired: rs.expired && !rs.reservedCents, approved, remaining };
 }
 
 // ---------- (Owner, Oct 29, batch 23 section 6) Pay what you owe reserves; the team's Approve takes it ----------
@@ -64,8 +67,9 @@ async function cancelPi(id: string | null) {
 }
 
 /**
- * Pay what you owe during a chargeback hold (after the card check): one authorization for everything owed that isn't reserved yet (a Charge added after an earlier
- * reservation needs its own for the difference). Without Stripe it is recorded as reserved. Returns the reserved amount, the bank's inline check, or why it failed.
+ * Pay what you owe during a chargeback hold (after the card check): one authorization for everything owed. (Owner, Oct 29, batch 28 §8) It reserves ONCE: while a
+ * reservation is in place nothing more is reserved (what is added later is charged right after the lift); after it expired or was released, the full amount owed then.
+ * Without Stripe it is recorded as reserved. Returns the reserved amount, the bank's inline check, or why it failed.
  */
 export async function reserveOwed(u: { id: string; email: string; stripeCustomerId: string | null; stripePaymentMethodId: string | null; stripeAccountId: string | null; payoutsReady: boolean }, rows: { id: string; amountCents: number }[]) {
   const total = rows.reduce((a, p) => a + p.amountCents, 0);
@@ -223,8 +227,8 @@ export async function finishCardVerification(userId: string, setupIntentId: stri
 type OwedRow = Awaited<ReturnType<typeof owed>>[number];
 
 /**
- * (Batch 23 section 6) Which reservation pays which owed payment: each payment goes with the reservation that covers it, else with any with room left. null when what is
- * reserved doesn't cover everything owed (a Charge added after the reservation, not reserved yet).
+ * (Batch 23 section 6) Which reservation pays which owed payment: each payment goes with the reservation that covers it, else with any with room left. (Batch 28 §8)
+ * `after`: what no reservation covers (added after it): charged right after the hold lifts.
  */
 function assign(rows: OwedRow[], active: { id: string; amountCents: number; covers: string[] }[]) {
   const room = new Map(active.map((r) => [r.id, r.amountCents]));
@@ -239,12 +243,30 @@ function assign(rows: OwedRow[], active: { id: string; amountCents: number; cove
     if (own) put(own.id, p);
     else later.push(p);
   }
+  const after: OwedRow[] = [];
   for (const p of later) {
     const any = active.find((r) => room.get(r.id)! >= p.amountCents);
-    if (!any) return null;
-    put(any.id, p);
+    if (any) put(any.id, p);
+    else after.push(p);
   }
-  return out;
+  return { plan: out, after };
+}
+
+/**
+ * (Owner, Oct 29, batch 28 §8) What was added to what is owed after the reservation is charged right after the lift, as an ordinary charge on the verified card
+ * ("deferred": chargeDeferred runs when the hold lifts). Its receipt names it; the tester is paid when it goes through; the bank asking waits as "Your bank wants you to
+ * confirm"; a decline starts a normal payment hold. A reversed payment owed again (a chargeback opened after the reservation) gets its repay row the same way.
+ */
+async function deferAfterLift(devId: string, rows: OwedRow[]) {
+  for (const p of rows) {
+    if (p.chargeback === "open") {
+      const busy = await db.payment.findFirst({ where: { repaysId: p.id, status: { in: ["charged", "not_set_up", "paying", "needs_action", "needs_confirmation", "deferred"] } } });
+      if (!busy) await db.payment.create({ data: { kind: "chargeback", repaysId: p.id, contractId: p.contractId, developerId: devId, testerId: p.testerId, amountCents: p.amountCents, feeCents: p.amountCents, testerCents: 0, transferStatus: "none", status: "deferred" } });
+      continue;
+    }
+    if (p.actionPi) await cancelPi(p.actionPi);
+    await db.payment.updateMany({ where: { id: p.id, settledAt: null, status: p.status }, data: { status: "deferred", owedUntil: null, failure: "", actionPi: null, actionBy: null, warnedAt: null } });
+  }
 }
 
 /**
@@ -269,7 +291,8 @@ async function settleOwedRow(dev: { id: string; name: string; email: string }, p
   if (claimed.count !== 1) return;
   if (ready) {
     try {
-      const t = await getStripe().transfers.create({ amount: split.testerCents, currency: "usd", destination: tester!.stripeAccountId!, metadata: { paymentId: p.id } }, { idempotencyKey: `transfer-${p.id}` });
+      // (Batch 28 §17) Sent from the captured charge itself (source_transaction): no platform balance needed.
+      const t = await transferShare({ id: p.id, stripePaymentIntentId: pi }, split.testerCents, tester!.stripeAccountId!);
       await db.payment.update({ where: { id: p.id }, data: { transferStatus: "sent", stripeTransferId: t.id } });
     } catch (e) {
       console.error("[reserve] transfer:", (e as Error).message);
@@ -281,8 +304,9 @@ async function settleOwedRow(dev: { id: string; name: string; email: string }, p
 
 /**
  * Step (c): the admin approves lifting the chargeback hold. (Owner, Oct 29, batch 23 section 6) Allowed once the card is verified and what is owed is reserved on it: Approve
- * captures the reservation (once: the first press claims the approval) and lifts the hold in one step; the testers waiting on that money are paid then. Refused while what is
- * reserved doesn't cover what is owed ("Not yet: $X is owed but $Y is reserved."). A reservation that can't be captured any more (it lapsed) is released and refused.
+ * captures the reservation (once: the first press claims the approval) and lifts the hold in one step; the testers waiting on that money are paid then. (Owner, Oct 29,
+ * batch 28 §8) Something added after the reservation never blocks it: the reservation is taken, the hold lifts, and what was added is charged right after (deferAfterLift).
+ * A reservation that can't be captured any more (it lapsed) is released and refused.
  */
 export async function approveChargebackHold(devId: string) {
   const steps = await chargebackSteps(devId);
@@ -291,10 +315,11 @@ export async function approveChargebackHold(devId: string) {
   const owing = await owed(devId);
   const rs = await reserveState(devId);
   const owedCents = owing.reduce((a, p) => a + p.amountCents, 0);
-  const plan = assign(owing, rs.active);
-  if (!steps.cardVerified && !plan) throw new HttpError(409, "steps_missing", `Not yet: the card isn't verified, and ${money(owedCents)} is owed but ${money(rs.reservedCents)} is reserved.`);
+  const { plan, after } = assign(owing, rs.active);
+  const nothingReserved = owedCents > 0 && !rs.active.length;
+  if (!steps.cardVerified && nothingReserved) throw new HttpError(409, "steps_missing", `Not yet: the card isn't verified, and nothing is reserved (${money(owedCents)} is owed).`);
   if (!steps.cardVerified) throw new HttpError(409, "steps_missing", "Not yet: the card isn't verified.");
-  if (!plan) throw new HttpError(409, "steps_missing", reserveShortLine(owedCents, rs.reservedCents));
+  if (nothingReserved) throw new HttpError(409, "steps_missing", `Not yet: nothing is reserved (${money(owedCents)} is owed).`);
   const claimed = await db.user.updateMany({ where: { id: devId, chargebackApprovedAt: null, holdStartedAt: { not: null }, holdReason: "chargeback" }, data: { chargebackApprovedAt: new Date() } });
   if (claimed.count !== 1) throw new HttpError(409, "already", "That hold was already approved.");
   const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
@@ -323,6 +348,8 @@ export async function approveChargebackHold(devId: string) {
     for (const p of rows) await settleOwedRow(dev, p, r.stripePaymentIntentId && stripeOn() ? r.stripePaymentIntentId : null);
     taken += cents;
   }
+  // (Batch 28 §8) What was added after the reservation waits for the lift, then is charged as an ordinary charge.
+  await deferAfterLift(devId, after);
 
   for (const p of await db.payment.findMany({ where: { developerId: devId, chargeback: "open" } })) {
     await db.payment.update({ where: { id: p.id }, data: { chargeback: "resolved" } });

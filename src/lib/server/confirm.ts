@@ -218,7 +218,10 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
   if (!stripeOn() || fakeOn()) return { paymentId, clientSecret: `${p.actionPi}_secret_fake`, publishableKey: pk(), simulated: true, paymentMethod: u.stripePaymentMethodId, checkUrl: null };
   const stripe = getStripe();
   let pi = await stripe.paymentIntents.retrieve(p.actionPi!);
-  if ((pi.status === "requires_payment_method" || pi.status === "requires_confirmation") && u.stripePaymentMethodId && typeof stripe.paymentIntents.confirm === "function") {
+  // (Batch 28 §10, checked on Stripe test mode) A renewal's invoice (or an off-session try) that the bank wants confirmed waits on Stripe.js ("use_stripe_sdk"): confirmed
+  // again here with return_url, Stripe hands back the bank's check page, shown inline like a press's.
+  const sdkOnly = pi.status === "requires_action" && !checkUrlOf(pi);
+  if ((pi.status === "requires_payment_method" || pi.status === "requires_confirmation" || sdkOnly) && u.stripePaymentMethodId && typeof stripe.paymentIntents.confirm === "function") {
     try {
       pi = await stripe.paymentIntents.confirm(pi.id, { payment_method: u.stripePaymentMethodId, return_url: bankReturnUrl() });
     } catch (e) {
@@ -280,7 +283,11 @@ async function finish(paymentId: string) {
 export async function release(paymentId: string) {
   const p = await db.payment.findUnique({ where: { id: paymentId } });
   if (!p) return;
-  if (p.actionPi && stripeOn()) await getStripe().paymentIntents.cancel(p.actionPi).catch(() => null);
+  // (Batch 28 §10) A Subscribe's first payment belongs to its invoice, which Stripe won't let be cancelled: the incomplete subscription is cancelled instead (its
+  // invoice is voided). Every other press cancels its PaymentIntent.
+  const subId = p.kind === "subscription" && p.status === "needs_action" && p.note.startsWith("sub:") && p.note !== "sub:manual" ? p.note.slice(4) : "";
+  if (subId && stripeOn()) await getStripe().subscriptions.cancel(subId).catch(() => null);
+  else if (p.actionPi && stripeOn()) await getStripe().paymentIntents.cancel(p.actionPi).catch(() => null);
   if (p.status === "needs_action" && (p.kind === "review" || p.kind === "call")) {
     await db.$transaction([db.review.deleteMany({ where: p.submissionId ? { submissionId: p.submissionId } : { callId: p.callId! } }), db.payment.update({ where: { id: p.id }, data: { status: "cancelled", actionPi: null, actionBy: null } })]);
   } else if (p.status === "needs_action" && p.kind === "chargeback") await db.payment.delete({ where: { id: p.id } });

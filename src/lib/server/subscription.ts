@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { HttpError } from "./http";
 import { linesFor, notify } from "./notify";
 import { T } from "@/lib/tz";
-import { PAYMENTS_PROBLEM, chargePlatform, getStripe, isCardError, stripeOn, type NeedsAction } from "./stripe";
+import { PAYMENTS_PROBLEM, bankReturnUrl, chargePlatform, checkUrlOf, getStripe, isCardError, stripeOn, type NeedsAction } from "./stripe";
 import { serverKey } from "./pressKeys";
 import { receipt } from "./payments";
 import { recordEvent } from "./tests";
@@ -79,6 +79,30 @@ async function recordCharge(dev: Dev, r: { status: string; stripePaymentIntentId
   await receipt(dev.email, `your subscription (${SUBSCRIPTION_PRICE})`, cents, r.status, "/app/payments#subscription");
 }
 
+/**
+ * (Batch 28 §10, API 2026-09-30) An invoice no longer carries `payment_intent` or `subscription`: its subscription is `parent.subscription_details.subscription` and its
+ * PaymentIntent is in `invoice.payments` (an includable list, so not in webhook payloads: asked for). The older fields are still read, for a webhook endpoint pinned to an
+ * older API version.
+ */
+type InvoiceLike = Partial<Pick<Stripe.Invoice, "id" | "amount_paid" | "amount_due" | "lines" | "parent" | "payments">> & { subscription?: unknown; payment_intent?: unknown };
+export const invoiceSubscription = (o: InvoiceLike) => {
+  const s = o.parent?.subscription_details?.subscription ?? o.subscription;
+  return typeof s === "string" ? s : s && typeof s === "object" && typeof (s as { id?: unknown }).id === "string" ? (s as { id: string }).id : "";
+};
+const piOfPayments = (list: Stripe.InvoicePayment[] | undefined) => {
+  const p = (list ?? []).find((x) => x.is_default) ?? list?.[0];
+  const pi = p?.payment?.payment_intent;
+  return typeof pi === "string" ? pi : pi?.id ?? null;
+};
+export async function invoicePaymentIntent(o: InvoiceLike): Promise<string | null> {
+  if (typeof o.payment_intent === "string") return o.payment_intent;
+  const own = piOfPayments(o.payments?.data);
+  if (own) return own;
+  if (!o.id || !stripeOn()) return null;
+  const list = await getStripe().invoicePayments.list({ invoice: o.id, limit: 10 }).catch((e) => { console.error("[stripe] invoice payments:", (e as Error).message); return null; });
+  return piOfPayments(list?.data);
+}
+
 let productId: string | null = null;
 async function stripeProduct(stripe: Stripe) {
   productId = productId ?? (await appState("stripe-sub-product"));
@@ -108,22 +132,36 @@ export async function subscribe(dev: Dev, now = new Date()) {
   if (billingOn()) {
     const stripe = getStripe();
     try {
-      // (Batch 11) On-session: when the bank wants the developer to confirm the first payment, the page shows its pop-up (default_incomplete keeps it waiting).
+      // (Batch 11) On-session. (Batch 28 §10, checked on Stripe test mode with API 2026-09-30) default_incomplete leaves the first invoice's PaymentIntent unconfirmed
+      // ("requires_confirmation"), and invoices no longer carry `payment_intent`: it is found in `latest_invoice.payments` and confirmed here with return_url, so the
+      // bank's check (if it asks) is a page shown inline under Subscribe, like Pay. Went through: recorded now (the invoice.paid webhook finds it by its PaymentIntent).
       const s = await stripe.subscriptions.create({
         customer: u.stripeCustomerId!, default_payment_method: u.stripePaymentMethodId!, payment_behavior: "default_incomplete", metadata: { userId: u.id },
         items: [{ price_data: { currency: "usd", product: await stripeProduct(stripe), unit_amount: SUBSCRIPTION_CENTS, recurring: { interval: "month" } } }],
-        expand: ["latest_invoice.payment_intent"],
+        expand: ["latest_invoice.payments"],
         ...(startsCharging > now ? { trial_end: Math.floor(startsCharging.getTime() / 1000) } : {}),
       }, { idempotencyKey: subKey });
       id = s.id;
-      const pi = (s.latest_invoice as unknown as { payment_intent?: { id: string; status: string; client_secret: string } } | null)?.payment_intent;
-      if (s.status === "incomplete" && pi?.status === "requires_action") {
-        const row = await db.payment.create({ data: { kind: "subscription", developerId: u.id, testerId: u.id, amountCents: SUBSCRIPTION_CENTS, feeCents: SUBSCRIPTION_CENTS, testerCents: 0, transferStatus: "none", status: "needs_action", note: `sub:${s.id}` } });
-        return (await import("./confirm")).pressAction(row.id, { status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret });
-      }
       if (s.status === "incomplete") {
-        await stripe.subscriptions.cancel(s.id).catch(() => null);
-        throw new Error("incomplete");
+        const inv = typeof s.latest_invoice === "object" ? s.latest_invoice : null;
+        const piId = inv ? await invoicePaymentIntent(inv) : null;
+        let pi = piId ? await stripe.paymentIntents.retrieve(piId) : null;
+        if (pi && (pi.status === "requires_confirmation" || pi.status === "requires_payment_method")) {
+          pi = await stripe.paymentIntents.confirm(pi.id, { payment_method: u.stripePaymentMethodId!, return_url: bankReturnUrl() }, { idempotencyKey: `${subKey}-confirm` }).catch((e) => {
+            if (isCardError(e)) return null;
+            throw e;
+          });
+        }
+        if (pi?.status === "requires_action") {
+          const row = await db.payment.create({ data: { kind: "subscription", developerId: u.id, testerId: u.id, amountCents: SUBSCRIPTION_CENTS, feeCents: SUBSCRIPTION_CENTS, testerCents: 0, transferStatus: "none", status: "needs_action", note: `sub:${s.id}` } });
+          return (await import("./confirm")).pressAction(row.id, { status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "", checkUrl: checkUrlOf(pi) });
+        }
+        if (pi?.status === "succeeded") await recordCharge(u, { status: "charged", stripePaymentIntentId: pi.id });
+        else {
+          // Declined (or no payment to confirm): the incomplete subscription is cancelled (its invoice is voided), nothing was charged.
+          await stripe.subscriptions.cancel(s.id).catch(() => null);
+          throw new Error("incomplete");
+        }
       }
     } catch (e) {
       // (Batch 15 section 41, M1) Only the card is a decline; anything else says payments have a problem (nothing charged).
@@ -302,24 +340,33 @@ export async function renewSubscriptions(now = new Date(), only?: string[]) {
   return { renewed: renewedN, failed, ended };
 }
 
-/** Stripe Billing webhook events about a subscription. */
-export async function subscriptionWebhook(type: string, o: Record<string, unknown>, now = new Date()) {
-  const subId = typeof o.subscription === "string" ? o.subscription : type.startsWith("customer.subscription") && typeof o.id === "string" ? o.id : "";
+/**
+ * Stripe Billing webhook events about a subscription. (Batch 28 §10) Invoices are read the API 2026-09-30 way (invoiceSubscription, invoicePaymentIntent); a payment
+ * already recorded (the Subscribe press, or a renewal confirmed with the bank) is never recorded twice.
+ */
+export async function subscriptionWebhook(type: string, payload: object, now = new Date()) {
+  const o = payload as InvoiceLike & { id?: string }; // a webhook payload (verified): an invoice or a subscription
+  const subId = type.startsWith("customer.subscription") ? (typeof o.id === "string" ? o.id : "") : invoiceSubscription(o);
   if (!subId) return false;
   const u = await db.user.findFirst({ where: { subscriptionId: subId } });
   if (!u) return false;
   if (type === "invoice.paid") {
     const cents = typeof o.amount_paid === "number" ? o.amount_paid : SUBSCRIPTION_CENTS;
-    if (cents > 0) await recordCharge(u, { status: "charged", stripePaymentIntentId: typeof o.payment_intent === "string" ? o.payment_intent : null }, cents);
-    const lines = (o.lines as { data?: { period?: { end?: number } }[] } | undefined)?.data;
-    const end = lines?.[0]?.period?.end;
+    const pi = cents > 0 ? await invoicePaymentIntent(o) : null;
+    if (cents > 0 && !(pi && (await db.payment.count({ where: { kind: "subscription", OR: [{ stripePaymentIntentId: pi }, { actionPi: pi }] } })))) await recordCharge(u, { status: "charged", stripePaymentIntentId: pi }, cents);
+    const end = o.lines?.data?.[0]?.period?.end;
     await renewed(u.id, now, end ? new Date(end * 1000) : null);
-  } else if (type === "invoice.payment_failed") await renewalFailed(u.id, now);
-  else if (type === "invoice.payment_action_required" && typeof o.payment_intent === "string") {
+  } else if (type === "invoice.payment_failed") {
+    // (Batch 28 §10) A renewal waiting for the bank's check also sends payment_failed: that one waits for the developer's Confirm (payment_action_required), not past due.
+    const pi = billingOn() ? await invoicePaymentIntent(o) : null;
+    const waiting = pi ? (await getStripe().paymentIntents.retrieve(pi).catch(() => null))?.status === "requires_action" : false;
+    if (!waiting) await renewalFailed(u.id, now);
+  } else if (type === "invoice.payment_action_required") {
     // (Batch 11) A renewal the bank wants the developer to confirm: it waits 3 days for their Confirm in Payments, then lapses.
-    if (!(await db.payment.count({ where: { actionPi: o.payment_intent } }))) {
+    const pi = await invoicePaymentIntent(o);
+    if (pi && !(await db.payment.count({ where: { actionPi: pi } }))) {
       const row = await db.payment.create({ data: { kind: "subscription", developerId: u.id, testerId: u.id, amountCents: typeof o.amount_due === "number" ? o.amount_due : SUBSCRIPTION_CENTS, feeCents: 0, testerCents: 0, transferStatus: "none", status: "needs_confirmation" } });
-      await (await import("./confirm")).awayAction(row.id, { status: "requires_action", stripePaymentIntentId: o.payment_intent, clientSecret: "" });
+      await (await import("./confirm")).awayAction(row.id, { status: "requires_action", stripePaymentIntentId: pi, clientSecret: "" });
     }
   }
   else if (type === "customer.subscription.deleted") {

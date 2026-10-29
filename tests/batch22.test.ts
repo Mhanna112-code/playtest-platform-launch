@@ -38,10 +38,11 @@ function fakeStripe(opts: { decline?: boolean; account?: { payouts_enabled: bool
         charges.push(p);
         return { id: "pi_" + randomUUID(), status: "succeeded" };
       },
-      retrieve: async (id: string) => ({ id, status: "succeeded" }),
+      retrieve: async (id: string) => ({ id, status: "succeeded", latest_charge: id.replace(/^pi_/, "ch_") }),
       cancel: async (id: string) => ({ id, status: "canceled" }),
     },
-    transfers: { create: async (t: { amount: number; destination: string; metadata: { paymentId: string } }) => { transfers.push(t); return { id: "tr_" + randomUUID() }; } },
+    // (Batch 28 §17) A transfer made after the charge must name it (the platform balance is still pending).
+    transfers: { create: async (t: { amount: number; destination: string; metadata: { paymentId: string }; source_transaction?: string }) => { if (!t.source_transaction) throw new Error("insufficient available funds"); transfers.push(t); return { id: "tr_" + randomUUID() }; } },
     accounts: { retrieve: async (id: string) => ({ id, ...(opts.account ?? { payouts_enabled: true, capabilities: { transfers: "active" } }) }) },
     webhooks: { constructEvent: (raw: string) => JSON.parse(raw) },
   } as unknown as Stripe);
@@ -137,7 +138,7 @@ describe("batch 22 section 3: waiting payouts go out when payout setup is done",
     await db.user.update({ where: { id: s.tester.user.id }, data: { stripeAccountId: acct } });
     const ready = { type: "account.updated", account: acct, data: { object: { id: acct, payouts_enabled: true, capabilities: { transfers: "active" } } } };
     expect((await webhook(ready)).status).toBe(200);
-    expect(f.transfers).toEqual([{ amount: p.testerCents, currency: "usd", destination: acct, metadata: { paymentId: p.id } }]);
+    expect(f.transfers).toEqual([{ amount: p.testerCents, currency: "usd", destination: acct, source_transaction: p.stripePaymentIntentId!.replace(/^pi_/, "ch_"), metadata: { paymentId: p.id } }]);
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).transferStatus).toBe("sent");
     const line = "Your payout setup is done: $8.00 on its way.";
     expect(await db.notification.count({ where: { userId: s.tester.user.id, text: line } })).toBe(1);

@@ -38,7 +38,7 @@ describe("chargeback hold: verify, then pay, then the team's Approve (section 41
     expect(VERIFY_FIRST).toBe("Verify your card first.");
     expect(await db.payment.count({ where: { developerId: dev.user.id, status: "charged" } })).toBe(0);
     const box = src("components/OwedBox.tsx");
-    expect(box).toContain("disabled={busy || verifyFirst}");
+    expect(box).toContain("disabled={busy || verifyFirst || reservedOnce}"); // (batch 28 §8) also disabled once reserved
     expect(box).toContain("Verify your card first (step 1): then you can pay what you owe.");
     expect(src("app/app/payments/page.tsx")).toContain("verifyFirst={!!cbSteps && !cbSteps.cardVerified}");
   });

@@ -8,7 +8,7 @@ import { CRITICAL_FIELDS, CRITICAL_KEYS, countsOf, lockedFields } from "@/lib/li
 import { SUBSCRIPTION_ENDED, adminSubLine } from "@/lib/subscription";
 import { pausedTestsForAdmin } from "./pauseClosure";
 import { REPORTED_OVER, labelled, reportCounts, reportedOver3 } from "./reports";
-import { HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, adminReservedLine } from "@/lib/rules";
 import { callMinutesOf } from "@/lib/callMeasure";
 import { itemsOf } from "@/lib/answerSets";
 import { writtenQuestions as writtenQuestionsOf } from "./tests";
@@ -76,6 +76,8 @@ function parse(cursor: string | null) {
 }
 /** Keyset condition for "older than the cursor" on a createdAt-style column. */
 const olderThan = (field: string, c: { at: Date; id: string } | null) => (c ? { OR: [{ [field]: { lt: c.at } }, { [field]: c.at, id: { lt: c.id } }] } : {});
+/** (Batch 28 §7) The keyset cursor of a list shown oldest first. */
+const newerThan = (field: string, c: { at: Date; id: string } | null) => (c ? { OR: [{ [field]: { gt: c.at } }, { [field]: c.at, id: { gt: c.id } }] } : {});
 
 /** Slice an in-memory list (already sorted) after a cursor; `key` gives each row's date. */
 function slice<T extends { id: string }>(all: T[], key: (r: T) => Date, cursor: string | null): Page<T> {
@@ -359,13 +361,14 @@ async function payments(cursor: string | null): Promise<Page<TextVM>> {
 
 /**
  * (Owner, Oct 29, batch 26 section 12) "Payouts waiting for a payout account": every one, in the plain scroll box of batch 17 §7 (the next 25 as it nears its end,
- * "That's all (N)"), newest first like every admin list. Read-only: each goes out on its own when the tester finishes their payout setup.
+ * "That's all (N)"). (Batch 28 §7) Oldest first: the longest-waiting payouts are the most urgent. Read-only: each goes out on its own when the tester finishes their payout
+ * setup.
  */
 export const WAITING_PAYOUT = { transferStatus: "waiting", status: "charged" } as const;
 async function payouts(cursor: string | null): Promise<Page<TextVM>> {
   const c = parse(cursor);
   const [list, total] = await Promise.all([
-    db.payment.findMany({ where: { ...WAITING_PAYOUT, ...olderThan("createdAt", c) }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: PAGE + 1 }),
+    db.payment.findMany({ where: { ...WAITING_PAYOUT, ...newerThan("createdAt", c) }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: PAGE + 1 }),
     db.payment.count({ where: WAITING_PAYOUT }),
   ]);
   const page = list.slice(0, PAGE);
@@ -403,7 +406,8 @@ async function chargebacks(cursor: string | null): Promise<Page<ChargebackVM & {
     cardVerified: steps.cardVerified,
     owedPaid: steps.owedPaid,
     // (Batch 23 section 6) Pay what you owe reserves: the row says how much is reserved against what is owed.
-    owedLine: steps.owedPaid ? (steps.reservedCents ? ` (${money(steps.reservedCents)} reserved)` : "") : ` (${money(steps.owedCents)} owed, ${money(steps.reservedCents)} reserved)`,
+    // (Batch 28 §8) What was added since the reservation is charged after the hold lifts (it never blocks Approve).
+    owedLine: steps.owedPaid ? (steps.reservedCents ? ` (${adminReservedLine(steps.reservedCents, steps.addedCents)})` : "") : ` (${money(steps.owedCents)} owed, ${money(steps.reservedCents)} reserved)`,
     reservedCents: steps.reservedCents,
     expired: steps.expired,
   }));

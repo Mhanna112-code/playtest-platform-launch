@@ -3,7 +3,7 @@ import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
 import {
-  owedReceiptWhat, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, chargeByLine, payByLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, choiceLine, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
+  owedReceiptWhat, reservedAddedLine, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, chargeByLine, payByLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, choiceLine, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, sendSummaries } from "./notify";
@@ -172,17 +172,50 @@ export async function chargeDeferred(devId: string) {
   const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
   for (const p of await db.payment.findMany({ where: { developerId: devId, status: "deferred" }, orderBy: { createdAt: "asc" } })) {
     const tester = await db.user.findUniqueOrThrow({ where: { id: p.testerId } });
+    const testPath = p.contractId ? `/app/tests/${(await db.contract.findUnique({ where: { id: p.contractId }, select: { testId: true } }))?.testId}` : "/app/payments";
+    if (p.kind === "chargeback") {
+      // (Batch 28 §8) A reversed payment owed again, added after the reservation: charged to the platform right after the lift (the tester already got their share).
+      try {
+        const r = await chargePlatform(dev, p.amountCents, serverKey("deferred", p.id), "Playtest: a payment reversed by your bank, charged again");
+        if (r.status === "requires_action") { await (await import("./confirm")).awayAction(p.id, r as NeedsAction); continue; }
+        await db.payment.update({ where: { id: p.id }, data: { status: r.status, stripePaymentIntentId: r.stripePaymentIntentId, settledAt: new Date() } });
+        await receipt(dev.email, await owedItemName(p), p.amountCents, r.status, "/app/payments");
+      } catch (e) {
+        // Declined: the reversal is owed again (its chargeback reopens), so a chargeback hold starts for it.
+        if (e instanceof HttpError && e.code === "card_failed") {
+          await db.payment.delete({ where: { id: p.id } });
+          if (p.repaysId) await db.payment.update({ where: { id: p.repaysId }, data: { chargeback: "open" } });
+          await startHold(devId, "chargeback");
+        }
+      }
+      continue;
+    }
     try {
       const r = await charge(dev, tester, p.amountCents, serverKey("deferred", p.id), "Playtest: charged now that the account is clear");
       if (r.status === "requires_action") { await (await import("./confirm")).awayAction(p.id, r as NeedsAction); continue; }
       await db.payment.update({ where: { id: p.id }, data: { ...r } });
-      await receipt(dev.email, p.kind === "dispute" ? "a team decision (charged after the pause)" : "work you paid for during the pause", p.amountCents, r.status, p.contractId ? `/app/tests/${(await db.contract.findUnique({ where: { id: p.contractId }, select: { testId: true } }))?.testId}` : "/app/payments");
+      await receipt(dev.email, await deferredWhat(p), p.amountCents, r.status, testPath);
       await tellArrived(p, tester.email, displayName(dev));
     } catch (e) {
       // (Batch 15 section 41, M1) Only a card error is a decline; any other problem leaves it waiting for the next time.
       if (e instanceof HttpError && e.code === "card_failed") await declinedPayment(devId, p.id, p.amountCents, p.kind === "dispute" ? "a team decision" : "work you paid for during the pause");
     }
   }
+}
+
+/**
+ * What a payment charged after a pause was for, in its receipt: a team decision, (batch 28 §8) a tester's Charge ("Ana Silva's written answers (charged by them after
+ * 7 days)", like any Charge's receipt), or work the developer paid for during the pause.
+ */
+async function deferredWhat(p: { kind: string; submissionId: string | null; callId: string | null; contractId: string | null }) {
+  if (p.kind === "dispute") return "a team decision (charged after the pause)";
+  const review = p.submissionId ? await db.review.findUnique({ where: { submissionId: p.submissionId } }) : p.callId ? await db.review.findUnique({ where: { callId: p.callId } }) : null;
+  const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } }) : null;
+  if (review?.reason === CHARGED_BY_TESTER && c) {
+    const label = p.callId ? "call" : (await db.submission.findUnique({ where: { id: p.submissionId ?? "" }, select: { kind: true } }))?.kind === "recording" ? "recording" : "written answers";
+    return `${displayName(c.tester)}'s ${label} (charged by them after ${REVIEW_DAYS} days)`;
+  }
+  return "work you paid for during the pause";
 }
 
 /**
@@ -259,9 +292,12 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
   const u = await db.user.findUniqueOrThrow({ where: { id: dev.id } });
   // (Owner, Oct 29, batch 23 section 6) A chargeback hold: what is already reserved on the card is not asked for again (only what was added since).
   const cbHold = !!u.holdStartedAt && u.holdReason === "chargeback";
-  const covered = cbHold ? (await (await import("./chargeback")).reserveState(dev.id)).covered : null;
+  const rs = cbHold ? await (await import("./chargeback")).reserveState(dev.id) : null;
+  const covered = rs?.covered ?? null;
   const list = (await owed(dev.id)).filter((p) => !covered?.has(p.id));
   const total = list.reduce((a, p) => a + p.amountCents, 0);
+  // (Owner, Oct 29, batch 28 §8) Pay what you owe reserves ONCE: with a reservation in place, what was added since is charged right after the lift (no second one).
+  if (rs && rs.reservedCents > 0 && list.length) throw new HttpError(409, "nothing_owed", reservedAddedLine(rs.reservedCents, total));
   // (Owner, Oct 29, batch 10) Paid meanwhile (another tab, or a won chargeback): nothing is charged, ever twice.
   // (A hold left with nothing owed still lifts here, charging nothing.)
   if (!list.length) {
@@ -652,6 +688,8 @@ async function runDailyLocked(now: Date) {
   await rs.cancelLatePauseCalls(now);
   await rs.payoutReminders(now);
   await rs.suspendedAccountsReminder(now);
+  // (Batch 28 §17) Shares still waiting for a tester whose payout setup is done (a transfer that failed earlier) are sent again, from their own charge.
+  await (await import("./stripe")).resendWaitingShares().catch((e) => console.error("[payouts] resend:", (e as Error).message));
   // (Batch 8) Subscription renewals (manual billing) and the free-during-launch notices.
   const subs = await import("./subscription");
   await subs.renewSubscriptions(now);

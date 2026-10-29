@@ -7,7 +7,7 @@ import { mergeChanges } from "@/lib/live";
 import { money } from "@/lib/format";
 import { type BankAction } from "@/lib/bankConfirm";
 import { useBankCheck } from "@/components/BankCheck";
-import { RESERVE_EXPIRED, reservedLine } from "@/lib/rules";
+import { RESERVE_EXPIRED, reservedAddedLine, reservedLine } from "@/lib/rules";
 
 type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string };
 
@@ -33,6 +33,8 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
   // What the page / the stop box showed last: every press (the second too) is checked against it.
   const [total, setTotal] = useState(seenTotal);
   const [shownIds, setShownIds] = useState(retry.map((o) => o.id));
+  // (Owner, Oct 29, batch 28 §8) Pay what you owe reserves once: with a reservation in place the button is disabled, and what was added since is charged after the lift.
+  const reservedOnce = chargeback && reservedCents > 0;
   return (
     <div id="owed" className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">
       {onHold && chargeback ? (
@@ -45,7 +47,7 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
       {retryLine && <p className="text-xs" data-retry-line="">{retryLine}</p>}
       {/* (Owner, Oct 29, batch 23 section 6) A chargeback hold: Pay what you owe reserves the money; the team's Approve takes it. */}
       {chargeback && reserveExpired && <p data-reserve-expired="">{RESERVE_EXPIRED}</p>}
-      {chargeback && reservedCents > 0 && <p data-reserved="">{reservedLine(reservedCents)}{retry.length > 0 ? " What was added since needs its own Pay what you owe:" : ""}</p>}
+      {reservedOnce && <p data-reserved="">{reservedAddedLine(reservedCents, seenTotal)}</p>}
       {onHold && review && <p data-hold-review="">After you pay what you owe, the team will review your account before your tests resume.</p>}
       {owed.length > 0 && (
         <ul className="list-disc pl-5">
@@ -54,8 +56,8 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
       )}
       {(!chargeback || retry.length > 0) && <button
         className="btn"
-        disabled={busy || verifyFirst}
-        aria-disabled={verifyFirst}
+        disabled={busy || verifyFirst || reservedOnce}
+        aria-disabled={verifyFirst || reservedOnce}
         onClick={async () => {
           setBusy(true);
           setErr("");

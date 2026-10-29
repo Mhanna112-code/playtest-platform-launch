@@ -19,7 +19,7 @@ import { approveChargebackHold, chargebackSteps, declineChargebackReserve, expir
 import { ALREADY_CONFIRMED, CONFIRM_EXPIRED } from "@/lib/server/confirm";
 import { fakeExpire, getStripe, setStripeForTests } from "@/lib/server/stripe";
 import { adminPage, type ChargebackVM } from "@/lib/server/adminLists";
-import { RESERVE_EXPIRED, reserveShortLine, reservedLine, splitFee } from "@/lib/rules";
+import { RESERVE_EXPIRED, reservedLine, splitFee } from "@/lib/rules";
 import { mergeElsewhere, replaceLine } from "@/lib/editMerge";
 import { GroupNote, TheirsNote } from "@/components/FieldNote";
 import { json, makeUser, req } from "./helpers";
@@ -220,9 +220,9 @@ function stripeMock() {
         return { id, status: "succeeded" };
       },
       cancel: async (id: string) => { cancelled.push(id); const x = pis.get(id); if (x) x.status = "canceled"; return { id, status: "canceled" }; },
-      retrieve: async (id: string) => ({ id, status: pis.get(id)?.status ?? "canceled", client_secret: `${id}_secret` }),
+      retrieve: async (id: string) => ({ id, status: pis.get(id)?.status ?? "canceled", client_secret: `${id}_secret`, latest_charge: id.replace(/^pi_/, "ch_") }),
     },
-    transfers: { create: async (t: { amount: number; destination: string }) => { transfers.push(t); return { id: "tr_" + randomUUID() }; } },
+    transfers: { create: async (t: { amount: number; destination: string; source_transaction?: string }) => { if (!t.source_transaction) throw new Error("insufficient available funds"); transfers.push(t); return { id: "tr_" + randomUUID() }; } },
     refunds: { create: async () => ({ id: "re_" + randomUUID() }) },
   } as unknown as Stripe);
   return { pis, captured, cancelled, transfers };
@@ -284,29 +284,14 @@ describe("batch 23 section 6: a chargeback hold's Pay what you owe reserves the 
     const rows = (await adminPage("chargebacks", x.dev.user.id, null)).rows as ChargebackVM[];
     expect(rows.find((c) => c.id === x.dev.user.id)).toMatchObject({ expired: true, owedPaid: false });
     expect(src("app/admin/PagedList.tsx")).toContain("Reservation expired");
-    await expect(approveChargebackHold(x.dev.user.id)).rejects.toMatchObject({ message: reserveShortLine(800, 0) });
+    await expect(approveChargebackHold(x.dev.user.id)).rejects.toMatchObject({ message: "Not yet: nothing is reserved ($8.00 is owed)." });
     // Pressed again: a new reservation; the line goes.
     expect((await x.press(800, [x.row.id])).body.reservedCents).toBe(800);
     expect(await chargebackSteps(x.dev.user.id)).toMatchObject({ owedPaid: true, expired: false });
   });
 
-  it("a Charge after reserving needs its own Pay what you owe for the difference; Approve is refused while short; then both are captured", async () => {
-    const st = stripeMock();
-    const x = await chargebackHeld();
-    expect((await x.press(800, [x.row.id])).body.reservedCents).toBe(800);
-    // The tester's Charge meanwhile (added to what is owed during the hold).
-    const charge = await db.payment.create({ data: { kind: "review", contractId: x.sessionId, developerId: x.dev.user.id, testerId: x.tester.user.id, amountCents: 500, feeCents: 0, testerCents: 0, status: "owed" } });
-    expect(await chargebackSteps(x.dev.user.id)).toMatchObject({ owedPaid: false, owedCents: 1300, reservedCents: 800, uncoveredCents: 500 });
-    await expect(approveChargebackHold(x.dev.user.id)).rejects.toMatchObject({ message: "Not yet: $13.00 is owed but $8.00 is reserved." });
-    // A press from a page that still showed the old total stops once; the second press reserves only the difference.
-    const stop = await x.press(800, [x.row.id]);
-    expect(stop.body.error).toMatchObject({ code: "stop_once", totalCents: 500 });
-    expect((await x.press(500, [charge.id])).body.reservedCents).toBe(500);
-    expect(await chargebackSteps(x.dev.user.id)).toMatchObject({ owedPaid: true, reservedCents: 1300 });
-    expect((await approveChargebackHold(x.dev.user.id)).takenCents).toBe(1300);
-    expect(st.captured.map((c) => c.amount).sort()).toEqual([500, 800]);
-    expect(await db.payment.count({ where: { id: { in: [x.row.id, charge.id] }, status: "charged" } })).toBe(2);
-  });
+  // (Batch 28 §8) "A Charge after reserving needs its own Pay what you owe" was replaced: Pay what you owe reserves once and Approve is never refused for
+  // what was added since (it is charged right after the lift); see tests/batch28.test.ts.
 
   it("not approved: the team's Don't approve cancels the reservation (nothing taken) and the hold stays", async () => {
     const st = stripeMock();

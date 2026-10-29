@@ -351,7 +351,7 @@ describe("batch 26 section 12: Payouts waiting shows everything, in the scroll b
     expect(first.total).toBe(30);
     expect(first.rows).toHaveLength(25);
     expect(first.next).not.toBeNull();
-    expect((first.rows[0] as { text: string }).text).toMatch(new RegExp(`^${t.user.email.replace(/[.+]/g, "\\$&")} · \\$8\\.00 · waiting since `));
+    expect((first.rows[0] as { text: string }).text).toMatch(new RegExp(`^${t.user.email.replace(/[.+]/g, "\\$&")} · \\$8\\.29 · waiting since `)); // (batch 28 §7) oldest first
     const second = await adminPage("payouts", d.user.id, first.next);
     expect(second.rows).toHaveLength(5);
     expect(second.next).toBeNull();
