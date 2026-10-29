@@ -89,9 +89,9 @@ describe("email settings and the bell", () => {
     expect(await db.outboxEmail.count({ where: { to: tester.user.email, subject: { contains: "Your deadline on" } } })).toBe(0);
   });
 
-  it("each admin gets one daily email listing new disputes (it can't be turned off); no per-event admin emails", async () => {
+  it("each admin gets one daily email listing new disputes (batch 29 §34: following their own email setting); no per-event admin emails", async () => {
     const adm = await makeUser({ email: `admin-${Math.random().toString(36).slice(2)}@playtest.test` });
-    await db.user.update({ where: { id: adm.user.id }, data: { isAdmin: true, emailPref: "off" } });
+    await db.user.update({ where: { id: adm.user.id }, data: { isAdmin: true, emailPref: "daily" } });
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });

@@ -156,7 +156,7 @@ describe("batch 19 section 4: timed jobs every 5 minutes, from the uptime check"
     await ping(KEY);
     await idle();
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).not.toBeNull();
-    expect(await db.notification.count({ where: { userId: j.tester.user.id, text: "Nora Lane didn't review your written answers in 7 days: charge $10.00 or let it go" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: j.tester.user.id, text: { startsWith: "Charge or let go: your written answers on “Harbor Run” ($10.00" } } })).toBe(1); // (batch 29 §22)
   });
 
   it("two at once don't double-send (one lock: the second skips)", async () => {

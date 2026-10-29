@@ -246,9 +246,9 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     expect(p.status).toBe("needs_confirmation");
     const href = `/app/tests/${testId}#bank-${p.id}`;
     expect(R.bankHref(testId, p.id)).toBe(href);
-    // The bell line (emailed even with Off): "Confirm this payment by <date>.", linking to the button.
-    const n = await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, text: { startsWith: "Your bank wants you to confirm a $10.00 payment. Confirm this payment by " } } });
-    expect(n.link).toBe(href);
+    // The bell line (emailed even with Off). (Batch 29 §32) One line across tests, opening the dashboard's "Your bank wants you to confirm" box.
+    const n = await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, text: { startsWith: "Your bank wants you to confirm a $10.00 payment on “Harbor Run” by " } } });
+    expect(n.link).toBe("/app#bank-to-confirm");
     expect(n.mustEmail).toBe(true);
     // Payments: no Confirm of its own, a link to the same button.
     const items = await confirmItems(dev.user.id);
@@ -299,8 +299,8 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     await startHold(dev.user.id, "unpaid");
     fakeStripe({ mode: "away-action" });
     await retryOwed(dev.user.id);
-    const n = await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, text: { startsWith: "Your bank wants you to confirm a $8.00 payment. Confirm this payment by " } } });
-    expect(n.link).toBe(R.bankHref(testId, row.id));
+    const n = await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, text: { startsWith: "Your bank wants you to confirm a $8.00 payment on “Harbor Run” by " } } });
+    expect(n.link).toBe("/app#bank-to-confirm"); // (batch 29 §32)
     const rows = await bankWaitingOnTest(dev.user.id, testId);
     expect(rows).toMatchObject([{ id: row.id, contractId: sessionId, pieceId: null }]);
     expect(rows[0].line).toMatch(/^Your bank wants you to confirm a \$8\.00 payment for Ana Silva's work, made while you were away\./);
@@ -308,8 +308,9 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     // A renewal belongs to no test: Payments keeps its own "Confirm with your bank" (the same inline check), and the bell keeps "Confirm it in Payments".
     const sub = await db.payment.create({ data: { kind: "subscription", developerId: dev.user.id, testerId: dev.user.id, amountCents: 700, feeCents: 700, testerCents: 0, status: "needs_confirmation" } });
     await (await import("@/lib/server/confirm")).awayAction(sub.id, { status: "requires_action", stripePaymentIntentId: "pi_" + randomUUID(), clientSecret: "" });
-    // (Batch 25 section 3) The renewal's line opens its own row on Payments.
-    expect(await db.notification.count({ where: { userId: dev.user.id, link: `/app/payments#bank-${sub.id}`, text: { startsWith: "Your bank wants you to confirm a $7.00 payment. Confirm it in Payments by " } } })).toBe(1);
+    // (Batch 29 §32) The same day: the day's one line now covers both (updated in place), still opening the dashboard's box.
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Your bank wants you to confirm" } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, link: "/app#bank-to-confirm", text: { startsWith: "Your bank wants you to confirm 2 payments ($15.00 in all): the first by " } } })).toBe(1);
     const items = await confirmItems(dev.user.id);
     expect(items.find((i) => i.id === sub.id)).toMatchObject({ href: null });
     const list = renderToStaticMarkup(createElement(ConfirmList, { items: items.filter((i) => i.id === sub.id) }));

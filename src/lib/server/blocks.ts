@@ -86,7 +86,7 @@ export async function blockUser(me: { id: string; email: string; name: string },
     const tester = await db.user.findUnique({ where: { id: p.tester }, select: { email: true } });
     for (const a of apps) {
       const title = tests.find((t) => t.id === a.testId)?.title ?? "";
-      if (tester) await notify(tester.email, appClosedLine(title), [appClosedLine(title)], `/app/find/${a.testId}`, { testId: a.testId });
+      if (tester) await notify(tester.email, appClosedLine(title), [appClosedLine(title)], `/app/find/${a.testId}`, { testId: a.testId, group: "apps" }); // (batch 29 §23)
     }
   }
   for (const c of contracts) await (await import("./tests")).spotOpened(c.testId);

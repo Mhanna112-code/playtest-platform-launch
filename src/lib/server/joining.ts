@@ -236,8 +236,9 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   if (body.action === "decline") {
     await db.application.update({ where: { id: a.id }, data: { status: "declined", decidedAt: new Date() } });
     const title = (await db.test.findUniqueOrThrow({ where: { id: testId } })).title;
-    if (a.kind === "rejoin") await notify(tester.email, `Your ask to rejoin “${title}” wasn't accepted`, ["The developer didn't accept your ask to rejoin."], `/app/find/${testId}`);
-    else await notify(tester.email, `Your application to “${title}” wasn't accepted`, ["Thanks for applying. There are other tests to find."], "/app/find");
+    // (Batch 29 §24) In the day's "Joined" entry, across tests.
+    if (a.kind === "rejoin") await notify(tester.email, `Your ask to rejoin “${title}” wasn't accepted`, ["The developer didn't accept your ask to rejoin."], `/app/find/${testId}`, { group: "joined", testId });
+    else await notify(tester.email, `Your application to “${title}” wasn't accepted`, ["Thanks for applying. There are other tests to find."], `/app/find/${testId}`, { group: "joined", testId }); // (batch 29 §24) its own join page
     return { declined: true };
   }
   const isRejoin = a.kind === "rejoin";
@@ -248,10 +249,10 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   await db.application.update({ where: { id: a.id }, data: { status: "accepted", decidedAt: new Date() } });
   if (isRejoin) {
     const line = `You're back in ${t.title}: your deadline is ${T(c.dueAt)}.`;
-    await notify(tester.email, line, [line, `Your session is restored on the current listing: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { about: dev.id });
+    await notify(tester.email, line, [line, `Your session is restored on the current listing: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { about: dev.id, group: "joined" });
     return { accepted: true, sessionId: c.id, line: `${name} rejoined: ${pronouns(tester.pronoun).poss} deadline is ${fmtDateTime(c.dueAt)}.` };
   }
-  await notify(tester.email, `You're in: ${t.title}`, [`You're in: ${t.title}. Your contract: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`);
+  await notify(tester.email, `You're in: ${t.title}`, [`You're in: ${t.title}. Your contract: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { group: "joined" });
   return { accepted: true, sessionId: c.id };
 }
 
@@ -267,10 +268,10 @@ export async function onSwitchToAnyone(testId: string) {
     if (sameListingIgnoringMode(a.listing, listingSnapshot(t)) && !(await joinRefusal(tester.id, testId))) {
       const c = await joinTest(tester, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true });
       await db.application.update({ where: { id: a.id }, data: { status: "joined", decidedAt: new Date() } });
-      await notify(tester.email, `You're in: ${t.title}`, [`You're in: ${t.title}.`], `/app/sessions/${c.id}`);
+      await notify(tester.email, `You're in: ${t.title}`, [`You're in: ${t.title}.`], `/app/sessions/${c.id}`, { group: "joined" });
     } else {
       await db.application.update({ where: { id: a.id }, data: { changedAt: new Date() } });
-      await notify(tester.email, `${t.title} changed since you applied`, [`${t.title} changed since you applied: join on the current listing, or withdraw your application.`], `/app/find/${testId}`);
+      await notify(tester.email, `${t.title} changed since you applied`, [`${t.title} changed since you applied: join on the current listing, or withdraw your application.`], `/app/find/${testId}`, { group: "apps", testId });
     }
   }
 }
@@ -293,7 +294,8 @@ export async function closeApplicationsAfterEdit(testId: string, why: "listing" 
     // (Batch 15 section 32) The test's title quoted, like every other line.
     const line = why === "invite_only" ? `“${t.title}” is now invite only, so your application was closed.` : `“${t.title}”'s listing changed, so your application was closed. You can apply again on the current listing.`;
     // (Batch 14 section 3) Several tests in a day stack into one entry.
-    await notify(tester.email, line, [line], `/app/find/${testId}`, { group: why === "invite_only" ? undefined : "appclosed", testId });
+    // (Batch 29 §23) In the day's "Applications and invites" entry, across tests (no longer "Applications closed").
+    await notify(tester.email, line, [line], `/app/find/${testId}`, { group: "apps", testId });
   }
   return names;
 }
@@ -365,7 +367,7 @@ export async function matchInviteAndAsk(testId: string, testerId: string) {
   const c = await joinTest(tester, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true, rejoinAccepted: true, ndaAccepted: !!app.ndaAcceptedAt, ndaAcceptedAt: app.ndaAcceptedAt?.toISOString() });
   await db.application.update({ where: { id: app.id }, data: { status: "joined", decidedAt: new Date() } });
   const back = app.kind === "rejoin";
-  await notify(tester.email, back ? `You're back in ${t.title}` : `You're in: ${t.title}`, [back ? `You're back in ${t.title}: your deadline is ${T(c.dueAt)}.` : `You're in: ${t.title}.`], `/app/sessions/${c.id}`, { about: t.developerId });
+  await notify(tester.email, back ? `You're back in ${t.title}` : `You're in: ${t.title}`, [back ? `You're back in ${t.title}: your deadline is ${T(c.dueAt)}.` : `You're in: ${t.title}.`], `/app/sessions/${c.id}`, { about: t.developerId, group: "joined" });
   await notify(t.developer.email, `${displayName(tester)} ${back ? "rejoined" : "joined"} “${t.title}”`, [`${displayName(tester)} ${back ? "rejoined" : "joined"} (you'd invited ${pronouns(tester.pronoun).obj} and ${pronouns(tester.pronoun).subj === "they" ? "they'd" : `${pronouns(tester.pronoun).subj} had`} asked).`], `/app/tests/${testId}#tester-${c.id}`, { about: testerId });
   return c;
 }

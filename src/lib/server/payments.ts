@@ -225,9 +225,9 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   // (Batch 15 section 35) The live line opens its Needs you row, like the bell line.
   await logEvent(c.testId, "dispute", `${displayName(tester)} disputed the pay for their ${kind === "call" ? "live call" : (await db.submission.findUnique({ where: { id } }))?.kind === "recording" ? "recording" : "written answers"}`, contractId, `item-dispute-${d.id}`);
   await notify(c.test.developer.email, `${displayName(tester)} disputed a payment on “${c.title}”`, [`${displayName(tester)} thinks the pay should be higher: “${reason}”`, `Our team decides. A decision can only raise the pay, ${disputeLimitText(roomCents)}.`], `/app/tests/${c.testId}#item-dispute-${d.id}`, { group: "disputefiled" });
-  // (Owner, Oct 26) Admins are told too: new-dispute lines on the same day stack into one line across tests, linking to the disputes.
+  // (Owner, Oct 26) Admins are told too. (Batch 29 §29) Disputes have their own daily entry across tests ("Disputes · 3 new"); each line opens its own row (marked).
   const flagged = await reportedOver3([tester.id, c.test.developerId]);
-  for (const a of await adminUsers()) await bell(a.id, `Dispute on “${c.title}”: ${labelled(displayName(tester), flagged.has(tester.id))} says the pay should be higher (${labelled(displayName(c.test.developer), flagged.has(c.test.developerId))})`, "/admin#disputes", undefined, { group: "disputes" });
+  for (const a of await adminUsers()) await bell(a.id, `Dispute on “${c.title}”: ${labelled(displayName(tester), flagged.has(tester.id))} says the pay should be higher (${labelled(displayName(c.test.developer), flagged.has(c.test.developerId))})`, `/admin#dispute-${d.id}`, undefined, { group: "admindisputes" });
   return d;
 }
 
@@ -532,7 +532,7 @@ export async function finishExtraPay(paymentId: string, result: { status: string
     await recordEvent(tx, c.testId, "paid", `You paid ${name} ${money(amount)} extra for the ${label}`, false, {}, c.id);
   });
   const line = `${displayName(dev)} paid you ${money(amount)} more for your ${label} on “${c.test.title}”`;
-  await notify(c.tester.email, line, [line + `. You get ${money(testerShare(amount))}.`, ...(p.note ? [`Their note: “${p.note}”`] : []), ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : [])], `/app/sessions/${c.id}#${p.callId ? "part-live" : `part-${label === "recording" ? "recording" : "written"}`}`, { payment: true, group: "textra", about: dev.id });
+  await notify(c.tester.email, line, [line + `. You get ${money(testerShare(amount))}.`, ...(p.note ? [`Their note: “${p.note}”`] : []), ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : [])], `/app/sessions/${c.id}#${p.callId ? "part-live" : `part-${label === "recording" ? "recording" : "written"}`}`, { payment: true, group: "tpaid", about: dev.id }); // (batch 29 §25) in the day's "You were paid" entry, no longer "Extra pay"
   await receipt(dev.email, `an extra payment to ${name}`, amount, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
   return { paid: true, amountCents: amount, status: result.status };
 }

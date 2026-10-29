@@ -4,6 +4,7 @@ import { setPageUser } from "@/lib/client";
 import { usePathname } from "next/navigation";
 import { restrictionKey } from "@/lib/restricted";
 import { sideFor } from "@/lib/sides";
+import { BELL_REFRESH, publishBell } from "./BellLink";
 
 // (Design doc 2; owner, Oct 27) Signed-in pages stay in step with the account: signing out in any tab signs out every tab and window of the browser
 // (they all go to the sign-in page); signing in (in any tab) brings the tabs waiting on the login page back to where they were; signing in as a
@@ -67,7 +68,7 @@ export function SessionWatch({ userId, restriction }: { userId: string; name?: s
   useEffect(() => {
     let alive = true;
     const check = async () => {
-      let s: { state: string; userId?: string; name?: string; suspended?: boolean; testerSuspended?: boolean; held?: boolean; holdReason?: string; developer?: boolean; tester?: boolean; side?: string };
+      let s: { state: string; bell?: number; userId?: string; name?: string; suspended?: boolean; testerSuspended?: boolean; held?: boolean; holdReason?: string; developer?: boolean; tester?: boolean; side?: string };
       try {
         s = await (await fetch("/api/account/status", { cache: "no-store" })).json();
       } catch {
@@ -79,6 +80,8 @@ export function SessionWatch({ userId, restriction }: { userId: string; name?: s
         window.location.reload();
         return;
       }
+      // (Batch 29 §28) The bell's number, live on every page.
+      if (s.state === "ok" && typeof s.bell === "number") publishBell(s.bell);
       if (s.state === "deleted") window.location.replace("/login?gone=1");
       else if (s.state === "out") window.location.replace(`/login?next=${encodeURIComponent(pathRef.current)}`);
       else if (s.userId && s.userId !== userId) window.location.replace(landingOfNewSignIn()); // a different account signed in elsewhere: switch to it
@@ -111,13 +114,22 @@ export function SessionWatch({ userId, restriction }: { userId: string; name?: s
         window.location.reload();
       }
     };
+    // (Batch 29 §28) The tab coming back into focus checks at once (the bell's number too); so does a line opened on the Notifications page.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void check();
+    };
+    const onBell = () => void check();
     window.addEventListener("storage", onStorage);
     window.addEventListener("pageshow", onShow);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener(BELL_REFRESH, onBell);
     return () => {
       alive = false;
       clearInterval(t);
       window.removeEventListener("storage", onStorage);
       window.removeEventListener("pageshow", onShow);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener(BELL_REFRESH, onBell);
     };
   }, [userId]);
 

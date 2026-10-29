@@ -117,7 +117,7 @@ describe("B) reminders", () => {
     expect((await lines(t.user.id)).filter((l) => /^Reminder: /.test(l.text)).length).toBe(1);
   });
 
-  it("the Charge offer and its reminders are one 'charge' group across tests (every 3 days)", async () => {
+  it("the Charge offer is the tester's one daily 'Charge or let go' line, in the 'charge' group (batch 29 §22)", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -125,15 +125,17 @@ describe("B) reminders", () => {
     await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000) } });
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() - 1000) } }); // (batch 15 section 18: the tester's own deadline)
     await cron();
-    const offer = (await lines(tester.user.id)).find((l) => /charge \$10\.00 or let it go$/.test(l.text))!;
+    const offer = (await lines(tester.user.id)).find((l) => /^Charge or let go: your written answers on “Harbor Run” \(\$10\.00/.test(l.text))!;
     expect(offer.groupKey).toBe("charge");
-    await db.submission.update({ where: { id: sub.id }, data: { remindedAt: new Date(Date.now() - 3 * DAY) } });
+    await cron(); // the same day: not again
+    expect((await lines(tester.user.id)).filter((l) => l.groupKey === "charge").length).toBe(1);
+    await db.notification.updateMany({ where: { userId: tester.user.id, reminderKey: "chargeday" }, data: { createdAt: new Date(Date.now() - DAY) } });
     await cron();
     expect((await lines(tester.user.id)).filter((l) => l.groupKey === "charge").length).toBe(2);
     void dev;
   });
 
-  it("rating prompts: stacked while the test is open, their own line once it is closed, then a reminder every 3 days until rated", async () => {
+  it("rating prompts: (batch 29 §21) in the day's 'Ratings to give' entry whatever the test's state, then a reminder every 3 days until rated", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -141,17 +143,17 @@ describe("B) reminders", () => {
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
     const prompt = (await lines(tester.user.id)).find((l) => /^Rate Nora Lane/.test(l.text))!;
-    expect(prompt.own).toBe(false); // the test is open: it stacks with that test's same-day lines
+    expect(prompt).toMatchObject({ own: false, groupKey: "ratings" });
     await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     await db.contract.update({ where: { id: sessionId }, data: { ratePromptedAt: new Date(Date.now() - 4 * DAY) } });
     await cron();
     await cron();
     const rem = (await lines(tester.user.id)).filter((l) => /^Reminder: rate Nora Lane/.test(l.text));
     expect(rem.length).toBe(1);
-    expect(rem[0]).toMatchObject({ own: true, link: `/app/sessions/${sessionId}#rate` });
-    // Rated: no more reminders (the developer's prompt is its own line now the test is closed).
+    expect(rem[0]).toMatchObject({ own: false, groupKey: "ratings", link: "/app#ratings-to-give" });
+    // Rated: no more reminders (the developer's prompt is in "Ratings to give" too).
     expect((await sact(sessionId, "rate", tester.cookie, { stars: 4 })).status).toBe(200);
-    expect((await lines(dev.user.id)).find((l) => /You can rate/.test(l.text))?.own).toBe(true);
+    expect((await lines(dev.user.id)).find((l) => /You can rate/.test(l.text))?.groupKey).toBe("ratings");
     await db.rating.updateMany({ where: { contractId: sessionId, side: "tester" }, data: { createdAt: new Date(Date.now() - 4 * DAY) } });
     await db.review.updateMany({ where: { contractId: sessionId }, data: { createdAt: new Date(Date.now() - 5 * DAY) } }); // (batch 17 section 16) the window counts from the later of the two
     await db.notification.updateMany({ where: { userId: tester.user.id, text: { startsWith: "Reminder: rate" } }, data: { createdAt: new Date(Date.now() - 4 * DAY) } });

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeftRight, Bell, Compass, CreditCard, LayoutDashboard, MailCheck, MessagesSquare, PlusCircle, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowLeftRight, Compass, CreditCard, LayoutDashboard, MailCheck, MessagesSquare, PlusCircle, ShieldCheck, UserRound } from "lucide-react";
 import { headers } from "next/headers";
 import { after } from "next/server";
 import { hasBoth, sideFor, sideForPath } from "@/lib/sides";
@@ -17,6 +17,8 @@ import { restrictionKey } from "@/lib/restricted";
 import { SessionWatch } from "@/components/SessionWatch";
 import { TimeZoneSync } from "@/components/TimeZoneSync";
 import { HashJump } from "@/components/HashJump";
+import { BellLink } from "@/components/BellLink";
+import { unreadEntryCount } from "@/lib/server/notify";
 
 // The full Playtest Platform's header (NEWEST+8): logo, the side's links with their icons, the bell, the account pill
 // and the log-out icon; the confirm-email strip under it; a wide main column.
@@ -30,7 +32,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // (Design doc 2; owner, Oct 27) A suspended or held account is routed from the pages that are closed to it to the dashboard, which explains.
   // (Owner, Oct 28) Decided BEFORE any other query: the page below renders in parallel with this layout, and a redirect thrown late can reach the browser after the page's first bytes (a blank page with only the footer).
   if (closedForSuspended(path, u, side)) redirect("/app");
-  const unread = await db.notification.count({ where: { userId: u.id, readAt: null } });
+  // (Batch 29 §28) The bell counts entries with anything unread (a stack counts 1), not lines.
+  const unread = await unreadEntryCount(u.id);
   const name = u.name.trim() || u.email;
   // (Owner, Oct 28) Restricted on this side: a suspended account (both sides), or a developer on a payment or chargeback hold on their developer side.
   const off = restrictedOn(u, side);
@@ -63,10 +66,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             {!admin && messagesLink}
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <Link className="nav-link relative" href="/app/notifications" aria-label={`Notifications, ${unread} unread`}>
-              <Bell className="h-4 w-4" />
-              {unread > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-punch-500 px-1.5 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span>}
-            </Link>
+            <BellLink unread={unread} />
             <Link href="/app/account" title="Your account" className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] py-1 pl-1 pr-1 text-sm text-ink-300 no-underline transition hover:border-white/25 hover:text-white hover:no-underline sm:pr-3">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-volt-300 to-sky-300 text-xs font-semibold text-ink-950">{name.charAt(0).toUpperCase()}</span>
               <span className="hidden max-w-[12rem] truncate sm:inline" title={u.email}>{name}</span>
