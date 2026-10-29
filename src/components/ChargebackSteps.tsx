@@ -11,7 +11,7 @@ import type { Simulate } from "@/lib/bankConfirm";
 type Steps = { cardVerified: boolean; owedPaid: boolean; approved: boolean; remaining: string[] };
 
 type CardElement = { mount: (el: HTMLElement) => void; on: (event: "ready", fn: () => void) => void; destroy: () => void };
-type Elements = { create: (t: "payment") => CardElement; submit: () => Promise<{ error?: { message?: string } }> };
+type Elements = { create: (t: "payment", o?: { wallets?: { link?: "auto" | "never"; applePay?: "auto" | "never"; googlePay?: "auto" | "never" } }) => CardElement; submit: () => Promise<{ error?: { message?: string } }> };
 type StripeJs = {
   elements: (o: { mode: "setup"; currency: string; paymentMethodCreation: "manual"; paymentMethodTypes: string[] }) => Elements;
   createPaymentMethod: (o: { elements: Elements }) => Promise<{ error?: { message?: string }; paymentMethod?: { id: string } }>;
@@ -52,7 +52,7 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!form || !mount.current) return;
-    const el = form.elements.create("payment");
+    const el = form.elements.create("payment", { wallets: { link: "never", applePay: "never", googlePay: "never" } }); // cards only: no Link bank tab, no wallets
     el.on("ready", () => setReady(true));
     el.mount(mount.current);
     return () => {
