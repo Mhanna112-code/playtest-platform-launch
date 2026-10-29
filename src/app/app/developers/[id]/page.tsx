@@ -90,7 +90,7 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
         <div className="space-y-2 text-right text-xs text-slate-500">
           <ReportButton userId={p.id} name={name} reportedOn={reportedOn} />
           {/* (Batch 20 section 17) Blocked: Unblock where Block was (no confirm). */}
-          {iBlocked ? <UnblockButton say userId={p.id} name={name} /> : <BlockButton plain userId={p.id} name={name} effect="You won't see their tests any more, and they can't invite you." />}
+          {iBlocked ? <UnblockButton say userId={p.id} name={name} /> : <BlockButton plain userId={p.id} name={name} effect="Your sessions on their tests end now (work you sent stays payable, and you can still charge, dispute and rate it), calls between you are cancelled, your applications and invites close, and chat closes. You won't see their other tests any more." />}
         </div>
       )}
     </div>

@@ -78,7 +78,7 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
       {viewer.isDeveloper && !mine && !off && (
         <div className="space-y-2 text-right text-xs text-slate-500">
           <ReportButton userId={p.id} name={name} reportedOn={reportedOn} />
-          {iBlocked ? <UnblockButton say userId={p.id} name={name} /> : <BlockButton plain userId={p.id} name={name} effect="Your sessions with them end now (work they sent stays payable), calls between you are cancelled, and chat closes." />}
+          {iBlocked ? <UnblockButton say userId={p.id} name={name} /> : <BlockButton plain userId={p.id} name={name} effect="Their sessions on your tests end now (work they sent stays payable), calls between you are cancelled, their applications and your invites close, and chat closes. They won't see your tests any more." />}
         </div>
       )}
     </div>
