@@ -31,15 +31,33 @@ export const GROUP_TITLES: Record<string, string> = {
   callrequests: "Call requests",
   // (Batch 19 section 1) The close-out reminders (3 days and 1 day before a piece closes) stack under a heading too.
   closeout: "Closing soon",
+  // (Owner, Oct 29, batch 29 §21-29, §33) More lines of one kind stack across tests, one entry per kind per day.
+  ratings: "Ratings to give",
+  apps: "Applications and invites",
+  joined: "Joined",
+  newterms: "New terms to answer",
+  excerpts: "Excerpts",
+  deadlines: "Deadlines",
+  admindisputes: "Disputes",
+  adminreports: "Reports",
+  adminlifts: "Hold lifts waiting",
 };
 
 /** (Batch 14) A stacked entry's title that says it all with its count ("3 tests you applied to changed: your applications were closed"); else GROUP_TITLES. */
-export const GROUP_COUNT_TITLES: Record<string, (n: number) => string> = {
+export const GROUP_COUNT_TITLES: Record<string, (n: number, lines: number) => string> = {
   appclosed: (n) => `${n} tests you applied to changed: your applications were closed`,
   reinvited: (n) => `${n} tests you were invited to changed: your invites were sent again`,
   closeout: (n) => `Closing soon: ${n} test${n === 1 ? "" : "s"}`,
+  // (Batch 29 §25, §27) "New terms to answer · 2 tests", "Deadlines · 2 tests".
+  newterms: (n) => `New terms to answer · ${n} test${n === 1 ? "" : "s"}`,
+  deadlines: (n) => `Deadlines · ${n} test${n === 1 ? "" : "s"}`,
+  // (Batch 29 §29) The admin's: "Disputes · 3 new", "Reports · 2 new", "Hold lifts waiting · 1" (counting lines).
+  admindisputes: (_n, lines) => `Disputes · ${lines} new`,
+  adminreports: (_n, lines) => `Reports · ${lines} new`,
+  adminlifts: (_n, lines) => `Hold lifts waiting · ${lines}`,
 };
-export const groupTitle = (key: string, n: number) => GROUP_COUNT_TITLES[key]?.(n) ?? GROUP_TITLES[key];
+/** A stacked entry's title: `n` = the tests it covers, `lines` = its lines. */
+export const groupTitle = (key: string, n: number, lines = n) => GROUP_COUNT_TITLES[key]?.(n, lines) ?? GROUP_TITLES[key];
 
 export function bellKey(n: { id: string; testId: string | null; own: boolean; groupKey?: string | null; createdAt: Date }) {
   if (n.own) return `solo|${n.id}`;

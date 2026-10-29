@@ -211,7 +211,7 @@ describe("batch 11 item 3: the bank wants to confirm a payment", () => {
     expect(st.made[0].off_session).toBe(true);
     const p = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id, kind: "review" } });
     expect(p.status).toBe("needs_confirmation");
-    const n = await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, text: { startsWith: "Your bank wants you to confirm a $10.00 payment. Confirm this payment by" } } }); // (batch 17 §11) confirmed on the test page
+    const n = await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, text: { startsWith: "Your bank wants you to confirm a $10.00 payment on “Harbor Run” by " } } }); // (batch 29 §32) one line across tests
     expect(n.mustEmail).toBe(true);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Payment for your work on “Harbor Run” may be delayed" } })).toBe(1);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();

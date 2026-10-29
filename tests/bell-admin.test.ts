@@ -79,12 +79,13 @@ describe("bell stacking: same-day lines about one test stack, except the lines t
       expect(dl.find((l) => re.test(l.text)), String(re)).toMatchObject({ own: false, groupKey: "admindecision" });
     expect(dl.find((l) => /was decided$/.test(l.text))).toMatchObject({ own: false, groupKey: "disputedecided" });
     // (Owner, Oct 26) The team pausing or stopping your test stacks into one line a day across all your tests (their emails stay always-send).
-    for (const re of [/^The team paused/, /^The team stopped/]) expect(dl.find((l) => re.test(l.text)), String(re)).toMatchObject({ own: false, groupKey: "team" });
-    expect(dl.filter((l) => l.groupKey === "team").map(bellKey).filter((k, i, a) => a.indexOf(k) === i).length).toBe(1);
+    // (Batch 29 §33) They stack with the hold lines, in the day's "Payments and holds" entry.
+    for (const re of [/^The team paused/, /^The team stopped/]) expect(dl.find((l) => re.test(l.text)), String(re)).toMatchObject({ own: false, groupKey: "payhold" });
+    expect(dl.filter((l) => /^The team (paused|stopped)/.test(l.text)).map(bellKey).filter((k, i, a) => a.indexOf(k) === i).length).toBe(1);
     expect((await lines(tester.user.id)).find((l) => /dispute on .* was decided$/.test(l.text))).toMatchObject({ own: false, groupKey: "disputedecided" });
   });
 
-  it("admins get ONE new-dispute line a day across different tests, linking to #disputes", async () => {
+  it("admins get ONE new-dispute entry a day across different tests, each line opening its own row (batch 29 §29)", async () => {
     const a = await admin();
     const disputes: string[] = [];
     for (const name of ["Ana Silva", "Ben Carter"]) {
@@ -96,9 +97,10 @@ describe("bell stacking: same-day lines about one test stack, except the lines t
       expect((await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: sub.id, reason: "I answered everything properly", seenAt: seen(), confirmed: true })).status).toBe(200);
       disputes.push((await db.dispute.findFirstOrThrow({ where: { submissionId: sub.id } })).id);
     }
-    const mine = (await lines(a.user.id)).filter((l) => l.groupKey === "disputes");
+    // (Batch 29 §29) Disputes have their own daily entry ("Disputes · 2 new"); each line opens its own row.
+    const mine = (await lines(a.user.id)).filter((l) => l.groupKey === "admindisputes");
     expect(mine.length).toBe(2);
-    expect(mine.every((l) => !l.own && l.link === "/admin#disputes")).toBe(true);
+    expect(mine.every((l) => !l.own && disputes.some((id) => l.link === `/admin#dispute-${id}`))).toBe(true);
     expect(new Set(mine.map(bellKey)).size).toBe(1); // one stacked line
     expect(disputes.length).toBe(2);
   });

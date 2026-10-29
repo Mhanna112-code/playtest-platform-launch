@@ -433,7 +433,7 @@ describe("follow-up 2, 3) the team stopping a test", () => {
 describe("follow-up 4) the redirect for a restricted developer", () => {
   it("is decided before anything else renders, by the layout and by the page itself, and the pulse says restricted", async () => {
     const layout = src("app/app/layout.tsx");
-    expect(layout.indexOf("closedForSuspended(path, u, side)")).toBeLessThan(layout.indexOf("db.notification.count"));
+    expect(layout.indexOf("closedForSuspended(path, u, side)")).toBeLessThan(layout.indexOf("unreadEntryCount(u.id)"));
     for (const f of ["app/app/tests/[id]/edit/page.tsx", "app/app/tests/new/page.tsx"]) expect(src(f), f).toContain("requireOpenDevPage");
     // (Batch 15 section 29) The test page opens in its restricted view: decided first, by the page's own path.
     expect(src("app/app/tests/[id]/page.tsx")).toContain("const u = await requireOpenPage(`/app/tests/${id}`);");

@@ -29,8 +29,9 @@ describe("Charge / Let it go at day 14", () => {
   it("offers the tester the choice (bell + email), then they charge the listing amount", async () => {
     const { tester, sessionId, sub, dev } = await waiting14();
     await cron();
-    const line = "Nora Lane didn't review your written answers in 7 days: charge $10.00 or let it go";
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: line } })).toBe(1);
+    // (Batch 29 §22) The tester's one daily "Charge or let go" line across tests (the closing date is a date in the reader's zone).
+    const n = await db.notification.findFirstOrThrow({ where: { userId: tester.user.id, text: { startsWith: "Charge or let go: your written answers on “Harbor Run” ($10.00, by " } } });
+    const line = n.text;
     // (Owner, Oct 26) One email lists everything new: the daily job's summary carries the line.
     expect((await db.outboxEmail.findFirstOrThrow({ where: { to: tester.user.email, subject: { startsWith: "Your Playtest summary" } } })).text).toContain(line);
     // (Batch 16 section 39) No tick for an ordinary amount: the Charge button (which names the amount) goes through alone.
@@ -71,9 +72,11 @@ describe("Charge / Let it go at day 14", () => {
   it("reminders every 3 days and never an automatic charge; (batch 6) during a hold a Charge is added to what is owed", async () => {
     const { tester, sessionId, sub, dev } = await waiting14();
     await cron();
-    await db.submission.update({ where: { id: sub.id }, data: { remindedAt: new Date(Date.now() - 3 * 86_400_000) } });
+    // (Batch 29 §22) No "Reminder: …" every 3 days any more: the one "Charge or let go" line comes again the next day.
+    await db.notification.updateMany({ where: { userId: tester.user.id, reminderKey: "chargeday" }, data: { createdAt: new Date(Date.now() - 86_400_000) } });
     await cron();
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Reminder: Nora Lane didn't review" } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Charge or let go: your written answers" } } })).toBe(2);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Reminder: Nora Lane didn't review" } } })).toBe(0);
     await startHold(dev.user.id, "unpaid");
     // (Batch 16 section 39) The amount is the cap ($10.00): no tick needed, so it isn't refused for one (the hold rules decide; checked in batch 6).
     await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: null } });

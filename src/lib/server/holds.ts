@@ -3,10 +3,10 @@ import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
 import {
-  owedReceiptWhat, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, chargeByLine, payByLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, choiceLine, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
+  owedReceiptWhat, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
 } from "@/lib/rules";
 import { HttpError } from "./http";
-import { adminUsers, bell, notify, sendSummaries } from "./notify";
+import { adminUsers, bell, notify, renderFor, sendSummaries } from "./notify";
 import { appUrl } from "./auth";
 import { accountEvent, labelled, reportedOver3 } from "./reports";
 import { sendEmail } from "./email";
@@ -261,13 +261,13 @@ export async function liftHoldIfClear(devId: string, opts: { /** (batch 24) the 
   return true;
 }
 
-/** Admins get one bell line when a hold lift is waiting for them (after the developer paid): it stacks with the day's new-dispute lines and links to the row. */
+/** Admins get one bell line when a hold lift is waiting for them (after the developer paid): (batch 29 §29) its own daily entry ("Hold lifts waiting · 1"), linking to the row. */
 async function tellAdminsLiftWaiting(dev: { id: string; email: string; name: string; holdCount: number; holdStartedAt: Date | null }) {
   const flagged = (await reportedOver3([dev.id])).has(dev.id);
   const text = `Hold lift waiting: ${labelled(displayName(dev), flagged)} paid what they owe (${MANY_HOLDS_LABEL})`;
   for (const a of await adminUsers()) {
     if (await db.notification.count({ where: { userId: a.id, text, createdAt: { gt: dev.holdStartedAt ?? new Date(0) } } })) continue;
-    await bell(a.id, text, `/admin#lift-${dev.id}`, undefined, { group: "disputes" });
+    await bell(a.id, text, `/admin#lift-${dev.id}`, undefined, { group: "adminlifts" });
   }
 }
 
@@ -611,6 +611,9 @@ export async function runSweep(now = new Date(), co = closeOutMemo(now)) {
   await (await import("./chargeback")).expireReservations(now).catch((e) => console.error("[reserve] expire:", (e as Error).message));
   await (await import("./calls")).sweepNobodyJoined(now);
   const choices = (await openCharges(now, co)) + (await autoChargeCalls(now));
+  // (Batch 29 §22, §31) The one-a-day money lines across tests: the tester's "Charge or let go", the developer's "Pay now".
+  await testerChargeLines(now, co);
+  await payNowLines(now, co);
   await closeOutReminders(now, co);
   await reviewReminders(now, co);
   await (await import("./ratings")).ratingReminders(now);
@@ -637,7 +640,9 @@ async function runDailyLocked(now: Date) {
   out.choices += await openCharges(now, co);
   // 1b. (Owner, Oct 29, batch 28 §21) A LISTED call not paid 7 days after it is charged automatically (rate × measured minutes, within the $1,000 for calls).
   out.choices += await autoChargeCalls(now);
-  // 1c. (Batch 17 §19) The reminders 3 days and 1 day before close-out, to whoever still has something open.
+  // 1c. (Batch 29 §22, §31) The tester's one daily "Charge or let go" line, the developer's one daily "Pay now" line, and the developer's closing-soon countdown.
+  await testerChargeLines(now, co);
+  await payNowLines(now, co);
   await closeOutReminders(now, co);
   // 3a. (Owner, Oct 27) ONE daily email per admin that can't be turned off, sent only when it has something in it (see adminDaily.ts).
   out.alerts = await (await import("./adminDaily")).adminDailyEmails(now);
@@ -656,7 +661,8 @@ async function runDailyLocked(now: Date) {
     out.headsUps++;
   }
   // 4b. (Owner, Oct 28, batch 16 section 1) Each working tester's own reminders, counted to THEIR deadline: 1 month, 1 week, 3 days and 1 day before (only the marks
-  // still ahead when they joined). Sent marks are kept per tester and per deadline; they wait while the test is paused or the tester is suspended. Bell only.
+  // still ahead when they joined). Sent marks are kept per tester and per deadline; they wait while the test is paused or the tester is suspended. (Owner, Oct 29,
+  // batch 29 §27, §34) They stack in one "Deadlines" entry a day across tests, and all of them go in the end-of-day email whatever the email setting.
   const working = await db.contract.findMany({
     where: { status: "working", dueAt: { gt: now }, tester: { deletedAt: null, testerSuspendedAt: null }, test: { status: { in: ["open", "closed"] }, ...PAUSE_FREE } },
     select: { id: true, testerId: true, joinedAt: true, dueAt: true, test: { select: { id: true, title: true, notifiedMarks: true } } },
@@ -665,7 +671,7 @@ async function runDailyLocked(now: Date) {
   for (const c of working) {
     const due = ownDeadlineMarkDue(c, c.test.notifiedMarks, now);
     if (due.send) {
-      await bell(c.testerId, ownDeadlineLine(c.test.title, c.dueAt, (d) => T(d, "date")), `/app/sessions/${c.id}`, undefined, { reminder: `headsup:${c.test.id}` });
+      await bell(c.testerId, ownDeadlineLine(c.test.title, c.dueAt, (d) => T(d, "date")), `/app/sessions/${c.id}`, undefined, { reminder: `headsup:${c.test.id}`, group: "deadlines", always: true, testId: c.test.id });
       out.headsUps++;
     }
     if (due.record.length) await db.test.update({ where: { id: c.test.id }, data: { notifiedMarks: { push: due.record } } });
@@ -745,7 +751,7 @@ async function openCharges(now: Date, co: CloseOuts) {
     take: 1000,
   });
   for (const s of due) {
-    const c = s.contract, dev = c.test.developer;
+    const c = s.contract;
     const auto = autoPayFor(s.agreedCents);
     if (auto == null) continue; // outside the contract: its own reminder every 3 days (below)
     // (Owner, Oct 26; batch 15 section 18) Charge / Let it go opens only when REVIEW_DAYS (7) have passed since it was sent AND the tester's own deadline has passed.
@@ -753,12 +759,12 @@ async function openCharges(now: Date, co: CloseOuts) {
     // (Batch 17 §19) Once the piece's Pay closed there's no "pay it" line; once its Charge closed (the tester's side) Charge is never offered or reminded.
     const payShut = await co.payClosed({ submissionId: s.id }), chargeShut = await co.chargeClosed({ submissionId: s.id });
     if (payShut && chargeShut) continue;
-    // Once it opens: the developer is reminded daily until it's paid, rejected, charged or let go.
+    // (Owner, Oct 29, batch 29 §31) While the tester can charge or let it go, the developer's daily line is ONE "Pay now" line across all their tests (payNowLines).
+    // With no Charge for the tester (a deleted tester, or their Charge closed) the piece keeps its own daily "… wasn't reviewed by <date>: pay it." (batch 28).
     const gone = !!c.tester.deletedAt;
-    if (!payShut && (!s.devRemindedAt || now.getTime() - s.devRemindedAt.getTime() >= 23 * 3_600_000)) {
-      // (Owner, Oct 29, batch 28) The review date is the later of 7 days after sending and the tester's deadline, so the line names it (not "waited over 7 days").
-      const line = unreviewedLine(c.title, displayName(c.tester), s.kind === "recording" ? "recording" : "written answers", chargeOpensAt(s, c.test, c, now)!, gone || chargeShut ? null : (await pieceCloseOut({ submissionId: s.id }, "developer", now)) ?? undefined);
-      await bell(dev.id, line, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
+    if (!payShut && (gone || chargeShut) && (!s.devRemindedAt || now.getTime() - s.devRemindedAt.getTime() >= 23 * 3_600_000)) {
+      const line = unreviewedLine(c.title, displayName(c.tester), s.kind === "recording" ? "recording" : "written answers", chargeOpensAt(s, c.test, c, now)!, null);
+      await bell(c.test.developerId, line, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
       await db.submission.update({ where: { id: s.id }, data: { devRemindedAt: now } });
     }
     if (gone || chargeShut) continue; // the tester can't sign in: Charge and Let it go never open (or, batch 17 §19, they closed)
@@ -768,19 +774,10 @@ async function openCharges(now: Date, co: CloseOuts) {
     if (!s.choiceOfferedAt) {
       const by = new Date(now.getTime() + REVIEW_DAYS * 86_400_000);
       await db.submission.update({ where: { id: s.id }, data: { choiceOfferedAt: now, choiceBy: by, remindedAt: now } });
-      const line = choiceLine(displayName(dev), s.kind, auto);
-      await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#part-${s.kind}`, { group: "charge" });
+      // (Owner, Oct 29, batch 29 §22) No line of its own: the tester's ONE daily "Charge or let go" line (testerChargeLines) starts today.
       await db.$transaction((tx) => recordEvent(tx, c.testId, "choice", `${displayName(c.tester)} can now charge or let go of their ${s.kind === "recording" ? "recording" : "written answers"}`, false, {}, c.id));
       await (await import("./ratings")).maybePromptRating(c.id);
       n++;
-      continue;
-    }
-    {
-      if (!s.remindedAt || now.getTime() - s.remindedAt.getTime() >= REMIND_DAYS * 86_400_000 - 3_600_000) {
-        const line = choiceLine(displayName(dev), s.kind, auto);
-        await notify(c.tester.email, `Reminder: ${line}`, [line], `/app/sessions/${c.id}#part-${s.kind}`, { group: "charge", reminder: `charge:${s.id}` });
-        await db.submission.update({ where: { id: s.id }, data: { remindedAt: now } });
-      }
       continue;
     }
   }
@@ -840,12 +837,43 @@ export function closeOutMark(at: Date | null, now: Date) {
   return [...CLOSE_OUT_REMINDER_DAYS].sort((a, b) => a - b).find((d) => left <= d * 86_400_000) ?? null;
 }
 
+/** (Owner, Oct 29, batch 29 §22) The developer's closing-soon countdown: 1 month (only when the closing date was more than a month away when the piece's Charge opened), 1 week, 3 days and 1 day before. */
+export const CLOSE_SOON_MARKS = [30, 7, 3, 1] as const;
+const dayNo = (d: Date) => Math.floor(d.getTime() / 86_400_000);
 /**
- * (Batch 17 §19, DEFAULT) Bell reminders 3 days and 1 day before a piece closes, to whoever still has something open on it, counted to each piece's own closing date: the
- * tester with work they can still Charge or let go ("Charge or let go of your work on “<test>” by <date>"), the developer with work still unpaid ("Pay <tester>'s work on
- * “<test>” by <date>"). One line per person, tester and closing day (pieces closing the same day share it). Money lines: they ignore the email setting (`always`). Each is
- * sent once (its reminderKey names the mark, the tester's contract and the day; a mark that passed unsent isn't sent late). They wait while the test is paused, or while
- * the tester side is suspended (their Charge is hidden then), as the closing dates move on meanwhile.
+ * (Batch 29 §22) The mark a piece reaches TODAY (by calendar day, so one daily line covers every piece reaching a mark that day), or null. Only the marks still ahead
+ * when the piece's Charge opened (`from`); the month only when the closing date was more than a month away then; each mark once per piece (`sent`), so a closing
+ * date moved by a pause or an outage never sends the same mark twice, and a mark that passed unsent isn't sent late.
+ */
+export function closeSoonMarkDue(at: Date | null, from: Date, now: Date, sent: string[]): number | null {
+  if (!at || at.getTime() <= now.getTime()) return null;
+  const left = dayNo(at) - dayNo(now);
+  const m = CLOSE_SOON_MARKS.find((d) => d === left);
+  if (!m || sent.includes(`co:${m}`)) return null;
+  if (dayNo(at) - m < dayNo(from)) return null; // already behind when Charge opened
+  if (m === 30 && at.getTime() - from.getTime() <= 30 * 86_400_000) return null;
+  return m;
+}
+/**
+ * (Batch 29 §22) "Closing soon: Ana's written answers on “Harbor Run” close on Nov 18" for one piece; "Closing soon: 2 pieces close by Nov 18 (Ana's written answers on
+ * “Harbor Run”, Ben's recording on “Sky Lab”)" for several (the latest closing date; at most 5 named, then "and N more").
+ */
+export function closingSoonLine(pieces: { who: string; part: string; title: string; at: Date }[]) {
+  const name = (p: { who: string; part: string; title: string }) => `${p.who}'s ${p.part} on “${p.title}”`;
+  if (pieces.length === 1) return `Closing soon: ${name(pieces[0])} ${pieces[0].part.endsWith("s") ? "close" : "closes"} on ${T(pieces[0].at, "date")}`;
+  const last = new Date(Math.max(...pieces.map((p) => p.at.getTime())));
+  const shown = pieces.slice(0, 5).map(name);
+  return `Closing soon: ${pieces.length} pieces close by ${T(last, "date")} (${shown.join(", ")}${pieces.length > 5 ? `, and ${pieces.length - 5} more` : ""})`;
+}
+/** A tester's first name, as the money lines name them ("Ana's written answers"). */
+const firstName = (u: { name?: string | null; email: string; deletedAt?: Date | null }) => displayName(u).split(/\s+/)[0];
+
+/**
+ * (Batch 17 §19; owner, Oct 29, batch 29 §22) The developer's closing-soon reminders, counted to each unpaid piece's own closing date (pieceCloseOut) on the countdown
+ * schedule (closeSoonMarkDue): ONE line a day across all their tests covering every piece reaching a mark that day, opening Needs you on the dashboard. Money lines: in
+ * the bell and the end-of-day email whatever the setting (`always`), stacked in "Closing soon". A piece reaching a mark later the same day joins that day's line (it is
+ * updated in place). They wait while the test is paused (the closing dates move on meanwhile). The tester's side is their one daily "Charge or let go" line
+ * (testerChargeLines). Kept alongside "Pay now" (payNowLines).
  */
 async function closeOutReminders(now: Date, co: CloseOuts) {
   const held = { review: null, status: "booked", startsAt: { lte: now } };
@@ -854,45 +882,127 @@ async function closeOutReminders(now: Date, co: CloseOuts) {
     include: { tester: true, test: { include: { developer: true } }, submissions: { where: { review: null } }, calls: { where: held } },
     take: 5000,
   });
-  const sent = async (userId: string, key: string) => !!(await db.notification.findFirst({ where: { userId, reminderKey: key }, select: { id: true } }));
-  /** The pieces whose mark is due now, one entry per closing day: its date, the mark and the first piece's anchor. */
-  const due = async (list: { k: { submissionId?: string; callId?: string }; anchor: string }[], side: "tester" | "developer") => {
-    const days = new Map<string, { at: Date; mark: number; anchor: string }>();
-    for (const x of list) {
-      const at = await co.at(x.k, side);
-      const mark = closeOutMark(at, now);
-      const day = at ? at.toISOString().slice(0, 10) : "";
-      if (mark && !days.has(day)) days.set(day, { at: at!, mark, anchor: x.anchor });
-    }
-    return [...days.entries()].map(([day, v]) => ({ day, ...v }));
-  };
+  type Piece = { who: string; part: string; title: string; at: Date };
+  const byDev = new Map<string, { email: string; today: Piece[]; fresh: boolean }>();
   for (const c of contracts) {
-    const calls = c.calls.filter((x) => callMinutesOf(x) != null);
-    // The developer: anything of this tester's still unpaid (a deleted tester's only when their payout account was connected).
-    if (testerPayable(c.tester)) {
-      const unpaid = [...c.submissions.map((s) => ({ k: { submissionId: s.id }, anchor: `#piece-${s.id}` })), ...calls.map((x) => ({ k: { callId: x.id }, anchor: `#call-${x.id}` }))];
-      for (const d of await due(unpaid, "developer")) {
-        const key = `closeout:${d.mark}d:dev:${c.id}:${d.day}`;
-        if (await sent(c.test.developerId, key)) continue;
-        const line = payByLine(displayName(c.tester), c.title, T(d.at, "date"));
-        await notify(c.test.developer.email, line, [line + "."], `/app/tests/${c.testId}${d.anchor}`, { always: true, payment: true, group: "closeout", reminder: key });
+    // Anything of this tester's still unpaid (a deleted tester's only when their payout account was connected).
+    if (!testerPayable(c.tester)) continue;
+    const pieces = [
+      ...c.submissions.map((s) => ({ k: { submissionId: s.id }, id: s.id, sub: true, part: s.kind === "recording" ? "recording" : "written answers", from: s.choiceOfferedAt ?? s.payBy ?? s.updatedAt, sent: s.devMarks })),
+      ...c.calls.filter((x) => callMinutesOf(x) != null).map((x) => ({ k: { callId: x.id }, id: x.id, sub: false, part: "call", from: x.choiceOfferedAt ?? x.payBy ?? x.startsAt, sent: x.devMarks })),
+    ];
+    for (const p of pieces) {
+      const at = await co.at(p.k, "developer");
+      if (!at || at.getTime() <= now.getTime()) continue;
+      const mark = closeSoonMarkDue(at, p.from, now, p.sent);
+      // Already sent today (its mark is today's): it stays in today's line when that line is drawn again.
+      const today = !mark && CLOSE_SOON_MARKS.some((d) => d === dayNo(at) - dayNo(now) && p.sent.includes(`co:${d}`));
+      if (!mark && !today) continue;
+      const entry = byDev.get(c.test.developerId) ?? { email: c.test.developer.email, today: [], fresh: false };
+      entry.today.push({ who: firstName(c.tester), part: p.part, title: c.title, at });
+      if (mark) {
+        entry.fresh = true;
+        if (p.sub) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: `co:${mark}` } } });
+        else await db.call.update({ where: { id: p.id }, data: { devMarks: { push: `co:${mark}` } } });
       }
+      byDev.set(c.test.developerId, entry);
     }
-    // The tester: a part or a listed call they can still Charge or let go.
-    if (c.tester.deletedAt || c.tester.testerSuspendedAt) continue;
-    const open: { k: { submissionId?: string; callId?: string }; anchor: string }[] = [];
-    for (const s of c.submissions) {
-      if (!s.choiceOfferedAt) continue;
-      const paid = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
-      if (chargeAmount(s.agreedCents, paid) > 0) open.push({ k: { submissionId: s.id }, anchor: `#part-${s.kind}` });
-    }
-    for (const x of calls) if (x.choiceOfferedAt && (await callChargeCap(x)).cents > 0) open.push({ k: { callId: x.id }, anchor: `#call-${x.id}` });
-    for (const d of await due(open, "tester")) {
-      const key = `closeout:${d.mark}d:tester:${c.id}:${d.day}`;
-      if (await sent(c.testerId, key)) continue;
-      const line = chargeByLine(c.title, T(d.at, "date"));
-      await notify(c.tester.email, line, [line + "."], `/app/sessions/${c.id}${d.anchor}`, { always: true, payment: true, group: "closeout", reminder: key });
-    }
+  }
+  for (const [devId, e] of byDev) {
+    if (!e.fresh) continue;
+    const line = closingSoonLine(e.today.sort((a, b) => a.at.getTime() - b.at.getTime()));
+    const key = `closesoon:${now.toISOString().slice(0, 10)}`;
+    const had = await db.notification.findFirst({ where: { userId: devId, reminderKey: key }, select: { id: true, summarizedAt: true } });
+    if (had && !had.summarizedAt) await db.notification.update({ where: { id: had.id }, data: { text: await renderFor(devId, line), readAt: null } });
+    else await notify(e.email, line, [line + "."], "/app#needs-you", { always: true, payment: true, group: "closeout", reminder: key });
+  }
+}
+
+/** A piece as the daily money lines name it ("Ana's written answers on “Harbor Run”"). */
+type OpenPiece = { id: string; who: string; part: string; title: string; testId: string; cents: number; closes: Date | null };
+const firstClose = (list: OpenPiece[]) => list.map((p) => p.closes).filter((d): d is Date => !!d).sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
+/** (Owner, Oct 29, batch 29 §31) "Pay now: Ana's written answers on “Harbor Run” ($10.00): Ana can charge or let it go (until Nov 18)" / "Pay now: 3 pieces on 2 tests: their testers can charge or let them go (the first closes Nov 18)". */
+export function payNowLine(list: OpenPiece[]) {
+  if (list.length === 1) {
+    const p = list[0];
+    return `Pay now: ${p.who}'s ${p.part} on “${p.title}” (${money(p.cents)}): ${p.who} can charge or let it go${p.closes ? ` (until ${T(p.closes, "date")})` : ""}`;
+  }
+  const tests = new Set(list.map((p) => p.testId));
+  const first = firstClose(list);
+  return `Pay now: ${list.length} pieces on ${tests.size === 1 ? `“${list[0].title}”` : `${tests.size} tests`}: their testers can charge or let them go${first ? ` (the first closes ${T(first, "date")})` : ""}`;
+}
+/** (Owner, Oct 29, batch 29 §22) "Charge or let go: your written answers on “Harbor Run” ($10.00, by Nov 18)" / "Charge or let go: 3 pieces on 2 tests (the first closes Nov 18)". */
+export function chargeDayLine(list: OpenPiece[]) {
+  if (list.length === 1) {
+    const p = list[0];
+    return `Charge or let go: your ${p.part} on “${p.title}” (${money(p.cents)}${p.closes ? `, by ${T(p.closes, "date")}` : ""})`;
+  }
+  const tests = new Set(list.map((p) => p.testId));
+  const first = firstClose(list);
+  return `Charge or let go: ${list.length} pieces on ${tests.size === 1 ? `“${list[0].title}”` : `${tests.size} tests`}${first ? ` (the first closes ${T(first, "date")})` : ""}`;
+}
+
+/** Listed parts past their review date, still unpaid and open to the tester's Charge (Charge opened, something left to charge, the tester's Charge not closed). */
+async function chargeablePieces(co: CloseOuts, where: Prisma.SubmissionWhereInput) {
+  const subs = await db.submission.findMany({
+    where: { review: null, choiceOfferedAt: { not: null }, agreedCents: { not: null }, ...where },
+    include: { contract: { include: { tester: true, test: { include: { developer: true } } } } },
+    orderBy: { choiceOfferedAt: "asc" },
+    take: 5000,
+  });
+  const out: (OpenPiece & { devId: string; devEmail: string; testerId: string; testerEmail: string; testerSuspended: boolean })[] = [];
+  for (const s of subs) {
+    const c = s.contract;
+    if (c.tester.deletedAt || (await co.chargeClosed({ submissionId: s.id }))) continue;
+    const paid = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
+    const cents = chargeAmount(s.agreedCents, paid);
+    if (cents <= 0) continue;
+    out.push({ id: s.id, who: firstName(c.tester), part: s.kind === "recording" ? "recording" : "written answers", title: c.title, testId: c.testId, cents, closes: await co.at({ submissionId: s.id }, "tester"), devId: c.test.developerId, devEmail: c.test.developer.email, testerId: c.testerId, testerEmail: c.tester.email, testerSuspended: !!c.tester.testerSuspendedAt });
+  }
+  return out;
+}
+/** At most one such line a day per person: none with this reminder key in the last ~day. */
+const lineDue = async (userId: string, key: string, now: Date) => !(await db.notification.findFirst({ where: { userId, reminderKey: key, createdAt: { gt: new Date(now.getTime() - 23 * 3_600_000) } }, select: { id: true } }));
+
+/**
+ * (Owner, Oct 29, batch 29 §31; replaces the per-piece daily "“<test>”: <tester>'s <part> wasn't reviewed by <date>: …" line) ONE bell line a day across all the
+ * developer's tests, on every day at least one listed piece is past its review date and still unpaid (open to the tester's Charge), opening Needs you on the dashboard.
+ * It stops when nothing is past its review date. Listed calls aren't in it (charged automatically, batch 28 §21); unlisted work isn't either. Emailed whatever the
+ * setting (money). Waits while the test is paused, like the line it replaces.
+ */
+async function payNowLines(now: Date, co: CloseOuts) {
+  const byDev = new Map<string, OpenPiece[]>();
+  const emails = new Map<string, string>();
+  for (const p of await chargeablePieces(co, { contract: { test: PAUSE_FREE } })) {
+    if (await co.payClosed({ submissionId: p.id })) continue;
+    byDev.set(p.devId, [...(byDev.get(p.devId) ?? []), p]);
+    emails.set(p.devId, p.devEmail);
+  }
+  for (const [devId, list] of byDev) {
+    if (!(await lineDue(devId, "paynow", now))) continue;
+    const line = payNowLine(list);
+    await notify(emails.get(devId)!, line, [line + "."], "/app#needs-you", { always: true, payment: true, group: "unreviewed", reminder: "paynow" });
+  }
+}
+
+/**
+ * (Owner, Oct 29, batch 29 §22; replaces "<dev> didn't review your <part> in 7 days: charge $X or let it go", its reminders every 3 days and the 3-day / 1-day "Charge or
+ * let go of your work on “<test>” by <date>") ONE bell line a day across all the tester's tests, on every day they have at least one piece open to Charge or Let it go,
+ * opening the dashboard's "Charge or cancel" box. The first comes the day a piece's Charge opens; it stops when nothing is open. Emailed whatever the setting (money);
+ * waits while the tester side is suspended. Never names a hold, a suspension or a failure.
+ */
+async function testerChargeLines(now: Date, co: CloseOuts) {
+  const byTester = new Map<string, OpenPiece[]>();
+  const emails = new Map<string, string>();
+  for (const p of await chargeablePieces(co, {})) {
+    if (p.testerSuspended) continue;
+    byTester.set(p.testerId, [...(byTester.get(p.testerId) ?? []), p]);
+    emails.set(p.testerId, p.testerEmail);
+  }
+  for (const [testerId, list] of byTester) {
+    if (!(await lineDue(testerId, "chargeday", now))) continue;
+    const line = chargeDayLine(list);
+    await notify(emails.get(testerId)!, line, [line + "."], "/app#charge-or-cancel", { always: true, payment: true, group: "charge", reminder: "chargeday" });
   }
 }
 

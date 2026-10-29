@@ -40,7 +40,7 @@ export async function offerNewTerms(testId: string, changeId: string | null = nu
       },
     });
     const line = `${displayName(t.developer)} updated the listing: ${diff}`;
-    await notify(c.tester.email, line, [line + ".", "Switch to the new terms or keep your current ones on your session page. Work you've already sent keeps its price."], `/app/sessions/${c.id}#terms-offer`, { about: t.developerId });
+    await notify(c.tester.email, line, [line + ".", "Switch to the new terms or keep your current ones on your session page. Work you've already sent keeps its price."], `/app/sessions/${c.id}#terms-offer`, { about: t.developerId, group: "newterms" }); // (batch 29 §25) "New terms to answer", across tests
     offered++;
   }
   return offered;

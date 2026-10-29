@@ -60,11 +60,13 @@ describe("notification schedule", { timeout: 120_000 }, () => {
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() - 1000) } }); // (batch 15 section 18: the tester's own deadline)
     await cron(); // opens: offer to the tester + first daily reminder to the developer
     await cron(); // same day: not again
-    expect(await n("reviewed by")).toBe(1);
+    // (Batch 29 §31) The daily reminder is the one "Pay now" line across all tests.
+    expect(await n("reviewed by")).toBe(0);
+    expect(await n("Pay now: Ana's written answers on “Harbor Run”")).toBe(1);
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).not.toBeNull();
-    await db.submission.update({ where: { id: sub.id }, data: { devRemindedAt: new Date(Date.now() - DAY) } });
+    await db.notification.updateMany({ where: { userId: dev.user.id, reminderKey: "paynow" }, data: { createdAt: new Date(Date.now() - DAY) } });
     await cron();
-    expect(await n("reviewed by")).toBe(2);
+    expect(await n("Pay now: ")).toBe(2);
   });
 
   it("(batch 15 section 18) Charge opens at the later of sent + 7 days and the tester's own deadline (an old test with no Open until too)", async () => {
@@ -104,12 +106,12 @@ describe("notification schedule", { timeout: 120_000 }, () => {
 
   const mkAdmin = async () => {
     const x = await makeUser({ email: `admin-${Math.random().toString(36).slice(2)}@playtest.test` });
-    await db.user.update({ where: { id: x.user.id }, data: { isAdmin: true, emailPref: "off" } }); // the admin daily email can't be turned off
+    await db.user.update({ where: { id: x.user.id }, data: { isAdmin: true, emailPref: "daily" } }); // (batch 29 §34) the admin's end-of-day summary follows their own setting
     return x;
   };
   const adminMails = (to: string) => db.outboxEmail.findMany({ where: { to, subject: { startsWith: "Playtest admin:" } }, orderBy: { createdAt: "asc" } });
 
-  it("ONE daily email per admin that can't be turned off: a call report appears once", async () => {
+  it("ONE daily email per admin (on Daily): a call report appears once", async () => {
     const adm = await mkAdmin();
     const { testId, dev } = await setup();
     const { tester, sessionId } = await joined(testId);

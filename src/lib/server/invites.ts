@@ -366,7 +366,7 @@ export async function reinviteAfterEdit(testId: string) {
     resent.push(name);
     // (Owner, Oct 29, batch 14 section 3) Stacked across tests, one entry per day.
     const line = reinvitedLine(displayName(t.developer), t.title);
-    await notify(p.email, line, [line, `The new listing: ${termsLine(asListing(t), true)}.`, "Open it and press Join to join on these terms."], `/app/find/${testId}`, { group: "reinvited", testId });
+    await notify(p.email, line, [line, `The new listing: ${termsLine(asListing(t), true)}.`, "Open it and press Join to join on these terms."], `/app/find/${testId}`, { group: "apps", testId }); // (batch 29 §23) in "Applications and invites", no longer its own stack
   }
   return { skipped, resent };
 }

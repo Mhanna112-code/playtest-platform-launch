@@ -171,9 +171,12 @@ export async function closeOnFull(tx: Tx, testId: string, exceptTesterId: string
 export const fullInviteLine = (title: string) => `${title} is full right now. Your invite stays open; we'll tell you when a spot opens.`;
 export const spotOpenLine = (title: string, dev: string) => `A spot opened on ${title}: you can accept ${dev}'s invite now.`;
 
+/** (Owner, Oct 29, batch 29 §23) The tester's lines about their applications and invites stack into ONE entry per day across tests: "Applications and invites". */
+export const APPS_GROUP = { group: "apps" } as const;
+
 export async function tellFull(f: { title: string; testId: string; dev: string; apps: string[]; invites: string[] }) {
-  for (const e of f.apps) if (e) await notify(e, `${f.title} is full, so your application was closed.`, [`${f.title} is full, so your application was closed.`], `/app/find/${f.testId}`);
-  for (const e of f.invites) if (e) await notify(e, fullInviteLine(f.title), [fullInviteLine(f.title)], `/app/find/${f.testId}`);
+  for (const e of f.apps) if (e) await notify(e, `${f.title} is full, so your application was closed.`, [`${f.title} is full, so your application was closed.`], `/app/find/${f.testId}`, { ...APPS_GROUP, testId: f.testId });
+  for (const e of f.invites) if (e) await notify(e, fullInviteLine(f.title), [fullInviteLine(f.title)], `/app/find/${f.testId}`, { ...APPS_GROUP, testId: f.testId });
 }
 
 /**
@@ -190,7 +193,7 @@ export async function spotOpened(testId: string) {
   const invs = await db.invite.findMany({ where: { testId, status: "sent", openNotifiedAt: null } });
   await db.invite.updateMany({ where: { id: { in: invs.map((i) => i.id) } }, data: { openNotifiedAt: new Date() } });
   const people = await db.user.findMany({ where: { id: { in: invs.map((i) => i.testerId) } } });
-  for (const p of people) await notify(p.email, spotOpenLine(t.title, displayName(t.developer)), [spotOpenLine(t.title, displayName(t.developer))], `/app/find/${testId}`);
+  for (const p of people) await notify(p.email, spotOpenLine(t.title, displayName(t.developer)), [spotOpenLine(t.title, displayName(t.developer))], `/app/find/${testId}`, { ...APPS_GROUP, testId });
 }
 
 /** (NEWEST+4) Rejoining keeps exactly the time they had left when they left (hours count; if it had passed, it stays passed). */
@@ -1016,7 +1019,7 @@ export async function closeJoiningAfterOpenUntil(now = new Date()) {
     await db.invite.updateMany({ where: { id: { in: invs.map((i) => i.id) } }, data: { status: "cancelled" } });
     const people = await db.user.findMany({ where: { id: { in: [...apps.map((a) => a.testerId), ...invs.map((i) => i.testerId)] } }, select: { id: true, email: true } });
     const line = closedToNewLine(t.openUntil!, (d) => T(d, "date"));
-    for (const p of people) await notify(p.email, line, [line], `/app/find/${t.id}`);
+    for (const p of people) await notify(p.email, line, [line], `/app/find/${t.id}`, { ...APPS_GROUP, testId: t.id });
     n += apps.length + invs.length;
   }
   return n;

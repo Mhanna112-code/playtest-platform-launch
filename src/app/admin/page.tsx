@@ -15,6 +15,7 @@ import { T, renderTimes } from "@/lib/tz";
 import { emailHealth, emailsDownLine } from "@/lib/server/email";
 import { adminPage, disputeRow, type DisputeVM, type Page } from "@/lib/server/adminLists";
 import { StatTile } from "@/components/StatTile";
+import { HashJump } from "@/components/HashJump";
 import { BadgeDollarSign, FlaskConical, Inbox, Users, Wallet } from "lucide-react";
 
 export const metadata = { title: "Admin · Playtest" };
@@ -53,6 +54,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const owedToTesters = (await db.payment.aggregate({ where: { transferStatus: "waiting" }, _sum: { testerCents: true } }))._sum.testerCents ?? 0;
   return (
     <main className="wrap space-y-8">
+      {/* (Batch 29 §29) A bell line opens its own row (a dispute, a report, a hold lift), marked. */}
+      <HashJump />
       <div className="flex items-center gap-4">
         <Brand />
         <Link href="/app">Back to the app</Link>

@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { summaryDue } from "@/lib/rules";
 import { renderTimes } from "@/lib/tz";
+import { bellKey, groupTitle } from "@/lib/bell";
 import { appUrl } from "./auth";
 import { sendEmail } from "./email";
 
@@ -62,11 +63,11 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
   await db.notification.create({ data: { userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
 }
 
-/** A bell notification only (no email), e.g. the Open until heads-ups. */
-export async function bell(userId: string, text0: string, link: string, about?: string, opts: Pick<Opts, "own" | "testId" | "group" | "payment" | "reminder"> = {}) {
+/** A bell notification only (no email unless the person's summary takes it, or `always`), e.g. the Open until heads-ups. */
+export async function bell(userId: string, text0: string, link: string, about?: string, opts: Pick<Opts, "own" | "testId" | "group" | "payment" | "reminder" | "always"> = {}) {
   if (about && !(await inReach(userId, about))) return;
   const text = await renderFor(userId, text0);
-  await db.notification.create({ data: { userId, text, link, testId: opts.testId ?? (await testIdOfLink(link)), reminderKey: opts.reminder ?? null, ...flags(opts) } });
+  await db.notification.create({ data: { userId, text, link, testId: opts.testId ?? (await testIdOfLink(link)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
 }
 
 /** (Batch 15 section 11) A line's time tokens, in this person's time zone. */
@@ -96,6 +97,18 @@ export async function adminUsers() {
  * go in ONE end-of-day email ("Your Playtest payment updates", or "account updates" when it holds a must-send line that isn't about a payment); nothing else.
  * The daily job runs this once a day, after every notification of the day exists.
  */
+/** (Owner, Oct 29, batch 29 §34) The email's lines; the testers' deadline reminders stack under one "Deadlines · 2 tests" heading, as in the bell (§27). */
+function emailLines<N extends { text: string; link: string; groupKey: string | null; testId: string | null; id: string }>(items: N[], line: (n: N) => string) {
+  const stacked = items.filter((n) => n.groupKey === "deadlines");
+  if (stacked.length < 2) return items.map(line);
+  const out: string[] = [];
+  for (const n of items) {
+    if (n.groupKey !== "deadlines") out.push(line(n));
+    else if (n === stacked[0]) out.push(`• ${groupTitle("deadlines", new Set(stacked.map((x) => x.testId ?? x.id)).size, stacked.length)}`, ...stacked.map((x) => `  ${line(x)}`));
+  }
+  return out;
+}
+
 export async function sendSummaries(now = new Date(), only?: string[]) {
   const users = await db.user.findMany({
     where: { ...(only ? { id: { in: only } } : {}), notifications: { some: { summarizedAt: null, ...({ OR: [{ mustEmail: true }, { payment: true }, { user: { emailPref: { in: ["daily", "weekly", "monthly"] } } }] } as object) } } },
@@ -116,7 +129,7 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
     const dropped = all.filter((n) => !items.includes(n)).map((n) => n.id);
     try {
       const subject = due ? `Your Playtest summary: ${items.length} update${items.length === 1 ? "" : "s"}` : off && items.some((n) => !n.payment) ? `Your Playtest account updates: ${items.length}` : `Your Playtest payment updates: ${items.length}`;
-      await sendEmail({ to: u.email, subject, text: [...items.map(line), "", "Playtest"].join("\n") });
+      await sendEmail({ to: u.email, subject, text: [...emailLines(items, line), "", "Playtest"].join("\n") });
       await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped] } }, data: { summarizedAt: now } });
       if (due) await db.user.update({ where: { id: u.id }, data: { lastSummaryAt: now } });
     } catch (e) {
@@ -124,4 +137,13 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
     }
   }
   return users.length;
+}
+
+/**
+ * (Owner, Oct 29, batch 29 §28) The bell's red number: how many ENTRIES of the bell list have anything unread (a stack with 3 unread lines counts 1), the same
+ * grouping as the Notifications page (bellKey). Read only when opened: a single line when clicked, a stack when expanded or one of its lines clicked.
+ */
+export async function unreadEntryCount(userId: string) {
+  const unread = await db.notification.findMany({ where: { userId, readAt: null }, orderBy: { createdAt: "desc" }, take: 500, select: { id: true, testId: true, own: true, groupKey: true, createdAt: true } });
+  return new Set(unread.map(bellKey)).size;
 }

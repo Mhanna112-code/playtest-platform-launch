@@ -72,7 +72,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
     case "decided": {
       const d = row as DisputeVM;
       return (
-        <div id={`dispute-${d.id}`} className="scroll-mt-24 space-y-1 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-dispute-row={d.id}>
+        <div id={`dispute-${d.id}`} className="scroll-mt-24 space-y-1 rounded data-[marked]:ring-2 data-[marked]:ring-sky-300 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-dispute-row={d.id}>
           <p><b>{d.head}</b></p>
           <p>{d.money}</p>
           <p>{d.said}</p>
@@ -97,7 +97,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
     case "lifts": {
       const l = row as LiftVM;
       return (
-        <div id={`lift-${l.id}`} className="scroll-mt-24 space-y-1 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-lift-row={l.id}>
+        <div id={`lift-${l.id}`} className="scroll-mt-24 space-y-1 rounded data-[marked]:ring-2 data-[marked]:ring-sky-300 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-lift-row={l.id}>
           <p><b>{l.head}</b></p>
           <p>{l.owed} · {l.paid}</p>
           <LiftApprove id={l.id} />
@@ -107,7 +107,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
     case "reports": {
       const r = row as ReportVM;
       return (
-        <div className="space-y-0.5 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-report-row={r.id}>
+        <div id={`report-${r.id}`} className="scroll-mt-24 space-y-0.5 rounded border-t border-white/[0.06] py-2 text-sm first:border-t-0 data-[marked]:ring-2 data-[marked]:ring-sky-300" data-report-row={r.id}>
           <p><a href={r.reporterHref}>{r.reporter}</a> reported <a href={r.reportedHref}>{r.reported}</a> · {r.when}</p>
           <p className="text-slate-300">“{r.note}”</p>
         </div>

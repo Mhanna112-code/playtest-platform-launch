@@ -757,6 +757,17 @@ export const BANK_NOT_CONFIRMED = "Your bank didn't confirm the payment, so noth
  */
 export const bankConfirmTestLine = (cents: number, by: Date) => `Your bank wants you to confirm a ${money(cents)} payment. Confirm this payment by ${T(by, "dateYear")}.`;
 export const CONFIRM_WITH_BANK = "Confirm with your bank";
+/**
+ * (Owner, Oct 29, batch 29 §32) ONE bell line for every charge waiting for the bank, across tests and renewals: "Your bank wants you to confirm a $10.00 payment on
+ * “Harbor Run” by Nov 2" (a renewal: "… a $10.00 payment by Nov 2"), or "Your bank wants you to confirm 3 payments ($24.50 in all): the first by Nov 2".
+ */
+export const bankWaitingAllLine = (list: { cents: number; title: string | null; by: Date }[]) => {
+  const first = [...list].sort((a, b) => a.by.getTime() - b.by.getTime())[0];
+  if (list.length === 1) return `Your bank wants you to confirm a ${money(first.cents)} payment${first.title ? ` on “${first.title}”` : ""} by ${T(first.by, "date")}`;
+  return `Your bank wants you to confirm ${list.length} payments (${money(list.reduce((s, x) => s + x.cents, 0))} in all): the first by ${T(first.by, "date")}`;
+};
+/** (Batch 29 §32) Where that line opens: the dashboard's "Your bank wants you to confirm" box (batch 24). */
+export const BANK_TO_CONFIRM_HREF = "/app#bank-to-confirm";
 /** (Batch 17 §11) The fake Stripe (tests, recordings, dev without a publishable key) draws this clearly-marked stand-in where the bank's own check would be. */
 export const BANK_STAND_IN = "Stand-in for your bank's check";
 export const BANK_STAND_IN_NOTE = "Your bank's own page shows here when payments are live. Nothing is charged until it's confirmed.";
