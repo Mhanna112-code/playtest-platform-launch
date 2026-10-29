@@ -16,6 +16,7 @@ describe("joining: Anyone / Apply / Invite only", () => {
     expect((await act(testId, "join", ana.cookie, {})).body.error.message).toBe("This test takes applications: press Apply to join.");
     expect((await act(testId, "apply", ana.cookie, { note: "I love boat games" })).body).toEqual({ applied: true });
     const a = await db.application.findFirstOrThrow({ where: { testId, testerId: ana.user.id } });
+    await later(); // Windows' clock can lag: the page load comes clearly after the application (else Accept stops once)
     const r = await act(testId, "application", dev.cookie, { applicationId: a.id, action: "accept", seenAt: seen() });
     expect(r.body.accepted).toBe(true);
     expect(await db.notification.count({ where: { userId: ana.user.id, text: "You're in: Harbor Run" } })).toBe(1);

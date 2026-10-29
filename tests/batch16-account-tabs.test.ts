@@ -14,7 +14,7 @@ import { ACCOUNT_STOP_HEADING, accountChangesSince, cardLabel, formGate, logAcco
 import { startHold } from "@/lib/server/holds";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
-import { joined, setup } from "./fixtures";
+import { joined, settle, setup } from "./fixtures";
 
 // Batch 16 section 27: Payments, the profile editor and Settings. A change in another tab or device updates the page silently; the first press afterwards
 // stops once with what changed (short form); the second saves on top; the same value isn't listed; repeats are plain refusals.
@@ -57,6 +57,7 @@ describe("Payments (section 27)", () => {
     const dev = await makeUser({ dev: true });
     const seenAt = past();
     await logAccountChange(dev.user.id, "tabA", { scopes: ["payments"], field: "card", label: "Card", before: "no card", after: "Visa ending 4242" });
+    await settle(); // Windows' clock can lag by ~15 ms: the box comes clearly after the change
     const f = new FormData();
     f.set("seenAt", seenAt);
     f.set("tab", "tabB");
@@ -99,6 +100,7 @@ describe("Profile editor (section 27)", () => {
     const base = { name: "Ana Silva", pronoun: "", isDeveloper: false, isTester: true, devices: ["Windows PC"], categories: [], languages: ["English"], bio: "" };
     const a = await post(profilePOST, "/api/profile", t.cookie, { ...base, devices: ["Windows PC", "iPad"], seenAt, tab: "tabA" });
     expect(a.status).toBe(200);
+    await settle();
     const b = await post(profilePOST, "/api/profile", t.cookie, { ...base, bio: "Roguelikes on PC.", seenAt, tab: "tabB" });
     expect(b.status).toBe(409);
     expect(b.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Devices: Windows PC → Windows PC, iPad"]);
@@ -134,6 +136,7 @@ describe("Settings (section 27)", () => {
     const u = await makeUser({ dev: true });
     const seenAt = past();
     expect((await post(passwordPOST, "/api/auth/password", u.cookie, { password: "first-pass-1", confirm: "first-pass-1", seenAt, tab: "tabA" })).status).toBe(200);
+    await settle();
     const b = await post(passwordPOST, "/api/auth/password", u.cookie, { current: "wrong-old", password: "second-pass-2", confirm: "second-pass-2", seenAt, tab: "tabB" });
     expect(b.body.error.code).toBe("stop_once");
     expect(b.body.error.changes.map((c: { text: string; kind: string }) => [c.text, c.kind])).toEqual([["Password changed", "account-at"]]);
@@ -148,6 +151,7 @@ describe("Settings (section 27)", () => {
     const u = await makeUser({ dev: true });
     const seenAt = past();
     expect((await post(sidePOST, "/api/account/side", u.cookie, { side: "tester", add: true, seenAt, tab: "tabA" })).status).toBe(200);
+    await settle();
     const b = await post(sidePOST, "/api/account/side", u.cookie, { side: "developer", add: false, seenAt, tab: "tabB" });
     expect(b.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Sides: developer → developer and tester"]);
     expect((await post(sidePOST, "/api/account/side", u.cookie, { side: "developer", add: false, seenAt, tab: "tabB", confirmed: true, boxAt: b.body.error.now })).status).toBe(200);

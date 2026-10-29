@@ -8,7 +8,7 @@ import { api, errOf } from "@/lib/client";
 import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
 
 /** New terms offered (Switch / Keep). Its stop-once box and refusals show directly under these buttons. */
-export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: string; seenAt: string; offer: { id: string; diff: string; ndaText?: string; fromNdaText?: string; questions?: string[]; fromQuestions?: string[]; answers?: string[] } | null; devName: string }) {
+export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: string; seenAt: string; offer: { id: string; diff: string; ndaText?: string; fromNdaText?: string; questions?: string[]; fromQuestions?: string[]; answers?: string[]; switchNote?: string } | null; devName: string }) {
   const [box, setBox] = useStopBox();
   const [offerId, setOfferId] = useState(offer?.id ?? "");
   // (Owner, Oct 28, batch 16 section 38A) The offer can arrive while the page is open (a refresh brings it): Switch / Keep always send the offer shown now.
@@ -65,6 +65,7 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
           <div className="mt-1 text-xs text-sky-200/80">Before: <QuestionList items={offer.fromQuestions} /></div>
           <div className="mt-1">After: <QuestionList items={offer.questions} /></div>
           {offer.answers && offer.answers.some(Boolean) && <p className="mt-1 whitespace-pre-wrap text-xs text-sky-200/80">Your answers so far: {offer.answers.filter(Boolean).join(" / ")}</p>}
+          {offer.switchNote && <p className="mt-1" data-switch-questions="">{offer.switchNote}</p>}
         </details>
       )}
       <div className="flex flex-wrap gap-2">

@@ -2,7 +2,7 @@ import { hasPerks } from "@/lib/server/subscription";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, pronouns } from "@/lib/format";
-import { chargeOpensAt, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, choiceNoteLine, closesInLine, lateLabel, termsLine, paidZeroLine } from "@/lib/rules";
+import { IN_PROGRESS_DEV, callInProgress, chargeOpensAt, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, choiceNoteLine, closesInLine, lateLabel, termsLine, paidZeroLine } from "@/lib/rules";
 import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, MEASURING_LINE } from "@/lib/callMeasure";
 import { callsLeftCents } from "@/lib/server/callMoney";
 import { callsLeftWarning } from "@/lib/callMeasure";
@@ -181,7 +181,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       // (Owner, Oct 28 afternoon) A call that isn't a listed part (not in the listing, or not in this tester's contract) can still be requested: its pay is up to the developer.
       callListed(t, c) ? `Live call ${whole(c.liveRateCents)}/h, ${whole(callPaid)} paid so far` : `Live call: ${NOT_LISTED}`,
     ].filter(Boolean).join(" · ");
-    const toCall = (x: (typeof c.calls)[number]): DevCall => ({ id: x.id, joinable: callJoinable(x, now), report: x.noShowBy ? { byMe: x.noShowBy === "developer", note: x.noShowNote } : null, when: x.startsAt.toISOString(), minutes: x.minutes, rate: rateLabel(x.rateCents, c.liveRateCents), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, late: lateOf(c, x), measuring: x.startsAt <= now ? MEASURING_LINE : undefined });
+    const toCall = (x: (typeof c.calls)[number]): DevCall => ({ id: x.id, joinable: callJoinable(x, now), report: x.noShowBy ? { byMe: x.noShowBy === "developer", note: x.noShowNote } : null, when: x.startsAt.toISOString(), minutes: x.minutes, rate: rateLabel(x.rateCents, c.liveRateCents), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, late: lateOf(c, x), measuring: x.startsAt <= now ? (restricted ? IN_PROGRESS_DEV : MEASURING_LINE) : undefined }); // (batch 18 section 9) a pause doesn't cut a call in progress
     // (Batch 15 section 42) The Live session shows only calls ahead and calls in progress; a call that's over moves to the tester's row.
     const live = c.calls.filter((x) => x.status === "booked" && !callIsOver(x));
     const setIds = [...new Set(live.filter((x) => x.setId).map((x) => x.setId!))];
@@ -300,6 +300,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             {excerptReqs.map((x) => (
               <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm" data-excerpt-request="">
                 <p className="text-slate-300"><b className="text-white">Excerpt request</b> · {x.tester} would like to show this on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
+              {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
                 <ExcerptQuestion question={x.question} />
                 <ClampText text={`“${x.text}”`} className="text-slate-200" />
                 <ExcerptDecision excerptId={x.id} seenAt={seenAt} />
@@ -392,6 +393,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           {excerptReqs.map((x) => (
             <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm scroll-mt-24" data-excerpt-request="">
               <p className="text-slate-300"><b className="text-white">Excerpt request</b> · {x.tester} would like to show this on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
+              {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
               <ExcerptQuestion question={x.question} />
               <ClampText text={`“${x.text}”`} className="text-slate-200" />
               <ExcerptDecision excerptId={x.id} seenAt={seenAt} />
@@ -532,6 +534,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     </li>
                   )}
                 </ul>
+                {/* (Batch 18 section 9) Their work ended (left, End early, Stop, a block, a suspension) during a call: it goes on until you both leave. */}
+                {c.status !== "working" && c.calls.filter((x) => callInProgress(x, now)).map((x) => (
+                  <p key={x.id} id={`call-${x.id}`} className="text-sm" data-in-progress-call=""><span className="text-slate-200">{fmtDateTime(x.startsAt)}</span> <span className="badge border-sky-300/40 text-sky-200">{IN_PROGRESS_DEV}</span></p>
+                ))}
                 {/* (Batch 15 sections 31 and 42) "Calls (N)": every call that's over, newest first, with its outcome badge; each call that took place has its own Pay more box. */}
                 {overCalls.length > 0 && (
                   <details open={overCalls.some((x) => bankRows.some((b) => b.pieceId === x.id)) || undefined} className="rounded-lg border border-white/10 p-2 text-sm" data-calls-fold={c.id}>

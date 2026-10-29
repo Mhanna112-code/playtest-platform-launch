@@ -157,9 +157,10 @@ describe("the $1,000 ceiling for all of a tester's calls (section 34)", () => {
     // A third call (60 min at $150/h = $150) would go over: refused on both sides.
     const startsAt = new Date(Date.now() + 96 * 3_600_000); startsAt.setSeconds(0, 0);
     const r = await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: startsAt.toISOString(), minutes: 60 });
-    expect(r.body.error.message).toBe("Calls with Ana Silva on this test can come to at most $1,000; $100.00 is left, so this call can't be booked.");
+    // (Batch 18 section 6) One call: the Length is at most what's left at the rate ($100 at $150/h is 40 minutes), red at the box.
+    expect(r.body.error.message).toBe("At most 40 minutes: the $1,000 for calls with Ana Silva on this test.");
     const t = await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: startsAt.toISOString(), minutes: 60 });
-    expect(t.body.error.message).toBe("Calls with Nora Lane on this test can come to at most $1,000; $100.00 is left, so this call can't be booked.");
+    expect(t.body.error.message).toBe("At most 40 minutes: the $1,000 for calls with Nora Lane on this test.");
     // 40 minutes ($100) still fits.
     expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: startsAt.toISOString(), minutes: 40 })).status).toBe(200);
     // The first call took place (60 minutes measured at $150/h = $150). Another 180-minute call is booked meanwhile ($450 more reserved): only $100 is left for this one.

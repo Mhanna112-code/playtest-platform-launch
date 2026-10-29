@@ -15,7 +15,7 @@ export function JoinCall({ callId }: { callId: string }) {
     const check = async () => {
       if (document.visibilityState !== "visible") return;
       const r = await fetch(`/api/calls/${callId}/status`, { cache: "no-store" }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
-      if (alive && r && r.cancelled) setGone(true);
+      if (alive && r && (r.cancelled || r.capped)) setGone(true); // (batch 18 section 3) ended at the $1,000: Join goes too
     };
     const t = setInterval(check, 15_000);
     return () => {

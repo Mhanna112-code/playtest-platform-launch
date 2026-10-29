@@ -1,10 +1,11 @@
 import { db } from "@/lib/db";
 import { displayName, fmtTime } from "@/lib/format";
-import { joinCallRefusal, testPaused } from "@/lib/rules";
+import { callEndedLine, callInProgress, joinCallRefusal, testPaused } from "@/lib/rules";
 import { HttpError } from "./http";
 import { fmtFor } from "@/lib/tz";
 import { notify } from "./notify";
-import { roomUrl } from "./calls";
+import { callCapState, callClosedLine, onCallNow, roomUrl } from "./calls";
+import { CALL_OVER_LINE, CAP_WARN_MS, capEndedLine, capWarnLine } from "@/lib/callMeasure";
 
 // Block (owner rule): either side can block the other. At once: their sessions together end (sent work stays payable
 // and reviewable; disputes still allowed), booked calls between them are cancelled, neither can book or join a call with
@@ -98,6 +99,11 @@ export async function unblockUser(me: { id: string }, otherId: string) {
 /** Join call: the room link only when the call can be joined now; otherwise the refusal line (shown under Join). */
 export async function joinCall(user: { id: string }, callId: string) {
   await (await import("./calls")).sweepNobodyJoined();
+  // (Batch 18 section 3) A call that ended at the $1,000 for that tester's calls: Join is refused (and the button goes).
+  if ((await callCapState(callId))?.ended) {
+    const own = await db.call.findUnique({ where: { id: callId }, include: { contract: { include: { test: true } } } });
+    if (own && (own.contract.testerId === user.id || own.contract.test.developerId === user.id)) throw new HttpError(409, "cant_join", CALL_OVER_LINE, { cancelled: true, over: true });
+  }
   const call = await db.call.findUnique({ where: { id: callId }, include: { slot: true, contract: { include: { test: { include: { developer: true } } } } } });
   const c = call?.contract;
   const side = c?.testerId === user.id ? "tester" : c?.test.developerId === user.id ? "developer" : null;
@@ -120,7 +126,7 @@ export async function joinCall(user: { id: string }, callId: string) {
   const now = new Date();
   if (side === "developer" && !call.devJoinedAt) await db.call.update({ where: { id: call.id }, data: { devJoinedAt: now } });
   if (side === "tester" && !call.testerJoinedAt) await db.call.update({ where: { id: call.id }, data: { testerJoinedAt: now } });
-  return { url: `/app/calls/${call.id}`, room: roomUrl(call, call.slot) };
+  return { url: `/app/calls/${call.id}`, room: roomUrl(call) };
 }
 
 /** The call page's status check (every few seconds): "" while it can go on; otherwise the line that replaces the room. */
@@ -128,14 +134,27 @@ export async function callStatus(user: { id: string }, callId: string) {
   const call = await db.call.findUnique({ where: { id: callId }, include: { contract: { include: { test: { include: { developer: true } } } } } });
   const c = call?.contract;
   if (!call || !c || (c.testerId !== user.id && c.test.developerId !== user.id)) throw new HttpError(404, "not_found", "That call doesn't exist.");
-  const line = call.status === "cancelled" ? "This call was cancelled." : (await blockedEitherWay(c.testerId, c.test.developerId)) ? "This call isn't available." : "";
+  // (Batch 18 section 3) Where the call stands against the $1,000 for that tester's calls (this check also ends it at that moment).
+  const cap = call.status === "cancelled" ? null : await callCapState(callId);
   const both = call.devJoinedAt && call.testerJoinedAt ? new Date(Math.max(call.devJoinedAt.getTime(), call.testerJoinedAt.getTime())) : null;
   // (The full app's CallPresence) Who has joined the room, for the other side's line: lean keeps each side's first join.
   const amTester = c.testerId === user.id;
   const tester = amTester ? null : await db.user.findUnique({ where: { id: c.testerId }, select: { name: true, email: true } });
   const otherName = amTester ? (c.test.developer.name || c.test.developer.email.split("@")[0]) : (tester?.name || tester?.email.split("@")[0] || "");
+  const tz = await db.user.findUnique({ where: { id: user.id }, select: { timeZone: true } });
+  // (Batch 18 section 9) Closed to joins (a pause, a block, a suspension, a leave, End early, a Stop): whoever is still on the call keeps the room and keeps counting
+  // until they leave; anyone else reads why. Once the length is final: "Call ended at 3:42 PM."
+  const closed = call.status === "booked" && !cap?.ended ? await callClosedLine(call, amTester ? "tester" : "developer") : "";
+  const staying = closed && callInProgress(call) ? await onCallNow(call.id, user.id) : false;
+  const ended = call.status === "booked" && !cap?.ended && call.measuredAt && (call.measuredMinutes ?? 0) > 0 ? callEndedLine(fmtFor(tz, call.measuredTo ?? call.measuredAt, "time")) : "";
+  const line = call.status === "cancelled" ? "This call was cancelled." : cap?.ended ? capEndedLine(otherName) : ended ? ended : closed && !staying ? closed : "";
+  // From 10 minutes before: "This call ends at 3:42 PM: the $1,000 for calls with Ana on this test is reached." (in the reader's own time zone)
+  const now = Date.now();
+  const capLine = !line && cap && !cap.ended && cap.endsAt.getTime() - now <= CAP_WARN_MS
+    ? capWarnLine(fmtFor(tz, cap.endsAt, "time"), otherName)
+    : "";
   return {
-    line, cancelled: call.status === "cancelled", bothJoinedAt: both, startsAt: call.startsAt, minutes: call.minutes,
+    line, capLine, capped: !!cap?.ended, cancelled: call.status === "cancelled", bothJoinedAt: both, startsAt: call.startsAt, minutes: call.minutes,
     other: { name: otherName, joinedAt: amTester ? call.devJoinedAt : call.testerJoinedAt },
     meJoinedAt: amTester ? call.testerJoinedAt : call.devJoinedAt,
   };

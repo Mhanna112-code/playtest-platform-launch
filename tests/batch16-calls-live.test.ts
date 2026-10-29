@@ -38,11 +38,11 @@ describe("clash checks (section 33)", () => {
     const lim = clashNotes({ rows: [once(at("2026-11-02T13:38:00.000Z"))], minutes: 60, side: "developer", targets: [
       { name: "A", calls: [], requests: [], pending: 3 },
       { name: "B", calls: [], requests: [], booked: 3 },
-      { name: "C", calls: [], requests: [], leftCents: 500, rateCents: 3000 },
+      { name: "C", calls: [], requests: [], leftCents: 400, rateCents: 3000 }, // (batch 18 section 6) under 10 minutes left: nothing can be booked
     ], elsewhere: [], fmt });
     expect(lim.limits[0]).toBe("You already have 3 requests waiting with A. Withdraw one or wait for an answer.");
     expect(lim.limits[1]).toBe("B already has 3 booked times with you. Wait until one is over or cancel one.");
-    expect(lim.limits[2]).toMatch(/^Calls with C on this test can come to at most \$1,000; \$5\.00 is left, so this call can't be booked\.$/);
+    expect(lim.limits[2]).toMatch(/^Calls with C on this test can come to at most \$1,000; \$4\.00 is left, so this call can't be booked\.$/);
   });
 });
 

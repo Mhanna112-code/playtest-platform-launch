@@ -12,7 +12,9 @@ import { LIMITS } from "@/lib/limits";
 import { bell, notify } from "./notify";
 import { devGate, recordEvent } from "./tests";
 import { testerGate } from "./testerGate";
-import { ceilingRefusal, checkCeiling } from "./callMoney";
+import { callsLeftCents, ceilingRefusal, checkCeiling } from "./callMoney";
+import { CALL_MIN_MINUTES } from "@/lib/rules";
+import { bookableMinutes, lengthCapLine } from "@/lib/callMeasure";
 import { CALL_ACTS } from "./live";
 import { clashNotes, localFmt } from "@/lib/callClash";
 import { safeZone } from "@/lib/tz";
@@ -234,6 +236,19 @@ async function ownCallClash(side: Side, who: { id: string; timeZone?: string | n
 /** "You already requested this time with Ben Okafor." */
 export const alreadyRequestedLine = (names: string[]) => `You already requested this time with ${andList(names)}.`;
 
+/**
+ * (Batch 18 section 6) A length longer than what's left of the $1,000 allows for these testers' calls (the smallest applies, named): "At most 95 minutes: the $1,000 for
+ * calls with Ana on this test." Under 10 minutes left, the existing "can't be booked" line takes over.
+ */
+async function lengthOverCap(minutes: number, targets: { contractId: string; rateCents: number | null; name: string }[]) {
+  let best: { max: number; name: string } | null = null;
+  for (const t of targets) {
+    const max = bookableMinutes(t.rateCents, await callsLeftCents(t.contractId));
+    if (!best || max < best.max) best = { max, name: t.name };
+  }
+  return best && best.max >= CALL_MIN_MINUTES && minutes > best.max ? lengthCapLine(best.max, best.name) : "";
+}
+
 /** Developer: Request a time with one or more ticked working testers. */
 export async function devRequestTime(dev: U, testId: string, body: Record<string, unknown>) {
   const ids = Array.isArray(body.contractIds) ? body.contractIds.map(String) : body.contractId ? [String(body.contractId)] : [];
@@ -247,6 +262,9 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     await refusals(x.c, "developer");
     all.push(x);
   }
+  // (Batch 18 section 6) The Length is at most what's left of the $1,000 for each ticked tester's calls (red at the box).
+  const overCap = await lengthOverCap(reqMinutes, all.map((x) => ({ contractId: x.c.id, rateCents: bookRate(x.c.test, x.c), name: displayName(x.c.tester) })));
+  if (overCap) throw new HttpError(400, "bad_minutes", overCap);
   // (Batch 16 section 21) Another tab's call action with any of these testers stops it once.
   await db.$transaction((tx) => devGate(tx, testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: ids.map((id) => `c:${id}`) }));
   // (Batch 16 section 21) The same time again (e.g. requested in another tab meanwhile): already done, said plainly; the request shows in the panel.
@@ -318,6 +336,9 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   await testerGate(c.testerId, contractId, c.testId, body);
   const minutes = readMinutes(body);
   const devName = displayName(c.test.developer);
+  // (Batch 18 section 6) The Length is at most what's left of the $1,000 for their calls (red at the box).
+  const overCap = await lengthOverCap(minutes, [{ contractId, rateCents: bookRate(c.test, c), name: devName }]);
+  if (overCap) throw new HttpError(400, "bad_minutes", overCap);
   // Auto-match ("choose one", rates match): a developer request with one of these exact times books it.
   const onceStarts = kind.rows.filter((r) => r.repeat === "once").map((r) => r.startsAt);
   if (onceStarts.length) {
@@ -404,6 +425,9 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
       if (clashes.length) throw new HttpError(409, "clash", clashes[0]);
     }
     if ((await bookedTimes(contractId)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit(side, displayName(c.tester)));
+    // (Batch 18 section 6) A request longer than what's left of the $1,000 allows: "At most 95 minutes: ...".
+    const overCap = await lengthOverCap(r.minutes, [{ contractId, rateCents: rate, name: side === "developer" ? displayName(c.tester) : displayName(c.test.developer) }]);
+    if (overCap) throw new HttpError(409, "calls_ceiling", overCap);
     // (Batch 15 section 34) A pending request over the $1,000 for calls can't be accepted.
     await checkCeiling(contractId, rate, r.minutes, times.length, side === "developer" ? displayName(c.tester) : displayName(c.test.developer));
     let first = null;

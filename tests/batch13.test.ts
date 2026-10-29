@@ -42,14 +42,14 @@ async function paidWork(amount = "10.00", over: Record<string, unknown> = {}) {
 const ask = (cookie: string, submissionId: string, over: Record<string, unknown> = {}) => ex(cookie, { action: "request", submissionId, index: 0, text: "the second boss was far too hard", ...over });
 
 describe("batch 13 sections 1-3: excerpt requests", () => {
-  it("only paid written answers (above $0), trimmed from the answer, 10 to 500 characters, product hidden by default", async () => {
+  it("only paid written answers (above $0), trimmed from the answer, 10 to 500 characters, (batch 18 section 7) always naming the test", async () => {
     const s = await paidWork();
     expect((await ask(s.tester.cookie, s.sub.id, { text: "too short" })).body.error.message).toBe(X.excerptLength);
     expect((await ask(s.tester.cookie, s.sub.id, { text: "the second boss was easy and I loved it" })).body.error.message).toContain("Trim the excerpt from your answer");
     const r = await ask(s.tester.cookie, s.sub.id);
     expect(r.status).toBe(200);
     const row = await db.excerpt.findUniqueOrThrow({ where: { id: r.body.id } });
-    expect(row).toMatchObject({ status: "pending", hideProduct: true, question: "What did you like?", text: "the second boss was far too hard" });
+    expect(row).toMatchObject({ status: "pending", hideProduct: false, question: "What did you like?", text: "the second boss was far too hard" });
     expect(await db.notification.count({ where: { userId: s.dev.user.id, text: "Ana Silva asked to show an excerpt from “Harbor Run” on their profile" } })).toBe(1);
     // One pending request per part.
     expect((await ask(s.tester.cookie, s.sub.id)).body.error.message).toBe(X.ONE_PENDING);
@@ -92,7 +92,7 @@ describe("batch 13 sections 1-3: excerpt requests", () => {
     const id2 = (await ask(s.tester.cookie, s.sub.id)).body.id;
     await ex(s.dev.cookie, { action: "decide", excerptId: id2, decision: "deny" });
     expect(await db.notification.count({ where: { userId: s.tester.user.id, text: "Nora Lane prefers that work from Harbor Run isn't shown on profiles." } })).toBe(1);
-    expect((await X.myExcerpts(s.tester.user.id))[0]).toMatchObject({ id: id2, state: "Not allowed by the developer", source: "a game test" });
+    expect((await X.myExcerpts(s.tester.user.id))[0]).toMatchObject({ id: id2, state: "Not allowed by the developer", source: "Harbor Run" }); // (batch 18 section 7) always "From <test>"
     const id3 = (await ask(s.tester.cookie, s.sub.id)).body.id;
     await ex(s.dev.cookie, { action: "decide", excerptId: id3, decision: "allow" });
     await ex(s.tester.cookie, { action: "remove", excerptId: id3 });
@@ -174,7 +174,7 @@ describe("batch 13 sections 5 and 6: the NDA card, and an NDA added later", () =
     expect(f).toContain('{left("ndaText")}');
   });
 
-  it("while the test has an NDA: requests refused, hidden from Needs you, Allow refused, Deny works, shown ones hidden; all back when it's removed", async () => {
+  it("while the test has an NDA: requests refused, shown ones hidden; all back when it's removed (batch 18 section 7: a pending one can still be Allowed, straight into hidden)", async () => {
     const s = await paidWork();
     const shownId = (await ask(s.tester.cookie, s.sub.id)).body.id;
     await ex(s.dev.cookie, { action: "decide", excerptId: shownId, decision: "allow" });
@@ -183,14 +183,21 @@ describe("batch 13 sections 5 and 6: the NDA card, and an NDA added later", () =
     expect((await edit(s.testId, s.dev.cookie, { ndaText: "Keep it secret." })).status).toBe(200);
     expect((await edit(t2.testId, t2.dev.cookie, { ndaText: "Keep it secret." })).status).toBe(200);
     expect((await ask(t2.tester.cookie, t2.sub.id)).body.error.message).toBe("This test now has an NDA, so its work can't be shown as an excerpt.");
-    expect(await X.pendingForDeveloper(t2.dev.user.id)).toEqual([]);
-    expect((await ex(t2.dev.cookie, { action: "decide", excerptId: pendingId, decision: "allow" })).body.error.message).toBe(X.NDA_NO_ALLOW);
+    // (Batch 18 section 7) The pending request stays for the developer, with the NDA note; the tester's list says it's hidden.
+    expect((await X.pendingForDeveloper(t2.dev.user.id)).map((x) => [x.id, x.ndaNote])).toEqual([[pendingId, "Harbor Run has an NDA now: if you allow this, it stays hidden while Harbor Run has an NDA."]]);
+    expect((await X.myExcerpts(t2.tester.user.id))[0].state).toBe("Hidden while Harbor Run has an NDA");
     expect(await X.shownExcerpts(s.tester.user.id)).toEqual([]);
-    expect((await X.myExcerpts(s.tester.user.id))[0].state).toBe("Hidden while Harbor Run has an NDA");
+    expect((await X.myExcerpts(s.tester.user.id))[0].state).toBe("Allowed · hidden while Harbor Run has an NDA");
     // Removed again: back.
     expect((await edit(s.testId, s.dev.cookie, { ndaText: "" })).status).toBe(200);
     expect((await X.shownExcerpts(s.tester.user.id)).map((x) => x.id)).toEqual([shownId]);
-    expect((await ex(t2.dev.cookie, { action: "decide", excerptId: pendingId, decision: "deny" })).status).toBe(200);
+    // (Batch 18 section 7) Allowed under the NDA: accepted straight into hidden, and shown once the NDA is removed.
+    expect((await ex(t2.dev.cookie, { action: "decide", excerptId: pendingId, decision: "allow" })).body).toEqual({ status: "shown", hidden: true });
+    expect(await db.notification.count({ where: { userId: t2.tester.user.id, text: "Your excerpt from Harbor Run was allowed. It stays hidden while Harbor Run has an NDA." } })).toBe(1);
+    expect((await X.myExcerpts(t2.tester.user.id))[0].state).toBe("Allowed · hidden while Harbor Run has an NDA");
+    expect(await X.shownExcerpts(t2.tester.user.id)).toEqual([]);
+    expect((await edit(t2.testId, t2.dev.cookie, { ndaText: "" })).status).toBe(200);
+    expect((await X.shownExcerpts(t2.tester.user.id)).map((x) => x.id)).toEqual([pendingId]);
   });
 });
 

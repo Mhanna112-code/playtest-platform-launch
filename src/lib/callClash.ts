@@ -1,8 +1,8 @@
 // (Owner, Oct 28, batch 16 section 33) Clash checks for Request a time, shown while the form is filled (both sides) and re-checked by the server on press.
 // Pure: the page passes what it shows (calls and waiting requests between the two people, the requester's other calls, the limits) and a time formatter.
 import type { RowJson } from "@/lib/callRows";
-import { callsCeilingLine, UNLISTED_CALL_RATE_CENTS } from "@/lib/callMeasure";
-import { callCharge } from "@/lib/rules";
+import { bookableMinutes, callsCeilingLine, UNLISTED_CALL_RATE_CENTS } from "@/lib/callMeasure";
+import { CALL_MIN_MINUTES, callCharge } from "@/lib/rules";
 
 export type Slot = { start: string; minutes: number };
 export type ClashReq = { id?: string; rows: RowJson[]; minutes: number; mine: boolean };
@@ -91,7 +91,9 @@ export function clashNotes(p: { rows: RowJson[]; minutes: number | null; side: "
     else if ((t.booked ?? 0) >= MAX_BOOKED_TIMES) limits.push(p.side === "developer" ? `${t.name} already has ${MAX_BOOKED_TIMES} booked times with you. Wait until one is over or cancel one.` : `You already have ${MAX_BOOKED_TIMES} booked times in this test.`);
     else if (t.leftCents != null && p.rows.length) {
       const one = t.rateCents == null ? Math.round((UNLISTED_CALL_RATE_CENTS * m) / 60) : callCharge(t.rateCents, m);
-      if (one * callsIfAccepted(p.rows) > t.leftCents) limits.push(callsCeilingLine(t.name, t.leftCents));
+      const n = callsIfAccepted(p.rows);
+      // (Batch 18 section 6) One call longer than what's left allows is red at the Length box ("At most 95 minutes: ..."); this line is for sets, and for under 10 minutes left.
+      if (one * n > t.leftCents && (n > 1 || bookableMinutes(t.rateCents ?? null, t.leftCents) < CALL_MIN_MINUTES)) limits.push(callsCeilingLine(t.name, t.leftCents));
     }
   }
   return { rows, limits };

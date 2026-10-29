@@ -34,6 +34,15 @@ function TesterAvatar({ seat }: { seat: Seat }) {
   );
 }
 
+/**
+ * (Owner, Oct 28 evening, batch 18 section 4) Past the shown circles: "+8 more joined · 30 open" (joined testers beyond the shown avatars, and the spots still open);
+ * a part that is 0 is left out.
+ */
+export function seatsOverflow(joined: number, spots: number, shown: number) {
+  const more = Math.max(0, joined - shown), open = Math.max(0, spots - joined);
+  return [more ? `+${more} more joined` : "", open ? `${open} open` : ""].filter(Boolean).join(" · ");
+}
+
 export function TestersJoined({ testId, spots, seats, gone, status, children }: { testId: string; spots: number; seats: Seat[]; gone: Gone[]; status: string; children?: ReactNode }) {
   const joined = seats.length;
   const shown = Math.min(spots, 12);
@@ -46,7 +55,7 @@ export function TestersJoined({ testId, spots, seats, gone, status, children }: 
       </summary>
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
         {Array.from({ length: shown }, (_, i) => (seats[i] ? <TesterAvatar key={seats[i].testerId} seat={seats[i]} /> : <span key={i} className="h-9 w-9 rounded-full border-2 border-dashed border-slate-600" />))}
-        {spots > shown && <span className="text-sm text-slate-400">+{spots - shown} more</span>}
+        {spots > shown && <span className="text-sm text-slate-400" data-seats-more="">{seatsOverflow(joined, spots, shown)}</span>}
       </div>
       {children}
       {gone.length > 0 && (

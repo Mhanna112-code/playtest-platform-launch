@@ -1,8 +1,9 @@
 import { db } from "@/lib/db";
 import { T } from "@/lib/tz";
 import { displayName, fmtDateTime, pronouns } from "@/lib/format";
-import { cancelLine, checkCancel, type TestEventLike, NOBODY_JOINED, JOIN_OPENS_MIN, payByFrom } from "@/lib/rules";
-import { PRESENCE_GAP_MS, measureDeadline, measureIsFinal, measureOverlap } from "@/lib/callMeasure";
+import { callClosedToJoins, cancelLine, checkCancel, type TestEventLike, NOBODY_JOINED, JOIN_OPENS_MIN, payByFrom, testPaused } from "@/lib/rules";
+import { MEASURE_CAP, PRESENCE_GAP_MS, capEnd, capMinutesFor, measureDeadline, measureIsFinal, measureOverlap, type Span } from "@/lib/callMeasure";
+import { callsLeftCents } from "./callMoney";
 import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { notify } from "./notify";
@@ -13,8 +14,8 @@ import { CALL_ACTS } from "./live";
 type U = { id: string; email: string; name: string; pronoun: string };
 
 
-/** The simple room: the developer's own link if they gave one, otherwise a free Jitsi room named after the call. */
-export const roomUrl = (call: { id: string }, slot: { link: string }) => slot.link || `https://meet.jit.si/playtest-${call.id}`;
+/** (Owner, Oct 28, batch 18 section 10) Every call uses its Jitsi room, named after the call: there is no own-link option any more (CallSlot.link is never read). */
+export const roomUrl = (call: { id: string }) => `https://meet.jit.si/playtest-${call.id}`;
 
 const canSee = (slot: { allowedTesterIds: string[] }, testerId: string) => slot.allowedTesterIds.length === 0 || slot.allowedTesterIds.includes(testerId);
 
@@ -120,17 +121,76 @@ export const MEASURING_REFUSAL = "This call is still being measured: you can pay
  * minutes or more. Only from 10 minutes before the call until its length is final; never for a cancelled call.
  */
 export async function heartbeat(user: { id: string }, callId: string, now = new Date()) {
-  const call = await db.call.findUnique({ where: { id: callId }, include: { contract: { include: { test: true } } } });
+  const call = await db.call.findUnique({ where: { id: callId }, include: { contract: { include: { test: { include: { developer: true } } } } } });
   const side = call?.contract.testerId === user.id ? "tester" : call?.contract.test.developerId === user.id ? "developer" : null;
   if (!call || !side) throw new HttpError(404, "not_found", "That call doesn't exist.");
   if (call.status !== "booked" || call.measuredAt || call.actualMinutes != null) return { counted: false };
   if (now.getTime() < call.startsAt.getTime() - JOIN_OPENS_MIN * 60_000 || now.getTime() > measureDeadline(call.startsAt, call.minutes).getTime()) return { counted: false };
   const last = await db.callPresence.findFirst({ where: { callId, userId: user.id }, orderBy: { endAt: "desc" } });
+  // (Batch 18 section 9) Closed to joins meanwhile (a pause, a block, a suspension, a leave, End early, a Stop): whoever is still on the call page keeps counting
+  // (a reload within the 5-minute gap is staying); someone who left can't come back into it.
+  const staying = !!last && now.getTime() - last.endAt.getTime() < PRESENCE_GAP_MS;
+  if (!staying && (await callClosedLine(call, side))) return { counted: false };
   if (last && now.getTime() - last.endAt.getTime() < PRESENCE_GAP_MS) await db.callPresence.update({ where: { id: last.id }, data: { endAt: now } });
   else await db.callPresence.create({ data: { callId, userId: user.id, side, startAt: now, endAt: now } });
   if (side === "developer" && !call.devJoinedAt) await db.call.update({ where: { id: call.id }, data: { devJoinedAt: now } });
   if (side === "tester" && !call.testerJoinedAt) await db.call.update({ where: { id: call.id }, data: { testerJoinedAt: now } });
-  return { counted: true };
+  // (Batch 18 section 3) The beat that reaches the $1,000 ends the call: measuring stops there.
+  const cap = await callCapState(callId, now);
+  return { counted: !cap?.ended };
+}
+
+/** (Batch 18 section 9) Why this call can't be (re-)joined any more, though it may still be in progress; "" when it's open. */
+export async function callClosedLine(call: { contract: { testerId: string; status: string; test: { developerId: string; status: string; adminPausedAt: Date | null; developer: { holdStartedAt: Date | null; devSuspendedAt: Date | null } } } }, side: "tester" | "developer") {
+  const c = call.contract;
+  const blocked = (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) > 0;
+  return callClosedToJoins({ blocked, paused: testPaused(c.test.developer, c.test), testStatus: c.test.status, contractStatus: c.status, side });
+}
+/** (Batch 18 section 9) Is this person on the call page right now (a heartbeat within the 5-minute gap)? */
+export async function onCallNow(callId: string, userId: string, now = new Date()) {
+  const last = await db.callPresence.findFirst({ where: { callId, userId }, orderBy: { endAt: "desc" } });
+  return !!last && now.getTime() - last.endAt.getTime() < PRESENCE_GAP_MS;
+}
+
+// ---------- (Owner, Oct 28 evening, batch 18 section 3) A call ends when its pay would pass what's left of the $1,000 ----------
+type CapCall = { id: string; contractId: string; status: string; rateCents: number | null; minutes: number; startsAt: Date; measuredAt: Date | null; actualMinutes: number | null; cappedAt: Date | null };
+const spansOf = (presences: { side: string; startAt: Date; endAt: Date }[], side: string): Span[] => presences.filter((p) => p.side === side);
+
+/**
+ * The most minutes this call can be paid before its pay at the call's rate reaches what's left of the $1,000 for that tester's calls on this test (this call's own
+ * booked reservation not counted); null when that never binds before the 150% cap (or the call is free).
+ */
+export async function callCapMinutes(call: Pick<CapCall, "id" | "contractId" | "rateCents" | "minutes">) {
+  const cap = capMinutesFor(call.rateCents, await callsLeftCents(call.contractId, db, call.id));
+  return cap == null || cap >= Math.floor(call.minutes * MEASURE_CAP) ? null : cap;
+}
+
+/** Ends a call at the $1,000: its length is final now, capped at that point (and at 150% of the booked length). */
+async function endAtCap(call: CapCall, dev: Span[], tes: Span[], capMinutes: number, endsAt: Date, now: Date) {
+  const m = measureOverlap(dev, tes, call.minutes);
+  const to = m.to && m.to.getTime() > endsAt.getTime() ? endsAt : m.to;
+  await db.call.updateMany({
+    where: { id: call.id, status: "booked", measuredAt: null, actualMinutes: null, cappedAt: null },
+    data: { cappedAt: endsAt, measuredMinutes: Math.min(m.ms > 0 ? Math.max(1, m.minutes) : 0, capMinutes), measuredFrom: m.from, measuredTo: to, measuredAt: now, payBy: payByFrom(to ?? endsAt) },
+  });
+}
+
+/**
+ * Where a call stands against the $1,000 (checked by both call pages every few seconds, by each heartbeat, by Join and by the measuring sweep): `ended` once its pay
+ * reached what's left (the call is then ended and measured there); otherwise `endsAt`, the projected moment, while that comes before the 150% cap; null when it doesn't apply.
+ */
+export async function callCapState(callId: string, now = new Date(), loaded?: CapCall & { presences: { side: string; startAt: Date; endAt: Date }[] }) {
+  const call = loaded ?? (await db.call.findUnique({ where: { id: callId }, include: { presences: true } }));
+  if (!call) return null;
+  if (call.cappedAt) return { ended: true, endsAt: call.cappedAt };
+  if (call.status !== "booked" || call.measuredAt || call.actualMinutes != null || call.startsAt.getTime() - JOIN_OPENS_MIN * 60_000 > now.getTime()) return null;
+  const capMinutes = await callCapMinutes(call);
+  if (capMinutes == null) return null;
+  const dev = spansOf(call.presences, "developer"), tes = spansOf(call.presences, "tester");
+  const e = capEnd(dev, tes, capMinutes, now);
+  if (!e.reached) return { ended: false, endsAt: e.endsAt };
+  await endAtCap(call, dev, tes, capMinutes, e.endsAt, now);
+  return { ended: true, endsAt: e.endsAt };
 }
 
 /**
@@ -161,6 +221,11 @@ export async function finishMeasuring(now = new Date()) {
   let n = 0;
   for (const call of open) {
     const dev = call.presences.filter((p) => p.side === "developer"), tes = call.presences.filter((p) => p.side === "tester");
+    // (Batch 18 section 3) A call whose pay reached what's left of the $1,000 ends there.
+    if ((await callCapState(call.id, now, call))?.ended) {
+      n++;
+      continue;
+    }
     if (!measureIsFinal(call, dev, tes, now)) continue;
     let m = measureOverlap(dev, tes, call.minutes);
     // A call that started before measuring existed (both joined, no heartbeats kept): the booked length, the old rule.
@@ -169,7 +234,8 @@ export async function finishMeasuring(now = new Date()) {
       await cancelNobodyJoined(call.id, now);
       continue;
     }
-    const minutes = m.ms > 0 ? Math.max(1, m.minutes) : 0;
+    const capMinutes = await callCapMinutes(call); // (batch 18 section 3) capped at the $1,000 as well as at 150%
+    const minutes = m.ms > 0 ? Math.min(Math.max(1, m.minutes), capMinutes ?? Number.POSITIVE_INFINITY) : 0;
     const end = m.to ?? new Date(call.startsAt.getTime() + call.minutes * 60_000);
     await db.call.updateMany({ where: { id: call.id, measuredAt: null }, data: { measuredMinutes: minutes, measuredFrom: m.from, measuredTo: m.to, measuredAt: now, payBy: payByFrom(end) } });
     n++;

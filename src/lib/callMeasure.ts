@@ -2,6 +2,7 @@
 // ~10 seconds; the site keeps each person's stretches of presence. The measured length is the whole minutes both were there at the same time (a gap under 5 minutes, a
 // reload or a brief drop, counts as still there), capped at 150% of the booked length. It's final when both have left, or 30 minutes after the latest allowed end.
 import { money } from "./format";
+import { CALL_MAX_MINUTES, CALL_MIN_MINUTES, callCharge } from "./rules";
 
 export const HEARTBEAT_MS = 10_000;
 /** A gap shorter than this between two heartbeats counts as still present. */
@@ -136,3 +137,74 @@ export function callOverBadge(x: OverCall, who: { developer: string; tester: str
 }
 /** Whether a call is over (it moves from the Live session to the tester row / Call history): cancelled, or its length is final. */
 export const callIsOver = (x: { status: string; measuredAt: Date | null; actualMinutes: number | null }) => x.status === "cancelled" || x.measuredAt != null || x.actualMinutes != null;
+
+// ---------- (Owner, Oct 28 evening, batch 18 section 3) A call ends when its pay would pass the $1,000 for that tester's calls ----------
+// The 150% cap on the measured length stays. While a call is on, the app works out when its pay at the call's rate (the contract rate for a listed call, $200/h for an
+// unlisted one) would reach what's left of the $1,000 for that tester's calls on the test, and the call ends then for both sides: the call page says so, measuring stops
+// (the length is final, capped at that point) and Join is refused. The video room is outside the app, so people could keep talking there; those minutes never count.
+
+/** A call's pay for `minutes` at its rate (null: not listed, $200 an hour): what the $1,000 counts for it. */
+export const callPayCents = (rateCents: number | null, minutes: number) => (rateCents == null ? Math.round((UNLISTED_CALL_RATE_CENTS * minutes) / 60) : callCharge(rateCents, minutes));
+/** The most whole minutes whose pay fits in `leftCents`; null for a free call (its pay never reaches it). */
+export function capMinutesFor(rateCents: number | null, leftCents: number) {
+  const rate = rateCents ?? UNLISTED_CALL_RATE_CENTS;
+  if (rate <= 0) return null;
+  let m = Math.max(0, Math.floor((leftCents * 60) / rate));
+  while (m > 0 && callPayCents(rateCents, m) > leftCents) m--;
+  while (callPayCents(rateCents, m + 1) <= leftCents) m++;
+  return m;
+}
+/** The call page's line shows from this long before the call ends at the $1,000. */
+export const CAP_WARN_MS = 10 * 60_000;
+/** Both people count as still in the call while each one's last heartbeat is this recent. */
+const HERE_MS = 3 * HEARTBEAT_MS;
+/**
+ * When a call's time together reaches `capMinutes`: reached once the measured time together has, or both are still here and the projected moment has come. `endsAt` is
+ * that moment: projected from the latest moment both were there while they still are, otherwise from now (it moves on while they aren't together).
+ */
+export function capEnd(dev: Span[], tester: Span[], capMinutes: number, now: Date) {
+  const m = measureOverlap(dev, tester, Number.POSITIVE_INFINITY);
+  const capMs = capMinutes * 60_000;
+  if (m.to && m.ms >= capMs) return { reached: true, endsAt: new Date(m.to.getTime() - (m.ms - capMs)) };
+  const last = (s: Span[]) => (s.length ? Math.max(...s.map((p) => p.endAt.getTime())) : Number.NEGATIVE_INFINITY);
+  const here = now.getTime() - last(dev) <= HERE_MS && now.getTime() - last(tester) <= HERE_MS;
+  const endsAt = new Date((here && m.to ? m.to.getTime() : now.getTime()) + capMs - m.ms);
+  return { reached: here && endsAt.getTime() <= now.getTime(), endsAt };
+}
+/** "This call ends at 3:42 PM: the $1,000 for calls with Ana on this test is reached." (`who`: the other person in the call). */
+export const capWarnLine = (time: string, who: string) => `This call ends at ${time}: the ${dollars(CALLS_TOTAL_CENTS)} for calls with ${who} on this test is reached.`;
+/** The call page once it ended there (it replaces the room, for both sides). */
+export const capEndedLine = (who: string) => `Call ended: the ${dollars(CALLS_TOTAL_CENTS)} for calls with ${who} on this test is reached. Minutes after this don't count.`;
+/** Join on a call that ended at the $1,000. */
+export const CALL_OVER_LINE = "This call is over.";
+
+// ---------- (Owner, Oct 28, batch 18 section 6) Booking: the Length is capped by what's left of the $1,000 ----------
+// In Request a time (both sides) and Accept, the longest call is the smaller of 180 minutes and the whole minutes left of the $1,000 for that tester's calls on this test at
+// the call's rate (the contract rate for a listed call, $200/h unlisted). Shown in the Length hint, red at the box, refused on the server; with several testers ticked the
+// smallest applies, named. Under 10 minutes nothing can be booked: the existing "can't be booked" line says so.
+
+/** The longest call that can be booked with what's left. */
+export function bookableMinutes(rateCents: number | null, leftCents: number) {
+  const cap = capMinutesFor(rateCents, leftCents);
+  return cap == null ? CALL_MAX_MINUTES : Math.min(CALL_MAX_MINUTES, cap);
+}
+/** The Length hint: "10–95 min (the $1,000 for calls with Ana)". */
+export const lengthCapHint = (max: number, who: string) => `${CALL_MIN_MINUTES}–${max} min (the ${dollars(CALLS_TOTAL_CENTS)} for calls with ${who})`;
+/** Red at the Length box, and the server's refusal: "At most 95 minutes: the $1,000 for calls with Ana on this test." */
+export const lengthCapLine = (max: number, who: string) => `At most ${max} minutes: the ${dollars(CALLS_TOTAL_CENTS)} for calls with ${who} on this test.`;
+/**
+ * The Length box's cap over the testers it books with (the smallest applies, named): null when the $1,000 doesn't bring it under 180 minutes. `line` is the message for
+ * a longer length (under 10 minutes left: the "can't be booked" line).
+ */
+export function lengthCap(targets: { name: string; leftCents?: number | null; rateCents?: number | null }[]) {
+  let best: { max: number; name: string; left: number } | null = null;
+  for (const t of targets) {
+    if (t.leftCents == null) continue;
+    const max = bookableMinutes(t.rateCents ?? null, t.leftCents);
+    if (max < CALL_MAX_MINUTES && (!best || max < best.max)) best = { max, name: t.name, left: t.leftCents };
+  }
+  if (!best) return null;
+  return best.max >= CALL_MIN_MINUTES
+    ? { max: best.max, hint: lengthCapHint(best.max, best.name), line: lengthCapLine(best.max, best.name) }
+    : { max: best.max, hint: `${CALL_MIN_MINUTES}–${CALL_MAX_MINUTES}`, line: callsCeilingLine(best.name, best.left) };
+}

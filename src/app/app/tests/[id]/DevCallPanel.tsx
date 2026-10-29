@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { lengthCap } from "@/lib/callMeasure";
 import { useRouter } from "next/navigation";
 import { checkFields, useLocalMin } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -63,6 +64,8 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   // (Owner, Oct 28, batch 16 section 33) Clash checks as the form is filled, for every ticked tester (and every call of a Daily / Weekly set): red lines under the
   // row (listed under the button; the press waits until fixed), a blue line for an exact match with their waiting request, and the limits in today's wording.
   const tickedTesters = testers.filter((t) => ticked.includes(t.contractId));
+  // (Batch 18 section 6) The Length is at most what's left of the $1,000 for the ticked testers' calls at their rate (the smallest applies, named).
+  const lenCap = lengthCap(tickedTesters);
   const clash = alignedClash(rows, minutes, "developer", tickedTesters.map((t) => ({
     name: t.name, pending: t.pending, booked: t.booked, leftCents: t.leftCents, rateCents: t.rateCents,
     calls: [...t.calls, ...t.sets.flatMap((x) => x.calls)].map((c) => ({ start: c.when, minutes: c.minutes })),
@@ -119,8 +122,8 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           {clash.limits.map((l) => <p key={l} className="err-field" tabIndex={-1} data-red-msg={l} data-clash-limit="">{l}</p>)}
           {already.length > 0 && <ul className="space-y-0.5 text-xs text-amber-200" data-already="">{already.map((l) => <li key={l}>{l}</li>)}</ul>}
           <div className="flex flex-wrap items-end gap-2">
-            <label className="inline-flex items-center gap-1 text-sm">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max="180" data-whole="" data-msg="A live call lasts from 10 to 180 minutes." data-required="" data-required-msg="Enter the call's length in minutes."
-              data-match="length in minutes|live call lasts" value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min <span className="text-xs text-slate-500">10–180</span></label>
+            <label className="inline-flex items-center gap-1 text-sm">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max={lenCap ? lenCap.max : 180} data-max-msg={lenCap?.line} data-whole="" data-msg="A live call lasts from 10 to 180 minutes." data-required="" data-required-msg="Enter the call's length in minutes."
+              data-match="length in minutes|live call lasts|^At most \d+ minutes" value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min <span className="text-xs text-slate-500" data-length-hint="">{lenCap ? lenCap.hint : "10–180"}</span></label>
             <button
               className="btn"
               disabled={busy || !filled.length || ticked.length === 0}

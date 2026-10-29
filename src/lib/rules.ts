@@ -1132,8 +1132,8 @@ export function joinCallRefusal(
 }
 
 /** (Owner, as in the full app) Join call shows only while the room can be joined: from 10 min before to 30 min after the end. */
-export function callJoinable(x: { status: string; startsAt: Date; minutes: number }, now = new Date()) {
-  if (x.status !== "booked") return false;
+export function callJoinable(x: { status: string; startsAt: Date; minutes: number; cappedAt?: Date | null }, now = new Date()) {
+  if (x.status !== "booked" || x.cappedAt) return false; // (batch 18 section 3) a call that ended at the $1,000 can't be joined
   const t = now.getTime(), s = x.startsAt.getTime();
   return t >= s - JOIN_OPENS_MIN * 60_000 && t <= s + (x.minutes + JOIN_CLOSES_AFTER_END_MIN) * 60_000;
 }
@@ -1317,3 +1317,32 @@ export function checkExtraPay(amountCents: number | null, tickedCents: number | 
   if (amountCents < MIN_CHARGE_CENTS) return no(`The smallest card charge is ${money(MIN_CHARGE_CENTS)}.`);
   return payTicks(amountCents, tickedCents, over200);
 }
+
+/**
+ * (Owner, Oct 28, batch 18 section 8) The tester's Switch / Keep box when the questions changed. Answers already sent keep the price they were sent at (`sent`, the
+ * written part; nothing sent yet: only the first sentence; a part that wasn't listed: no price).
+ */
+export const switchQuestionsLine = (sent: { agreedCents: number | null } | null | undefined) =>
+  `Switching means answering the new questions: send your updated answers.${!sent ? "" : sent.agreedCents != null ? ` Answers you already sent stay payable at ${money(sent.agreedCents)}.` : " Answers you already sent stay payable."}`;
+
+// ---------- (Owner, Oct 28, batch 18 section 9) A call in progress keeps counting until the people on it leave ----------
+// A pause (any cause), a block, a suspension of either side, a leave, End early or a Stop never cuts a call already in progress: the people already on the call page keep
+// being measured until they leave (the 5-minute gap rule), or it hits 150% or the $1,000. Join and any re-Join are refused with the existing lines.
+export const IN_PROGRESS_DEV = "In progress: it ends when you both leave";
+export const IN_PROGRESS_TESTER = "In progress";
+/** The call page once its length is final: "Call ended at 3:42 PM." (neutral, for both sides). */
+export const callEndedLine = (time: string) => `Call ended at ${time}.`;
+/** Started and not ended yet (still being measured). */
+export const callInProgress = (x: { status: string; startsAt: Date; measuredAt: Date | null; actualMinutes: number | null }, now = new Date()) =>
+  x.status === "booked" && x.startsAt.getTime() <= now.getTime() && !x.measuredAt && x.actualMinutes == null;
+/** Why nobody can (re-)join this call any more although it may still be in progress: the test paused or stopped, the session over, a block; "" when it's open. */
+export function callClosedToJoins(x: { paused: boolean; testStatus: string; contractStatus: string; blocked: boolean; side: "tester" | "developer" }) {
+  if (x.blocked) return "This call isn't available.";
+  if (x.paused) return "This test is paused.";
+  if (x.testStatus === "stopped") return "This test was stopped.";
+  if (x.contractStatus === "left") return x.side === "tester" ? "You left this test." : "They left the test.";
+  if (x.contractStatus === "ended") return x.side === "tester" ? "Your session ended." : "Their session ended.";
+  return "";
+}
+/** (Owner, Oct 28, batch 18 section 10) Under Join on the call page. */
+export const CALL_JOIN_LINE = "The call opens in Jitsi in a new tab. Keep this page open: it measures the call.";
