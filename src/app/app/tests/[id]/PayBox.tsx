@@ -84,10 +84,10 @@ export function PayBox(p: {
 
   async function go() {
     const r = more
-      ? await press<{ status?: string; amountCents: number; later?: string }>(`/api/tests/${more.testId}/pay-extra`, {
+      ? await press<{ status?: string; amountCents: number }>(`/api/tests/${more.testId}/pay-extra`, {
         contractId: more.contractId, ...(p.kind === "call" ? { callId: p.id } : { submissionId: p.id }), amount, note: reason, payKey, tickedCents: ticked ? cents : null, over200: over && over200,
       }, "pay")
-      : await press<{ status?: string; amountCents: number; later?: string }>("/api/review", {
+      : await press<{ status?: string; amountCents: number }>("/api/review", {
         kind: p.kind, id: p.id, payKey, amount, reason, ...(isCall && rate ? { rate, typed } : {}), tickedCents: ticked ? cents : null, over200: over && over200,
       }, "pay");
     if (!r) {
@@ -101,7 +101,7 @@ export function PayBox(p: {
       try { res = await bank.check<typeof r>(r); } catch (e) { setBankErr((e as Error).message); setPayKey(newPressId()); return; }
     }
     await keep.clear();
-    setDone(res.status === "not_set_up" ? `Recorded ${money(res.amountCents)}: payments aren't set up yet, so nothing was charged.` : res.amountCents === 0 ? "Paid $0." : `Paid ${money(res.amountCents)}${res.later ? ` · ${res.later}` : ""}.`);
+    setDone(res.status === "not_set_up" ? `Recorded ${money(res.amountCents)}: payments aren't set up yet, so nothing was charged.` : res.amountCents === 0 ? "Paid $0." : `Paid ${money(res.amountCents)}.`);
     setTimeout(() => window.location.reload(), 900);
   }
 

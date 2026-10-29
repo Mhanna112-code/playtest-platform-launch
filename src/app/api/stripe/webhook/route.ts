@@ -1,6 +1,6 @@
 import { chargebackOpened, chargebackWon } from "@/lib/server/holds";
 import { db } from "@/lib/db";
-import { payoutReadyOf, verifyWebhook, webhookSecretsSet } from "@/lib/server/stripe";
+import { payoutReadyOf, sendWaitingShares, verifyWebhook, webhookSecretsSet } from "@/lib/server/stripe";
 import { payoutFixed, payoutProblem } from "@/lib/server/restrictions";
 
 // Stripe webhook: a dispute (the developer's bank reversing a payment) opens a chargeback and a payment hold; a dispute the platform won closes it (batch 10).
@@ -38,6 +38,8 @@ export async function POST(req: Request) {
       const ready = payoutReadyOf(o);
       await db.user.updateMany({ where: { stripeAccountId: account }, data: { payoutsReady: ready } });
       if (ready) await payoutFixed(account);
+      // (Batch 22 section 3) The tester's shares that waited for their payout setup go out now (each once).
+      if (ready) for (const u of await db.user.findMany({ where: { stripeAccountId: account }, select: { id: true } })) await sendWaitingShares(u.id);
       else if (o.details_submitted === true && o.payouts_enabled === false) await payoutProblem(account);
     }
   }

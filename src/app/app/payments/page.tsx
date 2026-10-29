@@ -80,7 +80,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         if (!u.holdStartedAt) return null;
         // (Owner, Oct 28, batch 16 section 41) A chargeback hold: paying never lifts it (step 2 shows ✓; the team's Approve, step 3, lifts it).
         if (!o.length) return cbSteps ? <p className="info" data-chargeback-paid="">Paid. Your tests stay paused until the team approves.</p> : review ? <p className="info" data-hold-review-paid="">You&apos;ve paid what you owe. The team will review your account before your tests resume.</p> : null;
-        return <OwedBox onHold={!!u.holdStartedAt} owed={o} chargeback={!!cbSteps} review={review} retryLine={retryStatusLine(u, fmtDateTime)} verifyFirst={!!cbSteps && !cbSteps.cardVerified} />;
+        return <OwedBox onHold={!!u.holdStartedAt} owed={o} chargeback={!!cbSteps} review={review} retryLine={cbSteps ? "" : retryStatusLine(u, fmtDateTime)} verifyFirst={!!cbSteps && !cbSteps.cardVerified} />;
       }))}
       {/* (Batch 11) Payments the developer's bank wants confirmed (made while they weren't here). (Batch 17 §11) A charge on a test links to its test page's button. */}
       {dev && <ConfirmList items={await confirmItems(u.id)} />}
@@ -179,7 +179,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
               {paidIn.map((p) => (
                 <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                   <span className="text-slate-200">You get {money(p.testerCents)}{p.kind === "extra" ? " · extra pay" : ""}</span>
-                  <span className="text-slate-400">{fmtDateTime(p.createdAt)}{p.transferStatus === "held" ? " · yours once your account is active again" : p.status === "not_set_up" || p.transferStatus === "waiting" ? " · delayed until your payout account is ready" : ""}</span>
+                  <span className="text-slate-400">{fmtDateTime(p.createdAt)}{p.status === "not_set_up" || p.transferStatus === "waiting" ? " · delayed until your payout account is ready" : ""}</span>
                 </li>
               ))}
               {paidIn.length === 0 && <li className="py-2 text-slate-500">Nothing yet.</li>}

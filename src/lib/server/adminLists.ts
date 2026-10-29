@@ -5,7 +5,7 @@ import { chargebackHolds } from "./chargeback";
 import { disputeBounds } from "./payments";
 import { NOT_LISTED, termsLine } from "@/lib/rules";
 import { CRITICAL_FIELDS, CRITICAL_KEYS, countsOf, lockedFields } from "@/lib/limits";
-import { adminSubLine } from "@/lib/subscription";
+import { SUBSCRIPTION_ENDED, adminSubLine } from "@/lib/subscription";
 import { pausedTestsForAdmin } from "./pauseClosure";
 import { REPORTED_OVER, labelled, reportCounts, reportedOver3 } from "./reports";
 import { HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL } from "@/lib/rules";
@@ -32,7 +32,8 @@ export type ListFilter = { q?: string; ticks?: string[] };
 export type TestVM = { href: string; id: string; at: string; line: string; status: string; adminPaused: boolean; stopped: boolean; critical: number; closedLine: string };
 /** (Owner, Oct 28 afternoon) The per-field change counts on an admin test row: "NDA 3, steps 1". */
 const countsText = (v: unknown) => { const c = countsOf(v); return CRITICAL_KEYS.filter((k) => c[k] > 0).map((k) => `${CRITICAL_FIELDS[k]} ${c[k]}`).join(", "); };
-export type TextVM = { id: string; at: string; text: string; href?: string };
+/** (Batch 22 section 4) `em`: a quoted reason shown in italics after the text (a dispute's). */
+export type TextVM = { id: string; at: string; text: string; href?: string; em?: string };
 /** A hold lift waiting for an admin's Approve (the 4th hold onward), in its own box: styled like a dispute row. */
 export type LiftVM = { id: string; at: string; head: string; owed: string; paid: string };
 /** A profile report: who reported whom, when, why, with links to both profiles. */
@@ -522,20 +523,63 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
   const who = (id: string | null | undefined) => (id ? admins.get(id) ?? "an admin" : "an admin");
   const rows: Row[] = [];
   if (kind === "t-timeline") {
-    for (const e of await db.testEvent.findMany({ where: { testId }, orderBy: { createdAt: "desc" }, take: 3000 })) rows.push(mk("event", e.id, e.createdAt, `${e.text}${e.contractId ? ` (${of(e.contractId)})` : ""}`));
+    // (Owner, Oct 29, batch 22 section 4) For admins every line names who did it, in the third person ("Nora Lane paid Ana Silva $10.00 …", "Nora Lane's tests are
+    // running again", "Nora Lane's developer account was paused (by ana@…)"), and each dispute and each decision shows once.
+    const dev = displayName(t.developer);
+    const [events, suspensions, actions, disputes] = await Promise.all([
+      db.testEvent.findMany({ where: { testId }, orderBy: { createdAt: "desc" }, take: 3000 }),
+      db.accountEvent.findMany({ where: { userId: t.developerId, kind: "suspended" }, orderBy: { createdAt: "asc" } }),
+      db.adminAction.findMany({ where: { targetId: testId, action: { in: ["pause-test", "unpause-test", "stop-test", "close-paused"] } }, orderBy: { createdAt: "asc" } }),
+      db.dispute.findMany({ where: { contractId: { in: ids } }, include: { submission: { select: { kind: true } } } }),
+    ]);
+    const emails = await adminEmails([...suspensions.map((s) => s.byId), ...actions.map((a) => a.adminId), ...disputes.map((d) => d.decidedById)]);
+    /** The admin action of that kind closest to the moment (the route records it right after the change). */
+    const by = (action: string, at: Date) => {
+      const near = actions.filter((a) => a.action === action && Math.abs(a.createdAt.getTime() - at.getTime()) < 60_000).sort((a, b) => Math.abs(a.createdAt.getTime() - at.getTime()) - Math.abs(b.createdAt.getTime() - at.getTime()))[0];
+      return (near && emails(near.adminId)) || "The team";
+    };
+    const suspendedBy = (at: Date) => {
+      const s = suspensions.filter((x) => x.createdAt.getTime() <= at.getTime() + 60_000).pop();
+      return (s && emails(s.byId)) || "the team";
+    };
+    const thirdPerson = (e: { text: string; createdAt: Date }) => {
+      const x = e.text;
+      if (x === "Your account is paused") return `${dev}'s developer account was paused (by ${suspendedBy(e.createdAt)})`;
+      if (x === "Your tests are running again") return `${dev}'s tests are running again`;
+      if (x === "Your tests are paused until you pay what you owe") return `${dev}'s tests are paused until they pay what they owe`;
+      if (x === SUBSCRIPTION_ENDED) return `${dev}'s subscription ended`;
+      if (x.startsWith("Your bank reversed your ")) return `${dev}'s bank reversed their ${x.slice("Your bank reversed your ".length)}`;
+      if (x.startsWith("You ")) return `${dev} ${x.slice(4)}`;
+      if (x === "The team paused this test") return `${by("pause-test", e.createdAt)} paused this test${t.adminPausedAt && Math.abs(t.adminPausedAt.getTime() - e.createdAt.getTime()) < 5_000 && t.adminNote ? `: ${t.adminNote}` : ""}`;
+      if (x === "The team lifted the pause on this test") return `${by("unpause-test", e.createdAt)} lifted the pause on this test`;
+      if (x === "The team stopped this test") return `${by("stop-test", e.createdAt)} stopped this test${t.adminStoppedAt && t.adminNote ? `: ${t.adminNote}` : ""}`;
+      return x.replace(/ rated you$/, ` rated ${dev}`).replace(/\(rated you\)$/, `(rated ${dev})`);
+    };
+    const decisions = events.filter((e) => e.kind === "admin" && e.text.startsWith("The team decided"));
+    for (const e of events) {
+      // One line per dispute and per decision: those come from the disputes themselves (below).
+      if (e.kind === "dispute" || decisions.includes(e)) continue;
+      // The closing after a pause has its own line (below), with who closed it.
+      if (t.pauseClosedAt && e.text === "The test was closed") continue;
+      const text = thirdPerson(e);
+      const name = of(e.contractId);
+      rows.push(mk("event", e.id, e.createdAt, `${text}${name && !text.includes(name) ? ` (${name})` : ""}`));
+    }
     for (const i of await db.invite.findMany({ where: { testId } })) rows.push(mk("invite", i.id, i.createdAt, `Invited a tester (${i.status})`));
     for (const k of await db.call.findMany({ where: { contractId: { in: ids } } })) {
       rows.push(mk("call", k.id, k.createdAt, `Call booked with ${of(k.contractId)} for ${fmtDateTime(k.startsAt)}`));
-      if (k.status === "cancelled" && k.cancelledAt) rows.push(mk("call-cancelled", k.id, k.cancelledAt, `Call with ${of(k.contractId)} cancelled by ${k.cancelledBy || "someone"}`));
+      if (k.status === "cancelled" && k.cancelledAt) rows.push(mk("call-cancelled", k.id, k.cancelledAt, `Call with ${of(k.contractId)} cancelled by ${k.cancelledBy === "developer" ? dev : k.cancelledBy === "tester" ? of(k.contractId) : "the app"}`));
     }
-    for (const d of await db.dispute.findMany({ where: { contractId: { in: ids } } })) {
-      rows.push(mk("dispute", d.id, d.createdAt, `${of(d.contractId)} disputed a payment: “${d.reason}”`));
-      if (d.decidedAt) rows.push(mk("dispute-decided", d.id, d.decidedAt, `Dispute by ${of(d.contractId)} decided: ${money(d.decidedCents)} in all`));
+    for (const d of disputes) {
+      const part = d.callId ? "live call" : d.submission?.kind === "recording" ? "recording" : "written answers";
+      rows.push({ ...mk("dispute", d.id, d.createdAt, `${of(d.contractId)} disputed the pay for their ${part}:`), em: d.reason });
+      if (d.decidedAt) {
+        const ev = decisions.filter((e) => e.contractId === d.contractId && Math.abs(e.createdAt.getTime() - d.decidedAt!.getTime()) < 60_000)[0];
+        const what = ev ? ev.text.replace(/^The team decided [^:]*: /, "") : `${money(d.decidedCents ?? 0)} in all`;
+        rows.push(mk("dispute-decided", d.id, d.decidedAt, `${emails(d.decidedById) || "The team"} decided ${of(d.contractId)}'s dispute: ${what}`));
+      }
     }
-    if (t.adminPausedAt) rows.push(mk("admin-paused", t.id, t.adminPausedAt, `Paused by ${who(t.adminPausedById)}${t.adminNote ? `: ${t.adminNote}` : ""}`));
-    if (t.adminStoppedAt) rows.push(mk("admin-stopped", t.id, t.adminStoppedAt, `Stopped by ${who(t.adminStoppedById)}${t.adminNote ? `: ${t.adminNote}` : ""}`));
     if (t.pauseClosedAt) rows.push(mk("pause-closed", t.id, t.pauseClosedAt, `Closed after being paused${t.adminStoppedById ? ` (by ${who(t.adminStoppedById)})` : " (by the daily job)"}: ${t.pauseClosedReason}`));
-    if (t.developer.devSuspendedAt) rows.push(mk("dev-suspended", t.id, t.developer.devSuspendedAt, `Its developer was suspended (developer side) by ${who(t.developer.devSuspendedById)}`));
   } else if (kind === "t-contracts") {
     for (const c of contracts) rows.push(mk("contract", c.id, c.joinedAt, `${displayName(c.tester)} joined on: ${termsLine(c)}`));
     for (const o of await db.termsOffer.findMany({ where: { testId } })) {

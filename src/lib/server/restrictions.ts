@@ -1,13 +1,12 @@
 import { db } from "@/lib/db";
 import { PAYOUT_LINE } from "@/lib/payout";
-import { displayName, fmtDateTime } from "@/lib/format";
+import { displayName, fmtDateTime, fmtTime } from "@/lib/format";
 import { callCancelledLine } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify } from "./notify";
 import { cancelCallsAhead, recordEvent, spotOpened, tellCancelled } from "./tests";
 import { closeRequests } from "./requests";
 import { chargeDeferred, markPaused, resumeTests, shiftAfterPause } from "./holds";
-import { sendWaitingTransfer } from "./stripe";
 import { accountEvent } from "./reports";
 
 // (Design doc 2 and 11.4; owner, Oct 27) Suspensions and deletion.
@@ -176,22 +175,6 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
   return { ok: true, side };
 }
 
-/** The held shares of a tester whose pay was charged during a suspension: sent now, or kept waiting for a payout account. */
-export async function releaseHeldShares(testerId: string, ids?: string[]) {
-  const held = await db.payment.findMany({ where: { testerId, transferStatus: "held", ...(ids ? { id: { in: ids } } : {}) } });
-  let sent = 0;
-  for (const p of held) {
-    await db.payment.update({ where: { id: p.id }, data: { transferStatus: "waiting" } });
-    try {
-      await sendWaitingTransfer(p.id);
-      sent++;
-    } catch {
-      // no payout account yet (or Stripe is off): it waits like any other share
-    }
-  }
-  return { released: held.length, sent };
-}
-
 /** Admin: lift the suspension of one side (batch 15 section 16). A one-role account, or an account with only one side suspended, needs no side named. */
 export async function reinstateAccount(userId: string, asked?: unknown, adminId: string | null = null, seen: SeenFrom | null = null) {
   const u = await db.user.findUnique({ where: { id: userId } });
@@ -230,7 +213,6 @@ export async function reinstateAccount(userId: string, asked?: unknown, adminId:
   }
   // (Owner, Oct 28) No automatic re-invite: the tests they were removed from wait on their dashboard with "You were removed from this test" and Ask to rejoin
   // (while the test is open, has a spot and isn't paused) until they ask or dismiss; the developer can also invite them again as usual.
-  if (side === "tester" && u.isTester) await releaseHeldShares(userId);
   const line = `Your ${side} account is active again`;
   await notify(u.email, line, [`${line}.`], "/app", { always: true, group: "admindecision" });
   return { ok: true, side };
@@ -313,17 +295,39 @@ export async function pauseTest(adminId: string, testId: string, note: string) {
   return { ok: true };
 }
 
-export async function unpauseTest(testId: string) {
+/**
+ * (Owner, Oct 29, batch 22 section 5) Why Lift the pause can't go through: the pause was lifted already (by whom and when), the test closed (when), or the test is
+ * paused only by the developer's account state (a hold or a suspension, which admins don't lift here).
+ */
+async function liftRefusal(testId: string) {
+  const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
+  if (t.status === "stopped") return new HttpError(409, "pause_lifted", `That test's pause was already lifted when it closed at ${fmtDateTime(t.pauseClosedAt ?? t.stoppedAt ?? t.adminStoppedAt ?? new Date())}.`);
+  const last = await db.adminAction.findFirst({ where: { targetId: testId, action: "unpause-test" }, orderBy: { createdAt: "desc" } });
+  if (last) {
+    const by = await db.user.findUnique({ where: { id: last.adminId }, select: { email: true, deletedAt: true } });
+    return new HttpError(409, "pause_lifted", `That test's pause was already lifted (by ${!by || by.deletedAt ? "an admin (deleted)" : by.email} at ${fmtTime(last.createdAt)}).`);
+  }
+  if (t.developer.holdStartedAt || t.developer.devSuspendedAt) return new HttpError(409, "pause_lifted", "That test isn't paused by the team: it's paused by the developer's account state.");
+  return new HttpError(409, "pause_lifted", "That test isn't paused.");
+}
+
+/** Admin: lift the team's pause. Two admins at once: the first lifts it (its admin action is kept with it), the second is refused naming them. */
+export async function unpauseTest(testId: string, adminId: string | null = null) {
   const t = await db.test.findUnique({ where: { id: testId } });
-  if (!t?.adminPausedAt) throw new HttpError(409, "not_paused", "That test isn't paused by the team.");
+  if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
+  if (!t.adminPausedAt || t.status === "stopped") throw await liftRefusal(testId);
   const start = t.adminPausedAt, now = new Date();
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
-  await db.$transaction(async (tx) => {
-    await tx.test.update({ where: { id: testId }, data: { adminPausedAt: null, adminNote: "", ...(dev.holdStartedAt || dev.devSuspendedAt ? {} : { pausedSince: null }) } });
+  const lifted = await db.$transaction(async (tx) => {
+    const claimed = await tx.test.updateMany({ where: { id: testId, adminPausedAt: start, status: { not: "stopped" } }, data: { adminPausedAt: null, adminNote: "", ...(dev.holdStartedAt || dev.devSuspendedAt ? {} : { pausedSince: null }) } });
+    if (claimed.count !== 1) return false;
     // (Owner, Oct 28 afternoon, DEFAULT) The same clock shift as a hold lift or a reinstatement (only the part not covered by the developer's own pause, if one is still on).
     await shiftAfterPause(tx, t, start, now, [dev.holdStartedAt, dev.devSuspendedAt]);
     await recordEvent(tx, testId, "resumed", "The team lifted the pause on this test", true);
+    if (adminId) await tx.adminAction.create({ data: { adminId, action: "unpause-test", targetId: testId } });
+    return true;
   });
+  if (!lifted) throw await liftRefusal(testId);
   await notify(dev.email, `The team lifted the pause on “${t.title}”`, [`The team lifted the pause on “${t.title}”: it is running again.`], `/app/tests/${testId}`, { own: true });
   return { ok: true };
 }

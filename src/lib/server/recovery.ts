@@ -68,7 +68,7 @@ export async function recoverPayment(paymentId: string, now = new Date()) {
   const pi = p.payKey ? await findPaymentIntent(p.payKey) : null;
   if (pi?.status === "succeeded") {
     const tester = await db.user.findUniqueOrThrow({ where: { id: p.testerId } });
-    const result = { status: "charged", stripePaymentIntentId: pi.id, ...splitFee(p.amountCents), transferStatus: pi.transfer_data?.destination ? "sent" : tester.testerSuspendedAt ? "held" : "waiting" };
+    const result = { status: "charged", stripePaymentIntentId: pi.id, ...splitFee(p.amountCents), transferStatus: pi.transfer_data?.destination ? "sent" : "waiting" };
     if (p.kind === "extra") await (await import("./payments")).finishExtraPay(p.id, result);
     else if (isChoiceKey(p.payKey)) await (await import("./holds")).finishChoicePay(p.id, result);
     else await (await import("./payments")).finishReviewPay(p.id, result);

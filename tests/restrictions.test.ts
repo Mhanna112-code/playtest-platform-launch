@@ -125,20 +125,19 @@ describe("a suspended tester (design doc 2 and 11.4)", () => {
     expect((await sact(ana.sessionId, "written", ana.tester.cookie, { answers: ["x", "y"] })).body.error.code).toBe("suspended");
     expect((await sact(ana.sessionId, "written", ana.tester.cookie, { answers: ["x", "y"] })).body.error.failed).toBe("Your Send on Harbor Run didn't go through");
 
-    // The developer can still pay their work: the card is charged, the share is held (neutral wording).
+    // The developer can still pay their work, and (batch 22 section 2) the tester is paid normally: no held share, nothing said about it.
     const r = await pay(open.dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true });
     expect(r.status).toBe(200);
-    expect(r.body.later).toBe("Ana Silva will receive it later");
+    expect(r.body.later).toBeUndefined();
     const p = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } });
-    expect(p.transferStatus).toBe("held");
+    expect(p.transferStatus).toBe("none"); // payments aren't set up in tests: nothing to send
     expect(JSON.stringify(r.body)).not.toMatch(/suspend/i);
 
-    // Lifting (owner, Oct 28): NO automatic re-invite; the held share is released (waits for a payout account).
+    // Lifting (owner, Oct 28): NO automatic re-invite.
     expect((await adm("unsuspend", a.cookie, { id: ana.tester.user.id })).status).toBe(200);
     expect(await db.invite.count({ where: { testId: open.testId, testerId: ana.tester.user.id, status: "sent" } })).toBe(0);
     expect(await db.invite.count({ where: { testId: inviteOnly.testId, testerId: ana.tester.user.id, status: "sent" } })).toBe(0);
     expect(await db.notification.count({ where: { userId: ana.tester.user.id, text: { startsWith: "You're invited back" } } })).toBe(0);
-    expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).transferStatus).toBe("waiting");
     expect(await db.notification.count({ where: { userId: ana.tester.user.id, text: "Your tester account is active again" } })).toBe(1); // (batch 15 section 16: the side is named)
     // The removed tests wait on her dashboard with Ask to rejoin until she asks or dismisses them; asking takes the card away.
     expect((await db.contract.findUniqueOrThrow({ where: { id: sess2 } })).endKind).toBe("suspended");
@@ -150,14 +149,15 @@ describe("a suspended tester (design doc 2 and 11.4)", () => {
     expect((await db.contract.findUniqueOrThrow({ where: { id: ana.sessionId } })).status).toBe("working");
   });
 
-  it("admin refunds or releases a held share", async () => {
+  it("(batch 22 section 2) no held shares: Release and Refund are gone", async () => {
     const { dev, sub, tester } = await withWork();
     const a = await admin();
     await adm("suspend", a.cookie, { id: tester.user.id, note: "Fake work" });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true });
     const p = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } });
-    expect((await adm("refund-share", a.cookie, { id: p.id })).status).toBe(200);
-    expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "refunded", transferStatus: "refunded" });
+    expect(p.transferStatus).not.toBe("held");
+    expect((await adm("refund-share", a.cookie, { id: p.id })).status).toBe(404);
+    expect((await adm("release-share", a.cookie, { id: p.id })).status).toBe(404);
   });
 });
 

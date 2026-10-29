@@ -5,13 +5,11 @@ import { HttpError, handle, ok, readJson, readText } from "@/lib/server/http";
 import { LIMITS } from "@/lib/limits";
 import { decideDispute } from "@/lib/server/payments";
 import { ADMIN_PAUSED, adminAccount, isAdmin, requireUser } from "@/lib/server/session";
-import { sendWaitingTransfer } from "@/lib/server/stripe";
 import { approveHoldLift } from "@/lib/server/holds";
 import { approveChargebackHold } from "@/lib/server/chargeback";
 import { closePausedTest, extendPauseClosure } from "@/lib/server/pauseClosure";
-import { adminStopTest, deleteAccount, pauseTest, previewSuspension, reinstateAccount, releaseHeldShares, seenFromBody, suspendAccount, unpauseTest } from "@/lib/server/restrictions";
+import { adminStopTest, deleteAccount, pauseTest, previewSuspension, reinstateAccount, seenFromBody, suspendAccount, unpauseTest } from "@/lib/server/restrictions";
 import { withAccountState } from "@/lib/server/accountState";
-import { refundPayment } from "@/lib/server/stripe";
 
 type Ctx = { params: Promise<{ action: string }> };
 
@@ -24,8 +22,9 @@ export async function POST(req: Request, { params }: Ctx) {
     const body = await readJson(req);
     const id = String(body.id ?? "");
     const res = await run(u, action, id, body);
-    // (Batch 15 section 21) Every admin action is kept with the admin who did it (a preview changes nothing).
-    if (action !== "preview-suspension") await db.adminAction.create({ data: { adminId: u.id, action, targetId: id } });
+    // (Batch 15 section 21) Every admin action is kept with the admin who did it (a preview changes nothing). (Batch 22 section 5) Lift the pause keeps its own, with
+    // the lift itself, so a second admin's press names the first.
+    if (action !== "preview-suspension" && action !== "unpause-test") await db.adminAction.create({ data: { adminId: u.id, action, targetId: id } });
     return res;
   });
 }
@@ -67,16 +66,9 @@ async function run(u: Awaited<ReturnType<typeof requireUser>>, action: string, i
       case "pause-test":
         return ok(await pauseTest(u.id, id, readText(body.note, LIMITS.reason, "bad_note")));
       case "unpause-test":
-        return ok(await unpauseTest(id));
+        return ok(await unpauseTest(id, u.id));
       case "stop-test":
         return ok(await adminStopTest(id, readText(body.note, LIMITS.reason, "bad_note"), u.id));
-      case "release-share": {
-        const p = await db.payment.findUniqueOrThrow({ where: { id } });
-        return ok(await releaseHeldShares(p.testerId, [p.id]));
-      }
-      case "refund-share":
-        await refundPayment(id);
-        return ok({ ok: true });
       // (Owner, Oct 28, batch 8) "Free for everyone until <date>" (blank clears it).
       case "allow-critical-changes":
       {
@@ -99,9 +91,6 @@ async function run(u: Awaited<ReturnType<typeof requireUser>>, action: string, i
         return ok(await extendPauseClosure(id, body.days));
       case "close-paused":
         return ok(await closePausedTest(id, "admin", new Date(), u.id));
-      case "transfer":
-        await sendWaitingTransfer(id);
-        return ok({ ok: true });
     }
     throw new HttpError(404, "not_found", "That action doesn't exist.");
   }

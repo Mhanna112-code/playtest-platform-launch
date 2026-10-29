@@ -96,7 +96,7 @@ export const PAYMENT_RULES: { heading: string; text: string; example: string }[]
   },
   {
     heading: "Payouts",
-    text: "Testers are paid through Stripe once their payout account is set up (that needs a confirmed email); until then their pay waits for them. While a tester's account is suspended their share of pay is held, and it's released when the account is reinstated; if it never is, our team releases or refunds it.",
+    text: "Testers are paid through Stripe once their payout account is set up (that needs a confirmed email); until then their pay waits for them, and it goes out on its own once the setup is done.",
     example: "A tester paid $8.00 before setting up payouts receives it once their Stripe account can take payouts.",
   },
   {
@@ -106,7 +106,7 @@ export const PAYMENT_RULES: { heading: string; text: string; example: string }[]
   },
   {
     heading: "Taxes and refunds",
-    text: "Testers are independent, not employees of the platform or of developers, and handle their own taxes. Payments aren't refunded, except when the platform wins a chargeback the developer already paid (the amount and the fee go back to their card), or when our team refunds pay held for a suspended tester who is never reinstated.",
+    text: "Testers are independent, not employees of the platform or of developers, and handle their own taxes. Payments aren't refunded, except when the platform wins a chargeback the developer already paid (the amount and the fee go back to their card).",
     example: "A $10 chargeback the platform wins after the developer paid it: $25 back to their card.",
   },
 ];

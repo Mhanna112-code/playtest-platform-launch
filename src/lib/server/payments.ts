@@ -199,8 +199,8 @@ export async function finishReviewPay(paymentId: string, result: { status: strin
     { payment: true, group: "tpaid" },
   );
   if (rev.amountCents > 0) await receipt(dev.email, `${name}'s ${piece.label}`, rev.amountCents, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
-  // A suspended tester is paid later (their share is held): said neutrally, never why.
-  return { reviewId: rev.id, amountCents: rev.amountCents, status: result.status, rejected: false, paidSoFarCents: await paidSoFar(c.id), ...(c.tester.testerSuspendedAt && rev.amountCents > 0 ? { later: `${name} will receive it later` } : {}) };
+  // (Batch 22 section 2) A suspended tester is paid like anyone (no held share).
+  return { reviewId: rev.id, amountCents: rev.amountCents, status: result.status, rejected: false, paidSoFarCents: await paidSoFar(c.id) };
 }
 
 /** Tester: dispute once, on any part the developer reviewed (batch 10: listed or not, any amount, $0 included, or a Reject). */

@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { api, errOf } from "@/lib/client";
 import { LIVE_POLL_MS, LOADING_LINE, SEARCHABLE, SEARCH_MAX, SEARCH_PAUSE_MS, atTop, endLine, headingText, isSearchKind, mergeTop, nearEnd, newRowsAhead, newRowsPill, searchOf } from "@/lib/adminScroll";
 import { AccountActions } from "./AccountActions";
@@ -42,6 +42,25 @@ function LiftApprove({ id }: { id: string }) {
       </button>
       {msg && <span className={msg.ok ? "ok" : "err"}>{msg.text}</span>}
     </div>
+  );
+}
+
+/** (Batch 22 section 5) Re-reads the list's first rows now and updates the ones shown (a refused Lift the pause turns its row back into Pause). */
+const RefreshRows = createContext<() => void>(() => {});
+
+/** Pause / Lift the pause on a test's row: a press from an old row is refused naming who lifted it, and the row refreshes. */
+function PauseToggle({ t }: { t: TestVM }) {
+  const refreshRows = useContext(RefreshRows);
+  const [refused, setRefused] = useState("");
+  const onRefused = (e: unknown) => {
+    setRefused(errOf(e));
+    refreshRows();
+  };
+  return (
+    <>
+      {t.adminPaused ? <AdminButton action="unpause-test" id={t.id} label="Lift the pause" onRefused={onRefused} /> : <AdminButton action="pause-test" id={t.id} label="Pause" fields={[{ name: "note", label: "Why" }]} onRefused={onRefused} />}
+      {refused && <span className="err" data-pause-refused="">{refused}</span>}
+    </>
   );
 }
 
@@ -114,7 +133,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
           {t.closedLine && <p className="text-xs text-rose-300">{t.closedLine}</p>}
           {!t.stopped && (
             <p className="flex flex-wrap items-center gap-2">
-              {t.adminPaused ? <AdminButton action="unpause-test" id={t.id} label="Lift the pause" /> : <AdminButton action="pause-test" id={t.id} label="Pause" fields={[{ name: "note", label: "Why" }]} />}
+              <PauseToggle t={t} />
               <AdminButton action="stop-test" id={t.id} label="Stop (close)" danger fields={[{ name: "note", label: "Why" }]} />
               {t.critical > 0 && <AdminButton action="allow-critical-changes" id={t.id} label="Allow 3 more changes of the locked fields" />}
             </p>
@@ -161,7 +180,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
     }
     default: {
       const t = row as TextVM;
-      return <li className="py-2 text-sm text-slate-300">{t.href ? <a href={t.href}>{t.text}</a> : t.text}</li>;
+      return <li className="py-2 text-sm text-slate-300">{t.href ? <a href={t.href}>{t.text}</a> : t.text}{t.em && <i className="text-slate-200"> “{t.em}”</i>}</li>;
     }
   }
 }
@@ -271,6 +290,15 @@ export function PagedList({ kind, initial, empty = "None.", arg = "", title, lev
     setPending(null);
   }, []);
 
+  /** (Batch 22 section 5) Rows already shown take their fresh state (a test's pause lifted elsewhere turns its button back into Pause). */
+  const updateShown = useCallback((fresh: AnyRow[]) => {
+    const byId = new Map(fresh.map((x) => [x.id, x]));
+    setRows((prev) => (prev.some((x) => byId.has(x.id) && JSON.stringify(byId.get(x.id)) !== JSON.stringify(x)) ? prev.map((x) => byId.get(x.id) ?? x) : prev));
+  }, []);
+  const refreshRows = useCallback(() => {
+    void api<Page<AnyRow>>(url(null, appliedRef.current)).then((r) => updateShown(r.rows), () => null);
+  }, [url, updateShown]);
+
   // Opened without rows (a lazy list): fetch its first 25.
   useEffect(() => {
     if (!initial) void reload(NO_FILTER);
@@ -304,6 +332,7 @@ export function PagedList({ kind, initial, empty = "None.", arg = "", title, lev
         const r = await api<Page<AnyRow>>(url(null, appliedRef.current));
         if (my !== seq.current) return;
         setTotal(r.total);
+        updateShown(r.rows);
         if (!r.rows.length || !newRowsAhead(r.rows, rowsRef.current).length) return setPending(null);
         if (!box.current || atTop(box.current)) takeTop(r);
         else setPending(r);
@@ -316,13 +345,14 @@ export function PagedList({ kind, initial, empty = "None.", arg = "", title, lev
       clearInterval(t);
       io?.disconnect();
     };
-  }, [fixed, url, takeTop]);
+  }, [fixed, url, takeTop, updateShown]);
 
   const filtered = applied.q !== "" || applied.ticks.length > 0;
   const fresh = pending ? newRowsAhead(pending.rows, rows).length : 0;
   const body = rows.map((r) => <Row key={r.id} kind={kind} row={r} />);
   const H = level === 2 ? "h2" : "h3";
   return (
+    <RefreshRows.Provider value={refreshRows}>
     <div className="w-full min-w-0 space-y-2" data-paged={kind} ref={wrap}>
       {title && <H className={level === 2 ? "text-lg font-semibold text-white" : "font-semibold text-white"} data-list-heading={kind}>{headingText(title, total, filtered)}</H>}
       {search && (
@@ -372,5 +402,6 @@ export function PagedList({ kind, initial, empty = "None.", arg = "", title, lev
       )}
       {err && <p className="err">{err}</p>}
     </div>
+    </RefreshRows.Provider>
   );
 }

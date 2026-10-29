@@ -31,15 +31,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const [disputes, liftsP, mine, paused, chargebacks, decided, noShows, reportsP, usersP, testsP, paymentsP, contactP] = await Promise.all(
     (["disputes", "lifts", "mine", "paused", "chargebacks", "decided", "noshows", "reports", "users", "tests", "payments", "contact"] as const).map((k) => adminPage(k, u.id, null)),
   );
-  const [waiting, heldShares, held, devCount, testerCount, openTests] = await Promise.all([
-    db.payment.findMany({ where: { transferStatus: "waiting" }, orderBy: { createdAt: "asc" }, take: 100 }),
-    db.payment.findMany({ where: { transferStatus: "held" }, orderBy: { createdAt: "asc" }, take: 100 }),
+  const [waiting, held, devCount, testerCount, openTests] = await Promise.all([
+    db.payment.findMany({ where: { transferStatus: "waiting", status: "charged" }, orderBy: { createdAt: "asc" }, take: 100 }),
     db.user.findMany({ where: { holdStartedAt: { not: null }, holdReason: { not: "chargeback" } }, orderBy: { holdStartedAt: "asc" }, take: 100 }),
     db.user.count({ where: { isDeveloper: true } }),
     db.user.count({ where: { isTester: true } }),
     db.test.count({ where: { status: "open" } }),
   ]);
-  const people = new Map((await db.user.findMany({ where: { id: { in: [...waiting, ...heldShares].flatMap((p) => [p.developerId, p.testerId]) } }, select: { id: true, email: true } })).map((x) => [x.id, x.email]));
+  const people = new Map((await db.user.findMany({ where: { id: { in: waiting.flatMap((p) => [p.developerId, p.testerId]) } }, select: { id: true, email: true } })).map((x) => [x.id, x.email]));
   // A link or a bell line can open one exact row: ?dispute=ID or ?user=ID shows it first.
   const focusDispute: DisputeVM | null = q.dispute ? await db.dispute.findUnique({ where: { id: q.dispute } }).then((d) => (d ? disputeRow(d) : null)) : null;
   const focusUser = q.user ? await db.user.findUnique({ where: { id: q.user } }) : null;
@@ -177,25 +176,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
       <section className="card space-y-3">
         <h2 id="payouts" className="scroll-mt-24 text-lg font-semibold text-white">Payouts waiting for a payout account</h2>
+        {/* (Batch 22 section 3) Read-only: each goes out on its own when that tester finishes their payout setup. */}
+        <p className="note">Each goes out on its own when the tester finishes their payout setup.</p>
         {waiting.length === 0 && <p className="note">None.</p>}
         {waiting.map((p) => (
-          <p key={p.id} className="text-sm">
-            {fmtDateTime(p.createdAt)} · {people.get(p.testerId)} · {money(p.testerCents)} <AdminButton action="transfer" id={p.id} label="Send now" />
+          <p key={p.id} className="text-sm" data-waiting-payout={p.id}>
+            {people.get(p.testerId)} · {money(p.testerCents)} · waiting since {fmtDateTime(p.createdAt)}
           </p>
         ))}
         <PagedList kind="payments" title="Latest payments" level={3} initial={rows(paymentsP)} />
-      </section>
-
-      <section className="card space-y-3" id="held-shares">
-        <h2 className="text-lg font-semibold text-white">Held tester shares ({heldShares.length})</h2>
-        <p className="note">A suspended tester&apos;s pay is charged to the developer, but their share waits. It goes out when the suspension is lifted; if it never is, refund the developer or release it here.</p>
-        {heldShares.length === 0 && <p className="note">None.</p>}
-        {heldShares.map((p) => (
-          <p key={p.id} className="text-sm">
-            {fmtDateTime(p.createdAt)} · {money(p.testerCents)} for {people.get(p.testerId)} (paid by {people.get(p.developerId)}){" "}
-            <AdminButton action="release-share" id={p.id} label="Release to the tester" /> <AdminButton action="refund-share" id={p.id} label="Refund the developer" danger />
-          </p>
-        ))}
       </section>
 
       {/* (Owner, Oct 28, batch 8) Free during launch; (batch 11) read-only: the date comes from the server configuration (FREE_UNTIL). */}

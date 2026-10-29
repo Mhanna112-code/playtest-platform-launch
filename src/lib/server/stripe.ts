@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import { db } from "@/lib/db";
 import { splitFee } from "@/lib/rules";
+import { money } from "@/lib/format";
 import { HttpError } from "./http";
 import { cardLabel, logAccountChange } from "./accountChanges";
 import { appUrl } from "./auth";
@@ -120,11 +121,10 @@ const pressParams = (mode: ChargeMode) => (mode === "away" ? { off_session: true
 export async function charge(dev: Party, tester: Party, amountCents: number, payKey: string, description: string, mode: ChargeMode = "away") {
   const split = splitFee(amountCents);
   if (amountCents === 0) return { status: "charged", ...split, transferStatus: "none", stripePaymentIntentId: null };
-  // (Design doc 11.2) A suspended tester's pay is charged, but their share is HELD until reinstatement (the admin refunds or releases it if it is never lifted).
-  const held = !!tester.testerSuspendedAt;
-  if (!stripeOn()) return { status: "not_set_up", ...split, transferStatus: held ? "held" : "none", stripePaymentIntentId: null };
+  // (Owner, Oct 29, batch 22 section 2) A suspended tester is paid like anyone: their share goes to their payout account (or waits for it to be set up).
+  if (!stripeOn()) return { status: "not_set_up", ...split, transferStatus: "none", stripePaymentIntentId: null };
   const stripe = getStripe();
-  const destination = !held && tester.stripeAccountId && tester.payoutsReady ? tester.stripeAccountId : null;
+  const destination = tester.stripeAccountId && tester.payoutsReady ? tester.stripeAccountId : null;
   try {
     const pi = await stripe.paymentIntents.create(
       {
@@ -140,12 +140,12 @@ export async function charge(dev: Party, tester: Party, amountCents: number, pay
       },
       { idempotencyKey: `pay-${payKey}` },
     );
-    if (pi.status === "requires_action") return { ...split, transferStatus: destination ? "sent" : held ? "held" : "waiting", status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "", checkUrl: checkUrlOf(pi) };
+    if (pi.status === "requires_action") return { ...split, transferStatus: destination ? "sent" : "waiting", status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "", checkUrl: checkUrlOf(pi) };
     if (pi.status !== "succeeded") throw new Error(`status ${pi.status}`);
-    return { status: "charged", ...split, transferStatus: destination ? "sent" : held ? "held" : "waiting", stripePaymentIntentId: pi.id };
+    return { status: "charged", ...split, transferStatus: destination ? "sent" : "waiting", stripePaymentIntentId: pi.id };
   } catch (e) {
     const na = needsActionOf(e);
-    if (na) return { ...split, transferStatus: destination ? "sent" : held ? "held" : "waiting", ...na };
+    if (na) return { ...split, transferStatus: destination ? "sent" : "waiting", ...na };
     throw chargeError(e, "Your card couldn't be charged. Update your card in Payments and press Pay again.");
   }
 }
@@ -207,15 +207,35 @@ export async function chargePlatform(dev: Party, amountCents: number, payKey: st
   }
 }
 
-/** Send a waiting tester share once they've connected a payout account (admin → payouts). */
-export async function sendWaitingTransfer(paymentId: string) {
-  const p = await db.payment.findUniqueOrThrow({ where: { id: paymentId } });
-  if (p.transferStatus !== "waiting") throw new HttpError(409, "not_waiting", "This payout isn't waiting.");
-  const tester = await db.user.findUniqueOrThrow({ where: { id: p.testerId } });
-  if (!tester.stripeAccountId || !tester.payoutsReady) throw new HttpError(409, "no_account", "The tester hasn't finished connecting a payout account yet.");
-  const t = await getStripe().transfers.create({ amount: p.testerCents, currency: "usd", destination: tester.stripeAccountId, metadata: { paymentId } }, { idempotencyKey: `transfer-${p.id}` });
-  return db.payment.update({ where: { id: p.id }, data: { transferStatus: "sent", stripeTransferId: t.id } });
+/**
+ * (Owner, Oct 29, batch 22 section 3) A tester's shares that waited for their payout setup go out on their own once it is done (the account.updated webhook, or the
+ * return from Stripe's setup): each charged one is claimed first ("waiting" -> "sending", so two webhooks at once send it once), transferred with an idempotency key,
+ * and the tester gets "Your payout setup is done: $X on its way." Nothing waiting: nothing sent, nothing said.
+ */
+export async function sendWaitingShares(testerId: string) {
+  const tester = await db.user.findUnique({ where: { id: testerId } });
+  if (!tester?.stripeAccountId || !tester.payoutsReady || !stripeOn()) return 0;
+  const waiting = await db.payment.findMany({ where: { testerId, transferStatus: "waiting", status: "charged", testerCents: { gt: 0 } }, orderBy: { createdAt: "asc" } });
+  let cents = 0;
+  for (const p of waiting) {
+    if ((await db.payment.updateMany({ where: { id: p.id, transferStatus: "waiting" }, data: { transferStatus: "sending" } })).count !== 1) continue;
+    try {
+      const t = await getStripe().transfers.create({ amount: p.testerCents, currency: "usd", destination: tester.stripeAccountId, metadata: { paymentId: p.id } }, { idempotencyKey: `transfer-${p.id}` });
+      await db.payment.update({ where: { id: p.id }, data: { transferStatus: "sent", stripeTransferId: t.id } });
+      cents += p.testerCents;
+    } catch (e) {
+      console.error("[payouts] waiting share:", (e as Error).message);
+      await db.payment.update({ where: { id: p.id }, data: { transferStatus: "waiting" } });
+    }
+  }
+  if (cents > 0) {
+    const line = payoutDoneLine(cents);
+    await (await import("./notify")).notify(tester.email, line, [line], "/app/payments", { payment: true });
+  }
+  return cents;
 }
+/** "Your payout setup is done: $8.00 on its way." */
+export const payoutDoneLine = (cents: number) => `Your payout setup is done: ${money(cents)} on its way.`;
 
 /** Developer: Stripe Checkout in setup mode to save a card. */
 export async function cardSetupUrl(user: Party, base: string) {
@@ -280,13 +300,8 @@ export async function refreshPayoutStatus(userId: string) {
   await db.user.update({ where: { id: userId }, data: { payoutsReady: ready } });
   // (Batch 16 section 27) For a Payments page open in another tab or device.
   if (ready !== user.payoutsReady) await logAccountChange(userId, "", { scopes: ["payments"], field: "payout", label: "Payout account", before: user.payoutsReady ? "connected" : "not connected", after: ready ? "connected" : "not connected" });
+  // (Batch 22 section 3) Shares that waited for the setup go out now.
+  if (ready) await sendWaitingShares(userId);
   return ready;
 }
 
-/** Admin: a held share that will never be released goes back to the developer (the charge is refunded). */
-export async function refundPayment(paymentId: string) {
-  const p = await db.payment.findUniqueOrThrow({ where: { id: paymentId } });
-  if (p.transferStatus !== "held" && p.transferStatus !== "waiting") throw new HttpError(409, "not_held", "Only a share that hasn't been sent can be refunded.");
-  if (p.stripePaymentIntentId) await getStripe().refunds.create({ payment_intent: p.stripePaymentIntentId }, { idempotencyKey: `refund-${p.id}` });
-  return db.payment.update({ where: { id: p.id }, data: { status: "refunded", transferStatus: "refunded" } });
-}

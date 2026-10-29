@@ -355,14 +355,16 @@ async function chargeOwedOne(u: Parameters<typeof charge>[0] & { email: string; 
 const owedWhy = (e: unknown) => (e instanceof HttpError && e.code === "card_failed" ? "Your card was declined." : e instanceof HttpError && e.code === "payments_problem" ? PAYMENTS_PROBLEM : "It didn't go through. Try again shortly.");
 
 /**
- * (Owner, Oct 29, batch 11 section 4) While a payment hold or chargeback hold lasts, what is owed is retried on the saved card: once a day, at most HOLD_RETRY_MAX tries a
- * hold ("daily"), and at once when the developer saves a new card ("card", not counted). Success: those lines are paid (an open Payments page updates live and a press stops
+ * (Owner, Oct 29, batch 11 section 4) While a payment hold lasts, what is owed is retried on the saved card: once a day, at most HOLD_RETRY_MAX tries a hold ("daily"),
+ * and at once when the developer saves a new card ("card", not counted). (Owner, Oct 29, batch 22 section 1) Never during a CHARGEBACK hold (also one that started as a
+ * payment hold): what is owed is then paid only through Pay what you owe, after the card check, and the hold lifts only on the team's Approve. Success: those lines are paid (an open Payments page updates live and a press stops
  * once), the developer gets "We charged your card $X for what you owed.", and the hold lifts as if they had pressed Pay (the 4th hold on still needs Approve; a chargeback
  * hold still needs the card check and Approve; a suspension is never lifted by a payment). A failed retry sends nothing: Payments shows the last and next try.
  */
 export async function retryOwed(devId: string, now = new Date(), why: "daily" | "card" = "daily") {
   const u = await db.user.findUnique({ where: { id: devId } });
   if (!u?.holdStartedAt || u.deletedAt) return null;
+  if (u.holdReason === "chargeback") return null; // (batch 22 section 1)
   if (why === "daily" && (u.holdRetries >= HOLD_RETRY_MAX || (u.holdRetryAt && now.getTime() - u.holdRetryAt.getTime() < 23 * 3_600_000))) return null;
   // No saved card (or payments not set up): nothing to retry on.
   if (!stripeOn() || !u.stripeCustomerId || !u.stripePaymentMethodId) return null;
@@ -524,7 +526,7 @@ async function runDailyLocked(now: Date) {
   await (await import("./calls")).sweepNobodyJoined(now);
   // (Batch 11) Bank confirmations that timed out, then the automatic retries of what is owed during a hold.
   await (await import("./confirm")).expireActions(now);
-  if (stripeOn()) for (const u of await db.user.findMany({ where: { holdStartedAt: { not: null }, deletedAt: null, stripePaymentMethodId: { not: null } }, select: { id: true } })) await retryOwed(u.id, now).catch((e) => console.error("[retry]", (e as Error).message));
+  if (stripeOn()) for (const u of await db.user.findMany({ where: { holdStartedAt: { not: null }, holdReason: { not: "chargeback" }, deletedAt: null, stripePaymentMethodId: { not: null } }, select: { id: true } })) await retryOwed(u.id, now).catch((e) => console.error("[retry]", (e as Error).message));
   // 1. Sent work past its review window: Charge / Let it go opens (batch 19 section 4: also every 5 minutes, runSweep).
   out.choices += await openCharges(now, co);
   // 1b. (Owner, Oct 30, batch 15 sections 15 and 40) A LISTED call left unpaid past its review date (the later of the tester's deadline and the call + 7 days): reviewed like
