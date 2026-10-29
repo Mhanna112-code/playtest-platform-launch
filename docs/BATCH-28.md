@@ -76,6 +76,9 @@ Today, with email Off only "Your Playtest account updates" lines are emailed; re
 ## 19. Verify a card never shows Stripe's card form (launch-critical, found by the Stripe test-mode run)
 During a chargeback hold, "Verify a card" (src/components/ChargebackSteps.tsx) never mounts Stripe's card form; "Verify this card" fails with "Could not find a ready element to create a payment method from.", so no chargeback hold could be lifted. Mount the element with the SetupIntent's client secret from /api/payments/verify-card, confirm with the matching Stripe.js call and a return_url, keep the inline 3D Secure and the fake-Stripe stand-in. Verify in real Stripe test mode.
 
+## 20. A listed piece's cap is its listing plus the part's max (owner, Oct 29; drops the 100%-of-listing rule)
+Extra pay above the listing is no longer limited to 100% of the listing: a listed piece can be paid up to its listing plus the part's max ($1,000 for written answers or a recording; $200/h × measured minutes for a call, within the $1,000 for that tester's calls). Unlisted pieces are unchanged. Pay / Pay more hints and refusals, §14's lines, §15's dispute range, the admin form, the Terms and the design doc follow.
+
 ## Check and report
 - Run `NEXT_DIST_DIR=.next-build npm run check`; it must be green. Migration only if needed (hand-written, checked with `prisma migrate diff` against playtest_lite_shadow with --exit-code, applied only to the local playtest_lite DB; say the 3400 server needs a restart).
 - Don't touch port 3400 (the owner uses it: write each file in one go). Don't edit docs/DESIGN-DOC.md. Never print secrets from .env.
