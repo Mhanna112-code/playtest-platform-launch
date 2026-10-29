@@ -516,7 +516,10 @@ On a fresh, healthy Postgres cluster (a new machine, Docker, Neon) none of this 
 
 - [ ] **GitHub.** The repo has no remote yet. Create a private GitHub repository and push `master`. Protect the default
       branch before adding collaborators (section 9).
-- [ ] **Neon.** Create the database; set `DATABASE_URL` (pooled) and `DIRECT_URL` (direct). Run `npm run db:deploy`.
+- [ ] **Neon.** Create the database; set `DATABASE_URL` (pooled) and `DIRECT_URL` (direct) in Vercel. Migrations run by
+      themselves on every Vercel deploy: Vercel uses the `vercel-build` script (`prisma migrate deploy` before `next build`,
+      through `DIRECT_URL`). A failed migration fails the deploy, and the previous version stays live. (Running
+      `npm run db:deploy` by hand still works.)
 - [ ] **Vercel.** Import the repo; set every variable from section 4 for Production (and Preview, with test keys).
       Set `APP_URL` to the real https address. Confirm the cron from `vercel.json` appears and `CRON_SECRET` is set.
 - [ ] **Stripe, live.** `STRIPE_SECRET_KEY` = live secret key, `STRIPE_ALLOW_LIVE=1`, `STRIPE_PUBLISHABLE_KEY` = live
