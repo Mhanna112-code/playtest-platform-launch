@@ -57,6 +57,9 @@ The tester's "<dev> updated the listing: <changes>" (a new terms offer to answer
 ## 25. Pay more stacks with "You were paid" (owner, Oct 29)
 The tester's "<dev> paid you $X more for your <part> on “<test>”" stacks in the same daily "You were paid" entry as their other payments (across tests), instead of its own "Extra pay" stack. Update the bell table (doc agent). Test: a Pay and a Pay more on one day form one "You were paid" entry.
 
+## 26. Excerpt answers stack across tests (owner, Oct 29)
+The tester's "Your excerpt from <test> is now on your profile.", "Your excerpt from <test> was allowed. It stays hidden while <test> has an NDA." and "<dev> prefers that work from <test> isn't shown on profiles." stack into ONE entry per day across tests, "Excerpts" (e.g. "Excerpts · 2 updates today"), each line opening its own place (the profile's excerpts, or the session page's excerpt), instead of "that test's day". Update the bell table (doc agent). Test: answers on two tests the same day form one entry.
+
 ## Decided, no change (owner, Oct 29)
 - After a stop, End early, Leave, a block or a removal, a sent piece's review date stays the later of 7 days after sending and the tester's ORIGINAL deadline (the owner said no to opening Charge 7 days after the work ended). Don't change it.
 
