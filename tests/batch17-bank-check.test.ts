@@ -308,7 +308,8 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     // A renewal belongs to no test: Payments keeps its own "Confirm with your bank" (the same inline check), and the bell keeps "Confirm it in Payments".
     const sub = await db.payment.create({ data: { kind: "subscription", developerId: dev.user.id, testerId: dev.user.id, amountCents: 700, feeCents: 700, testerCents: 0, status: "needs_confirmation" } });
     await (await import("@/lib/server/confirm")).awayAction(sub.id, { status: "requires_action", stripePaymentIntentId: "pi_" + randomUUID(), clientSecret: "" });
-    expect(await db.notification.count({ where: { userId: dev.user.id, link: "/app/payments#confirm", text: { startsWith: "Your bank wants you to confirm a $7.00 payment. Confirm it in Payments by " } } })).toBe(1);
+    // (Batch 25 section 3) The renewal's line opens its own row on Payments.
+    expect(await db.notification.count({ where: { userId: dev.user.id, link: `/app/payments#bank-${sub.id}`, text: { startsWith: "Your bank wants you to confirm a $7.00 payment. Confirm it in Payments by " } } })).toBe(1);
     const items = await confirmItems(dev.user.id);
     expect(items.find((i) => i.id === sub.id)).toMatchObject({ href: null });
     const list = renderToStaticMarkup(createElement(ConfirmList, { items: items.filter((i) => i.id === sub.id) }));

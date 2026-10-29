@@ -248,7 +248,8 @@ describe("batch 11 item 4: automatic retries during a hold", () => {
     const { dev } = await held();
     fakeStripe();
     expect(await retryOwed(dev.user.id)).toMatchObject({ cents: 800, lifted: true });
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: "We charged your card $8.00 for what you owed." } })).toBe(1);
+    // (Batch 25 section 5) The one line names what was paid.
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: "We charged your card $8.00 for what you owed: Ana Silva's work." } })).toBe(1);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();
   });
 

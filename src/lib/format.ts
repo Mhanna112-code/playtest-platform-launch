@@ -64,5 +64,21 @@ export function pronouns(p: string | null | undefined) {
 
 export const fmtDateTime = (d: Date | string) =>
   new Date(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+/** `{ timeZone }` for a saved zone this runtime knows; nothing (the server's clock) for none or an unknown one. */
+export function zoneOpt(tz?: string | null): { timeZone?: string } {
+  if (!tz) return {};
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return { timeZone: tz };
+  } catch {
+    return {};
+  }
+}
+/**
+ * (Owner, Oct 29, batch 25 section 1) fmtDateTime in a person's own saved time zone ("Mon, Nov 2, 3:10 PM"), for a time a server-rendered page shows them. No saved zone:
+ * the server's clock, as before.
+ */
+export const fmtDateTimeIn = (d: Date | string, tz?: string | null) =>
+  new Date(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...zoneOpt(tz) });
 export const fmtTime = (d: Date | string) => new Date(d).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 export const fmtDate = (d: Date | string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });

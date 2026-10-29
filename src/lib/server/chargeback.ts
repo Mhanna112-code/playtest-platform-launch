@@ -323,7 +323,7 @@ export async function approveChargebackHold(devId: string) {
     for (const p of rows) await settleOwedRow(dev, p, r.stripePaymentIntentId && stripeOn() ? r.stripePaymentIntentId : null);
     taken += cents;
   }
-  if (taken) await receipt(dev.email, "what you owed (reserved on your card, taken on the team's approval)", taken, stripeOn() ? "charged" : "not_set_up", "/app/payments");
+
   for (const p of await db.payment.findMany({ where: { developerId: devId, chargeback: "open" } })) {
     await db.payment.update({ where: { id: p.id }, data: { chargeback: "resolved" } });
     const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId } }) : null;
@@ -331,6 +331,9 @@ export async function approveChargebackHold(devId: string) {
   }
   // (Batch 24, a batch 23 leftover) ONE notice for the developer: when Approve lifts the hold it says so too (the testers still get their "is running again").
   const lifted = await liftHoldIfClear(devId, { quietDev: true });
+  // (Batch 25 section 5) One bell line for this money: when the Approve lifts the hold, its one notice names the amount taken ("…the $8.00 reserved on your card was
+  // taken…"), so there is no separate receipt line; otherwise the receipt says it.
+  if (taken && !lifted) await receipt(dev.email, "what you owed (reserved on your card, taken on the team's approval)", taken, stripeOn() ? "charged" : "not_set_up", "/app/payments");
   const still = lifted && !!(await db.user.findUnique({ where: { id: devId }, select: { devSuspendedAt: true } }))?.devSuspendedAt;
   if (lifted) {
     // Lifted while an admin suspension is still on: the same one notice says the tests stay paused (ignores Off, like "running again").

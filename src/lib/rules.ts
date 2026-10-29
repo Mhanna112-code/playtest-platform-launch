@@ -751,7 +751,16 @@ export const bankWaitingLine = (cents: number, what: string, by: string) => `You
 export const PIECE_LOCKED = "A payment for this is being confirmed right now.";
 /** (Owner, Oct 29, batch 11 section 4) Automatic retries of what is owed during a hold: once a day, at most this many a hold. */
 export const HOLD_RETRY_MAX = 7;
-export const retriedLine = (cents: number) => `We charged your card ${money(cents)} for what you owed.`;
+/** (Batch 25 section 5) Items named in one line: "A", "A and B", "A, B and C"; more than 3: "A, B, C and 2 more". */
+export const namesList = (names: string[]) =>
+  names.length <= 1 ? (names[0] ?? "") : names.length <= 3 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : `${names.slice(0, 3).join(", ")} and ${names.length - 3} more`;
+/**
+ * (Owner, Oct 29, batch 25 section 5) An automatic retry's ONE bell line, naming what was paid: "We charged your card $10.00 for what you owed: Ana Silva's call on Oct 30."
+ * (It is a money line, so it also rides the payment email: that is the retry's receipt; no separate "Receipt:" line.)
+ */
+export const retriedLine = (cents: number, names: string[] = []) => `We charged your card ${money(cents)} for what you owed${names.length ? `: ${namesList(names)}` : ""}.`;
+/** (Batch 25 section 5) What a receipt for paying what's owed names: "what you owed: Ana Silva's call on Oct 30 and Ben Okafor's written answers". */
+export const owedReceiptWhat = (names: string[]) => (names.length ? `what you owed: ${namesList(names)}` : "an amount you owed");
 /** Payments' line about the automatic retries. */
 export function retryStatusLine(u: { holdRetries: number; holdRetryAt: Date | null }, fmt: (d: Date) => string) {
   if (u.holdRetries >= HOLD_RETRY_MAX) return "No more automatic tries: press Pay what you owe.";

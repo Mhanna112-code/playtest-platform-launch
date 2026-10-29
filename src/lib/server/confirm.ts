@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { displayName, fmtDateTime, money } from "@/lib/format";
+import { displayName, fmtDateTimeIn, money } from "@/lib/format";
 import { CONFIRM_DAYS, PRESS_ACTION_MS, bankAnchor, bankConfirmLine, bankConfirmTestLine, bankHref, bankWaitingLine, BANK_NOT_CONFIRMED } from "@/lib/rules";
 import { bankTopLead, confirmByText, pieceWords, shortDay, type BankTopRow } from "@/lib/bankTop";
 import { HttpError } from "./http";
@@ -52,8 +52,25 @@ export async function awayAction(paymentId: string, r: NeedsAction & { feeCents?
   // (Batch 17 §11) On a test: "Confirm this payment by <date>.", linking straight to its button on the test page.
   const home = await bankHome(p);
   const line = home ? bankConfirmTestLine(p.amountCents, by) : bankConfirmLine(p.amountCents, by);
-  await notify(dev.email, line, [line], home ?? "/app/payments#confirm", { always: true, payment: true, group: "payhold" });
+  // (Batch 25 section 3) A renewal's line opens its own row on Payments (marked), like the dashboard's link.
+  await notify(dev.email, line, [line], home ?? `/app/payments#${bankAnchor(p.id)}`, { always: true, payment: true, group: "payhold" });
   return p;
+}
+
+/** (Batch 25 section 1) The developer's saved time zone, for the times these lists show them. */
+const zoneOf = async (devId: string) => (await db.user.findUnique({ where: { id: devId }, select: { timeZone: true } }))?.timeZone ?? null;
+
+/**
+ * (Batch 25 section 2) A retried chargeback's row (kind "chargeback") names the piece of the payment the bank reversed (`repaysId`): where the piece is found for any
+ * waiting row.
+ */
+async function pieceIdsOf(waiting: { id: string; kind: string; repaysId: string | null; submissionId: string | null; callId: string | null }[]) {
+  const origIds = waiting.filter((p) => p.kind === "chargeback" && p.repaysId && !p.submissionId && !p.callId).map((p) => p.repaysId!);
+  const origs = origIds.length ? await db.payment.findMany({ where: { id: { in: origIds } }, select: { id: true, submissionId: true, callId: true } }) : [];
+  return (p: { kind: string; repaysId: string | null; submissionId: string | null; callId: string | null }) => {
+    const o = p.kind === "chargeback" && p.repaysId ? origs.find((x) => x.id === p.repaysId) : undefined;
+    return { submissionId: p.submissionId ?? o?.submissionId ?? null, callId: p.callId ?? o?.callId ?? null };
+  };
 }
 
 /** Payments waiting for the developer's confirmation (the Confirm list on Payments; with `contractIds`, one test's). */
@@ -67,12 +84,13 @@ export async function waitingConfirmation(devId: string, contractIds?: string[],
  */
 export async function confirmItems(devId: string) {
   const waiting = await waitingConfirmation(devId);
+  const tz = waiting.length ? await zoneOf(devId) : null;
   const ids = [...new Set(waiting.map((p) => p.contractId).filter((x): x is string => !!x))];
   const contracts = ids.length ? await db.contract.findMany({ where: { id: { in: ids } }, select: { id: true, testId: true, title: true } }) : [];
   return waiting.map((p) => {
     const c = contracts.find((x) => x.id === p.contractId);
     const what = p.kind === "subscription" ? "Your subscription" : p.kind === "dispute" ? "A team decision" : p.kind === "chargeback" ? "A payment your bank had reversed" : "A payment";
-    return { id: p.id, text: `${what} ${money(p.amountCents)}${c ? ` on “${c.title}”` : ""} · confirm by ${fmtDateTime(p.actionBy!)}`, href: c ? bankHref(c.testId, p.id) : null };
+    return { id: p.id, text: `${what} ${money(p.amountCents)}${c ? ` on “${c.title}”` : ""} · confirm by ${fmtDateTimeIn(p.actionBy!, tz)}`, href: c ? bankHref(c.testId, p.id) : null };
   });
 }
 
@@ -84,10 +102,12 @@ export async function confirmItems(devId: string) {
 export async function bankToConfirm(devId: string, now = new Date()): Promise<BankTopRow[]> {
   const waiting = await waitingConfirmation(devId, undefined, now);
   if (!waiting.length) return [];
+  const tz = await zoneOf(devId);
   const ids = [...new Set(waiting.map((p) => p.contractId).filter((x): x is string => !!x))];
   const contracts = ids.length ? await db.contract.findMany({ where: { id: { in: ids } }, select: { id: true, testId: true, title: true, tester: true } }) : [];
-  const subIds = waiting.map((p) => p.submissionId).filter((x): x is string => !!x);
-  const callIds = waiting.map((p) => p.callId).filter((x): x is string => !!x);
+  const pieceOf = await pieceIdsOf(waiting);
+  const subIds = waiting.map((p) => pieceOf(p).submissionId).filter((x): x is string => !!x);
+  const callIds = waiting.map((p) => pieceOf(p).callId).filter((x): x is string => !!x);
   const [subs, calls] = await Promise.all([
     subIds.length ? db.submission.findMany({ where: { id: { in: subIds } }, select: { id: true, kind: true } }) : [],
     callIds.length ? db.call.findMany({ where: { id: { in: callIds } }, select: { id: true, startsAt: true } }) : [],
@@ -96,17 +116,19 @@ export async function bankToConfirm(devId: string, now = new Date()): Promise<Ba
     .map((p) => {
       const c = contracts.find((x) => x.id === p.contractId);
       const name = c ? displayName(c.tester) : "";
-      const sub = p.submissionId ? subs.find((x) => x.id === p.submissionId) : undefined;
-      const call = p.callId ? calls.find((x) => x.id === p.callId) : undefined;
-      // An owed payment keeps its status while its automatic retry waits for the bank (a retried chargeback is a "chargeback" row): "what you owe".
+      const at = pieceOf(p);
+      const sub = at.submissionId ? subs.find((x) => x.id === at.submissionId) : undefined;
+      const call = at.callId ? calls.find((x) => x.id === at.callId) : undefined;
+      const piece = sub ? pieceWords.part(name, sub.kind) : call ? pieceWords.call(name, shortDay(call.startsAt, tz)) : pieceWords.work(name);
+      // An owed payment keeps its status while its automatic retry waits for the bank: "what you owe". (Batch 25 section 2) A retried chargeback (a "chargeback" row)
+      // reads as on the test page: "a payment your bank had reversed (Ana Silva's written answers)".
       const what =
         p.kind === "subscription" ? null
-        : !c || p.status !== "needs_confirmation" || p.kind === "chargeback" ? pieceWords.owed
+        : p.kind === "chargeback" ? pieceWords.reversed(c ? piece : null)
+        : !c || p.status !== "needs_confirmation" ? pieceWords.owed
         : p.kind === "dispute" ? pieceWords.dispute(name)
-        : sub ? pieceWords.part(name, sub.kind)
-        : call ? pieceWords.call(name, shortDay(call.startsAt))
-        : pieceWords.work(name);
-      const by = confirmByText(p.actionBy!, now);
+        : piece;
+      const by = confirmByText(p.actionBy!, now, tz);
       return { id: p.id, lead: bankTopLead(p.amountCents, c?.title ?? null, what), by: by.text, soon: by.soon, href: c ? bankHref(c.testId, p.id) : `/app/payments#${bankAnchor(p.id)}`, at: p.actionBy!.getTime() };
     })
     .sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
@@ -119,14 +141,19 @@ export async function bankToConfirm(devId: string, now = new Date()): Promise<Ba
 export async function bankWaitingOnTest(devId: string, testId: string) {
   const contracts = await db.contract.findMany({ where: { testId }, include: { tester: true, submissions: { select: { id: true, kind: true } }, calls: { select: { id: true, startsAt: true } } } });
   const waiting = await waitingConfirmation(devId, contracts.map((c) => c.id));
+  if (!waiting.length) return [];
+  // (Batch 25 section 1) "Confirm it by" (and a call's time) in the developer's own time zone, like the dashboard's row.
+  const tz = await zoneOf(devId);
+  const pieceOf = await pieceIdsOf(waiting);
   return waiting.map((p) => {
     const c = contracts.find((x) => x.id === p.contractId)!;
     const name = displayName(c.tester);
-    const sub = p.submissionId ? c.submissions.find((x) => x.id === p.submissionId) : undefined;
-    const call = p.callId ? c.calls.find((x) => x.id === p.callId) : undefined;
-    const piece = sub ? `${name}'s ${sub.kind === "recording" ? "recording" : "written answers"}` : call ? `${name}'s call on ${fmtDateTime(call.startsAt)}` : `${name}'s work`;
+    const at = pieceOf(p);
+    const sub = at.submissionId ? c.submissions.find((x) => x.id === at.submissionId) : undefined;
+    const call = at.callId ? c.calls.find((x) => x.id === at.callId) : undefined;
+    const piece = sub ? `${name}'s ${sub.kind === "recording" ? "recording" : "written answers"}` : call ? `${name}'s call on ${fmtDateTimeIn(call.startsAt, tz)}` : `${name}'s work`;
     const what = p.kind === "dispute" ? `the team's decision on ${name}'s dispute` : p.kind === "chargeback" ? `a payment your bank had reversed (${piece})` : piece;
-    return { id: p.id, contractId: c.id, pieceId: sub?.id ?? call?.id ?? null, line: bankWaitingLine(p.amountCents, what, fmtDateTime(p.actionBy!)) };
+    return { id: p.id, contractId: c.id, pieceId: sub?.id ?? call?.id ?? null, line: bankWaitingLine(p.amountCents, what, fmtDateTimeIn(p.actionBy!, tz)) };
   });
 }
 
@@ -230,13 +257,15 @@ async function finish(paymentId: string) {
   if ((p.status === "needs_action" || p.status === "needs_confirmation") && p.kind === "chargeback") {
     await db.payment.update({ where: { id: p.id }, data: { status: "charged", settledAt: new Date(), actionPi: null, actionBy: null } });
     const u = await db.user.findUniqueOrThrow({ where: { id: p.developerId } });
-    await payments.receipt(u.email, "a payment your bank had reversed", p.amountCents, "charged", "/app/payments");
+    // (Batch 25 section 5) One receipt, naming what was paid (the retry that waited for the bank sent no line of its own for this money).
+    await payments.receipt(u.email, await holds.owedItemName(p), p.amountCents, "charged", "/app/payments");
     return { done: true, lifted: await holds.liftHoldIfClear(p.developerId) };
   }
   if (p.kind === "subscription") return { done: true, ...(await (await import("./subscription")).subscriptionConfirmed(p.id)) };
   // An owed payment ("paying" from a press, or failed / owed with a retry waiting), a tester's Charge or a dispute decision made while away.
+  const wasOwed = p.status === "failed" || p.status === "owed" || p.status === "paying";
   await db.payment.update({ where: { id: p.id }, data: { status: "charged", settledAt: new Date(), failure: "", actionPi: null, actionBy: null, warnedAt: null } });
-  await holds.settledOwed(p.id);
+  await holds.settledOwed(p.id, wasOwed);
   return { done: true, lifted: await holds.liftHoldIfClear(p.developerId) };
 }
 

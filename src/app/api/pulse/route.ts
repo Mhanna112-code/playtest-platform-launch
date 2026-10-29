@@ -31,7 +31,8 @@ export async function GET(req: Request) {
     }
     // (Owner, Oct 29, batch 24 section 1) The developer dashboard's "Your bank wants you to confirm": a charge arriving, confirmed (here, another tab, the test page),
     // past its date (counted as declined), cancelled, or turning red under 24 hours refreshes it. It shows during a hold or suspension too, so it always refreshes.
-    if (q.get("bank")) {
+    // (Batch 25 section 4) Only a developer has the box: anyone else gets the plain pulse.
+    if (q.get("bank") && u.isDeveloper) {
       const { bankToConfirm } = await import("@/lib/server/confirm");
       const { bankTopV } = await import("@/lib/bankTop");
       return ok({ v: bankTopV(await bankToConfirm(u.id)), restricted: false });

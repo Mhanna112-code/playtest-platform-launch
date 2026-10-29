@@ -3,7 +3,7 @@ import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
 import {
-  CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, chargeByLine, payByLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, choiceLine, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
+  owedReceiptWhat, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, chargeByLine, payByLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, choiceLine, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REMIND_DAYS, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, sendSummaries } from "./notify";
@@ -21,6 +21,7 @@ import { callReference } from "@/lib/rules";
 import { callsLeftCents } from "./callMoney";
 import { closedOut, pieceCloseOut } from "./closeOut";
 import { withTimersLock } from "./timers";
+import { pieceWords } from "@/lib/bankTop";
 
 // Payment hold (owner rule, Oct 27): starts AT ONCE when any payment is declined (part Pay, the tester's Charge, a call charge, extra pay), or when a chargeback opens
 // (a chargeback during a payment hold turns it into a chargeback hold). There is no owed window and no daily retry. While on hold all the developer's
@@ -300,22 +301,31 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
   let paid = 0;
   // (Batch 11) Payments the bank wants the developer to confirm in the page (its pop-up, then /api/payments/confirm).
   const confirm: Awaited<ReturnType<typeof import("./confirm").pressAction>>[] = [];
+  // (Owner, Oct 29, batch 25 section 5) The press gets ONE receipt for what went through, naming the items.
+  const names: string[] = [];
+  let paidCents = 0, setUp = false;
   for (const p of list) {
     const r = await chargeOwedOne(u, p, "press");
-    if (r.result === "paid") paid++;
-    else if (r.result === "action") confirm.push(r.action);
+    if (r.result === "paid") {
+      paid++;
+      paidCents += r.cents;
+      names.push(r.name);
+      setUp ||= r.status !== "not_set_up";
+    } else if (r.result === "action") confirm.push(r.action);
     else if (r.result === "failed") stillFailing.push(`${lines.find((l) => l.id === p.id)?.text ?? money(p.amountCents)} (${r.why.replace(/\.$/, "")})`);
   }
+  if (paidCents > 0) await receipt(u.email, owedReceiptWhat(names), paidCents, setUp ? "charged" : "not_set_up", "/app/payments");
   // The hold lifts only when all are paid; a chargeback hold also needs the card check and the admin's approval.
   const lifted = await liftHoldIfClear(dev.id);
   return { paid, stillFailing, lifted, confirm };
 }
 
 type OwedRow = Awaited<ReturnType<typeof owed>>[number];
-type OneResult = { result: "paid"; cents: number } | { result: "action"; action: Awaited<ReturnType<typeof import("./confirm").pressAction>> } | { result: "waiting" } | { result: "failed"; why: string } | { result: "skipped" };
+type OneResult = { result: "paid"; cents: number; status: string; name: string } | { result: "action"; action: Awaited<ReturnType<typeof import("./confirm").pressAction>> } | { result: "waiting" } | { result: "failed"; why: string } | { result: "skipped" };
 /**
  * Charge ONE owed payment on the saved card. "press": the developer's own "Pay what you owe" (on-session: the bank may ask them to confirm in the page). "away": an automatic
  * retry during the hold (batch 11 section 4; the bank's confirmation then waits 3 days for Confirm in Payments). Each payment is claimed first, so it is never charged twice.
+ * (Batch 25 section 5) It sends the developer no line itself: the caller sends one for all that went through (the press's receipt, the retry's line), naming `name`.
  */
 async function chargeOwedOne(u: Parameters<typeof charge>[0] & { email: string; name: string }, p: OwedRow, mode: "press" | "away"): Promise<OneResult> {
   const tester = await db.user.findUniqueOrThrow({ where: { id: p.testerId } });
@@ -333,8 +343,7 @@ async function chargeOwedOne(u: Parameters<typeof charge>[0] & { email: string; 
         return { result: "waiting" };
       }
       await db.payment.update({ where: { id: claim.id }, data: { ...r, settledAt: new Date() } });
-      await receipt(u.email, "a payment your bank had reversed", p.amountCents, r.status, "/app/payments");
-      return { result: "paid", cents: p.amountCents };
+      return { result: "paid", cents: p.amountCents, status: r.status, name: await owedItemName(p) };
     } catch (e) {
       await db.payment.delete({ where: { id: claim.id } });
       return { result: "failed", why: owedWhy(e) };
@@ -357,9 +366,8 @@ async function chargeOwedOne(u: Parameters<typeof charge>[0] & { email: string; 
       return { result: "waiting" };
     }
     await db.payment.update({ where: { id: p.id }, data: { ...r, settledAt: new Date(), failure: "", warnedAt: null, actionPi: null, actionBy: null } });
-    await receipt(u.email, "an amount you owed", p.amountCents, r.status, "/app/payments");
     await tellArrived(p, tester.email, displayName(u));
-    return { result: "paid", cents: p.amountCents };
+    return { result: "paid", cents: p.amountCents, status: r.status, name: await owedItemName(p) };
   } catch (e) {
     await db.payment.update({ where: { id: p.id }, data: { status: was, warnedAt: null } });
     return { result: "failed", why: owedWhy(e) };
@@ -372,7 +380,8 @@ const owedWhy = (e: unknown) => (e instanceof HttpError && e.code === "card_fail
  * (Owner, Oct 29, batch 11 section 4) While a payment hold lasts, what is owed is retried on the saved card: once a day, at most HOLD_RETRY_MAX tries a hold ("daily"),
  * and at once when the developer saves a new card ("card", not counted). (Owner, Oct 29, batch 22 section 1) Never during a CHARGEBACK hold (also one that started as a
  * payment hold): what is owed is then paid only through Pay what you owe, after the card check, and the hold lifts only on the team's Approve. Success: those lines are paid (an open Payments page updates live and a press stops
- * once), the developer gets "We charged your card $X for what you owed.", and the hold lifts as if they had pressed Pay (the 4th hold on still needs Approve; a chargeback
+ * once), the developer gets ONE line (batch 25 section 5), "We charged your card $X for what you owed: <the items>." (no separate receipt line; it rides the payment email
+ * as the receipt), and the hold lifts as if they had pressed Pay (the 4th hold on still needs Approve; a chargeback
  * hold still needs the card check and Approve; a suspension is never lifted by a payment). A failed retry sends nothing: Payments shows the last and next try.
  */
 export async function retryOwed(devId: string, now = new Date(), why: "daily" | "card" = "daily") {
@@ -386,11 +395,15 @@ export async function retryOwed(devId: string, now = new Date(), why: "daily" | 
   if (!list.length) return null;
   await db.user.update({ where: { id: devId }, data: { holdRetryAt: now, ...(why === "daily" ? { holdRetries: { increment: 1 } } : {}) } });
   let cents = 0;
+  const names: string[] = [];
   for (const p of list) {
     const r = await chargeOwedOne(u, p, "away");
-    if (r.result === "paid") cents += r.cents;
+    if (r.result === "paid") {
+      cents += r.cents;
+      names.push(r.name);
+    }
   }
-  if (cents > 0) await bell(devId, retriedLine(cents), "/app/payments", undefined, { payment: true, group: "payhold" });
+  if (cents > 0) await bell(devId, retriedLine(cents, names), "/app/payments", undefined, { payment: true, group: "payhold" });
   const lifted = cents > 0 ? await liftHoldIfClear(devId) : false;
   return { cents, lifted };
 }
@@ -412,13 +425,34 @@ async function claimChargebackRepay(p: { id: string; contractId: string | null; 
   });
 }
 
-/** (Batch 11) A payment that waited (owed, or for the bank's confirmation) went through: the developer's receipt and the tester's paid line. */
-export async function settledOwed(paymentId: string) {
+/**
+ * (Batch 11) A payment that waited (owed, or for the bank's confirmation) went through: the developer's receipt and the tester's paid line. (Batch 25 section 5) The one
+ * receipt names what was paid: "what you owed: Ana Silva's call on Oct 30" for a retry of what's owed (`wasOwed`), else the piece or the team's decision.
+ */
+export async function settledOwed(paymentId: string, wasOwed = false) {
   const p = await db.payment.findUniqueOrThrow({ where: { id: paymentId } });
   const dev = await db.user.findUniqueOrThrow({ where: { id: p.developerId } });
   const tester = await db.user.findUniqueOrThrow({ where: { id: p.testerId } });
-  await receipt(dev.email, p.kind === "dispute" ? "a team decision" : "an amount you owed", p.amountCents, p.status, "/app/payments");
+  const name = await owedItemName(p);
+  await receipt(dev.email, wasOwed ? owedReceiptWhat([name]) : name, p.amountCents, p.status, "/app/payments");
   if (p.kind !== "chargeback" && p.kind !== "subscription") await tellArrived(p, tester.email, displayName(dev));
+}
+
+/**
+ * (Owner, Oct 29, batch 25 section 5) What one payment was for, named like the dashboard's rows: "Ana Silva's call on Oct 30" (a time token: the reader's own zone), "Ben
+ * Okafor's written answers", "the team's decision on Ana Silva's dispute"; a reversed payment owed again (an open chargeback, or its repay row): "a payment your bank had
+ * reversed (Ana Silva's written answers)".
+ */
+export async function owedItemName(p: { amountCents: number; kind: string; contractId: string | null; submissionId: string | null; callId: string | null; chargeback?: string | null; repaysId?: string | null }) {
+  const orig = p.kind === "chargeback" && p.repaysId ? await db.payment.findUnique({ where: { id: p.repaysId } }) : null;
+  const base = orig ?? p;
+  const c = base.contractId ? await db.contract.findUnique({ where: { id: base.contractId }, include: { tester: true } }) : null;
+  const name = c ? displayName(c.tester) : "";
+  const sub = c && base.submissionId ? await db.submission.findUnique({ where: { id: base.submissionId }, select: { kind: true } }) : null;
+  const call = c && !sub && base.callId ? await db.call.findUnique({ where: { id: base.callId }, select: { startsAt: true } }) : null;
+  const piece = !c ? null : base.kind === "dispute" ? pieceWords.dispute(name) : sub ? pieceWords.part(name, sub.kind) : call ? pieceWords.call(name, T(call.startsAt, "date")) : pieceWords.work(name);
+  if (orig || p.chargeback === "open" || p.kind === "chargeback") return pieceWords.reversed(piece);
+  return piece ?? `a payment of ${money(p.amountCents)}`;
 }
 
 /** The tester's one notice when a delayed payment goes through: the normal paid line. */
