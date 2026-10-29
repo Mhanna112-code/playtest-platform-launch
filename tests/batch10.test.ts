@@ -302,7 +302,8 @@ describe("batch 10 item 6: a chargeback the platform wins", () => {
     await withCard(s.dev.user.id);
     const refunds: string[] = [];
     setStripeForTests({
-      paymentIntents: { create: async () => ({ id: "pi_" + randomUUID(), status: "succeeded" }) },
+      // (Batch 23 section 6) A chargeback hold's Pay what you owe reserves (manual capture); the team's Approve captures it.
+      paymentIntents: { create: async (x: { capture_method?: string }) => ({ id: "pi_" + randomUUID(), status: x.capture_method === "manual" ? "requires_capture" : "succeeded" }), capture: async (id: string) => ({ id, status: "succeeded" }) },
       refunds: { create: async (p: { payment_intent: string }) => { refunds.push(p.payment_intent); return { id: "re_" + randomUUID() }; } },
       webhooks: { constructEvent: (raw: string) => JSON.parse(raw) },
     } as unknown as Stripe);
@@ -331,14 +332,15 @@ describe("batch 10 item 6: a chargeback the platform wins", () => {
   it("already paid: that amount is refunded to their card with a receipt line", async () => {
     const { dev, p, refunds } = await chargedBack();
     await db.user.update({ where: { id: dev.user.id }, data: { chargebackCardVerifiedAt: new Date() } }); // (batch 16 section 41) step 1 first: Pay what you owe waits for the verified card
-    expect(await payOwed(await db.user.findUniqueOrThrow({ where: { id: dev.user.id } }))).toMatchObject({ paid: 1, lifted: false });
+    expect(await payOwed(await db.user.findUniqueOrThrow({ where: { id: dev.user.id } }))).toMatchObject({ paid: 0, reservedCents: 2500, lifted: false });
+    await (await import("@/lib/server/chargeback")).approveChargebackHold(dev.user.id); // (batch 23 section 6) taken on the team's Approve
     const repay = await db.payment.findFirstOrThrow({ where: { repaysId: p.id } });
     expect(repay).toMatchObject({ kind: "chargeback", status: "charged" });
     await webhook("charge.dispute.closed", { payment_intent: p.stripePaymentIntentId, status: "won" });
     expect(refunds).toEqual([repay.stripePaymentIntentId]);
     expect(await db.payment.findUniqueOrThrow({ where: { id: repay.id } })).toMatchObject({ status: "refunded" });
     expect(await db.notification.count({ where: { userId: dev.user.id, text: "Refund: your bank's chargeback of $10.00 was reversed" } })).toBe(1);
-    // No card check or Approve is needed any more: it lifts like a payment hold.
+    // The hold lifted on the Approve; the refund doesn't bring it back.
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();
     expect(src("app/app/payments/page.tsx")).toContain("refunded (your bank's chargeback was reversed)");
   });

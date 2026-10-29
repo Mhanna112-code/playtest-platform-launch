@@ -207,6 +207,8 @@ export async function liftHoldIfClear(devId: string) {
     await tx.user.update({ where: { id: devId }, data: { holdStartedAt: null, holdReason: "", holdAlertedAt: null, chargebackCardVerifiedAt: null, chargebackApprovedAt: null, holdApprovedAt: null, holdApprovedById: null } });
   });
   await accountEvent(devId, "hold-lifted");
+  // (Batch 23 section 6) Anything still reserved on the card is released (nothing taken).
+  await (await import("./chargeback")).releaseReservations(devId);
   // (Batch 8) The subscription's paid days left resume (unless a suspension is still on).
   await (await import("./subscription")).resumeBilling(devId, now);
   await chargeDeferred(devId);
@@ -252,12 +254,16 @@ export async function approveHoldLift(adminId: string, devId: string, note: stri
 export async function payOwed(dev: { id: string }, body: Record<string, unknown> = {}) {
   await (await import("./confirm")).expireActions();
   const u = await db.user.findUniqueOrThrow({ where: { id: dev.id } });
-  const list = await owed(dev.id);
+  // (Owner, Oct 29, batch 23 section 6) A chargeback hold: what is already reserved on the card is not asked for again (only what was added since).
+  const cbHold = !!u.holdStartedAt && u.holdReason === "chargeback";
+  const covered = cbHold ? (await (await import("./chargeback")).reserveState(dev.id)).covered : null;
+  const list = (await owed(dev.id)).filter((p) => !covered?.has(p.id));
   const total = list.reduce((a, p) => a + p.amountCents, 0);
   // (Owner, Oct 29, batch 10) Paid meanwhile (another tab, or a won chargeback): nothing is charged, ever twice.
   // (A hold left with nothing owed still lifts here, charging nothing.)
   if (!list.length) {
     if (await liftHoldIfClear(dev.id)) return { paid: 0, stillFailing: [] as string[], lifted: true };
+    if (covered?.size) throw new HttpError(409, "nothing_owed", ALREADY_RESERVED);
     throw new HttpError(409, "nothing_owed", NOTHING_OWED);
   }
   // (Owner, Oct 28, batch 16 section 41) A chargeback hold's steps go in order: a card verified with 3D Secure first, then paying (which never lifts it: the team's Approve does).
@@ -281,6 +287,12 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
         ? `${won.map((w) => `Your bank's chargeback of ${money(w.amountCents)} was reversed`).join("; ")}. Now ${money(total)}. Press again to pay ${money(total)}.`
         : `What you owe changed: now ${money(total)}. Press again to pay ${money(total)}.`;
     throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text, at: new Date() }], totalCents: total, ids: nowIds });
+  }
+  // (Owner, Oct 29, batch 23 section 6) A chargeback hold: one authorization for the total (the bank's check inline if it asks); nothing is taken until the team approves.
+  if (cbHold) {
+    const r = await (await import("./chargeback")).reserveOwed(u, list);
+    if ("failed" in r) return { paid: 0, stillFailing: [`${money(total)} (${r.failed!.replace(/.$/, "")})`], lifted: false, confirm: [] };
+    return { paid: 0, stillFailing: [] as string[], lifted: false, reservedCents: total, confirm: "action" in r && r.action ? [r.action] : [] };
   }
   const stillFailing: string[] = [];
   let paid = 0;
@@ -385,6 +397,8 @@ export async function retryOwed(devId: string, now = new Date(), why: "daily" | 
 const PAYING = "paying";
 /** (Batch 10) "Pay what you owe" pressed when nothing is owed any more (paid in another tab meanwhile). */
 export const NOTHING_OWED = "There's nothing to pay: what you owed is already paid.";
+/** (Batch 23 section 6) Pay what you owe during a chargeback hold when everything owed is already reserved (another tab). */
+export const ALREADY_RESERVED = "There's nothing more to reserve: what you owe is already reserved on your card.";
 
 /** (Batch 10) Claim the repay of one reversed payment: one "paying" repay row at a time, made under a row lock; null when it is paid or being paid already. */
 async function claimChargebackRepay(p: { id: string; contractId: string | null; testerId: string; amountCents: number }, devId: string) {
@@ -406,7 +420,7 @@ export async function settledOwed(paymentId: string) {
 }
 
 /** The tester's one notice when a delayed payment goes through: the normal paid line. */
-async function tellArrived(p: { contractId: string | null; submissionId: string | null; callId: string | null; kind: string; amountCents: number }, email: string, devName: string) {
+export async function tellArrived(p: { contractId: string | null; submissionId: string | null; callId: string | null; kind: string; amountCents: number }, email: string, devName: string) {
   const sub = p.submissionId ? await db.submission.findUnique({ where: { id: p.submissionId } }) : null;
   const label = p.kind === "dispute" ? "dispute" : p.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers";
   const line = `${devName} paid ${money(p.amountCents)} for your ${label}`;
@@ -415,7 +429,10 @@ async function tellArrived(p: { contractId: string | null; submissionId: string 
 
 /** One line per failed payment ("Ana Silva's written answers $8.00 · card declined Oct 20"), plus open chargebacks. */
 export async function owedLines(devId: string) {
-  const list = await owed(devId);
+  // (Batch 23 section 6) During a chargeback hold, what is reserved on the card already isn't listed again (Payments shows "Reserved $X" instead).
+  const u = await db.user.findUnique({ where: { id: devId }, select: { holdStartedAt: true, holdReason: true } });
+  const covered = u?.holdStartedAt && u.holdReason === "chargeback" ? (await (await import("./chargeback")).reserveState(devId)).covered : null;
+  const list = (await owed(devId)).filter((p) => !covered?.has(p.id));
   const out = [];
   for (const p of list) {
     const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } }) : null;
@@ -476,7 +493,8 @@ export async function chargebackWon(paymentIntentId: string) {
   // a webhook retried after a failed refund still refunds.
   let refunded = 0;
   for (const r of await db.payment.findMany({ where: { repaysId: p.id, status: { in: ["charged", "not_set_up"] } } })) {
-    if (r.stripePaymentIntentId) await getStripe().refunds.create({ payment_intent: r.stripePaymentIntentId }, { idempotencyKey: serverKey("cbwon", r.id) });
+    // (Batch 23 section 6) The amount too: a repay taken from a reservation shares its PaymentIntent with the other payments it covered.
+    if (r.stripePaymentIntentId) await getStripe().refunds.create({ payment_intent: r.stripePaymentIntentId, amount: r.amountCents }, { idempotencyKey: serverKey("cbwon", r.id) });
     if ((await db.payment.updateMany({ where: { id: r.id, status: r.status }, data: { status: "refunded" } })).count !== 1) continue;
     refunded += r.amountCents;
     const line = chargebackRefundLine(p.amountCents);
@@ -489,8 +507,11 @@ export async function chargebackWon(paymentIntentId: string) {
   if (c) await (await import("./live")).logEvent(c.testId, "payment", chargebackReversedLine(p.amountCents, refunded || p.amountCents + CHARGEBACK_FEE_CENTS, refunded > 0), c.id);
   await notify(dev.email, chargebackWonLine(p.amountCents), [chargebackWonLine(p.amountCents)], "/app/payments", { payment: true, group: "payhold" });
   // No chargeback left open: the hold is a payment hold again (it lifts once nothing is owed; the 4th hold on still needs the admin's Approve).
-  if (dev.holdStartedAt && dev.holdReason === "chargeback" && !(await db.payment.count({ where: { developerId: dev.id, chargeback: "open" } })))
+  if (dev.holdStartedAt && dev.holdReason === "chargeback" && !(await db.payment.count({ where: { developerId: dev.id, chargeback: "open" } }))) {
     await db.user.update({ where: { id: dev.id }, data: { holdReason: "unpaid", chargebackCardVerifiedAt: null, chargebackApprovedAt: null } });
+    // (Batch 23 section 6) A payment hold charges at once again: what was reserved for the team's approval is released (nothing taken).
+    await (await import("./chargeback")).releaseReservations(dev.id);
+  }
   await liftHoldIfClear(dev.id);
   return true;
 }
@@ -505,6 +526,10 @@ export const VERIFY_FIRST = "Verify your card first.";
  * reminders. Each step records what it did, so a second run sends nothing twice; the caller holds the timers lock (withTimersLock), so two never run at once.
  */
 export async function runSweep(now = new Date(), co = closeOutMemo(now)) {
+  // (Batch 23 section 1) Emails that failed are tried again when due (first: a later step's error never holds them up). (Batch 23 section 6) Reservations past their
+  // days are released.
+  await (await import("./email")).retryEmails(now).catch((e) => console.error("[email] retry:", (e as Error).message));
+  await (await import("./chargeback")).expireReservations(now).catch((e) => console.error("[reserve] expire:", (e as Error).message));
   await (await import("./calls")).sweepNobodyJoined(now);
   const choices = (await openCharges(now, co)) + (await callCharges(now, co));
   await closeOutReminders(now, co);
@@ -523,6 +548,8 @@ async function runDailyLocked(now: Date) {
   const out = { autoPaid: 0, holds: 0, alerts: 0, headsUps: 0, choices: 0, retried: 0, closed: 0 };
   // (Batch 17 §19) Each piece's closing dates (the developer's Pay, the tester's Charge), looked up once per run.
   const co = closeOutMemo(now);
+  await (await import("./email")).retryEmails(now).catch((e) => console.error("[email] retry:", (e as Error).message)); // (batch 23 section 1)
+  await (await import("./chargeback")).expireReservations(now).catch((e) => console.error("[reserve] expire:", (e as Error).message)); // (batch 23 section 6)
   await (await import("./calls")).sweepNobodyJoined(now);
   // (Batch 11) Bank confirmations that timed out, then the automatic retries of what is owed during a hold.
   await (await import("./confirm")).expireActions(now);

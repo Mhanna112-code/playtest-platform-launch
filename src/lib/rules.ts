@@ -787,6 +787,15 @@ export const chargebackOwedLine = (cents: number) => `Your bank reversed a ${who
 /** (Batch 11) The stop-once line on the developer's test page and Edit when the platform won a chargeback (a payments-kind line). */
 export const chargebackReversedLine = (cents: number, backCents: number, refunded: boolean) =>
   `Your bank's chargeback of ${money(cents)} was reversed: ${money(backCents)} ${refunded ? "refunded to your card" : "taken off what you owe"}.`;
+/**
+ * (Owner, Oct 29, batch 23 section 6) A chargeback hold's Pay what you owe reserves the money on the card (an authorization, Stripe shows it "Uncaptured"); the team's Approve
+ * takes it. An authorization lasts about 7 days: unused by then, it is released and the developer presses Pay what you owe again.
+ */
+export const RESERVE_DAYS = 7;
+export const reservedLine = (cents: number) => `Reserved ${money(cents)}: it's taken when the team approves lifting your hold.`;
+export const RESERVE_EXPIRED = "Your reservation expired: press Pay what you owe again so the team can approve it.";
+/** The admin's Approve while what is owed isn't all reserved: "Not yet: $28.00 is owed but $23.00 is reserved." */
+export const reserveShortLine = (owedCents: number, reservedCents: number) => `Not yet: ${money(owedCents)} is owed but ${money(reservedCents)} is reserved.`;
 export const STILL_SUSPENDED_LINE = "Your payment went through. Your tests stay paused while your account is suspended.";
 /** (Owner, Oct 27) What a tester reads while the developer owes a declined payment: Dispute and Charge wait (never "failed"). */
 export const OWED_FOR_TESTERS = "Payment from this developer is delayed right now. You can try again once it's sorted.";
@@ -1394,7 +1403,9 @@ export const switchQuestionsLine = (sent: { agreedCents: number | null } | null 
 // ---------- (Batch 18 section 9, replaced by batch 21 section 2) Calls in progress ----------
 // A pause (any cause), a block, a suspension of either side, a leave, End early or a Stop ends a call in progress at that moment, on the server (both rooms hang up;
 // the minutes measured up to then are kept and payable). Join and any re-Join are refused with the existing lines.
-export const IN_PROGRESS_DEV = "In progress: it ends when you both leave";
+// (Batch 23, a batch 21 leftover) The in-app room: no "ends when you both leave" (the server ends it); a call opened but never connected is "Waiting to connect".
+export const IN_PROGRESS_DEV = "In progress";
+export const WAITING_TO_CONNECT = "Waiting to connect";
 export const IN_PROGRESS_TESTER = "In progress";
 /** The call page once its length is final: "Call ended at 3:42 PM." (neutral, for both sides). */
 export const callEndedLine = (time: string) => `Call ended at ${time}.`;

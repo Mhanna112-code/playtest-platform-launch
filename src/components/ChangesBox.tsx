@@ -51,7 +51,7 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
             {[...changes].map((c, i) => (
               <li key={`${c.at}|${c.text}|${i}`}>
                 {/* (Batch 16 section 21) A line can open what it's about (e.g. the next round's draft another tab made). */}
-                {c.link?.startsWith("/") ? <><a href={c.link} data-stop-link="">{c.text}</a> · {time(c.at)}</> : c.text.startsWith("You also did this in another tab") || c.kind === "account-at" ? `${c.text} at ${time(c.at)}` : c.kind === "account" ? c.text : `${c.text} · ${time(c.at)}`}
+                {c.link?.startsWith("/") ? <><a href={c.link} data-stop-link="">{c.text}</a> · {time(c.at)}</> : c.text.startsWith("You also did this in another tab") || c.kind === "account-at" ? `${c.text} at ${time(c.at)}` : c.kind === "yours" ? `${c.text} at ${time(c.at)}.` /* (batch 23 section 5) Edit: "Instructions: your version will replace the one saved in another tab at 3:54 PM." */ : c.kind === "account" ? c.text : `${c.text} · ${time(c.at)}`}
                 {/* (Owner, Oct 28) "Ana switched to the new terms" / "kept their current terms": the same "See their contract" as the top box (scrolls on the test page; a new tab from Edit). */}
                 {c.kind === "terms" && c.contract && <> <ContractLink contract={c.contract} /></>}
                 {(() => { const d = detail?.(c); return d ? <div className="mt-0.5 text-xs" data-stop-detail="">{d}</div> : null; })()}

@@ -43,15 +43,20 @@ export function AccountActions({ initial }: { initial: AccountState }) {
           <AdminButton action="unsuspend" id={acct.id} label="Reinstate" extra={{ side: s, ...seen }} onRefused={refused} />
         </p>
       ))}
+      {/* (Owner, Oct 29, batch 23 section 7) Top to bottom, full width (phones too): Preview and its effects, then the side choice and the reason box, then Suspend. */}
+      {(open.length > 0 || roles === 0) && (
+        <div className="flex w-full max-w-xl flex-col items-start gap-2" data-suspend-block="">
+          <PreviewButton id={acct.id} onLoaded={setPreviewAt} />
+          {/* A one-role account just shows Suspend; an account with both roles chooses the side. */}
+          {open.length > 0 && (roles === 2 && open.length === 2 ? (
+            <AdminButton action="suspend" id={acct.id} label="Suspend" danger stacked extra={seen} onRefused={refused} choice={{ name: "side", label: "Side to suspend", options: [{ value: "developer", label: "Developer side" }, { value: "tester", label: "Tester side" }] }} fields={[{ name: "note", label: "Why" }]} />
+          ) : (
+            <AdminButton action="suspend" id={acct.id} label={roles === 2 ? `Suspend the ${open[0]} side` : "Suspend"} danger stacked extra={{ side: open[0], ...seen }} onRefused={refused} fields={[{ name: "note", label: "Why" }]} />
+          ))}
+          {roles === 0 && <AdminButton action="suspend" id={acct.id} label="Suspend" danger stacked extra={seen} onRefused={refused} fields={[{ name: "note", label: "Why" }]} />}
+        </div>
+      )}
       <p className="flex flex-wrap items-center gap-2">
-        {(open.length > 0 || roles === 0) && <PreviewButton id={acct.id} onLoaded={setPreviewAt} />}
-        {/* A one-role account just shows Suspend; an account with both roles chooses the side. */}
-        {open.length > 0 && (roles === 2 && open.length === 2 ? (
-          <AdminButton action="suspend" id={acct.id} label="Suspend" danger extra={seen} onRefused={refused} choice={{ name: "side", label: "Side to suspend", options: [{ value: "developer", label: "Developer side" }, { value: "tester", label: "Tester side" }] }} fields={[{ name: "note", label: "Why" }]} />
-        ) : (
-          <AdminButton action="suspend" id={acct.id} label={roles === 2 ? `Suspend the ${open[0]} side` : "Suspend"} danger extra={{ side: open[0], ...seen }} onRefused={refused} fields={[{ name: "note", label: "Why" }]} />
-        ))}
-        {roles === 0 && <AdminButton action="suspend" id={acct.id} label="Suspend" danger extra={seen} onRefused={refused} fields={[{ name: "note", label: "Why" }]} />}
         <AdminButton action="delete-account" id={acct.id} label="Delete account" danger onRefused={refused} fields={[{ name: "note", label: "Why" }]} />
       </p>
       {line}

@@ -24,7 +24,8 @@ async function held(reason: "chargeback" | "unpaid") {
   const press = (body: Record<string, unknown> = {}) => owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: { seenTotalCents: 800, seenIds: [row.id], ...body } })).then(json);
   return { dev, press };
 }
-const fakeCharges = () => setStripeForTests({ paymentIntents: { create: async () => ({ id: "pi_" + randomUUID(), status: "succeeded" }) } } as unknown as Stripe);
+// (Batch 23 section 6) A chargeback hold's Pay what you owe reserves (manual capture): uncaptured until the team's Approve.
+const fakeCharges = () => setStripeForTests({ paymentIntents: { create: async (x: { capture_method?: string }) => ({ id: "pi_" + randomUUID(), status: x.capture_method === "manual" ? "requires_capture" : "succeeded" }), capture: async (id: string) => ({ id, status: "succeeded" }), cancel: async (id: string) => ({ id, status: "canceled" }) } } as unknown as Stripe);
 const holdOf = async (id: string) => (await db.user.findUniqueOrThrow({ where: { id } })).holdStartedAt;
 
 describe("chargeback hold: verify, then pay, then the team's Approve (section 41)", () => {

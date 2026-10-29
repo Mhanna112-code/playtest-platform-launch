@@ -21,15 +21,20 @@ let fakeN = 0;
 /** (Batch 11) The fake's PaymentIntents that wait for the cardholder: "requires_action" until the page's simulated pop-up says yes or no. */
 // (Kept on globalThis: the dev server may load this module once per route, and the confirm route must see what the Pay route created.)
 const fakePis: Map<string, string> = ((globalThis as { __fakePis?: Map<string, string> }).__fakePis ??= new Map<string, string>());
-export const fakeConfirm = (id: string, ok: boolean) => { if (fakePis.has(id)) fakePis.set(id, ok ? "succeeded" : "canceled"); };
+export const fakeConfirm = (id: string, ok: boolean) => { if (fakePis.has(id)) fakePis.set(id, ok ? (fakeManual.has(id) ? "requires_capture" : "succeeded") : "canceled"); };
+/** (Batch 23 section 6) The fake's authorizations (capture_method manual): "requires_capture" until captured, cancelled or expired. */
+const fakeManual: Set<string> = ((globalThis as { __fakeManual?: Set<string> }).__fakeManual ??= new Set<string>());
+/** (Batch 23 section 6) The bank let the fake's authorization lapse (about 7 days): it can't be captured any more. */
+export const fakeExpire = (id: string) => { if (fakePis.has(id)) fakePis.set(id, "canceled"); };
 /** (Batch 15 section 9) The fake's PaymentIntents by their metadata payKey, for its search. */
 const fakeByKey: Map<string, string> = ((globalThis as { __fakeByKey?: Map<string, string> }).__fakeByKey ??= new Map<string, string>());
 const fakeStripe = {
   paymentIntents: {
-    create: async (p: { payment_method?: string; amount: number; off_session?: boolean; metadata?: { payKey?: string } }) => {
+    create: async (p: { payment_method?: string; amount: number; off_session?: boolean; capture_method?: string; metadata?: { payKey?: string } }) => {
       if (p.payment_method === "pm_card_declined" || (p.payment_method === "pm_card_partial" && p.amount === 1500)) throw Object.assign(new Error("Your card was declined."), { type: "StripeCardError", rawType: "card_error", code: "card_declined" });
       const id = `pi_fake_${Date.now()}_${++fakeN}`;
       if (p.metadata?.payKey) fakeByKey.set(p.metadata.payKey, id);
+      if (p.capture_method === "manual") fakeManual.add(id);
       if (!fakePis.has(id)) fakePis.set(id, "succeeded");
       // (Batch 11) pm_card_authenticationRequired: the bank wants the cardholder to confirm (off-session, Stripe refuses with authentication_required).
       if (p.payment_method === "pm_card_authenticationRequired") {
@@ -37,7 +42,17 @@ const fakeStripe = {
         if (p.off_session) throw Object.assign(new Error("Your bank wants you to confirm this payment."), { code: "authentication_required", raw: { payment_intent: { id, client_secret: `${id}_secret_fake`, status: "requires_payment_method" } } });
         return { id, status: "requires_action", client_secret: `${id}_secret_fake`, amount: p.amount };
       }
+      if (p.capture_method === "manual") {
+        fakePis.set(id, "requires_capture");
+        return { id, status: "requires_capture", amount: p.amount };
+      }
       return { id, status: "succeeded", amount: p.amount };
+    },
+    // (Batch 23 section 6) Capture an authorization (the team's Approve); a cancelled or lapsed one can't be.
+    capture: async (id: string, p: { amount_to_capture?: number } = {}) => {
+      if (fakePis.get(id) !== "requires_capture") throw Object.assign(new Error(`This PaymentIntent could not be captured because it has a status of ${fakePis.get(id) ?? "unknown"}.`), { type: "StripeInvalidRequestError", code: "payment_intent_unexpected_state" });
+      fakePis.set(id, "succeeded");
+      return { id, status: "succeeded", amount_received: p.amount_to_capture };
     },
     retrieve: async (id: string) => ({ id, status: fakePis.get(id) ?? "succeeded", client_secret: `${id}_secret_fake` }),
     search: async (q: { query: string }) => {
@@ -48,6 +63,7 @@ const fakeStripe = {
     cancel: async (id: string) => { fakePis.set(id, "canceled"); return { id, status: "canceled" }; },
   },
   refunds: { create: async () => ({ id: `re_fake_${++fakeN}` }) },
+  transfers: { create: async () => ({ id: `tr_fake_${++fakeN}` }) },
   webhooks: { constructEvent: (raw: string, sig: string) => { if (sig !== "fake") throw new Error("bad signature"); return JSON.parse(raw); } },
 } as unknown as Stripe;
 
@@ -200,6 +216,27 @@ export async function chargePlatform(dev: Party, amountCents: number, payKey: st
     if (pi.status === "requires_action") return { status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "", checkUrl: checkUrlOf(pi) };
     if (pi.status !== "succeeded") throw new Error(`status ${pi.status}`);
     return { status: "charged", stripePaymentIntentId: pi.id as string | null };
+  } catch (e) {
+    const na = needsActionOf(e);
+    if (na) return na;
+    throw chargeError(e, "Your card couldn't be charged. Update your card in Payments and try again.");
+  }
+}
+
+/**
+ * (Owner, Oct 29, batch 23 section 6) Reserve (authorize) an amount on the developer's card without taking it: a PaymentIntent with capture_method "manual", made on-session
+ * (the bank may ask for its check, shown inline). Stripe shows it "Uncaptured" until it is captured (the team's Approve) or cancelled. A declined card throws a plain
+ * sentence, like charge().
+ */
+export async function authorize(dev: Party, amountCents: number, reservationId: string): Promise<{ status: "requires_capture" | "requires_action"; stripePaymentIntentId: string; clientSecret?: string; checkUrl?: string }> {
+  try {
+    const pi = await getStripe().paymentIntents.create(
+      { amount: amountCents, currency: "usd", customer: dev.stripeCustomerId!, payment_method: dev.stripePaymentMethodId!, capture_method: "manual", ...pressParams("press"), confirm: true, description: "Playtest: what you owe, reserved until the team approves lifting your hold", metadata: { developerId: dev.id, reservationId, purpose: "chargeback-reserve" } },
+      { idempotencyKey: `reserve-${reservationId}` },
+    );
+    if (pi.status === "requires_capture") return { status: "requires_capture", stripePaymentIntentId: pi.id };
+    if (pi.status === "requires_action") return { status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "", checkUrl: checkUrlOf(pi) };
+    throw new Error(`status ${pi.status}`);
   } catch (e) {
     const na = needsActionOf(e);
     if (na) return na;

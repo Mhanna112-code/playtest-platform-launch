@@ -108,3 +108,53 @@ export function FieldNote({ label, items }: { label: string; items: NoteItem[] }
     </div>
   );
 }
+
+/** (Owner, Oct 29, batch 23 section 5) One field's "Use theirs": the other tab's saved value replaces what you typed (and the note goes). */
+function UseTheirs({ field, onUse }: { field: string; onUse: () => void }) {
+  return <button type="button" className="btn-ghost !px-2 !py-0.5 text-xs" data-use-theirs={field} onClick={onUse}>Use theirs</button>;
+}
+
+export type TheirsItem = { field: string; name: string; value: string | string[]; onUse: () => void };
+
+/**
+ * (Owner, Oct 29, batch 23 section 5) Under a field you typed in that another tab or device saved: your text stays, and this blue note shows what was saved there
+ * ("Saved in another tab or device at 3:54 PM: Spots: 5" on one line for a short value; long text folded, 3 lines then Show more), each with "Use theirs".
+ */
+export function TheirsNote({ heading, items }: { heading: string; items: TheirsItem[] }) {
+  const first = items[0];
+  const short = (it: TheirsItem) => !Array.isArray(it.value) && isShort(it.value);
+  const inline = items.length === 1 && first && short(first) ? `${first.name}: ${(first.value as string) || "empty"}` : null;
+  return (
+    <div className="info mt-1.5 space-y-1 !p-2 text-xs" role="status" data-field-note="" data-theirs-note="">
+      <p className="flex flex-wrap items-center gap-2 font-medium">
+        <span>{inline ? `${heading}: ${inline}` : `${heading}:`}</span>
+        {inline && <UseTheirs field={first.field} onUse={first.onUse} />}
+      </p>
+      {!inline && items.map((it) => (
+        <div key={it.field} className="space-y-0.5" data-theirs-item={it.field}>
+          {short(it) ? <p>{it.name}: {(it.value as string) || "empty"}</p> : <Value label={`${it.name}:`} value={it.value} />}
+          <UseTheirs field={it.field} onUse={it.onUse} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * (Owner, Oct 29, batch 23 section 5) A note with lines from different causes, each under its own heading: "Changed in another tab or device at 3:54 PM:" heads your own
+ * saves elsewhere; "Updated at 3:54 PM:" heads what other people caused (a tester joining and given a key). A note with both shows both.
+ */
+export function GroupNote({ groups }: { groups: { heading: string; lines: string[] }[] }) {
+  const shown = groups.filter((g) => g.lines.length);
+  if (!shown.length) return null;
+  return (
+    <div className="info mt-1.5 space-y-1 !p-2 text-xs" role="status" data-field-note="" data-group-note="">
+      {shown.map((g) => (
+        <div key={g.heading} className="space-y-0.5" data-note-group={g.heading}>
+          <p className="font-medium">{g.heading}:</p>
+          <LongList as="div" className="space-y-0.5">{g.lines.map((l) => <p key={l}>{l}</p>)}</LongList>
+        </div>
+      ))}
+    </div>
+  );
+}

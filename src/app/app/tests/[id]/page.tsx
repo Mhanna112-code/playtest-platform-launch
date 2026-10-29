@@ -2,7 +2,7 @@ import { hasPerks } from "@/lib/server/subscription";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, pronouns } from "@/lib/format";
-import { IN_PROGRESS_DEV, callInProgress, chargeOpensAt, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, choiceNoteLine, closesInLine, lateLabel, termsLine, paidZeroLine } from "@/lib/rules";
+import { IN_PROGRESS_DEV, WAITING_TO_CONNECT, callInProgress, chargeOpensAt, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, choiceNoteLine, closesInLine, lateLabel, termsLine, paidZeroLine } from "@/lib/rules";
 import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, MEASURING_LINE } from "@/lib/callMeasure";
 import { callsLeftCents } from "@/lib/server/callMoney";
 import { callsLeftWarning } from "@/lib/callMeasure";
@@ -137,7 +137,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const cbSteps = await chargebackSteps(u.id);
   // (Batch 17 §11) Charges made while the developer was away that their bank wants confirmed: "Confirm with your bank" under the affected piece (Payments and the bell link here).
   const bankRows = await bankWaitingOnTest(u.id, t.id);
-  const bankAt = (pieceId: string) => bankRows.filter((b) => b.pieceId === pieceId).map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} />);
+  // (Batch 23 section 9) "Confirm with your bank" stops once like Pay: it sends this page's seen marker.
+  const bankAt = (pieceId: string) => bankRows.filter((b) => b.pieceId === pieceId).map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} seenAt={seenAt} />);
+  // (Batch 23, a batch 21 leftover) A call whose two browsers never connected reads "Waiting to connect", not "In progress".
+  const connectedCalls = new Set((await db.callPresence.findMany({ where: { call: { contract: { testId: t.id } } }, select: { callId: true }, distinct: ["callId"] })).map((p) => p.callId));
   // (Owner, Oct 27) While a failed payment is owed, Pay (part Pay, extra pay) is disabled: "Pay what you owe first."; the room above the listing prices for extra pay.
   const owesNow = owedList.some((o) => o.retry);
   // (Batch 9 section 6) Extra pay's "up to $Y", per piece: every sent part and every call that took place (batch 15 section 40: its length is final).
@@ -182,7 +185,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       // (Owner, Oct 28 afternoon) A call that isn't a listed part (not in the listing, or not in this tester's contract) can still be requested: its pay is up to the developer.
       callListed(t, c) ? `Live call ${whole(c.liveRateCents)}/h, ${whole(callPaid)} paid so far` : `Live call: ${NOT_LISTED}`,
     ].filter(Boolean).join(" · ");
-    const toCall = (x: (typeof c.calls)[number]): DevCall => ({ id: x.id, joinable: callJoinable(x, now), report: x.noShowBy ? { byMe: x.noShowBy === "developer", note: x.noShowNote } : null, when: x.startsAt.toISOString(), minutes: x.minutes, rate: rateLabel(x.rateCents, c.liveRateCents), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, late: lateOf(c, x), measuring: x.startsAt <= now ? (restricted ? IN_PROGRESS_DEV : MEASURING_LINE) : undefined }); // (batch 18 section 9) a pause doesn't cut a call in progress
+    const toCall = (x: (typeof c.calls)[number]): DevCall => ({ id: x.id, joinable: callJoinable(x, now), report: x.noShowBy ? { byMe: x.noShowBy === "developer", note: x.noShowNote } : null, when: x.startsAt.toISOString(), minutes: x.minutes, rate: rateLabel(x.rateCents, c.liveRateCents), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, late: lateOf(c, x), measuring: x.startsAt <= now ? (restricted ? (connectedCalls.has(x.id) ? IN_PROGRESS_DEV : WAITING_TO_CONNECT) : MEASURING_LINE) : undefined }); // (batch 18 section 9) a pause doesn't cut a call in progress
     // (Batch 15 section 42) The Live session shows only calls ahead and calls in progress; a call that's over moves to the tester's row.
     const live = c.calls.filter((x) => x.status === "booked" && !callIsOver(x));
     const setIds = [...new Set(live.filter((x) => x.setId).map((x) => x.setId!))];
@@ -291,7 +294,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         {bankRows.length > 0 && (
           <section className="card space-y-2" data-restricted-bank="">
             <h2 className="font-semibold text-white">Your bank wants you to confirm</h2>
-            {bankRows.map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} />)}
+            {bankRows.map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} seenAt={seenAt} />)}
           </section>
         )}
         {/* (Batch 15 section 39) Excerpts go through anything: Allow / Deny (hidden while the test has an NDA, as always) and Take down. */}
@@ -541,9 +544,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     </li>
                   )}
                 </ul>
-                {/* (Batch 18 section 9) Their work ended (left, End early, Stop, a block, a suspension) during a call: it goes on until you both leave. */}
+                {/* (Batch 18 section 9) Their work ended (left, End early, Stop, a block, a suspension) during a call. (Batch 21) The server ends it; (batch 23) "Waiting to connect" until the two browsers connect. */}
                 {c.status !== "working" && c.calls.filter((x) => callInProgress(x, now)).map((x) => (
-                  <p key={x.id} id={`call-${x.id}`} className="text-sm" data-in-progress-call=""><span className="text-slate-200">{fmtDateTime(x.startsAt)}</span> <span className="badge border-sky-300/40 text-sky-200">{IN_PROGRESS_DEV}</span></p>
+                  <p key={x.id} id={`call-${x.id}`} className="text-sm" data-in-progress-call=""><span className="text-slate-200">{fmtDateTime(x.startsAt)}</span> <span className="badge border-sky-300/40 text-sky-200">{connectedCalls.has(x.id) ? IN_PROGRESS_DEV : WAITING_TO_CONNECT}</span></p>
                 ))}
                 {/* (Batch 15 sections 31 and 42) "Calls (N)": every call that's over, newest first, with its outcome badge; each call that took place has its own Pay more box. */}
                 {overCalls.length > 0 && (
@@ -582,7 +585,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 )}
                 <p className="text-sm"><b>Paid in all:</b> {money(paidSoFar(c.id))}{(bookedAhead || done || cancelledN) ? ` · Calls: ${[bookedAhead ? `${bookedAhead} booked ahead` : "", done ? `${done} done` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}` : ""}</p>
                 {/* (Batch 17 §11) A waiting charge whose piece isn't listed above (a dispute decision or retry with no part) sits under the tester's row. */}
-                {bankRows.filter((b) => b.contractId === c.id && !(b.pieceId && (partRows.some((r) => r.on && r.sub?.id === b.pieceId) || overCalls.some((x) => x.id === b.pieceId)))).map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} />)}
+                {bankRows.filter((b) => b.contractId === c.id && !(b.pieceId && (partRows.some((r) => r.on && r.sub?.id === b.pieceId) || overCalls.some((x) => x.id === b.pieceId)))).map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} seenAt={seenAt} />)}
                 {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}
                 {/* (Batch 15 section 24) Renames are recorded in each tester's contract changes. */}
                 {notesByContract.some((n) => n.contractId === c.id) && (
@@ -620,7 +623,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       </TestersJoined>
       {!restricted && <ContractChanges entries={changeEntries} stop={stopEntry} fmt={(iso) => fmtDateTime(new Date(iso))} />}
       {cbSteps && <ChargebackSteps steps={cbSteps} />}
-      {(u.holdStartedAt || (owedList.length > 0 && !u.devSuspendedAt)) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} chargeback={!!cbSteps} verifyFirst={!!cbSteps && !cbSteps.cardVerified} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />}
+      {(u.holdStartedAt || (owedList.length > 0 && !u.devSuspendedAt)) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} chargeback={!!cbSteps} verifyFirst={!!cbSteps && !cbSteps.cardVerified} reservedCents={cbSteps?.reservedCents ?? 0} reserveExpired={cbSteps?.expired ?? false} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />}
       {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date(), "developer")}</p>}
       <DevCallPanel
         testId={t.id}

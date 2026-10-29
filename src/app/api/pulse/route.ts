@@ -15,7 +15,9 @@ export async function GET(req: Request) {
       const me = await db.user.findUniqueOrThrow({ where: { id: u.id }, select: { holdStartedAt: true, holdReason: true, chargebackCardVerifiedAt: true, chargebackApprovedAt: true, holdApprovedAt: true } });
       const lines = await owedLines(u.id);
       const paid = await db.payment.count({ where: { developerId: u.id } });
-      const v = [lines.map((l) => `${l.id}:${l.amountCents}`).join(","), me.holdStartedAt?.getTime() ?? 0, me.holdReason, me.chargebackCardVerifiedAt?.getTime() ?? 0, me.chargebackApprovedAt?.getTime() ?? 0, me.holdApprovedAt?.getTime() ?? 0, paid].join("|");
+      // (Batch 23 section 6) A reservation made, taken, released or lapsed (another tab, the team, the clock).
+      const reserves = (await db.reservation.findMany({ where: { developerId: u.id }, orderBy: { createdAt: "desc" }, take: 5, select: { id: true, status: true } })).map((r) => `${r.id}:${r.status}`).join(",");
+      const v = [lines.map((l) => `${l.id}:${l.amountCents}`).join(","), me.holdStartedAt?.getTime() ?? 0, me.holdReason, me.chargebackCardVerifiedAt?.getTime() ?? 0, me.chargebackApprovedAt?.getTime() ?? 0, me.holdApprovedAt?.getTime() ?? 0, paid, reserves].join("|");
       // Payments stays open during a hold or suspension, so it always refreshes.
       return ok({ v, restricted: false });
     }

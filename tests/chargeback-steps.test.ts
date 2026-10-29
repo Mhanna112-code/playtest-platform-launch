@@ -70,13 +70,13 @@ describe("a chargeback is a hold with extra steps", () => {
     let row = list.find((x) => x.dev.id === dev.user.id)!;
     expect(row.steps).toMatchObject({ cardVerified: false, owedPaid: false, owedCents: 2800 }); // the failed $5.00 plus the reversed $8.00 and its $15 fee (batch 11)
     expect(row.chargebacks.map((p) => p.id)).toEqual([paid.id]);
-    expect((await approve(a.cookie, dev.user.id)).body.error).toMatchObject({ code: "steps_missing", message: "Not yet: the card isn't verified and $28.00 is still owed." });
+    expect((await approve(a.cookie, dev.user.id)).body.error).toMatchObject({ code: "steps_missing", message: "Not yet: the card isn't verified, and $28.00 is owed but $0.00 is reserved." });
     // The card is verified (simulated without Stripe): still owed.
     expect((await json(await verifyPOST(req("/api/payments/verify-card", { cookie: dev.cookie, body: {} })))).body).toEqual({ simulated: true, verified: true });
-    expect((await approve(a.cookie, dev.user.id)).body.error.message).toBe("Not yet: $28.00 is still owed.");
-    // Pay what is owed (the failed payment and the reversed one): still on hold (no approval yet).
-    expect((await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })))).body).toMatchObject({ paid: 2, stillFailing: [] });
-    expect((await db.payment.findUniqueOrThrow({ where: { id: owedRow.id } })).settledAt).not.toBeNull();
+    expect((await approve(a.cookie, dev.user.id)).body.error.message).toBe("Not yet: $28.00 is owed but $0.00 is reserved.");
+    // (Batch 23 section 6) Pay what is owed reserves it (the failed payment and the reversed one): still on hold, nothing taken until the team approves.
+    expect((await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })))).body).toMatchObject({ paid: 0, stillFailing: [], reservedCents: 2800 });
+    expect((await db.payment.findUniqueOrThrow({ where: { id: owedRow.id } })).settledAt).toBeNull();
     list = await chargebackHolds();
     row = list.find((x) => x.dev.id === dev.user.id)!;
     expect(row.steps).toMatchObject({ cardVerified: true, owedPaid: true, approved: false });
@@ -86,6 +86,7 @@ describe("a chargeback is a hold with extra steps", () => {
     const r = await approve(a.cookie, dev.user.id);
     expect(r.status).toBe(200);
     expect(r.body.lifted).toBe(true);
+    expect((await db.payment.findUniqueOrThrow({ where: { id: owedRow.id } })).settledAt).not.toBeNull(); // taken on Approve
     expect(await holdOf(dev.user.id)).toMatchObject({ holdStartedAt: null, holdReason: "", chargebackCardVerifiedAt: null, chargebackApprovedAt: null });
     expect((await db.payment.findUniqueOrThrow({ where: { id: paid.id } })).chargeback).toBe("resolved");
     expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).status).toBe("working");

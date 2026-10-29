@@ -251,7 +251,10 @@ describe("L1: headers", () => {
     expect(h["Strict-Transport-Security"]).toBe("max-age=63072000; includeSubDomains; preload");
     expect(h["Permissions-Policy"]).toContain("geolocation=()");
     expect(h["Permissions-Policy"]).toContain('payment=(self "https://js.stripe.com")');
-    for (const part of ["default-src 'self'", "frame-ancestors 'none'", "object-src 'none'", "base-uri 'self'", "form-action 'self'", "https://js.stripe.com", "https://meet.jit.si"]) expect(h["Content-Security-Policy"]).toContain(part);
+    for (const part of ["default-src 'self'", "frame-ancestors 'none'", "object-src 'none'", "base-uri 'self'", "form-action 'self'", "https://js.stripe.com"]) expect(h["Content-Security-Policy"]).toContain(part);
+    // (Batch 23, a batch 21 leftover) The call room is the app's own: no Jitsi; camera, microphone and screen share for this site only.
+    expect(h["Content-Security-Policy"]).not.toMatch(/jit.si/);
+    expect(h["Permissions-Policy"]).toContain("camera=(self), microphone=(self), display-capture=(self)");
   });
 });
 

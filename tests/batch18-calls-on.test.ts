@@ -15,7 +15,10 @@ const src = (f: string) => fs.readFileSync(path.resolve(__dirname, "../src", f),
 
 describe("batch 18 section 9 (what stays after batch 21): the in-progress lines", () => {
   it("the lines on the test page and the tester's page", () => {
-    expect(R.IN_PROGRESS_DEV).toBe("In progress: it ends when you both leave");
+    // (Batch 23, a batch 21 leftover) The server ends calls: no "ends when you both leave"; a call never connected is "Waiting to connect".
+    expect(R.IN_PROGRESS_DEV).toBe("In progress");
+    expect(R.WAITING_TO_CONNECT).toBe("Waiting to connect");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("{connectedCalls.has(x.id) ? IN_PROGRESS_DEV : WAITING_TO_CONNECT}");
     expect(R.IN_PROGRESS_TESTER).toBe("In progress");
     expect(R.callEndedLine("3:42 PM")).toBe("Call ended at 3:42 PM.");
     expect(R.callClosedToJoins({ blocked: false, paused: false, testStatus: "open", contractStatus: "working", side: "tester" })).toBe("");
@@ -24,7 +27,7 @@ describe("batch 18 section 9 (what stays after batch 21): the in-progress lines"
     expect(R.callClosedToJoins({ blocked: false, paused: false, testStatus: "open", contractStatus: "left", side: "tester", endKind: "suspended" })).toBe("Your session ended.");
     expect(R.callClosedToJoins({ blocked: false, paused: false, testStatus: "open", contractStatus: "left", side: "developer", endKind: "suspended" })).toBe("They left the test.");
     const dev = src("app/app/tests/[id]/page.tsx");
-    expect(dev).toContain("measuring: x.startsAt <= now ? (restricted ? IN_PROGRESS_DEV : MEASURING_LINE) : undefined });");
+    expect(dev).toContain("measuring: x.startsAt <= now ? (restricted ? (connectedCalls.has(x.id) ? IN_PROGRESS_DEV : WAITING_TO_CONNECT) : MEASURING_LINE) : undefined });");
     expect(dev).toContain("{c.status !== \"working\" && c.calls.filter((x) => callInProgress(x, now)).map((x) => (");
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("lengthText: x.startsAt <= now ? (paused || refusal ? IN_PROGRESS_TESTER : MEASURING_LINE) : \"\",");
   });

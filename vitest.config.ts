@@ -19,7 +19,7 @@ export default defineConfig({
     globalSetup: ["tests/global-setup.ts"],
     // No real emails, payments or uploads from tests.
     env: {
-      DATABASE_URL: testDb, DIRECT_URL: testDb, RESEND_API_KEY: "", STRIPE_SECRET_KEY: "", STRIPE_PUBLISHABLE_KEY: "", STRIPE_CONNECT_WEBHOOK_SECRET: "", GOOGLE_CLIENT_ID: "", GOOGLE_CLIENT_SECRET: "",
+      DATABASE_URL: testDb, DIRECT_URL: testDb, RESEND_API_KEY: "", EMAIL_FROM: "", STRIPE_SECRET_KEY: "", STRIPE_PUBLISHABLE_KEY: "", STRIPE_CONNECT_WEBHOOK_SECRET: "", GOOGLE_CLIENT_ID: "", GOOGLE_CLIENT_SECRET: "",
       R2_ACCOUNT_ID: "", R2_ACCESS_KEY_ID: "", R2_SECRET_ACCESS_KEY: "", R2_BUCKET: "", UPLOAD_DIR: path.resolve(__dirname, ".test-uploads"),
       ADMIN_EMAILS: "owner@playtest.test", SKIP_EMAIL_CONFIRM: "", APP_URL: "http://localhost:3400", STRIPE_WEBHOOK_SECRET: "whsec_test", CRON_SECRET: "cron-test",
     },

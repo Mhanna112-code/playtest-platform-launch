@@ -104,7 +104,8 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
       <p><b>Your bank reversed a payment, so your account is on a payment hold.</b> Your tests are paused. To lift it:</p>
       <ul className="space-y-1">
         {row(steps.cardVerified, "A card verified with 3D Secure")}
-        {row(steps.owedPaid, "What you owe paid")}
+        {/* (Batch 23 section 6) Paying reserves it on the card; the team's approval takes it. */}
+        {row(steps.owedPaid, "What you owe reserved on your card")}
         {row(steps.approved, "The team's approval")}
       </ul>
       {steps.remaining.length > 0 && <p data-steps-line="">{stepsLine(steps.remaining)} Paying alone doesn&apos;t lift it.</p>}

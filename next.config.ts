@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
-// (Batch 15 section 41, L1) Security headers. The call room embeds Jitsi (meet.jit.si: see roomUrl in src/lib/server/calls.ts); a developer's own meeting link is
-// opened in a new tab when it can't be framed. Uploads go straight to R2 (its host comes from R2_ACCOUNT_ID). Stripe.js runs the bank's confirmation pop-ups.
-const CALLS = "https://meet.jit.si";
+// (Batch 15 section 41, L1) Security headers. (Batch 21; batch 23) The call room is the app's own page (browser-to-browser WebRTC): camera, microphone and screen
+// share are allowed for this site only, and nothing else is framed for calls. Uploads go straight to R2 (its host comes from R2_ACCOUNT_ID). Stripe.js runs the bank's
+// confirmation pop-ups.
 const r2Host = process.env.R2_ACCOUNT_ID?.trim() ? `https://${process.env.R2_ACCOUNT_ID.trim()}.r2.cloudflarestorage.com` : "";
 const dev = process.env.NODE_ENV !== "production";
 const csp = [
@@ -13,7 +13,7 @@ const csp = [
   `media-src 'self' blob:${r2Host ? ` ${r2Host}` : ""}`,
   `connect-src 'self' https://api.stripe.com${r2Host ? ` ${r2Host}` : ""}${dev ? " ws: wss:" : ""}`,
   // (Batch 17 §11) 'self': the bank's check shows inline (hooks.stripe.com in a frame) and returns to /api/payments/bank-return in the same frame.
-  `frame-src 'self' https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com ${CALLS}`,
+  `frame-src 'self' https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com`,
   "frame-ancestors 'none'",
   "object-src 'none'",
   "base-uri 'self'",
@@ -25,7 +25,7 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
-  { key: "Permissions-Policy", value: `camera=(self "${CALLS}"), microphone=(self "${CALLS}"), display-capture=(self "${CALLS}"), geolocation=(), usb=(), payment=(self "https://js.stripe.com")` },
+  { key: "Permissions-Policy", value: `camera=(self), microphone=(self), display-capture=(self), geolocation=(), usb=(), payment=(self "https://js.stripe.com")` },
   { key: "Content-Security-Policy", value: csp },
 ];
 

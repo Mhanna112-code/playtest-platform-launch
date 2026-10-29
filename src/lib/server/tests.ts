@@ -1,4 +1,5 @@
 import { devStopSince, loadedOf } from "./stopMoment";
+import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { CALL_ACTS, PAY_ACTS, bigOwnLines, devChanges, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { qOptional } from "@/lib/questions";
 import { itemsFor, itemsOf, prevSetsOf, pushPrev, sameQuestions } from "@/lib/answerSets";
@@ -370,15 +371,19 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
       dcN = dcN.filter((e) => !isEdit(e));
       gateChanges = gateChanges.filter((e) => !isEdit(e));
       const at = dropped.reduce((a, e) => (e.createdAt > a ? e.createdAt : a), dropped[0]?.createdAt ?? new Date());
+      // (Batch 23 section 5) One line per typed field: "Instructions: your version will replace the one saved in another tab" (the page adds " at 3:54 PM."); spots and
+      // Open until keep today's line.
+      const theirs = news.fields.filter((f) => takesTheirs(f)), yours = news.fields.filter((f) => !takesTheirs(f));
       const lines: (TestEventLike & { fields?: string[] })[] = [
-        ...(news.fields.length ? [{ kind: "own", text: `You changed the ${andList(news.fields.map((f) => FIELD_NAMES[f]))} in another tab`, createdAt: at, fields: news.fields as string[] }] : []),
+        ...(theirs.length ? [{ kind: "own", text: `You changed the ${andList(theirs.map((f) => FIELD_NAMES[f]))} in another tab`, createdAt: at, fields: theirs as string[] }] : []),
+        ...yours.map((f) => ({ kind: "yours", text: replaceLine(f), createdAt: at, fields: [f] as string[] })),
         ...(news.added.length ? [{ kind: "own", text: keysAddedLine(news.added), createdAt: at }] : []),
         ...(news.removed.length ? [{ kind: "own", text: keysRemovedLine(news.removed), createdAt: at }] : []),
       ];
       if (lines.length) dcN = [...dcN, ...lines];
     }
     dcN = [...dcN].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-    const stop = dcN.length ? dcN.map((c) => ({ ...devLine(c, false), ...(c.fields ? { fields: c.fields } : {}) })) : gateChanges.length ? gateChanges.map((c) => ({ text: c.text, at: c.createdAt })) : null;
+    const stop = dcN.length ? dcN.map((c) => ({ ...devLine(c, false), ...(c.fields ? { fields: c.fields } : {}), ...(c.kind === "yours" ? { kind: "yours" } : {}) })) : gateChanges.length ? gateChanges.map((c) => ({ text: c.text, at: c.createdAt })) : null;
     if (stop) {
       // Both together: the blue stop and any red mistakes (red wins: the next press still saves nothing while red remains).
       throw new HttpError(409, "changed", dcN.length ? "Press Save again to save." : "This test changed since you opened Edit. Press Save again to save your changes on top.", {
@@ -519,7 +524,10 @@ export async function editNews(tx: Tx, testId: string, body: Record<string, unkn
   } catch {
     return null; // a box this press can't read (its own mistake is said elsewhere): every line stays
   }
-  const fields = LISTING_FIELDS.filter((k) => !NOT_COMPARED.has(k) && k in base && k in has && !sameValue(k, base[k], current[k]) && !sameValue(k, has[k], current[k]));
+  // (Owner, Oct 29, batch 23 section 5) Edit keeps what you typed: a field this press doesn't send took the other tab's value (it is never undone), so only the fields it
+  // sends count, except spots and Open until (they take the other tab's value even when typed: today's rule, with the press holding what it had typed).
+  const sent = new Set(Object.keys(obj(body.fields) ?? {}));
+  const fields = LISTING_FIELDS.filter((k) => !NOT_COMPARED.has(k) && k in base && k in has && (takesTheirs(k) || sent.has(k)) && !sameValue(k, base[k], current[k]) && !sameValue(k, has[k], current[k]));
   let added: string[] = [], removed: string[] = [];
   if (Array.isArray(body.keysLoaded)) {
     const loaded = parseKeys(body.keysLoaded);

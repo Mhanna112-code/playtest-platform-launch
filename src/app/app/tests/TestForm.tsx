@@ -23,7 +23,8 @@ const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions()
 import { ScrollText } from "@/components/ScrollText";
 import { toCents } from "@/lib/format";
 import { KeyBoxes, freeBoxCheck, type KeysData } from "./KeyBoxes";
-import { FieldNote, NoteItems, type NoteItem } from "@/components/FieldNote";
+import { FieldNote, GroupNote, NoteItems, TheirsNote, type NoteItem } from "@/components/FieldNote";
+import { CHANGED_ELSEWHERE, SAVED_ELSEWHERE, UPDATED_AT, mergeElsewhere, takesTheirs } from "@/lib/editMerge";
 import { ShieldCheck } from "lucide-react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 
@@ -155,7 +156,11 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true, termsAga
   const [blurred, setBlurred] = useState<Set<string>>(new Set());
   const [pressed, setPressed] = useState(false);
   // (Design doc 5) Notes under each field changed in another tab or device: { field: { at, text } }.
-  const [notes, setNotes] = useState<Record<string, { at: string; items: NoteItem[]; label?: string }>>({});
+  const [notes, setNotes] = useState<Record<string, { at: string; items: NoteItem[] }>>({});
+  // (Owner, Oct 29, batch 23 section 5) Fields typed here that another tab or device saved meanwhile: the text stays, and the note under it shows their value (saved at `at`).
+  const [theirs, setTheirs] = useState<Partial<Record<keyof F, string>>>({});
+  // (Batch 23 section 5) The keys' note in two groups: your own saves elsewhere ("Added / Removed"), and what other people caused (a tester joining and given a key).
+  const [keysNote, setKeysNote] = useState<{ own: { at: string; lines: string[] } | null; others: { at: string; lines: string[] } | null }>({ own: null, others: null });
   // (Owner, Oct 28, batch 16 sections 17 and 19) What this tab loaded (until a stop box shows the newer values), what it held in each field another tab
   // changed (before taking the newer value), and each such field's note, for Save's stop box: the server stops only for what this tab doesn't have.
   const seenBase = useRef<F>(toForm(init));
@@ -176,6 +181,15 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true, termsAga
     setF((o) => ({ ...o, ...p }));
     setTouched((t) => new Set([...t, ...(Object.keys(p) as (keyof F)[])]));
     setSaved("");
+    // (Batch 23 section 5) Your text now matches what the other tab saved: its note goes.
+    const matched = (Object.keys(p) as (keyof F)[]).filter((k) => theirs[k] && same(p[k], base[k]));
+    if (matched.length) setTheirs((o) => Object.fromEntries(Object.entries(o).filter(([k]) => !matched.includes(k as keyof F))) as typeof o);
+  };
+  /** (Batch 23 section 5) "Use theirs": the other tab's saved value replaces what you typed here, and the note goes. */
+  const takeTheirs = (k: keyof F) => {
+    setF((o) => ({ ...o, [k]: base[k] }));
+    setTouched((t) => new Set([...t].filter((x) => x !== k)));
+    setTheirs((o) => Object.fromEntries(Object.entries(o).filter(([x]) => x !== k)) as typeof o);
   };
   const leave = (k: string) => setBlurred((b) => (b.has(k) ? b : new Set([...b, k])));
 
@@ -240,30 +254,31 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true, termsAga
   const keysBad = (showOn("keys") || pressed) && !!keyLine;
 
   /**
-   * Apply what another tab or device saved: the fields it changed take its value here; the others stay as typed. (Owner, Oct 28, batch 16 sections 17-19) A
-   * field where this tab already has the saved value isn't news: its base just moves, with no note. Otherwise the note names the field and what it replaced ("Spots: 4 → 5"; long text: "Instructions:" and the old text)
-   * and, when this tab had typed something different, "What you typed (not saved):" in full with Copy. Keys: "Added: …" / "Removed: …", joins their own line.
+   * Apply what another tab or device saved. (Owner, Oct 29, batch 23 section 5: Edit keeps what you typed; it shows what the other tab saved) A field you haven't touched
+   * takes the saved value silently; a field you typed in keeps your text, with a note under it showing what was saved there and "Use theirs" (lib/editMerge.ts). A
+   * field that already holds the saved value isn't news: its base just moves. Spots and Open until keep the older rule: they take the saved value with the note naming
+   * what it replaced ("Spots: 4 → 5") and, when this tab had typed something else, "What you typed (not saved):" in full with Copy.
    */
   function applyElsewhere(listing: Listing, at: string) {
     const now = toForm(listing);
-    const fresh: Record<string, { at: string; items: NoteItem[]; label?: string }> = {};
+    const m = mergeElsewhere(f, base, now);
+    const fresh: Record<string, { at: string; items: NoteItem[] }> = {};
     const takeover: Partial<F> = {};
-    for (const k of Object.keys(now) as (keyof F)[]) {
-      if (same(now[k], base[k])) continue;
-      (takeover as Record<string, unknown>)[k] = now[k];
+    for (const k of m.take) (takeover as Record<string, unknown>)[k] = now[k];
+    for (const k of m.oldNote) {
       if (!prior.current[k]) prior.current[k] = { had: f[k], took: now[k] };
-      if (same(f[k], now[k])) continue; // this tab already has it: not news
       const typed = !same(f[k], base[k]);
       const item: NoteItem = { name: NAMES[k] ?? k, before: valueText(k, base[k]), after: valueText(k, now[k]), ...(typed ? { typed: valueText(k, f[k]) } : {}) };
       if (!details.current[k]) details.current[k] = item;
       const where = NOTE_AT[k] ?? k;
       fresh[where] = { at, items: [...(fresh[where]?.items ?? []), item] };
     }
-    if (Object.keys(takeover).length) {
-      setF((o) => ({ ...o, ...takeover }));
-      setBase((o) => ({ ...o, ...takeover }));
-      setTouched((t) => new Set([...t].filter((k) => !(k in takeover))));
-    }
+    const moved = (Object.keys(now) as (keyof F)[]).filter((k) => !same(now[k], base[k]));
+    if (moved.length) setBase((o) => ({ ...o, ...Object.fromEntries(moved.map((k) => [k, now[k]])) }));
+    if (Object.keys(takeover).length) setF((o) => ({ ...o, ...takeover }));
+    const settled = [...m.take, ...m.settled];
+    if (settled.length) setTouched((t) => new Set([...t].filter((k) => !settled.includes(k))));
+    if (moved.length) setTheirs((o) => ({ ...Object.fromEntries(Object.entries(o).filter(([k]) => !settled.includes(k as keyof F))), ...Object.fromEntries(m.keep.map((k) => [k, at])) }) as typeof o);
     if (Object.keys(fresh).length) setNotes((n) => ({ ...n, ...fresh }));
   }
   /**
@@ -283,20 +298,21 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true, termsAga
     const deletedHere = joined.filter((v) => mine.removed.includes(v));
     const joinedOnly = joined.filter((v) => !mine.removed.includes(v));
     const removed = goneElse.filter((v) => !givenTo(v));
-    const lines = [
+    // (Batch 23 section 5) Your own saves elsewhere, and what other people caused (a tester joining and given a key), each under its own heading.
+    const ownLines = [
       ...(addedElse.length ? [keysAddedLine(addedElse)] : []),
       ...(removed.length ? [keysRemovedLine(removed)] : []),
+    ];
+    const otherLines = [
       ...joinedOnly.map((v) => keyGivenLine(givenTo(v)!, v)),
       ...(deletedHere.length ? [givenDeletedLine(deletedHere.map((v) => ({ name: givenTo(v)!, value: v })))] : []),
     ];
     setFreeLoaded(nowFree);
     setKeysText([...nowFree.filter((v) => !mine.removed.includes(v)), ...mine.added.filter((v) => !nowFree.includes(v) && !givenTo(v))].join("\n"));
-    setNotes((n) => {
-      const old = n.keys && n.keys.at === at ? n.keys.items[0]?.lines ?? [] : [];
-      const all = [...old, ...lines.filter((l) => !old.includes(l))];
-      const joinsOnly = !addedElse.length && !removed.length && !deletedHere.length && !old.length;
-      return { ...n, keys: { at, items: [{ lines: all }], ...(joinsOnly ? { label: all.length === 1 ? all[0] : `${all.length} testers joined and were given keys` } : {}) } };
-    });
+    // Your own changes replace the older ones (unless from the same refresh); joins add up.
+    const merge = (old: { at: string; lines: string[] } | null, lines: string[], keepOld: boolean) =>
+      lines.length ? { at, lines: [...(old && (keepOld || old.at === at) ? old.lines : []), ...lines].filter((l, i, all) => all.indexOf(l) === i) } : old;
+    setKeysNote((n) => ({ own: merge(n.own, ownLines, false), others: merge(n.others, otherLines, true) }));
   }
   /** (Batch 16 section 17) What this tab holds, for the server: a field another tab changed counts with the value this tab had then (unless typed in since). */
   const holding = (): F => {
@@ -432,10 +448,25 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true, termsAga
   );
   /** The blue note under a field changed in another tab or device (batch 16 section 19: what it replaced, and what this tab had typed). */
   const note = (k: string) => {
+    // (Batch 23 section 5) The keys: "Changed in another tab or device at …:" over your own saves elsewhere, "Updated at …:" over a tester joining and given a key.
+    if (k === "keys") {
+      const groups = [
+        ...(keysNote.own ? [{ heading: `${CHANGED_ELSEWHERE} ${clock(keysNote.own.at)}`, lines: keysNote.own.lines }] : []),
+        ...(keysNote.others ? [{ heading: `${UPDATED_AT} ${clock(keysNote.others.at)}`, lines: keysNote.others.lines }] : []),
+      ];
+      return groups.length ? <GroupNote groups={groups} /> : null;
+    }
     const n = notes[k];
-    if (!n) return null;
-    const items = n.label ? n.items.map((i) => ({ ...i, lines: i.lines?.filter((l) => l !== n.label) })) : n.items;
-    return <FieldNote key={n.at + JSON.stringify(n.items)} label={n.label ? `${n.label} · ${clock(n.at)}` : `Changed in another tab or device at ${clock(n.at)}`} items={items} />;
+    // Typed fields another tab saved (still different from what you typed): their value, with Use theirs.
+    const mine = (Object.keys(theirs) as (keyof F)[]).filter((x) => (NOTE_AT[x] ?? x) === k && !takesTheirs(String(x)) && !same(f[x], base[x]));
+    const at = mine.map((x) => theirs[x]!).sort().pop();
+    if (!n && !at) return null;
+    return (
+      <>
+        {n && <FieldNote key={n.at + JSON.stringify(n.items)} label={`${CHANGED_ELSEWHERE} ${clock(n.at)}`} items={n.items} />}
+        {at && <TheirsNote heading={`${SAVED_ELSEWHERE} ${clock(at)}`} items={mine.map((x) => ({ field: String(x), name: NAMES[x] ?? String(x), value: valueText(x, base[x]), onUse: () => takeTheirs(x) }))} />}
+      </>
+    );
   };
   /** Save's stop box: under "You changed the … in another tab", each field's Before / What you typed. */
   const stopDetail = (c: Change) => {

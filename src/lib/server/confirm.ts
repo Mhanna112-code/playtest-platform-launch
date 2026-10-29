@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money } from "@/lib/format";
 import { CONFIRM_DAYS, PRESS_ACTION_MS, bankConfirmLine, bankConfirmTestLine, bankHref, bankWaitingLine, BANK_NOT_CONFIRMED } from "@/lib/rules";
 import { HttpError } from "./http";
+import { PAY_ACTS, seenOf } from "./live";
 import { notify } from "./notify";
 import { bankReturnUrl, checkUrlOf, fakeConfirm, fakeOn, getStripe, stripeOn, type NeedsAction } from "./stripe";
 
@@ -20,6 +21,9 @@ import { bankReturnUrl, checkUrlOf, fakeConfirm, fakeOn, getStripe, stripeOn, ty
 const pk = () => process.env.STRIPE_PUBLISHABLE_KEY?.trim() ?? "";
 /** In the local fake (and in tests without Stripe.js) the page simulates the bank's pop-up. */
 const simulated = () => fakeOn() || !pk();
+
+/** What the page's inline bank check needs for a press (a payment, or batch 23 section 6: a chargeback hold's reservation). */
+export const checkFor = (paymentId: string, clientSecret: string, checkUrl: string | null) => ({ requiresAction: true as const, paymentId, clientSecret, publishableKey: pk(), simulated: simulated(), checkUrl });
 
 /** A press's charge needs the cardholder: lock it for up to 15 minutes and hand the page what its pop-up needs. */
 export async function pressAction(paymentId: string, r: NeedsAction & { feeCents?: number; testerCents?: number; transferStatus?: string }, keepStatus = false) {
@@ -96,6 +100,27 @@ async function piStatus(id: string, simulate?: unknown) {
   return pi.status;
 }
 
+/** (Batch 23 section 9) Plain refusals for "Confirm with your bank": confirmed in another tab, expired, cancelled. */
+export const ALREADY_CONFIRMED = "You already confirmed this payment.";
+export const CONFIRM_EXPIRED = "This confirmation expired: nothing was charged.";
+export const CONFIRM_CANCELLED = "This payment was cancelled: nothing was charged.";
+
+/** (Batch 23 section 9) A payment "Confirm with your bank" can still start on, or a plain refusal saying why not. */
+async function startable(devId: string, paymentId: string) {
+  const p = await db.payment.findUnique({ where: { id: paymentId } });
+  if (!p || p.developerId !== devId) throw new HttpError(404, "not_found", "There's nothing to confirm here.");
+  if (!p.actionPi) {
+    if (p.status === "charged" || p.status === "not_set_up") throw new HttpError(409, "confirmed", ALREADY_CONFIRMED);
+    if (p.status === "cancelled") throw new HttpError(409, "cancelled", CONFIRM_CANCELLED);
+    throw new HttpError(409, "expired", CONFIRM_EXPIRED);
+  }
+  if (p.actionBy && p.actionBy <= new Date()) {
+    await expireActions();
+    throw new HttpError(409, "expired", CONFIRM_EXPIRED);
+  }
+  return p;
+}
+
 async function own(devId: string, paymentId: string) {
   const p = await db.payment.findUnique({ where: { id: paymentId } });
   if (!p || p.developerId !== devId || !p.actionPi) throw new HttpError(404, "not_found", "There's nothing to confirm here.");
@@ -106,8 +131,18 @@ async function own(devId: string, paymentId: string) {
  * "Confirm with your bank" (the test page; Payments for a renewal) on a payment that waits: what the page's inline check needs. (Batch 17 §11) A charge made while away
  * waits with no next step, so it is confirmed here with return_url: the bank's check page (`checkUrl`) then shows inline; "none" when it went through without one.
  */
-export async function confirmStart(dev: { id: string }, paymentId: string) {
-  const p = await own(dev.id, paymentId);
+export async function confirmStart(dev: { id: string }, paymentId: string, body: Record<string, unknown> = {}) {
+  const p = await startable(dev.id, paymentId);
+  // (Owner, Oct 29, batch 23 section 9) On the test page, the developer's stop-once check first, exactly like Pay on that piece: a stop, close or End early (batch 17 §12), a
+  // dispute, the tester's Charge or Let it go, a Pay or Pay more in another tab, a call change... (Alerts apply) stops it once; the second press opens the bank's check.
+  if (p.contractId && seenOf(body.seenAt)) {
+    const c = await db.contract.findUnique({ where: { id: p.contractId }, select: { id: true, testId: true } });
+    if (c) {
+      const { devGate } = await import("./tests");
+      const key = p.callId ? `call:${p.callId}` : p.submissionId ? `sub:${p.submissionId}` : `c:${c.id}`;
+      await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: [...PAY_ACTS], keys: [key], stopCheck: c.id }));
+    }
+  }
   const u = await db.user.findUniqueOrThrow({ where: { id: dev.id } });
   if (!stripeOn() || fakeOn()) return { paymentId, clientSecret: `${p.actionPi}_secret_fake`, publishableKey: pk(), simulated: true, paymentMethod: u.stripePaymentMethodId, checkUrl: null };
   const stripe = getStripe();
@@ -128,6 +163,13 @@ const split = (p: { feeCents: number; testerCents: number; transferStatus: strin
 
 /** The page's pop-up finished (or Confirm on Payments): ask Stripe how it ended and finish the payment, or let it go with nothing charged. */
 export async function confirmFinish(dev: { id: string; email: string }, paymentId: string, body: Record<string, unknown> = {}) {
+  // (Batch 23 section 6) A chargeback hold's Pay what you owe reserved the money: its check ended (reserved when Stripe holds it, "requires_capture").
+  const reservation = await db.reservation.findUnique({ where: { id: paymentId }, select: { stripePaymentIntentId: true, developerId: true } });
+  if (reservation && reservation.developerId === dev.id) {
+    const cb = await import("./chargeback");
+    const status = reservation.stripePaymentIntentId ? await piStatus(reservation.stripePaymentIntentId, body.simulate) : body.simulate === "succeeded" ? "requires_capture" : "canceled";
+    return cb.reservationChecked(dev.id, paymentId, status === "requires_capture" || status === "succeeded");
+  }
   const p = await own(dev.id, paymentId);
   const status = await piStatus(p.actionPi!, body.simulate);
   const ok = status === "succeeded";

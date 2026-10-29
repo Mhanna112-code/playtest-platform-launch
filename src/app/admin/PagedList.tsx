@@ -161,9 +161,12 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
           <p>{c.email} · on hold since {c.since}</p>
           {c.chargebacks.map((x, i) => <p key={i} className="text-slate-400">{x}</p>)}
           <p data-chargeback-steps="">
-            Chargeback hold: card verified <b>{c.cardVerified ? "✓" : "✗"}</b>, owed paid <b>{c.owedPaid ? "✓" : "✗"}</b>{c.owedLine}{" "}
+            Chargeback hold: card verified <b>{c.cardVerified ? "✓" : "✗"}</b>, owed reserved <b>{c.owedPaid ? "✓" : "✗"}</b>{c.owedLine}{" "}
+            {/* (Batch 23 section 6) Approve takes the reservation and lifts the hold in one step; Don't approve releases it (nothing taken; the hold stays). */}
             <AdminButton action="approve-chargeback" id={c.id} label="Approve" disabled={!c.cardVerified || !c.owedPaid} />
+            {c.reservedCents > 0 && <AdminButton action="decline-chargeback" id={c.id} label="Don't approve: release the reservation" danger fields={[{ name: "note", label: "Why (optional)" }]} />}
           </p>
+          {c.expired && <p className="text-amber-200" data-reserve-expired="">Reservation expired</p>}
         </div>
       );
     }

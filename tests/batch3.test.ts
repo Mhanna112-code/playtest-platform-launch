@@ -163,7 +163,8 @@ describe("call length and payment problems on a call", () => {
     await db.user.update({ where: { id: tester.user.id }, data: { stripeAccountId: "acct_" + randomUUID(), payoutsReady: true } });
     let decline = true;
     setStripeForTests({
-      paymentIntents: { create: async () => { if (decline) throw Object.assign(new Error("declined"), { type: "StripeCardError" }); return { id: "pi_" + randomUUID(), status: "succeeded" }; } },
+      // (Batch 23 section 6) A manual-capture PaymentIntent (a chargeback hold's reservation) waits uncaptured.
+      paymentIntents: { create: async (x: { capture_method?: string }) => { if (decline) throw Object.assign(new Error("declined"), { type: "StripeCardError" }); return { id: "pi_" + randomUUID(), status: x.capture_method === "manual" ? "requires_capture" : "succeeded" }; } },
       webhooks: { constructEvent: (raw: string) => JSON.parse(raw) },
     } as unknown as Stripe);
     const r = await pay(dev.cookie, { kind: "call", id: call.id, amount: "15.00", tickedCents: 1500 });
@@ -182,7 +183,8 @@ describe("call length and payment problems on a call", () => {
     await expect(payOwed(dev.user)).rejects.toMatchObject({ code: "verify_first", message: "Verify your card first." });
     await expect((await import("@/lib/server/chargeback")).approveChargebackHold(dev.user.id)).rejects.toMatchObject({ code: "steps_missing" });
     await db.user.update({ where: { id: dev.user.id }, data: { chargebackCardVerifiedAt: new Date() } });
-    expect(await payOwed(dev.user)).toEqual({ paid: 1, stillFailing: [], lifted: false, confirm: [] });
+    // (Batch 23 section 6) Pay what you owe reserves the $15.00 and its $15 fee; the team's Approve takes it.
+    expect(await payOwed(dev.user)).toEqual({ paid: 0, stillFailing: [], lifted: false, reservedCents: 3000, confirm: [] });
     // A chargeback hold is a hold with extra steps: a verified card and the admin's approval lift it (paying alone never does).
     const { startCardVerification, approveChargebackHold } = await import("@/lib/server/chargeback");
     setStripeForTests(null); // no Stripe here (dev): the card check is simulated

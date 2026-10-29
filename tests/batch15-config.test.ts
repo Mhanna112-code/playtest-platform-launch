@@ -75,14 +75,17 @@ describe("configProblems", () => {
     expect(seesConfigBox({ email: "ana@x.test" }, { OWNER_EMAIL: "Owner@x.test" })).toBe(false);
     expect(seesConfigBox({ email: "owner@x.test" }, { OWNER_EMAIL: "Owner@x.test" })).toBe(true);
   });
-  it("production without the email key: sendEmail throws, logs and never writes to the outbox (unless ALLOW_DEV_OUTBOX=1)", async () => {
+  it("production without the email key: sendEmail logs and never writes to the outbox (unless ALLOW_DEV_OUTBOX=1); (batch 23) the email waits with the missing key as its error", async () => {
     const to = `nobody-${Date.now()}@x.test`;
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("RESEND_API_KEY", "");
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
-    await expect(sendEmail({ to, subject: "Hi", text: "x" })).rejects.toThrow(NO_EMAIL_KEY);
+    expect((await sendEmail({ to, subject: "Hi", text: "x" })).via).toBe("queued");
     expect(err).toHaveBeenCalled();
     expect(await db.outboxEmail.count({ where: { to } })).toBe(0);
+    expect(await db.emailQueue.findFirstOrThrow({ where: { to } })).toMatchObject({ status: "pending", lastError: NO_EMAIL_KEY });
+    await db.emailQueue.deleteMany({ where: { to } });
+    if (!(await db.emailQueue.count({ where: { status: "pending", lastError: { not: "" } } }))) await db.appState.deleteMany({ where: { key: "email-incident" } });
     vi.stubEnv("ALLOW_DEV_OUTBOX", "1");
     expect((await sendEmail({ to, subject: "Hi", text: "x" })).via).toBe("outbox");
     err.mockRestore();

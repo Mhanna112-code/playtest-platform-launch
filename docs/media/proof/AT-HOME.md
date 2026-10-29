@@ -51,5 +51,54 @@ in **test mode**, before launch. Nothing here needs a live key. Where a setting 
 ## 5. After deploying
 
 - The settings box at the top of the admin console (shown to `OWNER_EMAIL`) must be empty. The build already stops on the serious ones.
-- Open a call page and check the video room loads (the security headers allow `meet.jit.si`; a developer's own meeting link opens in a new tab instead).
+- Open a call page and check the built-in call room shows your camera (batch 21: the app's own room; the security headers allow the camera, microphone and screen share for this site only).
 - Run the database migrations with `DIRECT_URL` set (see HANDOVER section 7).
+
+## 6. Emails that fail: the outside alert (batch 23 sections 1 and 2)
+
+1. Set up the second UptimeRobot monitor from the HANDOVER launch checklist: type **Keyword**, URL `https://<staging domain>/api/health?key=<HEALTH_KEY>`,
+   keyword `degraded: emails`, alert when the keyword **exists**, every 5 minutes, alert contacts: your email and your phone (SMS).
+2. On **staging**, set `RESEND_API_KEY` to a wrong value (for example the right one with a letter changed) and redeploy.
+3. Trigger a few emails: "Forgot your password?" for your own account, or Contact us. Nothing arrives.
+4. Within a few minutes the admin console shows the red box at the top: "Emails aren't sending: 2 waiting since 3:10 PM. Resend says: 401: API key is
+   invalid." and your bell has one line "Emails aren't sending (since 3:10 PM)".
+5. After 15 minutes, `https://<staging domain>/api/health?key=<HEALTH_KEY>` answers `{"ok":true,"emails":"degraded: emails"}`, and **UptimeRobot alerts you**
+   by email and text (through its own system, so it works while Resend is down).
+6. Put the right key back and redeploy: within the next 5-minute sweep the waiting emails go out (each once), the red box goes, the health answer says
+   `"emails":"sending"` and UptimeRobot sends its "up" alert.
+7. Optional, Resend's free plan: after 100 emails in a day Resend refuses with its daily limit. The red box then says "Resend's daily limit was reached
+   (free plan: 100 a day). Emails will go out tomorrow, or upgrade the plan." and the emails go out after midnight UTC.
+
+## 7. Stripe test mode: the cards to try (batch 23 section 10)
+
+Use Stripe's test cards (any future expiry, any CVC, any postcode) with `sk_test_…` keys:
+
+| Card | What it does | What the app shows | What the Stripe dashboard (Test mode → Payments) shows |
+| --- | --- | --- | --- |
+| `4000 0027 6000 3184` | Always asks for the bank's check (3-D Secure) | Under Pay (or Pay what you owe, Subscribe, Verify a card) the bank's check opens inline. Complete it: the payment goes through. Fail it: "Your bank didn't confirm the payment, so nothing was charged." | Completed: **Succeeded**, with "3D Secure: authenticated". Failed: **Incomplete** / **Canceled**, nothing taken |
+| `4000 0000 0000 0002` | Always declines | "Your card was declined, …": a payment hold starts; Payments → Pay what you owe lists it. Save a 4242 card and press Pay what you owe: the hold lifts | **Failed** (`card_declined`) |
+| `4000 0000 0000 0259` | Charges, then the cardholder disputes it (a chargeback) | Within a minute (the `charge.dispute.created` webhook) the developer's tests pause on a **chargeback hold**; Payments shows the three steps; every admin gets the chargeback email and the console's Chargeback holds row | The payment shows **Disputed** (Disputes lists it, "Needs response") |
+
+Then finish the chargeback hold, as the developer and the admin:
+
+1. Payments → **Verify a card** with `4000 0027 6000 3184` (the bank's check opens inline; complete it). Step 1 ✓.
+2. **Pay what you owe**: it **reserves** the money. Payments says "Reserved $X: it's taken when the team approves lifting your hold."; the steps show
+   "What you owe reserved on your card ✓". In Stripe the new payment is **Uncaptured** (an authorization: nothing taken yet).
+3. As an admin, the Chargeback holds row shows "owed reserved ✓ ($X reserved)". Press **Approve**: in Stripe the payment becomes **Succeeded** (captured),
+   the developer's tests resume, and the testers waiting on that money get "… paid $X for your …".
+4. Or press **Don't approve: release the reservation** instead: Stripe shows it **Canceled** (nothing taken) and the hold stays; the developer can press
+   Pay what you owe again.
+5. A reservation not approved within 7 days is released by the app (Stripe shows it **Canceled**); Payments then says "Your reservation expired: press Pay
+   what you owe again so the team can approve it." and the admin's row "Reservation expired". (Stripe test mode can't fast-forward 7 days: this is covered
+   by `tests/batch23.test.ts`.)
+
+## 8. Right after going live: one real $1 payment (batch 23 section 10)
+
+With **live** keys (`sk_live_…`, `STRIPE_ALLOW_LIVE=1`), between two of your own accounts, with your own card:
+
+1. Account A (tester): sign up, Payments → **Set up payouts**, finish Stripe's real onboarding (your own bank account).
+2. Account B (developer): add your own card in Payments, post a small test, let account A join and send written answers, then **Pay $1.00**.
+3. If your bank asks to confirm, its real check opens under Pay: complete it. The payment goes through.
+4. Stripe dashboard (live mode) → Payments: the $1.00 charge, **Succeeded**, with the platform's fee; Connect → account A: the transfer of the tester's share.
+5. Refund it afterwards from the Stripe dashboard: the payment → **Refund** → full amount. (The transfer to account A stays with account A unless you reverse
+   it in Connect → the transfer → Reverse.)

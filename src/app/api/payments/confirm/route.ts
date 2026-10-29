@@ -12,7 +12,8 @@ export async function POST(req: Request) {
     if (u.deletedAt) throw new HttpError(403, "deleted", "This account was deleted.");
     const body = await readJson(req);
     const paymentId = String(body.paymentId ?? "");
-    if (body.start === true) return ok(await confirmStart(u, paymentId));
+    // (Batch 23 section 9) The start runs the stop-once check (the page's seen marker) and the plain refusals first.
+    if (body.start === true) return ok(await confirmStart(u, paymentId, body));
     const p = await db.payment.findUnique({ where: { id: paymentId }, select: { kind: true, submissionId: true, callId: true, status: true, contractId: true, amountCents: true } });
     const r = await confirmFinish(u, paymentId, body);
     if (p && p.status === "needs_action" && (p.kind === "review" || p.kind === "call") && "reviewId" in r) await logReview(u.id, { ...body, action: "pay", kind: p.callId ? "call" : "submission", id: p.callId ?? p.submissionId ?? "" }, r as { amountCents?: number });

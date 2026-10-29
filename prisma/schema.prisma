@@ -1045,3 +1045,57 @@ model TestVisit {
   @@index([testerId, visitedAt])
   @@index([testId])
 }
+
+/// (Owner, Oct 29, batch 23 section 1) Every email sent through Resend is stored here first, then sent; a failure keeps it pending with the error and a next try. The 5-minute
+/// sweep retries it after 5, 15 and 30 minutes, then hourly, for 48 hours; then it is failed for good (kept, never deleted). Sent at most once (Resend's Idempotency-Key is the row id).
+/// (In development without RESEND_API_KEY, emails still go to the dev outbox, OutboxEmail.)
+model EmailQueue {
+  id          String    @id @default(cuid())
+  to          String
+  subject     String
+  text        String
+  html        String    @default("")
+  /// "pending" | "sent" | "failed" (failed for good)
+  status      String    @default("pending")
+  /// Tries that failed or went through (a daily-limit wait isn't counted)
+  attempts    Int       @default(0)
+  /// The last failure, short (Resend's status and message); "" before any failure
+  lastError   String    @default("")
+  /// "cap": Resend's daily limit was reached (it waits for the next day's first sweep)
+  errorKind   String    @default("")
+  /// When it is tried next (also a claim: a sweep taking it moves this 10 minutes on, so overlapping sweeps send it once)
+  nextTryAt   DateTime  @default(now())
+  /// The 48 hours of tries end here (a daily-limit wait moves it later by the wait)
+  giveUpAt    DateTime
+  lastTriedAt DateTime?
+  sentAt      DateTime?
+  failedAt    DateTime?
+  /// An admin cleared it from the console's failed-for-good list (the row is kept)
+  clearedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([status, nextTryAt])
+}
+
+/// (Owner, Oct 29, batch 23 section 6) During a chargeback hold, Pay what you owe reserves the owed total on the card (a Stripe PaymentIntent with capture_method manual) instead
+/// of charging it; the team's Approve captures it (the owed payments it covers are then paid) and lifts the hold. Not approved: cancelled (nothing taken). Unused after about 7 days:
+/// expired (released; the developer presses Pay what you owe again).
+model Reservation {
+  id                    String    @id @default(cuid())
+  developerId           String
+  amountCents           Int
+  /// The owed payments it covers (Payment ids; an open chargeback's own payment stands for its repay)
+  covers                String[]
+  /// "pending" (being made) | "needs_action" (the bank's check is open) | "reserved" | "captured" | "cancelled" | "expired" | "failed"
+  status                String    @default("pending")
+  stripePaymentIntentId String?
+  /// While the bank's check is open: by when it must finish (15 minutes)
+  actionBy              DateTime?
+  /// When the reservation lapses (about 7 days after it was made)
+  expiresAt             DateTime?
+  capturedAt            DateTime?
+  endedAt               DateTime?
+  createdAt             DateTime  @default(now())
+
+  @@index([developerId, status])
+}

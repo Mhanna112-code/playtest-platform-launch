@@ -24,7 +24,7 @@ describe("batch 19 section 4: a sweep error still answers healthy", () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     const r = await ping();
     expect(r.status).toBe(200);
-    expect(await r.json()).toEqual({ ok: true });
+    expect(await r.json()).toEqual({ ok: true, emails: "sending" });
     expect(log.mock.calls.some((c) => String(c[0]).startsWith("[sweep] failed:") && String(c[1]) === "sweep broke")).toBe(true);
     log.mockRestore();
     expect(await db.outage.count()).toBe(outages);

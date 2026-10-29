@@ -14,8 +14,8 @@ import { accountEvent } from "./reports";
 //   every kind of pause testers can't send work or chat, and can still save drafts, charge or let go, dispute, rate, leave and cancel calls: rules.ts PAUSE_DEFAULTS); every press on
 //   the developer's pages is refused except Cancel call; calls starting within 3 days of the start are cancelled with no fault, later ones 3 days before they start if it still
 //   lasts. Invites and applications wait. Lifted: the tests resume as normal.
-//   Tester suspended: removed from every test at once (their work stays and is reviewed; the pay is charged but their share is held until
-//   reinstatement). Reinstated (owner, Oct 28): no automatic re-invite; the tests they were removed from wait on their dashboard with
+//   Tester suspended: removed from every test at once (their work stays, is reviewed and, since batch 22, is paid
+//   normally: no held shares). Reinstated (owner, Oct 28): no automatic re-invite; the tests they were removed from wait on their dashboard with
 //   "You were removed from this test" and Ask to rejoin until they ask or dismiss.
 
 const DAY = 86_400_000;
@@ -376,7 +376,7 @@ export async function previewSuspension(userId: string) {
   if (u.isTester) {
     const contracts = await db.contract.count({ where: { testerId: userId, status: "working" } });
     const calls = await db.call.count({ where: { status: "booked", startsAt: { gt: new Date() }, contract: { testerId: userId } } });
-    lines.push(`Removed from ${s(contracts, "test")}; ${s(calls, "booked call")} cancelled; later pay is charged to the developer but the share is held.`);
+    lines.push(`Removed from ${s(contracts, "test")}; ${s(calls, "booked call")} cancelled; pay for work they sent still reaches them.`); // (batch 22: no held shares)
   }
   if (!lines.length) lines.push("This account has no developer or tester side yet: nothing else changes.");
   return { lines };

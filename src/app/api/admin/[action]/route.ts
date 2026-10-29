@@ -6,7 +6,8 @@ import { LIMITS } from "@/lib/limits";
 import { decideDispute } from "@/lib/server/payments";
 import { ADMIN_PAUSED, adminAccount, isAdmin, requireUser } from "@/lib/server/session";
 import { approveHoldLift } from "@/lib/server/holds";
-import { approveChargebackHold } from "@/lib/server/chargeback";
+import { approveChargebackHold, declineChargebackReserve } from "@/lib/server/chargeback";
+import { clearFailedEmails } from "@/lib/server/email";
 import { closePausedTest, extendPauseClosure } from "@/lib/server/pauseClosure";
 import { adminStopTest, deleteAccount, pauseTest, previewSuspension, reinstateAccount, seenFromBody, suspendAccount, unpauseTest } from "@/lib/server/restrictions";
 import { withAccountState } from "@/lib/server/accountState";
@@ -84,6 +85,12 @@ async function run(u: Awaited<ReturnType<typeof requireUser>>, action: string, i
         return ok(await approveHoldLift(u.id, id, readText(body.note, LIMITS.reason, "bad_note")));
       case "approve-chargeback":
         return ok(await approveChargebackHold(id));
+      // (Batch 23 section 6) Not approved: the reservation is cancelled (nothing taken) and the hold stays (id = the developer).
+      case "decline-chargeback":
+        return ok(await declineChargebackReserve(id, readText(body.note, LIMITS.reason, "bad_note")));
+      // (Batch 23 section 2) The red box's failed-for-good list is cleared (the emails are kept).
+      case "emails-clear":
+        return ok(await clearFailedEmails());
       // A paused test closes after 7 days: the admin can move its date later (days, default 7) or close it now (id = the test).
       case "approve-outage":
         return ok(await (await import("@/lib/server/outages")).approveOutage(u.id, id));

@@ -16,6 +16,7 @@ import { expireActions } from "@/lib/server/confirm";
 import { deleteAccount } from "@/lib/server/restrictions";
 import { testerDeleteLines } from "@/lib/server/deletion";
 import { setStripeForTests } from "@/lib/server/stripe";
+import { approveChargebackHold } from "@/lib/server/chargeback";
 import { json, req } from "./helpers";
 import { act, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 
@@ -34,27 +35,30 @@ afterEach(() => setStripeForTests(null));
 
 /** A Stripe stand-in: `mode` decides what a new PaymentIntent does; retrieve answers with `after`. */
 function fakeStripe(opts: { mode?: "ok" | "decline" | "action" | "away-action"; after?: "succeeded" | "canceled" } = {}) {
-  const made: { amount: number; off_session?: boolean; payment_method_types?: string[] }[] = [];
+  const made: { amount: number; off_session?: boolean; payment_method_types?: string[]; capture_method?: string }[] = [];
+  const captured: { id: string; amount?: number }[] = [];
   const cancelled: string[] = [];
   const refunds: string[] = [];
   setStripeForTests({
     paymentIntents: {
-      create: async (p: { amount: number; off_session?: boolean }) => {
+      create: async (p: { amount: number; off_session?: boolean; capture_method?: string }) => {
         made.push(p);
         const id = "pi_" + randomUUID();
         const mode = opts.mode ?? "ok";
         if (mode === "decline") throw Object.assign(new Error("Your card was declined."), { type: "StripeCardError" });
         if (mode === "action" && !p.off_session) return { id, status: "requires_action", client_secret: `${id}_secret` };
         if ((mode === "action" || mode === "away-action") && p.off_session) throw Object.assign(new Error("Authentication required."), { code: "authentication_required", raw: { payment_intent: { id, client_secret: `${id}_secret` } } });
-        return { id, status: "succeeded" };
+        // (Batch 23 section 6) A chargeback hold's reservation: authorized, not taken.
+        return { id, status: p.capture_method === "manual" ? "requires_capture" : "succeeded" };
       },
+      capture: async (id: string, p: { amount_to_capture?: number }) => { captured.push({ id, amount: p.amount_to_capture }); return { id, status: "succeeded" }; },
       retrieve: async (id: string) => ({ id, status: opts.after ?? "succeeded", client_secret: `${id}_secret` }),
       cancel: async (id: string) => { cancelled.push(id); return { id, status: "canceled" }; },
     },
     refunds: { create: async (p: { payment_intent: string }) => { refunds.push(p.payment_intent); return { id: "re_" + randomUUID() }; } },
     webhooks: { constructEvent: (raw: string) => JSON.parse(raw) },
   } as unknown as Stripe);
-  return { made, cancelled, refunds, set: (o: typeof opts) => Object.assign(opts, o) };
+  return { made, cancelled, refunds, captured, set: (o: typeof opts) => Object.assign(opts, o) };
 }
 
 /** Written answers sent on a test (listed at `writtenCents`, or not listed with null). */
@@ -117,15 +121,17 @@ describe("batch 11 item 2: the chargeback fee", () => {
     return { ...s, p, st };
   }
 
-  it("each chargeback adds $15 to what is owed; the Payments line; Pay what you owe charges both", async () => {
+  it("each chargeback adds $15 to what is owed; the Payments line; Pay what you owe reserves both (batch 23 section 6) and the team's Approve takes them", async () => {
     expect(R.CHARGEBACK_FEE_CENTS).toBe(1500);
     const { dev, p, st } = await chargedBack();
     expect((await owed(dev.user.id)).map((x) => x.amountCents)).toEqual([2500]);
     expect((await owedLines(dev.user.id))[0].text).toBe("Your bank reversed a $10 payment: $10 + $15 chargeback fee");
     await db.user.update({ where: { id: dev.user.id }, data: { chargebackCardVerifiedAt: new Date() } }); // (batch 16 section 41) step 1 first: Pay what you owe waits for the verified card
     const r = await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })));
-    expect(r.body.paid).toBe(1);
-    expect(st.made.at(-1)!.amount).toBe(2500);
+    expect(r.body).toMatchObject({ paid: 0, reservedCents: 2500 });
+    expect(st.made.at(-1)!).toMatchObject({ amount: 2500, capture_method: "manual" });
+    expect((await approveChargebackHold(dev.user.id)).takenCents).toBe(2500);
+    expect(st.captured).toEqual([{ id: expect.any(String), amount: 2500 }]);
     expect(await db.payment.findFirstOrThrow({ where: { repaysId: p.id } })).toMatchObject({ amountCents: 2500, status: "charged" });
   });
 
@@ -133,6 +139,7 @@ describe("batch 11 item 2: the chargeback fee", () => {
     const { dev, p, st, testId } = await chargedBack();
     await db.user.update({ where: { id: dev.user.id }, data: { chargebackCardVerifiedAt: new Date() } }); // (batch 16 section 41) step 1 first: Pay what you owe waits for the verified card
     await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })));
+    await approveChargebackHold(dev.user.id); // (batch 23 section 6) paid when the team approves
     const loaded = seen();
     await settle();
     await webhook("charge.dispute.closed", { payment_intent: p.stripePaymentIntentId, status: "won" });

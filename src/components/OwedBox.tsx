@@ -7,6 +7,7 @@ import { mergeChanges } from "@/lib/live";
 import { money } from "@/lib/format";
 import { type BankAction } from "@/lib/bankConfirm";
 import { useBankCheck } from "@/components/BankCheck";
+import { RESERVE_EXPIRED, reservedLine } from "@/lib/rules";
 
 type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string };
 
@@ -16,7 +17,7 @@ type Line = { id: string; retry: boolean; amountCents: number; until: string | n
  * (Owner, Oct 29, batch 10) The page polls (AutoRefresh): the amount and the lines follow `owed` live, and the page drops the box when nothing is owed. A press
  * still checks what was last confirmed (the page load or the last stop box), so a press after a change stops once with the new lines.
  */
-export function OwedBox({ onHold, owed, chargeback = false, review = false, retryLine = "", verifyFirst = false }: { onHold: boolean; owed: Line[]; chargeback?: boolean; review?: boolean; /** (Batch 11) "Last try: ... · next try: ..." of the automatic retries */ retryLine?: string; /** (Batch 16 section 41) a chargeback hold with no verified card yet: Pay waits for step 1 */ verifyFirst?: boolean }) {
+export function OwedBox({ onHold, owed, chargeback = false, review = false, retryLine = "", verifyFirst = false, reservedCents = 0, reserveExpired = false }: { onHold: boolean; owed: Line[]; chargeback?: boolean; review?: boolean; /** (Batch 11) "Last try: ... · next try: ..." of the automatic retries */ retryLine?: string; /** (Batch 16 section 41) a chargeback hold with no verified card yet: Pay waits for step 1 */ verifyFirst?: boolean; /** (Batch 23 section 6) a chargeback hold: what is reserved on the card already, and whether the last reservation lapsed */ reservedCents?: number; reserveExpired?: boolean }) {
   const [err, setErr] = useState("");
   const [failing, setFailing] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -40,6 +41,9 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
         <p><b>A payment failed.</b> Pay {money(seenTotal)} to keep your tests running.</p>
       )}
       {retryLine && <p className="text-xs" data-retry-line="">{retryLine}</p>}
+      {/* (Owner, Oct 29, batch 23 section 6) A chargeback hold: Pay what you owe reserves the money; the team's Approve takes it. */}
+      {chargeback && reserveExpired && <p data-reserve-expired="">{RESERVE_EXPIRED}</p>}
+      {chargeback && reservedCents > 0 && <p data-reserved="">{reservedLine(reservedCents)}{retry.length > 0 ? " What was added since needs its own Pay what you owe:" : ""}</p>}
       {onHold && review && <p data-hold-review="">After you pay what you owe, the team will review your account before your tests resume.</p>}
       {owed.length > 0 && (
         <ul className="list-disc pl-5">
@@ -55,7 +59,7 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
           setErr("");
           setFailing([]);
           try {
-            const r = await api<{ stillFailing: string[]; lifted: boolean; confirm?: BankAction[] }>("/api/payments/owed", { seenTotalCents: total, seenIds: shownIds, confirmed: changes != null });
+            const r = await api<{ stillFailing: string[]; lifted: boolean; confirm?: BankAction[]; reservedCents?: number }>("/api/payments/owed", { seenTotalCents: total, seenIds: shownIds, confirmed: changes != null });
             setChanges(null);
             // (Batch 11) Payments the bank wants confirmed: one check each, inline under the button; any it refused stay owed (nothing was charged for them).
             let refused = "";
@@ -72,7 +76,7 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
               setFailing(r.stillFailing);
               setBusy(false);
             } else {
-              setDone(`Paid ${money(total)}, thank you`);
+              setDone(chargeback ? reservedLine(changes ? total : seenTotal) : `Paid ${money(total)}, thank you`);
               setTimeout(() => window.location.reload(), 1500);
             }
           } catch (e) {
@@ -102,7 +106,7 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
           Still declined: {failing.join("; ")}. Your tests stay paused until everything is paid. <a href="/app/payments#card">Update your card</a> and try again.
         </p>
       )}
-      {chargeback && <p>Paying what you owe is only one of the steps above: your tests resume once the card is verified, what you owe is paid and the team approves.</p>}
+      {chargeback && <p>Pay what you owe reserves the money on your card: nothing is taken until the team approves lifting your hold, and your tests resume then.</p>}
       <Err text={err} />
     </div>
   );

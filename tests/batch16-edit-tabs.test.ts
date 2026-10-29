@@ -50,19 +50,20 @@ describe("another tab saved the same value: no note, no stop (section 17)", () =
     expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).description).toBe("Sail through all three reefs.");
   });
 
-  it("a different value: a stop that names the field (and carries it for Before / What you typed)", async () => {
+  it("a different value: a stop that names the field; (batch 23 section 5) one line per typed field, \"your version will replace the one saved in another tab\"", async () => {
     const { saveA, saveB } = await twoTabs();
     expect((await saveB({ description: "Sail through all three reefs." })).status).toBe(200);
     const r = await saveA({ description: "Only the first reef." }, { description: "Only the first reef." });
     expect(r.status).toBe(409);
     expect(r.body.error.code).toBe("changed");
     const lines = r.body.error.changes as { text: string; fields?: string[] }[];
-    expect(lines.map((l) => l.text)).toEqual(["You changed the description in another tab"]);
-    expect(lines[0].fields).toEqual(["description"]);
-    // Untouched here (this tab still shows the old text): a different value too.
-    const { saveA: a2, saveB: b2 } = await twoTabs();
+    expect(lines.map((l) => l.text)).toEqual(["Instructions: your version will replace the one saved in another tab"]);
+    expect(lines[0]).toMatchObject({ fields: ["description"], kind: "yours" });
+    // (Batch 23 section 5) Untouched here: the field took the other tab's value silently, and this Save (which doesn't send it) never undoes it: no stop.
+    const { testId: t2, saveA: a2, saveB: b2 } = await twoTabs();
     expect((await b2({ description: "Sail on." })).status).toBe(200);
-    expect((await a2({ spots: "3" }, {})).status).toBe(409);
+    expect((await a2({ spots: "3" }, {})).status).toBe(200);
+    expect((await db.test.findUniqueOrThrow({ where: { id: t2 } })).description).toBe("Sail on.");
   });
 
   it("mixed: only the field this tab doesn't have is listed", async () => {
@@ -149,9 +150,10 @@ describe("the notes under Edit's fields and in Save's stop box (sections 17-19)"
     expect(form).toContain("joinedOnly.map((v) => keyGivenLine(givenTo(v)!, v))");
   });
 
-  it("same value: the base moves with no note; a different one names the field and what it replaced; What you typed (not saved) in full with Copy", () => {
+  it("same value: the base moves with no note; (batch 23 section 5: spots and Open until) a different one names the field and what it replaced; What you typed (not saved) in full with Copy", () => {
     const form = src("app/app/tests/TestForm.tsx");
-    expect(form).toContain("if (same(f[k], now[k])) continue; // this tab already has it: not news");
+    expect(src("lib/editMerge.ts")).toContain("settled.push(k); // this tab already has it: not news");
+    expect(form).toContain("const m = mergeElsewhere(f, base, now);");
     expect(form).toContain("before: valueText(k, base[k]), after: valueText(k, now[k]), ...(typed ? { typed: valueText(k, f[k]) } : {})");
     expect(form).not.toMatch(/slice\(0, 80\)|the newer value is kept|"now: |`now /);
     expect(form).toContain('spots: "Spots"');

@@ -11,7 +11,8 @@ import { PagedList } from "./PagedList";
 import { adminCases } from "@/lib/server/holds";
 import { configProblems, seesConfigBox } from "@/lib/server/config";
 import { adminOutages, lengthText, outageLine } from "@/lib/server/outages";
-import { renderTimes } from "@/lib/tz";
+import { T, renderTimes } from "@/lib/tz";
+import { emailHealth, emailsDownLine } from "@/lib/server/email";
 import { adminPage, disputeRow, type DisputeVM, type Page } from "@/lib/server/adminLists";
 import { StatTile } from "@/components/StatTile";
 import { BadgeDollarSign, FlaskConical, Inbox, Users, Wallet } from "lucide-react";
@@ -44,6 +45,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const focusUser = q.user ? await db.user.findUnique({ where: { id: q.user } }) : null;
   const cases = await adminCases();
   const outages = await adminOutages();
+  const mail = await emailHealth();
+  // (Batch 23 section 2) Times on the admin's own clock: the time alone within a day, else the day too.
+  const clock = (d: Date) => renderTimes(T(d, Date.now() - d.getTime() < 20 * 3_600_000 ? "time" : "dayTime"), u.timeZone);
   // The full app's admin tiles: people, parts awaiting review, what was charged, the platform's share, what testers are owed.
   const charged = await db.payment.aggregate({ where: { status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true, feeCents: true }, _count: { _all: true } });
   const toReview = (await db.submission.count({ where: { review: null } })) + (await db.call.count({ where: { review: null, status: "booked", startsAt: { lte: new Date() } } }));
@@ -66,6 +70,23 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <li key={p.message}>{p.message}</li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {/* (Owner, Oct 29, batch 23 section 2) Emails waiting after a failure, or failed for good: a red box at the top until everything is sent (every admin sees it). */}
+      {(mail.waiting > 0 || mail.failedCount > 0) && (
+        <section className="scroll-mt-24 space-y-2 rounded-xl border border-rose-500/60 bg-rose-950/40 p-4 text-sm text-rose-100" id="emails" data-emails-box="">
+          {mail.waiting > 0 && mail.since && <p className="font-semibold text-rose-200" data-emails-waiting="">{emailsDownLine(mail.waiting, clock(mail.since), mail.error, mail.cap)}</p>}
+          {mail.waiting > 0 && <p className="text-xs text-rose-200/80">Each is tried again after 5, 15 and 30 minutes, then every hour, for 48 hours. The uptime monitor&apos;s keyword alert tells you outside the app too.</p>}
+          {mail.failedCount > 0 && (
+            <div className="space-y-1" data-emails-failed="">
+              <p className="font-semibold text-rose-200">{mail.failedCount} email{mail.failedCount === 1 ? "" : "s"} failed for good (tried for 48 hours, kept):</p>
+              <ul className="max-h-52 list-disc space-y-0.5 overflow-y-auto pl-5">
+                {mail.failed.map((m) => <li key={m.id}>To {m.to} · “{m.subject}” · written {clock(m.createdAt)} · {m.lastError}</li>)}
+              </ul>
+              <AdminButton action="emails-clear" id="all" label="Clear this list (the emails are kept)" />
+            </div>
+          )}
         </section>
       )}
 

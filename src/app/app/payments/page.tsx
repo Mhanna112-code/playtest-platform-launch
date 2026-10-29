@@ -6,7 +6,7 @@ import { stripeOn } from "@/lib/server/stripe";
 import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { HOLD_APPROVAL_AFTER, retryStatusLine } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, reservedLine, retryStatusLine } from "@/lib/rules";
 import { confirmItems } from "@/lib/server/confirm";
 import { ConfirmList } from "./ConfirmList";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
@@ -79,8 +79,9 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         const review = !!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER);
         if (!u.holdStartedAt) return null;
         // (Owner, Oct 28, batch 16 section 41) A chargeback hold: paying never lifts it (step 2 shows ✓; the team's Approve, step 3, lifts it).
-        if (!o.length) return cbSteps ? <p className="info" data-chargeback-paid="">Paid. Your tests stay paused until the team approves.</p> : review ? <p className="info" data-hold-review-paid="">You&apos;ve paid what you owe. The team will review your account before your tests resume.</p> : null;
-        return <OwedBox onHold={!!u.holdStartedAt} owed={o} chargeback={!!cbSteps} review={review} retryLine={cbSteps ? "" : retryStatusLine(u, fmtDateTime)} verifyFirst={!!cbSteps && !cbSteps.cardVerified} />;
+        // (Batch 23 section 6) Everything owed reserved on the card: "Reserved $X: it's taken when the team approves lifting your hold."
+        if (!o.length) return cbSteps ? <p className="info" data-chargeback-paid="">{cbSteps.reservedCents > 0 ? reservedLine(cbSteps.reservedCents) : "Paid. Your tests stay paused until the team approves."}</p> : review ? <p className="info" data-hold-review-paid="">You&apos;ve paid what you owe. The team will review your account before your tests resume.</p> : null;
+        return <OwedBox onHold={!!u.holdStartedAt} owed={o} chargeback={!!cbSteps} review={review} retryLine={cbSteps ? "" : retryStatusLine(u, fmtDateTime)} verifyFirst={!!cbSteps && !cbSteps.cardVerified} reservedCents={cbSteps?.reservedCents ?? 0} reserveExpired={cbSteps?.expired ?? false} />;
       }))}
       {/* (Batch 11) Payments the developer's bank wants confirmed (made while they weren't here). (Batch 17 §11) A charge on a test links to its test page's button. */}
       {dev && <ConfirmList items={await confirmItems(u.id)} />}

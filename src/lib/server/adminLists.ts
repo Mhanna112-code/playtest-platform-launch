@@ -39,7 +39,7 @@ export type LiftVM = { id: string; at: string; head: string; owed: string; paid:
 /** A profile report: who reported whom, when, why, with links to both profiles. */
 export type ReportVM = { id: string; at: string; reporter: string; reporterHref: string; reported: string; reportedHref: string; when: string; note: string };
 export type PausedVM = { id: string; at: string; text: string; closure: string; extended: boolean };
-export type ChargebackVM = { id: string; at: string; email: string; since: string; chargebacks: string[]; cardVerified: boolean; owedPaid: boolean; owedLine: string };
+export type ChargebackVM = { id: string; at: string; email: string; since: string; chargebacks: string[]; cardVerified: boolean; owedPaid: boolean; owedLine: string; /** (Batch 23 section 6) money reserved on the card; the last reservation lapsed */ reservedCents: number; expired: boolean };
 
 export type Kind = "contact" | "disputes" | "decided" | "mine" | "users" | "tests" | "noshows" | "payments" | "paused" | "chargebacks" | "lifts" | "reports" | "u-payments" | "u-payouts" | "u-disputes" | "u-chargebacks" | "u-holds" | "u-tests" | "u-reports" | "u-parts" | "t-timeline" | "t-contracts" | "t-payments";
 /** (Batch 15 section 21) An admin by email, as admin views name them ("an admin (deleted)" once the account is gone). */
@@ -58,7 +58,7 @@ async function lastActions(targetIds: string[], actions: string[]) {
 }
 const ACTION_WORDS: Record<string, string> = {
   "pause-test": "paused", "unpause-test": "unpaused", "stop-test": "stopped", "extend-pause": "closing date extended", "close-paused": "closed now", "allow-critical-changes": "3 more changes allowed",
-  "release-share": "released to the tester", "refund-share": "refunded to the developer", transfer: "sent", "approve-hold": "lift approved", "approve-chargeback": "lift approved", "delete-account": "deleted",
+  "release-share": "released to the tester", "refund-share": "refunded to the developer", transfer: "sent", "approve-hold": "lift approved", "approve-chargeback": "lift approved", "decline-chargeback": "reservation released", "emails-clear": "failed emails cleared", "delete-account": "deleted",
   suspend: "suspended", unsuspend: "reinstated", decide: "decided", "contact-replied": "marked replied", "approve-outage": "outage approved",
 };
 
@@ -377,7 +377,10 @@ async function chargebacks(cursor: string | null): Promise<Page<ChargebackVM & {
     chargebacks: cbs.map((p) => `Chargeback open: ${money(p.amountCents)} · ${p.stripePaymentIntentId}`),
     cardVerified: steps.cardVerified,
     owedPaid: steps.owedPaid,
-    owedLine: steps.owedPaid ? "" : ` (${money(steps.owedCents)} owed)`,
+    // (Batch 23 section 6) Pay what you owe reserves: the row says how much is reserved against what is owed.
+    owedLine: steps.owedPaid ? (steps.reservedCents ? ` (${money(steps.reservedCents)} reserved)` : "") : ` (${money(steps.owedCents)} owed, ${money(steps.reservedCents)} reserved)`,
+    reservedCents: steps.reservedCents,
+    expired: steps.expired,
   }));
   return slice(all, (r) => r.date, cursor);
 }
