@@ -218,12 +218,13 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   const existing = await db.dispute.findFirst({ where });
   // (Batch 20 section 15) Nothing a decision could add (the admin form's max, from disputeBounds): refused with the page's line (an older page).
   const bounds = existing || byTesterChoice(review.reason) ? null : await disputeBounds({ submissionId: kind === "call" ? null : id, callId: kind === "call" ? id : null });
+  const roomCents = bounds ? bounds.max - bounds.min : 0;
   const ok = canDispute(review.amountCents, review.agreedCents, !!existing, byTesterChoice(review.reason), bounds ? bounds.max - bounds.min : null);
   if (!ok.ok) throw new HttpError(409, "no_dispute", ok.message);
   const d = await db.dispute.create({ data: { ...where, contractId, testerId: tester.id, reason } });
   // (Batch 15 section 35) The live line opens its Needs you row, like the bell line.
   await logEvent(c.testId, "dispute", `${displayName(tester)} disputed the pay for their ${kind === "call" ? "live call" : (await db.submission.findUnique({ where: { id } }))?.kind === "recording" ? "recording" : "written answers"}`, contractId, `item-dispute-${d.id}`);
-  await notify(c.test.developer.email, `${displayName(tester)} disputed a payment on “${c.title}”`, [`${displayName(tester)} thinks the pay should be higher: “${reason}”`, `Our team decides. A decision can only raise the pay, ${disputeLimitText(review.agreedCents, kind === "call" ? "call" : "submission")}.`], `/app/tests/${c.testId}#item-dispute-${d.id}`, { group: "disputefiled" });
+  await notify(c.test.developer.email, `${displayName(tester)} disputed a payment on “${c.title}”`, [`${displayName(tester)} thinks the pay should be higher: “${reason}”`, `Our team decides. A decision can only raise the pay, ${disputeLimitText(roomCents)}.`], `/app/tests/${c.testId}#item-dispute-${d.id}`, { group: "disputefiled" });
   // (Owner, Oct 26) Admins are told too: new-dispute lines on the same day stack into one line across tests, linking to the disputes.
   const flagged = await reportedOver3([tester.id, c.test.developerId]);
   for (const a of await adminUsers()) await bell(a.id, `Dispute on “${c.title}”: ${labelled(displayName(tester), flagged.has(tester.id))} says the pay should be higher (${labelled(displayName(c.test.developer), flagged.has(c.test.developerId))})`, "/admin#disputes", undefined, { group: "disputes" });
@@ -243,30 +244,33 @@ export async function disputeRoom(pieces: { submissionId?: string | null; callId
 }
 
 /**
- * (Item 28) What an admin may decide for a dispute: MIN = what this piece was paid; MAX = the part's listing minus what was
- * already paid for that part on OTHER pieces (payments on the same work that are not this review's).
- * (Owner, Oct 29, batch 10) An unlisted part: MAX = the unlisted cap ($1000 for a written or recording piece, $200/h × the logged minutes for a call) minus what was already
- * paid on it besides this Pay (its extra pays). `listing` is then that cap and `unlisted` is true.
+ * What an admin may decide for a dispute. (Owner, Oct 29, batch 28 §15) The total for THIS piece: MIN = what the piece was already paid (its Pay and every Pay more);
+ * MAX = its cap, the same one Pay + Pay more have (pieceRoom: a listed part's listing plus its max, batch 28 §20; an unlisted part's max plus the max; an unlisted call
+ * its max; a call also within what's left of the $1,000 for that tester's calls). A decision still only raises pay.
  */
 export async function disputeBounds(d: { submissionId: string | null; callId: string | null }) {
-  const review = await db.review.findFirstOrThrow({ where: d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! } });
-  const paid = await db.payment.aggregate({ where: { ...(d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! }), kind: { not: "dispute" }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } });
-  if (review.agreedCents == null) {
-    const piece = await pieceOf(d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId });
-    const cap = piece ? pieceMaxCents(piece.kind, piece.minutes) : 0;
-    const other = Math.max(0, (paid._sum.amountCents ?? 0) - review.amountCents);
-    // (Batch 15 section 34) A call also stays within what is left of the $1,000 for all of the tester's calls on the test.
-    const pool = piece?.kind === "call" ? review.amountCents + (await callsLeftCents(piece.contractId)) : Infinity;
-    return { review, listing: Math.min(cap, pool + other), unlisted: true, other, min: review.amountCents, max: Math.max(review.amountCents, Math.min(cap - other, pool)) };
-  }
-  const other = d.submissionId ? Math.max(0, (paid._sum.amountCents ?? 0) - review.amountCents) : 0;
-  // (Batch 15 section 34) A listed call's decision is capped at what's left of the $1,000 too.
-  const pool = d.callId ? review.amountCents + (await callsLeftCents(review.contractId)) : Infinity;
-  const listing = Math.min(review.agreedCents, pool + other);
-  return { review, listing, unlisted: false, other, min: review.amountCents, max: Math.max(review.amountCents, listing - other) };
+  const key = d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! };
+  const review = await db.review.findFirstOrThrow({ where: key });
+  const piece = await pieceOf(key);
+  if (!piece) return { review, min: review.amountCents, max: review.amountCents, poolBinds: false };
+  const room = await pieceRoom(piece);
+  const min = Math.max(review.amountCents, room.paidCents);
+  return { review, min, max: min + room.roomCents, poolBinds: room.ceilingBinds };
 }
 
-/** Admin: decide a dispute. The total can only go up (to at most the listing minus what the part was already paid on other pieces); blank keeps the pay; the extra is charged. */
+/** (Batch 28 §14) What each paid piece has been paid and can reach in all with Pay more (the tester's line on a paid part). */
+export async function paidAndCap(pieces: { submissionId?: string | null; callId?: string | null }[]) {
+  const out = new Map<string, { paidCents: number; allCents: number }>();
+  for (const k of pieces) {
+    const piece = await pieceOf(k);
+    if (!piece) continue;
+    const r = await pieceRoom(piece);
+    out.set(k.submissionId ?? k.callId ?? "", { paidCents: r.paidCents, allCents: r.paidCents + r.roomCents });
+  }
+  return out;
+}
+
+/** Admin: decide a dispute. The total can only go up (to at most the piece's cap, batch 28 §15); blank keeps the pay; the extra is charged. */
 export async function decideDispute(admin: U, disputeId: string, body: Record<string, unknown>) {
   if (!isAdmin(admin)) throw new HttpError(403, "not_admin", "Only admins can decide disputes.");
   const d = await db.dispute.findUnique({ where: { id: disputeId } });
@@ -279,11 +283,11 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
     const dev = (await db.contract.findUnique({ where: { id: d.contractId }, include: { test: { include: { developer: true } } } }))?.test.developer;
     throw new HttpError(409, "stop_once", "Press Decide again to go ahead.", { changes: [{ text: `${dev ? displayName(dev) : "The developer"} added their side at ${fmtTime(d.devSideAt)}: read it, then press Decide again.`, at: d.devSideAt }], devSide: d.devSide });
   }
-  const { review, other, listing, unlisted } = await disputeBounds(d);
+  const { review, min, max, poolBinds } = await disputeBounds(d);
   // A blank box keeps the pay as it is.
   const blank = body.total === undefined || body.total === null || String(body.total).trim() === "";
-  const decided = blank ? review.amountCents : toCents(body.total);
-  const check = checkDisputeDecision(decided, review.amountCents, listing, other, unlisted);
+  const decided = blank ? min : toCents(body.total);
+  const check = checkDisputeDecision(decided, min, max, poolBinds);
   if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
   const extra = check.extraCents!;
   const c = await db.contract.findUniqueOrThrow({ where: { id: d.contractId }, include: { tester: true, test: { include: { developer: true } } } });
@@ -328,7 +332,7 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
       await db.payment.create({ data: { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, ...result } });
     }
   }
-  const line = extra > 0 ? `The team raised the pay to ${money(decided!)} (${money(extra)} more).` : `The team kept the pay at ${money(review.amountCents)}${review.rejected ? " (rejected)" : ""}.`;
+  const line = extra > 0 ? `The team raised the pay to ${money(decided!)} (${money(extra)} more).` : `The team kept the pay at ${money(min)}${review.rejected ? " (rejected)" : ""}.`;
   await logEvent(c.testId, "admin", `The team decided ${displayName(c.tester)}'s dispute: ${line.replace(/^The team /, "").replace(/\.$/, "")}`, c.id);
   await (await import("./ratings")).maybePromptRating(c.id);
   await notify(c.tester.email, `Your dispute on “${c.title}” was decided`, [line, ...(delayed ? ["Payment may be delayed until the test resumes."] : []), ...(note ? [`Their note: “${note}”`] : [])], `/app/sessions/${c.id}#${d.callId ? "part-live" : partAnchor((await db.submission.findUnique({ where: { id: d.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers")}`, { group: "disputedecided" });
@@ -376,12 +380,14 @@ export async function waitingForReview(devId: string) {
 
 type PieceKey = { submissionId?: string | null; callId?: string | null };
 const COUNTED = ["charged", "not_set_up", "deferred", "pending", "owed", "needs_action", "needs_confirmation"];
+/** (Batch 28 §15) What counts as paid on a piece above its Pay: every Pay more, and a team decision's raise (a dispute can now reach the cap). */
+const ABOVE_PAY = ["extra", "dispute"];
 /** (Owner, Oct 30, batch 15 section 30) The refusal for an old page's Reject (or an API call). */
 export const NO_REJECT = "There's no Reject: pay any amount, $0 included (say why at $0).";
 /**
  * What can still be paid on ONE piece, with ONE Pay box (owner, Oct 29: batch 11 section 6 merged Extra pay into Pay; batch 12 section 2 the call caps).
- *   - Listed: the listing plus up to 100% of it above (never more than the max: $1000, or $200/h × the logged minutes for a call).
- *   - Unlisted written answers or recording: the max ($1000) plus 100% of it ($2000 in all).
+ *   - Listed: (batch 28 §20) the listing plus the part's max above it ($1000, or $200/h × the logged minutes for a call).
+ *   - Unlisted written answers or recording: the max ($1000) plus the max ($2000 in all).
  *   - Unlisted call: at most $200/h × its measured minutes, nothing above.
  *   - (Batch 15 section 34) Any call, listed or not: all of the tester's calls on the test together at most $1,000 (extra pay counted).
  * `roomCents`: the most the next payment (the first Pay or a "Pay more") can be. `aboveRoomCents`: what is still left above the base (the listing, or the max), for the
@@ -394,7 +400,7 @@ export async function pieceRoom(piece: { where: PieceKey; listing: number | null
   const cap = unlistedCall ? 0 : extraCapCents(piece.listing, maxCents);
   const base = piece.listing ?? maxCents;
   const rev = await tx.review.findFirst({ where: { ...key, rejected: false }, select: { amountCents: true } });
-  const extras = (await tx.payment.aggregate({ where: { ...key, kind: "extra", status: { in: COUNTED } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
+  const extras = (await tx.payment.aggregate({ where: { ...key, kind: { in: ABOVE_PAY }, status: { in: COUNTED } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
   const paidCents = (rev?.amountCents ?? 0) + extras;
   const totalCapCents = base + cap;
   const aboveRoomCents = Math.max(0, cap - Math.max(0, paidCents - base));
@@ -472,7 +478,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     const again = await tx.payment.findFirst({ where: { kind: "extra", pressKey: extraKey } });
     if (again && again.status !== "failed" && again.status !== "cancelled") return { again };
     if (again) await tx.payment.update({ where: { id: again.id }, data: { pressKey: null } });
-    // (Batch 9 section 6) Per piece: listed, 100% of the listing at most (never more than the max); unlisted, 100% of the max on top of the Pay.
+    // (Batch 9 section 6; batch 28 §20) Per piece: listed, the listing plus the part's max; unlisted, the max on top of the Pay.
     const room = await pieceRoom(piece, tx);
     const morePress = payPressOf(c.id, at);
     if (amount! > room.roomCents) {

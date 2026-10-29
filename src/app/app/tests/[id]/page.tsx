@@ -37,6 +37,7 @@ import { HOLD_APPROVAL_AFTER, inviteBlocked, rateNeedsLine, NOT_LISTED, callList
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
+import { paidMostLine } from "@/lib/rules";
 import { closedOut, payMoreClosesAt, pieceCloseOut } from "@/lib/server/closeOut";
 import { BankWaiting } from "@/components/BankWaiting";
 import { bankWaitingOnTest } from "@/lib/server/confirm";
@@ -149,7 +150,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const rooms = new Map(await Promise.all(pieceKeys.map(async (k) => {
     const piece = (await pieceOf(k))!;
     const r = await pieceRoom(piece);
-    return [k.submissionId ?? k.callId!, { room: r.roomCents, listed: r.listed, pool: r.callPoolRoomCents, box: { roomCents: r.roomCents, aboveRoomCents: r.aboveRoomCents, ceilingBinds: r.ceilingBinds } }] as const;
+    return [k.submissionId ?? k.callId!, { room: r.roomCents, paid: r.paidCents, listed: r.listed, pool: r.callPoolRoomCents, box: { roomCents: r.roomCents, aboveRoomCents: r.aboveRoomCents, ceilingBinds: r.ceilingBinds } }] as const;
   })));
   // (Batch 15 section 34) What's left of the $1,000 for each tester's calls, and the small warning when under an hour (or under $200 unlisted).
   const callsLeft = new Map(await Promise.all(t.contracts.map(async (c) => [c.id, await callsLeftCents(c.id)] as const)));
@@ -528,6 +529,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                         <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                           room={rooms.get(r.sub.id)?.box} listingCents={r.sub.agreedCents} listingText={`${money(r.sub.agreedCents)} for ${r.name === "Recording" ? "a recording" : "written answers"}`} />
                       )}
+                      {/* (Owner, Oct 29, batch 28 §14) At its cap, where Pay more was (grey). */}
+                      {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && payMore.open && rooms.has(r.sub.id) && (rooms.get(r.sub.id)?.room ?? 0) <= 0 && (
+                        <span className="w-full text-sm text-slate-400" data-paid-most="">{paidMostLine(rooms.get(r.sub.id)!.paid)}</span>
+                      )}
                       {r.sub?.review && r.sub.review.amountCents === 0 && !r.sub.review.rejected && r.sub.review.reason && <span className="w-full text-sm text-slate-300" data-paid-zero="">{paidZeroLine(r.sub.review.reason)}</span>}
                       {r.sub?.review?.rejected && <span className="badge border-rose-400/40 text-rose-200">Rejected</span>}
                       {/* (Batch 17 §11) A charge on this part made while you were away, waiting for your bank. */}
@@ -576,6 +581,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                                 room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
                                 listingCents={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).cents}
                                 listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
+                            )}
+                            {x.review && !x.review.rejected && !restricted && payMore.open && rooms.has(x.id) && (rooms.get(x.id)?.room ?? 0) <= 0 && (
+                              <p className="text-sm text-slate-400" data-paid-most="">{paidMostLine(rooms.get(x.id)!.paid)}</p>
                             )}
                           </li>
                         );

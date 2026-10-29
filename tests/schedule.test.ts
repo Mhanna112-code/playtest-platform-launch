@@ -54,17 +54,17 @@ describe("notification schedule", { timeout: 120_000 }, () => {
     expect(await n("review Ana Silva's written answers by tomorrow")).toBe(1);
     expect((await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, text: { contains: "by tomorrow" } } })).groupKey).toBe("unreviewed");
     // 14 days have passed but Open until has not: Charge has not opened (no offer to the tester, no daily reminder).
-    expect(await n("waited over 7 days")).toBe(0);
+    expect(await n("reviewed by")).toBe(0);
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).toBeNull();
     // Open until passes: it opens, and the developer is reminded daily.
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() - 1000) } }); // (batch 15 section 18: the tester's own deadline)
     await cron(); // opens: offer to the tester + first daily reminder to the developer
     await cron(); // same day: not again
-    expect(await n("waited over 7 days")).toBe(1);
+    expect(await n("reviewed by")).toBe(1);
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).not.toBeNull();
     await db.submission.update({ where: { id: sub.id }, data: { devRemindedAt: new Date(Date.now() - DAY) } });
     await cron();
-    expect(await n("waited over 7 days")).toBe(2);
+    expect(await n("reviewed by")).toBe(2);
   });
 
   it("(batch 15 section 18) Charge opens at the later of sent + 7 days and the tester's own deadline (an old test with no Open until too)", async () => {

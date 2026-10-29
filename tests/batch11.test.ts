@@ -301,10 +301,11 @@ describe("batch 11 item 5: the paused banner mentions the deadline", () => {
 describe("batch 11 item 6 (with batch 12 section 2): one Pay box, Pay more", () => {
   it("a listed piece: the first Pay can go above the listing within the cap; then Pay more until the cap; the tester's lines", async () => {
     const { dev, tester, testId, sessionId, sub } = await sentWork("20.00");
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "40.01", tickedCents: 4001 })).body.error.message).toBe("This is more than you can pay above the listing (up to $20).");
+    // (Batch 28 §20) The listing plus the part's max: $20 + $1,000.
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "1020.01", tickedCents: 102_001, over200: true })).body.error.message).toBe("This is more than you can pay above the listing (up to $1,000).");
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "30.00", tickedCents: 3000 })).status).toBe(200);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $30.00 for your written answers on “Harbor Run”" } })).toBe(1);
-    expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "10.01", tickedCents: 1001 })).body.error.message).toBe("This is more than you can pay above the listing (up to $10).");
+    expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "990.01", tickedCents: 99_001, over200: true })).body.error.message).toBe("This is more than you can pay above the listing (up to $990).");
     expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "10.00", tickedCents: 1000, note: "Great" })).status).toBe(200);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $10.00 more for your written answers on “Harbor Run”" } })).toBe(1); // (batch 15 section 20: the note is in the email, not the bell)
   });

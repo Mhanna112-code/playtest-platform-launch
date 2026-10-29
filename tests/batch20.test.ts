@@ -665,34 +665,33 @@ describe("batch 20 section 15: Dispute disabled when nothing more can be awarded
   }
   it("the rule and its line", async () => {
     const { canDispute, NOTHING_TO_DISPUTE } = await import("@/lib/rules");
-    expect(NOTHING_TO_DISPUTE).toBe("Already paid the most a dispute could award, so there's nothing to dispute.");
+    expect(NOTHING_TO_DISPUTE).toBe("Already paid the most this piece can be paid, so there's nothing to dispute."); // (batch 28 §15)
     expect(canDispute(1000, 1000, false, false, 0)).toEqual({ ok: false, message: NOTHING_TO_DISPUTE });
     expect(canDispute(999, 1000, false, false, 1).ok).toBe(true);
     expect(canDispute(1000, 1000, false, false, null).ok).toBe(true); // not known: as before
   });
-  it("(server) a listed piece paid in full is refused; one cent below goes through", async () => {
+  it("(server; batch 28 §15) a listed piece paid the listing can still be disputed: the range runs to the piece's cap", async () => {
     const full = await paidAt("10.00", 1000);
-    expect((await dispute(full.sessionId, full.tester.cookie, full.sub.id)).body.error.message).toBe("Already paid the most a dispute could award, so there's nothing to dispute.");
-    const below = await paidAt("9.99", 999);
-    expect((await dispute(below.sessionId, below.tester.cookie, below.sub.id)).status).toBe(200);
+    expect((await dispute(full.sessionId, full.tester.cookie, full.sub.id)).status).toBe(200);
   });
-  it("(server) an unlisted piece at its max ($1,000) is refused", async () => {
+  it("(server; batch 28 §15) an unlisted piece paid its max ($1,000) can still be disputed up to its cap ($2,000)", async () => {
     const x = await paidAt("1000.00", 100000, { writtenCents: null });
-    expect((await dispute(x.sessionId, x.tester.cookie, x.sub.id)).body.error.message).toBe("Already paid the most a dispute could award, so there's nothing to dispute.");
+    expect((await dispute(x.sessionId, x.tester.cookie, x.sub.id)).status).toBe(200);
   });
-  it("(server) a Pay more reaching the max disables it (the page's poll brings it); the page uses the admin form's bounds", async () => {
+  it("(server) a Pay more reaching the cap disables it (the page's poll brings it); the page uses the admin form's bounds", async () => {
     const x = await paidAt("8.00", 800);
     const { disputeRoom } = await import("@/lib/server/payments");
-    expect((await disputeRoom([{ submissionId: x.sub.id }])).get(x.sub.id)).toBe(200);
+    expect((await disputeRoom([{ submissionId: x.sub.id }])).get(x.sub.id)).toBe(100_200); // (batch 28 §20) $8 + $1,000, less the $8 paid
+    expect((await payMore(x.testId, x.dev.cookie, { contractId: x.sessionId, submissionId: x.sub.id, amount: "1000.00", tickedCents: 100_000, over200: true })).status).toBe(200);
     expect((await payMore(x.testId, x.dev.cookie, { contractId: x.sessionId, submissionId: x.sub.id, amount: "2.00", tickedCents: 200 })).status).toBe(200);
     expect((await disputeRoom([{ submissionId: x.sub.id }])).get(x.sub.id)).toBe(0);
-    expect((await dispute(x.sessionId, x.tester.cookie, x.sub.id)).body.error.message).toBe("Already paid the most a dispute could award, so there's nothing to dispute.");
+    expect((await dispute(x.sessionId, x.tester.cookie, x.sub.id)).body.error.message).toBe("Already paid the most this piece can be paid, so there's nothing to dispute.");
     const page = src("app/app/sessions/[id]/page.tsx");
     expect(page).toContain('<button type="button" className="btn-ghost text-sm" disabled>Dispute the pay</button>');
     expect(page).toContain("const room = await disputeRoom(");
     // The same bounds as the admin's decision (disputeBounds), so the two never disagree; a call's include what's left of the $1,000.
     expect(src("lib/server/payments.ts")).toContain("const bounds = existing || byTesterChoice(review.reason) ? null : await disputeBounds(");
-    expect(src("lib/server/payments.ts")).toContain("const pool = d.callId ? review.amountCents + (await callsLeftCents(review.contractId)) : Infinity;");
+    expect(src("lib/server/payments.ts")).toContain("const room = await pieceRoom(piece);");
   });
 });
 

@@ -125,24 +125,31 @@ export function canDispute(paidCents: number, listingCents: number | null, alrea
   if (roomCents != null && roomCents <= 0) return no(NOTHING_TO_DISPUTE);
   return yes;
 }
-/** (Owner, Oct 28, batch 20 section 15) Already paid the most a team decision could award (the admin form's own max): the Dispute button is disabled with this line. */
-export const NOTHING_TO_DISPUTE = "Already paid the most a dispute could award, so there's nothing to dispute.";
+/**
+ * (Owner, Oct 28, batch 20 section 15; batch 28 §15) Already paid the most this piece can be paid (its cap, the admin form's own max): the Dispute button is disabled
+ * with this line.
+ */
+export const NOTHING_TO_DISPUTE = "Already paid the most this piece can be paid, so there's nothing to dispute.";
 /** (Batch 10) A dispute pressed on a part the tester settled themselves (their Charge or Let it go). */
 export const TESTER_CHOSE_LINE = "You settled this part yourself (Charge or Let it go), so there's no developer decision to dispute.";
-/** (Batch 10) What an admin's decision can reach, for the dispute form's note: the listing, or the unlisted max for this piece. */
-export const disputeLimitText = (listingCents: number | null, kind: "submission" | "call") =>
-  listingCents != null ? "up to the listing amount" : kind === "call" ? `up to ${money(NO_LISTING_CALL_RATE_CAP_CENTS).replace(/\.00$/, "")} an hour for the measured minutes` : `up to ${money(NO_LISTING_WORK_CAP_CENTS).replace(/\.00$/, "")} for this piece`;
+/**
+ * (Batch 28 §15) How far a decision can raise the pay, for the dispute form's note and the developer's notice: "up to $20.00 more" (what's left of the piece's cap, the same
+ * cap Pay and Pay more have).
+ */
+export const disputeLimitText = (roomCents: number) => `up to ${money(Math.max(0, roomCents))} more`;
+/** (Batch 28 §15) The admin form's range: "$20.00 paid · can raise up to $20.00 more". */
+export const disputeRangeLine = (paidCents: number, roomCents: number) => `${money(paidCents)} paid · can raise up to ${money(Math.max(0, roomCents))} more`;
 
 /**
- * An admin's decision can only raise pay. (Owner, item 28) MIN = what this piece was paid; MAX = the part's listing minus what
- * was already paid for that part on OTHER pieces (the same rule as the Charge cap). Returns the extra to charge.
+ * An admin's decision can only raise pay. (Owner, Oct 29, batch 28 §15) The total for the piece runs from what it was already paid (`paidCents`, its Pay and every Pay
+ * more) up to its cap (`maxCents`: the same cap Pay + Pay more have; a call also within what's left of the $1,000 for that tester's calls, `poolBinds`). Returns the
+ * extra to charge.
  */
-export function checkDisputeDecision(decidedCents: number | null, paidCents: number, listingCents: number, otherPaidCents = 0, unlisted = false): Check & { extraCents?: number } {
+export function checkDisputeDecision(decidedCents: number | null, paidCents: number, maxCents: number, poolBinds = false): Check & { extraCents?: number } {
   if (decidedCents == null || !Number.isInteger(decidedCents)) return no("Enter the total pay, like 7.50.");
   if (decidedCents < paidCents) return no(`A decision can only raise pay: at least the ${money(paidCents)} paid for this piece.`);
-  const max = Math.max(paidCents, listingCents - otherPaidCents);
-  // (Batch 10) An unlisted part: `listingCents` is its max ($1000 for a written or recording piece, $200/h × the logged minutes for a call), minus what was already paid on it.
-  if (decidedCents > max) return no(`At most ${money(max)}: ${unlisted ? `the max of ${money(listingCents)} for a part that isn't listed` : `the listing's ${money(listingCents)}`}${otherPaidCents > 0 ? ` minus the ${money(otherPaidCents)} already paid for this part` : ""}.`);
+  const max = Math.max(paidCents, maxCents);
+  if (decidedCents > max) return no(`At most ${money(max)}: ${poolBinds ? "what's left of the $1,000 for this tester's calls" : "the most this piece can be paid"}.`);
   const extra = decidedCents - paidCents;
   if (extra > 0 && extra < MIN_CHARGE_CENTS) return no(`The extra would be under the smallest card charge (${money(MIN_CHARGE_CENTS)}). Keep the pay as it is or raise it by at least ${money(MIN_CHARGE_CENTS)}.`);
   return { ok: true, extraCents: extra };
@@ -1396,12 +1403,7 @@ export const EXTRA_PAY_TICK_CENTS = PAY_TICK_CENTS;
 /** The most one extra payment can be. For now only Stripe's own limit; the owner is deciding a cap, so it lives here and nowhere else. */
 export const EXTRA_PAY_MAX_CENTS = STRIPE_MAX_CENTS;
 export const EXTRA_PAY_TICK_LINE = PAY_TICK_LINE;
-/**
- * (Owner, Oct 28 night, batch 9 section 6) Extra pay is everything paid above a piece's base (the listing for a listed part, or the max for an unlisted one), counted PER
- * PIECE across its Pay and every Extra pay on it. Listed: at most this percent of the listing, and never more than the max. Unlisted: the Pay itself is at most the max,
- * and extra pay adds at most this percent of the max on top. (It replaced the per-contract 100% cap.)
- */
-export const EXTRA_PAY_CAP_PERCENT = 100;
+
 /** (Batch 9 section 1) A part with no listed price: written answers or a recording at most $1000 per piece; a call at most $200 an hour for the minutes logged. */
 export const NO_LISTING_WORK_CAP_CENTS = 100_000;
 export const NO_LISTING_CALL_RATE_CAP_CENTS = 20_000;
@@ -1410,9 +1412,23 @@ export const NO_LISTING_CALL_RATE_CAP_CENTS = 20_000;
 export const overCallsLine = (roomCents: number) => `This is more than you can pay for this call (up to ${money(roomCents)} at ${money(NO_LISTING_CALL_RATE_CAP_CENTS).replace(/\.00$/, "")} an hour).`;
 /** A piece's max: $1000 for written answers or a recording; $200/h × the logged minutes for a call. */
 export const pieceMaxCents = (kind: "submission" | "call", minutes = 0) => (kind === "call" ? Math.round((NO_LISTING_CALL_RATE_CAP_CENTS * minutes) / 60) : NO_LISTING_WORK_CAP_CENTS);
-/** How much may be paid above the base on one piece in all (listed: the percent of the listing, at most the max; unlisted: the percent of the max). */
-export const extraCapCents = (listingCents: number | null, maxCents: number) =>
-  listingCents == null ? Math.round((maxCents * EXTRA_PAY_CAP_PERCENT) / 100) : Math.min(Math.round((listingCents * EXTRA_PAY_CAP_PERCENT) / 100), maxCents);
+/**
+ * How much may be paid above the base on one piece in all (batch 9 section 6: counted PER PIECE across its Pay and every Pay more). (Owner, Oct 29, batch 28 §20) The
+ * part's max, listed or not: a listed piece up to its listing plus the max ($1,000 for written answers or a recording; $200/h × the measured minutes for a call), an
+ * unlisted one up to the max plus the max (the 100%-of-the-listing rule is gone). Calls also stay within what's left of the $1,000 for that tester's calls (pieceRoom).
+ */
+export const extraCapCents = (listingCents: number | null, maxCents: number) => {
+  void listingCents;
+  return maxCents;
+};
+/** (Batch 28 §14) The developer's line where Pay more was, once the piece reached its cap: "Paid the most this piece can be paid ($20.00)." */
+export const paidMostLine = (cents: number) => `Paid the most this piece can be paid (${money(cents)}).`;
+/**
+ * (Batch 28 §14) The tester's line on a paid part. (A paid part can't be changed in this app, so the lines say what Pay more can still add rather than "an update".)
+ * "Nora Lane has paid $10.00 for this. It can be paid more, up to $1,010.00 in all." / "This part is already paid the most it can be ($20.00)." / "Pay more closed on Nov 2."
+ */
+export const testerPayMoreLine = (dev: string, paidCents: number, allCents: number) => `${dev} has paid ${money(paidCents)} for this. It can be paid more, up to ${money(allCents)} in all.`;
+export const testerPaidMostLine = (cents: number) => `This part is already paid the most it can be (${money(cents)}).`;
 /** The blocked wording for pay above the listing (a Pay above it, extra pay): Y is what can still be paid above it. */
 export const overListingLine = (roomCents: number) => `This is more than you can pay above the listing (up to ${money(roomCents).replace(/\.00$/, "")}).`;
 /** The same for a part that isn't listed: "above the max". */

@@ -4,7 +4,9 @@ import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, Mes
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, stopTimeIn } from "@/lib/format";
 import { IN_PROGRESS_TESTER, switchQuestionsLine, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, DELAYED_CALL_LINE, isLate, pausedForTesters, callListed, lateLabel, termsLine, testPaused, testerShare, canAskToRejoin, leftText, paidZeroLine } from "@/lib/rules";
-import { disputeRoom } from "@/lib/server/payments";
+import { disputeRoom, paidAndCap } from "@/lib/server/payments";
+import { payMoreClosesAt } from "@/lib/server/closeOut";
+import { payClosedLine, testerPaidMostLine, testerPayMoreLine } from "@/lib/rules";
 import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, callsLeftWarning, MEASURING_LINE } from "@/lib/callMeasure";
 import { callsLeftCents } from "@/lib/server/callMoney";
 import { callChargeCap, callChoiceLine } from "@/lib/server/holds";
@@ -198,6 +200,11 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const choiceOpen = (sub: typeof written) => !!(sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && canChoose && !chargeShut(sub.id) && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0);
   // (Batch 20 section 15) What a team decision could still add to each reviewed piece without a dispute (the admin form's max): at 0, Dispute is disabled with its line.
   const room = await disputeRoom([...[written, recording].filter((x) => x?.review && !x.dispute).map((x) => ({ submissionId: x!.id })), ...c.calls.filter((x) => x.review && !x.dispute).map((x) => ({ callId: x.id }))]);
+  // (Batch 28 §14) Each paid piece: what it was paid and what Pay more can still bring it to in all; and when Pay more closed (close-out).
+  const caps = await paidAndCap([...[written, recording].filter((x) => x?.review && !x.review.rejected).map((x) => ({ submissionId: x!.id })), ...c.calls.filter((x) => x.review && !x.review.rejected).map((x) => ({ callId: x.id }))]);
+  const payMoreAt = await payMoreClosesAt(c.testId, now);
+  const payMoreShut = closedOut(payMoreAt, now) ? fmtDate(payMoreAt!) : null;
+  const moreOf = (id: string) => (caps.has(id) ? { ...caps.get(id)!, closedOn: payMoreShut } : null);
   const disputable = (r: { amountCents: number; agreedCents: number | null; reason: string } | null | undefined, d: unknown, id = "") => !!r && canAct && canDispute(r.amountCents, r.agreedCents, !!d, byTesterChoice(r.reason), room.get(id) ?? null).ok;
   const unpaidPart = !written?.review || !recording?.review;
   const pausedBanner = rulesPaused ? pausedForTesters({
@@ -401,7 +408,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               {chargeSoon(sub?.id) && choiceOpen(sub) && <p className="note" data-charge-closes="">{chargeSoon(sub?.id)}</p>}
               {/* (Batch 12 section 1) The developer deleted their account before Charge opened: this part can't be paid. */}
               {sub && !sub.review && !sub.choiceOfferedAt && devGone && <p className="info" data-dev-deleted="">{devDeletedLine(devRealName)}</p>}
-              {sub && chargedOwed.has(sub.id) ? <p className="info" data-charged-delayed="">{chargedDelayedLine(chargedOwed.get(sub.id)!)}</p> : sub && delayedSubs.has(sub.id) ? <p className="info">Payment for this part may be delayed.</p> : sub?.review && <TesterReview dev={dev} extras={extraRows.filter((p) => p.submissionId === sub.id)} off={meOff && !limited} delayed={disputeOwed.has(sub.id)} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} room={room.get(sub.id) ?? null} />}
+              {sub && chargedOwed.has(sub.id) ? <p className="info" data-charged-delayed="">{chargedDelayedLine(chargedOwed.get(sub.id)!)}</p> : sub && delayedSubs.has(sub.id) ? <p className="info">Payment for this part may be delayed.</p> : sub?.review && <TesterReview dev={dev} extras={extraRows.filter((p) => p.submissionId === sub.id)} off={meOff && !limited} delayed={disputeOwed.has(sub.id)} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} room={room.get(sub.id) ?? null} more={moreOf(sub.id)} />}
             </li>
           ))}
           <li id="part-live" data-part="live" className="scroll-mt-24 space-y-1.5 rounded-xl border border-white/[0.08] p-3 text-sm">
@@ -431,7 +438,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             {c.calls.filter((x) => x.review).map((x) => (
               <div key={x.id} className="space-y-2">
                 <p className="text-xs text-slate-400" data-call-row="">{fmtDateTime(x.startsAt)} · {callMinutesOf(x) ?? x.minutes} min · {callOutcome(x.review!)}</p>
-                {owedCalls.has(x.id) ? <p className="info">{DELAYED_CALL_LINE}</p> : <TesterReview dev={dev} extras={extraRows.filter((p) => p.callId === x.id)} off={meOff && !limited} delayed={disputeOwed.has(x.id)} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} room={room.get(x.id) ?? null} />}
+                {owedCalls.has(x.id) ? <p className="info">{DELAYED_CALL_LINE}</p> : <TesterReview dev={dev} extras={extraRows.filter((p) => p.callId === x.id)} off={meOff && !limited} delayed={disputeOwed.has(x.id)} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} room={room.get(x.id) ?? null} more={moreOf(x.id)} />}
               </div>
             ))}
           </li>
@@ -567,7 +574,7 @@ const callOutcome = (r: Rev) => (r.rejected ? "rejected" : r.reason === LET_GO_B
 type Disp = { status: string; decidedCents: number | null; decisionNote: string; devSide: string } | null;
 
 /** What the developer did with a piece, as the tester reads it (they see what they get; never holds or chargebacks). */
-function TesterReview({ sessionId, kind, id, review, dispute, delayed = false, off = false, dev = "The developer", extras = [], room = null }: { /** (Batch 20 section 15) what a decision could still add */ room?: number | null; dev?: string; /** (Batch 9) extra pays on this piece, with their notes */ extras?: { amountCents: number; note: string; createdAt: Date }[]; off?: boolean; /** A raise decided while the developer was on a hold: owed, paid when they pay it. */ delayed?: boolean; sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
+function TesterReview({ sessionId, kind, id, review, dispute, delayed = false, off = false, dev = "The developer", extras = [], room = null, more = null }: { /** (Batch 28 §14) what this piece was paid, what Pay more can bring it to in all, and when Pay more closed */ more?: { paidCents: number; allCents: number; closedOn: string | null } | null; /** (Batch 20 section 15) what a decision could still add */ room?: number | null; dev?: string; /** (Batch 9) extra pays on this piece, with their notes */ extras?: { amountCents: number; note: string; createdAt: Date }[]; off?: boolean; /** A raise decided while the developer was on a hold: owed, paid when they pay it. */ delayed?: boolean; sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
   // (Batch 10) Every part the developer reviewed can be disputed once, listed or not (not the tester's own Charge or Let it go).
   const check = canDispute(review.amountCents, review.agreedCents, !!dispute, byTesterChoice(review.reason), room);
   const may = check.ok;
@@ -591,8 +598,12 @@ function TesterReview({ sessionId, kind, id, review, dispute, delayed = false, o
       {extras.map((x, i) => <p key={i} data-extra-line="">Extra {money(x.amountCents)}: you get {money(testerShare(x.amountCents))} ({fmtDateTime(x.createdAt)}){x.note && <> · “{x.note}”</>}</p>)}
       {dispute && <p>{dispute.status === "open" ? "You disputed this: waiting for the team." : `The team decided: ${money(dispute.decidedCents)} in all${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : ""}.`}</p>}
       {delayed && <p className="info" data-dispute-delayed="">Payment may be delayed until the test resumes.</p>}
+      {/* (Owner, Oct 29, batch 28 §14) Whether this part can still be paid more (grey; not a stop). */}
+      {more && !review.rejected && (
+        <p className="note" data-pay-more-state="">{more.allCents <= more.paidCents ? testerPaidMostLine(more.paidCents) : more.closedOn ? payClosedLine(more.closedOn, true) : testerPayMoreLine(dev, more.paidCents, more.allCents)}</p>
+      )}
       {dispute?.devSide && <p>The developer&apos;s side: “{dispute.devSide}”</p>}
-      {may && !off && <DisputeForm sessionId={sessionId} kind={kind} id={id} seenAt={new Date().toISOString()} limit={disputeLimitText(review.agreedCents, kind)} />}
+      {may && !off && <DisputeForm sessionId={sessionId} kind={kind} id={id} seenAt={new Date().toISOString()} limit={disputeLimitText(room ?? 0)} />}
       {full && !off && (
         <div className="space-y-1" data-dispute-none="">
           <button type="button" className="btn-ghost text-sm" disabled>Dispute the pay</button>

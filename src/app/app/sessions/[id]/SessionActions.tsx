@@ -169,8 +169,8 @@ export function LeaveButton({ sessionId, seenAt, title }: { sessionId: string; s
   );
 }
 
-/** Dispute once, on any part the developer reviewed (batch 10). `limit`: how far a decision can raise the pay ("up to the listing amount", or the unlisted max). */
-export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", limit = "up to the listing amount" }: { disabledNote?: string; sessionId: string; kind: "submission" | "call"; id: string; seenAt?: string; limit?: string }) {
+/** Dispute once, on any part the developer reviewed (batch 10). `limit`: how far a decision can raise the pay (batch 28 §15: "up to $20.00 more", to the piece's cap). */
+export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", limit = "up to the piece's cap" }: { disabledNote?: string; sessionId: string; kind: "submission" | "call"; id: string; seenAt?: string; limit?: string }) {
   const [box, setBox] = useStopBox();
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");

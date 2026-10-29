@@ -145,8 +145,8 @@ describe("M2: Pay more can't race past its cap or charge twice", () => {
     await withCard(dev.user.id);
     const keys = okStripe();
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    // Room above the $10 listing: $10 more. Two $6 presses at once: only one fits.
-    const [a, b] = await Promise.all([payMore(testId, dev.cookie, { submissionId: sub.id, contractId: sub.contractId, amount: "6.00", tickedCents: 600 }), payMore(testId, dev.cookie, { submissionId: sub.id, contractId: sub.contractId, amount: "6.00", tickedCents: 600 })]);
+    // Room above the $10 listing: (batch 28 §20) $1,000 more. Two $600 presses at once: only one fits.
+    const [a, b] = await Promise.all([payMore(testId, dev.cookie, { submissionId: sub.id, contractId: sub.contractId, amount: "600.00", tickedCents: 60_000, over200: true }), payMore(testId, dev.cookie, { submissionId: sub.id, contractId: sub.contractId, amount: "600.00", tickedCents: 60_000, over200: true })]);
     expect([a.status, b.status].sort()).toEqual([200, 400]);
     expect(await db.payment.count({ where: { submissionId: sub.id, kind: "extra", status: { in: ["charged", "not_set_up"] } } })).toBe(1);
     // The same press (same key) again: never twice.

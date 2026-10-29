@@ -752,7 +752,9 @@ async function openCharges(now: Date, co: CloseOuts) {
     // Once it opens: the developer is reminded daily until it's paid, rejected, charged or let go.
     const gone = !!c.tester.deletedAt;
     if (!payShut && (!s.devRemindedAt || now.getTime() - s.devRemindedAt.getTime() >= 23 * 3_600_000)) {
-      await bell(dev.id, `“${c.title}”: ${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} waited over ${REVIEW_DAYS} days: pay it${gone ? "" : ` (${displayName(c.tester)} can now charge or let it go)`}.`, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
+      // (Owner, Oct 29, batch 28) The review date is the later of 7 days after sending and the tester's deadline, so the line names it (not "waited over 7 days").
+      const line = unreviewedLine(c.title, displayName(c.tester), s.kind === "recording" ? "recording" : "written answers", chargeOpensAt(s, c.test, c, now)!, gone || chargeShut ? null : (await pieceCloseOut({ submissionId: s.id }, "developer", now)) ?? undefined);
+      await bell(dev.id, line, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
       await db.submission.update({ where: { id: s.id }, data: { devRemindedAt: now } });
     }
     if (gone || chargeShut) continue; // the tester can't sign in: Charge and Let it go never open (or, batch 17 §19, they closed)
@@ -889,6 +891,14 @@ async function closeOutReminders(now: Date, co: CloseOuts) {
     }
   }
 }
+
+/**
+ * (Owner, Oct 29, batch 28) The developer's daily line once a sent part's review date passed: "“Harbor Run”: Ana Silva's written answers wasn't reviewed by Oct 30:
+ * Ana Silva can now charge or let it go. You can still pay until they do (at the latest Nov 13)." With no Charge for the tester (a deleted tester, or their Charge
+ * closed): "… wasn't reviewed by Oct 30: pay it." The dates are time tokens (the reader's zone), also in the email.
+ */
+export const unreviewedLine = (title: string, name: string, part: string, reviewDate: Date, closesAt: Date | null | undefined) =>
+  `“${title}”: ${name}'s ${part} ${part.endsWith("s") ? "weren't" : "wasn't"} reviewed by ${T(reviewDate, "date")}: ${closesAt === null ? "pay it." : `${name} can now charge or let it go. You can still pay until they do${closesAt ? ` (at the latest ${T(closesAt, "date")})` : ""}.`}`;
 
 /** (Batch 15 section 34) What a tester can Charge for a listed call: its measured (or lowered) length × the contract rate, less what's paid, within what's left of the $1,000. */
 export async function callChargeCap(x: { id: string; contractId: string; rateCents: number | null; actualMinutes: number | null; measuredMinutes: number | null; measuredAt: Date | null }) {

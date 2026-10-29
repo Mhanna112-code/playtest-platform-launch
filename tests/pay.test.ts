@@ -167,7 +167,7 @@ describe("Stripe (test mode, faked)", () => {
 });
 
 describe("admin decides disputes", () => {
-  it("can only raise pay (up to the listing); the extra is charged", async () => {
+  it("can only raise pay (batch 28 §15: up to the piece's cap); the extra is charged", async () => {
     const { dev, sub, sessionId, tester } = await sent();
     await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400, reason: "Half the answers were one word" });
     await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question fully" });
@@ -176,25 +176,24 @@ describe("admin decides disputes", () => {
     await db.user.update({ where: { id: owner.user.id }, data: { isAdmin: true } });
     expect((await admin("decide", tester.cookie, { id: d.id, total: "10.00" })).status).toBe(403);
     expect((await admin("decide", owner.cookie, { id: d.id, total: "3.00" })).body.error.message).toContain("can only raise pay");
-    expect((await admin("decide", owner.cookie, { id: d.id, total: "11.00" })).body.error.message).toContain("At most");
+    expect((await admin("decide", owner.cookie, { id: d.id, total: "1010.01" })).body.error.message).toContain("At most");
     const r = await admin("decide", owner.cookie, { id: d.id, total: "10.00", note: "Answers were complete" });
     expect(r.body).toEqual({ extraCents: 600 });
     expect(await db.payment.findFirstOrThrow({ where: { disputeId: d.id } })).toMatchObject({ kind: "dispute", amountCents: 600, testerCents: 480 });
     expect((await admin("decide", owner.cookie, { id: d.id, total: "10.00" })).body.error.message).toMatch(/^.+ already decided this dispute at .+.$/); // (batch 15 section 21) named by email
   });
-  it("(Item 28) MAX = the listing minus what was already paid for that part on other pieces; MIN = this piece's pay; blank keeps the pay", async () => {
+  it("(Batch 28 §15) MIN = what the piece was paid; MAX = its cap (the listing plus the part's max); blank keeps the pay", async () => {
     const { dev, sub, sessionId, tester } = await sent();
-    // The listing is $10; $5 was already paid for this part on another piece; this piece was rejected.
-    await db.payment.create({ data: { kind: "review", submissionId: sub.id, contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 500, feeCents: 100, testerCents: 400, status: "charged" } });
+    // The listing is $10; the piece was paid $0.
     await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "0", tickedCents: 0, reason: "Nothing usable" });
     await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I did answer everything fully" });
     const d = await db.dispute.findFirstOrThrow({ where: { submissionId: sub.id } });
     const owner = await makeUser({ email: `admin-${randomUUID()}@playtest.test` });
     await db.user.update({ where: { id: owner.user.id }, data: { isAdmin: true } });
     const { disputeBounds } = await import("@/lib/server/payments");
-    expect(await disputeBounds(d)).toMatchObject({ min: 0, max: 500, other: 500, listing: 1000 });
-    const over = await admin("decide", owner.cookie, { id: d.id, total: "6.00" });
-    expect(over.body.error.message).toBe("At most $5.00: the listing's $10.00 minus the $5.00 already paid for this part.");
+    expect(await disputeBounds(d)).toMatchObject({ min: 0, max: 101_000 });
+    const over = await admin("decide", owner.cookie, { id: d.id, total: "1010.01" });
+    expect(over.body.error.message).toBe("At most $1,010.00: the most this piece can be paid.");
     expect(over.status).toBe(400);
     // Blank keeps the pay as it is (nothing charged).
     const kept = await admin("decide", owner.cookie, { id: d.id, total: "" });

@@ -132,7 +132,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       )}
 
       <section className="card scroll-mt-24 space-y-3" id="disputes">
-        <p className="note">Newest first. A decision can only raise the pay, up to the listing amount. The extra is charged to the developer. Stripe card disputes are handled by hand in the Stripe dashboard.</p>
+        <p className="note">Newest first. A decision can only raise the pay, up to the piece&apos;s cap (the same as for Pay more), less what the piece was already paid. The extra is charged to the developer. Stripe card disputes are handled by hand in the Stripe dashboard.</p>
         <PagedList kind="disputes" title="Open disputes" initial={rows(disputes)} empty="No open disputes." />
       </section>
 

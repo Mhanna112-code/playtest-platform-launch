@@ -231,13 +231,13 @@ describe("the daily job after close-out", () => {
     await cron();
     expect((await db.submission.findUniqueOrThrow({ where: { id: w.sub.id } })).choiceOfferedAt).toBeNull();
     expect(await db.notification.count({ where: { userId: w.tester.user.id, text: { contains: "charge" } } })).toBe(0);
-    expect(await db.notification.count({ where: { userId: w.dev.user.id, text: { contains: "waited over" } } })).toBe(0);
+    expect(await db.notification.count({ where: { userId: w.dev.user.id, text: { contains: "reviewed by" } } })).toBe(0);
     // A piece whose Charge was already open: no reminder after close-out.
     await chargeOpen(w.sub.id);
     await db.submission.update({ where: { id: w.sub.id }, data: { remindedAt: ago(4), devRemindedAt: ago(2) } });
     await cron();
     expect(await db.notification.count({ where: { userId: w.tester.user.id, text: { startsWith: "Reminder:" } } })).toBe(0);
-    expect(await db.notification.count({ where: { userId: w.dev.user.id, text: { contains: "waited over" } } })).toBe(0);
+    expect(await db.notification.count({ where: { userId: w.dev.user.id, text: { contains: "reviewed by" } } })).toBe(0);
     expect(await db.notification.count({ where: { userId: { in: [w.dev.user.id, w.tester.user.id] }, reminderKey: { startsWith: "closeout:" } } })).toBe(0);
   });
 });

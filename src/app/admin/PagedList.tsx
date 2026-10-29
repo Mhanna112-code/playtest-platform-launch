@@ -77,6 +77,16 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
           <p>{d.money}</p>
           <p>{d.said}</p>
           <DisputeWork work={d.work ?? null} />
+          {/* (Owner, Oct 29, batch 28 §15) Their chat on this test, read-only, newest last, in a scroll box: the only place the team reads a chat. */}
+          <details className="rounded-lg border border-white/10 p-2" data-dispute-chat={d.id}>
+            <summary className="fold-chevron cursor-pointer font-medium text-white">Their chat on this test <span className="font-normal text-slate-400">({(d.chat ?? []).length})</span></summary>
+            {(d.chat ?? []).length === 0 ? <p className="note mt-2">No messages.</p> : (
+              <ul className="mt-2 max-h-72 space-y-1 overflow-y-auto pr-1">
+                {(d.chat ?? []).map((m) => <li key={m.id} className="whitespace-pre-wrap break-words"><b>{m.who}</b> <span className="text-xs text-slate-500">{m.at}</span>: {m.text}</li>)}
+              </ul>
+            )}
+          </details>
+          {d.open && d.range && <p data-dispute-range="">{d.range}</p>}
           {d.open ? <DisputeDecision id={d.id} minCents={d.min} maxCents={d.max} side={d.devSide ?? ""} sideAt={d.devSideAt ?? null} dev={d.dev ?? "The developer"} /> : <>
             {d.devSide && <p>Developer&apos;s side: “{d.devSide}”</p>}
             <p className="note">{d.decided}</p>

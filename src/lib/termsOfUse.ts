@@ -61,12 +61,12 @@ export const PAYMENT_RULES: { heading: string; text: string; example: string }[]
   },
   {
     heading: "Paying for work",
-    text: "The developer pays any amount from $0 up for each piece of work; there is no reject. Paying less than the listing, or $0, needs a reason the tester reads. A payment above $0 is charged to the developer's card at once. The tester can dispute a payment on each piece once; our team reads the work, both sides and the chat, and its decision is final and can only raise the pay (up to the listing, or for unlisted work up to its cap, less what was already paid).",
+    text: "The developer pays any amount from $0 up for each piece of work; there is no reject. Paying less than the listing, or $0, needs a reason the tester reads. A payment above $0 is charged to the developer's card at once. The tester can dispute a payment on each piece once; our team reads the work and both sides, and its decision is final and can only raise the pay (up to the piece's cap, the same one Pay more has, less what that piece was already paid). To decide a dispute, our team can read the chat between the tester and the developer.",
     example: "A $20 recording paid $12 with the reason “Only half the levels were covered”: the tester reads it and can dispute it once.",
   },
   {
     heading: "Pay more",
-    text: "After paying a piece, the developer can pay extra on it with Pay more, within the piece's cap: on a listed piece up to 100% of its listing on top (never past the $1,000 maximum for written answers or a recording), on unlisted written answers or a recording up to $1,000 on top, and nothing extra on an unlisted call. Pay more closes together with the test's last Pay or Charge.",
+    text: "After paying a piece, the developer can pay extra on it with Pay more, within the piece's cap: on a listed piece up to the part's maximum on top of its listing ($1,000 for written answers or a recording; $200 an hour for a call's measured length), on unlisted written answers or a recording up to $1,000 on top, and nothing extra on an unlisted call. All of one tester's calls on a test stay within $1,000 together. Pay more closes together with the test's last Pay or Charge.",
     example: "A written part listed at $20 can get up to $20 extra.",
   },
   {

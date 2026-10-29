@@ -53,12 +53,11 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     expect(R.canDispute(50_000, null, false)).toEqual({ ok: true });
     expect(R.canDispute(500, 1000, true)).toMatchObject({ ok: false, message: "You already disputed this payment. A part can be disputed once." });
     expect(R.canDispute(500, 1000, false, true)).toEqual({ ok: false, message: R.TESTER_CHOSE_LINE });
-    expect(R.disputeLimitText(1000, "submission")).toBe("up to the listing amount");
-    expect(R.disputeLimitText(null, "submission")).toBe("up to $1,000 for this piece");
-    expect(R.disputeLimitText(null, "call")).toBe("up to $200 an hour for the measured minutes");
+    // (Batch 28 §15) A decision reaches the piece's cap: the note names what is left of it.
+    expect(R.disputeLimitText(101_000)).toBe("up to $1,010.00 more");
     expect(src("lib/rules.ts")).not.toContain("so the developer's amount is final");
     expect(src("app/app/sessions/[id]/page.tsx")).not.toContain("the developer&apos;s amount is final");
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("limit={disputeLimitText(review.agreedCents, kind)}");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("limit={disputeLimitText(room ?? 0)}");
   });
 
   it("an unlisted written piece paid $0: the tester disputes it; the admin can raise it up to $1000 minus what was already paid (extra pay counts)", async () => {
@@ -69,14 +68,15 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     expect(d.status).toBe(200);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: "Ana Silva disputed a payment on “Harbor Run”" } })).toBe(1);
     const row = await db.dispute.findFirstOrThrow({ where: { submissionId: sub.id } });
-    expect(await disputeBounds(row)).toMatchObject({ unlisted: true, listing: 100_000, other: 20_000, min: 0, max: 80_000 });
+    // (Batch 28 §15) The total for the piece: from what it was paid ($0 + $200 Pay more) up to its cap ($1,000 + $1,000 for an unlisted part).
+    expect(await disputeBounds(row)).toMatchObject({ min: 20_000, max: 200_000 });
     // Once only.
     expect((await dispute(sessionId, tester.cookie, { kind: "submission", id: sub.id })).body.error.message).toBe("You already disputed this payment. A part can be disputed once.");
     const a = await admin();
-    await expect(decideDispute(a, row.id, { total: "800.01" })).rejects.toThrow("At most $800.00: the max of $1,000.00 for a part that isn't listed minus the $200.00 already paid for this part.");
-    expect(await decideDispute(a, row.id, { total: "800.00" })).toEqual({ extraCents: 80_000 });
+    await expect(decideDispute(a, row.id, { total: "2000.01" })).rejects.toThrow("At most $2,000.00: the most this piece can be paid.");
+    expect(await decideDispute(a, row.id, { total: "800.00" })).toEqual({ extraCents: 60_000 });
     // No Stripe in tests: the raise is recorded ("payments not set up") at once, as any decision outside a hold.
-    expect(await db.payment.findFirstOrThrow({ where: { disputeId: row.id } })).toMatchObject({ kind: "dispute", amountCents: 80_000, status: "not_set_up" });
+    expect(await db.payment.findFirstOrThrow({ where: { disputeId: row.id } })).toMatchObject({ kind: "dispute", amountCents: 60_000, status: "not_set_up" });
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Your dispute on “Harbor Run” was decided" } })).toBe(1);
   });
 
@@ -88,7 +88,7 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     expect((await pay(s.dev.cookie, { kind: "call", id: call.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
     expect((await dispute(j.sessionId, j.tester.cookie, { kind: "call", id: call.id })).status).toBe(200);
     const row = await db.dispute.findFirstOrThrow({ where: { callId: call.id } });
-    expect(await disputeBounds(row)).toMatchObject({ unlisted: true, listing: 10_000, max: 10_000 });
+    expect(await disputeBounds(row)).toMatchObject({ min: 1000, max: 10_000 });
     await startHold(s.dev.user.id, "unpaid");
     const a = await admin();
     await expect(decideDispute(a, row.id, { total: "100.01" })).rejects.toThrow("At most $100.00");
@@ -97,12 +97,12 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     expect((await owed(s.dev.user.id)).map((p) => p.amountCents)).toEqual([9000]);
   });
 
-  it("a listed part paid the listing can't be disputed (batch 20 section 15); an old rejection can; the tester's own Charge can't", async () => {
+  it("a listed part paid the listing can still be disputed up to its cap (batch 28 §15); an old rejection can; the tester's own Charge can't", async () => {
     const full = await sentWork("10.00");
     expect((await pay(full.dev.cookie, { kind: "submission", id: full.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    // The listing's range is unchanged: a part paid the listing can only be kept. (Batch 20 section 15) So there's nothing to dispute: refused with that line.
-    expect(await disputeBounds({ submissionId: full.sub.id, callId: null })).toMatchObject({ unlisted: false, min: 1000, max: 1000 });
-    expect((await dispute(full.sessionId, full.tester.cookie, { kind: "submission", id: full.sub.id })).body.error.message).toBe("Already paid the most a dispute could award, so there's nothing to dispute.");
+    // (Batch 28 §15 and §20) Up to the listing plus the part's max ($10 + $1,000), less what it was paid.
+    expect(await disputeBounds({ submissionId: full.sub.id, callId: null })).toMatchObject({ min: 1000, max: 101_000 });
+    expect((await dispute(full.sessionId, full.tester.cookie, { kind: "submission", id: full.sub.id })).status).toBe(200);
 
     const rej = await sentWork("10.00");
     // (Batch 15 section 30) Reject is gone: a rejection made before stays and can still be disputed.

@@ -39,15 +39,15 @@ async function heldCall(listed: boolean, liveRate = "30.00") {
 }
 
 describe("batch 9 item 1 and 6: the caps", () => {
-  it("the constants and the per-piece extra cap (100% of the listing, never more than the max; 100% of the max for an unlisted part)", () => {
+  it("the constants and the per-piece extra cap (batch 28 §20: the part's max above the listing, listed or not)", () => {
     expect(R.NO_LISTING_WORK_CAP_CENTS).toBe(100_000);
     expect(R.NO_LISTING_CALL_RATE_CAP_CENTS).toBe(20_000);
-    expect(R.EXTRA_PAY_CAP_PERCENT).toBe(100);
+    expect("EXTRA_PAY_CAP_PERCENT" in R).toBe(false);
     expect(R.pieceMaxCents("submission")).toBe(100_000);
     expect(R.pieceMaxCents("call", 30)).toBe(10_000);
-    expect(R.extraCapCents(2000, 100_000)).toBe(2000); // a $20 listing allows $20 extra
+    expect(R.extraCapCents(2000, 100_000)).toBe(100_000); // a $20 listing allows $1,000 extra
     expect(R.extraCapCents(300_000, 100_000)).toBe(100_000); // a $3000 listing allows $1000 extra
-    expect(R.extraCapCents(2500, 10_000)).toBe(2500); // a $50/h call, 30 min: $25 extra
+    expect(R.extraCapCents(2500, 10_000)).toBe(10_000); // a $50/h call, 30 min: $100 extra ($200/h × 30 min)
     expect(R.extraCapCents(15_000, 10_000)).toBe(10_000); // a $300/h call, 30 min: $100 extra
     expect(R.extraCapCents(null, 100_000)).toBe(100_000); // unlisted: up to the max on top
     expect(R.overMaxLine(100_000)).toBe("This is more than you can pay above the max (up to $1,000).");
@@ -75,16 +75,16 @@ describe("batch 9 item 1 and 6: the caps", () => {
     expect((await extra(testId, dev.cookie, { contractId: sessionId, callId: call.id, amount: "0.50", tickedCents: 50 })).body.error.message).toBe(R.overCallsLine(0));
   });
 
-  it("a listed piece: what is paid above the listing (Pay plus extra pays) is at most 100% of the listing", async () => {
+  it("a listed piece: what is paid above the listing (Pay plus extra pays) is at most the part's max (batch 28 §20)", async () => {
     const { dev, testId, sessionId, sub } = await sentWork("20.00");
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "41.00", tickedCents: 4100 })).body.error.message).toBe("This is more than you can pay above the listing (up to $20).");
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "1020.01", tickedCents: 102_001, over200: true })).body.error.message).toBe("This is more than you can pay above the listing (up to $1,000).");
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "30.00", tickedCents: 3000 })).status).toBe(200);
-    expect((await extra(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "10.01", tickedCents: 1001 })).body.error.message).toBe("This is more than you can pay above the listing (up to $10).");
-    expect((await extra(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    // A $50/h call: $25 extra for 30 minutes.
+    expect((await extra(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "990.01", tickedCents: 99_001, over200: true })).body.error.message).toBe("This is more than you can pay above the listing (up to $990).");
+    expect((await extra(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "990.00", tickedCents: 99_000, over200: true })).status).toBe(200);
+    // A $50/h call: $100 extra for 30 minutes ($200/h × 30 min).
     const c = await heldCall(true, "50.00");
     await pay(c.dev.cookie, { kind: "call", id: c.call.id, amount: "25.00", tickedCents: 2500 });
-    expect((await extra(c.testId, c.dev.cookie, { contractId: c.sessionId, callId: c.call.id, amount: "25.01", tickedCents: 2501 })).body.error.message).toBe("This is more than you can pay above the listing (up to $25).");
+    expect((await extra(c.testId, c.dev.cookie, { contractId: c.sessionId, callId: c.call.id, amount: "100.01", tickedCents: 10_001 })).body.error.message).toBe("This is more than you can pay above the listing (up to $100).");
     expect(src("app/app/tests/[id]/page.tsx")).toContain("<PayBox more={{ testId: t.id, contractId: c.id }}");
     expect(src("app/app/tests/[id]/page.tsx")).toContain('kind="call" id={x.id}');
   });

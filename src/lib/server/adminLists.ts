@@ -8,7 +8,7 @@ import { CRITICAL_FIELDS, CRITICAL_KEYS, countsOf, lockedFields } from "@/lib/li
 import { SUBSCRIPTION_ENDED, adminSubLine } from "@/lib/subscription";
 import { pausedTestsForAdmin } from "./pauseClosure";
 import { REPORTED_OVER, labelled, reportCounts, reportedOver3 } from "./reports";
-import { HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, adminReservedLine } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, adminReservedLine, disputeRangeLine } from "@/lib/rules";
 import { callMinutesOf } from "@/lib/callMeasure";
 import { itemsOf } from "@/lib/answerSets";
 import { writtenQuestions as writtenQuestionsOf } from "./tests";
@@ -24,7 +24,11 @@ import { textFilters } from "@/lib/nameSearch";
 export const PAGE = 25;
 export type Page<T> = { rows: T[]; next: string | null; total: number };
 
-export type DisputeVM = { work?: DisputedWork | null; type?: "dispute"; id: string; at: string; head: string; money: string; said: string; open: boolean; decided: string; min: number; max: number; devSide?: string; devSideAt?: string | null; dev?: string };
+export type DisputeVM = {
+  work?: DisputedWork | null; type?: "dispute"; id: string; at: string; head: string; money: string; said: string; open: boolean; decided: string; min: number; max: number; devSide?: string; devSideAt?: string | null; dev?: string;
+  /** (Batch 28 §15) "$20.00 paid · can raise up to $20.00 more" */ range?: string;
+  /** (Owner, Oct 29, batch 28 §15) Their chat on this test, read-only, newest last: the only place an admin can read a chat. */ chat?: { id: string; who: string; at: string; text: string }[];
+};
 export type MineVM = { id: string; at: string; title: string; dev: string; why: string; when: string; testId: string };
 export type UserVM = { href: string; id: string; at: string; line: string; reports: number; state: "deleted" | "suspended" | "normal"; stateLine: string; devSuspended?: boolean; testerSuspended?: boolean; isDeveloper?: boolean; isTester?: boolean; acct: AccountState };
 /** (Batch 17 §5) A search and ticks on the Accounts or Tests list (see lib/adminScroll.ts). */
@@ -110,21 +114,25 @@ export async function disputeRow(d: Awaited<ReturnType<typeof db.dispute.findMan
   const r = await db.review.findFirst({ where: d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId ?? "none" } });
   const what = call ? `Live call (${fmtDateTime(call.startsAt)})` : `${sub?.kind === "recording" ? "Recording" : "Written answers"} (sent ${sub ? fmtDateTime(sub.sentAt) : ""})`;
   const flagged = await reportedOver3([d.testerId, c?.test.developerId ?? ""]);
-  let min = 0, max = 0, partSoFar = "", base = r?.agreedCents == null ? NOT_LISTED : `Listing ${money(r.agreedCents)}`;
+  let min = 0, max = 0, range = "";
+  const base = r?.agreedCents == null ? NOT_LISTED : `Listing ${money(r.agreedCents)}`;
   if (d.status === "open" && r) {
+    // (Batch 28 §15) The range runs up to the piece's cap (the same as Pay + Pay more), less what the piece was already paid.
     const b = await disputeBounds(d);
     min = b.min;
     max = b.max;
-    partSoFar = ` · Paid for this part so far ${money(b.other + r.amountCents)}`;
-    // (Batch 10) An unlisted part: the admin's range goes up to its max minus what was already paid.
-    if (b.unlisted) base = `${NOT_LISTED} (max ${money(b.listing)})`;
+    range = disputeRangeLine(b.min, b.max - b.min);
   }
+  // (Owner, Oct 29, batch 28 §15) Their chat on this test, so an agreement made in chat can be checked (read-only; no read log).
+  const chat = c ? await db.message.findMany({ where: { testId: c.testId, testerId: c.testerId }, orderBy: { createdAt: "asc" }, include: { sender: true }, take: 500 }) : [];
   return {
     id: d.id,
     at: d.createdAt.toISOString(),
     type: "dispute" as const,
     head: `${c ? labelled(displayName(c.tester), flagged.has(c.testerId)) : "?"} vs ${c ? labelled(displayName(c.test.developer), flagged.has(c.test.developerId)) : "?"} · ${c?.title ?? ""} · ${what}`,
-    money: `${base} · Paid for this piece ${money(r?.amountCents)}${r?.rejected ? " (rejected)" : ""}${partSoFar}`,
+    money: `${base} · Paid for this piece ${money(r?.amountCents)}${r?.rejected ? " (rejected)" : ""}`,
+    range,
+    chat: chat.map((m) => ({ id: m.id, who: displayName(m.sender), at: fmtDateTime(m.createdAt), text: m.body })),
     work: await disputedWork(d),
     // (Batch 15 section 27) The developer's side shows on its own line ("added <time>"), live.
     said: `Tester: “${d.reason}”${r?.reason ? ` · Developer's note when ${r.rejected ? "rejecting" : "paying"}: “${r.reason}”` : ""}`,
