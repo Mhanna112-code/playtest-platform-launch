@@ -106,11 +106,14 @@ export async function logTestAction(userId: string, testId: string, action: stri
     case "no-show": text = `reported a problem with ${await callLine(s(body.callId), true)}`; about = { a: "no-show", k: await callKeys(s(body.callId)) }; break;
     case "dispute-side": text = "added your side to a dispute"; about = { a: "dispute-side", k: [`dispute:${s(body.disputeId)}`] }; break;
     case "pay-extra": {
-      const r = (result ?? {}) as { amountCents?: number };
+      // (Batch 20 section 12) Waiting for the bank's check: nothing is paid yet (it's logged when the bank confirms: logPayMore). A repeat isn't news.
+      const r = (result ?? {}) as { amountCents?: number; requiresAction?: boolean; repeated?: boolean };
+      if (r.requiresAction || r.repeated) return;
       const piece = body.callId ? `call:${s(body.callId)}` : `sub:${s(body.submissionId)}`;
       const sub = body.callId ? null : await db.submission.findUnique({ where: { id: s(body.submissionId) }, select: { kind: true } });
       const label = body.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers";
-      text = `paid ${await contractName(s(body.contractId))} ${money(r.amountCents ?? 0)} more for the ${label}`;
+      // (Batch 20 section 12) "You paid Ana Silva $5.00 more for their written answers in another tab": it stops every press on the test page once (BIG_OWN_ACTS).
+      text = `paid ${await contractName(s(body.contractId))} ${money(r.amountCents ?? 0)} more for their ${label}`;
       about = { a: "pay-more", k: [piece, `c:${s(body.contractId)}`] };
       break;
     }
@@ -167,6 +170,13 @@ export async function logTestAction(userId: string, testId: string, action: stri
     default: return;
   }
   await logAction(userId, testId, body, text, about);
+}
+
+/** (Batch 20 section 12) A Pay more the bank confirmed afterwards: logged then, as the press would have been. */
+export async function logPayMore(userId: string, body: B, p: { contractId: string | null; submissionId: string | null; callId: string | null; amountCents: number }) {
+  if (!p.contractId) return;
+  const c = await db.contract.findUnique({ where: { id: p.contractId }, select: { testId: true } });
+  if (c) await logTestAction(userId, c.testId, "pay-extra", { ...body, contractId: p.contractId, ...(p.callId ? { callId: p.callId } : { submissionId: p.submissionId ?? "" }) }, { amountCents: p.amountCents });
 }
 
 /** Pay / Reject on a piece of work or a call. */

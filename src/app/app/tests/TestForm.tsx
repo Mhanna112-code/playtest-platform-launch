@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { Err } from "@/components/Err";
 import { mergeChanges, useLiveAppend } from "@/lib/live";
-import { NOT_REQUIRED, qOptional, qText } from "@/lib/questions";
+import { NOT_REQUIRED, qOptional, qText, questionLimitLine } from "@/lib/questions";
 import { limitHint } from "@/lib/capacity";
 import { MistakeList, focusFirstMistake, markServerMistakes, useLocalMin } from "@/components/FieldChecks";
 import { fieldOfMistake, isCriticalLine, type ListingField } from "@/lib/listingFields";
@@ -16,7 +16,7 @@ import { NotSentTag, useKept } from "@/lib/useKept";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { givenDeletedLine, keyGivenLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
-import { PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, type Listing } from "@/lib/rules";
+import { PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, type Listing } from "@/lib/rules";
 /** The browser's own date (YYYY-MM-DD) and zone. */
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone ?? ""; } catch { return ""; } };
@@ -76,6 +76,7 @@ const NAMES: Partial<Record<keyof F, string>> = {
   written: "Written report", writtenPrice: "Price for written answers", recording: "Recorded session", recordingPrice: "Price for a recording", live: "Live session", liveRate: "Live call rate",
   writtenRequired: "Written report required", recordingRequired: "Recorded session required", liveRequired: "Live session required", questions: "Questions", optionalQs: "Questions not required",
 };
+
 /** (Batch 16 section 19) A field's value as a note shows it ("$8.00", "Windows PC, iPad"); the questions as a list. */
 function valueText(k: keyof F, v: unknown): string | string[] {
   if (typeof v === "boolean") return v ? "on" : "off";
@@ -113,7 +114,7 @@ type EditProps = {
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
 /** (Owner, Oct 28 evening) `draft`: a draft (a next round not opened yet) shown in Post a test: Post opens it for testers, and it can be deleted here. */
-export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init: Listing; edit?: EditProps; spotsLimit?: number; draft?: { id: string }; /** (Batch 8) false on the free plan: "Subscribers" on Approved-only */ perks?: boolean }) {
+export function TestForm({ init, edit, spotsLimit, draft, perks = true, termsAgain = false }: { init: Listing; edit?: EditProps; spotsLimit?: number; draft?: { id: string }; /** (Batch 8) false on the free plan: "Subscribers" on Approved-only */ perks?: boolean; /** (Batch 20 section 21) the account hasn't agreed to the current Terms: the tick shows above Post */ termsAgain?: boolean }) {
   const [f, setF] = useState<F>(toForm(init));
   // What this tab last knew the test to be (Edit): fields that differ from it are "changed" (Save is faded when none are).
   const [base, setBase] = useState<F>(toForm(init));
@@ -141,7 +142,7 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
   const [saved, setSaved] = useState("");
   const [refusal, setRefusal] = useState("");
   // (Batch 18 section 1) The account accepted an older Terms of Use: Post the test shows the box with its tick under the button; ticked, the next press posts.
-  const [termsAsk, setTermsAsk] = useState(false);
+  const [termsAsk, setTermsAsk] = useState(termsAgain);
   const [agreeTerms, setAgreeTerms] = useState(false);
   // (Batch 19 section 7) The required tick about Charge above Post the test / Save (Edit: only while Save is enabled; it unticks when the form is back to unchanged).
   const [payTick, setPayTick] = useState(false);
@@ -396,8 +397,10 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
         if (err.data.keys) keysSeen.current = (err.data.keys as { free: string[] }).free;
       }
       else if (err instanceof ApiError && err.code === TERMS_UPDATED_CODE) {
+        // (Batch 20 section 21) The tick shows above the button (if the Terms changed while the page was open) with its red line.
         setChanges(null);
         setTermsAsk(true);
+        showServer([err.message]);
       }
       else if (err instanceof ApiError && !isFieldError(err)) {
         // A refusal (e.g. "Confirm your email first."): blue, under the button.
@@ -535,7 +538,9 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
                       $
                       <input id={part.price} className={"input w-24 py-1" + (bad(part.price) ? " field-bad" : "")} inputMode="decimal" data-money="" disabled={!on || free || pl} placeholder={part.ph} value={free ? "" : price}
                         onChange={(e) => set({ [part.price]: e.target.value } as Partial<F>)} aria-label={`Price for the ${part.title.toLowerCase()}`}
-                        data-min={part.min} data-max={part.max} data-zero-ok="" data-min-msg={part.lowMsg} data-max-msg={part.highMsg} data-msg={part.lowMsg} />
+                        data-min={part.min} data-max={part.max} data-zero-ok="" data-min-msg={part.lowMsg} data-max-msg={part.highMsg} data-msg={part.lowMsg}
+                        // (Owner, Oct 28, batch 20 section 22) Ticked: a price is required ($0 only through Free), red on leaving it and on press; the server says the same.
+                        {...(on && !free ? { "data-required": "", "data-required-msg": PART_PRICE_MISSING[part.on] } : {})} data-match={`^${PART_PRICE_MISSING[part.on].slice(0, 30)}`} />
                       {part.unit}
                     </label>
                     <span className="text-xs text-slate-500">{part.min}–{Number(part.max).toLocaleString("en-US")}{part.unit}</span>
@@ -580,6 +585,9 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
                 ))}
               </ul>
             )}
+            {/* (Owner, Oct 28, batch 20 section 2) At 20 questions a notice under the last one (not a mistake: not red, Save and Post still work; the server still
+                refuses more than 20). Deleting a question removes it. */}
+            {questionLimitLine(f.questions) && <p className="mt-1 text-xs text-sky-200" data-question-limit="" role="status">{questionLimitLine(f.questions)}</p>}
             {lockNote("questions")}
             {note("questions")}
           </div>
@@ -590,7 +598,7 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
         <h2>Who and how long</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            {text("spots", "Number of tester spots", { req: true, type: "number", cls: "max-w-[8rem]", hint: `1–${limit}`, attrs: { "data-min": "1", "data-max": String(limit), "data-whole": "", "data-msg": spotsLimit != null ? `You can take up to ${limit} testers per test right now.` : `Spots must be a whole number from 1 to ${limit}.` } })}
+            {text("spots", "Number of tester spots", { req: true, type: "number", cls: "max-w-[8rem]", hint: `1–${limit}`, attrs: { "data-min": "1", min: "1", step: "1", inputMode: "numeric", "data-max": String(limit), "data-whole": "", "data-msg": spotsLimit != null ? `You can take up to ${limit} testers per test right now.` : `Spots must be a whole number from 1 to ${limit}.` } })}
             {spotsLimit != null && <p className="mt-1 text-xs text-slate-500">{limitHint(spotsLimit)}</p>}
           </div>
           <div>
@@ -650,6 +658,8 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
         <MistakeList press={edit ? "Save" : "Post the test"} orphans={orphans} />
         {/* (Owner, Oct 28, batch 19 section 7) Required, just above the button: on Post (and a draft's Post) always; on Edit only while Save is enabled. Unticked, the
             server refuses the press with its red line at the tick. */}
+        {/* (Owner, Oct 28, batch 20 section 21) The updated-Terms tick (only while the account hasn't agreed to the current version), then the Charge tick. */}
+        {termsAsk && !edit && <TermsAgainBox agreed={agreeTerms} onAgree={setAgreeTerms} />}
         {!nothingChanged && (
           <div data-note-after="" data-pay-rules-tick="">
             <label className="flex max-w-xl items-start gap-2 text-sm text-ink-200">
@@ -659,12 +669,13 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
           </div>
         )}
         <div className="flex flex-wrap items-center">
-          <button className="btn" disabled={busy || nothingChanged} aria-disabled={nothingChanged} title={nothingChanged ? "Nothing has changed yet" : undefined}>{busy ? "Saving…" : edit ? "Save" : "Post the test"}</button>
-          {keep.restored && <NotSentTag />}
+          {/* (Batch 20 section 22) Unchanged: visibly greyed (the app's disabled style), with its tooltip. */}
+          <button className={`btn ${nothingChanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || nothingChanged} aria-disabled={nothingChanged} title={nothingChanged ? "Nothing has changed yet" : undefined} data-save-idle={nothingChanged ? "" : undefined}>{busy ? "Saving…" : edit ? "Save" : "Post the test"}</button>
+          {/* (Batch 20 section 22) What the kept draft means here: Edit's typed changes aren't saved yet; Post's draft isn't posted yet. */}
+          {keep.restored && <NotSentTag label={edit ? "Not saved yet" : "Not posted yet"} />}
         </div>
         {saved && <p className="ok">{saved}</p>}
         {locked && pressed && lockedNow.map((f) => <p key={f} className="err-field" role="alert" data-critical-limit={f}>{criticalLine(f)}</p>)}
-        {termsAsk && !edit && <TermsAgainBox agreed={agreeTerms} onAgree={setAgreeTerms} />}
         <Err text={refusal} />
         {draft && (
           <ConfirmButton className="btn-secondary px-3 py-1.5 text-sm text-rose-200" title="Delete this draft?" confirmLabel="Delete the draft"

@@ -37,7 +37,8 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
             {(v[f.name] ?? "").length > LIMITS.reason && <span className="err-field">{reasonTooLong()}</span>}
           </span>
         ) : (
-          <input key={f.name} aria-label={f.label} placeholder={f.ph ?? f.label} className="input w-40" value={v[f.name] ?? ""} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} />
+          <input key={f.name} aria-label={f.label} placeholder={f.ph ?? f.label} className="input w-40" value={v[f.name] ?? ""} onChange={(e) => setV({ ...v, [f.name]: e.target.value })}
+            {...(f.name === "days" ? { inputMode: "numeric" as const, "data-whole": "" } : {})} />
         ),
       )}
       <button

@@ -15,6 +15,7 @@ import { writtenQuestions as writtenQuestionsOf } from "./tests";
 import type { DisputedWork } from "@/app/admin/DisputeWork";
 import type { Prisma } from "@prisma/client";
 import { accountStates, type AccountState } from "./accountState";
+import { textFilters } from "@/lib/nameSearch";
 
 // (Owner, Oct 26) The admin dashboard's lists, 25 rows at a time (keyset by date: newest first; the lists ordered by closure date go soonest first). Rows are
 // plain, already-formatted view models so the same loaders serve the page and /api/admin/more. (Batch 17 §7) Each list is a scroll box that loads the next 25
@@ -174,7 +175,8 @@ async function mine(adminId: string, cursor: string | null): Promise<Page<MineVM
 export function userWhere(f?: ListFilter): Prisma.UserWhereInput {
   const and: Prisma.UserWhereInput[] = [];
   const q = f?.q?.trim();
-  if (q) and.push({ OR: [{ email: { contains: q, mode: "insensitive" } }, { name: { contains: q, mode: "insensitive" } }] });
+  // (Batch 20 section 9) From 1 character: 1-2 characters match the start of the email or of a word in the name (or the whole name), 3+ any part.
+  if (q) and.push({ OR: [...textFilters(q, true).map((f) => ({ email: f })), ...textFilters(q).map((f) => ({ name: f }))] });
   const t = new Set(f?.ticks ?? []);
   const roles: Prisma.UserWhereInput[] = [...(t.has("developer") ? [{ isDeveloper: true }] : []), ...(t.has("tester") ? [{ isTester: true }] : [])];
   const states: Prisma.UserWhereInput[] = [
@@ -190,11 +192,16 @@ export function userWhere(f?: ListFilter): Prisma.UserWhereInput {
 async function users(cursor: string | null, f?: ListFilter): Promise<Page<UserVM>> {
   const c = parse(cursor);
   const where = userWhere(f);
-  const [list, total] = await Promise.all([
-    db.user.findMany({ where: { AND: [where, olderThan("createdAt", c)] }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: PAGE + 1 }),
+  // (Batch 20 section 9) An exact name or email match comes first (on the first page; the pages after it leave them out).
+  const q = f?.q?.trim() ?? "";
+  const exactWhere: Prisma.UserWhereInput | null = q ? { AND: [where, { OR: [{ name: { equals: q, mode: "insensitive" } }, { email: { equals: q, mode: "insensitive" } }] }] } : null;
+  const rest: Prisma.UserWhereInput = exactWhere ? { AND: [where, { NOT: exactWhere }] } : where;
+  const [exact, list, total] = await Promise.all([
+    exactWhere && !c ? db.user.findMany({ where: exactWhere, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: PAGE }) : Promise.resolve([]),
+    db.user.findMany({ where: { AND: [rest, olderThan("createdAt", c)] }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: PAGE + 1 }),
     db.user.count({ where }),
   ]);
-  const page = list.slice(0, PAGE);
+  const page = [...exact, ...list.slice(0, PAGE)];
   // (Batch 15 sections 16 and 21; batch 17 §6) Each suspended side with the admin who did it, and who deleted it: the same state the profile's admin view shows.
   const states = await accountStates(page);
   const reports = await reportCounts(page.map((u) => u.id));
@@ -215,7 +222,7 @@ async function users(cursor: string | null, f?: ListFilter): Promise<Page<UserVM
       stateLine: acct.deleted || (["developer", "tester"] as const).filter((s) => acct.suspended[s]).map((s) => `Suspended (${s} side) ${acct.suspended[s]}`).join(" · "),
     };
   });
-  const last = page[page.length - 1];
+  const last = list.slice(0, PAGE).pop();
   return { rows, next: list.length > PAGE && last ? cur(last.createdAt, last.id) : null, total };
 }
 

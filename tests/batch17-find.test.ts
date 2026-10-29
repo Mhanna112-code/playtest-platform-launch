@@ -273,8 +273,8 @@ describe("developer profile's Open tests stays current (section 9)", () => {
     await db.block.create({ data: { blockerId: blocker.user.id, blockedId: x.dev.user.id } });
     expect(await profileTestRefusal(x.testId, blocker.user.id)).toBe(TEST_NOT_AVAILABLE);
     const profile = src("app/app/developers/[id]/page.tsx");
-    expect(profile).toContain("{!mine && !isAdmin(viewer) && <AutoRefresh query={`profile=${p.id}`} v={openTestsV(open)} />}");
-    expect(profile).toContain("`/app/find/${t.id}?from=profile`");
+    expect(profile).toContain("{!mine && !isAdmin(viewer) && !iBlocked && <AutoRefresh query={`profile=${p.id}`} v={openTestsV(open)} />}"); // (batch 20 section 17)
+    expect(profile).toContain("`/app/find/${t.id}?from=profile`"); // (batch 20 section 6: a test they're working in opens their session)
     const listing = src("app/app/find/[id]/page.tsx");
     expect(listing).toContain('const gone = from === "profile" && !isAdmin(u) ? await profileTestRefusal(id, u.id) : "";');
     expect(listing).toContain('<p className="card note" data-unavailable="" data-profile-gone="">{gone}</p>');

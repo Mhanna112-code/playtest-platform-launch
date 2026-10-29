@@ -465,7 +465,7 @@ describe("follow-up 5, 7, 8, 9, 10) cards, the mistakes line, End early, profile
 
   it("a tester changing their profile is not a 'Joins and applications' stop", async () => {
     expect(alertOf("profile")).toBeNull();
-    expect(src("lib/server/invites.ts")).toContain('kind: "profile", text: `${name} removed ${gone}');
+    expect(src("lib/server/invites.ts")).toContain('kind: "profile", text: `${name} no longer lists ${gone}.`'); // (batch 20 section 4)
   });
 
   it("a draft has no Next round and no End early", () => {

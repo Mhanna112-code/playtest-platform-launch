@@ -139,7 +139,7 @@ async function account(email, name, role, pronoun = "they", tester = {}) {
   // (Batch 15 section 7) Sign-ups are limited per network (10 an hour): the recorder makes many accounts from this machine, so it clears its own local count first
   // (in the media database only).
   if (MEDIA_DB !== "playtest_lite") sql(`delete from "LoginAttempt" where kind = 'signup' and ip in ('::1', '127.0.0.1', '::ffff:127.0.0.1')`);
-  const r = await post(p, "/api/auth/signup", { email, password: PASSWORD, role, name, acceptTerms: true });
+  const r = await post(p, "/api/auth/signup", { email, password: PASSWORD, role, name, acceptTerms: true, over18: true });
   if (!r.ok) throw new Error("sign-up failed for " + email);
   own(`update "User" set "emailVerifiedAt" = (now() at time zone 'utc') where email = ${lit(email)}`);
   await post(p, "/api/profile", { name, pronoun, isDeveloper: role !== "tester", isTester: role !== "developer", devices: tester.devices ?? ["Windows PC"], languages: tester.languages ?? ["English"], categories: [] });
@@ -1748,7 +1748,7 @@ async function lightTester(email, name) {
   const p = { context: () => c, email, name };
   // (Batch 15 §7) The local sign-up count per network: cleared in the media database only, as account() does.
   if (MEDIA_DB !== "playtest_lite") sql(`delete from "LoginAttempt" where kind = 'signup' and ip in ('::1', '127.0.0.1', '::ffff:127.0.0.1')`);
-  const r = await post(p, "/api/auth/signup", { email, password: PASSWORD, role: "tester", name, acceptTerms: true });
+  const r = await post(p, "/api/auth/signup", { email, password: PASSWORD, role: "tester", name, acceptTerms: true, over18: true });
   if (!r.ok) throw new Error("sign-up failed for " + email);
   own(`update "User" set "emailVerifiedAt" = (now() at time zone 'utc') where email = ${lit(email)}`);
   await post(p, "/api/profile", { name, pronoun: "they", isDeveloper: false, isTester: true, devices: ["Windows PC"], languages: ["English"], categories: [] });
@@ -5034,8 +5034,8 @@ group("b19a", async () => {
     await D.waitForSelector("[data-tester-days]");
     await pause(D, 1800);
     const line = await D.locator("[data-tester-days]").innerText();
-    if (!/^Testers can join until this date\. Each gets 14 days from when they join, so someone joining on .+ has until .+ to send work\. You pay each piece within 7 days of it arriving, or the tester can charge you\.$/.test(line)) console.log("   ! §8 Post line:", line);
-    await shotSpan(D, "b19-08-post-line", "§8 The Open until line on Post | Under the date, live: “Testers can join until this date. Each gets 14 days from when they join, so someone joining on <Open until> has until <14 days later> to send work. You pay each piece within 7 days of it arriving, or the tester can charge you.”", "label[for=openUntil]", "[data-tester-days]");
+    if (!/^Testers can join until this date\. Each gets 14 days from when they join, so someone joining on .+ has until .+ to send work\. You pay each piece within 7 days of it arriving or by that tester's deadline, whichever is later, or the tester can charge you\.$/.test(line)) console.log("   ! §8 Post line:", line);
+    await shotSpan(D, "b19-08-post-line", "§8 The Open until line on Post | Under the date, live: “Testers can join until this date. Each gets 14 days from when they join, so someone joining on <Open until> has until <14 days later> to send work. You pay each piece within 7 days of it arriving or by that tester's deadline, whichever is later, or the tester can charge you.”", "label[for=openUntil]", "[data-tester-days]");
     await D.locator("#openUntil").fill(day(20));
     await D.locator("#spots").click();
     await pause(D, 1800);

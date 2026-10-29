@@ -2,6 +2,7 @@ import { DELETE_ENDS_SUBSCRIPTION, subscribed } from "@/lib/subscription";
 import Link from "next/link";
 import { Ban, Bell, Banknote, CheckCircle2, LifeBuoy, PlusCircle, ShieldCheck, UserRound, Building2 } from "lucide-react";
 import { requirePageUser } from "@/lib/server/page-auth";
+import { isAdmin } from "@/lib/server/session";
 import { hasSide, sideFor } from "@/lib/sides";
 import { ResendConfirm } from "@/components/ResendConfirm";
 import { confirmSkipped } from "@/lib/server/users";
@@ -23,7 +24,8 @@ export const dynamic = "force-dynamic";
 export default async function AccountPage() {
   const u = await requirePageUser();
   const dev = hasSide(u, "developer"), tester = hasSide(u, "tester");
-  const side = sideFor(u, "/app/account");
+  // (Owner, Oct 28, batch 20 section 16) An admin account is only an admin: no side (one it already has is ignored), so no "Start … too" here.
+  const side = isAdmin(u) ? null : sideFor(u, "/app/account");
   // (Owner, Oct 27) The profile editor is closed while the account is suspended or (as a developer) on hold; the other settings stay.
   const profileClosed = restrictedOn(u, side);
   // (Owner, Oct 28, batch 16 section 30) Only the side in use: no "Developer, tester, or both" cards. With the other side off, one small line offers it;

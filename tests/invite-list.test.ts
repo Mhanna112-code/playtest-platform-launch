@@ -74,10 +74,10 @@ describe("invite list: greyed vs removed", () => {
     const list = await invitable(dev.user.id, testId);
     expect(list.find((x) => x.id === past.tester.user.id)?.section).toBe("worked");
     expect(list.find((x) => x.id === fits.user.id)?.section).toBe("other"); // the page takes the top 5 of these as Suggested
-    expect(list.find((x) => x.id === spanish.user.id)?.gap).toBe("English");
+    expect(list.find((x) => x.id === spanish.user.id)?.gap).toBe("doesn't list a language this test needs (English)"); // (batch 20 section 3)
     const first = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [spanish.user.id] });
     expect(first.body.error.code).toBe("needs_confirm");
-    expect(first.body.error.lines).toEqual(["Cara Diaz doesn't list English, which this test needs."]);
+    expect(first.body.error.lines).toEqual(["Cara Diaz doesn't list a language this test needs (English)."]);
     const ok = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [spanish.user.id], anyway: true, seenGaps: first.body.error.lines });
     expect(ok.body.message).toBe("Invited Cara Diaz.");
   });
@@ -89,7 +89,7 @@ describe("invite list: greyed vs removed", () => {
     const first = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [cara.user.id] });
     await db.testerProfile.update({ where: { userId: cara.user.id }, data: { languages: ["English"], devices: ["Mac"] } });
     const changed = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [cara.user.id], anyway: true, seenGaps: first.body.error.lines, confirmed: true });
-    expect(changed.body.error).toMatchObject({ code: "needs_confirm", changed: true, lines: ["Cara Diaz doesn't list Windows PC, which this test needs."] });
+    expect(changed.body.error).toMatchObject({ code: "needs_confirm", changed: true, lines: ["Cara Diaz doesn't list a device this test needs (Windows PC)."] });
     await db.testerProfile.update({ where: { userId: cara.user.id }, data: { devices: ["Windows PC"] } });
     const none = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [cara.user.id], anyway: true, seenGaps: changed.body.error.lines, confirmed: true });
     expect(none.body.error.message).toBe("Everyone you ticked now meets this test's needs. Press Invite to send.");

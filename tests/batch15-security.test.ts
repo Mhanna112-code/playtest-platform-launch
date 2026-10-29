@@ -93,7 +93,9 @@ describe("H2: Google into an unconfirmed account ends the pre-hijack", () => {
     const idToken = `e30.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.sig`;
     vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ id_token: idToken }), { status: 200 }));
     const r = new Request("http://localhost:3400/api/auth/google/callback?code=c&state=s", { headers: { cookie: `${GOOGLE_COOKIE}=s.v` } });
-    const { user } = await finishGoogle(r);
+    const done = await finishGoogle(r);
+    if (!("user" in done)) throw new Error("expected a sign-in");
+    const { user } = done;
     expect(user.id).toBe(squat.user.id);
     expect(user).toMatchObject({ passwordHash: "", stripeAccountId: null, payoutsReady: false });
     expect(user.emailVerifiedAt).not.toBeNull();

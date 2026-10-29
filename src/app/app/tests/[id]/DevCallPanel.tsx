@@ -9,13 +9,14 @@ import { FIELD } from "@/lib/client";
 import { JoinCall } from "@/components/JoinCall";
 import { CalendarPlus } from "lucide-react";
 import { usePress } from "@/lib/usePress";
+import { NotSentTag, useKept } from "@/lib/useKept";
 import { LivePanel } from "@/components/LivePanel";
 import { CallTimer } from "@/components/CallTimer";
 import { ReportProblem } from "@/components/ReportProblem";
 import { CallPresence } from "@/components/CallPresence";
 import { CancelMenu } from "@/components/CancelMenu";
 import type { RowJson } from "@/lib/callRows";
-import { alignedClash, describeRows, newRow, RequestRows, rowsPayload, type RowState } from "@/components/RequestRows";
+import { alignedClash, describeRows, formClashInputs, madeBy, newRow, RequestRows, rowsPayload, type PressMade, type RowState } from "@/components/RequestRows";
 import { CallRequestsPanel, type PanelReq } from "@/components/CallRequestsPanel";
 import { jumpTo } from "@/lib/markJump";
 import { CallCheckLink } from "@/components/CallCheckLink";
@@ -48,6 +49,12 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   const [ticked, setTicked] = useState<string[]>([]);
   const [rows, setRows] = useState<RowState[]>([newRow()]);
   const [minutes, setMinutes] = useState("");
+  // (Owner, Oct 28, batch 20 section 18) The typed times, length and ticks survive any reload (kept on the server, "Not sent yet"), and are forgotten once sent.
+  const keep = useKept<{ rows: RowState[]; minutes: string; ticked: string[] }>(`request:t-${testId}`, { rows, minutes, ticked }, rows.every((r) => !r.when) && !minutes.trim(), (v) => {
+    if (Array.isArray(v.rows) && v.rows.length) setRows(v.rows);
+    setMinutes(typeof v.minutes === "string" ? v.minutes : "");
+    if (Array.isArray(v.ticked)) setTicked(v.ticked.filter((id) => testers.some((t) => t.contractId === id)));
+  });
   const form = useRef<HTMLDivElement>(null);
   const minNow = useLocalMin(5);
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -60,6 +67,22 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
       window.location.reload();
     }
   };
+  // (Batch 20 section 7) From the Request a time press until the reload, the clash checks use the testers as they were when pressed and never what the press made
+  // (its new requests, or the call it booked); the form clears as soon as it goes through.
+  const [frozen, setFrozen] = useState<{ testers: DevTester[]; elsewhere: OtherCall[] } | null>(null);
+  const [made, setMade] = useState<PressMade | null>(null);
+  const request = async (body: Record<string, unknown>) => {
+    setFrozen({ testers, elsewhere });
+    const r = await press<{ message?: string }>(`/api/tests/${testId}/request-time`, body, "request");
+    if (r) {
+      setMade(madeBy(r));
+      setRows([newRow()]);
+      setMinutes("");
+      await keep.clear();
+      window.location.reload();
+    } else setFrozen(null);
+  };
+  const checked = formClashInputs(testers.map((t) => ({ ...t, calls: [...t.calls, ...t.sets.flatMap((x) => x.calls)] })), frozen ? frozen.testers.map((t) => ({ ...t, calls: [...t.calls, ...t.sets.flatMap((x) => x.calls)] })) : null, made);
   const all = testers.length > 0 && testers.every((t) => ticked.includes(t.contractId));
   const filled = rowsPayload(rows);
   // (Owner, Oct 28, batch 16 section 33) Clash checks as the form is filled, for every ticked tester (and every call of a Daily / Weekly set): red lines under the
@@ -67,17 +90,17 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   const tickedTesters = testers.filter((t) => ticked.includes(t.contractId));
   // (Batch 18 section 6) The Length is at most what's left of the $1,000 for the ticked testers' calls at their rate (the smallest applies, named).
   const lenCap = lengthCap(tickedTesters);
-  const clash = alignedClash(rows, minutes, "developer", tickedTesters.map((t) => ({
+  const clash = alignedClash(rows, minutes, "developer", checked.filter((t) => ticked.includes(t.contractId)).map((t) => ({
     name: t.name, pending: t.pending, booked: t.booked, leftCents: t.leftCents, rateCents: t.rateCents,
-    calls: [...t.calls, ...t.sets.flatMap((x) => x.calls)].map((c) => ({ start: c.when, minutes: c.minutes })),
+    calls: t.calls.map((c) => ({ id: c.id, start: c.when, minutes: c.minutes })),
     requests: t.requests.map((q) => ({ id: q.id, rows: q.rows, minutes: q.minutes ?? 0, mine: q.mine })),
-  })), elsewhere.filter((c) => !ticked.includes(c.contractId)).map((c) => ({ start: c.start, minutes: c.minutes, name: c.name })));
+  })), (frozen?.elsewhere ?? elsewhere).filter((c) => !ticked.includes(c.contractId)).map((c) => ({ start: c.start, minutes: c.minutes, name: c.name })));
   // (Owner, Oct 28, batch 16 section 21) What this form is requesting that is now booked or requested (e.g. from another tab): marked; the rest of the form stays.
   const already = filled.flatMap((r) => ticked.flatMap((cid) => {
-    const t = testers.find((x) => x.contractId === cid);
+    const t = checked.find((x) => x.contractId === cid);
     if (!t) return [];
     const at = new Date(r.startsAt).getTime();
-    if ([...t.calls, ...t.sets.flatMap((x) => x.calls)].some((c) => new Date(c.when).getTime() === at)) return [`Already booked: ${t.name}, ${fmt(r.startsAt)}`];
+    if (t.calls.some((c) => new Date(c.when).getTime() === at)) return [`Already booked: ${t.name}, ${fmt(r.startsAt)}`];
     if (t.requests.some((q) => q.mine && q.rows.some((x) => new Date(x.startsAt).getTime() === at))) return [`Already requested: ${t.name}, ${fmt(r.startsAt)}`];
     return [];
   }));
@@ -131,10 +154,11 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
             <button
               className="btn"
               disabled={busy || !filled.length || ticked.length === 0}
-              onClick={() => checkFields(form.current) && go("request-time", { contractIds: ticked, minutes: minutes.trim() ? minutes.trim() : "", rows: filled }, "request")}
+              onClick={() => checkFields(form.current) && request({ contractIds: ticked, minutes: minutes.trim() ? minutes.trim() : "", rows: filled })}
             >
               Request a time
             </button>
+            {keep.restored && <NotSentTag />}
           </div>
           {ticked.length === 0 && <p className="note">Tick one or more testers to request a time.</p>}
           {box("request")}

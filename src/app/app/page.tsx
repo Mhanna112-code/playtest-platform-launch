@@ -5,7 +5,8 @@ import { compact, compactMoney, displayName, fmtDate, fmtDateTime, money, num } 
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { RatingsToGive } from "./RatingsToGive";
 import { LiveTop } from "@/components/LiveTop";
-import { requirePageUser } from "@/lib/server/page-auth";
+import { adminAway, requirePageUser } from "@/lib/server/page-auth";
+import { isAdmin } from "@/lib/server/session";
 import { sideFor } from "@/lib/sides";
 import { ProfileForm } from "./profile/ProfileForm";
 import { NoThanks } from "./NoThanks";
@@ -59,12 +60,14 @@ const DAY = 86_400_000;
 export default async function AppHome({ searchParams }: { searchParams: Promise<{ category?: string; failed?: string; done?: string }> }) {
   const u = await requirePageUser();
   const { category, failed, done } = await searchParams;
-  if (!u.isDeveloper && !u.isTester)
+  // (Owner, Oct 28, batch 20 section 16) An admin account is only an admin: the setup asks only Name and Pronoun (until the name is set), then /admin is home.
+  adminAway(u, "/app");
+  if ((!u.isDeveloper && !u.isTester) || isAdmin(u))
     return (
       <>
         <h1>Welcome to Playtest</h1>
         <p className="note">Tell us who you are. You can change this later in Profile.</p>
-        <ProfileForm first init={{ name: u.name, pronoun: u.pronoun, isDeveloper: false, isTester: false, devices: [], categories: [], languages: [], bio: "" }} />
+        <ProfileForm first admin={isAdmin(u)} init={{ name: u.name, pronoun: u.pronoun, isDeveloper: false, isTester: false, devices: [], categories: [], languages: [], bio: "" }} />
       </>
     );
   const now = new Date();

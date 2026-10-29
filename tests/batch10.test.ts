@@ -97,12 +97,12 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     expect((await owed(s.dev.user.id)).map((p) => p.amountCents)).toEqual([9000]);
   });
 
-  it("a listed part paid the listing (or more) and an old rejection can be disputed; the tester's own Charge can't", async () => {
+  it("a listed part paid the listing can't be disputed (batch 20 section 15); an old rejection can; the tester's own Charge can't", async () => {
     const full = await sentWork("10.00");
     expect((await pay(full.dev.cookie, { kind: "submission", id: full.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    expect((await dispute(full.sessionId, full.tester.cookie, { kind: "submission", id: full.sub.id })).status).toBe(200);
-    // The listing's range is unchanged: a part paid the listing can only be kept.
-    expect(await disputeBounds((await db.dispute.findFirstOrThrow({ where: { submissionId: full.sub.id } })))).toMatchObject({ unlisted: false, min: 1000, max: 1000 });
+    // The listing's range is unchanged: a part paid the listing can only be kept. (Batch 20 section 15) So there's nothing to dispute: refused with that line.
+    expect(await disputeBounds({ submissionId: full.sub.id, callId: null })).toMatchObject({ unlisted: false, min: 1000, max: 1000 });
+    expect((await dispute(full.sessionId, full.tester.cookie, { kind: "submission", id: full.sub.id })).body.error.message).toBe("Already paid the most a dispute could award, so there's nothing to dispute.");
 
     const rej = await sentWork("10.00");
     // (Batch 15 section 30) Reject is gone: a rejection made before stays and can still be disputed.
@@ -154,7 +154,7 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
     expect(page).toContain("chat={!meOff ?");
     expect(src("app/app/chat/[id]/page.tsx")).toContain("closed={blocked || paused}");
     const actions = src("app/app/sessions/[id]/SessionActions.tsx");
-    expect(actions).toContain("{canSend && <button className=\"btn\" disabled={busy || length > WRITTEN_MAX_CHARS}>");
+    expect(actions).toContain("{canSend && <button className={`btn ${unchanged ? \"!bg-white/10 !text-ink-400 !shadow-none\" : \"\"}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged}"); // (batch 20 section 26)
     expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).toContain("{canSend && sendable && uploaded.length > 0 && (");
     // Testers' dashboard rows keep the "Paused" tag.
     expect(src("app/app/page.tsx")).toContain("{c.title} {pausedTest(c.test) && <PausedTag />}");

@@ -1,9 +1,9 @@
 import { db } from "@/lib/db";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { HttpError } from "./http";
-import { requireUser } from "./session";
+import { isAdmin, requireUser } from "./session";
 import { accountGate, listLabel, logAccountChange, sidesLabel } from "./accountChanges";
-import { TERMS_CHANGED_HREF, TERMS_UPDATED_CODE, TERMS_UPDATED_LINE, TERMS_VERSION, needsTermsAgain } from "@/lib/termsOfUse";
+import { TERMS_CHANGED_HREF, TERMS_TICK_MISSING, TERMS_UPDATED_CODE, TERMS_VERSION, needsTermsAgain } from "@/lib/termsOfUse";
 
 export const SUSPENDED = "Your account is paused. Contact support if you think this is a mistake.";
 
@@ -102,6 +102,14 @@ export async function saveProfile(userId: string, body: Record<string, unknown>)
   const pronoun = ["she", "he", "they"].includes(body.pronoun as string) ? (body.pronoun as string) : "";
   const isDeveloper = body.isDeveloper === true;
   const isTester = body.isTester === true;
+  // (Owner, Oct 28, batch 20 section 16) An admin account has no side (its setup asks only Name and Pronoun; sides sent are ignored, one it has is kept and ignored);
+  // everyone else picks at least one.
+  const me = await db.user.findUnique({ where: { id: userId } });
+  const admin = !!me && isAdmin(me);
+  if (admin) {
+    const user = await db.user.update({ where: { id: userId }, data: { name, pronoun } });
+    return user;
+  }
   if (!isDeveloper && !isTester) throw new HttpError(400, "bad_role", "Choose developer, tester, or both.");
   const devices = pick(body.devices, DEVICES), categories = pick(body.categories, CATEGORIES), languages = pick(body.languages, LANGUAGES);
   if (isTester && devices.length === 0) throw new HttpError(400, "bad_devices", "Pick at least one device you play on.");
@@ -141,7 +149,8 @@ export async function saveProfile(userId: string, body: Record<string, unknown>)
  */
 export async function requireCurrentTerms(u: { id: string; termsVersion: number }, body: Record<string, unknown>) {
   if (!needsTermsAgain(u)) return;
-  if (body.agreeTerms !== true) throw new HttpError(409, TERMS_UPDATED_CODE, TERMS_UPDATED_LINE, { termsHref: TERMS_CHANGED_HREF, termsVersion: TERMS_VERSION });
+  // (Owner, Oct 28, batch 20 section 21) The tick sits above the button with the other ticks: unticked, a red mistake at it ("Tick to agree to the updated Terms of Use.").
+  if (body.agreeTerms !== true) throw new HttpError(400, TERMS_UPDATED_CODE, TERMS_TICK_MISSING, { termsHref: TERMS_CHANGED_HREF, termsVersion: TERMS_VERSION, errors: [TERMS_TICK_MISSING] });
   await db.user.updateMany({ where: { id: u.id, termsVersion: { lt: TERMS_VERSION } }, data: { termsVersion: TERMS_VERSION, termsAcceptedAt: new Date() } });
   u.termsVersion = TERMS_VERSION;
 }

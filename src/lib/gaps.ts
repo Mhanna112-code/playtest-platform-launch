@@ -39,5 +39,25 @@ export const TESTER_ASK: Record<GapAsk, { question: string; anyway: string; plai
   join: { question: "Join anyway?", anyway: "Join anyway", plain: "Join" },
 };
 export const PROFILE_COVERS = "Your profile now covers what this test needs.";
-export const testerGapText = (g: Gaps, ask: GapAsk) => (noGaps(g) ? PROFILE_COVERS : `Your profile ${gapsWords(g)}. ${TESTER_ASK[ask].question}`);
+// (Batch 20 section 3) The Join anyway box names both kinds in the Invite anyway box's words.
+export const testerGapText = (g: Gaps, ask: GapAsk) => (noGaps(g) ? PROFILE_COVERS : `Your profile ${missingNeedText(g)}. ${TESTER_ASK[ask].question}`);
 export const testerGapButton = (g: Gaps, ask: GapAsk) => (noGaps(g) ? TESTER_ASK[ask].plain : TESTER_ASK[ask].anyway);
+
+/** (Owner, Oct 28, batch 20 section 3) "A, B or C": every item, the last joined with "or". */
+export const orList = list;
+/**
+ * (Batch 20 section 3) Everything a profile is missing, both kinds in one: "doesn't list a language this test needs (Chinese or Portuguese) or a device it needs
+ * (Windows PC or iPad)"; with only one kind missing, only that part ("doesn't list a device this test needs (Windows PC or iPad)").
+ */
+export function missingNeedText(g: Gaps) {
+  if (g.languages.length && g.devices.length) return `doesn't list a language this test needs (${list(g.languages)}) or a device it needs (${list(g.devices)})`;
+  if (g.languages.length) return `doesn't list a language this test needs (${list(g.languages)})`;
+  if (g.devices.length) return `doesn't list a device this test needs (${list(g.devices)})`;
+  return "";
+}
+/** (Batch 20 section 3) One line per ticked tester in the Invite anyway box (and the server's gap lines, which `seenGaps` compares): "fbbb doesn't list … ." */
+export const missingNeedLine = (name: string, g: Gaps) => `${name} ${missingNeedText(g)}.`;
+/** A gap line (as opposed to the box's "What's missing changed since you looked" heading). */
+export const isMissingNeedLine = (l: string) => / doesn't list a (language|device) this test needs \(.*\)\.$/.test(l);
+/** (Batch 20 section 3) What the Invite anyway box gets with its lines: who, and what's missing (so a long list can be cut to 3 with "+N more"). */
+export type GapItem = Gaps & { name: string };

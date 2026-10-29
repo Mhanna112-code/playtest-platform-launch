@@ -452,8 +452,8 @@ describe("batch 19 section 7: a required tick about Charge on Post and Edit", ()
 
 describe("batch 19 section 8: Post and Edit say that work can arrive after Open until", () => {
   it("the live line's numbers: Post (today to Open until) and Edit (the days now + the extension)", () => {
-    expect(R.openUntilLine("2026-11-20", 14)).toBe("Testers can join until this date. Each gets 14 days from when they join, so someone joining on Nov 20 has until Dec 4 to send work. You pay each piece within 7 days of it arriving, or the tester can charge you.");
-    expect(R.openUntilLine("2026-11-25", 14 + 5)).toBe("Testers can join until this date. Each gets 19 days from when they join, so someone joining on Nov 25 has until Dec 14 to send work. You pay each piece within 7 days of it arriving, or the tester can charge you.");
+    expect(R.openUntilLine("2026-11-20", 14)).toBe("Testers can join until this date. Each gets 14 days from when they join, so someone joining on Nov 20 has until Dec 4 to send work. You pay each piece within 7 days of it arriving or by that tester's deadline, whichever is later, or the tester can charge you.");
+    expect(R.openUntilLine("2026-11-25", 14 + 5)).toBe("Testers can join until this date. Each gets 19 days from when they join, so someone joining on Nov 25 has until Dec 14 to send work. You pay each piece within 7 days of it arriving or by that tester's deadline, whichever is later, or the tester can charge you.");
     expect(R.openUntilLine("2026-12-30", 1)).toContain("Each gets 1 day from when they join, so someone joining on Dec 30 has until Dec 31 to send work.");
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain("openUntilLine(f.openUntil, daysBetween(localToday(), f.openUntil))");

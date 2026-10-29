@@ -91,6 +91,6 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
 }
 
 /** The full app's "Not sent yet" tag. */
-export function NotSentTag() {
-  return <span data-not-sent="draft" className="badge ml-2 border-amber-300/50 bg-amber-300/10 text-amber-200">Not sent yet</span>;
+export function NotSentTag({ label = "Not sent yet" }: { /** (Batch 20 section 22) "Not saved yet" on Edit, "Not posted yet" on Post */ label?: string }) {
+  return <span data-not-sent="draft" className="badge ml-2 border-amber-300/50 bg-amber-300/10 text-amber-200">{label}</span>;
 }

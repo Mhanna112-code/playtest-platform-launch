@@ -33,10 +33,20 @@ export function BlockButton({ userId, name, effect, plain }: { userId: string; n
   );
 }
 
-export function UnblockButton({ userId }: { userId: string }) {
+export function UnblockButton({ userId, say = false, name = "" }: { userId: string; /** (Batch 20 section 17) on a profile: "Unblocked." shows, then the page comes back in full */ say?: boolean; name?: string }) {
+  const [done, setDone] = useState(false);
+  const [err, setErr] = useState("");
   return (
-    <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => api("/api/blocks", { userId, action: "unblock" }).then(() => window.location.reload())}>
-      Unblock
-    </button>
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <button className="btn-secondary px-3 py-1.5 text-sm" disabled={done} data-unblock="" onClick={() => api("/api/blocks", { userId, action: "unblock" }).then(() => {
+        if (!say) return window.location.reload();
+        setDone(true);
+        setTimeout(() => window.location.reload(), 800);
+      }, (e) => setErr(errOf(e)))}>
+        {name ? `Unblock ${name}` : "Unblock"}
+      </button>
+      {done && <span className="text-emerald-300" role="status">Unblocked.</span>}
+      <Err text={err} />
+    </span>
   );
 }

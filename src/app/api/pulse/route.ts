@@ -84,6 +84,9 @@ export async function GET(req: Request) {
     // (Owner, Oct 28) Whether the team stopped the test: an open test page or Edit moves to the top of the test page at once.
     // (Batch 10) A tester's session page isn't restricted by the developer's hold (only the developer's own pages are): it keeps refreshing, so the paused banner shows live.
     // (Batch 15 section 16) Each side's own suspension: the tester side on a session page, the developer side on a test page.
-    return ok({ v, adminStopped: !!t.adminStoppedAt, restricted: !!(sessionId ? u.testerSuspendedAt : u.devSuspendedAt || t.developer.holdStartedAt) });
+    // (Batch 20 section 8) The viewer's own Alerts setting (the developer's ignored types, the tester's Off): an Alerts menu, toggle or stop box chip open in another
+    // tab or browser follows a change made elsewhere on this poll (no refresh needed).
+    const alerts = sessionId ? { testerOff: u.testerAlertsOff } : { ignored: u.ignoredAlerts };
+    return ok({ v, adminStopped: !!t.adminStoppedAt, restricted: !!(sessionId ? u.testerSuspendedAt : u.devSuspendedAt || t.developer.holdStartedAt), alerts });
   });
 }

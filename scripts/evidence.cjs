@@ -94,6 +94,7 @@ async function signIn(page, email) {
   await page.goto("/signup");
   await page.fill("#email", email);
   await page.fill("#password", PASSWORD);
+  await page.check("#over18").catch(() => {}); // (batch 20 section 5) the required 18+ tick
   await page.click("button:has-text('Sign up')");
   const ok = await page.waitForURL("**/app", { timeout: 8000 }).then(() => true, () => false);
   if (!ok) {
@@ -1415,6 +1416,7 @@ async function signIn(page, email) {
     await d.goto("/signup");
     await d.fill("#email", DEV29);
     await d.fill("#password", PASSWORD);
+    await d.check("#over18").catch(() => {});
     await d.click("button:has-text('Sign up')");
     await d.waitForURL("**/app");
     await d.fill("#name", "Nora Lane");

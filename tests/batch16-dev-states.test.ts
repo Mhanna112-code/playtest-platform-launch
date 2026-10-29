@@ -104,7 +104,7 @@ describe("developer, stopped / closed or paused / held: what still works goes th
     await later();
     await db.testEvent.create({ data: { testId, kind: "left", text: "Cara Diaz left the test" } });
     expect((await act(testId, "cancel-call", dev.cookie, { callId: call.id, seenAt: loaded })).status).toBe(200);
-    expect((await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "Done", seenAt: loaded })).status).toBe(200);
+    expect((await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "All done.", seenAt: loaded })).status).toBe(200);
     expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded })).status).toBe(200);
   });
 

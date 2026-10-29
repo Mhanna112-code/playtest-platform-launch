@@ -10,6 +10,7 @@ import { ratingSummary } from "@/lib/server/ratings";
 import { byMostTimeToFinish, perTesterLine, termsLine, testerDaysOf, testerShare } from "@/lib/rules";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { asListing, findTests, needsLines } from "@/lib/server/tests";
+import { exactFirst } from "@/lib/nameSearch";
 import { isAdmin } from "@/lib/server/session";
 import { adminFindTests, ADMIN_FIND_LIMIT } from "@/lib/server/findSearch";
 import { findQuery, noFindMatchLine, statesFrom, type TestState } from "@/lib/findSearch";
@@ -68,6 +69,8 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
   // (Owner, Oct 28, batch 16 section 3) "Most time to finish": the days each new tester gets (the card's "N days per tester"), most first; ties: the later Open until
   // first (more time left to join); tests without Open until last.
   else if (sp.sort === "deadline") shown.sort(byMostTimeToFinish);
+  // (Batch 20 section 9) An exact match (the test's name, its product or the developer's name) comes first.
+  if (typed) shown.splice(0, shown.length, ...exactFirst(shown, typed, (t) => [t.title, t.productName ?? "", displayName(t.developer)]));
   // What the search box, the tick boxes and the chips keep from each other.
   const params: Record<string, string | undefined> = { category: sp.category, device: sp.device, part: sp.part, sort: sp.sort, mine: admin ? undefined : sp.mine, q: typed || undefined, states: admin ? sp.states : undefined };
   return (

@@ -42,7 +42,8 @@ describe("Open until: at most 30 days from when the test opened (section 16)", (
     expect((await editOU(testId, dev.cookie, cap)).status).toBe(200);
     // A pause of 5 days lifted: Open until moves 5 days later, past the cap (the developer couldn't use that time).
     const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
-    await db.$transaction((tx) => shiftAfterPause(tx, t, new Date(Date.now() - 5 * DAY), new Date()));
+    const nowMs = Date.now(); // one clock reading, so the two ends are exactly 5 days apart (the test flaked by 1 ms)
+    await db.$transaction((tx) => shiftAfterPause(tx, t, new Date(nowMs - 5 * DAY), new Date(nowMs)));
     const shifted = await db.test.findUniqueOrThrow({ where: { id: testId } });
     expect(shifted.openUntil!.getTime() - t.openUntil!.getTime()).toBe(5 * DAY);
     expect(shifted.openUntil!.toISOString().slice(0, 10) > cap).toBe(true);

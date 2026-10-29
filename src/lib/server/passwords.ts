@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { TERMS_VERSION } from "@/lib/termsOfUse";
+import { AGE_LINE, TERMS_VERSION } from "@/lib/termsOfUse";
 import { db } from "@/lib/db";
 import { isEmail, normEmail } from "@/lib/format";
 import { safeZone } from "@/lib/tz";
@@ -84,6 +84,9 @@ async function loginPaused(email: string, ip: string, now: Date) {
 /** The daily job: attempts older than a day are deleted. */
 export const cleanLoginAttempts = (now = new Date()) => db.loginAttempt.deleteMany({ where: { at: { lt: new Date(now.getTime() - 86_400_000) } } });
 
+/** (Batch 20 section 5) A tick sent by a form ("yes", "on") or as JSON (true). */
+export const isTicked = (v: unknown) => v === true || v === "yes" || v === "on" || v === "true";
+
 /** Sign up: email + password. Signed in at once; a confirmation link is emailed. (Batch 15 section 7) At most 10 new accounts per network an hour. */
 export async function signUp(body: Record<string, unknown>, base: string, ip = "", now = new Date()) {
   const email = readEmail(body.email);
@@ -101,8 +104,10 @@ export async function signUp(body: Record<string, unknown>, base: string, ip = "
     if (!body.acceptTerms) throw field("Agree to the Terms of Use to sign up");
     who = { name, isDeveloper: role !== "tester", isTester: role !== "developer", termsVersion: TERMS_VERSION, termsAcceptedAt: now }; // (batch 18 section 1) the version they accepted
   }
+  // (Owner, Oct 28, batch 20 section 5) The required "I'm 18 or older." tick: no account without it (red at the tick).
+  if (!isTicked(body.over18)) throw field(AGE_LINE);
   const user = await db.user.create({
-    data: { email, passwordHash: await hashPassword(password), timeZone: readTimeZone(body.timeZone), ...(who ?? {}), ...(who?.isTester ? { profile: { create: { devices: [], languages: [], categories: [] } } } : {}) },
+    data: { email, passwordHash: await hashPassword(password), timeZone: readTimeZone(body.timeZone), ageConfirmedAt: now, ...(who ?? {}), ...(who?.isTester ? { profile: { create: { devices: [], languages: [], categories: [] } } } : {}) },
   });
   await db.loginAttempt.create({ data: { email, ip, kind: "signup", ok: true, at: now } });
   await sendVerification(user.id, base);

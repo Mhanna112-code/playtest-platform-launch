@@ -18,7 +18,7 @@ describe("missing device or language: Join anyway?", () => {
     const { testId } = await setup({ devices: ["Mac"] });
     const ben = await makeUser({ tester: true });
     const r = await act(testId, "join", ben.cookie, {});
-    expect(r.body.error).toMatchObject({ code: "needs", message: "This test needs one of: Mac. Add your device in your profile.\nJoin anyway?" });
+    expect(r.body.error).toMatchObject({ code: "needs", message: "Your profile doesn't list a device this test needs (Mac).\nJoin anyway?" }); // (batch 20 section 3)
     expect((await act(testId, "join", ben.cookie, { anyway: true })).status).toBe(200);
     expect(await db.contract.count({ where: { testId, testerId: ben.user.id } })).toBe(1);
   });
@@ -30,8 +30,8 @@ describe("(NEXT-UI 4b) the pop-up's Join anyway / Apply anyway", () => {
     const ben = await makeUser({ tester: true });
     const r = await act(testId, "apply", ben.cookie, {});
     expect(r.body.error).toMatchObject({ code: "needs", gaps: { languages: ["Spanish"], devices: ["Mac"] } });
-    expect(r.body.error.message).toContain("Add your device in your profile.");
-    expect(r.body.error.message).toContain("Add the language in your profile.");
+    // (Batch 20 section 3) Both kinds in one line, in the Invite anyway box's words.
+    expect(r.body.error.message).toContain("Your profile doesn't list a language this test needs (Spanish) or a device it needs (Mac).");
     expect(r.body.error.message.endsWith("Apply anyway?")).toBe(true);
     // The pop-up showed only the language; the device is missing too: stops again, with the list as it is now.
     const stale = await act(testId, "apply", ben.cookie, { anyway: true, gapsShown: { languages: ["Spanish"], devices: [] } });

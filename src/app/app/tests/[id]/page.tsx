@@ -34,7 +34,7 @@ import { rowsOf, toJson } from "@/lib/callRows";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
-import { HOLD_APPROVAL_AFTER, NOT_LISTED, callListed, deletedNoPayoutsLine, joiningClosedLine, closeOutSoon, closedNotPaidLine, payClosesLine, testerPayable, STOP_NOTE_KIND, stopReasonOf } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, inviteBlocked, rateNeedsLine, NOT_LISTED, callListed, deletedNoPayoutsLine, joiningClosedLine, closeOutSoon, closedNotPaidLine, payClosesLine, testerPayable, STOP_NOTE_KIND, stopReasonOf } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
@@ -57,6 +57,7 @@ import { ClampText } from "@/components/ClampText";
 import { RowsBox } from "./RowsBox";
 import { testerStats } from "@/lib/server/profileStats";
 import { ByQuestion } from "./ByQuestion";
+import { pastCallsBox } from "@/components/QuestionBox";
 import { byQuestion } from "@/lib/byQuestion";
 import { PrevSetFolds, SetView } from "@/components/AnswerSets";
 import { itemsOf, prevSetsOf } from "@/lib/answerSets";
@@ -340,7 +341,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       </>
     );
   }
-  const needsCount = pieces.length + apps.length + needsRequests.length + disputesWaiting.length + excerptReqs.length;
+  // (Owner, Oct 28, batch 20 section 24) Each open Rate in Needs you: "Rate ff · 14 days left", linking to that tester's Rate box (the page's poll brings it).
+  const rateNeeds = restricted ? [] : t.contracts.flatMap((c) => {
+    const st = rateStates.get(c.id);
+    return st?.kind === "open" && st.endsAt ? [{ id: c.id, line: rateNeedsLine(displayName(c.tester), st.endsAt, now) }] : [];
+  });
+  const needsCount = pieces.length + apps.length + needsRequests.length + disputesWaiting.length + excerptReqs.length + rateNeeds.length;
   return (
     <>
       <AutoRefresh query={`test=${t.id}`} />
@@ -391,6 +397,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         <NeedsYou count={needsCount}>
           <Applications testId={t.id} seenAt={seenAt} apps={apps} />
           <NeedsRequests testId={t.id} seenAt={seenAt} requests={needsRequests} />
+          {rateNeeds.map((r) => <p key={`rate-need-${r.id}`} className="text-sm" data-rate-need={r.id}><a href={`#rate-${r.id}`}>{r.line}</a></p>)}
           {excerptReqs.map((x) => (
             <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm scroll-mt-24" data-excerpt-request="">
               <p className="text-slate-300"><b className="text-white">Excerpt request</b> · {x.tester} would like to show this on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
@@ -543,7 +550,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {overCalls.length > 0 && (
                   <details open={overCalls.some((x) => bankRows.some((b) => b.pieceId === x.id)) || undefined} className="rounded-lg border border-white/10 p-2 text-sm" data-calls-fold={c.id}>
                     <summary className="fold-chevron cursor-pointer font-medium text-white">Calls ({overCalls.length})</summary>
-                    <ul className="mt-2 max-h-96 space-y-2 overflow-y-auto pr-1" data-calls-history="">
+                    {/* (Batch 20 section 11) More than 3: a scroll box about 3 calls tall (each call's Pay / Pay more / dispute controls inside it). */}
+                    <ul className={`mt-2 space-y-2 ${pastCallsBox(overCalls.length, "developer")}`} data-calls-history="" data-calls-scroll={overCalls.length > 3 ? overCalls.length : undefined}>
                       {overCalls.map((x) => {
                         const m = callMinutesOf(x);
                         const badge = callOverBadge(x, { developer: displayName(u), tester: name }, "developer", fmtTime, partPaid(x.id), m);
@@ -635,6 +643,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           seenAt={seenAt}
           options={{ devices: t.devices, languages: t.languages }}
           perks={perks}
+          // (Batch 20 section 10) Full, paused or joining closed: Invite is disabled with its line (the page's poll brings a spot opening or filling); Open until
+          // passing while the page is open closes it at that moment.
+          blocked={inviteBlocked({ ...t, testersIn: working.length, paused: !!u.holdStartedAt }, now, fmtDate)}
+          closes={t.openUntil && t.openUntil > now ? { at: t.openUntil.toISOString(), line: inviteBlocked({ ...t, testersIn: working.length, paused: !!u.holdStartedAt }, new Date(t.openUntil.getTime() + 1000), fmtDate)?.line ?? "" } : undefined}
           initial={invitePanelData ?? { worked: [], suggested: [], found: [], foundTotal: 0, capLine: "", searched: false }}
           sent={expired ? [] : invites.filter((i) => i.status === "sent").map((i) => ({ id: i.id, name: people.get(i.testerId) ?? "?", status: "waiting for them to join" }))}
         />

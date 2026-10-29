@@ -14,8 +14,9 @@ const lv = async (testId: string) => (await db.test.findUniqueOrThrow({ where: {
 const oldTerms = (userId: string) => db.user.update({ where: { id: userId }, data: { termsVersion: TERMS_VERSION - 1 } });
 const versionOf = async (userId: string) => (await db.user.findUniqueOrThrow({ where: { id: userId } })).termsVersion;
 const refusedForTerms = (r: { status: number; body: { error?: { code: string; message: string } } }) => {
-  expect(r.status).toBe(409);
-  expect(r.body.error).toMatchObject({ code: TERMS_UPDATED_CODE, message: TERMS_UPDATED_LINE });
+  // (Batch 20 section 21) A required tick above the button: unticked is a red mistake at it.
+  expect(r.status).toBe(400);
+  expect(r.body.error).toMatchObject({ code: TERMS_UPDATED_CODE, message: "Tick to agree to the updated Terms of Use." });
 };
 
 describe("batch 18 section 1: re-accepting updated Terms of Use", () => {
@@ -24,7 +25,7 @@ describe("batch 18 section 1: re-accepting updated Terms of Use", () => {
     expect(TERMS_UPDATED_LINE).toBe("We updated our Terms of Use. Read what changed.");
     expect(TERMS_AGREE_LABEL).toBe("I agree to the updated Terms");
     expect(TERMS_CHANGED_HREF).toBe("/terms#what-changed");
-    const r = await signUp({ email: `terms-${Date.now()}@test.playtest.test`, password: "longenough1", role: "tester", name: "Ana Silva", acceptTerms: "yes" }, "http://localhost:3400");
+    const r = await signUp({ email: `terms-${Date.now()}@test.playtest.test`, password: "longenough1", role: "tester", name: "Ana Silva", acceptTerms: "yes", over18: "yes" }, "http://localhost:3400");
     const u = await db.user.findUniqueOrThrow({ where: { id: r.user.id } });
     expect(u.termsVersion).toBe(TERMS_VERSION);
     expect(u.termsAcceptedAt).not.toBeNull();
@@ -109,11 +110,10 @@ describe("batch 18 section 1: re-accepting updated Terms of Use", () => {
 
   it("the pages: the box (link + tick) under Post the test and Join / Apply / Ask to rejoin, sending the tick with the press", () => {
     const box = src("components/TermsAgainBox.tsx");
-    expect(box).toContain("We updated our Terms of Use. <a href={TERMS_CHANGED_HREF}");
-    expect(box).toContain("Read what changed.</a>");
-    expect(box).toContain("{TERMS_AGREE_LABEL}");
+    // (Batch 20 section 21) One more tick above the button: "I agree to the updated Terms of Use. Read what changed".
+    expect(box).toContain("<span>{TERMS_TICK_LABEL} <a href={TERMS_CHANGED_HREF} target=\"_blank\" rel=\"noreferrer\">{TERMS_TICK_LINK}</a></span>");
     const join = src("app/app/find/[id]/JoinBox.tsx");
-    expect(join).toContain("{termsAsk && <TermsAgainBox agreed={agreeTerms} onAgree={setAgreeTerms} />}");
+    expect(join).toContain("{termsAsk && <TermsAgainBox agreed={agreeTerms} onAgree={setAgreeTerms} red={termsErr} />}");
     expect(join.match(/inviteId, agreeTerms \}/g)).toHaveLength(2); // the button's press and the needs pop-up's
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain("{termsAsk && !edit && <TermsAgainBox agreed={agreeTerms} onAgree={setAgreeTerms} />}");

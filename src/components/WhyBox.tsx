@@ -1,4 +1,5 @@
 "use client";
+import { WHY_MIN_CHARS, WHY_TOO_SHORT } from "@/lib/rules";
 
 /**
  * (Batch 15 section 22; Batch 17 §15) A required "Why?" the other side reads: End early's box, also used by Stop the test. A textarea (red at the field when
@@ -21,7 +22,8 @@ export function WhyBox({ id, label, placeholder, requiredMsg, match, value, onCh
   return (
     <div>
       <label className="label req" htmlFor={id}>{label}</label>
-      <textarea id={id} rows={3} className="input" placeholder={placeholder} data-required="" data-required-msg={requiredMsg} data-match={match} value={value} onChange={(e) => onChange(e.target.value)} />
+      {/* (Batch 20 section 27) At least 5 characters: red "Say a little more: at least 5 characters." on leaving it or pressing. */}
+      <textarea id={id} rows={3} className="input" placeholder={placeholder} data-required="" data-required-msg={requiredMsg} data-min-chars={String(WHY_MIN_CHARS)} data-msg={WHY_TOO_SHORT} data-match={`${match}|say a little more`} value={value} onChange={(e) => onChange(e.target.value)} />
       <p className={`text-xs ${value.length > max ? "text-rose-300" : "text-slate-500"}`} {...{ [countAttr]: "" }}>{value.length.toLocaleString("en-US")} / {max.toLocaleString("en-US")}</p>
     </div>
   );

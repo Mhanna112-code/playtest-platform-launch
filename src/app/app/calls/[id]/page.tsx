@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDateTime } from "@/lib/format";
 import { callStatus } from "@/lib/server/blocks";
 import { callCheckUrl, onCallNow, roomUrl } from "@/lib/server/calls";
-import { leaveIfClosed, requireOpenPage, requirePageUser } from "@/lib/server/page-auth";
+import { adminAway, leaveIfClosed, requireOpenPage, requirePageUser } from "@/lib/server/page-auth";
 import { CallRoom } from "./CallRoom";
 import { CallTimer } from "@/components/CallTimer";
 import { JITSI_HOST_DEV_LINE, JOIN_OPENS_MIN, jitsiWaitingLine } from "@/lib/rules";
@@ -15,6 +15,7 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   // (Owner, Oct 28) Closed to a restricted account (it moves to the dashboard top); with both sides and only a hold, the role in this call decides.
   const u = await requirePageUser();
+  adminAway(u, "/app/calls"); // (batch 20 section 16) admin only
   const call = await db.call.findUnique({ where: { id }, include: { contract: { include: { test: true } } } });
   if (!call || (call.contract.testerId !== u.id && call.contract.test.developerId !== u.id)) notFound();
   // (Batch 18 section 9) Someone still on the call (a reload within the 5-minute gap) keeps the page even if their account was paused meanwhile.

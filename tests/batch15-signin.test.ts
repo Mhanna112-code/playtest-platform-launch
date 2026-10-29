@@ -54,12 +54,12 @@ describe("sign-in (section 7)", () => {
 
   it("at most 10 new accounts per network an hour; a taken email keeps its own message", async () => {
     const ip = ipOf();
-    for (let i = 0; i < 10; i++) expect((await signup({ email: email("s"), password: "harbor-run-1" }, ip)).status).toBe(200);
-    expect(await signup({ email: email("s"), password: "harbor-run-1" }, ip)).toMatchObject({ status: 429, body: { error: { message: TOO_MANY_SIGNUPS } } });
+    for (let i = 0; i < 10; i++) expect((await signup({ email: email("s"), password: "harbor-run-1", over18: "yes" }, ip)).status).toBe(200);
+    expect(await signup({ email: email("s"), password: "harbor-run-1", over18: "yes" }, ip)).toMatchObject({ status: 429, body: { error: { message: TOO_MANY_SIGNUPS } } });
     const other = ipOf();
     const addr = email("s");
-    expect((await signup({ email: addr, password: "harbor-run-1" }, other)).status).toBe(200);
-    expect((await signup({ email: addr, password: "harbor-run-1" }, other)).body.error.message).toBe("An account with that email already exists");
+    expect((await signup({ email: addr, password: "harbor-run-1", over18: "yes" }, other)).status).toBe(200);
+    expect((await signup({ email: addr, password: "harbor-run-1", over18: "yes" }, other)).body.error.message).toBe("An account with that email already exists");
   });
 
   it("Forgot your password? for an account with no password sends the first-password email; the page answers the same", async () => {

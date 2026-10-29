@@ -11,6 +11,15 @@ export const TERMS_CHANGED_HREF = `/terms#${WHAT_CHANGED_ID}`;
 /** The box's line (and the server's refusal of an unticked press). "Read what changed" links to the note. */
 export const TERMS_UPDATED_LINE = "We updated our Terms of Use. Read what changed.";
 export const TERMS_AGREE_LABEL = "I agree to the updated Terms";
+/** (Owner, Oct 28, batch 20 section 5) The age rule: in the Terms, and the red line when the sign-up tick is missing. */
+export const AGE_LINE = "You must be 18 or older to use Playtest.";
+/** The sign-up tick (email sign-up and Google's sign-up step). */
+export const AGE_TICK = "I'm 18 or older.";
+/** (Owner, Oct 28, batch 20 section 21) The updated-Terms tick above the button (Post / Join / Apply / Ask to rejoin), with "Read what changed" after it. */
+export const TERMS_TICK_LABEL = "I agree to the updated Terms of Use.";
+export const TERMS_TICK_LINK = "Read what changed";
+/** Its red line (in the mistake list) and the server's refusal of an unticked press. */
+export const TERMS_TICK_MISSING = "Tick to agree to the updated Terms of Use.";
 /** The refusal's code: the page shows the box with the tick under the pressed button. */
 export const TERMS_UPDATED_CODE = "terms_updated";
 
@@ -28,6 +37,8 @@ export const WHAT_CHANGED: { version: number; date: string; points: string[] }[]
       "A live call ends when its pay would pass what's left of the $1,000 for that tester's calls on the test; minutes after that don't count (section 4, Calls).",
       "Every call uses its own Jitsi video room, opened from the call page; keep the call page open, it measures the call (section 7).",
       "When these terms change, you're asked to agree to the new version the next time you post a test, or join, apply, accept an invite or ask to rejoin (section 8).",
+      // (Batch 20 section 5) Folded into version 2: nothing has launched.
+      "You must be 18 or older to use Playtest. Signing up (with email or Google) asks you to confirm it (section 1).",
     ],
   },
 ];
@@ -99,5 +110,5 @@ export const PAYMENT_RULES: { heading: string; text: string; example: string }[]
   },
 ];
 
-/** Whether this account still has to agree to the current Terms. */
+/** Whether this account still has to agree to the current Terms. (Batch 20 sections 5 and 21) Age is confirmed only at sign-up: existing accounts aren't asked. */
 export const needsTermsAgain = (u: { termsVersion: number }) => u.termsVersion < TERMS_VERSION;

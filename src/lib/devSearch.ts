@@ -1,3 +1,4 @@
+import { exactFirst, nameMatches } from "./nameSearch";
 // (Owner, Oct 28, batch 16 section 13) The tester dashboard's "Search by developer": every test the tester has been in (working, finished, left, ended,
 // stopped, closed), narrowed by the developer's name. Pure, so the dashboard's client box and the tests share it.
 
@@ -15,11 +16,14 @@ export function testStatusWord(c: { status: string; endKind: string }) {
   return "Ended";
 }
 
-/** The tests whose developer's name contains `typed` (any part, any case), most recent first (by when the tester joined). Blank: none (the normal dashboard shows). */
+/**
+ * The tests whose developer's name matches `typed` (any case; batch 20 section 9: from 1 character, 1-2 characters the start of a word in the name or the whole
+ * name, 3+ any part), the exact name first, then most recent first (by when the tester joined). Blank: none (the normal dashboard shows).
+ */
 export function searchByDeveloper(rows: DevSearchRow[], typed: string): DevSearchRow[] {
   const q = typed.trim().toLowerCase();
   if (!q) return [];
-  return rows.filter((r) => r.developer.toLowerCase().includes(q)).sort((a, b) => b.joinedAt.localeCompare(a.joinedAt));
+  return exactFirst(rows.filter((r) => nameMatches(r.developer, q)).sort((a, b) => b.joinedAt.localeCompare(a.joinedAt)), q, (r) => [r.developer]);
 }
 
 /** No match: "No tests with a developer named “nora”." */

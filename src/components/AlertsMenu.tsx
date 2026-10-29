@@ -6,6 +6,7 @@ import { ALERT_TYPES } from "@/lib/alerts";
 /** (Batch 16 section 21) The line under "Alerts". */
 export const ALERTS_INTRO_REST = "stop your buttons. A payment hold or pause, a stopped test and final refusals always stop.";
 import { api } from "@/lib/client";
+import { publishIgnoredAlerts, useIgnoredAlerts } from "@/lib/testerAlerts";
 
 /**
  * (Design doc 6) "Alerts": tick the update types that should NOT interrupt your buttons any more. They still show (greyed) in the live
@@ -13,12 +14,20 @@ import { api } from "@/lib/client";
  * "Your saves and presses in another tab") is ignored.
  */
 export function AlertsMenu({ ignored: start, keys }: { ignored: string[]; keys?: string[] }) {
-  const [ignored, setIgnored] = useState<string[]>(start.filter((k) => ALERT_TYPES.some((a) => a.key === k)));
+  // (Batch 20 section 8) The one shared setting: a stop box's "Don't stop me for" chip ticks it here at once (and in other tabs); un-ticking here turns the chip back.
+  const shared = useIgnoredAlerts(start);
+  const ignored = shared.filter((k) => ALERT_TYPES.some((a) => a.key === k));
   const [saved, setSaved] = useState("");
   async function toggle(key: string, on: boolean) {
-    const next = on ? [...ignored, key] : ignored.filter((x) => x !== key);
-    setIgnored(next);
-    await api("/api/account/alerts", { ignored: next }).then(() => setSaved("Saved."), () => setSaved("Couldn't save. Try again."));
+    // One type at a time (the server adds or removes just it), so a menu drawn earlier never saves its old list over a chip's press.
+    publishIgnoredAlerts(on ? [...new Set([...shared, key])] : shared.filter((x) => x !== key), false);
+    await api<{ ignored: string[] }>("/api/account/alerts", { key, off: on }).then((r) => {
+      publishIgnoredAlerts(r.ignored);
+      setSaved("Saved.");
+    }, () => {
+      publishIgnoredAlerts(shared, false);
+      setSaved("Couldn't save. Try again.");
+    });
   }
   return (
     <details className="relative" data-alerts-menu="">

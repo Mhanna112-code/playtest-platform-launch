@@ -7,6 +7,7 @@ import { displayName, fmtDate, money } from "@/lib/format";
 import { REVIEW_DAYS, closedToNewLine, dueFromJoin, perTesterLine, termsLine, testerDaysOf, testerShare, testPaused, yourDeadlineLine } from "@/lib/rules";
 const utcDay = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 import { ScrollText } from "@/components/ScrollText";
+import { QUESTION_BOX_AFTER, QuestionBox } from "@/components/QuestionBox";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { asListing, needsLines } from "@/lib/server/tests";
 import { JoinBox } from "./JoinBox";
@@ -25,6 +26,7 @@ import { sideLink } from "@/lib/sides";
 import { canAskToRejoin, leftText } from "@/lib/rules";
 import { heldBrokenKey } from "@/lib/server/accessKeys";
 import { profileTestRefusal } from "@/lib/server/profileOpenTests";
+import { needsTermsAgain } from "@/lib/termsOfUse";
 import { inviteOnlyHidden, noteJoinPageVisit } from "@/lib/server/testVisits";
 
 export const metadata = { title: "Test · Playtest" };
@@ -174,7 +176,12 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
         <div className="card space-y-3">
           <h2 className="flex items-center gap-2 font-semibold text-white"><HelpCircle className="h-5 w-5 text-indigo-300" /> {dev} wants to know</h2>
           {l.questions.length ? (
-            <ul className="list-disc space-y-1 pl-5 text-sm text-slate-300">{l.questions.map((q) => <li key={q}><ScrollText text={qText(q)} label="Question" />{qOptional(q) && <span className="text-ink-500"> · not required</span>}</li>)}</ul>
+            // (Batch 20 section 1) More than 3 questions: every one inside a scroll box about 3 questions tall, each long one cut to 3 lines with "Show more".
+            l.questions.length > QUESTION_BOX_AFTER ? (
+              <QuestionBox count={l.questions.length} as="ul" className="list-disc space-y-1 pl-5 text-sm text-slate-300">{l.questions.map((q, i) => <li key={i} data-question=""><ClampText text={qText(q)} />{qOptional(q) && <span className="text-ink-500"> · not required</span>}</li>)}</QuestionBox>
+            ) : (
+              <ul className="list-disc space-y-1 pl-5 text-sm text-slate-300">{l.questions.map((q) => <li key={q}><ScrollText text={qText(q)} label="Question" />{qOptional(q) && <span className="text-ink-500"> · not required</span>}</li>)}</ul>
+            )
           ) : (
             <p className="text-sm text-slate-400">Where you got stuck, any bugs, and what you liked.</p>
           )}
@@ -251,6 +258,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       {t.developerId === u.id || isAdmin(u) || !u.isTester || closed || blocked || ratedHere ? null : (
         <div>
           <JoinBox
+            termsAgain={needsTermsAgain(u)}
             rejoin={canRejoin}
             timeBack={mine && mine.endedAt ? leftText(mine.dueAt.getTime() - mine.endedAt.getTime()) : undefined}
             nda={t.ndaText}

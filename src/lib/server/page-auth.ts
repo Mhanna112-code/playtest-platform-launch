@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { closedForSuspended } from "@/lib/closedPages";
 import { sideFor } from "@/lib/sides";
 import { hashToken, SESSION_COOKIE, userForToken } from "./session";
+import { adminAway } from "./adminPages";
+export { adminAway, adminKeeps } from "./adminPages";
 
 /** The signed-in user for a server component, or null. */
 export async function getPageUser() {
@@ -19,9 +21,11 @@ export async function getPageUser() {
  */
 export async function requireOpenPage(path: string) {
   const u = await requirePageUser();
+  adminAway(u, path);
   if (closedForSuspended(path, u, sideFor(u, path))) redirect("/app");
   return u;
 }
+
 
 /** The same for a page whose side is the person's role in one contract (a chat, a call): checked once the page knows the role. */
 export function leaveIfClosed(u: { isDeveloper: boolean; isTester: boolean; side?: string; devSuspendedAt?: Date | null; testerSuspendedAt?: Date | null; holdStartedAt?: Date | null; holdReason?: string | null }, path: string, role: "developer" | "tester") {

@@ -169,7 +169,7 @@ describe("batch 5 item 3: a restricted account's signed-in pages go to the dashb
     expect(src("app/app/tests/[id]/page.tsx")).toContain("requireOpenPage(`/app/tests/${id}`)");
     const layout = src("app/app/layout.tsx");
     expect(layout).toContain("const off = restrictedOn(u, side);");
-    for (const link of ['side === "developer" && !off', 'side === "tester" && !off', "{!off && <Link", "const messagesLink = off ? null"]) expect(layout, link).toContain(link);
+    for (const link of ['side === "developer" && !off', 'side === "tester" && !off', "{!off && !admin && <Link", "const messagesLink = off ? null"]) expect(layout, link).toContain(link);
     expect(src("app/app/notifications/page.tsx")).toContain('closedForSuspended(link, u, sideFor(u, link)) ? "/app"');
   });
 

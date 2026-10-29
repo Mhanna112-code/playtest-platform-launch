@@ -11,7 +11,8 @@ import { isAdmin } from "@/lib/server/session";
 import { anySuspended, devRestricted } from "@/lib/restricted";
 import { sideFor } from "@/lib/sides";
 
-import { BlockButton } from "@/components/BlockButton";
+import { BlockButton, UnblockButton } from "@/components/BlockButton";
+import { ProfileUnavailable } from "@/components/ProfileUnavailable";
 import { ReportButton } from "@/components/ReportButton";
 import { MyExcerpts, ShownExcerpts } from "@/components/ExcerptList";
 import { myExcerpts, shownExcerpts } from "@/lib/server/excerpts";
@@ -35,11 +36,14 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
   // (Owner, Oct 27) A suspended or held developer can read this page, but Chat with, Report, Block and Edit profile are hidden.
   const off = viewer.isDeveloper && devRestricted(viewer, sideFor(viewer, "/app/testers"));
   if (!mine && !isAdmin(viewer) && !viewer.isDeveloper) notFound();
-  if (!mine && !isAdmin(viewer) && (await db.block.count({ where: { OR: [{ blockerId: viewer.id, blockedId: p.id }, { blockerId: p.id, blockedId: viewer.id }] } }))) notFound();
+  // (Owner, Oct 28, batch 20 section 17) They blocked you: "This profile isn't available." (never says why). You blocked them: their profile as usual, with Unblock
+  // where Block was and no Chat with.
+  if (!mine && !isAdmin(viewer) && (await db.block.count({ where: { blockerId: p.id, blockedId: viewer.id } }))) return <ProfileUnavailable />;
+  const iBlocked = !mine && !isAdmin(viewer) && (await db.block.count({ where: { blockerId: viewer.id, blockedId: p.id } })) > 0;
   const name = displayName(p);
   const pr = p.profile;
   // (Owner, Oct 26) "Chat with <name>" for a developer: the chat of the most recent test they share; hidden when they share none.
-  const shared = !mine && viewer.isDeveloper && !off ? await db.contract.findFirst({ where: { testerId: p.id, test: { developerId: viewer.id } }, orderBy: { joinedAt: "desc" }, select: { id: true } }) : null;
+  const shared = !mine && viewer.isDeveloper && !off && !iBlocked ? await db.contract.findFirst({ where: { testerId: p.id, test: { developerId: viewer.id } }, orderBy: { joinedAt: "desc" }, select: { id: true } }) : null;
   const reportedRow = !mine ? await db.report.findUnique({ where: { reporterId_reportedId: { reporterId: viewer.id, reportedId: p.id } } }) : null;
   const reportedOn = reportedRow ? fmtDate(reportedRow.createdAt) : null;
   return (
@@ -74,7 +78,7 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
       {viewer.isDeveloper && !mine && !off && (
         <div className="space-y-2 text-right text-xs text-slate-500">
           <ReportButton userId={p.id} name={name} reportedOn={reportedOn} />
-          <BlockButton plain userId={p.id} name={name} effect="Your sessions with them end now (work they sent stays payable), calls between you are cancelled, and chat closes." />
+          {iBlocked ? <UnblockButton say userId={p.id} name={name} /> : <BlockButton plain userId={p.id} name={name} effect="Your sessions with them end now (work they sent stays payable), calls between you are cancelled, and chat closes." />}
         </div>
       )}
     </div>

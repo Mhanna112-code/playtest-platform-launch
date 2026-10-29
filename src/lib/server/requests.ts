@@ -318,12 +318,15 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     }
   }
   const batchId = randomBytes(8).toString("hex");
+  const made: string[] = [];
   for (const { c } of ok) {
     const minutes = reqMinutes;
-    await db.callRequest.create({ data: { testId, contractId: c.id, fromSide: "developer", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes, batchId } });
+    const row = await db.callRequest.create({ data: { testId, contractId: c.id, fromSide: "developer", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes, batchId } });
+    made.push(row.id);
   }
   await db.$transaction((tx) => recordEvent(tx, testId, "requested", `You requested ${kindWords(kind.rows)} from ${fmtDateTime(kind.startsAt)} with ${ok.length} tester${ok.length === 1 ? "" : "s"}`, false));
-  return { requested: ok.length, batchId };
+  // (Batch 20 section 7) The new requests' ids: the form never counts them as a clash with itself.
+  return { requested: ok.length, batchId, ids: made };
 }
 
 /** Tester: Request a time (choose one or weekly), always at the contract rate. */
@@ -372,7 +375,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   // (Batch 17 section 4) It opens the Live session's Call requests panel with this request highlighted, like the Needs you row (batch 16 section 35).
   const when = kind.rows.map((x) => `${T(x.startsAt)}${x.repeat === "once" ? "" : x.repeat === "daily" ? " (daily)" : " (weekly)"}`).join(" or ");
   await bell(c.test.developerId, `${displayName(c.tester)} asked for a call: ${when}`, `/app/tests/${c.testId}#req-${r.id}`, c.testerId, { group: "callrequests" });
-  return { requested: true, id: r.id };
+  return { requested: true, id: r.id, ids: [r.id] };
 }
 
 /** Either side's Request a time (one contract). */

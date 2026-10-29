@@ -4,7 +4,7 @@ import type { RowJson } from "@/lib/callRows";
 import { bookableMinutes, callsCeilingLine, UNLISTED_CALL_RATE_CENTS } from "@/lib/callMeasure";
 import { CALL_MIN_MINUTES, callCharge } from "@/lib/rules";
 
-export type Slot = { start: string; minutes: number };
+export type Slot = { start: string; minutes: number; /** (Batch 20 section 7) the call's id, so a press never clashes with the call it booked */ id?: string };
 export type ClashReq = { id?: string; rows: RowJson[]; minutes: number; mine: boolean };
 export type ClashTarget = {
   /** The other person's name ("fbbb"). */

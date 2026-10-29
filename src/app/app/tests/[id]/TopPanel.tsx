@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
+import { useKept } from "@/lib/useKept";
 import { KeyRound, Pencil, Play, Repeat } from "lucide-react";
 import { checkFields } from "@/components/FieldChecks";
 import { FormMistakes } from "@/components/FormMistakes";
@@ -15,6 +16,7 @@ import { AlertsMenu } from "@/components/AlertsMenu";
 import { LIMITS } from "@/lib/limits";
 import { OctagonX } from "lucide-react";
 import { WhyBox } from "@/components/WhyBox";
+import { WHY_MIN_CHARS } from "@/lib/rules";
 
 /** A working tester, for End early's rows and the Stop / End dialogs: what they sent, what is still to send, calls ahead. */
 type Tester = { contractId: string; name: string; sent: string[]; toSend: string[]; ahead: number; /** Sent parts and held calls not paid or rejected yet (what still waits for review). */ waiting: string[] };
@@ -38,7 +40,11 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
   const [reason, setReason] = useState("");
   // (Batch 17 §15) Stop the test's "Why?" (testers read it): required, like End early's.
   const [stopReason, setStopReason] = useState("");
-  const stopReady = !!stopReason.trim() && stopReason.length <= LIMITS.stopReason;
+  // (Batch 20 section 27) At least 5 characters after trimming.
+  const stopReady = stopReason.trim().length >= WHY_MIN_CHARS && stopReason.length <= LIMITS.stopReason;
+  // (Owner, Oct 28, batch 20 section 18) End early's and Stop's reasons survive any reload (kept on the server), and are forgotten once pressed.
+  const keepEnd = useKept<{ reason: string }>(`endearly:${p.id}`, { reason }, !reason.trim(), (v) => setReason(typeof v.reason === "string" ? v.reason : ""));
+  const keepStop = useKept<{ reason: string }>(`stop:${p.id}`, { reason: stopReason }, !stopReason.trim(), (v) => setStopReason(typeof v.reason === "string" ? v.reason : ""));
   const [openErr] = useState("");
   const stopped = p.status === "stopped";
   const ahead = p.working.reduce((n, w) => n + w.ahead, 0);
@@ -49,6 +55,8 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
   async function go(action: string, body: Record<string, unknown> = {}) {
     const r = await press<{ id?: string }>(`/api/tests/${p.id}/${action}`, body, action);
     if (!r) return;
+    if (action === "end-early") await keepEnd.clear();
+    if (action === "stop") await keepStop.clear();
     // (Owner, Oct 28 evening) Next round creates the draft and goes straight to Post a test with it.
     if (action === "next-round" && r.id) window.location.href = `/app/tests/new?draft=${r.id}`;
     // (Batch 15 section 29) A restricted developer's Stop / End early: the dashboard top says it's done.
@@ -155,13 +163,13 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
               ))}
             </fieldset>
             {noTick && <p className="err-field">Tick at least one tester.</p>}
-            {/* (Owner, Oct 30, batch 15 section 22) Required, up to 10,000 characters with a counter; no 5-character minimum. (Batch 17 §15) The same box as Stop's. */}
+            {/* (Owner, Oct 30, batch 15 section 22) Required, up to 10,000 characters with a counter. (Batch 17 §15) The same box as Stop's. (Batch 20 section 27) At least 5 characters. */}
             <WhyBox id="reason" label="Why? (each tester you tick reads it)" placeholder="e.g. We have what we need for this build: thank you!" requiredMsg="Say why you're ending their work (they read it)."
               match="ending their work|keep it to" value={reason} onChange={setReason} max={LIMITS.endEarlyReason} countAttr="data-end-count" />
             <p className="note">Their work ends now. What they already sent still waits for you to pay; calls ahead are cancelled.</p>
             <div>
               {(!reason.trim() || !picked.length) && <p className="text-xs text-slate-400" data-say-why="">{!picked.length ? "Tick at least one tester first" : "Say why first"}</p>}
-              <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy || !reason.trim() || !picked.length || reason.length > LIMITS.endEarlyReason} confirmLabel="End their work now"
+              <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy || reason.trim().length < WHY_MIN_CHARS || !picked.length || reason.length > LIMITS.endEarlyReason} confirmLabel="End their work now"
                 title={`End the work of ${chosen.length === 1 ? chosen[0].name : `${chosen.length} testers`} now?`}
                 before={() => {
                   if (!picked.length) { setNoTick(true); return false; }

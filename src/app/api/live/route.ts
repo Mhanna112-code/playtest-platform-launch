@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
-import { displayName } from "@/lib/format";
+import { displayName, fmtDate } from "@/lib/format";
+import { DEV_QUIET_KINDS, ratedYouLiveLine } from "@/lib/rules";
 import { handle, HttpError, ok } from "@/lib/server/http";
 import { joinPageChanges } from "@/lib/server/joining";
 import { asLines, devChanges } from "@/lib/server/live";
@@ -46,6 +47,18 @@ export async function GET(req: Request) {
       await ownTest(u.id, id);
       changes = await devChanges(u.id, id, since, tab, db, { all: true });
       ignored = new Set(u.ignoredAlerts);
+      // (Batch 20 section 24) A tester's rating, in the live box with the developer's own window: "ff rated you. You can rate them until Nov 12, 2026."
+      const rated = changes.filter((c) => c.kind === "rated" && (c as { contractId?: string | null }).contractId);
+      if (rated.length) {
+        const { devRateStates } = await import("@/lib/server/ratings");
+        const states = await devRateStates(rated.map((c) => (c as unknown as { contractId: string }).contractId));
+        changes = changes.map((c) => {
+          const cid = (c as { contractId?: string | null }).contractId;
+          if (c.kind !== "rated" || !cid) return c;
+          const end = states.get(cid)?.endsAt ?? null;
+          return { ...c, text: ratedYouLiveLine(c.text.replace(/ rated you$/, ""), end ? fmtDate(end) : null) };
+        });
+      }
     } else if (kind === "listing") {
       changes = await joinPageChanges(u.id, id, since.toISOString(), tab);
       // (Batch 16 section 32) Their invite to this test closed: a neutral line (the page refreshes without it).
@@ -60,6 +73,9 @@ export async function GET(req: Request) {
     const shown = changes.filter((c) => c.createdAt <= now);
     const seenTo = new Date(Math.max(margin.getTime(), ...shown.map((c) => c.createdAt.getTime())));
     const lines = asLines(shown, ignored);
+    // (Owner, batch 14 section 4; batch 20 section 25) The developer's quiet lines (a tester's Switch, a key reported, a rating by a tester whose part had ended) are
+    // live-box lines only: marked, so an open stop box under a button never takes them in (it lists only what stops a press).
+    if (kind === "test") lines.forEach((l, i) => { if ((DEV_QUIET_KINDS as readonly string[]).includes(shown[i].kind)) Object.assign(l, { quiet: true }); });
     // (Batch 15 section 26) A tester with Alerts Off: everything but their contract's changes shows greyed (it won't stop a press).
     if (kind === "session" && u.testerAlertsOff) lines.forEach((l, i) => { if (!CONTRACT_KINDS.has(shown[i].kind)) Object.assign(l, { ignored: true }); });
     return ok({ changes: [...lines, ...outages].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()), now: seenTo.toISOString() });

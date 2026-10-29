@@ -12,7 +12,8 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
     title: "1. What this platform is",
     points: [
       "Playtest connects people who make apps, websites and games (\"developers\") with people who try them and give feedback (\"testers\").",
-      "Everyone must be at least 18 and give accurate account details. One account per person; an account can be a developer, a tester, or both.",
+      // (Batch 20 section 5) The age rule in the sign-up's own words.
+      "You must be 18 or older to use Playtest. Everyone must give accurate account details. One account per person; an account can be a developer, a tester, or both.",
     ],
   },
   {

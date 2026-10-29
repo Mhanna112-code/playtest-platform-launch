@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { displayName, pronouns } from "@/lib/format";
 import { PAUSED_SEND, isLate, payByFrom, testerPaused } from "@/lib/rules";
 import { HttpError } from "./http";
+import { NOTHING_CHANGED_LINE } from "@/lib/rules";
 import { notify } from "./notify";
 import { ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_RECORDING_BYTES, MAX_RECORDINGS, deleteObject, deleteStored, headObject, isVideo, listStored, r2On, uploadTarget } from "./storage";
 import { ownContract, recordEvent, sessionRefusal } from "./tests";
@@ -132,6 +133,8 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     if (recs.length === 0) throw new HttpError(400, "none", "Upload a recording first.");
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });
     if (existing?.review) throw new HttpError(409, "paid", "Your recording was already paid for, so it can't be changed. Send anything new in the chat.");
+    // (Owner, Oct 28, batch 20 section 26) Nothing added or removed since the last send: refused (no new piece, no bell).
+    if (existing && recs.every((r) => r.submissionId === existing.id) && !(await tx.recording.count({ where: { contractId, part: "removed" } }))) throw new HttpError(409, "unchanged", NOTHING_CHANGED_LINE);
     const now = new Date();
     const data = { late: isLate(c.dueAt, now), updatedAt: now, payBy: payByFrom(now) };
     const sub = existing

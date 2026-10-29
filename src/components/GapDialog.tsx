@@ -2,7 +2,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Languages, RefreshCw } from "lucide-react";
 import { api } from "@/lib/client";
-import { noGaps, sameGaps, testerGapButton, testerGapText, type GapAsk, type Gaps } from "@/lib/gaps";
+import { noGaps, sameGaps, TESTER_ASK, testerGapButton, testerGapText, type GapAsk, type Gaps } from "@/lib/gaps";
+import { MissingNeedWords } from "@/components/MissingNeeds";
 
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
@@ -138,7 +139,7 @@ export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs
         </div>
       )}
       <h2 id={`${id}-title`} className="flex items-center gap-2 font-semibold text-white"><Languages className="h-5 w-5 text-amber-300" /> {title}</h2>
-      <p id={`${id}-text`} role="status" className="mt-2 text-sm text-slate-300">{changedAt && !stop && <><JustUpdated at={changedAt} /> </>}{testerGapText(shown, p.ask)}</p>
+      <p id={`${id}-text`} role="status" className="mt-2 text-sm text-slate-300">{changedAt && !stop && <><JustUpdated at={changedAt} /> </>}{noGaps(shown) ? testerGapText(shown, p.ask) : <>Your profile <MissingNeedWords g={shown} />. {TESTER_ASK[p.ask].question}</>}</p>
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="button" className="btn px-3 py-1.5 text-sm" onClick={go} disabled={sending} autoFocus>{sending ? "Sending…" : testerGapButton(shown, p.ask)}</button>
         {/* A new tab: this pop-up stays where it is and follows the profile as it's saved there. */}

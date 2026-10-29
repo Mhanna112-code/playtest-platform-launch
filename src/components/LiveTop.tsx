@@ -37,14 +37,22 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
     box.current?.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
     setPill(0);
   };
-  function scrollUp(n: number, newest: string) {
+  /**
+   * (Owner, Oct 28, batch 20 section 13, bug found by the owner) EVERY live update nobody pressed for is announced, not only the page's first: the first one (box
+   * out of view, nothing being typed) scrolls up once; any one arriving while a text box has focus or a pop-up is open, or after that first scroll, raises the
+   * pill and adds to its count. Before, only the first update of a page load was announced (later ones only checked a `pill` value frozen at 0 in the poll's
+   * closure), so a call request arriving while the tester typed in the Dispute box (after an earlier update had used the one scroll) showed nothing.
+   */
+  function announceFresh(n: number, newest: string) {
     setFlash(newest);
     setTimeout(() => setFlash(""), 2500);
     setTimeout(() => {
       if (inView()) return;
       const el = document.activeElement;
       const busy = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement || (el instanceof HTMLElement && el.isContentEditable) || !!document.querySelector("dialog[open], [role='dialog'], [aria-modal='true']");
-      if (busy) setPill(n);
+      const first = !scrolled.current;
+      scrolled.current = true;
+      if (busy || !first) setPill((p) => p + n);
       else go();
     }, 50);
   }
@@ -77,13 +85,10 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
       const added = r.changes.filter((c) => !known.current.has(key(c)));
       added.forEach((c) => known.current.add(key(c)));
       if (added.length) setLines((old) => [...old, ...added]);
-      // Scroll once, only for a live update nobody pressed for (lines a stop box showed are quiet).
+      // Scroll once, only for a live update nobody pressed for (lines a stop box showed are quiet); (batch 20 section 13) every later one raises the pill.
       // Ignored (greyed) Alerts lines count as updates too, since they still show.
-      if (added.some((c) => !wasShownInBox(c)) && !scrolled.current) {
-        scrolled.current = true;
-        const fresh = added.filter((c) => !wasShownInBox(c));
-        scrollUp(fresh.length, key(fresh[fresh.length - 1]));
-      } else if (pill) setPill((n) => n + added.length);
+      const fresh = added.filter((c) => !wasShownInBox(c));
+      if (fresh.length) announceFresh(fresh.length, key(fresh[fresh.length - 1]));
       setShown(scope, r.now);
       announce(added);
     };

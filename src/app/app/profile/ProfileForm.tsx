@@ -10,7 +10,7 @@ import { DEVICES, LANGUAGES } from "@/lib/options";
 type Init = { name: string; pronoun: string; isDeveloper: boolean; isTester: boolean; devices: string[]; categories: string[]; languages: string[]; bio: string };
 
 /** The profile form of the side in use: the developer's is the name; the tester's adds devices, languages and a bio. (Batch 16 section 10) A mistake is red at its box and listed under the button. */
-export function ProfileForm({ init, first, side = "tester", seenAt: seen0 }: { init: Init; first?: boolean; side?: "developer" | "tester"; /** (Batch 16 section 27) the page's load time */ seenAt?: string }) {
+export function ProfileForm({ init, first, admin = false, side = "tester", seenAt: seen0 }: { init: Init; first?: boolean; /** (Batch 20 section 16) an admin's first setup: Name and Pronoun only, then the admin console */ admin?: boolean; side?: "developer" | "tester"; /** (Batch 16 section 27) the page's load time */ seenAt?: string }) {
   const [v, setV] = useState(init);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -41,7 +41,7 @@ export function ProfileForm({ init, first, side = "tester", seenAt: seen0 }: { i
       await api("/api/profile", { ...v, ...(seenAt ? { seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}) } : {}) });
       setChanges(null);
       typed.current.clear();
-      if (first) window.location.href = "/app";
+      if (first) window.location.href = admin && !v.isDeveloper && !v.isTester ? "/admin" : "/app";
       else setMsg({ ok: true, text: "Your profile is saved." });
     } catch (err) {
       if (err instanceof ApiError && err.code === "stop_once") {
@@ -68,7 +68,7 @@ export function ProfileForm({ init, first, side = "tester", seenAt: seen0 }: { i
           <option value="they">they / them</option>
         </select>
       </div>
-      {first && (
+      {first && !admin && (
         <fieldset id="sides" data-field-group="" data-match="developer, tester, or both">
           <legend className="label req">I&apos;m here to</legend>
           <label className="mr-4 text-sm"><input type="checkbox" checked={v.isDeveloper} onChange={(e) => set({ isDeveloper: e.target.checked })} /> post tests for my app, game or product (developer)</label>

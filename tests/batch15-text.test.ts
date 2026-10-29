@@ -95,13 +95,15 @@ describe("reasons and notes (section 20)", () => {
 });
 
 describe("End early's reason (section 22)", () => {
-  it("required (one character is enough), at most 10,000; testers read it on the session page and in the email", async () => {
+  it("required (at least 5 characters since batch 20 section 27), at most 10,000; testers read it on the session page and in the email", async () => {
     const { dev, testId } = await setup();
     const { sessionId } = await joined(testId);
     const go = (reason: string) => act(testId, "end-early", dev.cookie, { contractIds: [sessionId], reason, seenAt: seen(), confirmed: true });
     expect((await go("   ")).body.error.message).toBe("Say why you're ending their work (they read it).");
     expect((await go("w".repeat(10_001))).body.error.message).toBe("Keep it to 10,000 characters.");
-    expect((await go("x")).status).toBe(200);
-    expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).endReason).toBe("x");
+    // (Batch 20 section 27) At least 5 characters now.
+    expect((await go("x")).body.error.message).toBe("Say a little more: at least 5 characters.");
+    expect((await go("Thanks")).status).toBe(200);
+    expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).endReason).toBe("Thanks");
   });
 });

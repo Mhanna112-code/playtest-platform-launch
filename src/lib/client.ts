@@ -1,6 +1,6 @@
 import { boxSeenAt, pageLoadedAt, seenNow } from "./live";
 import { pressLabelOf } from "./pressLabels";
-import { setTesterAlertsOff } from "./testerAlerts";
+import { publishTesterAlertsOff, setTesterAlertsOff } from "./testerAlerts";
 
 /** (Batch 15 section 36) The label of the last press that was stopped or refused: the box under it names it ("Your Pay didn't go through."). */
 let LAST_PRESS = "";
@@ -75,6 +75,8 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
     LAST_PRESS = typeof e?.press === "string" ? e.press : pressLabelOf(path);
     // (Batch 17 section 13) A tester's stop box says whether their Alerts is Off (the box then drops "Turn off alerts").
     if (e?.code === "stop_once" && typeof e.alertsOff === "boolean") setTesterAlertsOff(e.alertsOff);
+    // (Batch 20 section 8) ... and the Alerts button and the other boxes on the page follow what the server says.
+    if (e?.code === "stop_once" && typeof e.alertsOff === "boolean") publishTesterAlertsOff(e.alertsOff, false);
     throw new ApiError(res.status, e?.code ?? "server", e?.message ?? (res.status === 413 ? "That's too much to send at once. Try a smaller amount." : "Something went wrong. Try again in a moment."), e ?? {});
   }
   // A press that went ahead with a note (e.g. "Done. Also: the test was renamed to ..."): kept for the page's top box

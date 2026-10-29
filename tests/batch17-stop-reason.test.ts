@@ -76,8 +76,9 @@ describe("the server: a required reason (section 15)", () => {
     expect(stopReasonOf(ev.text)).toBe(why);
     // Nobody working: still required, still recorded on the test.
     const s2 = await setup();
-    expect((await stop(s2.testId, s2.dev.cookie, { reason: "x" })).status).toBe(200);
-    expect((await db.testEvent.findFirstOrThrow({ where: { testId: s2.testId, kind: "stopped" } })).text).toBe(stopEventText("x"));
+    expect((await stop(s2.testId, s2.dev.cookie, { reason: "Wrap" })).body.error.message).toBe("Say a little more: at least 5 characters."); // (batch 20 section 27)
+    expect((await stop(s2.testId, s2.dev.cookie, { reason: "Wrap!" })).status).toBe(200);
+    expect((await db.testEvent.findFirstOrThrow({ where: { testId: s2.testId, kind: "stopped" } })).text).toBe(stopEventText("Wrap!"));
   });
 
   it("the helpers: older stops and other lines carry no reason", () => {

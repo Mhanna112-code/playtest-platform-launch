@@ -17,13 +17,13 @@ import { T, safeZone } from "@/lib/tz";
 import {
   andList, closedToNewLine, daysBetween, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, WRITTEN_MAX_CHARS, checkWrittenLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
-import { gapsOf, gapsUnseen, noGaps, readGaps } from "@/lib/gaps";
+import { gapsOf, gapsUnseen, missingNeedText, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError, readText } from "./http";
 import { notify } from "./notify";
 import { offerNewTerms, testerTermsGate } from "./terms";
 import { testerGate } from "./testerGate";
 import { blockPartners } from "./blocks";
-import { callCancelledLine, rateStops, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked } from "@/lib/rules";
+import { callCancelledLine, rateStops, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, NOTHING_CHANGED_LINE, WHY_MIN_CHARS, WHY_TOO_SHORT } from "@/lib/rules";
 
 type Tx = Prisma.TransactionClient;
 type U = { id: string; email: string; name: string; pronoun: string; isDeveloper: boolean; isTester: boolean; timeZone?: string | null };
@@ -77,7 +77,9 @@ const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice
 const list = (v: unknown, allowed: string[]) => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && allowed.includes(x)))] : []);
 const int = (v: unknown) => (typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN);
 /** A price field: null/"" = not offered; "0" = free; "7.50" = $7.50. */
-function price(v: unknown, label: string): number | null {
+function price(v: unknown, label: string, missing = ""): number | null {
+  // (Batch 20 section 22) Ticked with a blank price (the form sends "" for a ticked part, null for one that's off): refused, $0 is only the Free tick ("0").
+  if (missing && typeof v === "string" && !v.trim()) throw new HttpError(400, "bad_price", missing);
   if (v === null || v === undefined || v === "" || v === false) return null;
   const c = toCents(v);
   if (c == null) throw new HttpError(400, "bad_price", `Enter the ${label} like 7.50 (or 0 for free).`);
@@ -104,12 +106,12 @@ export function parseListing(body: Record<string, unknown>, partial = false): Pa
   if (has("devices")) out.devices = list(body.devices, DEVICES);
   if (has("languages")) out.languages = list(body.languages, LANGUAGES);
   if (has("spots")) out.spots = int(body.spots);
-  if (has("writtenCents")) out.writtenCents = price(body.writtenCents, "written answers price");
-  if (has("recordingCents")) out.recordingCents = price(body.recordingCents, "recording price");
+  if (has("writtenCents")) out.writtenCents = price(body.writtenCents, "written answers price", PART_PRICE_MISSING.written);
+  if (has("recordingCents")) out.recordingCents = price(body.recordingCents, "recording price", PART_PRICE_MISSING.recording);
   if (has("writtenRequired")) out.writtenRequired = body.writtenRequired === true;
   if (has("recordingRequired")) out.recordingRequired = body.recordingRequired === true;
   if (has("liveRequired")) out.liveRequired = body.liveRequired === true;
-  if (has("liveRateCents")) out.liveRateCents = price(body.liveRateCents, "live call rate");
+  if (has("liveRateCents")) out.liveRateCents = price(body.liveRateCents, "live call rate", PART_PRICE_MISSING.live);
   if (has("liveMinutes")) out.liveMinutes = body.liveMinutes === null || body.liveMinutes === "" ? null : int(body.liveMinutes);
   // (Batch 12 section 6) No "days after joining" field any more: a value sent by an old page is kept, unused for new joins.
   // Post stores a value (an old page's, or 7) that new joins never use; Edit ignores it.
@@ -535,6 +537,8 @@ export async function editNews(tx: Tx, testId: string, body: Record<string, unkn
  */
 export const devLine = (c: TestEventLike & { contractId?: string | null }, withAlert = true) => ({
   text: c.text, at: c.createdAt, ...(c.kind === "terms" && c.contractId ? { kind: "terms", contract: c.contractId } : {}), ...(withAlert && alertOf(c.kind) ? { alert: alertOf(c.kind) } : {}),
+  // (Batch 20 section 4) A line that stands for one thing (a ticked tester's needs): a later stop's line with the same key replaces it in the box.
+  ...(c.key ? { key: c.key } : {}),
 });
 
 /**
@@ -644,6 +648,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
   // (Batch 17 §15) A required "Why?" like End early's: at least one character, at most 10,000, refused beyond (never cut). Testers read it (also when paused or restricted).
   const reason = readText(body.reason, LIMITS.stopReason, "bad_reason");
   if (!reason) throw new HttpError(400, "bad_reason", "Say why you're stopping the test (testers read it).");
+  if (reason.length < WHY_MIN_CHARS) throw new HttpError(400, "bad_reason", WHY_TOO_SHORT); // (batch 20 section 27)
   let cancelled: Awaited<ReturnType<typeof cancelCallsAhead>> = [];
   const contracts = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
@@ -682,6 +687,7 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
   // (Owner, Oct 30, batch 15 section 22) Required (at least one character), at most 10,000, refused beyond (never cut).
   const reason = readText(body.reason, LIMITS.endEarlyReason, "bad_reason");
   if (!reason) throw new HttpError(400, "bad_reason", "Say why you're ending their work (they read it).");
+  if (reason.length < WHY_MIN_CHARS) throw new HttpError(400, "bad_reason", WHY_TOO_SHORT); // (batch 20 section 27)
   const ids = [...new Set((Array.isArray(body.contractIds) ? body.contractIds : [body.contractId]).map((x) => String(x ?? "")).filter(Boolean))];
   if (!ids.length) throw new HttpError(400, "none", "Tick at least one tester.");
   let cancelled: Awaited<ReturnType<typeof cancelCallsAhead>> = [];
@@ -799,7 +805,8 @@ export function needsLines(t: { devices: string[]; languages: string[] }, p: { d
 export function gapStop(t: { devices: string[]; languages: string[] }, profile: { devices: string[]; languages: string[] } | null, body: Record<string, unknown>, verb: "Join" | "Apply" | "Ask") {
   const gaps = gapsOf(t, profile);
   if (noGaps(gaps)) return;
-  const message = `${needsLines(t, profile).join("\n")}\n${verb === "Ask" ? "Ask to rejoin" : verb} anyway?`;
+  // (Batch 20 section 3) In the Invite anyway box's words, both kinds in one line.
+  const message = `Your profile ${missingNeedText(gaps)}.\n${verb === "Ask" ? "Ask to rejoin" : verb} anyway?`;
   if (body.anyway !== true) throw new HttpError(409, "needs", message, { gaps });
   const shown = readGaps(body.gapsShown);
   if (shown && gapsUnseen(gaps, shown)) throw new HttpError(409, "needs", message, { gaps, changed: true });
@@ -903,9 +910,12 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
 export async function sendWritten(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
   const qs = writtenQuestions(c0);
-  const answers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim().slice(0, WRITTEN_MAX_CHARS + 1) : "")) : [];
-  // Only the required questions need an answer ("not required" ones may stay empty).
-  if (answers.length !== qs.length || qs.some((q, i) => !qOptional(q) && !answers[i])) throw new HttpError(400, "bad_answers", "Answer every required question before sending.");
+  const sentAnswers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim().slice(0, WRITTEN_MAX_CHARS + 1) : "")) : [];
+  // (Batch 20 section 28) One answer per question of the contract, by position (a missing one is blank); only the required questions need an answer ("not required" ones
+  // may stay empty). The refusal names which question (`missing`), so the page marks it red there.
+  const answers = qs.map((_, i) => sentAnswers[i] ?? "");
+  const missing = qs.findIndex((q, i) => !qOptional(q) && !answers[i]);
+  if (missing >= 0) throw new HttpError(400, "bad_answers", "Answer every required question before sending.", { missing });
   const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, WRITTEN_MAX_CHARS + 1) : "";
   // (Owner, Oct 29, batch 11) At most 10,000 characters for the whole written part (all its answers and notes together).
   const long = checkWrittenLength([...answers, notes]);
@@ -928,6 +938,9 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     const items = itemsFor(qs, answers);
     const before = existing ? itemsOf(existing.answers, qs) : [];
     const replacesEarlier = !!existing && (!!existing.setUntil || !sameQuestions(before, items));
+    // (Owner, Oct 28, batch 20 section 26) A resend identical to the last send (the same answers and notes, no new attachment) is refused: no new piece, no bell.
+    if (existing && !replacesEarlier && items.every((x, i) => x.answer === before[i]?.answer) && notes === existing.notes
+      && !(await tx.recording.count({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null } }))) throw new HttpError(409, "unchanged", NOTHING_CHANGED_LINE);
     const data = {
       answers: items as unknown as Prisma.InputJsonValue, notes, late: isLate(c.dueAt, now), updatedAt: now, payBy: payByFrom(now),
       ...(replacesEarlier ? { setUntil: null, agreedCents: c.writtenCents, prevSets: pushPrev(prevSetsOf(existing!.prevSets), { until: (existing!.setUntil ?? now).toISOString(), items: before }) as unknown as Prisma.InputJsonValue } : {}),

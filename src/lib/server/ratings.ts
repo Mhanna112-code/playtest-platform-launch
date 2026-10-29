@@ -3,9 +3,10 @@ import { T } from "@/lib/tz";
 import { displayName, fmtDate, money, pronouns } from "@/lib/format";
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
-import { ratingClosedLine, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, TESTER_CHOICE_REASONS, chargeIsOpen, chargeOpensAt, ratePendingLine, rateOpensOnLine, rateOpensReviewLine, rateTheirDisputeLine, testPaused, type TestEventLike } from "@/lib/rules";
+import { finishedAndRatedLine, ratedYouLine, ratingClosedLine, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, TESTER_CHOICE_REASONS, chargeIsOpen, chargeOpensAt, ratePendingLine, rateOpensOnLine, rateOpensReviewLine, rateTheirDisputeLine, testPaused, type TestEventLike } from "@/lib/rules";
 import { cancelCallsAhead, lockTest, ownContract, ownTest, recordEvent, spotOpened } from "./tests";
-import { testerPaymentChanges } from "./live";
+import { CALL_CHANGE_ACTS, ownChanges, tabOf, testerPaymentChanges } from "./live";
+import { payMoreLine, TESTER_CALL_KINDS, testerChanges } from "./testerGate";
 import { devStopSince, loadedOf, stopBox, testerStopSince } from "./stopMoment";
 import { closeOutOf, closedOut, devPauseSpans, windowEnd, type Span } from "./closeOut";
 
@@ -213,18 +214,32 @@ async function testerRateGate(testerId: string, contractId: string, devName: str
   }
   const kinds = new Map((await db.submission.findMany({ where: { contractId }, select: { id: true, kind: true } })).map((x) => [x.id, x.kind]));
   for (const p of await db.payment.findMany({ where: { contractId, kind: "extra", createdAt: { gt: since }, status: { in: ["charged", "not_set_up"] } } })) {
-    lines.push({ kind: "paid", text: `${devName} paid ${money(p.amountCents)} more for ${p.callId ? "your live call" : `your ${kinds.get(p.submissionId ?? "") === "recording" ? "recording" : "written answers"}`}`, createdAt: p.createdAt });
+    lines.push({ kind: "paid", text: payMoreLine(devName, p.amountCents, p.callId ? "live call" : kinds.get(p.submissionId ?? "") === "recording" ? "recording" : "written answers"), createdAt: p.createdAt }); // (batch 20 section 12) the same line as the other presses
   }
   lines.push(...(await testerPaymentChanges(testerId, contractId, since, true)));
+  // (Owner, Oct 28, batch 20 section 14) On a running test, Rate ends their part (calls ahead and requests close): a call change between them and the developer
+  // since the page loaded stops it once too (a request, a booking, a decline, a withdraw, a cancel); other testers' calls never do. Alerts Off: they don't stop.
+  const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, select: { status: true, testId: true, tester: { select: { testerAlertsOff: true } }, test: { select: { status: true } } } });
+  if (c.status === "working" && c.test.status === "open" && !c.tester.testerAlertsOff) lines.push(...(await testerChanges(testerId, contractId, c.testId, since, tabOf(body))).filter((e) => TESTER_CALL_KINDS.has(e.kind)));
   if (lines.length) stopBox(lines.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()));
 }
-async function devRateGate(testId: string, contractId: string, body: Record<string, unknown>) {
+async function devRateGate(testId: string, contractId: string, body: Record<string, unknown>, devId = "") {
   const since = loadedOf(body);
   if (!since) return;
   const lines: TestEventLike[] = [];
+  // (Batch 20 section 12) A Pay more for this tester made in another tab or device stops Rate once too ("You paid Ana Silva $5.00 more for their written answers in
+  // another tab"); Rate stops only for a payment about the person it rates (batch 16 section 25), so one for someone else doesn't.
+  if (devId) for (const o of await ownChanges(devId, testId, since, tabOf(body))) if (o.about?.a === "pay-more" && o.about.k.includes(`c:${contractId}`)) lines.push({ kind: "own", text: o.live ?? o.text, createdAt: o.createdAt });
   const stop = await devStopSince(testId, contractId, since);
   if (stop) lines.push(stop);
   lines.push(...(await db.testEvent.findMany({ where: { testId, contractId, kind: "admin", createdAt: { gt: since }, text: { startsWith: "The team decided" } } })));
+  // (Batch 20 section 14) On a running test: call changes with this tester since the page loaded (theirs, and the developer's own from another tab); other testers'
+  // never. Alerts: "Call changes" ticked off doesn't stop.
+  const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, select: { status: true, test: { select: { status: true, developer: { select: { ignoredAlerts: true } } } } } });
+  if (c.status === "working" && c.test.status === "open" && !c.test.developer.ignoredAlerts.includes("calls")) {
+    lines.push(...(await db.testEvent.findMany({ where: { testId, contractId, createdAt: { gt: since }, kind: { in: ["requested", "booked", "confirmed", "cancelled", "withdrew_req", "declined_req"] } } })).filter((e) => !e.text.startsWith("You ")));
+    if (devId) for (const o of await ownChanges(devId, testId, since, tabOf(body))) if (o.about && (CALL_CHANGE_ACTS as readonly string[]).includes(o.about.a) && o.about.k.includes(`c:${contractId}`)) lines.push({ kind: "own", text: o.live ?? o.text, createdAt: o.createdAt });
+  }
   if (lines.length) stopBox(lines.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()));
 }
 function refuse(s: RateState, already: string): never {
@@ -243,12 +258,16 @@ export async function testerRate(tester: { id: string; name: string; email: stri
     await lockTest(tx, c0.testId);
     await tx.rating.create({ data: { testId: c0.testId, contractId, side: "tester", raterId: tester.id, rateeId: c0.test.developerId, ...r } });
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
-    if (c.status === "working") {
+    const wasWorking = c.status === "working";
+    if (wasWorking) {
       await tx.contract.update({ where: { id: c.id }, data: { status: "left", endKind: "rated", endedAt: new Date() } });
       await cancelCallsAhead(tx, [c.id], `${displayName(tester)} finished their part.`);
       await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the tester left", decidedAt: new Date() } });
     }
-    await recordEvent(tx, c.testId, "left", `${displayName(tester)} finished ${c0.title} and rated you`, true, {}, c.id);
+    // (Owner, Oct 28, batch 20 section 24) A working tester who rates is leaving: one line ("Testers leaving"). One whose part had ended: "ff rated you" (Ratings from
+    // testers). Either stops the developer's presses once; never the stars (the blind reveal).
+    if (wasWorking) await recordEvent(tx, c.testId, "left", `${finishedAndRatedLine(displayName(tester))}`, true, {}, c.id);
+    else await recordEvent(tx, c.testId, "rated", `${ratedYouLine(displayName(tester))}`, false, {}, c.id);
   });
   // (Batch 17 section 16) The developer's Rate (and its 14 days) opens once everything this tester sent is settled too: now, or when the last piece is.
   await maybeOpenDevRating(contractId);
@@ -265,7 +284,7 @@ export async function devRate(dev: { id: string; name: string; email: string }, 
   const state = (await devRateStates([contractId])).get(contractId)!;
   if (state.kind !== "open") refuse(state, `You already rated ${displayName(c0.tester)}.`);
   const r = readRating(body);
-  await devRateGate(testId, contractId, body);
+  await devRateGate(testId, contractId, body, dev.id);
   const now = new Date();
   await db.$transaction(async (tx) => {
     await lockTest(tx, testId);

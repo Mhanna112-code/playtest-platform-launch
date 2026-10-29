@@ -60,8 +60,11 @@ export function markShownInBox(lines: Change[]) {
 export const wasShownInBox = (c: Change) => shownInBox.has(ck(c));
 /** Adds newly picked-up changes to an open box, skipping any it already lists. */
 export function mergeChanges(old: Change[], added: Change[]) {
-  const have = new Set(old.map(ck));
-  return [...old, ...added.filter((c) => !have.has(ck(c)))];
+  // (Batch 20 section 4) A keyed line (one per ticked tester's needs) replaces the box's earlier line with that key: one line per tester, its latest time.
+  const keys = new Set(added.map((c) => c.key).filter(Boolean));
+  const kept = old.filter((c) => !c.key || !keys.has(c.key));
+  const have = new Set(kept.map(ck));
+  return [...kept, ...added.filter((c) => !have.has(ck(c)))];
 }
 
 /** While a stop box is open, new changes the page picks up are added to it. */
@@ -70,7 +73,11 @@ export function useLiveAppend(open: boolean, add: (added: Change[]) => void) {
   cb.current = add;
   useEffect(() => {
     if (!open) return;
-    const on = (e: Event) => cb.current((e as CustomEvent<Change[]>).detail);
+    // (Batch 20 section 25) Quiet live-box lines (a tester's Switch, …) never join a stop box.
+    const on = (e: Event) => {
+      const added = ((e as CustomEvent<Change[]>).detail ?? []).filter((c) => !c.quiet);
+      if (added.length) cb.current(added);
+    };
     window.addEventListener(LIVE_EVENT, on);
     return () => window.removeEventListener(LIVE_EVENT, on);
   }, [open]);

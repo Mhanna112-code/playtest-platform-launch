@@ -9,6 +9,7 @@ import { uploadToSession } from "@/lib/upload";
 import { ScreenRecorder } from "@/components/ScreenRecorder";
 import { ChangesBox } from "@/components/ChangesBox";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { NOTHING_CHANGED_LINE } from "@/lib/rules";
 
 type Rec = { id: string; filename: string; size: number; uploaded: boolean; sent?: boolean };
 
@@ -40,7 +41,7 @@ function RecordingRow({ r, sessionId, canRemove }: { r: Rec; sessionId: string; 
  * Upload up to 5 screen recordings (500 MB each), then send them. (Owner, Oct 29, batch 13 section 7) Send sends them all together as ONE piece of work; until it's paid
  * (or rejected) recordings can be removed or added and sent again.
  */
-export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, seenAt, sendable = true }: { sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean; seenAt: string; /** (Batch 10) false while the test is paused: uploads (drafts) still work, Send is hidden */ sendable?: boolean }) {
+export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, seenAt, sendable = true, removedSince = false }: { sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean; seenAt: string; /** (Batch 10) false while the test is paused: uploads (drafts) still work, Send is hidden */ sendable?: boolean; /** (Batch 20 section 26) a sent recording removed since */ removedSince?: boolean }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
@@ -49,6 +50,8 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const uploaded = recordings.filter((r) => r.uploaded);
+  // (Owner, Oct 28, batch 20 section 26) Sent and nothing added or removed since: the updated Send waits.
+  const unchanged = sentBefore && uploaded.every((r) => r.sent) && !removedSince;
 
   async function upload(file: File) {
     setErr("");
@@ -85,8 +88,10 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
       {progress != null && <p className="note">Uploading… {progress}%</p>}
       {canSend && sendable && uploaded.length > 0 && (
         <button
-          className="btn"
-          disabled={busy}
+          className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`}
+          disabled={busy || unchanged}
+          title={unchanged ? NOTHING_CHANGED_LINE : undefined}
+          data-send-idle={unchanged ? "" : undefined}
           onClick={async (e) => {
             if (!checkFields(e.currentTarget.parentElement)) return;
             setBusy(true);

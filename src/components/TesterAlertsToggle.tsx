@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { BellOff, Bell } from "lucide-react";
 import { api } from "@/lib/client";
-import { setTesterAlertsOff } from "@/lib/testerAlerts";
+import { publishTesterAlertsOff, setTesterAlertsOff, useTesterAlertsOff } from "@/lib/testerAlerts";
 
 /**
  * (Owner, Oct 30, batch 15 section 26) The tester's one-press Alerts, at the top right of the session page, saved per tester for all their tests.
@@ -12,21 +12,16 @@ import { setTesterAlertsOff } from "@/lib/testerAlerts";
 export const ALERTS_ON_LINE = "Stops a press once for: new terms, your key, pay, calls, delayed pay, your dispute, listing changes, other tabs.";
 export const ALERTS_OFF_LINE = "Stops a press only for: new terms, your key marked as working.";
 export function TesterAlertsToggle({ off: start }: { off: boolean }) {
-  const [off, setOff] = useState(start);
+  // (Batch 20 section 8) The one shared setting: a box's "Turn off alerts", another tab or the page's poll changes it here at once.
+  const off = useTesterAlertsOff(start);
   const [err, setErr] = useState("");
   // (Batch 17 section 13) The stop boxes on this page know the state shown here.
   useEffect(() => setTesterAlertsOff(off), [off]);
-  useEffect(() => {
-    const on = (e: Event) => setOff(!!(e as CustomEvent<{ off: boolean }>).detail?.off);
-    window.addEventListener("tester-alerts", on);
-    return () => window.removeEventListener("tester-alerts", on);
-  }, []);
   async function flip() {
     setErr("");
     try {
-      await api("/api/account/tester-alerts", { off: !off });
-      setOff(!off);
-      window.dispatchEvent(new CustomEvent("tester-alerts", { detail: { off: !off } }));
+      const r = await api<{ off: boolean }>("/api/account/tester-alerts", { off: !off });
+      publishTesterAlertsOff(typeof r.off === "boolean" ? r.off : !off);
     } catch {
       setErr("Couldn't save. Try again.");
     }

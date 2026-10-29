@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { asListing } from "@/lib/server/tests";
 import { requireOpenDevPage } from "@/lib/server/page-auth";
+import { needsTermsAgain } from "@/lib/termsOfUse";
 import { TestForm } from "../TestForm";
 import { testerCapacity } from "@/lib/server/capacity";
 
@@ -26,6 +27,7 @@ export default async function NewTest({ searchParams }: { searchParams: Promise<
         spotsLimit={(await testerCapacity(u.id)).limit}
         draft={draft ? { id: draft.id } : undefined}
         perks={await hasPerks(u)}
+        termsAgain={needsTermsAgain(u)}
         init={draft ? asListing(draft) : { productName: "", mature: false, matureWhy: "", ndaText: "", title: "", description: "", buildUrl: "", categories: ["Productivity"], devices: [], languages: [], spots: 5, writtenCents: 1000, recordingCents: null, liveRateCents: null, liveMinutes: 30, deadlineDays: 7, questions: [], openUntil: null, joinMode: "anyone" }}
       />
     </>

@@ -46,6 +46,12 @@ export async function testerChanges(testerId: string, contractId: string, testId
     const what = r.callId ? "your live call" : `your ${r.submission?.kind === "recording" ? "recording" : "written answers"}`;
     out.push({ kind: r.rejected ? "rejected" : "paid", text: r.rejected ? `${dev} rejected ${what}` : `${dev} paid ${money(r.amountCents)} for ${what}`, createdAt: r.createdAt });
   }
+  // (Owner, Oct 28, batch 20 section 12, bug found by the owner) A Pay more (Payment kind "extra") is a "paid" change too: before, only Reviews were read, so a Pay
+  // more never stopped a tester press (a Cancel call went straight through) nor showed in the stop box or the live box. Charged (or charged before payouts are set up).
+  const kinds = new Map((await db.submission.findMany({ where: { contractId }, select: { id: true, kind: true } })).map((x) => [x.id, x.kind]));
+  for (const p of await db.payment.findMany({ where: { contractId, kind: "extra", createdAt: { gt: seenAt }, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "asc" } })) {
+    out.push({ kind: "paid", text: payMoreLine(dev, p.amountCents, p.callId ? "live call" : kinds.get(p.submissionId ?? "") === "recording" ? "recording" : "written answers"), createdAt: p.createdAt });
+  }
   for (const r of devReqs) {
     const when = fmtDateTime(r.startsAt);
     const what = requestWords(r, when);
@@ -71,6 +77,9 @@ export async function testerChanges(testerId: string, contractId: string, testId
   out.push(...(await ownChanges(testerId, testId, seenAt, tab)));
   return out.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }
+
+/** (Batch 20 section 12) "Nora Lane paid you $5.00 more for your written answers". */
+export const payMoreLine = (dev: string, cents: number, part: string) => `${dev} paid you ${money(cents)} more for your ${part}`;
 
 /** (Batch 15 sections 26 and 45) Changes to the tester's own contract: they stop a press even with Alerts Off. */
 export const CONTRACT_KINDS = new Set(["terms", "keyfixed"]);

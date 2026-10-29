@@ -13,6 +13,7 @@
 // from the red fields themselves, so the two always agree. A field a component marks red itself carries data-red-msg (its line's text).
 import { useEffect, useRef, useState } from "react";
 import { roundedMoneyText } from "@/lib/format";
+import { scrollQuestionBoxTo } from "@/components/QuestionBox";
 
 type Field = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 const isField = (el: EventTarget | null): el is Field => el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
@@ -134,7 +135,8 @@ export function redFields(root: Element | null): { el: HTMLElement; text: string
 /** Scrolls to a red field and puts the cursor in it (a group: its first box). */
 export function focusField(el: HTMLElement) {
   const target = isField(el) ? el : el.querySelector<HTMLElement>("input:not([disabled]), select:not([disabled]), textarea:not([disabled])") ?? el;
-  el.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  // (Batch 20 section 1) Inside a question box (the answer form with more than 3 questions), the box scrolls to the field's question first.
+  if (!scrollQuestionBoxTo(el)) el.scrollIntoView?.({ block: "center", behavior: "smooth" });
   target.focus?.({ preventScroll: true });
 }
 /** A press with mistakes goes to the FIRST red field, top to bottom. */
@@ -187,6 +189,20 @@ export function markServerMistakes(root: Element | null, messages: string[], fin
   return orphans;
 }
 
+/**
+ * (Owner, Oct 28, batch 20 section 19) What a whole-number box (data-whole: spots, a call's Length, the admin's Extend days…) may hold: digits only (a minus, "e",
+ * "+", "." and letters are dropped), never 0 or below: a value that is only zeros is ignored (the box keeps what it had). The maximum keeps its red line.
+ */
+export function wholeText(next: string, prev = "") {
+  const digits = next.replace(/\D/g, "");
+  if (!digits) return "";
+  if (/^0+$/.test(digits)) return prev;
+  return digits.replace(/^0+/, "");
+}
+/** (Batch 20 section 19) A money box never takes a minus sign ($0 stays allowed where it is today). */
+export const moneyText = (next: string) => next.replace(/[-\u2212]/g, "");
+const setValue = (el: HTMLInputElement, next: string) => Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(el, next);
+
 /** Rounds a money box (data-money) in place, through the native setter so a React-controlled box takes the new value too. */
 export function roundMoneyBox(el: HTMLInputElement) {
   const next = roundedMoneyText(el.value);
@@ -213,6 +229,41 @@ export function FieldChecks() {
     const onType = (e: Event) => {
       if (isField(e.target)) recheck(e.target);
     };
+    // (Batch 20 section 19) Whole-number and money boxes: what can't be in them is never typed or pasted in (checked before the page's own handlers see it).
+    const last = new WeakMap<HTMLInputElement, string>();
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target;
+      if (!(el instanceof HTMLInputElement) || e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+      if (el.dataset.whole != null && !/\d/.test(e.key)) e.preventDefault();
+      else if (el.dataset.money != null && (e.key === "-" || e.key === "\u2212")) e.preventDefault();
+    };
+    const onPaste = (e: ClipboardEvent) => {
+      const el = e.target;
+      if (!(el instanceof HTMLInputElement) || (el.dataset.whole == null && el.dataset.money == null)) return;
+      const text = e.clipboardData?.getData("text") ?? "";
+      const clean = el.dataset.whole != null ? wholeText(text, "") : moneyText(text);
+      if (clean === text) return;
+      e.preventDefault();
+      if (!clean) return;
+      setValue(el, el.dataset.whole != null ? wholeText(clean, el.value) : clean);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    // The value it had when entered: a lone "0" typed over it brings it back.
+    const onEnter = (e: FocusEvent) => {
+      if (e.target instanceof HTMLInputElement && e.target.dataset.whole != null) last.set(e.target, e.target.value);
+    };
+    const onRaw = (e: Event) => {
+      const el = e.target;
+      if (!(el instanceof HTMLInputElement)) return;
+      if (el.dataset.whole != null) {
+        const next = wholeText(el.value, last.get(el) ?? "");
+        if (next !== el.value) setValue(el, next);
+        last.set(el, next);
+      } else if (el.dataset.money != null) {
+        const next = moneyText(el.value);
+        if (next !== el.value) setValue(el, next);
+      }
+    };
     const onChange = (e: Event) => {
       if (!isField(e.target)) return;
       if (hasRules(e.target)) showField(e.target);
@@ -229,11 +280,19 @@ export function FieldChecks() {
       }
     };
     document.addEventListener("focusout", onLeave);
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("focusin", onEnter, true);
+    document.addEventListener("paste", onPaste, true);
+    document.addEventListener("input", onRaw, true);
     document.addEventListener("input", onType);
     document.addEventListener("change", onChange);
     document.addEventListener("submit", onSubmit, true);
     return () => {
       document.removeEventListener("focusout", onLeave);
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("focusin", onEnter, true);
+      document.removeEventListener("paste", onPaste, true);
+      document.removeEventListener("input", onRaw, true);
       document.removeEventListener("input", onType);
       document.removeEventListener("change", onChange);
       document.removeEventListener("submit", onSubmit, true);

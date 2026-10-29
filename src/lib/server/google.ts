@@ -1,8 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
+import type { User } from "@prisma/client";
 import { db } from "@/lib/db";
 import { isEmail, normEmail } from "@/lib/format";
 import { appUrl } from "./auth";
 import { createSession, readCookie, sessionCookie } from "./session";
+import { HttpError } from "./http";
+import { isTicked, readTimeZone } from "./passwords";
+import { AGE_LINE, TERMS_VERSION } from "@/lib/termsOfUse";
 
 // Sign in with Google: plain OAuth 2.0 authorization-code flow with PKCE, no auth library.
 
@@ -64,7 +68,7 @@ function decodeIdToken(idToken: string) {
  * read the ID token (received straight from Google over TLS, so its claims are checked rather than its signature),
  * require a verified email, then find or create the user and start a session.
  */
-export async function finishGoogle(req: Request) {
+export async function finishGoogle(req: Request): Promise<{ pending: string } | { user: User; cookie: string }> {
   if (!googleConfigured()) throw new GoogleError("off");
   const params = new URL(req.url).searchParams;
   if (params.get("error")) throw new GoogleError("cancelled");
@@ -111,7 +115,57 @@ export async function finishGoogle(req: Request) {
       db.user.update({ where: { id: existing.id }, data: { passwordHash: "", stripeAccountId: null, payoutsReady: false, payoutProblemAt: null, payoutRemindedAt: null, emailVerifiedAt: new Date() } }),
     ]);
   }
-  const user = existing ? await db.user.findUniqueOrThrow({ where: { id: existing.id } }) : await db.user.create({ data: { email, emailVerifiedAt: new Date() } });
+  // (Owner, Oct 28, batch 20 section 5) A NEW account isn't made here: the browser goes to one short step (the "I'm 18 or older." tick and the Terms agreement,
+  // then Continue), and the account is created only once both are ticked.
+  if (!existing) return { pending: await startGoogleSignup(email) };
+  const user = await db.user.findUniqueOrThrow({ where: { id: existing.id } });
+  const session = await createSession(user.id);
+  return { user, cookie: sessionCookie(session.token, session.expiresAt) };
+}
+
+// ---------- (Batch 20 section 5) Google's sign-up step for a new account ----------
+
+export const GOOGLE_SIGNUP_COOKIE = "pt_google_signup";
+/** How long the step waits after Google answered. */
+const SIGNUP_STEP_MS = 30 * 60_000;
+const stepKey = (token: string) => `google-signup:${createHash("sha256").update(token).digest("hex")}`;
+export const googleSignupCookie = (token: string) => `${GOOGLE_SIGNUP_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SIGNUP_STEP_MS / 1000}${secure()}`;
+export const clearGoogleSignupCookie = () => `${GOOGLE_SIGNUP_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+export const GOOGLE_STEP_EXPIRED = "This Google sign-up expired. Continue with Google again.";
+
+/** Google proved this (new) email: kept for the step (only a hash of the browser's token is stored). */
+export async function startGoogleSignup(email: string, now = new Date()) {
+  const token = b64url(randomBytes(24));
+  await db.appState.create({ data: { key: stepKey(token), value: JSON.stringify({ email, exp: now.getTime() + SIGNUP_STEP_MS }) } });
+  return token;
+}
+/** The email waiting for the step, or null (none, or expired: then it's removed). */
+export async function pendingGoogleSignup(token: string | null | undefined, now = new Date()) {
+  if (!token) return null;
+  const row = await db.appState.findUnique({ where: { key: stepKey(token) } });
+  if (!row) return null;
+  const v = JSON.parse(row.value) as { email: string; exp: number };
+  if (v.exp < now.getTime()) {
+    await db.appState.deleteMany({ where: { key: row.key } });
+    return null;
+  }
+  return { email: v.email };
+}
+/**
+ * Continue on the step: both ticks required (red at each: "Agree to the Terms of Use to sign up", "You must be 18 or older to use Playtest."); then the account is
+ * created (email confirmed by Google, the Terms version and the age confirmation recorded) and signed in.
+ */
+export async function finishGoogleSignup(token: string | null | undefined, body: Record<string, unknown>) {
+  if (!isTicked(body.acceptTerms)) throw new HttpError(400, "bad_field", "Agree to the Terms of Use to sign up");
+  if (!isTicked(body.over18)) throw new HttpError(400, "bad_field", AGE_LINE);
+  const step = await pendingGoogleSignup(token);
+  if (!step || !token) throw new HttpError(409, "expired", GOOGLE_STEP_EXPIRED);
+  await db.appState.deleteMany({ where: { key: stepKey(token) } });
+  const now = new Date();
+  const existing = await db.user.findUnique({ where: { email: step.email } });
+  // Made meanwhile (another tab's sign-up): signed into it, as Google's sign-in would.
+  const user = existing ?? await db.user.create({ data: { email: step.email, emailVerifiedAt: now, termsVersion: TERMS_VERSION, termsAcceptedAt: now, ageConfirmedAt: now, timeZone: readTimeZone(body.timeZone) } });
+  if (existing && !existing.ageConfirmedAt) await db.user.update({ where: { id: existing.id }, data: { ageConfirmedAt: now } });
   const session = await createSession(user.id);
   return { user, cookie: sessionCookie(session.token, session.expiresAt) };
 }

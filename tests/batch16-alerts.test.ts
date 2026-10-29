@@ -128,11 +128,11 @@ describe("big changes from another tab stop every press once (section 21)", () =
     await later();
     const loaded = seen();
     await later();
-    expect((await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId], reason: "Done", seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
+    expect((await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId], reason: "All done.", seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
     expect((await devLive(dev.cookie, testId, loaded, "B")).filter((t) => /another tab/.test(t))).toEqual([]);
-    const r = await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId, b.sessionId], reason: "Done", seenAt: loaded, tab: "B" });
+    const r = await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId, b.sessionId], reason: "All done.", seenAt: loaded, tab: "B" });
     expect(texts(r)).toEqual(["You ended Ana Silva's work early in another tab"]);
-    const r2 = await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId, b.sessionId], reason: "Done", seenAt: loaded, tab: "B", ...again() });
+    const r2 = await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId, b.sessionId], reason: "All done.", seenAt: loaded, tab: "B", ...again() });
     expect(r2.status).toBe(200);
     expect(r2.body.count).toBe(1);
     expect((await db.contract.findUniqueOrThrow({ where: { id: b.sessionId } })).status).toBe("ended");
@@ -206,6 +206,7 @@ describe("a closed tester account counts as leaving; the menu (section 21)", () 
     expect(menu).toContain('"stop your buttons. A payment hold or pause, a stopped test and final refusals always stop."');
     expect(menu).toContain("Tick what should <b>not</b> {ALERTS_INTRO_REST}");
     expect(menu).not.toContain("closed tester account");
-    expect(menu).toContain("start.filter((k) => ALERT_TYPES.some((a) => a.key === k))");
+    // (Batch 20 section 8) The menu reads the one shared setting; a stored tick for a type no longer in the menu is still ignored.
+    expect(menu).toContain("const ignored = shared.filter((k) => ALERT_TYPES.some((a) => a.key === k));");
   });
 });

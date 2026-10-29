@@ -52,6 +52,8 @@ model User {
   /// 0 = never accepted (an account made before sign-up asked, or through Google). Compared with TERMS_VERSION (src/lib/termsOfUse.ts).
   termsVersion      Int       @default(0)
   termsAcceptedAt   DateTime?
+  /// (Owner, Oct 28, batch 20 section 5) When the account confirmed it is 18 or older (the sign-up tick, Google's sign-up step, or the updated-Terms box). Null = not yet.
+  ageConfirmedAt    DateTime?
   createdAt   DateTime  @default(now())
 
   /// Stripe: developer's customer + saved card; tester's Connect account

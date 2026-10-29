@@ -89,7 +89,7 @@ describe("join and contract snapshots", () => {
     expect((await act(testId, "join", ben.cookie, { listingVersion: 1, confirmed: true })).body.error.message).toBe("This test is full.");
     expect((await act(testId, "join", dev.cookie, { listingVersion: 1 })).status).toBe(403); // not a tester
     const s = await setup({ devices: ["Mac"] });
-    expect((await act(s.testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toContain("This test needs one of: Mac");
+    expect((await act(s.testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toContain("Your profile doesn't list a device this test needs (Mac)."); // (batch 20 section 3)
     await act(s.testId, "stop", s.dev.cookie, { reason: "We have what we need.", seenAt: seen() });
     expect((await act(s.testId, "join", ben.cookie, { listingVersion: 1, confirmed: true })).body.error.message).toBe("This test was stopped.");
   });

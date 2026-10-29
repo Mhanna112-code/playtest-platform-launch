@@ -216,7 +216,9 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   if (review && !(await db.dispute.findFirst({ where }))) await testerGate(tester.id, contractId, c.testId, body);
   if (!review) throw new HttpError(409, "not_paid", "This hasn't been paid yet.");
   const existing = await db.dispute.findFirst({ where });
-  const ok = canDispute(review.amountCents, review.agreedCents, !!existing, byTesterChoice(review.reason));
+  // (Batch 20 section 15) Nothing a decision could add (the admin form's max, from disputeBounds): refused with the page's line (an older page).
+  const bounds = existing || byTesterChoice(review.reason) ? null : await disputeBounds({ submissionId: kind === "call" ? null : id, callId: kind === "call" ? id : null });
+  const ok = canDispute(review.amountCents, review.agreedCents, !!existing, byTesterChoice(review.reason), bounds ? bounds.max - bounds.min : null);
   if (!ok.ok) throw new HttpError(409, "no_dispute", ok.message);
   const d = await db.dispute.create({ data: { ...where, contractId, testerId: tester.id, reason } });
   // (Batch 15 section 35) The live line opens its Needs you row, like the bell line.
@@ -226,6 +228,18 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   const flagged = await reportedOver3([tester.id, c.test.developerId]);
   for (const a of await adminUsers()) await bell(a.id, `Dispute on “${c.title}”: ${labelled(displayName(tester), flagged.has(tester.id))} says the pay should be higher (${labelled(displayName(c.test.developer), flagged.has(c.test.developerId))})`, "/admin#disputes", undefined, { group: "disputes" });
   return d;
+}
+
+/** (Batch 20 section 15) What a team decision could still add to each reviewed piece (the decision form's max minus what the piece was paid). */
+export async function disputeRoom(pieces: { submissionId?: string | null; callId?: string | null }[]) {
+  const out = new Map<string, number>();
+  for (const p of pieces) {
+    const id = p.submissionId ?? p.callId;
+    if (!id) continue;
+    const b = await disputeBounds({ submissionId: p.submissionId ?? null, callId: p.callId ?? null }).catch(() => null);
+    if (b) out.set(id, b.max - b.min);
+  }
+  return out;
 }
 
 /**

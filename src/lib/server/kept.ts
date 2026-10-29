@@ -4,7 +4,8 @@ import { HttpError } from "./http";
 
 // (NEXT-UI 10) Typed but not sent: kept per person and form on the server (so it follows them to any device and survives
 // signing out). ONLY these kinds of form (a key starts with one of them); never sign-in / sign-up.
-const KINDS = ["written:", "chat:", "dispute:", "rate:", "reject:", "test:"];
+// (Batch 20 section 18) Also Request a time (both sides), End early's and Stop's reasons.
+const KINDS = ["written:", "chat:", "dispute:", "rate:", "reject:", "test:", "request:", "endearly:", "stop:"];
 const MAX_BYTES = 1_100_000; // (batch 15 sections 3 and 17) room for 20 questions and the steps at 20,000 characters each, or a 50,000-character written part with its questions
 /** (Batch 15 section 41, L2) Kept forms per person. */
 export const MAX_KEPT = 50;

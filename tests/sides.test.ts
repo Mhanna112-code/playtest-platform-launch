@@ -52,15 +52,15 @@ describe("sign-up asks who you are, like the full app's", () => {
   it("developer / tester / both set the sides and the name; a name and the Terms are needed with a role; email + password alone still works", async () => {
     const { signUp } = await import("@/lib/server/passwords");
     const mail = () => `su-${Math.random().toString(36).slice(2)}@example.com`;
-    const both = await signUp({ email: mail(), password: "longenough1", role: "both", name: "Nora Lane", acceptTerms: "yes" }, "http://localhost:3400");
+    const both = await signUp({ email: mail(), password: "longenough1", role: "both", name: "Nora Lane", acceptTerms: "yes", over18: "yes" }, "http://localhost:3400");
     expect(both.user).toMatchObject({ name: "Nora Lane", isDeveloper: true, isTester: true });
     expect((await db.testerProfile.count({ where: { userId: both.user.id } }))).toBe(1);
-    const dev = await signUp({ email: mail(), password: "longenough1", role: "developer", name: "Dee Moss", acceptTerms: "yes" }, "http://localhost:3400");
+    const dev = await signUp({ email: mail(), password: "longenough1", role: "developer", name: "Dee Moss", acceptTerms: "yes", over18: "yes" }, "http://localhost:3400");
     expect(dev.user).toMatchObject({ isDeveloper: true, isTester: false });
-    await expect(signUp({ email: mail(), password: "longenough1", role: "tester", name: "   ", acceptTerms: "yes" }, "http://x")).rejects.toThrow(); // (Owner, Oct 27) a name is at least 1 character, no other rules
-    expect((await signUp({ email: mail(), password: "longenough1", role: "tester", name: "A", acceptTerms: "yes" }, "http://x")).user.name).toBe("A");
-    await expect(signUp({ email: mail(), password: "longenough1", role: "tester", name: "Ana Silva" }, "http://x")).rejects.toThrow("Agree to the Terms");
-    const plain = await signUp({ email: mail(), password: "longenough1" }, "http://localhost:3400");
+    await expect(signUp({ email: mail(), password: "longenough1", role: "tester", name: "   ", acceptTerms: "yes", over18: "yes" }, "http://x")).rejects.toThrow(); // (Owner, Oct 27) a name is at least 1 character, no other rules
+    expect((await signUp({ email: mail(), password: "longenough1", role: "tester", name: "A", acceptTerms: "yes", over18: "yes" }, "http://x")).user.name).toBe("A");
+    await expect(signUp({ email: mail(), password: "longenough1", role: "tester", name: "Ana Silva", over18: "yes" }, "http://x")).rejects.toThrow("Agree to the Terms");
+    const plain = await signUp({ email: mail(), password: "longenough1", over18: "yes" }, "http://localhost:3400");
     expect(plain.user).toMatchObject({ isDeveloper: false, isTester: false });
   });
 });

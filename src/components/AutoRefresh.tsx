@@ -1,7 +1,9 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { pageBusy, watchTyping } from "@/lib/pageBusy";
 import { useRouter } from "next/navigation";
 import { bankCheckOpen } from "@/lib/bankConfirm";
+import { publishIgnoredAlerts, publishTesterAlertsOff } from "@/lib/testerAlerts";
 
 /**
  * Keeps an open page current: polls a fingerprint every 20 s and refreshes the page's data when it changes (`refresh={false}`: only watches, e.g. on Edit, which must keep what was typed).
@@ -32,15 +34,34 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
     shown.current = v ?? null;
   }, [v]);
   const stopped = useRef<boolean | null>(null);
+  // (Owner, Oct 28, batch 20 section 18) A last-resort reload never happens under someone's typing or an open box: it waits (a quiet "This page has updates ·
+  // Refresh" shows meanwhile), and goes ahead only once nothing would be lost and the page still needs it.
+  const [waiting, setWaiting] = useState(false);
   useEffect(() => {
     let alive = true;
+    watchTyping();
+    const reloadWhenFree = (still: () => boolean) => {
+      const go = () => {
+        if (!alive || !still()) return setWaiting(false);
+        if (pageBusy()) {
+          setWaiting(true);
+          setTimeout(go, 5000);
+          return;
+        }
+        window.location.reload();
+      };
+      go();
+    };
     const testId = /^test=([^&]+)/.exec(query)?.[1];
     const tick = async () => {
       window.dispatchEvent(new Event("live-tick")); // the live top notice checks at the same moment
       try {
         const r = await fetch(`/api/pulse?${query}`, { cache: "no-store" });
         if (!r.ok) return;
-        const { v, adminStopped, restricted } = (await r.json()) as { v: string; adminStopped?: boolean; restricted?: boolean };
+        const { v, adminStopped, restricted, alerts } = (await r.json()) as { v: string; adminStopped?: boolean; restricted?: boolean; alerts?: { ignored?: string[]; testerOff?: boolean } };
+        // (Batch 20 section 8) The Alerts setting as saved now (changed in another browser or device): the menu, toggle and chips follow.
+        if (alive && Array.isArray(alerts?.ignored)) publishIgnoredAlerts(alerts.ignored, false);
+        if (alive && typeof alerts?.testerOff === "boolean") publishTesterAlertsOff(alerts.testerOff, false);
         if (testId && alive && stopped.current === false && adminStopped) {
           try { window.history.scrollRestoration = "manual"; } catch { /* ignore */ }
           window.location.href = `/app/tests/${testId}`; // Edit goes back to the test page; the test page reloads at its top
@@ -54,10 +75,10 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
         if (refresh && !restricted && was !== null && v !== was && alive) {
           router.refresh();
           // Backstop: if the refresh left the main column empty (the server redirected it mid-flight), load the page again.
-          setTimeout(() => { if (alive && !document.querySelector("main")?.children.length) window.location.reload(); }, 6000);
+          setTimeout(() => reloadWhenFree(() => !document.querySelector("main")?.children.length), 6000);
           // (Batch 19 section 5) A page with its own fingerprint that still shows the old one: load it again.
           // Once per polled fingerprint, so a page whose own fingerprint can't match never reloads in a loop.
-          if (shown.current !== null) setTimeout(() => { if (alive && shown.current !== null && shown.current !== v && !bankCheckOpen() && onceFor(`${query}|${v}`)) window.location.reload(); }, 5000);
+          if (shown.current !== null) setTimeout(() => { if (alive && shown.current !== null && shown.current !== v && !bankCheckOpen() && onceFor(`${query}|${v}`)) reloadWhenFree(() => shown.current !== null && shown.current !== v && !bankCheckOpen()); }, 5000);
         }
         last.current = v;
       } catch {
@@ -79,5 +100,10 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
       window.removeEventListener("pageshow", onShow);
     };
   }, [query, router, refresh]);
-  return null;
+  if (!waiting) return null;
+  return (
+    <button type="button" className="fixed bottom-5 right-5 z-40 rounded-full border border-white/15 bg-slate-900/95 px-4 py-2 text-sm text-slate-200 shadow-xl" data-page-updates="" onClick={() => window.location.reload()}>
+      This page has updates · Refresh
+    </button>
+  );
 }

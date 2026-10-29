@@ -12,9 +12,11 @@ import { PressButton } from "@/components/PressButton";
 import { UserPlus } from "lucide-react";
 import { bringInView } from "@/lib/markJump";
 import { LongList } from "@/components/LongList";
+import { MissingNeedWords } from "@/components/MissingNeeds";
+import { isMissingNeedLine, missingNeedLine, type GapItem } from "@/lib/gaps";
 import { LiveNotices } from "@/components/LiveNotices";
 
-type Tester = { id: string; name: string; rating?: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; tagItems?: string[]; detail?: string; together?: { id: string; title: string }[] };
+type Tester = { id: string; name: string; rating?: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; tagItems?: string[]; detail?: string; together?: { id: string; title: string; state?: string }[] };
 type Sent = { id: string; name: string; status: string };
 /** (Batch 16 section 12) What the server works out over every tester: worked with, Suggested after the ticks, and the name search. */
 type PanelData = { worked: Tester[]; suggested: Tester[]; found: Tester[]; foundTotal: number; capLine: string; searched: boolean };
@@ -25,10 +27,12 @@ type PanelData = { worked: Tester[]; suggested: Tester[]; found: Tester[]; found
  * Invited (Cancel invite) · the filters (the devices / languages THIS test needs) · Search by name with Find testers right under it
  * (batch 16 section 29: hidden until you search) · People you've worked with · Suggested. The filters narrow Suggested and Find testers. Greyed rows can't be ticked. A
  * ticked tester missing something the test needs gets an in-page confirm under Invite (Invite anyway / Cancel).
- * (Owner, Oct 28, batch 16 section 12) The lists come from the server over EVERY tester: the name search (2+ characters, after a short pause in
+ * (Owner, Oct 28, batch 16 section 12) The lists come from the server over EVERY tester: the name search (from 1 character since batch 20 section 9, after a short pause in
  * typing) and the ticks ask it again; every match shows in a scroll box, and above 100 the first 100 with "Showing 100 of N: type more of the name".
  */
-export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelData; sent: Sent[]; options: { devices: string[]; languages: string[] }; /** (Batch 8) false on the free plan: the "Subscribers" tag */ perks?: boolean }) {
+export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelData; sent: Sent[]; options: { devices: string[]; languages: string[] }; /** (Batch 8) false on the free plan: the "Subscribers" tag */ perks?: boolean;
+  /** (Batch 20 section 10) Nobody can be invited right now (full, paused, joining closed): Invite is disabled with this line; ticks stay. */ blocked?: { line: string; full: boolean } | null;
+  /** Open until, while it's ahead: at that moment Invite disables with this line. */ closes?: { at: string; line: string } }) {
   const router = useRouter();
   // (Batch 16 section 21) An invite from another tab for a ticked tester stops Invite once; the panel shows it at once (the row greys, "Invited <date>").
   const { press, changes, error, busy, setError, at, errData } = usePress(p.seenAt, () => router.refresh());
@@ -40,11 +44,23 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   const [q, setQ] = useState("");
   const [ticked, setTicked] = useState<string[]>([]);
   const [msg, setMsg] = useState("");
+  // (Batch 20 section 10) Open until passing while the page is open.
+  const [closedNow, setClosedNow] = useState(false);
+  useEffect(() => {
+    if (!p.closes) return;
+    const ms = new Date(p.closes.at).getTime() - Date.now();
+    if (ms <= 0) return setClosedNow(true);
+    const t = setTimeout(() => setClosedNow(true), Math.min(ms + 500, 2_147_000_000));
+    return () => clearTimeout(t);
+  }, [p.closes]);
+  const blocked = p.blocked ?? (closedNow && p.closes?.line ? { line: p.closes.line, full: false } : null);
   const [confirm, setConfirm] = useState<string[] | null>(null);
-  // (Batch 16 section 12) The server's lists; the ticks and the name search (2+ characters) ask it again after a short pause in typing.
+  // (Batch 20 section 3) What each gap line is missing (both kinds), so a long device or language list is cut to 3 with "+N more".
+  const [gapItems, setGapItems] = useState<GapItem[]>([]);
+  // (Batch 16 section 12) The server's lists; the ticks and the name search (from 1 character) ask it again after a short pause in typing.
   const [data, setData] = useState<PanelData>(p.initial);
   const [searching, setSearching] = useState(false);
-  const term = q.trim().length >= 2 ? q.trim() : "";
+  const term = q.trim().length >= 1 ? q.trim() : "";
   const asked = useRef(0);
   const first = useRef(true);
   // (Batch 16 section 21) When the page refreshes (an invite from another tab, the poll), the lists follow: the server's lists again, or the search asked again.
@@ -80,7 +96,8 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   // as shown, so the server stops once when either changed since. A ticked tester who is now greyed is unticked when the panel refreshes.
   const shown = useRef(new Map<string, { devices: string[]; languages: string[] }>());
   useEffect(() => {
-    for (const t of [...data.worked, ...data.suggested, ...data.found]) shown.current.set(t.id, { devices: t.devices, languages: t.languages });
+    // (Batch 20 section 4) As the page loaded (the first time each tester was shown): Invite stops for the net change since then, one line per tester.
+    for (const t of [...data.worked, ...data.suggested, ...data.found]) if (!shown.current.has(t.id)) shown.current.set(t.id, { devices: t.devices, languages: t.languages });
     const grey = new Set([...data.worked, ...data.suggested, ...data.found].filter((t) => t.grey).map((t) => t.id));
     if (grey.size) setTicked((tk) => (tk.some((id) => grey.has(id)) ? tk.filter((id) => !grey.has(id)) : tk));
   }, [data]);
@@ -92,7 +109,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
 
   async function invite(anyway: boolean) {
     setMsg("");
-    const r = await press<{ message: string }>(`/api/tests/${p.testId}/invite`, { testerIds: ticked, anyway, seenGaps: confirm ? confirm.filter((l) => l.endsWith("which this test needs.")) : undefined, ...(anyway && gapAt ? { confirmed: true, boxAt: gapAt } : {}), seenNeeds: p.options, seenTesters: Object.fromEntries(ticked.flatMap((id) => (shown.current.has(id) ? [[id, shown.current.get(id)!]] : []))) }, anyway ? "anyway" : "invite");
+    const r = await press<{ message: string }>(`/api/tests/${p.testId}/invite`, { testerIds: ticked, anyway, seenGaps: confirm ? confirm.filter(isMissingNeedLine) : undefined, ...(anyway && gapAt ? { confirmed: true, boxAt: gapAt } : {}), seenNeeds: p.options, seenTesters: Object.fromEntries(ticked.flatMap((id) => (shown.current.has(id) ? [[id, shown.current.get(id)!]] : []))) }, anyway ? "anyway" : "invite");
     if (r) {
       setConfirm(null);
       setMsg(r.message);
@@ -107,6 +124,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   useEffect(() => {
     if (error.startsWith("CONFIRM:")) {
       setConfirm(error.slice(8).split("\n"));
+      if (Array.isArray(errData.items)) setGapItems(errData.items as GapItem[]);
       if (typeof errData.now === "string") setGapAt(errData.now);
       setError("");
     } else if (at === "anyway" && error && !changes) {
@@ -134,15 +152,16 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
     if (!boxOpen) return;
     // At once when the ticks change, then every 15 s as profiles change.
     const check = async () => {
-      const r = await api<{ lines: string[]; now: string }>(`/api/tests/${p.testId}/invite-check`, { testerIds: ticked }).catch(() => null);
+      const r = await api<{ lines: string[]; items?: GapItem[]; now: string }>(`/api/tests/${p.testId}/invite-check`, { testerIds: ticked }).catch(() => null);
       if (!r) return;
       if (!r.lines.length) {
         setConfirm(null);
         setMsg("Everyone you ticked now meets this test's needs. Press Invite to send.");
       } else
         setConfirm((c) => {
-          if (c && JSON.stringify(r.lines) !== JSON.stringify(c.filter((l) => l.endsWith("which this test needs.")))) {
+          if (c && JSON.stringify(r.lines) !== JSON.stringify(c.filter(isMissingNeedLine))) {
             setGapAt(r.now);
+            if (r.items) setGapItems(r.items);
             return r.lines;
           }
           return c;
@@ -168,8 +187,9 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
       {/* "In tests with you": how many, and links to them. */}
       {key === "w" && t.together && t.together.length > 0 && (
         <details className="basis-full pl-6 text-xs text-slate-400">
-          <summary className="cursor-pointer">In {t.together.length} test{t.together.length === 1 ? "" : "s"} with you</summary>
-          <ul className="mt-1 space-y-0.5">{t.together.map((x) => <li key={x.id}><a href={`/app/tests/${x.id}`} target="_blank" rel="noopener">{x.title}</a></li>)}</ul>
+          {/* (Owner, Oct 28, batch 20 section 23) Not "in" them: how each one went ("jj · ended", "Harbor Run · in it now"). */}
+          <summary className="cursor-pointer">Worked with you on {t.together.length} test{t.together.length === 1 ? "" : "s"}</summary>
+          <ul className="mt-1 space-y-0.5">{t.together.map((x) => <li key={x.id} data-together-state={x.state ?? ""}><a href={`/app/tests/${x.id}`} target="_blank" rel="noopener">{x.title}</a>{x.state ? ` · ${x.state}` : ""}</li>)}</ul>
         </details>
       )}
     </li>
@@ -235,19 +255,26 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
       </div>
       {none && <p className="err-field">Tick at least one tester.</p>}
       <div className="flex flex-wrap items-center gap-2">
-        <button className="btn" disabled={busy} onClick={() => (ticked.length ? invite(false) : setNone(true))}>Invite</button>
+        <button className="btn" disabled={busy || !!blocked} title={blocked?.line} onClick={() => (ticked.length ? invite(false) : setNone(true))}>Invite</button>
         <span className="text-xs text-slate-400">{ticked.length} selected</span>
       </div>
+      {blocked && (
+        <p className="note" data-invite-blocked={blocked.full ? "full" : "closed"}>
+          {blocked.full ? <>This test is full. Add spots <a href={`/app/tests/${p.testId}/edit#spots`}>in Edit</a> to invite more people.</> : blocked.line}
+        </p>
+      )}
       <MistakeList press="Invite" shown={none} />
       {msg && <p className="info" data-invite-msg="">{msg}</p>}
       {at !== "anyway" && <ChangesBox changes={changes} error={error} />}
       {confirm && (
         <div className="info space-y-2" data-invite-anyway="">
-          {/* The unmet needs: 3 lines, then "Show N more" opening a scroll box about 8 lines tall. */}
-          <LongList as="div" shown={3} tall="max-h-52" className="space-y-1">{confirm.map((l) => <p key={l}>{l}</p>)}</LongList>
+          {/* (Owner, Oct 28, batch 20 section 3) One line per ticked tester naming everything they're missing (a long list: its first 3, then "+N more"); more
+              than 3 testers: their lines in a scroll box about 3 lines tall, with Invite anyway / Cancel below it. */}
+          {confirm.filter((l) => !isMissingNeedLine(l)).map((l) => <p key={l}>{l}</p>)}
+          <GapLinesBox lines={confirm.filter(isMissingNeedLine)} items={gapItems} />
           <LiveNotices open={!!confirm} />
           <div className="flex gap-2">
-            <button className="btn" disabled={busy} onClick={() => invite(true)}>Invite anyway</button>
+            <button className="btn" disabled={busy || !!blocked} onClick={() => invite(true)}>Invite anyway</button>
             <button className="btn-ghost" onClick={() => setConfirm(null)}>Cancel</button>
           </div>
           {/* A stop for Invite anyway (what's missing changed, or any Invite reason) shows inside the box. */}
@@ -257,4 +284,14 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
       </div>
     </details>
   );
+}
+
+/** (Batch 20 section 3) The Invite anyway box's lines: each in the server's words, its lists cut to 3 with "+N more"; more than 3 in a scroll box about 3 lines tall. */
+export function GapLinesBox({ lines, items }: { lines: string[]; items: GapItem[] }) {
+  const line = (l: string) => {
+    const it = items.find((i) => missingNeedLine(i.name, i) === l);
+    return <p key={l} data-gap-line="">{it ? <>{it.name} <MissingNeedWords g={it} />.</> : l}</p>;
+  };
+  if (lines.length <= 3) return <div className="space-y-1">{lines.map(line)}</div>;
+  return <div className="max-h-24 space-y-1 overflow-y-auto pr-1" data-gap-scroll={lines.length} tabIndex={0} role="region" aria-label="What each tester is missing">{lines.map(line)}</div>;
 }

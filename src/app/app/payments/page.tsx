@@ -1,7 +1,7 @@
 import { Banknote, CreditCard, ShieldCheck } from "lucide-react";
 import { db } from "@/lib/db";
 import { fmtDateTime, money } from "@/lib/format";
-import { requirePageUser } from "@/lib/server/page-auth";
+import { adminAway, requirePageUser } from "@/lib/server/page-auth";
 import { stripeOn } from "@/lib/server/stripe";
 import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
@@ -35,6 +35,7 @@ const MESSAGES: Record<string, string> = {
 
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; pending?: string; stop?: string; since?: string; tab?: string }> }) {
   const u = await requirePageUser();
+  adminAway(u, "/app/payments"); // (batch 20 section 16) admin only
   await (await import("@/lib/server/recovery")).checkStuck({ developerId: u.id }); // (batch 15 section 9) payments stuck "in progress"
   const q = await searchParams;
   const on = stripeOn();

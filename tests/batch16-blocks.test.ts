@@ -72,12 +72,14 @@ for (const who of ["the developer blocks the tester", "the tester blocks the dev
 }
 
 describe("the pages (section 11)", () => {
-  it("the listing hides a blocked developer's test the tester was never part of, with the paused test's line; the profile is not found", () => {
+  it("the listing hides a blocked developer's test the tester was never part of, with the paused test's line; the profile reads as unavailable (batch 20 section 17)", () => {
     const page = src("app/app/find/[id]/page.tsx");
     // (Batch 17 §18) The same line also covers an open invite-only test for a tester who isn't invited, applying or in it.
     expect(page).toContain("if (((paused && !involved) || inviteOnly || (blocked && !involved && t.developerId !== u.id)) && !isAdmin(u)) {");
     expect(page).toContain("This test isn&apos;t available right now.");
-    expect(src("app/app/developers/[id]/page.tsx")).toMatch(/db\.block\.count\(\{ where: \{ OR: \[\{ blockerId: viewer\.id, blockedId: p\.id \}, \{ blockerId: p\.id, blockedId: viewer\.id \}\] \} \}\)/);
+    // (Batch 20 section 17) Blocked by them: "This profile isn't available."; blocked by you: the profile with Unblock and their tests hidden.
+    expect(src("app/app/developers/[id]/page.tsx")).toContain("(await db.block.count({ where: { blockerId: p.id, blockedId: viewer.id } })) > 0;");
+    expect(src("app/app/developers/[id]/page.tsx")).toContain("if (theyBlocked) return <ProfileUnavailable />;");
   });
   it("another tester (no block) still sees everything", async () => {
     const { dev, testId } = await setup();

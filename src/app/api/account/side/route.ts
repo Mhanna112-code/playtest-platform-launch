@@ -1,12 +1,15 @@
 import { db } from "@/lib/db";
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
-import { requireUser } from "@/lib/server/session";
+import { isAdmin, requireUser } from "@/lib/server/session";
+import { ADMIN_ONLY_LINE } from "@/lib/rules";
 import { accountGate, logAccountChange, sidesLabel } from "@/lib/server/accountChanges";
 
 // (NEXT-UI 6 / 15) Switch to a side the account has, or add the other side to it ("Start testing too").
 export async function POST(req: Request) {
   return handle(async () => {
     const u = await requireUser(req);
+    // (Owner, Oct 28, batch 20 section 16) An admin account is only an admin: to test as a developer or tester, use a separate account.
+    if (isAdmin(u)) throw new HttpError(409, "admin_only", ADMIN_ONLY_LINE);
     const b = await readJson(req);
     const side = b.side === "developer" || b.side === "tester" ? b.side : null;
     if (!side) throw new HttpError(400, "bad_side", "Choose developer or tester.");

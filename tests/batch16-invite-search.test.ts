@@ -39,8 +39,8 @@ describe("invite: Search by name finds every tester (section 12)", () => {
     for (const n of [`Fbbb Blocker ${tag}`, `Fbbb Blocked ${tag}`, `Fbbb Gone ${tag}`]) expect(all).not.toContain(n);
     // The device tick narrows the search.
     expect(await names(`fbbb`, { devices: ["Mac"] })).toEqual([`Fbbb Mac ${tag}`]);
-    // One character searches nothing.
-    expect((await invitePanel(dev.user.id, testId, { q: "f" })).found).toEqual([]);
+    // (Batch 20 section 9) One character searches too: names with a word starting with it.
+    expect((await invitePanel(dev.user.id, testId, { q: "f" })).found.every((x) => x.name.toLowerCase().split(" ").some((w) => w.startsWith("f")))).toBe(true);
     // Suggested is worked out over every tester too: the oldest account with the ticked device is suggested.
     expect((await invitePanel(dev.user.id, testId, { devices: [`Rare-${tag}`] })).suggested.map((x) => x.id)).toEqual([target.id]);
     // Through the test page's route.

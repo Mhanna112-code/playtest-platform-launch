@@ -59,6 +59,27 @@ export function alignedClash(rows: RowState[], minutes: string, side: "developer
   return { notes, limits: n.limits };
 }
 
+/** (Batch 20 section 7) What a Request a time press made: its new waiting requests and, when it matched the other side's request, the booked call. */
+export type PressMade = { requestIds: string[]; callIds: string[] };
+export function madeBy(r: unknown): PressMade {
+  const o = (r ?? {}) as { ids?: unknown; id?: unknown; callId?: unknown };
+  const requestIds = Array.isArray(o.ids) ? o.ids.map(String) : typeof o.id === "string" ? [o.id] : [];
+  return { requestIds, callIds: typeof o.callId === "string" ? [o.callId] : [] };
+}
+
+/**
+ * (Batch 20 section 7, bug found by the owner) The clash checks' inputs while a Request a time press is on its way and after it went through. The page's data can
+ * refresh in between (its 20-second poll sees the new request and refreshes before the reload lands), and the form still held the times it just sent, so its
+ * own new request showed as "Overlaps your request to …" for a moment. Now: from the press until the reload, the checks use the data as it was when it was
+ * pressed (`frozen`), never anything the press made (`made`), and the form clears as soon as the press succeeds.
+ */
+export function formClashInputs<T extends { requests: { id?: string }[]; calls: { id?: string }[] }>(live: T[], frozen: T[] | null, made: PressMade | null): T[] {
+  const base = frozen ?? live;
+  if (!made) return base;
+  const req = new Set(made.requestIds), call = new Set(made.callIds);
+  return base.map((t) => ({ ...t, requests: t.requests.filter((q) => !q.id || !req.has(q.id)), calls: t.calls.filter((c) => !c.id || !call.has(c.id)) }));
+}
+
 export function RequestRows({ rows, setRows, minNow, notes }: { rows: RowState[]; setRows: (r: RowState[]) => void; minNow: string; notes?: ClashLine[][] }) {
   const set = (i: number, patch: Partial<RowState>) => setRows(rows.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   return (

@@ -5,6 +5,7 @@ import { AuthShell } from "@/components/AuthShell";
 import { PasswordInput } from "@/components/PasswordInput";
 import { googleConfigured } from "@/lib/server/google";
 import { getPageUser } from "@/lib/server/page-auth";
+import { AGE_TICK } from "@/lib/termsOfUse";
 
 export const metadata = { title: "Create an account · Playtest" };
 
@@ -46,6 +47,11 @@ export default async function SignupPage() {
         <label className="flex items-start gap-2 text-sm text-slate-300">
           <input type="checkbox" id="acceptTerms" name="acceptTerms" value="yes" required className="mt-1" data-match="terms of use" />
           <span>I agree to the <a href="/terms" target="_blank" className="text-indigo-300 underline">Terms of Use</a> and the <a href="/privacy" target="_blank" className="text-indigo-300 underline">Privacy policy</a>.</span>
+        </label>
+        {/* (Owner, Oct 28, batch 20 section 5) Required, next to the Terms agreement: Sign up is refused (red here) until it's ticked. */}
+        <label className="flex items-start gap-2 text-sm text-slate-300">
+          <input type="checkbox" id="over18" name="over18" value="yes" required className="mt-1" data-match="18 or older" />
+          <span>{AGE_TICK}</span>
         </label>
       </AuthForm>
     </AuthShell>

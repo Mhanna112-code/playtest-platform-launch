@@ -3,7 +3,7 @@ import { Err } from "@/components/Err";
 import { FormMistakes } from "@/components/FormMistakes";
 import { checkFields } from "@/components/FieldChecks";
 import { useRef, useState } from "react";
-import { api, errOf, FIELD } from "@/lib/client";
+import { api, ApiError, errOf, FIELD } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { NotSentTag, useKept } from "@/lib/useKept";
 import { restoreDraft } from "@/lib/answerSets";
@@ -11,6 +11,8 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { qOptional, qText } from "@/lib/questions";
 import { ChangesBox } from "@/components/ChangesBox";
 import { ScrollText } from "@/components/ScrollText";
+import { NOTHING_CHANGED_LINE } from "@/lib/rules";
+import { QuestionBox } from "@/components/QuestionBox";
 import { WRITTEN_MAX_CHARS, writtenLength } from "@/lib/rules";
 import { wrapSelection } from "@/lib/markdown";
 
@@ -49,12 +51,16 @@ function AnswerBox({ id, value, onChange, rows = 3, required }: { id: string; va
  * Written answers: one box per question in the tester's contract. Can be updated until it's paid. `canSend` false (batch 10: the test is paused): the boxes stay and what is
  * typed is kept as a draft, but Send is hidden until the test resumes.
  */
-export function WrittenForm({ sessionId, questions, initial, initialNotes, update, seenAt, canSend = true }: { sessionId: string; questions: string[]; initial: string[]; initialNotes: string; update: boolean; seenAt: string; canSend?: boolean }) {
+export function WrittenForm({ sessionId, questions, initial, initialNotes, update, seenAt, canSend = true, sentSame = false, newFiles = false }: { sessionId: string; questions: string[]; initial: string[]; initialNotes: string; update: boolean; seenAt: string; canSend?: boolean; /** (Batch 20 section 26) what was sent is for these same questions (so the form starts from exactly it) */ sentSame?: boolean; /** an attachment added since the last send */ newFiles?: boolean }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
   const [box, setBox] = useStopBox();
-  const [answers, setAnswers] = useState<string[]>(questions.map((_, i) => initial[i] ?? ""));
+  const [answers0, setAnswers] = useState<string[]>(questions.map((_, i) => initial[i] ?? ""));
+  // (Batch 20 section 28, bug found by the owner) Always one answer per question shown, each a string: a shorter or holed list made a box uncontrolled (what was typed
+  // showed but never reached the press), so the server got fewer answers than questions and refused "Answer every required question" with nothing red on the page.
+  const answers = questions.map((_, i) => answers0[i] ?? "");
+  const [missingAt, setMissingAt] = useState<number | null>(null);
   const [notes, setNotes] = useState(initialNotes);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -68,6 +74,8 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   });
 
   const length = writtenLength([...answers, notes]);
+  // (Owner, Oct 28, batch 20 section 26) After a send: "Send my updated answers" waits until something differs from it (changing it back disables it again).
+  const unchanged = update && sentSame && !newFiles && same;
   async function send(e: React.FormEvent) {
     e.preventDefault();
     if (!canSend) return;
@@ -75,38 +83,47 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     setBusy(true);
     setMsg(null);
     try {
+      setMissingAt(null);
       await api(`/api/sessions/${sessionId}/written`, { answers, notes, seenAt, confirmed, boxAt });
       await keep.clear();
       window.location.reload();
     } catch (err) {
       const sb = stopBox(err); if (sb) { setBox(sb); setBoxAt(sb.now); }
-      else setMsg({ ok: false, text: errOf(err) });
+      else {
+        // (Batch 20 section 28) Which required question the server found empty: the red goes AT it.
+        if (err instanceof ApiError && typeof err.data.missing === "number") setMissingAt(err.data.missing);
+        setMsg({ ok: false, text: errOf(err) });
+      }
       setBusy(false);
     }
   }
 
   return (
     <form className="space-y-3" onSubmit={send}>
+      {/* (Batch 20 section 1) More than 3 questions: the questions and their answer boxes sit in a scroll box about 3 questions tall; the notes, counter, files
+          and Send stay below it, and a red mistake scrolls the box to its question. */}
+      <QuestionBox count={questions.length} size="form" className="space-y-3" >
       {questions.map((q, i) => (
-        <div key={i}>
+        <div key={i} data-question="">
           {/* (Batch 15 section 3) A long question sits in a scroll box about 6 lines tall. */}
-          <label className={`label ${qOptional(q) ? "" : "req"}`} htmlFor={`a${i}`}><ScrollText text={qText(q)} label={`Question ${i + 1}`} />{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</label>
-          <AnswerBox id={`a${i}`} required={!qOptional(q)} value={answers[i]} onChange={(v) => setAnswers((all) => all.map((a, j) => (j === i ? v : a)))} />
+          <label className={`label ${qOptional(q) ? "" : "req"} flex items-start gap-1`} htmlFor={`a${i}`}><ScrollText className="min-w-0 flex-1" text={qText(q)} label={`Question ${i + 1}`} />{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</label>
+          <AnswerBox id={`a${i}`} required={!qOptional(q)} value={answers[i]} onChange={(v) => setAnswers((all) => questions.map((_, j) => (j === i ? v : all[j] ?? "")))} />
         </div>
       ))}
+      </QuestionBox>
       <div>
         <label className="label" htmlFor="notes">Anything else (bugs, ideas)</label>
         <AnswerBox id="notes" rows={2} value={notes} onChange={setNotes} />
       </div>
       {/* (Batch 11) (Batch 14) At most 50,000 characters for the whole written part, counted live. */}
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
-      <span>{canSend && <button className="btn" disabled={busy || length > WRITTEN_MAX_CHARS}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && <NotSentTag />}</span>
+      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && <NotSentTag />}</span>
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {msg?.ok && <p className="ok">{msg.text}</p>}
       {/* (Batch 16 section 10) The server's "answer every required question" goes to the first empty required box. */}
       <FormMistakes text={msg && !msg.ok ? msg.text : ""} press={update ? "Send my updated answers" : "Send my answers"}
-        find={(m) => (m === ANSWER_REQUIRED ? Array.from(document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-required-msg="${ANSWER_REQUIRED}"]`)).find((t) => !t.value.trim()) : null)} />
+        find={(m) => (m === ANSWER_REQUIRED ? (missingAt != null ? document.getElementById(`a${missingAt}`) : null) ?? Array.from(document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-required-msg="${ANSWER_REQUIRED}"]`)).find((t) => !t.value.trim()) : null)} />
     </form>
   );
 }

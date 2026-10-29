@@ -7,6 +7,8 @@ import { asListing, devGate, devGateIfSeen, needsGap, ownTest, recordEvent, stam
 import { revealedRatingsWhere } from "./ratings";
 import { doesntListItems, doesntListTag, withYouText } from "@/lib/inviteRows";
 import { INVITE_ACTS } from "./live";
+import { exactFirst, nameMatches } from "@/lib/nameSearch";
+import { gapsOf, missingNeedLine, missingNeedText, orList, type GapItem } from "@/lib/gaps";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -33,7 +35,7 @@ async function rankedTesters(devId: string, testId: string) {
     db.contract.findMany({ where: { test: { developerId: devId } }, select: { testerId: true } }),
     // (The full app's rows) "you rated 5.0/5 · 1 test with you": this developer's own ratings of them, and their tests together.
     db.rating.groupBy({ by: ["rateeId"], where: { raterId: devId, side: "developer" }, _avg: { stars: true } }),
-    db.contract.findMany({ where: { test: { developerId: devId } }, select: { testerId: true, joinedAt: true, test: { select: { id: true, title: true } } }, orderBy: { joinedAt: "desc" } }),
+    db.contract.findMany({ where: { test: { developerId: devId } }, select: { testerId: true, joinedAt: true, status: true, endKind: true, test: { select: { id: true, title: true } } }, orderBy: { joinedAt: "desc" } }),
   ]);
   const removed = new Set(blocks.map((b) => (b.blockerId === devId ? b.blockedId : b.blockerId)));
   // Blocked either way and deleted accounts never appear.
@@ -96,10 +98,11 @@ async function rankedTesters(devId: string, testId: string) {
       const g = grouped.find((x) => x.rateeId === id);
       return g ? `${(g._avg.stars ?? 0).toFixed(1)} ★ (${g._count._all} rating${g._count._all === 1 ? "" : "s"})` : "";
     };
+    // (Owner, Oct 28, batch 20 section 23) Each test with how their part went (their latest session on it): in it now, left, finished (rated) or ended.
     const together = (id: string) => {
-      const seen = new Map<string, string>();
-      for (const c of myTests) if (c.testerId === id && !seen.has(c.test.id)) seen.set(c.test.id, c.test.title);
-      return [...seen].map(([tid, title]) => ({ id: tid, title }));
+      const seen = new Map<string, { title: string; state: string }>();
+      for (const c of myTests) if (c.testerId === id && !seen.has(c.test.id)) seen.set(c.test.id, { title: c.test.title, state: togetherState(c) });
+      return [...seen].map(([tid, x]) => ({ id: tid, title: x.title, state: x.state }));
     };
     return xs.map((x) => ({
       id: x.t.id, name: x.name, devices: x.t.profile?.devices ?? [], languages: x.t.profile?.languages ?? [], categories: x.t.profile?.categories ?? [],
@@ -118,6 +121,11 @@ async function rankedTesters(devId: string, testId: string) {
   return { lean, full };
 }
 
+/** (Batch 20 section 23) How a tester's part on one of this developer's tests went: "in it now", "left", "finished" (they rated) or "ended". */
+export const togetherState = (c: { status: string; endKind?: string | null }) => (c.status === "working" ? "in it now" : c.status === "left" ? "left" : c.endKind === "rated" ? "finished" : "ended");
+/** "Worked with you on 2 tests". */
+export const workedWithLine = (n: number) => `Worked with you on ${n} test${n === 1 ? "" : "s"}`;
+
 /** Every tester the developer could see in the invite panel for this test, ranked (all of them, with full rows). */
 export async function invitable(devId: string, testId: string) {
   const { lean, full } = await rankedTesters(devId, testId);
@@ -129,7 +137,7 @@ const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string =>
 
 /**
  * (Owner, Oct 28, batch 16 section 12) The invite panel, computed over every tester on the server: People you've worked with (all of them),
- * Suggested (the top 5 after the device / language ticks) and Find testers (name search, 2+ characters, any part of the name, any case; every match,
+ * Suggested (the top 5 after the device / language ticks) and Find testers (name search from 1 character (batch 20 section 9: 1-2 characters match the start of a word or the whole name, 3+ any part), any case; every match, the exact name first,
  * ranked invitable first, then meets and score; above SEARCH_LIMIT the first ones and searchCapLine). Testers already invited are in "Invited".
  */
 export async function invitePanel(devId: string, testId: string, filters: InviteFilters = {}) {
@@ -142,24 +150,29 @@ export async function invitePanel(devId: string, testId: string, filters: Invite
     (!devices.length || (x.t.profile?.devices ?? []).some((d) => devices.includes(d))) && (!languages.length || (x.t.profile?.languages ?? []).some((l) => languages.includes(l)));
   const worked = notInvited.filter((x) => x.section === "worked");
   const suggested = notInvited.filter((x) => x.section === "other" && !x.grey && passes(x)).slice(0, 5);
-  const matches = q.length >= 2 ? notInvited.filter((x) => passes(x) && x.name.toLowerCase().includes(q)) : [];
+  const matches = q.length >= 1 ? exactFirst(notInvited.filter((x) => passes(x) && nameMatches(x.name, q)), q, (x) => [x.name]) : [];
   const [w, s, f] = await Promise.all([full(worked), full(suggested), full(matches.slice(0, SEARCH_LIMIT))]);
-  return { worked: w, suggested: s, found: f, foundTotal: matches.length, capLine: matches.length > SEARCH_LIMIT ? searchCapLine(matches.length) : "", searched: q.length >= 2 };
+  return { worked: w, suggested: s, found: f, foundTotal: matches.length, capLine: matches.length > SEARCH_LIMIT ? searchCapLine(matches.length) : "", searched: q.length >= 1 };
 }
 export type InvitePanelData = Awaited<ReturnType<typeof invitePanel>>;
 
-/** What the test needs that this tester's profile doesn't list ("English"), or "". */
+/**
+ * What the test needs that this tester's profile doesn't list, or "". (Owner, Oct 28, batch 20 section 3) Both kinds, in one: "doesn't list a language this test
+ * needs (Chinese or Portuguese) or a device it needs (Windows PC or iPad)" (before, only the languages when both were missing).
+ */
 function missingNeed(t: { devices: string[]; languages: string[] }, p: { devices: string[]; languages: string[] } | null) {
-  if (t.languages.length && !t.languages.some((l) => p?.languages.includes(l))) return t.languages.join(" or ");
-  if (t.devices.length && !t.devices.some((d) => p?.devices.includes(d))) return t.devices.join(" or ");
-  return "";
+  return missingNeedText(gapsOf(t, p));
+}
+/** (Batch 20 section 3) The Invite anyway box's lines (and what `seenGaps` is compared with), one per ticked tester missing something, with what's missing. */
+function gapLines(t: { devices: string[]; languages: string[] }, people: { name: string; email: string; profile: { devices: string[]; languages: string[] } | null }[]) {
+  const items: GapItem[] = people.filter((p) => missingNeed(t, p.profile)).map((p) => ({ name: displayName(p), ...gapsOf(t, p.profile) }));
+  return { lines: items.map((i) => missingNeedLine(i.name, i)), items };
 }
 
-/** What the test needs that this tester's profile no longer has ("removed English"). */
+/** What the test needs that this tester's profile no longer has (they list none of a kind it needs): "a language this test needs (English)". */
 function removedNeeds(t: { devices: string[]; languages: string[] }, p: { devices: string[]; languages: string[] } | null) {
   if (!needsGap(t, p)) return "";
-  if (t.languages.length && !t.languages.some((l) => p?.languages.includes(l))) return t.languages.join(" or ");
-  return t.devices.join(" or ");
+  return missingNeedText(gapsOf(t, p)).replace(/^doesn't list /, "");
 }
 
 type Needs = { devices: string[]; languages: string[] };
@@ -180,17 +193,25 @@ export function requirementsChangedLine(seen: Needs, now: Needs) {
   return parts.length ? `The test's requirements changed: ${parts.join(" · ")}` : "";
 }
 /**
- * (Batch 16 section 31) A ticked tester's devices or languages changed since the panel showed them: "<name> removed Russian, which this test needs" when they no
- * longer meet a need they met; otherwise "<name> changed their devices: none → iPad" (and the same for languages).
+ * (Batch 16 section 31) A ticked tester's devices or languages changed since the panel showed them. (Owner, Oct 28, batch 20 section 4) Only what THIS test requires
+ * counts (anything else added or removed never stops Invite and isn't named), as ONE line per tester: the net change since the page loaded, naming only the
+ * required items. "fbbb now lists Chinese and Windows PC, which this test needs." / "fbbb no longer lists Chinese, which this test needs." / both: "fbbb now lists
+ * Windows PC but no longer lists Chinese (this test needs Chinese or Portuguese)." Edits that cancel out (added, then removed again) give no line.
  */
 export function testerNeedsChangedLines(name: string, seen: Needs, now: Needs, test: Needs) {
-  if (same(seen.devices, now.devices) && same(seen.languages, now.languages)) return [];
-  const gone = removedNeeds(test, now);
-  if (gone && !removedNeeds(test, seen)) return [`${name} removed ${gone}, which this test needs`];
-  return [
-    ...(same(seen.devices, now.devices) ? [] : [`${name} changed their devices: ${listOf(seen.devices)} → ${listOf(now.devices)}`]),
-    ...(same(seen.languages, now.languages) ? [] : [`${name} changed their languages: ${listOf(seen.languages)} → ${listOf(now.languages)}`]),
+  const required = [...test.languages, ...test.devices];
+  const had = new Set([...seen.languages, ...seen.devices]), has = new Set([...now.languages, ...now.devices]);
+  const added = required.filter((x) => has.has(x) && !had.has(x));
+  const removed = required.filter((x) => had.has(x) && !has.has(x));
+  if (!added.length && !removed.length) return [];
+  if (!removed.length) return [`${name} now lists ${andList(added)}, which this test needs.`];
+  if (!added.length) return [`${name} no longer lists ${andList(removed)}, which this test needs.`];
+  // Both: what the test needs, for each kind something was removed from.
+  const needs = [
+    ...(removed.some((x) => test.languages.includes(x)) ? [orList(test.languages)] : []),
+    ...(removed.some((x) => test.devices.includes(x)) ? [orList(test.devices)] : []),
   ];
+  return [`${name} now lists ${andList(added)} but no longer lists ${andList(removed)} (this test needs ${needs.join(", and ")}).`];
 }
 
 /**
@@ -233,11 +254,12 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
       for (const p of people) {
         const name = displayName(p);
         const seenP = seenTesters ? needsOf(seenTesters[p.id]) : null;
+        // (Batch 20 section 4) One line per tester (`key`: a later stop's line replaces it in the box), with one time: the latest change.
         if (seenP) {
-          for (const line of testerNeedsChangedLines(name, seenP, { devices: p.profile?.devices ?? [], languages: p.profile?.languages ?? [] }, t)) extra.push({ kind: "profile", text: line, createdAt: p.profile?.updatedAt ?? new Date() });
+          for (const line of testerNeedsChangedLines(name, seenP, { devices: p.profile?.devices ?? [], languages: p.profile?.languages ?? [] }, t)) extra.push({ kind: "profile", text: line, createdAt: p.profile?.updatedAt ?? new Date(), key: `needs:${p.id}` });
         } else {
           const gone = removedNeeds(t, p.profile);
-          if (gone && p.profile && p.profile.updatedAt > seenAt) extra.push({ kind: "profile", text: `${name} removed ${gone}, which this test needs`, createdAt: p.profile.updatedAt });
+          if (gone && p.profile && p.profile.updatedAt > seenAt) extra.push({ kind: "profile", text: `${name} no longer lists ${gone}.`, createdAt: p.profile.updatedAt, key: `needs:${p.id}` });
         }
         const joined = contracts.find((c) => c.testerId === p.id && c.joinedAt > seenAt);
         if (joined) extra.push({ kind: "joined", text: `${name} joined this test, so ${pronouns(p.pronoun).subj}'s no longer in your invite list`.replace("they's", "they're"), createdAt: joined.joinedAt });
@@ -251,18 +273,16 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     }
     // (Batch 16 section 21) An invite (or a cancelled invite) for the same tester from another tab stops it once.
     await devGate(tx, testId, body, {}, extra, undefined, { acts: INVITE_ACTS, keys: ids.map((id) => `t:${id}`) });
-    const gaps = people
-      .filter((p) => !contracts.some((c) => c.testerId === p.id) && missingNeed(t, p.profile))
-      .map((p) => `${displayName(p)} doesn't list ${missingNeed(t, p.profile)}, which this test needs.`);
+    const { lines: gaps, items: gapItems } = gapLines(t, people.filter((p) => !contracts.some((c) => c.testerId === p.id)));
     const seenGaps = Array.isArray(body.seenGaps) ? (body.seenGaps as unknown[]).map(String) : null;
     if (body.anyway === true && !gaps.length) {
       // Everyone ticked now meets the needs: nothing is sent; the box closes and a notice shows under Invite.
       throw new HttpError(409, "needs_none", "Everyone you ticked now meets this test's needs. Press Invite to send.");
     }
-    if (gaps.length && body.anyway !== true) throw new HttpError(409, "needs_confirm", "CONFIRM:" + gaps.join("\n"), { lines: gaps });
+    if (gaps.length && body.anyway !== true) throw new HttpError(409, "needs_confirm", "CONFIRM:" + gaps.join("\n"), { lines: gaps, items: gapItems });
     if (gaps.length && JSON.stringify(seenGaps) !== JSON.stringify(gaps)) {
       // What's missing changed since the box showed: stop once in the box with the updated list.
-      throw new HttpError(409, "needs_confirm", "CONFIRM:" + ["What's missing changed since you looked. Press Invite anyway again to invite on this:", ...gaps].join("\n"), { lines: gaps, changed: true });
+      throw new HttpError(409, "needs_confirm", "CONFIRM:" + ["What's missing changed since you looked. Press Invite anyway again to invite on this:", ...gaps].join("\n"), { lines: gaps, items: gapItems, changed: true });
     }
     const invited: { id: string; name: string; email: string }[] = [];
     const others: string[] = [];
@@ -315,7 +335,7 @@ export const inviteExpired = (t: { status: string; openUntil: Date | null }, now
 export async function inviteGaps(devId: string, testId: string, testerIds: string[]) {
   const t = await ownTest(devId, testId);
   const people = await db.user.findMany({ where: { id: { in: testerIds } }, include: { profile: true } });
-  return { now: new Date().toISOString(), lines: people.filter((p) => missingNeed(t, p.profile)).map((p) => `${displayName(p)} doesn't list ${missingNeed(t, p.profile)}, which this test needs.`) };
+  return { now: new Date().toISOString(), ...gapLines(t, people) };
 }
 
 /**

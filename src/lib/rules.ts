@@ -117,13 +117,16 @@ export function listingAmount(c: { writtenCents: number | null; recordingCents: 
  * $0 included) on an unlisted part. The tester's own Charge or Let it go isn't the developer's decision, so it can't be disputed. (`paidCents` and `listingCents` are kept for
  * the callers' signatures: no amount refuses a dispute any more.)
  */
-export function canDispute(paidCents: number, listingCents: number | null, alreadyDisputed: boolean, testerChose = false): Check {
+export function canDispute(paidCents: number, listingCents: number | null, alreadyDisputed: boolean, testerChose = false, /** (Batch 20 section 15) what a decision could still add (disputeBounds' max minus min) */ roomCents: number | null = null): Check {
   void paidCents;
   void listingCents;
   if (testerChose) return no(TESTER_CHOSE_LINE);
   if (alreadyDisputed) return no("You already disputed this payment. A part can be disputed once.");
+  if (roomCents != null && roomCents <= 0) return no(NOTHING_TO_DISPUTE);
   return yes;
 }
+/** (Owner, Oct 28, batch 20 section 15) Already paid the most a team decision could award (the admin form's own max): the Dispute button is disabled with this line. */
+export const NOTHING_TO_DISPUTE = "Already paid the most a dispute could award, so there's nothing to dispute.";
 /** (Batch 10) A dispute pressed on a part the tester settled themselves (their Charge or Let it go). */
 export const TESTER_CHOSE_LINE = "You settled this part yourself (Charge or Let it go), so there's no developer decision to dispute.";
 /** (Batch 10) What an admin's decision can reach, for the dispute form's note: the listing, or the unlisted max for this piece. */
@@ -254,11 +257,11 @@ export const openUntilCapHint = (capDay: string) => `only later, up to ${capLabe
  * (Owner, Oct 28, batch 19 section 8, replacing the batch 15 section 18 and batch 16 section 16 hints) The live line under Open until on Post and Edit: work can arrive
  * after Open until. `openUntil` is the field's date (YYYY-MM-DD); `days` the days per tester (Post: today to that date; Edit: the days now + the extension). The latest
  * possible deadline is Open until + those days. "Testers can join until this date. Each gets 14 days from when they join, so someone joining on Nov 20 has until Dec 4
- * to send work. You pay each piece within 7 days of it arriving, or the tester can charge you."
+ * to send work. You pay each piece within 7 days of it arriving or by that tester's deadline, whichever is later, or the tester can charge you."
  */
 export function openUntilLine(openUntil: string, days: number) {
   const day = (iso: string, plus = 0) => new Date(Date.parse(`${iso}T00:00:00Z`) + plus * DAY).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-  return `Testers can join until this date. Each gets ${days} day${days === 1 ? "" : "s"} from when they join, so someone joining on ${day(openUntil)} has until ${day(openUntil, days)} to send work. You pay each piece within ${REVIEW_DAYS} days of it arriving, or the tester can charge you.`;
+  return `Testers can join until this date. Each gets ${days} day${days === 1 ? "" : "s"} from when they join, so someone joining on ${day(openUntil)} has until ${day(openUntil, days)} to send work. You pay each piece within ${REVIEW_DAYS} days of it arriving or by that tester's deadline, whichever is later, or the tester can charge you.`;
 }
 
 // ---------- (Owner, Oct 30, batch 15 section 18) Every tester gets the same number of days; Open until is the last day to JOIN ----------
@@ -422,7 +425,7 @@ export function termsLine(t: Pick<Listing, "writtenCents" | "recordingCents" | "
  */
 export const STOP_ONCE_KINDS = ["joined", "left", "sent", "booked", "confirmed", "cancelled", "offered", "removed"] as const;
 export const CALL_KINDS = ["booked", "confirmed", "cancelled", "offered", "removed"] as const;
-export type TestEventLike = { kind: string; text: string; createdAt: Date; version?: number | null };
+export type TestEventLike = { kind: string; text: string; createdAt: Date; version?: number | null; /** (Batch 20 section 4) one line per thing in a stop box */ key?: string };
 
 /** Events since the page's "seen" marker that stop a press once, oldest first. */
 export function stopOnceChanges(events: TestEventLike[], seenAt: Date, kinds: readonly string[] = STOP_ONCE_KINDS) {
@@ -453,7 +456,8 @@ export const DEV_STOP_KINDS = [
 ] as const;
 
 /** (Owner, Oct 29, batch 14) Kinds the developer's live box shows quietly (never a stop-once reason, never in the under-button notice, no bell). */
-export const DEV_QUIET_KINDS = ["terms", "key"] as const;
+// (Owner, Oct 28, batch 20 section 24) "rated": a tester whose part had ended rated you: a live-box line only, never a stop.
+export const DEV_QUIET_KINDS = ["terms", "key", "rated"] as const;
 /** "Ana switched to the new terms"; several in a day stack: "3 testers switched to the new terms". */
 export const switchedLine = (n: number, name = "") => (n === 1 ? `${name} switched to the new terms` : `${n} testers switched to the new terms`);
 
@@ -471,6 +475,7 @@ export const DEV_EXEMPT_KINDS: Record<string, string> = {
   ended: "the developer's own End early (reason E from another tab)",
   next_round: "the developer's own Next round (reason E from another tab)",
   invited: "the developer's own invites (reason E from another tab)",
+  rated: "(batch 20 section 24) a tester whose part had ended rated you: one quiet line in the live box (DEV_QUIET_KINDS) with your own window, never a stop (a working tester who rates leaves: \"left\")",
   key: "(batch 14 section 6) an access key reported as not working: one quiet line in the live box (DEV_QUIET_KINDS), never a stop, no bell",
   terms: "(batch 14 section 4) a tester switched to the new terms: one quiet line in the live box (DEV_QUIET_KINDS), stacked per day; work already sent keeps its price, so nothing a press could change",
   paused: "a payment hold: every paused button refuses for good, and the page shows the hold",
@@ -496,6 +501,7 @@ export const TESTER_EXEMPT_KINDS: Record<string, string> = {
   payment: "the developer's own payments (batch 11: a chargeback reversed in their favour) are never shown to testers",
   joined: "another tester's activity is never shown to a tester",
   left: "another tester's activity (their own Leave is reason E)",
+  rated: "(batch 20 section 24) the tester's own rating (another tester's is never shown to a tester)",
   sent: "the tester's own work (reason E from another tab)",
   booked: "read from their own call requests (reason C), never other testers' calls",
   cancelled: "read from their own calls (reason C)",
@@ -830,6 +836,45 @@ export function inviteTestRefusal(
   if (t.testersIn >= t.spots) return `${t.title ?? "This test"} is full. Add spots to invite more people.`;
   return "";
 }
+
+/** (Owner, Oct 28, batch 20 section 10) Under the disabled Invite button while every spot is taken ("in Edit" opens Edit's spots field). */
+export const INVITE_FULL_LINE = "This test is full. Add spots in Edit to invite more people.";
+/**
+ * (Batch 20 section 10) While nobody can be invited (full, paused, stopped, joining closed), the panel's Invite button is disabled with this line under it
+ * (`full`: the full line, with its Edit link); null when Invite works. The server still refuses with inviteTestRefusal for pages opened before.
+ */
+export function inviteBlocked(t: Parameters<typeof inviteTestRefusal>[0], now: Date, fmt: (d: Date) => string): { line: string; full: boolean } | null {
+  const r = inviteTestRefusal(t, now, fmt);
+  if (!r) return null;
+  const full = r === `${t.title ?? "This test"} is full. Add spots to invite more people.`;
+  return { line: full ? INVITE_FULL_LINE : r, full };
+}
+
+/**
+ * (Owner, Oct 28, batch 20 section 24) A tester's rating never stops a developer press by itself: a working tester who rates leaves ("Testers leaving", one stop line:
+ * "ff finished their part (rated you)"); one whose part had ended gives only the live box's line, with the developer's own window. Never the stars.
+ */
+export const ratedYouLine = (name: string) => `${name} rated you`;
+export const finishedAndRatedLine = (name: string) => `${name} finished their part (rated you)`;
+export const ratedYouLiveLine = (name: string, until: string | null) => (until ? `${name} rated you. You can rate them until ${until}.` : `${name} rated you. You can rate them once everything they sent is settled.`);
+/** The test page's Needs you row for an open Rate: "Rate ff · 14 days left". */
+export const rateNeedsLine = (name: string, endsAt: Date, now = new Date()) => {
+  const days = Math.max(1, Math.ceil((endsAt.getTime() - now.getTime()) / 86_400_000));
+  return `Rate ${name} · ${days} day${days === 1 ? "" : "s"} left`;
+};
+
+/** (Owner, Oct 28, batch 20 section 27) End early's and Stop's reasons: at least this many characters (after trimming), like the Mature reason. */
+export const WHY_MIN_CHARS = 5;
+export const WHY_TOO_SHORT = "Say a little more: at least 5 characters.";
+
+/** (Owner, Oct 28, batch 20 section 26) "Send my updated answers / recording" with nothing different from the last send: disabled (its tooltip), and the server's refusal. */
+export const NOTHING_CHANGED_LINE = "Nothing has changed since you sent it.";
+
+/** (Owner, Oct 28, batch 20 section 16) An admin account never gets a developer or tester side. */
+export const ADMIN_ONLY_LINE = "An admin account is only for the admin console. To post or test, use a separate account.";
+
+/** (Owner, Oct 28, batch 20 section 22) A ticked part left without a price: $0 only through the Free tick. */
+export const PART_PRICE_MISSING = { written: "Enter a price for the written answers, or tick Free.", recording: "Enter a price for the recording, or tick Free.", live: "Enter an hourly rate for live calls, or tick Free." } as const;
 
 export const MAX_ACTIVE_TESTS = LIMITS.testsPerTester;
 /** (7.3) Joining, applying, accepting an invite and asking to rejoin all refuse with this line at the limit. */

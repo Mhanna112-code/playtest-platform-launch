@@ -11,7 +11,7 @@ import { ContractLink } from "@/components/ContractLink";
 import { lastPressLabel } from "@/lib/client";
 import { pressVerb, refusalLine } from "@/lib/pressLabels";
 
-export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string; /** (Batch 16 section 19) the fields another tab changed (API names) */ fields?: string[] };
+export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string; /** (Batch 16 section 19) the fields another tab changed (API names) */ fields?: string[]; /** (Batch 20 section 4) one line per thing: a newer line with the same key replaces it */ key?: string; /** (Batch 20 section 25) a live-box line that never stops a press */ quiet?: boolean };
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const DEFAULT_TAILS = new Set(["Press again to go ahead.", "Press again to go ahead"]);

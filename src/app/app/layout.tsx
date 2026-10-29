@@ -24,7 +24,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const u = await requirePageUser();
   // (NEXT-UI 6) The side this tab shows: the page's own side (developer pages, tester pages), else the side used last.
   const path = (await headers()).get("x-path") ?? "";
-  const side = sideFor(u, path);
+  // (Owner, Oct 28, batch 20 section 16) An admin account is only an admin: no side in the header (one it already has is ignored), no switch.
+  const admin = isAdmin(u);
+  const side = admin ? null : sideFor(u, path);
   // (Design doc 2; owner, Oct 27) A suspended or held account is routed from the pages that are closed to it to the dashboard, which explains.
   // (Owner, Oct 28) Decided BEFORE any other query: the page below renders in parallel with this layout, and a redirect thrown late can reach the browser after the page's first bytes (a blank page with only the footer).
   if (closedForSuspended(path, u, side)) redirect("/app");
@@ -52,12 +54,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="ml-4 flex flex-wrap items-center gap-1">
             {isAdmin(u) && <Link href="/admin" className="nav-link text-punch-200"><ShieldCheck className="h-4 w-4" /> Admin</Link>}
             {/* Each side has its own links: developer: Dashboard, Post a test, Profile, Payments, Messages; tester: Dashboard, Find tests, Profile, Payments, Messages. */}
-            <Link className="nav-link" href="/app"><LayoutDashboard className="h-4 w-4" /> Dashboard</Link>
+            {!admin && <Link className="nav-link" href="/app"><LayoutDashboard className="h-4 w-4" /> Dashboard</Link>}
+            {admin && <Link className="nav-link" href="/app/find"><Compass className="h-4 w-4" /> Find tests</Link>}
             {side === "developer" && !off && <Link className="nav-link" href="/app/tests/new"><PlusCircle className="h-4 w-4" /> Post a test</Link>}
             {side === "tester" && !off && <Link className="nav-link" href="/app/find"><Compass className="h-4 w-4" /> Find tests</Link>}
-            {!off && <Link className="nav-link" href="/app/profile"><UserRound className="h-4 w-4" /> Profile</Link>}
-            <Link className="nav-link" href="/app/payments"><CreditCard className="h-4 w-4" /> Payments</Link>
-            {messagesLink}
+            {!off && !admin && <Link className="nav-link" href="/app/profile"><UserRound className="h-4 w-4" /> Profile</Link>}
+            {!admin && <Link className="nav-link" href="/app/payments"><CreditCard className="h-4 w-4" /> Payments</Link>}
+            {!admin && messagesLink}
           </div>
           <div className="ml-auto flex items-center gap-2">
             <Link className="nav-link relative" href="/app/notifications" aria-label={`Notifications, ${unread} unread`}>
@@ -69,7 +72,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <span className="hidden max-w-[12rem] truncate sm:inline" title={u.email}>{name}</span>
               {side && <span className="hidden shrink-0 text-ink-500 sm:inline">· {side === "developer" ? "Developer" : "Tester"}</span>}
             </Link>
-            {hasBoth(u) && side && (
+            {!admin && hasBoth(u) && side && (
               // Goes to the other side's dashboard (and remembers it as the side used last).
               <Link href={`/app/switch?to=${side === "developer" ? "tester" : "developer"}&next=/app`} className="nav-link border border-white/10"
                 title={`Go to your ${side === "developer" ? "tester" : "developer"} side`} aria-label={`Switch to ${side === "developer" ? "tester" : "developer"}`}>
