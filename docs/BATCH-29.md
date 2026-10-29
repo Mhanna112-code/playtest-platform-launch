@@ -54,6 +54,9 @@ The tester's "You're in: <test>", "You're back in <test>: your deadline is <date
 ## 25. New terms get their own stack (owner, Oct 29)
 The tester's "<dev> updated the listing: <changes>" (a new terms offer to answer) stacks into ONE entry per day across tests, "New terms to answer" (e.g. "New terms to answer · 2 tests"), each line opening that session page at the Switch / Keep box, highlighted; no longer in "that test's day". Update the bell table (doc agent). Test: offers on two tests the same day form one entry.
 
+## 25. Pay more stacks with "You were paid" (owner, Oct 29)
+The tester's "<dev> paid you $X more for your <part> on “<test>”" stacks in the same daily "You were paid" entry as their other payments (across tests), instead of its own "Extra pay" stack. Update the bell table (doc agent). Test: a Pay and a Pay more on one day form one "You were paid" entry.
+
 ## Decided, no change (owner, Oct 29)
 - After a stop, End early, Leave, a block or a removal, a sent piece's review date stays the later of 7 days after sending and the tester's ORIGINAL deadline (the owner said no to opening Charge 7 days after the work ended). Don't change it.
 
