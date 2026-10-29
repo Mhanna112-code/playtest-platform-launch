@@ -76,6 +76,12 @@ The tester's "Your deadline on “<test>” is <date>: send your work before the
 ## 29. Admin bell lines: one stack per kind, across tests (owner, Oct 29)
 Today "Dispute on <test>: <tester> says the pay should be higher (<dev>)", "New report: <a> reported <b>" and "Hold lift waiting: <dev> paid what they owe (More than 3 holds)" share one entry a day. Give each kind its own daily entry across all tests: "Disputes · 3 new", "Reports · 2 new", "Hold lifts waiting · 1", each line opening its own row in the admin console (marked). The other admin lines ("Emails aren't sending", outages) keep their own lines. Update the bell table (doc agent). Test: two disputes and a report on one day → two entries.
 
+## 30. Only testers remove excerpts (owner, Oct 29)
+- **Drop the developer's Take down** on excerpts shown from their test (test page tester rows, the admin-free paths in src/lib/server/excerpts.ts removeExcerpt's developer branch, any "Take down" route or button, and the paused view's mention of it). Once the developer has allowed an excerpt, only the tester can remove it (Remove on their profile). An NDA added later still hides it, as today.
+- **No bell line when a tester removes their own excerpt** ("<name> took down the excerpt from <test>." goes; nothing replaces it).
+- Old pages: a developer's Take down pressed on a page loaded earlier is refused: "Only the tester can remove an excerpt from their profile."
+- Update the design doc, the bell table and Terms if they mention Take down (doc agent). Tests: no Take down for the developer (UI and server); the tester's Remove sends no line.
+
 ## Decided, no change (owner, Oct 29)
 - After a stop, End early, Leave, a block or a removal, a sent piece's review date stays the later of 7 days after sending and the tester's ORIGINAL deadline (the owner said no to opening Charge 7 days after the work ended). Don't change it.
 
