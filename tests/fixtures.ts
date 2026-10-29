@@ -43,7 +43,7 @@ export const seen = () => new Date().toISOString();
 /** Calls are always requests: the developer requests a time with this tester and the tester accepts → booked. */
 export async function bookCall(testId: string, devCookie: string, sessionId: string, testerCookie: string, hours = 48) {
   const startsAt = new Date(Date.now() + hours * 3_600_000);
-  startsAt.setSeconds(0, 0);
+  startsAt.setUTCSeconds(0, 0); // (UTC: a local setSeconds lands a time in the repeated fall-back hour on its first occurrence)
   const r = await act(testId, "request-time", devCookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: startsAt.toISOString() });
   expect(r.status).toBe(200);
   const q = await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId, status: "pending", fromSide: "developer" }, orderBy: { createdAt: "desc" } });
@@ -51,4 +51,4 @@ export async function bookCall(testId: string, devCookie: string, sessionId: str
   expect(a.status).toBe(200);
   return db.call.findFirstOrThrow({ where: { contractId: sessionId, status: "booked" }, orderBy: { createdAt: "desc" } });
 }
-export const atHours = (h: number) => { const d = new Date(Date.now() + h * 3_600_000); d.setSeconds(0, 0); return d.toISOString(); };
+export const atHours = (h: number) => { const d = new Date(Date.now() + h * 3_600_000); d.setUTCSeconds(0, 0); return d.toISOString(); };
