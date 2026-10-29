@@ -25,6 +25,9 @@ A listed part (written answers or a recording) sent after the tester's own deadl
 - Post's Charge tick, the Terms and the design doc: Charge applies to listed work sent by the tester's deadline (doc agent for the doc).
 - Tests: on-time listed work → Charge opens as today; late listed work → no Charge / Let it go anywhere (UI and server: "You can't charge for work sent after your deadline."), Pay works, closes unpaid at its closing date; the tester's lines before and after sending.
 
+## 4. Remove a Rate rule that can never apply (owner, Oct 29)
+The developer's Rate "stops once for call changes between the two of them on a running test while that tester is still working" can never trigger: the developer's Rate only opens after the tester rated (which ends their part) or at close-out. Remove it from the stop list (the developer's Rate keeps: a dispute with that tester decided; their own Pay more to that tester in another tab or device; the stop itself on a page opened before it) and from the design doc's "Why a press stops: Rate" (doc agent). Tests unchanged in behaviour.
+
 ## Decided, no change (owner, Oct 29)
 - **Late sending stays** (a tester can still send after their own deadline, "Sent late (deadline was <date>)"); work isn't closed at the deadline. What changes for late work is §3.
 
