@@ -51,6 +51,9 @@ The tester's lines about their applications and invites ("<test> is full, so you
 ## 24. Joins stack together (owner, Oct 29)
 The tester's "You're in: <test>", "You're back in <test>: your deadline is <date>." and "Your application (or ask to rejoin) wasn't accepted" stack into ONE entry per day across tests, "Joined" (e.g. "Joined · 3 updates today"), each line still opening its own session page (or join page for one not accepted), instead of "that test's day". Update the bell table (doc agent). Test: joins on two tests the same day form one entry.
 
+## 25. New terms get their own stack (owner, Oct 29)
+The tester's "<dev> updated the listing: <changes>" (a new terms offer to answer) stacks into ONE entry per day across tests, "New terms to answer" (e.g. "New terms to answer · 2 tests"), each line opening that session page at the Switch / Keep box, highlighted; no longer in "that test's day". Update the bell table (doc agent). Test: offers on two tests the same day form one entry.
+
 ## Decided, no change (owner, Oct 29)
 - After a stop, End early, Leave, a block or a removal, a sent piece's review date stays the later of 7 days after sending and the tester's ORIGINAL deadline (the owner said no to opening Charge 7 days after the work ended). Don't change it.
 
