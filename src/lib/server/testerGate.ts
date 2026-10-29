@@ -13,8 +13,10 @@ import { asLines, ownChanges, seenOf, tabOf, testerPaymentChanges, withRenamed }
 // cancelling a call; (E) anything the tester did themselves in another tab; (F) the listing's info changed.
 // Final refusals (ended early, stopped, Open until passed, already decided, holds) are checked separately and stay final.
 
-/** Closed because of the tester's own press (their own action, reason E). */
-const CLOSED_BY_TESTER = new Set(["you asked a different rate", "the tester left"]);
+/** (Owner, Oct 29, batch 24 section 2) A tester who rates (finishing their part) closes their waiting call requests with this reason. */
+export const FINISHED_PART_REASON = "the tester finished their part";
+/** Closed because of the tester's own press (their own action, reason E): a different rate, Leave (and a suspension's removal), finishing their part by rating. */
+export const CLOSED_BY_TESTER = new Set(["you asked a different rate", "the tester left", FINISHED_PART_REASON]);
 /** (Owner, Oct 28, batch 16 section 24) What the stop, a closure or an early end did by itself (requests closed, calls ahead cancelled): never a stop-once
  * reason for what still works afterwards (Charge, Let it go, Dispute, Rate); the stopped line at the top already says it. */
 const CLOSED_BY_END = new Set(["the test was stopped", "the session ended", "the test ended"]);

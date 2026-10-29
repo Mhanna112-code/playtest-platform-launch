@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { T } from "@/lib/tz";
+import { T, safeZone } from "@/lib/tz";
 
 export type Email = { to: string; subject: string; text: string; html?: string };
 
@@ -33,8 +33,16 @@ export const EMAIL_CAP_KEY = "email-cap-until";
 
 /** (Batch 23 section 2) The red box's plain words for Resend's daily limit. */
 export const EMAIL_CAP_LINE = "Resend's daily limit was reached (free plan: 100 a day). Emails will go out tomorrow, or upgrade the plan.";
-/** The admins' bell line, once per incident. */
-export const emailsDownBell = (since: Date) => `Emails aren't sending (since ${T(since, "time")})`;
+/**
+ * The admins' bell line, once per incident: "Emails aren't sending (since 3:10 PM EST)". (Batch 24, a batch 23 leftover) An incident that started on an earlier day (in
+ * the admin's own time zone) names the day, as the red box does after 20 hours: "Emails aren't sending (since Wed, Oct 28 at 3:10 PM EST)".
+ */
+export const emailsDownBell = (since: Date, now: Date = since, tz?: string | null) => {
+  const day = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: safeZone(tz) });
+  return `Emails aren't sending (since ${T(since, day(since) < day(now) ? "dayTime" : "time")})`;
+};
+/** (Batch 24, a batch 23 leftover) The red box's words when the waiting emails' error is the missing key (nothing from Resend to quote). */
+export const NO_KEY_DEPLOY_LINE = "RESEND_API_KEY isn't set on this deploy.";
 
 /** The wait after the n-th failed try (1-based). */
 export const retryDelayMs = (attempts: number) => EMAIL_RETRY_MINUTES[Math.min(Math.max(attempts, 1), EMAIL_RETRY_MINUTES.length) - 1] * 60_000;
@@ -181,7 +189,13 @@ async function startIncident(now: Date) {
     return; // already open
   }
   const { adminUsers, bell } = await import("./notify");
-  for (const a of await adminUsers()) await bell(a.id, emailsDownBell(now), "/admin#emails", undefined, { own: true });
+  // Since the oldest email still waiting (the red box's "since"), or now.
+  const oldest = await db.emailQueue.findFirst({ where: WAITING, orderBy: { createdAt: "asc" }, select: { createdAt: true } });
+  const since = oldest && oldest.createdAt < now ? oldest.createdAt : now;
+  for (const a of await adminUsers()) {
+    const tz = (await db.user.findUnique({ where: { id: a.id }, select: { timeZone: true } }))?.timeZone;
+    await bell(a.id, emailsDownBell(since, now, tz), "/admin#emails", undefined, { own: true });
+  }
 }
 /** The incident ends when nothing is waiting any more (all sent, or failed for good). */
 async function endIncidentIfClear() {
@@ -200,9 +214,12 @@ export async function emailHealth() {
   return { waiting, since: oldest?.createdAt ?? null, error: latest?.lastError ?? "", cap: latest?.errorKind === "cap", failedCount, failed };
 }
 
-/** "Emails aren't sending: 12 waiting since 3:10 PM. Resend says: 503: Service unavailable." (the daily limit in plain words). `since` is on the reader's own clock. */
+/**
+ * "Emails aren't sending: 12 waiting since 3:10 PM. Resend says: 503: Service unavailable." (the daily limit in plain words; the missing key: "RESEND_API_KEY isn't set
+ * on this deploy."). `since` is on the reader's own clock.
+ */
 export function emailsDownLine(waiting: number, since: string, error: string, cap: boolean) {
-  return `Emails aren't sending: ${waiting} waiting since ${since}. ${cap ? EMAIL_CAP_LINE : `Resend says: ${error.replace(/\.$/, "")}.`}`;
+  return `Emails aren't sending: ${waiting} waiting since ${since}. ${cap ? EMAIL_CAP_LINE : error === NO_EMAIL_KEY ? NO_KEY_DEPLOY_LINE : `Resend says: ${error.replace(/\.$/, "")}.`}`;
 }
 
 /** (Batch 23 section 2) Admin: the failed-for-good list is cleared from the red box (the emails are kept). */

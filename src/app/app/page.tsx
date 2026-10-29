@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { compact, compactMoney, displayName, fmtDate, fmtDateTime, money, num } from "@/lib/format";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { RatingsToGive } from "./RatingsToGive";
+import { BankToConfirm } from "./BankToConfirm";
 import { LiveTop } from "@/components/LiveTop";
 import { adminAway, requirePageUser } from "@/lib/server/page-auth";
 import { isAdmin } from "@/lib/server/session";
@@ -81,6 +82,8 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
   const disputeBox = devOff ? await disputesForSide(u.id) : [];
   return (
     <div className="space-y-8">
+      {/* (Owner, Oct 29, batch 24 section 1) Charges the developer's bank wants confirmed: the very top, above the blue box too (hidden when there are none). */}
+      {side === "developer" && u.isDeveloper && <BankToConfirm userId={u.id} now={now} />}
       {(devOff || testerOff) && (
         <RestrictedBox failed={failed} developer={devOff} tester={testerOff} kinds={restrictionsOf(u)} steps={cbSteps?.remaining} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />
       )}

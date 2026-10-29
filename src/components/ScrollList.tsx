@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 /** About 4 rows of the dashboard's row cards; about 2 rows of the developer's test cards (one column of about 3 on phones). */
-const HEIGHT = { rows: "max-h-[22rem]", lines: "max-h-56", cards: "max-h-[54rem] md:max-h-[38rem]" } as const;
+const HEIGHT = { rows: "max-h-[22rem]", lines: "max-h-56", cards: "max-h-[54rem] md:max-h-[38rem]", /** (batch 24 section 1) about 3 short rows (stacked on phones) */ three: "max-h-[21rem] sm:max-h-[13rem]" } as const;
 
 /**
  * (Owner, Oct 28, batch 16 section 14) Every list panel on the dashboards and the developer profile's "Open tests": everything in the list (no "Show N more",

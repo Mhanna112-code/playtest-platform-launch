@@ -16,6 +16,8 @@ type Line = { id: string; retry: boolean; amountCents: number; until: string | n
  * changed since the page loaded; the second press pays at once, with the result right under the button.
  * (Owner, Oct 29, batch 10) The page polls (AutoRefresh): the amount and the lines follow `owed` live, and the page drops the box when nothing is owed. A press
  * still checks what was last confirmed (the page load or the last stop box), so a press after a change stops once with the new lines.
+ * (Batch 23 section 6) During a chargeback hold the box reserves rather than pays: Pay what you owe puts the amount on hold on the card ("Reserved $X: it's taken when
+ * the team approves lifting your hold."), the team's Approve takes it, and it's released if they don't approve or after about 7 days.
  */
 export function OwedBox({ onHold, owed, chargeback = false, review = false, retryLine = "", verifyFirst = false, reservedCents = 0, reserveExpired = false }: { onHold: boolean; owed: Line[]; chargeback?: boolean; review?: boolean; /** (Batch 11) "Last try: ... · next try: ..." of the automatic retries */ retryLine?: string; /** (Batch 16 section 41) a chargeback hold with no verified card yet: Pay waits for step 1 */ verifyFirst?: boolean; /** (Batch 23 section 6) a chargeback hold: what is reserved on the card already, and whether the last reservation lapsed */ reservedCents?: number; reserveExpired?: boolean }) {
   const [err, setErr] = useState("");

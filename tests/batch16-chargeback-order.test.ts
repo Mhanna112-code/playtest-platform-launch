@@ -56,7 +56,9 @@ describe("chargeback hold: verify, then pay, then the team's Approve (section 41
     expect(await db.notification.count({ where: { userId: dev.user.id, text: "Your tests are running again" } })).toBe(0);
     expect((await approveChargebackHold(dev.user.id)).lifted).toBe(true);
     expect(await holdOf(dev.user.id)).toBeNull();
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: "Your tests are running again" } })).toBe(1);
+    // (Batch 24) One notice from the team's Approve, saying the tests are running again.
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "The team approved lifting your hold", endsWith: "your tests are running again." } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: "Your tests are running again" } })).toBe(0);
   });
 
   it("a payment hold (not a chargeback) still lifts on paying, with no card check", async () => {

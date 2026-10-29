@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money } from "@/lib/format";
-import { CONFIRM_DAYS, PRESS_ACTION_MS, bankConfirmLine, bankConfirmTestLine, bankHref, bankWaitingLine, BANK_NOT_CONFIRMED } from "@/lib/rules";
+import { CONFIRM_DAYS, PRESS_ACTION_MS, bankAnchor, bankConfirmLine, bankConfirmTestLine, bankHref, bankWaitingLine, BANK_NOT_CONFIRMED } from "@/lib/rules";
+import { bankTopLead, confirmByText, pieceWords, shortDay, type BankTopRow } from "@/lib/bankTop";
 import { HttpError } from "./http";
 import { PAY_ACTS, seenOf } from "./live";
 import { notify } from "./notify";
@@ -56,8 +57,8 @@ export async function awayAction(paymentId: string, r: NeedsAction & { feeCents?
 }
 
 /** Payments waiting for the developer's confirmation (the Confirm list on Payments; with `contractIds`, one test's). */
-export async function waitingConfirmation(devId: string, contractIds?: string[]) {
-  return db.payment.findMany({ where: { developerId: devId, actionPi: { not: null }, actionBy: { gt: new Date() }, status: { in: ["needs_confirmation", "failed", "owed"] }, ...(contractIds ? { contractId: { in: contractIds } } : {}) }, orderBy: { createdAt: "asc" } });
+export async function waitingConfirmation(devId: string, contractIds?: string[], now = new Date()) {
+  return db.payment.findMany({ where: { developerId: devId, actionPi: { not: null }, actionBy: { gt: now }, status: { in: ["needs_confirmation", "failed", "owed"] }, ...(contractIds ? { contractId: { in: contractIds } } : {}) }, orderBy: { createdAt: "asc" } });
 }
 
 /**
@@ -73,6 +74,42 @@ export async function confirmItems(devId: string) {
     const what = p.kind === "subscription" ? "Your subscription" : p.kind === "dispute" ? "A team decision" : p.kind === "chargeback" ? "A payment your bank had reversed" : "A payment";
     return { id: p.id, text: `${what} ${money(p.amountCents)}${c ? ` on “${c.title}”` : ""} · confirm by ${fmtDateTime(p.actionBy!)}`, href: c ? bankHref(c.testId, p.id) : null };
   });
+}
+
+/**
+ * (Owner, Oct 29, batch 24 section 1) The developer dashboard's "Your bank wants you to confirm" box, soonest deadline first: each row says what it is for and links to
+ * where it is confirmed: a charge on a test to its piece's "Confirm with your bank" on the test page (the paused view during a hold or suspension), marked like the bell
+ * line; a renewal (no test) to its row on Payments. A row leaves once it is confirmed, cancelled or past its date (then it counts as declined).
+ */
+export async function bankToConfirm(devId: string, now = new Date()): Promise<BankTopRow[]> {
+  const waiting = await waitingConfirmation(devId, undefined, now);
+  if (!waiting.length) return [];
+  const ids = [...new Set(waiting.map((p) => p.contractId).filter((x): x is string => !!x))];
+  const contracts = ids.length ? await db.contract.findMany({ where: { id: { in: ids } }, select: { id: true, testId: true, title: true, tester: true } }) : [];
+  const subIds = waiting.map((p) => p.submissionId).filter((x): x is string => !!x);
+  const callIds = waiting.map((p) => p.callId).filter((x): x is string => !!x);
+  const [subs, calls] = await Promise.all([
+    subIds.length ? db.submission.findMany({ where: { id: { in: subIds } }, select: { id: true, kind: true } }) : [],
+    callIds.length ? db.call.findMany({ where: { id: { in: callIds } }, select: { id: true, startsAt: true } }) : [],
+  ]);
+  return waiting
+    .map((p) => {
+      const c = contracts.find((x) => x.id === p.contractId);
+      const name = c ? displayName(c.tester) : "";
+      const sub = p.submissionId ? subs.find((x) => x.id === p.submissionId) : undefined;
+      const call = p.callId ? calls.find((x) => x.id === p.callId) : undefined;
+      // An owed payment keeps its status while its automatic retry waits for the bank (a retried chargeback is a "chargeback" row): "what you owe".
+      const what =
+        p.kind === "subscription" ? null
+        : !c || p.status !== "needs_confirmation" || p.kind === "chargeback" ? pieceWords.owed
+        : p.kind === "dispute" ? pieceWords.dispute(name)
+        : sub ? pieceWords.part(name, sub.kind)
+        : call ? pieceWords.call(name, shortDay(call.startsAt))
+        : pieceWords.work(name);
+      const by = confirmByText(p.actionBy!, now);
+      return { id: p.id, lead: bankTopLead(p.amountCents, c?.title ?? null, what), by: by.text, soon: by.soon, href: c ? bankHref(c.testId, p.id) : `/app/payments#${bankAnchor(p.id)}`, at: p.actionBy!.getTime() };
+    })
+    .sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
 }
 
 /**

@@ -263,7 +263,8 @@ describe("batch 23 section 6: a chargeback hold's Pay what you owe reserves the 
     expect(await db.payment.findUniqueOrThrow({ where: { id: x.row.id } })).toMatchObject({ status: "charged", stripePaymentIntentId: pi[0], transferStatus: "sent" });
     expect(st.transfers).toEqual([expect.objectContaining({ amount: splitFee(800).testerCents })]);
     expect((await userOf(x.dev.user.id)).holdStartedAt).toBeNull();
-    expect(await db.notification.count({ where: { userId: x.dev.user.id, text: "The team approved lifting your hold" } })).toBe(1);
+    // (Batch 24) One notice for the developer when Approve lifts the hold.
+    expect(await db.notification.count({ where: { userId: x.dev.user.id, text: "The team approved lifting your hold: the $8.00 reserved on your card was taken, and your tests are running again." } })).toBe(1);
     expect(await db.notification.count({ where: { userId: x.tester.user.id, text: { contains: "paid $8.00 for your written answers" } } })).toBe(1);
   });
 

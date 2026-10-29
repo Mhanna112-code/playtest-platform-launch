@@ -189,7 +189,7 @@ export async function chargeDeferred(devId: string) {
  * (Owner, Oct 26) A CHARGEBACK hold is a hold with extra steps: paying what is owed never lifts it alone. It also needs a card re-verified with
  * 3D Secure after the chargeback and the admin's approval (which also closes the chargeback).
  */
-export async function liftHoldIfClear(devId: string) {
+export async function liftHoldIfClear(devId: string, opts: { /** (batch 24) the caller sends the developer's one notice itself (the team's Approve) */ quietDev?: boolean } = {}) {
   const dev = await db.user.findUnique({ where: { id: devId } });
   if (!dev?.holdStartedAt) return false;
   if ((await owed(devId)).length) return false;
@@ -213,7 +213,9 @@ export async function liftHoldIfClear(devId: string) {
   await (await import("./subscription")).resumeBilling(devId, now);
   await chargeDeferred(devId);
   // (Owner, Oct 29, batch 10) "Your tests are running again" only when nothing pauses them any more: with an admin suspension still on, the payment line instead (both ignore Off).
-  if (dev.devSuspendedAt) await notify(dev.email, STILL_SUSPENDED_LINE, [STILL_SUSPENDED_LINE], "/app", { always: true, payment: true, group: "payhold" });
+  if (opts.quietDev) {
+    // (Batch 24, a batch 23 leftover) The team's Approve tells the developer in its own single notice.
+  } else if (dev.devSuspendedAt) await notify(dev.email, STILL_SUSPENDED_LINE, [STILL_SUSPENDED_LINE], "/app", { always: true, payment: true, group: "payhold" });
   else await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause."], "/app", { always: true, payment: true, group: "payhold" });
   const testers = await db.contract.findMany({ where: { status: "working", testId: { in: running } }, include: { tester: true } });
   for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { group: "paused" });

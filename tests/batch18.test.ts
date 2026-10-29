@@ -490,6 +490,7 @@ describe("the final list of emails that ignore Off, and each notification emaile
     // (Batch 10) holds.ts also: "Your payment went through. Your tests stay paused while your account is suspended." in place of "running again".
     // (Batch 11) confirm.ts: "Your bank wants you to confirm a $X payment. Confirm it in Payments by <date>." (sent even with email Off).
     // (Batch 17 §19) holds.ts also: the reminders 3 days and 1 day before close-out, to the tester ("Charge or let go of your work on …") and the developer ("Pay …'s work on …").
-    expect(names).toEqual(["confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
+    // (Batch 24) chargeback.ts: the team's Approve that lifts a chargeback hold sends the developer's one "running again" notice itself.
+    expect(names).toEqual(["chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
   });
 });

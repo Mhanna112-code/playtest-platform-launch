@@ -29,6 +29,13 @@ export async function GET(req: Request) {
       const full = open.filter((i) => (working.find((w) => w.testId === i.testId)?._count._all ?? 0) >= i.test.spots).map((i) => i.id);
       return ok({ v: [invs.map((i) => `${i.id}:${i.status}:${i.updatedAt.getTime()}:${i.test.status}`).join(","), full.join(",")].join("|"), restricted: false });
     }
+    // (Owner, Oct 29, batch 24 section 1) The developer dashboard's "Your bank wants you to confirm": a charge arriving, confirmed (here, another tab, the test page),
+    // past its date (counted as declined), cancelled, or turning red under 24 hours refreshes it. It shows during a hold or suspension too, so it always refreshes.
+    if (q.get("bank")) {
+      const { bankToConfirm } = await import("@/lib/server/confirm");
+      const { bankTopV } = await import("@/lib/bankTop");
+      return ok({ v: bankTopV(await bankToConfirm(u.id)), restricted: false });
+    }
     // (Batch 17 section 17) "Ratings to give" on a dashboard: a row appearing or going (a dispute opening, a rating given, a window ending) refreshes it.
     const rates = q.get("rates");
     if (rates === "tester" || rates === "developer") {

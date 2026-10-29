@@ -6,7 +6,7 @@ import { bell, notify } from "./notify";
 import { finishedAndRatedLine, ratedYouLine, ratingClosedLine, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, TESTER_CHOICE_REASONS, chargeIsOpen, chargeOpensAt, ratePendingLine, rateOpensOnLine, rateOpensReviewLine, rateTheirDisputeLine, testPaused, type TestEventLike } from "@/lib/rules";
 import { cancelCallsAhead, lockTest, ownContract, ownTest, recordEvent, spotOpened } from "./tests";
 import { CALL_CHANGE_ACTS, ownChanges, tabOf, testerPaymentChanges } from "./live";
-import { payMoreLine, TESTER_CALL_KINDS, testerChanges } from "./testerGate";
+import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges } from "./testerGate";
 import { devStopSince, loadedOf, stopBox, testerStopSince } from "./stopMoment";
 import { closeOutOf, closedOut, devPauseSpans, windowEnd, type Span } from "./closeOut";
 
@@ -262,7 +262,8 @@ export async function testerRate(tester: { id: string; name: string; email: stri
     if (wasWorking) {
       await tx.contract.update({ where: { id: c.id }, data: { status: "left", endKind: "rated", endedAt: new Date() } });
       await cancelCallsAhead(tx, [c.id], `${displayName(tester)} finished their part.`);
-      await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the tester left", decidedAt: new Date() } });
+      // (Owner, Oct 29, batch 24 section 2) Said in the tester's terms: they finished their part (Leave and a suspension's removal keep "the tester left").
+      await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: FINISHED_PART_REASON, decidedAt: new Date() } });
     }
     // (Owner, Oct 28, batch 20 section 24) A working tester who rates is leaving: one line ("Testers leaving"). One whose part had ended: "ff rated you" (Ratings from
     // testers). Either stops the developer's presses once; never the stars (the blind reveal).

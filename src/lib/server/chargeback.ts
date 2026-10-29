@@ -329,10 +329,21 @@ export async function approveChargebackHold(devId: string) {
     const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId } }) : null;
     if (c) await logEvent(c.testId, "chargeback", `The team resolved the bank reversal of your ${money(p.amountCents)} payment`, c.id);
   }
-  await notify(dev.email, "The team approved lifting your hold", ["The team approved lifting your hold.", ...(taken ? [`The ${money(taken)} reserved on your card was taken.`] : [])], "/app/payments", { payment: true, group: "admindecision" });
-  const lifted = await liftHoldIfClear(devId);
+  // (Batch 24, a batch 23 leftover) ONE notice for the developer: when Approve lifts the hold it says so too (the testers still get their "is running again").
+  const lifted = await liftHoldIfClear(devId, { quietDev: true });
+  const still = lifted && !!(await db.user.findUnique({ where: { id: devId }, select: { devSuspendedAt: true } }))?.devSuspendedAt;
+  if (lifted) {
+    // Lifted while an admin suspension is still on: the same one notice says the tests stay paused (ignores Off, like "running again").
+    const line = still ? approvedStillSuspendedLine(taken) : approvedLiftedLine(taken);
+    await notify(dev.email, line, [line, ...(still ? [] : ["Every deadline moved on by the pause."])], "/app", { always: true, payment: true, group: "admindecision" });
+  } else await notify(dev.email, APPROVED_LINE, [`${APPROVED_LINE}.`, ...(taken ? [`The ${money(taken)} reserved on your card was taken.`] : [])], "/app/payments", { payment: true, group: "admindecision" });
   return { ok: true, lifted, takenCents: taken };
 }
+export const APPROVED_LINE = "The team approved lifting your hold";
+/** "The team approved lifting your hold: the $8.00 reserved on your card was taken, and your tests are running again." */
+export const approvedLiftedLine = (cents: number) => `${APPROVED_LINE}: ${cents ? `the ${money(cents)} reserved on your card was taken, and ` : ""}your tests are running again.`;
+/** Lifted while suspended: "The team approved lifting your hold: the $8.00 reserved on your card was taken. Your tests stay paused while your account is suspended." */
+export const approvedStillSuspendedLine = (cents: number) => `${APPROVED_LINE}${cents ? `: the ${money(cents)} reserved on your card was taken` : ""}. Your tests stay paused while your account is suspended.`;
 
 /** (Batch 23 section 6) The team doesn't approve (yet): every reservation is cancelled (nothing taken) and the hold stays. */
 export async function declineChargebackReserve(devId: string, note = "") {

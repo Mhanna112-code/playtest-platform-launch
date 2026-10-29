@@ -221,7 +221,9 @@ describe("batch 10 item 4: paying what is owed while a suspension continues", ()
     await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     await startCardVerification(await db.user.findUniqueOrThrow({ where: { id: dev.user.id } }));
     expect((await approveChargebackHold(dev.user.id)).lifted).toBe(true);
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: R.STILL_SUSPENDED_LINE } })).toBe(1);
+    // (Batch 24) The team's Approve sends the developer one notice, which says the tests stay paused.
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: "The team approved lifting your hold. Your tests stay paused while your account is suspended." } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: R.STILL_SUSPENDED_LINE } })).toBe(0);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: "Your tests are running again" } })).toBe(0);
   });
 });
