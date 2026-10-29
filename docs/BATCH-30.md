@@ -56,6 +56,13 @@ Searching the Invite panel for someone who can't be invited shows "No testers ma
 - blocked either way: not shown (never revealed), so the plain "No testers match" stays for them.
 Tests: a search for an invited, a joined and an applying tester shows the right line; a blocked one shows nothing.
 
+## 8. A new invite shows on the tester dashboard live (owner, Oct 29)
+The owner had the tester dashboard open; a new invite only appeared after a reload. The dashboard does poll (AutoRefresh "invites=1", every 20 s, fingerprinting all the tester's invites), but: (a) its baseline is the first poll after mount, not what the server rendered, so an invite arriving between render and that first poll is never noticed; (b) the top box ("invites:me") only announces invites closing, never a new one, so nothing tells the tester when the page does update. Fix:
+- Seed AutoRefresh's baseline from the server-rendered fingerprint (pass it from the page), so any change after render refreshes on the next poll.
+- A new invite (and a re-sent one) shows as a top-box line, "Marc Hanna invited you to “ddddd”", raising the pill like other updates, and the Invitations section appears in place.
+- Check the same baseline issue for every other AutoRefresh user (developer dashboard, Payments, the bank box, Ratings to give) and fix it the same way.
+- Tests: an invite created right after render shows on the next poll; the top-box line and pill.
+
 ## Decided, no change (owner, Oct 29)
 - **Charge / Let it go stays** for listed written answers and recordings (the owner said no to charging listed work automatically at its review date; only listed calls are charged automatically).
 - **The tester's Rate still closes at the test's close-out**, not at their own pieces' closing date (a last tester who waits past the close-out to Charge can't rate any more). Don't change it.
