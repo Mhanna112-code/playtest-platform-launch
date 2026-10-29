@@ -127,7 +127,8 @@ function needsActionOf(e: unknown): NeedsAction | null {
   return null;
 }
 // (Batch 17 §11) A press is confirmed with return_url, so the bank's check (if it asks) is a page the developer's page can show inline, under the button.
-const pressParams = (mode: ChargeMode) => (mode === "away" ? { off_session: true } : { payment_method_types: ["card"], return_url: bankReturnUrl() });
+// (API 2026-09-30) PaymentIntents take `allowed_payment_method_types`; the old `payment_method_types` is refused by Stripe, so every press failed.
+const pressParams = (mode: ChargeMode) => (mode === "away" ? { off_session: true } : { allowed_payment_method_types: ["card" as const], return_url: bankReturnUrl() });
 
 /**
  * Charge the developer for one Pay press. One charge per press: the idempotency key is the press's payKey.
