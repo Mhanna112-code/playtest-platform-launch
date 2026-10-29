@@ -47,6 +47,15 @@ For abuse cases (spam testers, a fraudulent test, an abandoned account), the tea
 - Dead code: bell.ts group titles textra, appclosed, reinvited, team, disputes, trejected; rules.ts bankConfirmLine, bankConfirmTestLine, chargeByLine, payByLine.
 - The session route's comment above LIMITED_ACTIONS still says Dispute, Charge, Let it go and Rate work "on the first press": fix the comment.
 
+## 7. Invite search says why a person isn't listed (owner, Oct 29)
+Searching the Invite panel for someone who can't be invited shows "No testers match “fbbb”." even when fbbb is already invited. Instead, a matching person who isn't invitable shows as a greyed row with the reason, no tick box:
+- already invited: "fbbb · already invited, waiting for them to join" (with the invite's Cancel invite reachable from the Invited list above, which scrolls into view and marks their row);
+- already in this test: "fbbb · already in this test";
+- applied / asked to rejoin: "fbbb · applied: answer them in Needs you →";
+- in 10 tests or suspended: the existing "Can't join this test";
+- blocked either way: not shown (never revealed), so the plain "No testers match" stays for them.
+Tests: a search for an invited, a joined and an applying tester shows the right line; a blocked one shows nothing.
+
 ## Decided, no change (owner, Oct 29)
 - **Charge / Let it go stays** for listed written answers and recordings (the owner said no to charging listed work automatically at its review date; only listed calls are charged automatically).
 - **The tester's Rate still closes at the test's close-out**, not at their own pieces' closing date (a last tester who waits past the close-out to Charge can't rate any more). Don't change it.
