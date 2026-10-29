@@ -24,6 +24,18 @@ export const PRICE_LIMITS = {
 export const HIGH_PART_CENTS = 20_000;
 export const HIGH_PART_TICK = "I confirm this part pays more than $200.";
 /**
+ * (Owner, Oct 28, batch 19 section 7) The required tick above Post the test (and posting a draft), and above Save on Edit while Save is enabled: "How payments work"
+ * after it links to the Terms' payments section (a new tab). An unticked press is refused with PAY_RULES_TICK_MISSING, red at the tick.
+ */
+export const PAY_RULES_TICK = "I understand that a tester can charge my card, up to the listing price, for work I haven't paid once 7 days have passed since they sent it and their own deadline has passed.";
+export const PAY_RULES_LINK = "How payments work";
+export const PAY_RULES_TICK_MISSING = "Tick to confirm you understand how payments work.";
+/** The Terms' payments section (section 4, How payments work). */
+export const PAYMENTS_TERMS_ID = "how-payments-work";
+export const PAYMENTS_TERMS_HREF = `/terms#${PAYMENTS_TERMS_ID}`;
+/** Whether a Post / Save press carries the tick. */
+export const payRulesTicked = (body: Record<string, unknown>) => body.payRulesOk === true;
+/**
  * (Owner, Oct 28 night, batch 9) EVERY Pay and Extra pay above $0 has the tick "I understand this payment of $X can't be refunded and is charged now." (it names the exact
  * amount; a changed amount unticks it). Over PAY_TICK_CENTS ($200) a second tick is needed too: "I confirm this payment is over $200." Paying $0 needs no tick.
  */
@@ -238,8 +250,16 @@ export const openUntilCapLine = (capDay: string) => `Open until can be at most 3
 /** Edit's hint next to Open until: "only later, up to Dec 6 (30 days after the test opened)". */
 export const openUntilCapHint = (capDay: string) => `only later, up to ${capLabel(capDay)} (30 days after the test opened)`;
 /** Edit's live hint: what each tester gets after the change: "Each tester gets 19 days from when they join (14 now + 5)." */
-export const editTesterDaysHint = (now: number, more: number) =>
-  more > 0 ? `Each tester gets ${now + more} days from when they join (${now} now + ${more}).` : `Each tester gets ${now} day${now === 1 ? "" : "s"} from when they join.`;
+/**
+ * (Owner, Oct 28, batch 19 section 8, replacing the batch 15 section 18 and batch 16 section 16 hints) The live line under Open until on Post and Edit: work can arrive
+ * after Open until. `openUntil` is the field's date (YYYY-MM-DD); `days` the days per tester (Post: today to that date; Edit: the days now + the extension). The latest
+ * possible deadline is Open until + those days. "Testers can join until this date. Each gets 14 days from when they join, so someone joining on Nov 20 has until Dec 4
+ * to send work. You pay each piece within 7 days of it arriving, or the tester can charge you."
+ */
+export function openUntilLine(openUntil: string, days: number) {
+  const day = (iso: string, plus = 0) => new Date(Date.parse(`${iso}T00:00:00Z`) + plus * DAY).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  return `Testers can join until this date. Each gets ${days} day${days === 1 ? "" : "s"} from when they join, so someone joining on ${day(openUntil)} has until ${day(openUntil, days)} to send work. You pay each piece within ${REVIEW_DAYS} days of it arriving, or the tester can charge you.`;
+}
 
 // ---------- (Owner, Oct 30, batch 15 section 18) Every tester gets the same number of days; Open until is the last day to JOIN ----------
 
@@ -272,7 +292,6 @@ export const perTesterLine = (days: number, openUntil: Date, fmt: (d: Date) => s
 /** The join page: "Your deadline: Dec 3 (14 days from joining)". */
 export const yourDeadlineLine = (due: Date, days: number, fmt: (d: Date) => string) => `Your deadline: ${fmt(due)} (${days} day${days === 1 ? "" : "s"} from joining)`;
 /** Post and Edit's live hint: "Each tester gets the same time from when they join: today to this date (14 days)." */
-export const testerDaysHint = (days: number) => `Each tester gets the same time from when they join: today to this date (${days} day${days === 1 ? "" : "s"}).`;
 /** The day a deadline needs Open until to reach: the test's opening + the deadline's days + the buffer (11.5: "must leave 3 days inside Open until"). */
 export function openUntilNeeded(openedAt: Date, deadlineDays: number) {
   return new Date(openedAt.getTime() + (deadlineDays + LIMITS.deadlineBufferDays) * 86_400_000);

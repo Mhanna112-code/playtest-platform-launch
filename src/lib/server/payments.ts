@@ -14,7 +14,7 @@ import { cardRefusal, charge, type NeedsAction } from "./stripe";
 import { devGate, devGateIfSeen, devOwes, recordEvent } from "./tests";
 import { logEvent } from "./live";
 import { testerGate } from "./testerGate";
-import { PAYMENT_CHECKING, pressKeyFor } from "./recovery";
+import { PAYMENT_CHECKING, freshPayKey, pressKeyFor } from "./recovery";
 import { clientPressKey, serverKey } from "./pressKeys";
 import { amountFromRate, callMinutesOf, overCeilingLine, rateFromAmount } from "@/lib/callMeasure";
 import { callsLeftCents } from "./callMoney";
@@ -127,7 +127,10 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name }, [], undefined, payPress);
     const rev = await tx.review.create({ data: { ...piece.where, contractId: c.id, amountCents: amountCents!, agreedCents: piece.listing, reason, payKey, rejected: false, rateCents: piece.kind === "call" ? rateCents : null } });
     // (Batch 15 section 9) The charge's key: an interrupted press on this piece in the last 24 hours lends its key, so nothing is ever charged twice.
-    const stripeKey = await pressKeyFor(piece.where, ["review", "call"], payKey, tx);
+    // (Batch 19 section 5) An earlier attempt with this press key whose bank check was cancelled (or that failed) keeps its row: this attempt gets a key of its own.
+    const stripeKey = await freshPayKey(tx, ["review", "call"], await pressKeyFor(piece.where, ["review", "call"], payKey, tx));
+    // (Batch 19 section 5) The cancelled (or failed) attempt hands its press key over too ((kind, pressKey) is unique): its row stays as the record of that attempt.
+    await tx.payment.updateMany({ where: { kind: { in: ["review", "call"] }, pressKey: payKey, status: { in: ["cancelled", "failed"] } }, data: { pressKey: null } });
     const payment = await tx.payment.create({
           data: { kind: kind === "call" ? "call" : "review", submissionId: piece.where.submissionId ?? null, callId: piece.where.callId ?? null, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amountCents!, feeCents: 0, testerCents: 0, status: "pending", payKey: stripeKey, pressKey: payKey },
         });
@@ -144,8 +147,9 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     } catch (e) {
       // (Batch 15 section 9) A reused key that Stripe already saw with other details: that earlier press reached Stripe and wasn't charged, so a fresh key is safe.
       if (!(e instanceof HttpError && e.code === "idempotency")) throw e;
-      await db.payment.update({ where: { id: payment!.id }, data: { payKey } });
-      result = await charging(payKey);
+      const fresh = await freshPayKey(db, ["review", "call"], payKey); // (batch 19 section 5) never a cancelled attempt's key
+      await db.payment.update({ where: { id: payment!.id }, data: { payKey: fresh } });
+      result = await charging(fresh);
     }
   } catch (e) {
     // (Batch 15 section 9) Stripe's answer was lost: the payment stays pending (in progress) and is checked after 15 minutes. Nothing is freed, so it can't be paid twice.
@@ -463,7 +467,8 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     }
     await devGate(tx, testId, body, {}, [], undefined, morePress);
     // (Batch 15 section 9) An interrupted Pay more on this piece in the last 24 hours lends its key.
-    const stripeKey = await pressKeyFor(at, ["extra"], extraKey, tx);
+    // (Batch 19 section 5) A cancelled or failed earlier attempt with this press key keeps its row: this attempt gets a key of its own.
+    const stripeKey = await freshPayKey(tx, ["extra"], await pressKeyFor(at, ["extra"], extraKey, tx));
     // (Batch 11) The row exists before the charge (pending), so a payment the bank wants confirmed counts toward the piece's cap while it waits.
     const row = await tx.payment.create({ data: { kind: "extra", contractId: c.id, ...at, note, developerId: dev.id, testerId: c.testerId, amountCents: amount!, feeCents: 0, testerCents: 0, status: "pending", payKey: stripeKey, pressKey: extraKey } });
     return { row, stripeKey };
@@ -477,8 +482,9 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
       result = await charging(stripeKey);
     } catch (e) {
       if (!(e instanceof HttpError && e.code === "idempotency")) throw e;
-      await db.payment.update({ where: { id: row.id }, data: { payKey: extraKey } });
-      result = await charging(extraKey);
+      const fresh = await freshPayKey(db, ["extra"], extraKey); // (batch 19 section 5) never a cancelled attempt's key
+      await db.payment.update({ where: { id: row.id }, data: { payKey: fresh } });
+      result = await charging(fresh);
     }
   } catch (e) {
     if (e instanceof HttpError && e.code === "payment_unknown") throw new HttpError(502, "payment_unknown", PAYMENT_CHECKING);

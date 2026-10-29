@@ -274,7 +274,7 @@ describe("payments and disputes, only for this test", () => {
     const { dev, testId: A } = await setup();
     const ana = await joined(A);
     const { POST: postTest } = await import("@/app/api/tests/route");
-    const r = await json(await postTest(req("/api/tests", { cookie: dev.cookie, body: { productName: "Night Ferry", title: "Night Ferry", description: "x", buildUrl: "https://example.com/o", categories: ["Game"], devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Q?"], openUntil: new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10) } })));
+    const r = await json(await postTest(req("/api/tests", { cookie: dev.cookie, body: { productName: "Night Ferry", title: "Night Ferry", description: "x", buildUrl: "https://example.com/o", categories: ["Game"], devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Q?"], openUntil: new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10), payRulesOk: true } })));
     const B = r.body.id as string;
     const ben = await joined(B, "Ben Carter", "he");
     await sact(ana.sessionId, "written", ana.tester.cookie, { answers: ["a", "b"] });
@@ -302,7 +302,7 @@ describe("payments and disputes, only for this test", () => {
     const { dev, testId: A } = await setup();
     const ana = await joined(A);
     const { POST: postTest } = await import("@/app/api/tests/route");
-    const B = (await json(await postTest(req("/api/tests", { cookie: dev.cookie, body: { productName: "Night Ferry", title: "Night Ferry", description: "x", buildUrl: "https://example.com/o", categories: ["Game"], devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Q?"], openUntil: new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10) } })))).body.id as string;
+    const B = (await json(await postTest(req("/api/tests", { cookie: dev.cookie, body: { productName: "Night Ferry", title: "Night Ferry", description: "x", buildUrl: "https://example.com/o", categories: ["Game"], devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Q?"], openUntil: new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10), payRulesOk: true } })))).body.id as string;
     await sact(ana.sessionId, "written", ana.tester.cookie, { answers: ["a", "b"] });
     await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
     await db.user.update({ where: { id: ana.tester.user.id }, data: { stripeAccountId: "acct_" + randomUUID(), payoutsReady: true } });
@@ -349,7 +349,7 @@ describe("payments and disputes, only for this test", () => {
     const { dev, testId: A } = await setup();
     const ana = await joined(A);
     const { POST: postTest } = await import("@/app/api/tests/route");
-    const B = (await json(await postTest(req("/api/tests", { cookie: dev.cookie, body: { productName: "Night Ferry", title: "Night Ferry", description: "x", buildUrl: "https://example.com/o", categories: ["Game"], devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Q?"], openUntil: new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10) } })))).body.id as string;
+    const B = (await json(await postTest(req("/api/tests", { cookie: dev.cookie, body: { productName: "Night Ferry", title: "Night Ferry", description: "x", buildUrl: "https://example.com/o", categories: ["Game"], devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Q?"], openUntil: new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10), payRulesOk: true } })))).body.id as string;
     const onB = await act(B, "join", ana.tester.cookie, { listingVersion: 1 });
     const other = await setup({ title: "Elsewhere" });
     const onC = await act(other.testId, "join", ana.tester.cookie, { listingVersion: 1 });

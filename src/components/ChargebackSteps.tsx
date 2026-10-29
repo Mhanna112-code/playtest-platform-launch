@@ -86,8 +86,10 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
       const pm = await form.stripe.createPaymentMethod({ elements: form.elements });
       if (pm.error || !pm.paymentMethod) throw new Error(pm.error?.message ?? CARD_NOT_VERIFIED);
       const r = await api<{ setupIntentId: string; checkUrl: string | null }>("/api/payments/verify-card", { setupIntent: form.setupIntentId, paymentMethod: pm.paymentMethod.id });
-      if (r.checkUrl) await check(r.setupIntentId, r.checkUrl, false);
-      else {
+      if (r.checkUrl) {
+        // (Batch 19 section 5) A cancelled or failed check frees the press: the next Verify a card starts a new check (a new card form and SetupIntent).
+        try { await check(r.setupIntentId, r.checkUrl, false); } catch (e) { setForm(null); throw e; }
+      } else {
         await finish(r.setupIntentId)();
         setDone("Card verified.");
         setTimeout(() => window.location.reload(), 1200);

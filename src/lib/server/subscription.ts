@@ -100,6 +100,10 @@ export async function subscribe(dev: Dev, now = new Date()) {
   if (launch.free && !launch.until) throw new HttpError(409, "free", "Everything is free during launch: there's nothing to subscribe to yet.");
   if (stripeOn() && (!u.stripeCustomerId || !u.stripePaymentMethodId)) throw new HttpError(409, "no_card", "Add a card first, then subscribe.");
   const startsCharging = launch.free && launch.until ? launch.until : now;
+  // (Batch 19 section 5) A Subscribe whose bank check was cancelled (or failed) freed the press: the next one is a new attempt with a new one-time key (a double press
+  // of one attempt shares it, so it is charged once).
+  const tries = await db.payment.count({ where: { kind: "subscription", developerId: u.id, status: { in: ["cancelled", "failed"] }, note: { startsWith: "sub:" } } });
+  const subKey = serverKey("sub", u.id, now.toISOString().slice(0, 10), ...(tries ? [String(tries + 1)] : []));
   let id = "manual";
   if (billingOn()) {
     const stripe = getStripe();
@@ -110,7 +114,7 @@ export async function subscribe(dev: Dev, now = new Date()) {
         items: [{ price_data: { currency: "usd", product: await stripeProduct(stripe), unit_amount: SUBSCRIPTION_CENTS, recurring: { interval: "month" } } }],
         expand: ["latest_invoice.payment_intent"],
         ...(startsCharging > now ? { trial_end: Math.floor(startsCharging.getTime() / 1000) } : {}),
-      }, { idempotencyKey: serverKey("sub", u.id, now.toISOString().slice(0, 10)) });
+      }, { idempotencyKey: subKey });
       id = s.id;
       const pi = (s.latest_invoice as unknown as { payment_intent?: { id: string; status: string; client_secret: string } } | null)?.payment_intent;
       if (s.status === "incomplete" && pi?.status === "requires_action") {
@@ -129,7 +133,7 @@ export async function subscribe(dev: Dev, now = new Date()) {
     }
   } else if (startsCharging <= now) {
     // (Section 4) A declined subscription payment never starts a hold. (Batch 11) The developer's own press: on-session, so the bank may ask them to confirm.
-    const r = await chargePlatform(u, SUBSCRIPTION_CENTS, serverKey("sub", u.id, now.toISOString().slice(0, 10)), `Playtest subscription (${SUBSCRIPTION_PRICE})`, "press").catch((e) => {
+    const r = await chargePlatform(u, SUBSCRIPTION_CENTS, subKey, `Playtest subscription (${SUBSCRIPTION_PRICE})`, "press").catch((e) => {
       if (e instanceof HttpError && e.code !== "card_failed") throw e;
       return null;
     });

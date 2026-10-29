@@ -9,7 +9,9 @@ export const listingBody = (over: Record<string, unknown> = {}) => ({
   productName: "Harbor Run", title: "Harbor Run", description: "Sail", buildUrl: "https://example.com/b", categories: ["Game"], devices: [], languages: [],
   spots: 3, writtenCents: "10.00", recordingCents: null, liveRateCents: "30.00", liveMinutes: 30, deadlineDays: 7,
   // (Batch 12 section 6) Open until is required (3 to 30 days ahead) and is every tester's deadline.
-  questions: ["What did you like?", "Where did you get stuck?"], openUntil: new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10), ...over,
+  questions: ["What did you like?", "Where did you get stuck?"], openUntil: new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10),
+  // (Batch 19 section 7) The required tick about Charge on Post (tests of the refusal leave it out).
+  payRulesOk: true, ...over,
 });
 
 export async function setup(over: Record<string, unknown> = {}) {
@@ -21,8 +23,10 @@ export async function setup(over: Record<string, unknown> = {}) {
 }
 // Windows' clock can lag by ~15 ms: let a step finish clearly before the test notes the page-load time (the stop-once rules compare the two).
 export const settle = () => new Promise((r) => setTimeout(r, 25));
+/** (Batch 19 section 7) Save and a draft's Post carry the required tick about Charge unless the test says otherwise (`payRulesOk: false`). */
+const withPayTick = (action: string, body: Record<string, unknown>) => (action === "edit" || action === "post-draft" ? { payRulesOk: true, ...body } : body);
 export const act = (id: string, action: string, cookie: string, body: Record<string, unknown> = {}) =>
-  testAction(req(`/api/tests/${id}/${action}`, { cookie, body }), { params: Promise.resolve({ id, action }) }).then(json);
+  testAction(req(`/api/tests/${id}/${action}`, { cookie, body: withPayTick(action, body) }), { params: Promise.resolve({ id, action }) }).then(json);
 export const sact = (id: string, action: string, cookie: string, body: Record<string, unknown> = {}) =>
   sessionAction(req(`/api/sessions/${id}/${action}`, { cookie, body }), { params: Promise.resolve({ id, action }) }).then(json);
 

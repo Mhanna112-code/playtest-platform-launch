@@ -29,12 +29,15 @@ export const GROUP_TITLES: Record<string, string> = {
   reinvited: "Invites sent again",
   // (Batch 15 section 35) A tester asked for a call.
   callrequests: "Call requests",
+  // (Batch 19 section 1) The close-out reminders (3 days and 1 day before a piece closes) stack under a heading too.
+  closeout: "Closing soon",
 };
 
 /** (Batch 14) A stacked entry's title that says it all with its count ("3 tests you applied to changed: your applications were closed"); else GROUP_TITLES. */
 export const GROUP_COUNT_TITLES: Record<string, (n: number) => string> = {
   appclosed: (n) => `${n} tests you applied to changed: your applications were closed`,
   reinvited: (n) => `${n} tests you were invited to changed: your invites were sent again`,
+  closeout: (n) => `Closing soon: ${n} test${n === 1 ? "" : "s"}`,
 };
 export const groupTitle = (key: string, n: number) => GROUP_COUNT_TITLES[key]?.(n) ?? GROUP_TITLES[key];
 

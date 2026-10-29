@@ -34,6 +34,20 @@ export async function pressKeyFor(where: PieceKey, kinds: string[], fresh: strin
   return prev.payKey;
 }
 
+/**
+ * (Batch 19 section 5) A press's charge key that no earlier attempt holds. A cancelled or failed bank check frees the press (its review is deleted and nothing was
+ * charged), so the next Pay on that piece is a NEW attempt: when the page sends the same press key again, the attempt gets "<key>:2", "<key>:3" … (a client's key is a
+ * UUID, so it can never end like that), a fresh Stripe idempotency key, and no unique-key clash with the cancelled row on (kind, payKey). A double press of one attempt
+ * still meets that attempt (its review, or for Pay more its pending row) first, so it is charged once.
+ */
+export async function freshPayKey(tx: Prisma.TransactionClient, kinds: string[], key: string) {
+  for (let n = 1; n < 1000; n++) {
+    const k = n === 1 ? key : `${key}:${n}`;
+    if (!(await tx.payment.findFirst({ where: { kind: { in: kinds }, payKey: k }, select: { id: true } }))) return k;
+  }
+  return `${key}:${Date.now()}`;
+}
+
 /** The PaymentIntent a press created, by its metadata payKey (Stripe's search; the fake keeps its own list). */
 export async function findPaymentIntent(payKey: string): Promise<{ id: string; status: string; transfer_data?: { destination?: unknown } | null } | null> {
   if (!stripeOn() || !/^[\w:-]{1,200}$/.test(payKey)) return null;

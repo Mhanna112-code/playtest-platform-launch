@@ -96,7 +96,7 @@ Written Oct 27, 2026, from a read of the code at commit `5f057a3` (batch 14).
 | **Live updates and stop-once** | Open pages poll a fingerprint and refresh; a live top box lists changes; every press sends a "seen" marker and is stopped once if something it hadn't shown changed; tabs stay signed in as the same account | `api/pulse`, `api/live`, `components/AutoRefresh.tsx`, `LiveTop.tsx`, `LiveNotices.tsx`, `SessionWatch.tsx`, `ShellWatch.tsx`, `ChangesBox.tsx`, `src/lib/live.ts`, `src/lib/usePress.ts`, `src/lib/topStop.ts`, server/live, server/testerGate, server/actionText, server/tests (`devGate`) | `devGate`, `devGateIfSeen`, `testerGate`, `testerChanges`, `devChanges`, `ownChanges`, `logAction`, `logEvent`, `recordEvent`, `withRenamed`, `asLines`, `logTestAction`, `logTesterAction`, `joinPageChanges`; rules: `stopOnce`, `DEV_STOP_KINDS`, `DEV_QUIET_KINDS`, `DEV_EXEMPT_KINDS`, `TESTER_EXEMPT_KINDS`; client: `usePress`, `seenNow`, `useLiveAppend`, `announceAuth` |
 | **Outages** | Off unless `OUTAGE_CHECKS=1`. Batch 15 §10: outages come from the uptime service's own alerts (`POST /api/health/alert`, a down then an up on the server's clock); the keyed ping only writes heartbeats for information. One over 24 hours waits for an admin's Approve | server/outages, `api/health`, `api/health/alert`, the admin console's Outages | `recordAlert`, `parseAlert`, `alertRefusal`, `recordOutage`, `approveOutage`, `adminOutages`, `outageLines`, `outageChecksOn`, `healthKeyOk`, `healthKeyOf` |
 | **The admin console** | Disputes, decided, my actions, users, tests, no-shows, payments, reports, holds and chargebacks, paused tests; suspend, pause, stop, approve, release or refund a held share, send a waiting payout, Allow 3 more | `app/admin/page.tsx`, `AdminBoxes.tsx`, `AdminButton.tsx`, `DisputeDecision.tsx`, `PagedList.tsx`, `PreviewButton.tsx`, `api/admin/[action]`, `api/admin/more`, server/adminLists, server/reports | `adminPage`, `disputeRow` (with "See the work", batch 15 §8), `testRow`, `adminEmails` (batch 15 §21: every admin action is an `AdminAction` row and admin views name the admin by email), `userTotals`, `KINDS` (with `contact`), `adminCases` (holds.ts), `reportPerson`, `reportCounts`, `accountEvent`. Actions in `api/admin/[action]`: `decide`, `suspend`, `unsuspend`, `preview-suspension`, `delete-account`, `pause-test`, `unpause-test`, `stop-test`, `release-share`, `refund-share`, `allow-critical-changes`, `approve-hold`, `approve-chargeback`, `approve-outage`, `extend-pause`, `close-paused`, `transfer`, `contact-replied` |
-| **The daily jobs** | One cron route runs everything time-based (section 5) | `api/cron/daily/route.ts`, server/holds (`runDaily`) | `runDaily` |
+| **The daily jobs** | One cron route runs the daily jobs; the uptime check's keyed `/api/health` runs the time-sensitive sweep every 5 minutes (section 5) | `api/cron/daily/route.ts`, `api/health/route.ts`, server/holds (`runDaily`, `runSweep`), server/timers | `runDaily`, `runSweep`, `withTimersLock`, `healthSweep` |
 | Other | Ratings, chat, blocks, reports, profiles, Contact us | server/ratings, server/messages, server/blocks, server/reports, server/profileStats, `api/help` | `testerRate`, `devRate`, `rateBlocker`, `ratingReminders`, `sendChat`, `chatAccess`, `unreadCount`, `blockUser`, `reportPerson`, `developerStats`, `testerStats` |
 
 Behaviour for each area is in the guide: [Edit test](DESIGN-DOC.md#edit-test),
@@ -208,7 +208,7 @@ The template is [.env.example](../.env.example). Never commit `.env*` files (the
 | `CRON_SECRET` | Bearer token for `GET /api/cron/daily`. Empty: the route answers 503 | Yes | empty |
 | `ADMIN_EMAILS` | Comma-separated admin emails (in addition to `User.isAdmin`) | Yes | `owner@example.com` in the template |
 | `OUTAGE_CHECKS` | `1` turns outage recording on (from the uptime service's alerts, batch 15 §10) | Decide at launch | `0` |
-| `HEALTH_KEY` | Secret the uptime service sends as `?key=` on its ping (heartbeats, information only) and on its alert webhook `POST /api/health/alert` | With `OUTAGE_CHECKS=1` | a long random value |
+| `HEALTH_KEY` | Secret the uptime service sends as `?key=` on its ping and on its alert webhook `POST /api/health/alert`. The keyed ping runs the 5-minute sweep of reminders and timers (batch 19 §4) and, with `OUTAGE_CHECKS=1`, writes heartbeats | Yes (the sweep needs it) | a long random value |
 | `SKIP_EMAIL_CONFIRM` | `1` skips the email-confirmation requirement (a strip says so). Ignored in production | Must be off | `0` |
 | `NEXT_DIST_DIR` | Build output folder, so a check or second server doesn't overwrite the running dev server's `.next` | No | `.next` |
 | `BASE`, `FAKE_BASE`, `ONLY`, `ADMIN`, `PLAYWRIGHT_BROWSERS_PATH` | Read by `scripts/evidence.cjs` / `scripts/media.cjs` only | No | see the script headers |
@@ -251,6 +251,17 @@ and logs; it writes to the outbox only with `ALLOW_DEV_OUTBOX=1`.
 
 ## 5. Background and daily jobs
 
+**Batch 19 §4: the 5-minute sweep.** Vercel's free plan only runs crons daily, so the time-sensitive work runs from the
+uptime check: every `GET /api/health?key=HEALTH_KEY` (UptimeRobot, every 5 minutes) runs `runSweep()` after answering
+(Next's `after`; where that isn't available it waits at most 8 seconds). The sweep is the 15-minute call reminders, calls
+ending at the $1,000, nobody-joined cancels and final call lengths (`sweepNobodyJoined`), Charge opening for sent parts and
+listed calls with their "pay it" and Charge reminders (`openCharges`, `callCharges`), the close-out reminders
+(`closeOutReminders`), the developer's review reminders (`reviewReminders`) and the rating reminders (`ratingReminders`).
+It runs under one lock (`AppState` key `timers-lock`, taken over after 4 minutes if a run died), shared with the daily job,
+so two never run at once; a sweep error is logged and never changes the health answer or records an outage. Without the key
+nothing runs. **HANDOVER: UptimeRobot's 5-minute check now also drives reminders and timers, so the monitor must stay on**
+(and keep `HEALTH_KEY` set); if it stops, those wait for page loads, polls and the daily job.
+
 **Trigger.** `vercel.json` schedules `GET /api/cron/daily` at `0 9 * * *` (09:00 UTC). Vercel sends
 `Authorization: Bearer $CRON_SECRET`; any other scheduler must do the same. The route calls `runDaily()` in
 `src/lib/server/holds.ts`, which returns a small JSON of counts (only some of the counters are filled in). Each step
@@ -284,7 +295,7 @@ on the same day should not repeat notices, but test that before scheduling it mo
 
 - `GET /api/pulse` (polled about every 20 s by pages with `AutoRefresh`) also runs `sweepNobodyJoined`, so calls
   nobody joined are cancelled, and (batch 15 §40) measured lengths become final, within a minute or so while anyone has such a page open.
-- `GET /api/health?key=HEALTH_KEY` writes heartbeats for information; outages come from `POST /api/health/alert` (only with `OUTAGE_CHECKS=1`).
+- `GET /api/health?key=HEALTH_KEY` runs the 5-minute sweep (above) and writes heartbeats for information; outages come from `POST /api/health/alert` (only with `OUTAGE_CHECKS=1`).
 - Stripe webhooks drive chargebacks, Billing renewals and payout status.
 - Bell lines are written at the moment of the action. **Emails are only sent by step 15**, so "end-of-day email" in the
   guide means "when the daily job runs". The exceptions are sent at once: reset and confirmation links, Contact us
@@ -455,7 +466,7 @@ On a fresh, healthy Postgres cluster (a new machine, Docker, Neon) none of this 
 - [ ] **Cloudflare R2.** Create the bucket and an API token limited to it; set the four `R2_*` variables. Add a CORS rule
       allowing `PUT` (uploads go straight from the browser) and `GET` from the `APP_URL` origin.
 - [ ] **UptimeRobot.** Generate a long random `HEALTH_KEY`, set `OUTAGE_CHECKS=1`, and add a 5-minute HTTP monitor on
-      `APP_URL/api/health?key=<HEALTH_KEY>`. Then add an Alert Contact: type **Webhook**, method **POST**, URL
+      `APP_URL/api/health?key=<HEALTH_KEY>`. This monitor also drives the reminders and timers every 5 minutes (batch 19 §4): keep it on. Then add an Alert Contact: type **Webhook**, method **POST**, URL
       `APP_URL/api/health/alert?key=<HEALTH_KEY>`, "Send as JSON" with
       `{"alertType": "*alertType*", "alertDateTime": "*alertDateTime*", "alertDuration": "*alertDuration*"}`, and attach it to
       the monitor for both down and up alerts. Outages come only from these alerts (batch 15 §10): a paused monitor changes nothing.

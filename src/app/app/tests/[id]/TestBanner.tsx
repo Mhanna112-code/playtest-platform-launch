@@ -13,9 +13,10 @@ export const BANNER_TITLES: Record<BannerCause, string> = {
 };
 
 /** The bottom line, built from the buttons actually shown, so it never lists something hidden. */
-export function allowedLine(paused: boolean, can: { stop?: boolean; endEarly?: boolean; cancelCalls?: boolean; nextRound?: boolean }) {
+export function allowedLine(paused: boolean, can: { stop?: boolean; endEarly?: boolean; cancelCalls?: boolean; rate?: boolean; nextRound?: boolean }) {
   if (paused) {
-    const parts = [can.stop ? "stop this test" : "", can.endEarly ? "end testers' work early" : "", can.cancelCalls ? "cancel calls" : ""].filter(Boolean);
+    // (Batch 19 section 2) "rate testers" when a Rate box is open on the paused test (batch 17 section 14).
+    const parts = [can.stop ? "stop this test" : "", can.endEarly ? "end testers' work early" : "", can.cancelCalls ? "cancel calls" : "", can.rate ? "rate testers" : ""].filter(Boolean);
     if (!parts.length) return "";
     return `For now you can ${parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")}, or ${parts[parts.length - 1]}`}.`;
   }

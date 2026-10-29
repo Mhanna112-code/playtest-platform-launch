@@ -93,7 +93,7 @@ describe("tester days (section 18)", () => {
   });
 
   it("wording: Post's hint, Find and the listing, the join page, terms lines", () => {
-    expect(R.testerDaysHint(14)).toBe("Each tester gets the same time from when they join: today to this date (14 days).");
+    expect(R.openUntilLine("2026-11-20", 14)).toBe("Testers can join until this date. Each gets 14 days from when they join, so someone joining on Nov 20 has until Dec 4 to send work. You pay each piece within 7 days of it arriving, or the tester can charge you."); // (batch 19 section 8)
     const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
     expect(R.perTesterLine(14, new Date("2026-11-20T23:59:59Z"), fmt)).toBe("14 days per tester · join by Nov 20");
     expect(R.yourDeadlineLine(new Date("2026-12-03T23:59:59Z"), 14, fmt)).toBe("Your deadline: Dec 3 (14 days from joining)");

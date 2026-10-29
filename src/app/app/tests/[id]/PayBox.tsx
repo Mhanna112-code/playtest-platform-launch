@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { checkFields } from "@/components/FieldChecks";
 import { FormMistakes } from "@/components/FormMistakes";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -50,7 +50,9 @@ export function PayBox(p: {
   const bank = useBankCheck();
   // (NEXT-UI 10) The note typed and not sent is kept on the server ("Not sent yet").
   const keep = useKept(`${more ? "more" : "pay"}:${p.kind}:${p.id}`, { reason }, reason === "", (v) => setReason(v.reason ?? ""));
-  const payKey = useMemo(() => newPressId(), []);
+  // (Batch 19 section 5) One key per attempt: a double press of it charges once; a press that didn't go through (the bank's check cancelled or failed, or a refusal)
+  // frees it, and the next Pay is a new attempt with a new key.
+  const [payKey, setPayKey] = useState(newPressId);
   const cents = toCents(amount);
   const below = listed && cents != null && cents < p.listingCents!;
   const over = cents != null && cents > PAY_TICK_CENTS;
@@ -88,12 +90,15 @@ export function PayBox(p: {
       : await press<{ status?: string; amountCents: number; later?: string }>("/api/review", {
         kind: p.kind, id: p.id, payKey, amount, reason, ...(isCall && rate ? { rate, typed } : {}), tickedCents: ticked ? cents : null, over200: over && over200,
       }, "pay");
-    if (!r) return;
+    if (!r) {
+      setPayKey(newPressId());
+      return;
+    }
     // (Batch 11) The bank wants to confirm: (batch 17 §11) its check opens inline under the button; then the payment goes through, or nothing was charged (the blue notice).
     let res: typeof r = r;
     if (needsBank(r)) {
       setBankErr("");
-      try { res = await bank.check<typeof r>(r); } catch (e) { setBankErr((e as Error).message); return; }
+      try { res = await bank.check<typeof r>(r); } catch (e) { setBankErr((e as Error).message); setPayKey(newPressId()); return; }
     }
     await keep.clear();
     setDone(res.status === "not_set_up" ? `Recorded ${money(res.amountCents)}: payments aren't set up yet, so nothing was charged.` : res.amountCents === 0 ? "Paid $0." : `Paid ${money(res.amountCents)}${res.later ? ` · ${res.later}` : ""}.`);

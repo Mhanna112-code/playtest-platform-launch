@@ -23,12 +23,15 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [ticked, setTicked] = useState(false);
+  // (Batch 19 section 5) The stop box names the press that was made: "Your Let it go didn't go through." / "Your Charge didn't go through."
+  const [pressed, setPressed] = useState<"Charge" | "Let it go">("Charge");
   const [amount, setAmount] = useState((cents / 100).toFixed(2));
   // (Batch 16 section 36) What will be charged: the typed amount rounded to the cent (the box shows it rounded once it's left).
   const typed = toCents(amount);
   // (Batch 16 section 39) No tick for ordinary amounts; above $200 the tick stays, required, naming the amount.
   const over = typed != null && typed > CHARGE_TICK_CENTS;
   const go = (choice: string) => {
+    setPressed(choice === "letgo" ? "Let it go" : "Charge");
     setBusy(true);
     setErr("");
     api(`/api/sessions/${sessionId}/choose`, { ...(callId ? { callId } : { submissionId }), choice, amount, tickedCents: choice === "charge" && over && ticked ? typed : undefined, seenAt, confirmed, boxAt })
@@ -63,7 +66,7 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
           </ConfirmButton>
         </div>
       )}
-      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} didntGo />
+      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} didntGo press={pressed} />
       <Err text={err && !err.startsWith(FIELD) ? `Your press didn't go through. ${err}` : ""} />
       <FormMistakes text={err.startsWith(FIELD) ? err : ""} press="Charge" />
     </div>

@@ -83,6 +83,7 @@ missed calls are cancelled without blame):
 1. Set a long random `HEALTH_KEY` and `OUTAGE_CHECKS=1` in the production environment.
 2. In UptimeRobot (free), add an HTTP(s) monitor with a 5-minute interval for
    `https://<your-site>/api/health?key=<HEALTH_KEY>`.
+   (Batch 19) The same keyed check runs the time-sensitive reminders and timers every 5 minutes, so the monitor must stay on.
 
 Only those keyed pings write heartbeats; a gap of more than 15 minutes between two of them is recorded as an outage.
 Without `OUTAGE_CHECKS=1` nothing is detected.

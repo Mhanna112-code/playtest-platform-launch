@@ -54,10 +54,10 @@ describe("Open until: at most 30 days from when the test opened (section 16)", (
   });
 
   it("Edit's hint: each tester's days now + the extension; the field's own cap and red line", () => {
-    expect(R.editTesterDaysHint(14, 5)).toBe("Each tester gets 19 days from when they join (14 now + 5).");
-    expect(R.editTesterDaysHint(14, 0)).toBe("Each tester gets 14 days from when they join.");
+    // (Batch 19 section 8) The line now says when the last work can arrive: the days now + the extension.
+    expect(R.openUntilLine("2026-11-25", 14 + 5)).toContain("Each gets 19 days from when they join, so someone joining on Nov 25 has until Dec 14 to send work.");
     const form = src("app/app/tests/TestForm.tsx");
-    expect(form).toContain("editTesterDaysHint(edit.testerDays, Math.max(0, daysBetween(base.openUntil.slice(0, 10), f.openUntil)))");
+    expect(form).toContain("openUntilLine(f.openUntil, edit.testerDays + Math.max(0, daysBetween(base.openUntil.slice(0, 10), f.openUntil)))");
     expect(form).toContain('"data-max-msg": edit?.capDay ? openUntilCapLine(edit.capDay) : OPEN_UNTIL_MAX_LINE');
     expect(form).toContain("hint: edit?.capDay ? openUntilCapHint(edit.capDay)");
     expect(src("app/app/tests/[id]/edit/page.tsx")).toContain("capDay: openUntilCapDay(t.createdAt, u.timeZone)");

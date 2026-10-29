@@ -23,7 +23,7 @@ import { notify } from "./notify";
 import { offerNewTerms, testerTermsGate } from "./terms";
 import { testerGate } from "./testerGate";
 import { blockPartners } from "./blocks";
-import { callCancelledLine, rateStops, STOP_NOTE_KIND, stopEventText, stopNoteText } from "@/lib/rules";
+import { callCancelledLine, rateStops, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked } from "@/lib/rules";
 
 type Tx = Prisma.TransactionClient;
 type U = { id: string; email: string; name: string; pronoun: string; isDeveloper: boolean; isTester: boolean; timeZone?: string | null };
@@ -231,6 +231,8 @@ async function checkPost(dev: U, body: Record<string, unknown>) {
   if (Number.isInteger(l.spots) && l.spots > cap.limit && !errs.some((e) => e.startsWith("Spots"))) errs.push(overLimitText(cap.limit));
   const keys = checkTypedKeys(body.accessKeys);
   if (keys.length && Number.isInteger(l.spots) && keys.length < l.spots) errs.push(keyNeedLine(l.spots, keys.length));
+  // (Batch 19 section 7) The required tick about Charge, red at the tick (listed last, with every other mistake).
+  if (!payRulesTicked(body)) errs.push(PAY_RULES_TICK_MISSING);
   if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs });
   return { l, keys };
 }
@@ -344,6 +346,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const plan = await planKeyChange(tx, testId, keysAdd, keysRemove, next.spots);
     const keyErrs = [...plan.errors, ...(plan.need ? [plan.need] : [])];
     errs.push(...keyErrs);
+    // (Batch 19 section 7) Every Save needs the tick about Charge (the page shows it while Save is enabled), red at the tick.
+    if (!payRulesTicked(body)) errs.push(PAY_RULES_TICK_MISSING);
     const keysChanged = plan.toAdd.length > 0 || plan.removable.length > 0 || plan.toReuse.length > 0;
     // (Owner, Oct 28, batch 16 sections 17 and 18) Another tab's (or device's) save is a reason to stop only for the fields where what this press holds
     // differs from what's saved now. Its lines are replaced by one line naming just those fields ("You changed the description in another tab", carrying

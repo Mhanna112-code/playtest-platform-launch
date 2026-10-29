@@ -16,7 +16,7 @@ import { NotSentTag, useKept } from "@/lib/useKept";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { givenDeletedLine, keyGivenLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
-import { OPEN_UNTIL_MAX_LINE, editTesterDaysHint, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, testerDaysHint, type Listing } from "@/lib/rules";
+import { PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, type Listing } from "@/lib/rules";
 /** The browser's own date (YYYY-MM-DD) and zone. */
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone ?? ""; } catch { return ""; } };
@@ -143,6 +143,8 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
   // (Batch 18 section 1) The account accepted an older Terms of Use: Post the test shows the box with its tick under the button; ticked, the next press posts.
   const [termsAsk, setTermsAsk] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
+  // (Batch 19 section 7) The required tick about Charge above Post the test / Save (Edit: only while Save is enabled; it unticks when the form is back to unchanged).
+  const [payTick, setPayTick] = useState(false);
   // Keys: Post types them one per line. (Batch 15 section 19) Edit's Free box holds every free key, one per line: Save works out what was added and deleted against
   // the free keys this page LOADED (freeLoaded), so another tab's work is never undone.
   const [freeLoaded, setFreeLoaded] = useState<string[]>(edit?.keys.free.map((k) => k.value) ?? []);
@@ -179,6 +181,9 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
   // What differs from what this tab knows (Edit): the Save button is faded when nothing does.
   const changedKeys = useMemo(() => (edit ? (Object.keys(f) as (keyof F)[]).filter((k) => JSON.stringify(f[k]) !== JSON.stringify(base[k])) : []), [f, base, edit]);
   const nothingChanged = !!edit && changedKeys.length === 0 && !keysChanged;
+  useEffect(() => {
+    if (nothingChanged) setPayTick(false);
+  }, [nothingChanged]);
   // (Owner, Oct 28 afternoon) Once a tester has joined, each limited field (the steps, the NDA, questions, required languages, required devices) has its OWN 3 changes (one Save that
   // changes two of them uses one change of each; prices, parts, the build link and access keys are not limited). "Changes left: N of 3" sits next to each field's label; a field
   // at 0 locks with its note, and the other fields stay editable.
@@ -351,7 +356,7 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
     try {
       if (!edit) {
         // (Batch 15 section 32) The developer's time zone goes with the press: "today" and the 3 to 30 days are counted in it.
-        const r = await api<{ id: string }>(draft ? `/api/tests/${draft.id}/post-draft` : "/api/tests", { ...toApi(f), accessKeys: keysText, confirmHigh: confirmHigh(), timeZone: browserZone(), agreeTerms });
+        const r = await api<{ id: string }>(draft ? `/api/tests/${draft.id}/post-draft` : "/api/tests", { ...toApi(f), accessKeys: keysText, confirmHigh: confirmHigh(), payRulesOk: payTick, timeZone: browserZone(), agreeTerms });
         await keep.clear();
         window.location.href = `/app/tests/${r.id}`;
         return;
@@ -360,7 +365,7 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
       const fields: Record<string, unknown> = {};
       for (const k of touched) for (const a of API_FIELDS[k]) fields[a] = all[a];
       const r = await api<{ offered: number; notReinvited?: string[]; resent?: string[]; closedApps?: string[]; spotClosed?: string[]; spots?: number }>(`/api/tests/${edit.id}/edit`, {
-        version, fields, confirmHigh: confirmHigh(), seenAt: edit.seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}), timeZone: browserZone(),
+        version, fields, confirmHigh: confirmHigh(), payRulesOk: payTick, seenAt: edit.seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}), timeZone: browserZone(),
         keysAdd: fb.added, keysRemove: fb.removed,
         // (Batch 16 section 17) What this tab loaded and what it holds: another tab's save of the same values is no reason to stop.
         base: toApi(seenBase.current), has: toApi(holding()), keysLoaded: keysSeen.current,
@@ -590,11 +595,11 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
           </div>
           <div>
             {text("openUntil", "Open until (last day to join)", { req: true, type: "date", cls: "max-w-[12rem]", hint: edit?.capDay ? openUntilCapHint(edit.capDay) : edit ? "only later, up to 30 days from today" : "3 to 30 days from today", attrs: { min: minOpen, max: capMax, "data-msg": edit ? "Open until must be a date in the future." : OPEN_UNTIL_RANGE, "data-max-msg": edit?.capDay ? openUntilCapLine(edit.capDay) : OPEN_UNTIL_MAX_LINE, "data-required-msg": OPEN_UNTIL_RANGE, ...(showOn("openUntil") && ouLine ? { "data-red-msg": ouLine } : {}) } })}
-            {/* (Owner, Oct 30, batch 15 section 18) Live: "Each tester gets the same time from when they join: today to this date (14 days)." */}
-            {/* (Batch 16 section 16) Edit: what each tester gets after the change (their days now + the extension); Post: today to this date. */}
+            {/* (Owner, Oct 28, batch 19 section 8) Live: testers join until this date, each gets N days from joining (Edit: their days now + the extension, batch 16
+                section 16; Post: today to this date), so the last work can arrive Open until + N; then the 7 days to pay. */}
             {f.openUntil && /^\d{4}-\d{2}-\d{2}$/.test(f.openUntil) && (edit?.testerDays != null
-              ? <p className="mt-1 text-xs text-slate-400" data-tester-days="">{editTesterDaysHint(edit.testerDays, Math.max(0, daysBetween(base.openUntil.slice(0, 10), f.openUntil)))}</p>
-              : daysBetween(localToday(), f.openUntil) > 0 && <p className="mt-1 text-xs text-slate-400" data-tester-days="">{testerDaysHint(daysBetween(localToday(), f.openUntil))}</p>)}
+              ? <p className="mt-1 text-xs text-slate-400" data-tester-days="">{openUntilLine(f.openUntil, edit.testerDays + Math.max(0, daysBetween(base.openUntil.slice(0, 10), f.openUntil)))}</p>
+              : daysBetween(localToday(), f.openUntil) > 0 && <p className="mt-1 text-xs text-slate-400" data-tester-days="">{openUntilLine(f.openUntil, daysBetween(localToday(), f.openUntil))}</p>)}
             {showOn("openUntil") && redLine(ouLine)}
           </div>
         </div>
@@ -643,6 +648,16 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
         {/* (Owner, Oct 28) Above the button: "Fix the N mistakes above…". (Batch 16 section 10) One linked bullet per field red right now, read from the
             fields themselves, so the list and the fields always agree; then any server mistake that belongs to no field. */}
         <MistakeList press={edit ? "Save" : "Post the test"} orphans={orphans} />
+        {/* (Owner, Oct 28, batch 19 section 7) Required, just above the button: on Post (and a draft's Post) always; on Edit only while Save is enabled. Unticked, the
+            server refuses the press with its red line at the tick. */}
+        {!nothingChanged && (
+          <div data-note-after="" data-pay-rules-tick="">
+            <label className="flex max-w-xl items-start gap-2 text-sm text-ink-200">
+              <input type="checkbox" id="payRulesOk" className="mt-1" checked={payTick} onChange={(e) => setPayTick(e.target.checked)} data-match="^Tick to confirm you understand how payments work" />
+              <span>{PAY_RULES_TICK} <a href={PAYMENTS_TERMS_HREF} target="_blank" rel="noreferrer">{PAY_RULES_LINK}</a></span>
+            </label>
+          </div>
+        )}
         <div className="flex flex-wrap items-center">
           <button className="btn" disabled={busy || nothingChanged} aria-disabled={nothingChanged} title={nothingChanged ? "Nothing has changed yet" : undefined}>{busy ? "Saving…" : edit ? "Save" : "Post the test"}</button>
           {keep.restored && <NotSentTag />}

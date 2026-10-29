@@ -20,6 +20,7 @@ import { callMinutesOf, chargeCappedLine } from "@/lib/callMeasure";
 import { callReference } from "@/lib/rules";
 import { callsLeftCents } from "./callMoney";
 import { closedOut, pieceCloseOut } from "./closeOut";
+import { withTimersLock } from "./timers";
 
 // Payment hold (owner rule, Oct 27): starts AT ONCE when any payment is declined (part Pay, the tester's Charge, a call charge, extra pay), or when a chargeback opens
 // (a chargeback during a payment hold turns it into a chargeback hold). There is no owed window and no daily retry. While on hold all the developer's
@@ -495,8 +496,28 @@ export async function chargebackWon(paymentIntentId: string) {
 /** (Batch 16 section 41) Pay what you owe during a chargeback hold before the card is verified. */
 export const VERIFY_FIRST = "Verify your card first.";
 
+/**
+ * (Owner, Oct 28, batch 19 section 4) The time-sensitive sweep: what page loads and polls trigger for calls and timers, run every 5 minutes by the uptime check's keyed
+ * GET /api/health (UptimeRobot) and by the daily job: the 15-minute call reminders, calls ending at the $1,000, nobody-joined cancels and final call lengths, Charge
+ * opening (sent parts and listed calls, with their daily "pay it" and Charge reminders), the close-out reminders, the developer's review reminders and the rating
+ * reminders. Each step records what it did, so a second run sends nothing twice; the caller holds the timers lock (withTimersLock), so two never run at once.
+ */
+export async function runSweep(now = new Date(), co = closeOutMemo(now)) {
+  await (await import("./calls")).sweepNobodyJoined(now);
+  const choices = (await openCharges(now, co)) + (await callCharges(now, co));
+  await closeOutReminders(now, co);
+  await reviewReminders(now, co);
+  await (await import("./ratings")).ratingReminders(now);
+  return { choices };
+}
+
 /** The daily job: auto-pay after the review window, closing tests paused for 7 days, the paused reminders, Open until heads-ups and each tester's own deadline reminders. (No retries and no owed window any more: a declined payment is a hold at once.) */
 export async function runDaily(now = new Date()) {
+  // (Batch 19 section 4) Under the timers lock, so a 5-minute sweep never runs at the same moment (it waits for one that is running).
+  return (await withTimersLock(() => runDailyLocked(now), { waitMs: 60_000 })) ?? runDailyLocked(now);
+}
+
+async function runDailyLocked(now: Date) {
   const out = { autoPaid: 0, holds: 0, alerts: 0, headsUps: 0, choices: 0, retried: 0, closed: 0 };
   // (Batch 17 §19) Each piece's closing dates (the developer's Pay, the tester's Charge), looked up once per run.
   const co = closeOutMemo(now);
@@ -504,52 +525,8 @@ export async function runDaily(now = new Date()) {
   // (Batch 11) Bank confirmations that timed out, then the automatic retries of what is owed during a hold.
   await (await import("./confirm")).expireActions(now);
   if (stripeOn()) for (const u of await db.user.findMany({ where: { holdStartedAt: { not: null }, deletedAt: null, stripePaymentMethodId: { not: null } }, select: { id: true } })) await retryOwed(u.id, now).catch((e) => console.error("[retry]", (e as Error).message));
-  // 1. Sent work not paid or rejected within the review window (REVIEW_DAYS, 7): the listing amount is paid automatically (clock paused in holds).
-  const due = await db.submission.findMany({
-    // (Owner, Oct 29, batch 11) A deleted tester's sent work is still reviewed (and reminded) when their payout account was connected; Charge never opens for it.
-    where: { review: null, payBy: { lt: now }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } },
-    include: { contract: { include: { tester: true, test: { include: { developer: true } } } } },
-    orderBy: { payBy: "asc" },
-    take: 1000,
-  });
-  for (const s of due) {
-    const c = s.contract, dev = c.test.developer;
-    const auto = autoPayFor(s.agreedCents);
-    if (auto == null) continue; // outside the contract: its own reminder every 3 days (below)
-    // (Owner, Oct 26; batch 15 section 18) Charge / Let it go opens only when REVIEW_DAYS (7) have passed since it was sent AND the tester's own deadline has passed.
-    if (!chargeIsOpen(s, c.test, c, now)) continue;
-    // (Batch 17 §19) Once the piece's Pay closed there's no "pay it" line; once its Charge closed (the tester's side) Charge is never offered or reminded.
-    const payShut = await co.payClosed({ submissionId: s.id }), chargeShut = await co.chargeClosed({ submissionId: s.id });
-    if (payShut && chargeShut) continue;
-    // Once it opens: the developer is reminded daily until it's paid, rejected, charged or let go.
-    const gone = !!c.tester.deletedAt;
-    if (!payShut && (!s.devRemindedAt || now.getTime() - s.devRemindedAt.getTime() >= 23 * 3_600_000)) {
-      await bell(dev.id, `“${c.title}”: ${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} waited over ${REVIEW_DAYS} days: pay it${gone ? "" : ` (${displayName(c.tester)} can now charge or let it go)`}.`, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
-      await db.submission.update({ where: { id: s.id }, data: { devRemindedAt: now } });
-    }
-    if (gone || chargeShut) continue; // the tester can't sign in: Charge and Let it go never open (or, batch 17 §19, they closed)
-    // Contract price already paid in full for this part: no Charge / Let it go, no day-14 notice, no reminders.
-    const paidPart = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
-    if (chargeAmount(s.agreedCents, paidPart) === 0) continue;
-    if (!s.choiceOfferedAt) {
-      const by = new Date(now.getTime() + REVIEW_DAYS * 86_400_000);
-      await db.submission.update({ where: { id: s.id }, data: { choiceOfferedAt: now, choiceBy: by, remindedAt: now } });
-      const line = choiceLine(displayName(dev), s.kind, auto);
-      await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#part-${s.kind}`, { group: "charge" });
-      await db.$transaction((tx) => recordEvent(tx, c.testId, "choice", `${displayName(c.tester)} can now charge or let go of their ${s.kind === "recording" ? "recording" : "written answers"}`, false, {}, c.id));
-      await (await import("./ratings")).maybePromptRating(c.id);
-      out.choices++;
-      continue;
-    }
-    {
-      if (!s.remindedAt || now.getTime() - s.remindedAt.getTime() >= REMIND_DAYS * 86_400_000 - 3_600_000) {
-        const line = choiceLine(displayName(dev), s.kind, auto);
-        await notify(c.tester.email, `Reminder: ${line}`, [line], `/app/sessions/${c.id}#part-${s.kind}`, { group: "charge", reminder: `charge:${s.id}` });
-        await db.submission.update({ where: { id: s.id }, data: { remindedAt: now } });
-      }
-      continue;
-    }
-  }
+  // 1. Sent work past its review window: Charge / Let it go opens (batch 19 section 4: also every 5 minutes, runSweep).
+  out.choices += await openCharges(now, co);
   // 1b. (Owner, Oct 30, batch 15 sections 15 and 40) A LISTED call left unpaid past its review date (the later of the tester's deadline and the call + 7 days): reviewed like
   // any other part. The developer is reminded daily; the tester can Charge (the measured or lowered length × the contract rate, within the $1,000 for calls) or Let it go.
   out.choices += await callCharges(now, co);
@@ -586,36 +563,8 @@ export async function runDaily(now = new Date()) {
     }
     if (due.record.length) await db.test.update({ where: { id: c.test.id }, data: { notifiedMarks: { push: due.record } } });
   }
-  // 5. (Owner, Oct 30, batch 15 section 2) The developer's review reminders, the SAME for listed and unlisted parts, counting to the review date (the later of the
-  // tester's deadline and sent + 7 days): 1 month (if it was more than a month away), 3, 2 and 1 weeks, 3 days, 1 day. After it, a listed part opens Charge (1
-  // above); an unlisted part's reminders just stop (its Needs you row stays until it's paid, $0 included).
-  const upcoming = await db.submission.findMany({ where: { review: null, choiceOfferedAt: null, payBy: { not: null }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, orderBy: { payBy: "asc" }, take: 2000 });
-  for (const s of upcoming) {
-    const reviewDate = chargeOpensAt(s, s.contract.test, s.contract, now);
-    const m = reviewDate ? reviewMarkDue(s.updatedAt, reviewDate, now, s.devMarks) : null;
-    if (!m || (await co.payClosed({ submissionId: s.id }))) continue; // (batch 17 §19) Pay closed: no reminders
-    const name = displayName(s.contract.tester);
-    const part = s.kind === "recording" ? "recording" : "written answers";
-    const when = m.label === "tomorrow" ? "by tomorrow" : m.label.replace("in ", "within ");
-    const after = s.agreedCents == null ? " (it isn't listed: any amount, $0 included)" : s.contract.tester.deletedAt ? "" : ` (after that ${name} can charge or let it go)`;
-    await bell(s.contract.test.developerId, `“${s.contract.title}”: review ${name}'s ${part} ${when}${after}.`, `/app/tests/${s.contract.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
-    // The mark is recorded with every earlier one, so a missed mark is never sent late.
-    const earlier = reviewMarksFor(s.updatedAt, reviewDate!).filter((x) => x.at.getTime() <= m.at.getTime()).map((x) => x.mark).filter((x) => !s.devMarks.includes(x));
-    await db.submission.update({ where: { id: s.id }, data: { devMarks: { push: earlier } } });
-  }
-  // 5b. (Batch 15 section 15) Listed calls get the same review reminders, counting to their review date.
-  const upcomingCalls = await db.call.findMany({ where: { review: null, status: "booked", rateCents: { not: null }, choiceOfferedAt: null, payBy: { not: null }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, take: 2000 });
-  for (const x of upcomingCalls) {
-    const reviewDate = chargeOpensAt(x, x.contract.test, x.contract, now);
-    const sent = x.measuredAt ?? x.startsAt;
-    const m = reviewDate ? reviewMarkDue(sent, reviewDate, now, x.devMarks) : null;
-    if (!m || (await co.payClosed({ callId: x.id }))) continue; // (batch 17 §19) Pay closed: no reminders
-    const name = displayName(x.contract.tester);
-    const when = m.label === "tomorrow" ? "by tomorrow" : m.label.replace("in ", "within ");
-    await bell(x.contract.test.developerId, `“${x.contract.title}”: pay ${name}'s call on ${T(x.startsAt)} ${when}${x.contract.tester.deletedAt ? "" : ` (after that ${name} can charge or let it go)`}.`, `/app/tests/${x.contract.testId}#call-${x.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${x.id}` });
-    const earlier = reviewMarksFor(sent, reviewDate!).filter((y) => y.at.getTime() <= m.at.getTime()).map((y) => y.mark).filter((y) => !x.devMarks.includes(y));
-    await db.call.update({ where: { id: x.id }, data: { devMarks: { push: earlier } } });
-  }
+  // 5, 5b. The developer's review reminders (batch 19 section 4: also every 5 minutes, runSweep).
+  await reviewReminders(now, co);
   // 5c. (Batch 15 sections 15 and 40) Calls that aren't listed: never charged; ONE weekly "Pay your calls" line per developer, stacked across tests, until each is paid ($0 counts).
   await payYourCalls(now, co);
   // (Batch 15 section 18) Open until passed: pending applications and open invites close.
@@ -674,6 +623,92 @@ export async function adminCases(now = new Date(), forDigest = false) {
 /** For the "Pay what you owe" box: failed charges and reversed payments. */
 export async function owedForBox(devId: string) {
   return owedLines(devId);
+}
+
+/** 1. Sent work not paid within the review window (REVIEW_DAYS, 7): the developer's daily "pay it", Charge / Let it go opening for the tester, and its reminders. */
+async function openCharges(now: Date, co: CloseOuts) {
+  let n = 0;
+  const due = await db.submission.findMany({
+    // (Owner, Oct 29, batch 11) A deleted tester's sent work is still reviewed (and reminded) when their payout account was connected; Charge never opens for it.
+    where: { review: null, payBy: { lt: now }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } },
+    include: { contract: { include: { tester: true, test: { include: { developer: true } } } } },
+    orderBy: { payBy: "asc" },
+    take: 1000,
+  });
+  for (const s of due) {
+    const c = s.contract, dev = c.test.developer;
+    const auto = autoPayFor(s.agreedCents);
+    if (auto == null) continue; // outside the contract: its own reminder every 3 days (below)
+    // (Owner, Oct 26; batch 15 section 18) Charge / Let it go opens only when REVIEW_DAYS (7) have passed since it was sent AND the tester's own deadline has passed.
+    if (!chargeIsOpen(s, c.test, c, now)) continue;
+    // (Batch 17 §19) Once the piece's Pay closed there's no "pay it" line; once its Charge closed (the tester's side) Charge is never offered or reminded.
+    const payShut = await co.payClosed({ submissionId: s.id }), chargeShut = await co.chargeClosed({ submissionId: s.id });
+    if (payShut && chargeShut) continue;
+    // Once it opens: the developer is reminded daily until it's paid, rejected, charged or let go.
+    const gone = !!c.tester.deletedAt;
+    if (!payShut && (!s.devRemindedAt || now.getTime() - s.devRemindedAt.getTime() >= 23 * 3_600_000)) {
+      await bell(dev.id, `“${c.title}”: ${displayName(c.tester)}'s ${s.kind === "recording" ? "recording" : "written answers"} waited over ${REVIEW_DAYS} days: pay it${gone ? "" : ` (${displayName(c.tester)} can now charge or let it go)`}.`, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
+      await db.submission.update({ where: { id: s.id }, data: { devRemindedAt: now } });
+    }
+    if (gone || chargeShut) continue; // the tester can't sign in: Charge and Let it go never open (or, batch 17 §19, they closed)
+    // Contract price already paid in full for this part: no Charge / Let it go, no day-14 notice, no reminders.
+    const paidPart = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
+    if (chargeAmount(s.agreedCents, paidPart) === 0) continue;
+    if (!s.choiceOfferedAt) {
+      const by = new Date(now.getTime() + REVIEW_DAYS * 86_400_000);
+      await db.submission.update({ where: { id: s.id }, data: { choiceOfferedAt: now, choiceBy: by, remindedAt: now } });
+      const line = choiceLine(displayName(dev), s.kind, auto);
+      await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#part-${s.kind}`, { group: "charge" });
+      await db.$transaction((tx) => recordEvent(tx, c.testId, "choice", `${displayName(c.tester)} can now charge or let go of their ${s.kind === "recording" ? "recording" : "written answers"}`, false, {}, c.id));
+      await (await import("./ratings")).maybePromptRating(c.id);
+      n++;
+      continue;
+    }
+    {
+      if (!s.remindedAt || now.getTime() - s.remindedAt.getTime() >= REMIND_DAYS * 86_400_000 - 3_600_000) {
+        const line = choiceLine(displayName(dev), s.kind, auto);
+        await notify(c.tester.email, `Reminder: ${line}`, [line], `/app/sessions/${c.id}#part-${s.kind}`, { group: "charge", reminder: `charge:${s.id}` });
+        await db.submission.update({ where: { id: s.id }, data: { remindedAt: now } });
+      }
+      continue;
+    }
+  }
+  return n;
+}
+
+/**
+ * 5. (Owner, Oct 30, batch 15 section 2) The developer's review reminders, the SAME for listed and unlisted parts, counting to the review date (the later of the
+ * tester's deadline and sent + 7 days): 1 month (if it was more than a month away), 3, 2 and 1 weeks, 3 days, 1 day. After it, a listed part opens Charge (openCharges);
+ * an unlisted part's reminders just stop (its Needs you row stays until it's paid, $0 included). 5b. Listed calls the same.
+ */
+async function reviewReminders(now: Date, co: CloseOuts) {
+  const upcoming = await db.submission.findMany({ where: { review: null, choiceOfferedAt: null, payBy: { not: null }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, orderBy: { payBy: "asc" }, take: 2000 });
+  for (const s of upcoming) {
+    const reviewDate = chargeOpensAt(s, s.contract.test, s.contract, now);
+    const m = reviewDate ? reviewMarkDue(s.updatedAt, reviewDate, now, s.devMarks) : null;
+    if (!m || (await co.payClosed({ submissionId: s.id }))) continue; // (batch 17 §19) Pay closed: no reminders
+    const name = displayName(s.contract.tester);
+    const part = s.kind === "recording" ? "recording" : "written answers";
+    const when = m.label === "tomorrow" ? "by tomorrow" : m.label.replace("in ", "within ");
+    const after = s.agreedCents == null ? " (it isn't listed: any amount, $0 included)" : s.contract.tester.deletedAt ? "" : ` (after that ${name} can charge or let it go)`;
+    await bell(s.contract.test.developerId, `“${s.contract.title}”: review ${name}'s ${part} ${when}${after}.`, `/app/tests/${s.contract.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
+    // The mark is recorded with every earlier one, so a missed mark is never sent late.
+    const earlier = reviewMarksFor(s.updatedAt, reviewDate!).filter((x) => x.at.getTime() <= m.at.getTime()).map((x) => x.mark).filter((x) => !s.devMarks.includes(x));
+    await db.submission.update({ where: { id: s.id }, data: { devMarks: { push: earlier } } });
+  }
+  // 5b. (Batch 15 section 15) Listed calls get the same review reminders, counting to their review date.
+  const upcomingCalls = await db.call.findMany({ where: { review: null, status: "booked", rateCents: { not: null }, choiceOfferedAt: null, payBy: { not: null }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, take: 2000 });
+  for (const x of upcomingCalls) {
+    const reviewDate = chargeOpensAt(x, x.contract.test, x.contract, now);
+    const sent = x.measuredAt ?? x.startsAt;
+    const m = reviewDate ? reviewMarkDue(sent, reviewDate, now, x.devMarks) : null;
+    if (!m || (await co.payClosed({ callId: x.id }))) continue; // (batch 17 §19) Pay closed: no reminders
+    const name = displayName(x.contract.tester);
+    const when = m.label === "tomorrow" ? "by tomorrow" : m.label.replace("in ", "within ");
+    await bell(x.contract.test.developerId, `“${x.contract.title}”: pay ${name}'s call on ${T(x.startsAt)} ${when}${x.contract.tester.deletedAt ? "" : ` (after that ${name} can charge or let it go)`}.`, `/app/tests/${x.contract.testId}#call-${x.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${x.id}` });
+    const earlier = reviewMarksFor(sent, reviewDate!).filter((y) => y.at.getTime() <= m.at.getTime()).map((y) => y.mark).filter((y) => !x.devMarks.includes(y));
+    await db.call.update({ where: { id: x.id }, data: { devMarks: { push: earlier } } });
+  }
 }
 
 /** (Batch 17 §19) Each piece's closing date for the developer's Pay and for the tester's Charge (pieceCloseOut), looked up once per daily run. */

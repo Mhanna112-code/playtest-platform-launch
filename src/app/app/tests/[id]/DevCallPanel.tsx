@@ -123,9 +123,11 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           <RequestRows rows={rows} setRows={setRows} minNow={minNow} notes={clash.notes} />
           {clash.limits.map((l) => <p key={l} className="err-field" tabIndex={-1} data-red-msg={l} data-clash-limit="">{l}</p>)}
           {already.length > 0 && <ul className="space-y-0.5 text-xs text-amber-200" data-already="">{already.map((l) => <li key={l}>{l}</li>)}</ul>}
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="inline-flex items-center gap-1 text-sm">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max={lenCap ? lenCap.max : 180} data-max-msg={lenCap?.line} data-whole="" data-msg="A live call lasts from 10 to 180 minutes." data-required="" data-required-msg="Enter the call's length in minutes."
-              data-match="length in minutes|live call lasts|^At most \d+ minutes" value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min <span className="text-xs text-slate-500" data-length-hint="">{lenCap ? lenCap.hint : "10–180"}</span></label>
+          {/* (Batch 19 section 5) The Length label and "min" stay on one line (never squeezed), and a red line at the box goes under the whole row. */}
+          <div className="flex flex-wrap items-end gap-2" data-note-after="" data-length-row="">
+            <label className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-sm">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max={lenCap ? lenCap.max : 180} data-max-msg={lenCap?.line} data-whole="" data-msg="A live call lasts from 10 to 180 minutes." data-required="" data-required-msg="Enter the call's length in minutes."
+              data-match="length in minutes|live call lasts|^At most \d+ minutes" value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min</label>
+            <span className="pb-2 text-xs text-slate-500" data-length-hint="">{lenCap ? lenCap.hint : "10–180"}</span>
             <button
               className="btn"
               disabled={busy || !filled.length || ticked.length === 0}

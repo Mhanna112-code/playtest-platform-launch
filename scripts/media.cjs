@@ -123,6 +123,8 @@ async function same(page, opts = V, video = false) {
 /** The Next.js dev-tools badge is not part of the app: hide it in pictures. */
 const hideDevBadge = (c) => c.addInitScript(() => document.addEventListener("DOMContentLoaded", () => { const s = document.createElement("style"); s.textContent = "nextjs-portal{display:none!important}"; document.head.appendChild(s); }));
 const post = async (page, p, data = {}) => {
+  // (Batch 19 section 7) Post, a draft's Post and Save carry the required tick about Charge.
+  if (p === "/api/tests" || /\/(edit|post-draft)$/.test(p)) data = { payRulesOk: true, ...data };
   const r = await page.context().request.post(BASE + p, { data, headers: { "content-type": "application/json" }, timeout: 90000 }); // (a dev server compiles a route on its first call)
   const body = await r.json().catch(() => ({}));
   if (!r.ok() && !post.quiet) console.log("   ! POST", p, r.status(), JSON.stringify(body).slice(0, 300));
@@ -460,6 +462,7 @@ group("post", async () => {
   await v.locator("#openUntil").fill(day(14));
   await v.locator("#joinMode").scrollIntoViewIfNeeded();
   await pause(v, 800);
+  await v.check("#payRulesOk"); // (batch 19 section 7)
   await v.click("button:has-text('Post the test')");
   await v.waitForURL((u) => /\/app\/tests\/\w+$/.test(u.pathname) && !u.pathname.endsWith("/new"));
   await pause(v, 3000);
@@ -510,6 +513,7 @@ group("post", async () => {
   await r.locator("#accessKeys").fill("KEY-1\nKEY-1\nKEY-2\nKEY-3");
   await r.locator("#productName").click();
   await pause(r, 800);
+  await r.check("#payRulesOk"); // (batch 19 section 7)
   await r.click("button:has-text('Post the test')");
   await r.waitForSelector("text=/Fix the .* above/");
   await pause(r, 2500);
@@ -1348,6 +1352,7 @@ group("plans", async () => {
   await nora.fill("#questions", "What did you like?");
   await nora.locator("#spots").fill("4");
   await nora.locator("#openUntil").fill(day(14));
+  await nora.check("#payRulesOk"); // (batch 19 section 7)
   await nora.click("button:has-text('Post the test')");
   await nora.waitForSelector("text=/You already have an open test/");
   await pause(nora, 600);
@@ -2130,6 +2135,7 @@ group("drafts", async () => {
   await nora.goto(`/app/tests/new?draft=${draftId}`);
   await nora.waitForSelector("[data-draft-note]");
   await nora.locator("#openUntil").fill(day(14));
+  await nora.check("#payRulesOk"); // (batch 19 section 7)
   await nora.click("button:has-text('Post the test')");
   await nora.waitForURL((u) => /\/app\/tests\/\w+$/.test(u.pathname) && !u.pathname.endsWith("/new"), { timeout: 15000 });
   await pause(nora, 1500);
@@ -2550,6 +2556,7 @@ group("plans2", async () => {
     await B.goto(`/app/tests/${ids[9]}`);
     const fromA = at(A), fromB = at(B);
     await fillPost(A, "Reef Rescue: first reef");
+    await A.check("#payRulesOk"); // (batch 19 section 7)
     await A.click("button:has-text('Post the test')");
     await A.waitForSelector("text=/You have 10 open tests/");
     await pause(A, 2000);
@@ -2563,6 +2570,7 @@ group("plans2", async () => {
     await B.waitForSelector("text=This test is stopped.");
     await pause(B, 1500);
     // The first tab presses Post again: it goes through (a drop in the count is never a stop-once reason).
+    await A.check("#payRulesOk"); // (batch 19 section 7)
     await A.click("button:has-text('Post the test')");
     await A.waitForURL((u) => /\/app\/tests\/\w+$/.test(u.pathname) && !u.pathname.endsWith("/new"), { timeout: 20000 });
     await pause(A, 3000);
@@ -2580,6 +2588,7 @@ group("plans2", async () => {
   await omar.goto(`/app/tests/new?draft=${draftId}`);
   await omar.waitForSelector("[data-draft-note]");
   await omar.locator("#openUntil").fill(day(14));
+  await omar.check("#payRulesOk"); // (batch 19 section 7)
   await omar.click("button:has-text('Post the test')");
   await omar.waitForSelector("text=/You already have an open test/");
   await pause(omar, 800);
@@ -2589,11 +2598,13 @@ group("plans2", async () => {
   await omar.goto("/app/tests/new");
   await fillPost(omar, "Tide Tracker: alerts", 40);
   await omar.locator("#spots").click();
+  await omar.check("#payRulesOk"); // (batch 19 section 7)
   await omar.click("button:has-text('Post the test')");
   await pause(omar, 2500);
   await shotFull(omar, "post-red-and-blue", "Red first, then blue | Open until 40 days ahead on the free plan with a test already open: the red at the field stops Post in the page, so the server's blue notice can't show yet");
   await omar.locator("#openUntil").fill(day(14));
   await omar.locator("#spots").click();
+  await omar.check("#payRulesOk"); // (batch 19 section 7)
   await omar.click("button:has-text('Post the test')");
   await omar.waitForSelector("text=/You already have an open test/");
   await pause(omar, 800);
@@ -2614,6 +2625,7 @@ group("postred", async () => {
   await P.locator("#questions").fill(["What did you like?", "Q: " + "Tell us everything about the second harbor, step by step. ".repeat(6)].join("\n"));
   await P.locator("#accessKeys").fill("KEY-1\nKEY-2");
   for (const id of ["productName", "title", "description", "spots", "openUntil", "accessKeys"]) await P.locator("#" + id).click();
+  await P.check("#payRulesOk"); // (batch 19 section 7)
   await P.click("button:has-text('Post the test')");
   await pause(P, 2500);
   await shotFull(P, "post-all-red", "Every red at once | Empty required fields, a price under $1, 60 spots, Open until 45 days ahead, an NDA over 1,000 characters, a question over 300 characters and fewer keys than spots, with the list above Post the test");
@@ -2641,6 +2653,7 @@ group("b16mistakes", async () => {
   const from = at(P);
   await P.locator("button:has-text('Post the test')").scrollIntoViewIfNeeded();
   await pause(P, 800);
+  await P.check("#payRulesOk"); // (batch 19 section 7)
   await P.click("button:has-text('Post the test')");
   await P.waitForSelector("[data-mistake-list] [data-mistake-link]");
   await pause(P, 1500);

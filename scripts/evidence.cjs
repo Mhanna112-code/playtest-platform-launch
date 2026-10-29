@@ -165,6 +165,7 @@ async function signIn(page, email) {
     await dev.check("input[aria-label='Include the live session']");
     await dev.fill("#liveRate", "30.00");
     await shot(dev, "post-form");
+    await dev.check("#payRulesOk"); // (batch 19 section 7) the required tick about Charge
     await dev.click("text=Post the test");
     await dev.waitForURL((u) => /\/app\/tests\/\w+$/.test(u.pathname) && !u.pathname.endsWith("/new"));
     testUrl = dev.url();
@@ -391,6 +392,8 @@ async function signIn(page, email) {
 
   // ---------- Payment / pause evidence set (flows 11–16), STRIPE_FAKE + CRON_SECRET ----------
   const apiPost = async (page, p, data = {}) => {
+    // (Batch 19 section 7) Post, a draft's Post and Save carry the required tick about Charge.
+    if (p === "/api/tests" || /\/(edit|post-draft)$/.test(p)) data = { payRulesOk: true, ...data };
     const r = await page.context().request.post(BASE + p, { data, headers: { "content-type": "application/json" } });
     return { status: r.status(), body: await r.json().catch(() => ({})) };
   };
@@ -501,6 +504,7 @@ async function signIn(page, email) {
     await dev.fill("#title", "Another game");
     await dev.fill("#productName", "Another game");
     await dev.fill("#questions", "Anything?");
+    await dev.check("#payRulesOk"); // (batch 19 section 7) the required tick about Charge
     await dev.click("text=Post the test");
     check("posting refused", await has(dev, "text=New tests can't be posted while payments are on hold."));
     await shot(dev, "hold-posting-refused-developer");
@@ -667,6 +671,7 @@ async function signIn(page, email) {
     check("Edit explains the offer", await has(dev, "text=each is offered these new terms and can switch"));
     await dev.fill("#recordingPrice", "20.00");
     await shot(dev, "edit-developer");
+    await dev.check("#payRulesOk"); // (batch 19 section 7)
     await dev.click("button:has-text('Save')");
     check("Save result names the offer", await has(dev, "text=Saved. Offered the new terms to"));
     check("tester row: on original terms", await has(dev, "text=On their original terms · offered new terms"));
@@ -724,7 +729,7 @@ async function signIn(page, email) {
     check("Apply to join shown", await has(t3, "button:has-text('Apply to join')"));
     // The developer edits the listing meanwhile: Apply stops once under the button.
     const v = sql(`select version from "Test" where id = '${T19}'`);
-    await apiPost(dev, `/api/tests/${T19}/edit`, { version: Number(v), fields: { writtenCents: "11.00" }, confirmed: true });
+    await apiPost(dev, `/api/tests/${T19}/edit`, { version: Number(v), fields: { writtenCents: "11.00" }, confirmed: true, payRulesOk: true });
     await t3.fill("#note", "I love beacon puzzles.");
     await t3.click("button:has-text('Apply to join')");
     check("Apply stops once (listing changed)", await has(t3, "text=The listing was edited: written answers price"));
@@ -941,10 +946,12 @@ async function signIn(page, email) {
     // Tab 2: the developer changes the description and saves.
     await devTab2.goto(`/app/tests/${T}/edit`);
     await devTab2.fill("#description", "Explore the rock pools at low tide.");
+    await devTab2.check("#payRulesOk"); // (batch 19 section 7)
     await devTab2.click("button:has-text('Save')");
     await devTab2.waitForURL(`**/app/tests/${T}?saved=1**`);
     // Edit tab 1 (opened before the other tab's save): Save stops once under Save; the second press saves.
     await devTab1.click("fieldset:has-text('Categories') label:has-text('Education')");
+    await devTab1.check("#payRulesOk"); // (batch 19 section 7)
     await devTab1.click("button:has-text('Save')");
     check("Edit tab 1: Save stopped once with the other tab's change", await has(devTab1, "text=Nora Lane changed the description"));
     await shot(devTab1, "edit-save-stopped-developer");
@@ -958,6 +965,7 @@ async function signIn(page, email) {
     await devTab1.waitForTimeout(1200);
     const yAfter = await saveY();
     check("after the stopped Save, the page stays at the button (no jump to the top box)", boxSeen && Math.abs(yAfter - yStop) < 40, `Save at ${yStop} px → ${yAfter} px on screen; top box ${boxSeen ? "shown" : "not shown"}`);
+    await devTab1.check("#payRulesOk"); // (batch 19 section 7)
     await devTab1.click("button:has-text('Save')");
     await devTab1.waitForURL(`**/app/tests/${T}?saved=1**`).catch(() => {});
     check("second Save saved", sql(`select 'Education' = any(categories) from "Test" where id = '${T}'`) === "t");
@@ -1029,7 +1037,7 @@ async function signIn(page, email) {
     await t4.goto(`/app/sessions/${SE}`);
     await apiPost(dev, `/api/tests/${TK}/request-time`, { seenAt: new Date().toISOString(), confirmed: true, contractIds: [SE], times: [atK(1)] });
     const v = sql(`select version from "Test" where id = '${TK}'`);
-    await apiPost(dev, `/api/tests/${TK}/edit`, { version: Number(v), fields: { description: "Swim through the kelp at dawn." }, confirmed: true });
+    await apiPost(dev, `/api/tests/${TK}/edit`, { version: Number(v), fields: { description: "Swim through the kelp at dawn." }, confirmed: true, payRulesOk: true });
     await t4.fill("#a0", "Fish and a turtle.");
     await t4.click("button:has-text('Send my answers')");
     check("tester stop box: listing info (F) + call change (C) together", (await has(t4, "text=Nora Lane changed the description")) && (await has(t4, "text=Nora Lane requested a call for")));
@@ -1151,7 +1159,7 @@ async function signIn(page, email) {
     await runCron();
     check("retried and went through", sql(`select count(*) from "Payment" where "submissionId" = '${subR}' and status = 'charged' and "settledAt" is not null`) === "1");
     const vk = sql(`select version from "Test" where id = '${TK}'`);
-    await apiPost(dev, `/api/tests/${TK}/edit`, { version: Number(vk), fields: { description: "Swim through the kelp at noon." }, confirmed: true });
+    await apiPost(dev, `/api/tests/${TK}/edit`, { version: Number(vk), fields: { description: "Swim through the kelp at noon." }, confirmed: true, payRulesOk: true });
     check("tester top box: paid on Reef", await t3.waitForSelector("[data-live-top] >> text=Nora Lane paid $8.00 for your written answers on Reef", { timeout: 35000 }).then(() => true, () => false));
     await t3.waitForSelector("[data-live-top] >> text=Nora Lane changed the description", { timeout: 35000 }).catch(() => {});
     const n = await t3.locator("[data-live-top] li").count();
@@ -1166,7 +1174,7 @@ async function signIn(page, email) {
 
 
   await flow("26", "NEWEST+4: a listing change re-sends the invite (old Accept refused); Accept after a change asks the applicant; rejoining restores the session", async () => {
-    const edit = async (testId, fields) => apiPost(dev, `/api/tests/${testId}/edit`, { version: Number(sql(`select version from "Test" where id = '${testId}'`)), fields, confirmed: true });
+    const edit = async (testId, fields) => apiPost(dev, `/api/tests/${testId}/edit`, { version: Number(sql(`select version from "Test" where id = '${testId}'`)), fields, confirmed: true, payRulesOk: true });
     // (a) Re-sent invite: Eve's join page shows the invite; the developer changes the price; her Join is refused with the new invite.
     const rl = await apiPost(dev, "/api/tests", { title: "Lagoon", description: "Float.", buildUrl: "https://example.com/lagoon", categories: ["Game"], devices: [], languages: [], spots: 3, writtenCents: "8.00", recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7, questions: ["Calm?"], openUntil: "", joinMode: "invite" });
     const TL = rl.body.id;
@@ -1196,6 +1204,7 @@ async function signIn(page, email) {
     const devTab2 = await dev.context().newPage();
     await devTab2.goto(`/app/tests/${TA}/edit`);
     await devTab2.fill("#description", "Circle the island twice.");
+    await devTab2.check("#payRulesOk"); // (batch 19 section 7)
     await devTab2.click("button:has-text('Save')");
     await devTab2.waitForURL(`**/app/tests/${TA}?saved=1**`);
     check("Save result lists the closed application", await has(devTab2, "text=Closed 1 application: Cara Diaz"));

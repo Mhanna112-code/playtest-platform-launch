@@ -1,13 +1,13 @@
 import { PublicShell } from "@/components/PublicShell";
-import { MAX_ACTIVE_TESTS, REVIEW_DAYS } from "@/lib/rules";
-import { TERMS_VERSION, WHAT_CHANGED, WHAT_CHANGED_ID } from "@/lib/termsOfUse";
+import { MAX_ACTIVE_TESTS, PAYMENTS_TERMS_ID } from "@/lib/rules";
+import { PAYMENT_RULES, TERMS_VERSION, WHAT_CHANGED, WHAT_CHANGED_ID } from "@/lib/termsOfUse";
 
 export const metadata = { title: "Terms of Use · Playtest" };
 
 // Copied from the full app's Terms of Use and adapted to the lean rules. DRAFT: the owner reviews the wording (and a lawyer
 // should) before launch. It is a plain-language description of the rules the site enforces, not legal advice.
-/** A point is its text, or its text with an anchor to link to (`id`). */
-const SECTIONS: { title: string; points: (string | { id: string; text: string })[] }[] = [
+/** A point is its text, or its text with an anchor to link to (`id`). (Batch 19 section 6) `payments` marks the section drawn from PAYMENT_RULES. */
+const SECTIONS: { title: string; points: (string | { id: string; text: string })[]; payments?: boolean }[] = [
   {
     title: "1. What this platform is",
     points: [
@@ -20,8 +20,7 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
     points: [
       "A test states its terms up front: the parts you ask for (written answers, a screen recording, a live call), the price of each, your questions, the devices and languages it needs, Open until (the last day to join; every tester gets the same number of days from when they join), how many testers (spots), and who can join (anyone who matches, people you approve, or invite only).",
       "A live call's hourly rate is at least $10 an hour (or free); each call request picks its own length (10 to 180 minutes). Each part can be marked Required or Not required: it is a label, it blocks nothing.",
-      `Developers post tests for free and pay only for the work they accept. A developer can take up to a number of testers per test that starts at 10 and grows with good ratings and reviews (never more than 50). A tester can be in up to ${MAX_ACTIVE_TESTS} tests at once.`,
-      "Developers pay by card when they press Pay on a piece of work. A card is needed before paying. A failed payment is owed and retried daily; an unpaid amount past its date pauses your tests until it is paid.",
+      `Posting a test is free; what developers pay is in section 4. A developer can take up to a number of testers per test that starts at 10 and grows with good ratings and reviews (never more than 50). A tester can be in up to ${MAX_ACTIVE_TESTS} tests at once.`,
       "Once a tester joins, the terms they agreed to are saved and are what their work is judged against, even if the test is edited later. If you change prices, parts, questions, devices or languages, or the description, each working tester is offered the new terms and chooses Switch or Keep; work already sent keeps the price it was sent under. Moving Open until later moves every working tester's deadline with it.",
       "Tests can be stopped for good by the developer; the work already sent still waits to be paid, and calls ahead are cancelled.",
     ],
@@ -37,25 +36,13 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
     ],
   },
   {
-    title: "4. Reviews and payment",
-    points: [
-      "Payment is for the work you sent, judged against the listing, not for whether the feedback is positive.",
-      "A developer pays any amount from $0 up for each part; there is no reject. Paying less than the listing, or $0, needs a reason, which the tester reads.",
-      `A listed part (or a listed call) not paid by its review date (the later of the tester's deadline and ${REVIEW_DAYS} days after it was sent, or after the call) is the tester's to decide: they can charge the developer the listed amount, or let it go.`,
-      "Live calls are paid for their real length at the contract's hourly rate. The site measures it: the minutes both people had the call page open at the same time (up to 150% of the booked length). The developer can only lower it, with a reason the tester reads. A call that isn't listed is paid what the developer chooses, up to $200 an hour. All of one tester's calls on a test together can come to at most $1,000, extra pay included. A call ends when its pay at the call's rate would pass what's left of that $1,000; minutes after that don't count, even if people keep talking in the video room.",
-      "Testers receive 80% of each price and of live call time; the platform keeps 20%.",
-      "Ratings (1 to 5, and a note) are given both ways and shown once both sides have rated or after 14 days.",
-    ],
+    // (Owner, Oct 28, batch 19 sections 3 and 6) Every money rule in one place: PAYMENT_RULES (lib/termsOfUse.ts). Payment is for the work, not for praise.
+    title: "4. How payments work",
+    points: ["Payment is for the work the tester sent, judged against the listing, not for whether the feedback is positive."],
+    payments: true,
   },
   {
-    title: "5. Disputes",
-    points: [
-      "A tester can dispute the developer's payment on any part they sent or call they had, once: a payment of any amount, including $0 and parts that weren't listed (and a rejection made before Reject was removed). Our team decides and can read the work, the reason and the chat. A decision can only raise the pay: up to the listing amount, or for a part that wasn't listed up to $1,000 a piece ($200 an hour for a call), minus what was already paid.",
-      "A bank reversing a card payment (a chargeback) pauses the developer's tests until it is resolved and what is owed is paid.",
-    ],
-  },
-  {
-    title: "6. Conduct",
+    title: "5. Conduct",
     points: [
       "Be respectful. No harassment, spam, fake or copied work, or leaking builds.",
       // (Owner, Oct 28 evening, batch 18 section 2) The same rule as Post / Edit's Mature line.
@@ -65,21 +52,22 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
     ],
   },
   {
-    title: "7. Feedback and confidentiality",
+    title: "6. Feedback, ratings and confidentiality",
     points: [
+      "Ratings (1 to 5 stars, and an optional note) go both ways. The tester rates first; the developer rates once the tester has rated and everything they sent is settled. The tester's rating shows once the developer rates or their 14 days to rate end.",
       "Developers may use the feedback they receive to improve their products. Testers keep no rights over how it's used, but their name isn't published without consent.",
       "Any confidentiality agreement a developer sets applies between the developer and the tester.",
     ],
   },
   {
-    title: "8. Calls and recordings",
+    title: "7. Calls and recordings",
     points: [
       "Calls run in the call's own Jitsi video room, opened from the call page on the site (keep that page open: it measures the call). Only the developer and tester of that call can join, from 10 minutes before the start until 30 minutes after the booked end. Who was in the call page and when is recorded (it measures the length); the team can read it when handling a report.",
       "Screen recordings are only seen by the developer and tester of that session, and by the team when handling a dispute or report.",
     ],
   },
   {
-    title: "9. The service and changes to these terms",
+    title: "8. The service and changes to these terms",
     points: [
       "The platform is provided as is. We aren't responsible for the products being tested, for builds, or for agreements between users beyond what these terms describe.",
       "If we have an outage, every deadline and payment date that was running moves later by the length of it.",
@@ -106,9 +94,20 @@ export default function TermsPage() {
           ))}
         </section>
         {SECTIONS.map((s) => (
-          <section key={s.title} className="card space-y-2">
+          <section key={s.title} className={`card space-y-2${s.payments ? " scroll-mt-24" : ""}`} {...(s.payments ? { id: PAYMENTS_TERMS_ID } : {})}>
             <h2 className="font-semibold text-white">{s.title}</h2>
             <ul className="list-disc space-y-1 pl-5 text-sm text-slate-300">{s.points.map((p) => (typeof p === "string" ? <li key={p}>{p}</li> : <li key={p.id} id={p.id} className="scroll-mt-24">{p.text}</li>))}</ul>
+            {s.payments && (
+              <div className="space-y-3 text-sm" data-payment-rules="">
+                {PAYMENT_RULES.map((r) => (
+                  <div key={r.heading} className="space-y-1">
+                    <h3 className="font-semibold text-slate-100">{r.heading}</h3>
+                    <p className="text-slate-300">{r.text}</p>
+                    <p className="text-xs text-slate-400">Example: {r.example}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         ))}
       </div>

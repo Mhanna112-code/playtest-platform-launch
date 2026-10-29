@@ -262,7 +262,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const bookedAhead = t.contracts.flatMap((c) => c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => ({ id: x.id, who: displayName(c.tester), when: x.startsAt.toISOString(), minutes: x.minutes, needsReason: cancelNeedsReason(x.startsAt, now) }))).sort((a, b) => a.when.localeCompare(b.when));
   const banner = bannerCause ? (
     <TestBanner cause={bannerCause} reason={bannerReason} failed={failed}
-      allowed={restricted ? allowedLine(true, { stop: t.status !== "stopped", endEarly: t.status !== "stopped" && working.length > 0, cancelCalls: bookedAhead.length > 0 }) : allowedLine(false, { nextRound: !t.adminStoppedAt && !next })} />
+      allowed={restricted ? allowedLine(true, { stop: t.status !== "stopped", endEarly: t.status !== "stopped" && working.length > 0, cancelCalls: bookedAhead.length > 0, rate: !accountPaused && t.contracts.some((c) => rateStates.get(c.id)?.kind === "open") }) : allowedLine(false, { nextRound: !t.adminStoppedAt && !next })} />
   ) : null;
   if (restricted) {
     return (
