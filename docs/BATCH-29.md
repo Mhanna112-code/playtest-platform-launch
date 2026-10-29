@@ -39,6 +39,7 @@ Today a tester's own press in another tab stops only the SAME press ("You also d
 
 ## 21. Rating reminders (owner, Oct 29)
 - **The developer's reminders come on running tests too.** Today "Reminder: rate <tester> for “<test>” (until <date>)" is sent every 3 days only on a stopped test (ratings.ts ~352); on a running test the developer gets just the first line ("<tester> finished <test>. You can rate them for 14 days."). Send it every 3 days inside the 14 days whatever the test's state, waiting while the developer can't rate (hold, suspension).
+- **The tester's reminders on running tests too (owner, Oct 29):** "Reminder: rate <dev> on <test>" every 3 days for 2 weeks from when their Rate opens, whatever the test's state (today only after a stop or close), not counting time their tester side was suspended.
 - **Rating lines get their own stack, on both sides:** "<tester> finished <test>. You can rate them…", the developer's reminders, the tester's "Rate <dev> on <test>" and its reminders no longer stack in "that test's day"; they stack in one "Ratings to give" entry per day across tests (like payments and holds), opening the dashboard's Ratings to give box. Update the bell table's "Stacks in" column (doc agent).
 - Tests: reminders on a running test; the new stack across two tests.
 
