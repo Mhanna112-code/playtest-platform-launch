@@ -175,7 +175,7 @@ describe("batch 11 item 3: the bank wants to confirm a payment", () => {
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({ requiresAction: true, simulated: true });
     expect(st.made[0].off_session).toBeUndefined();
-    expect(st.made[0].allowed_payment_method_types).toEqual(["card"]);
+    expect(st.made[0].allowed_payment_method_types).toEqual(["card", "link"]);
     const ch = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: seen(), confirmed: true });
     expect(ch.body.error.message).toBe("A payment for this is being confirmed right now.");
     const done = await confirm(dev.cookie, { paymentId: r.body.paymentId });

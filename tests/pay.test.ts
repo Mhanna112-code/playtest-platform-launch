@@ -126,7 +126,7 @@ describe("Stripe (test mode, faked)", () => {
     expect(calls).toHaveLength(1);
     // (Batch 11) The developer's own press is on-session (the bank may ask them to confirm in the page).
     expect(calls[0]).not.toHaveProperty("off_session");
-    expect(calls[0]).toMatchObject({ amount: 1000, currency: "usd", allowed_payment_method_types: ["card"], confirm: true, application_fee_amount: 200, transfer_data: { destination: expect.stringMatching(/^acct_/) } });
+    expect(calls[0]).toMatchObject({ amount: 1000, currency: "usd", allowed_payment_method_types: ["card", "link"], confirm: true, application_fee_amount: 200, transfer_data: { destination: expect.stringMatching(/^acct_/) } });
     expect(await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } })).toMatchObject({ status: "charged", transferStatus: "sent", stripePaymentIntentId: "pi_1" });
   });
 

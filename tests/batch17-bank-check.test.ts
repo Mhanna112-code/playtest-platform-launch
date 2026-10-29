@@ -134,7 +134,7 @@ describe("batch 17 §11: Pay with a check", () => {
     const r = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({ requiresAction: true, checkUrl: CHECK_URL });
-    expect(st.made[0]).toMatchObject({ allowed_payment_method_types: ["card"], return_url: RETURN_URL });
+    expect(st.made[0]).toMatchObject({ allowed_payment_method_types: ["card", "link"], return_url: RETURN_URL });
     expect(st.made[0].off_session).toBeUndefined();
     st.bank((await db.payment.findUniqueOrThrow({ where: { id: r.body.paymentId } })).actionPi!, true); // the bank's page finished: Stripe says it went through
     const done = await confirm(dev.cookie, { paymentId: r.body.paymentId });
