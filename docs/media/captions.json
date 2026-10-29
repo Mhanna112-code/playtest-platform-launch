@@ -1260,7 +1260,7 @@
     "size": "desktop"
   },
   "bank-press.webm": {
-    "caption": "Nora presses Pay and her bank's check opens under it: cancelled on Ana's answers, nothing is charged; on Dee's answers confirmed, and Dee is paid",
+    "caption": "Nora presses Pay and her bank's check opens under it: cancelled, nothing is charged; she presses Pay again on the same answers, confirms, and Ana is paid",
     "kind": "video",
     "title": "§11 Pay with a bank check",
     "section": "Batch 17 (Oct 28)",
@@ -2772,7 +2772,7 @@
     "size": "phone"
   },
   "bank-press-phone.webm": {
-    "caption": "Nora presses Pay and her bank's check opens under it: cancelled on Ana's answers, nothing is charged; on Dee's answers confirmed, and Dee is paid",
+    "caption": "Nora presses Pay and her bank's check opens under it: cancelled, nothing is charged; she presses Pay again on the same answers, confirms, and Ana is paid",
     "kind": "video",
     "title": "§11 Pay with a bank check",
     "section": "Batch 17 (Oct 28)",
@@ -8235,30 +8235,30 @@
     "size": "desktop"
   },
   "b18-06-length-hint.png": {
-    "caption": "With Ben ticked the hint reads “10–40 min (the $1,000 for calls with Ben Okafor)”: what's left of his $1,000 at the call's $150/h.",
+    "caption": "With Ben ticked the hint next to Length reads “10–40 min (the $1,000 for calls with Ben Okafor)”: what's left of his $1,000 at the call's $150/h.",
     "kind": "image",
     "title": "§6 The Length cap",
     "section": "Batch 18 (Oct 28)",
-    "group": "b18c",
-    "order": 64001,
+    "group": "b18len",
+    "order": 65001,
     "size": "desktop"
   },
   "b18-06-length-red.png": {
-    "caption": "60 minutes turns the box red: “At most 40 minutes: the $1,000 for calls with Ben Okafor on this test.” (the server refuses it too).",
+    "caption": "60 minutes turns the box red, with the line under the row: “At most 40 minutes: the $1,000 for calls with Ben Okafor on this test.” (the server refuses it too).",
     "kind": "image",
     "title": "§6 Too long",
     "section": "Batch 18 (Oct 28)",
-    "group": "b18c",
-    "order": 64002,
+    "group": "b18len",
+    "order": 65002,
     "size": "desktop"
   },
   "b18-06-video.webm": {
-    "caption": "Ticking Ben shows his cap in the Length hint; 60 minutes is red at the box.",
+    "caption": "Ticking Ben shows his cap in the Length hint; 60 minutes is red, with the line under the row.",
     "kind": "video",
     "title": "§6 Booking within the $1,000",
     "section": "Batch 18 (Oct 28)",
-    "group": "b18c",
-    "order": 64003,
+    "group": "b18len",
+    "order": 65004,
     "size": "desktop"
   },
   "b18-03-warning.png": {
@@ -9063,30 +9063,30 @@
     "size": "phone"
   },
   "b18-06-length-hint-phone.png": {
-    "caption": "With Ben ticked the hint reads “10–40 min (the $1,000 for calls with Ben Okafor)”: what's left of his $1,000 at the call's $150/h.",
+    "caption": "With Ben ticked the hint next to Length reads “10–40 min (the $1,000 for calls with Ben Okafor)”: what's left of his $1,000 at the call's $150/h.",
     "kind": "image",
     "title": "§6 The Length cap",
     "section": "Batch 18 (Oct 28)",
-    "group": "b18c",
-    "order": 64001,
+    "group": "b18len",
+    "order": 65001,
     "size": "phone"
   },
   "b18-06-length-red-phone.png": {
-    "caption": "60 minutes turns the box red: “At most 40 minutes: the $1,000 for calls with Ben Okafor on this test.” (the server refuses it too).",
+    "caption": "60 minutes turns the box red, with the line under the row: “At most 40 minutes: the $1,000 for calls with Ben Okafor on this test.” (the server refuses it too).",
     "kind": "image",
     "title": "§6 Too long",
     "section": "Batch 18 (Oct 28)",
-    "group": "b18c",
-    "order": 64002,
+    "group": "b18len",
+    "order": 65002,
     "size": "phone"
   },
   "b18-06-video-phone.webm": {
-    "caption": "Ticking Ben shows his cap in the Length hint; 60 minutes is red at the box.",
+    "caption": "Ticking Ben shows his cap in the Length hint; 60 minutes is red, with the line under the row.",
     "kind": "video",
     "title": "§6 Booking within the $1,000",
     "section": "Batch 18 (Oct 28)",
-    "group": "b18c",
-    "order": 64003,
+    "group": "b18len",
+    "order": 65004,
     "size": "phone"
   },
   "b18-03-warning-phone.png": {
@@ -9330,6 +9330,420 @@
     "section": "Batch 17 (Oct 28)",
     "group": "bank",
     "order": 11008,
+    "size": "phone"
+  },
+  "b19-06-payments-top.png": {
+    "caption": "The Terms of Use open at section 4, How payments work (its own link): “Payment is for the work the tester sent…”, then short headed paragraphs, each with a one-line example, starting with Prices and the split.",
+    "kind": "image",
+    "title": "§6 How payments work",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66001,
+    "size": "desktop"
+  },
+  "b19-06-payments-scroll.png": {
+    "caption": "The next headed paragraphs of the same section, each in plain words with its example (the whole section runs from Prices and the split to Taxes and refunds).",
+    "kind": "image",
+    "title": "§6 One scroll further",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66002,
+    "size": "desktop"
+  },
+  "b19-08-post-line.png": {
+    "caption": "Under the date, live: “Testers can join until this date. Each gets 14 days from when they join, so someone joining on <Open until> has until <14 days later> to send work. You pay each piece within 7 days of it arriving, or the tester can charge you.”",
+    "kind": "image",
+    "title": "§8 The Open until line on Post",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66003,
+    "size": "desktop"
+  },
+  "b19-08-post-line-20.png": {
+    "caption": "Open until 20 days ahead: “Each gets 20 days from when they join …” and the last day to send work moves with it.",
+    "kind": "image",
+    "title": "§8 It follows the date",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66004,
+    "size": "desktop"
+  },
+  "b19-07-post-tick.png": {
+    "caption": "Just above Post the test: “I understand that a tester can charge my card, up to the listing price, for work I haven't paid once 7 days have passed since they sent it and their own deadline has passed.” with the link “How payments work”.",
+    "kind": "image",
+    "title": "§7 The Charge tick",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66005,
+    "size": "desktop"
+  },
+  "b19-07-post-refused.png": {
+    "caption": "The server refuses it with the red line at the tick, “Tick to confirm you understand how payments work.”, and the list above the button counts it.",
+    "kind": "image",
+    "title": "§7 Unticked, Post is refused",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66006,
+    "size": "desktop"
+  },
+  "b19-07-post-video.webm": {
+    "caption": "The Open until line follows the date; Post unticked is refused in red at the tick; ticked, the next press posts the test.",
+    "kind": "video",
+    "title": "§7 and §8 Posting with the tick",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66007,
+    "size": "desktop"
+  },
+  "b19-07-edit-unchanged.png": {
+    "caption": "Save is faded and there's no tick above it.",
+    "kind": "image",
+    "title": "§7 Edit, nothing changed",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66008,
+    "size": "desktop"
+  },
+  "b19-08-edit-line.png": {
+    "caption": "Moved 5 days later, the line counts the days after the change: “Each gets 19 days from when they join, so someone joining on <Open until> has until <19 days later> to send work. …”",
+    "kind": "image",
+    "title": "§8 The Open until line on Edit",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66009,
+    "size": "desktop"
+  },
+  "b19-07-edit-tick.png": {
+    "caption": "Save is on, and the same tick appears just above it, required for this Save.",
+    "kind": "image",
+    "title": "§7 Edit, with a change",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66010,
+    "size": "desktop"
+  },
+  "b19-07-edit-video.webm": {
+    "caption": "No tick while nothing changed; moving Open until 5 days later updates the line and brings the tick above Save; ticked, Save goes through.",
+    "kind": "video",
+    "title": "§7 and §8 The tick on Edit",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66011,
+    "size": "desktop"
+  },
+  "b19-02-paused-rate.png": {
+    "caption": "The team paused the test while Nora's Rate box for Ana is open, so the last line reads “For now you can stop this test, or rate testers.”, built from what's really there.",
+    "kind": "image",
+    "title": "§2 The paused banner lists rating",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67001,
+    "size": "desktop"
+  },
+  "b19-05-let-it-go-box.png": {
+    "caption": "Ben's Let it go stops once for Nora's Stop: “Your Let it go didn't go through.” (it used to say Charge), then the stop and “Press Let it go again to go ahead.”",
+    "kind": "image",
+    "title": "§5 The stop box names the press",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67002,
+    "size": "desktop"
+  },
+  "b19-05-let-it-go-video.webm": {
+    "caption": "Nora stops the test while Ben's page is open: his Let it go stops with “Your Let it go didn't go through.”, and the second press goes through.",
+    "kind": "video",
+    "title": "§5 Let it go stops once",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67003,
+    "size": "desktop"
+  },
+  "b19-01-dev-stack.png": {
+    "caption": "Nora's bell stacks the close-out reminders under one heading, “Closing soon: 2 tests”, instead of an entry with no title.",
+    "kind": "image",
+    "title": "§1 Closing soon (developer)",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67004,
+    "size": "desktop"
+  },
+  "b19-01-dev-stack-open.png": {
+    "caption": "Inside: “Pay Dee Park's work on “Kelp Forest: iPhone beta” by <date>” and the same for Sky Lab.",
+    "kind": "image",
+    "title": "§1 Opened (developer)",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67005,
+    "size": "desktop"
+  },
+  "b19-01-tester-stack.png": {
+    "caption": "Dee's bell stacks the close-out reminders under one heading, “Closing soon: 2 tests”, instead of an entry with no title.",
+    "kind": "image",
+    "title": "§1 Closing soon (tester)",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67006,
+    "size": "desktop"
+  },
+  "b19-01-tester-stack-open.png": {
+    "caption": "Inside: “Charge or let go of your work on “Kelp Forest: iPhone beta” by <date>” and the same for Sky Lab.",
+    "kind": "image",
+    "title": "§1 Opened (tester)",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67007,
+    "size": "desktop"
+  },
+  "b19-05-cancelled.png": {
+    "caption": "Nora cancelled her bank's check: “Your bank didn't confirm the payment, so nothing was charged.” Pay is still there.",
+    "kind": "image",
+    "title": "§5 The check cancelled",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67008,
+    "size": "desktop"
+  },
+  "b19-05-second-check.png": {
+    "caption": "Pressing Pay again on the same answers is a new attempt with its own bank check (before this fix it failed with “Something went wrong on our side”).",
+    "kind": "image",
+    "title": "§5 Pay again",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67009,
+    "size": "desktop"
+  },
+  "b19-05-length-row.png": {
+    "caption": "With the red line showing, “Length”, the box and “min” stay on one line (no letter-by-letter wrapping on a phone) and the red line sits under the whole row.",
+    "kind": "image",
+    "title": "§5 The Length row keeps its shape",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b18len",
+    "order": 65003,
+    "size": "desktop"
+  },
+  "b19-05-length-row-phone.png": {
+    "caption": "With the red line showing, “Length”, the box and “min” stay on one line (no letter-by-letter wrapping on a phone) and the red line sits under the whole row.",
+    "kind": "image",
+    "title": "§5 The Length row keeps its shape",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b18len",
+    "order": 65003,
+    "size": "phone"
+  },
+  "b19-06-payments-top-phone.png": {
+    "caption": "The Terms of Use open at section 4, How payments work (its own link): “Payment is for the work the tester sent…”, then short headed paragraphs, each with a one-line example, starting with Prices and the split.",
+    "kind": "image",
+    "title": "§6 How payments work",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66001,
+    "size": "phone"
+  },
+  "b19-06-payments-scroll-phone.png": {
+    "caption": "The next headed paragraphs of the same section, each in plain words with its example (the whole section runs from Prices and the split to Taxes and refunds).",
+    "kind": "image",
+    "title": "§6 One scroll further",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66002,
+    "size": "phone"
+  },
+  "b19-08-post-line-phone.png": {
+    "caption": "Under the date, live: “Testers can join until this date. Each gets 14 days from when they join, so someone joining on <Open until> has until <14 days later> to send work. You pay each piece within 7 days of it arriving, or the tester can charge you.”",
+    "kind": "image",
+    "title": "§8 The Open until line on Post",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66003,
+    "size": "phone"
+  },
+  "b19-08-post-line-20-phone.png": {
+    "caption": "Open until 20 days ahead: “Each gets 20 days from when they join …” and the last day to send work moves with it.",
+    "kind": "image",
+    "title": "§8 It follows the date",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66004,
+    "size": "phone"
+  },
+  "b19-07-post-tick-phone.png": {
+    "caption": "Just above Post the test: “I understand that a tester can charge my card, up to the listing price, for work I haven't paid once 7 days have passed since they sent it and their own deadline has passed.” with the link “How payments work”.",
+    "kind": "image",
+    "title": "§7 The Charge tick",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66005,
+    "size": "phone"
+  },
+  "b19-07-post-refused-phone.png": {
+    "caption": "The server refuses it with the red line at the tick, “Tick to confirm you understand how payments work.”, and the list above the button counts it.",
+    "kind": "image",
+    "title": "§7 Unticked, Post is refused",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66006,
+    "size": "phone"
+  },
+  "b19-07-post-video-phone.webm": {
+    "caption": "The Open until line follows the date; Post unticked is refused in red at the tick; ticked, the next press posts the test.",
+    "kind": "video",
+    "title": "§7 and §8 Posting with the tick",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66007,
+    "size": "phone"
+  },
+  "b19-07-edit-unchanged-phone.png": {
+    "caption": "Save is faded and there's no tick above it.",
+    "kind": "image",
+    "title": "§7 Edit, nothing changed",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66008,
+    "size": "phone"
+  },
+  "b19-08-edit-line-phone.png": {
+    "caption": "Moved 5 days later, the line counts the days after the change: “Each gets 19 days from when they join, so someone joining on <Open until> has until <19 days later> to send work. …”",
+    "kind": "image",
+    "title": "§8 The Open until line on Edit",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66009,
+    "size": "phone"
+  },
+  "b19-07-edit-tick-phone.png": {
+    "caption": "Save is on, and the same tick appears just above it, required for this Save.",
+    "kind": "image",
+    "title": "§7 Edit, with a change",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66010,
+    "size": "phone"
+  },
+  "b19-07-edit-video-phone.webm": {
+    "caption": "No tick while nothing changed; moving Open until 5 days later updates the line and brings the tick above Save; ticked, Save goes through.",
+    "kind": "video",
+    "title": "§7 and §8 The tick on Edit",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19a",
+    "order": 66011,
+    "size": "phone"
+  },
+  "b19-05-paid.png": {
+    "caption": "Confirmed this time: Ana's written answers read “paid $10.00 of $10.00” (Pay more takes Pay's place); she is paid once and the cancelled attempt charged nothing.",
+    "kind": "image",
+    "title": "§5 Paid once",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67010,
+    "size": "desktop"
+  },
+  "b19-05-pay-again-video.webm": {
+    "caption": "Nora presses Pay, cancels her bank's check (nothing charged), presses Pay again on the same answers, confirms, and Ana is paid.",
+    "kind": "video",
+    "title": "§5 Pay after a cancelled bank check",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67011,
+    "size": "desktop"
+  },
+  "b19-02-paused-rate-phone.png": {
+    "caption": "The team paused the test while Nora's Rate box for Ana is open, so the last line reads “For now you can stop this test, or rate testers.”, built from what's really there.",
+    "kind": "image",
+    "title": "§2 The paused banner lists rating",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67001,
+    "size": "phone"
+  },
+  "b19-05-let-it-go-box-phone.png": {
+    "caption": "Ben's Let it go stops once for Nora's Stop: “Your Let it go didn't go through.” (it used to say Charge), then the stop and “Press Let it go again to go ahead.”",
+    "kind": "image",
+    "title": "§5 The stop box names the press",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67002,
+    "size": "phone"
+  },
+  "b19-05-let-it-go-video-phone.webm": {
+    "caption": "Nora stops the test while Ben's page is open: his Let it go stops with “Your Let it go didn't go through.”, and the second press goes through.",
+    "kind": "video",
+    "title": "§5 Let it go stops once",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67003,
+    "size": "phone"
+  },
+  "b19-01-dev-stack-phone.png": {
+    "caption": "Nora's bell stacks the close-out reminders under one heading, “Closing soon: 2 tests”, instead of an entry with no title.",
+    "kind": "image",
+    "title": "§1 Closing soon (developer)",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67004,
+    "size": "phone"
+  },
+  "b19-01-dev-stack-open-phone.png": {
+    "caption": "Inside: “Pay Dee Park's work on “Kelp Forest: iPhone beta” by <date>” and the same for Sky Lab.",
+    "kind": "image",
+    "title": "§1 Opened (developer)",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67005,
+    "size": "phone"
+  },
+  "b19-01-tester-stack-phone.png": {
+    "caption": "Dee's bell stacks the close-out reminders under one heading, “Closing soon: 2 tests”, instead of an entry with no title.",
+    "kind": "image",
+    "title": "§1 Closing soon (tester)",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67006,
+    "size": "phone"
+  },
+  "b19-01-tester-stack-open-phone.png": {
+    "caption": "Inside: “Charge or let go of your work on “Kelp Forest: iPhone beta” by <date>” and the same for Sky Lab.",
+    "kind": "image",
+    "title": "§1 Opened (tester)",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67007,
+    "size": "phone"
+  },
+  "b19-05-cancelled-phone.png": {
+    "caption": "Nora cancelled her bank's check: “Your bank didn't confirm the payment, so nothing was charged.” Pay is still there.",
+    "kind": "image",
+    "title": "§5 The check cancelled",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67008,
+    "size": "phone"
+  },
+  "b19-05-second-check-phone.png": {
+    "caption": "Pressing Pay again on the same answers is a new attempt with its own bank check (before this fix it failed with “Something went wrong on our side”).",
+    "kind": "image",
+    "title": "§5 Pay again",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67009,
+    "size": "phone"
+  },
+  "b19-05-paid-phone.png": {
+    "caption": "Confirmed this time: Ana's written answers read “paid $10.00 of $10.00” (Pay more takes Pay's place); she is paid once and the cancelled attempt charged nothing.",
+    "kind": "image",
+    "title": "§5 Paid once",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67010,
+    "size": "phone"
+  },
+  "b19-05-pay-again-video-phone.webm": {
+    "caption": "Nora presses Pay, cancels her bank's check (nothing charged), presses Pay again on the same answers, confirms, and Ana is paid.",
+    "kind": "video",
+    "title": "§5 Pay after a cancelled bank check",
+    "section": "Batch 19 (Oct 28)",
+    "group": "b19b",
+    "order": 67011,
     "size": "phone"
   }
 }

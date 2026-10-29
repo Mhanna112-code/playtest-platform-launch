@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-29T01:54:02.911Z",
+  "generated": "2026-10-29T03:12:48.222Z",
   "sizes": {
     "desktop": "1280x900",
     "phone": "375x812"
@@ -3362,7 +3362,7 @@
         },
         {
           "title": "§11 Pay with a bank check",
-          "explanation": "Nora presses Pay and her bank's check opens under it: cancelled on Ana's answers, nothing is charged; on Dee's answers confirmed, and Dee is paid",
+          "explanation": "Nora presses Pay and her bank's check opens under it: cancelled, nothing is charged; she presses Pay again on the same answers, confirms, and Ana is paid",
           "kind": "video",
           "desktop": "bank-press.webm",
           "phone": "bank-press-phone.webm"
@@ -3669,21 +3669,21 @@
         },
         {
           "title": "§6 The Length cap",
-          "explanation": "With Ben ticked the hint reads “10–40 min (the $1,000 for calls with Ben Okafor)”: what's left of his $1,000 at the call's $150/h.",
+          "explanation": "With Ben ticked the hint next to Length reads “10–40 min (the $1,000 for calls with Ben Okafor)”: what's left of his $1,000 at the call's $150/h.",
           "kind": "image",
           "desktop": "b18-06-length-hint.png",
           "phone": "b18-06-length-hint-phone.png"
         },
         {
           "title": "§6 Too long",
-          "explanation": "60 minutes turns the box red: “At most 40 minutes: the $1,000 for calls with Ben Okafor on this test.” (the server refuses it too).",
+          "explanation": "60 minutes turns the box red, with the line under the row: “At most 40 minutes: the $1,000 for calls with Ben Okafor on this test.” (the server refuses it too).",
           "kind": "image",
           "desktop": "b18-06-length-red.png",
           "phone": "b18-06-length-red-phone.png"
         },
         {
           "title": "§6 Booking within the $1,000",
-          "explanation": "Ticking Ben shows his cap in the Length hint; 60 minutes is red at the box.",
+          "explanation": "Ticking Ben shows his cap in the Length hint; 60 minutes is red, with the line under the row.",
           "kind": "video",
           "desktop": "b18-06-video.webm",
           "phone": "b18-06-video-phone.webm"
@@ -3813,6 +3813,173 @@
           "kind": "image",
           "desktop": "b18-13-dev-dash.png",
           "phone": "b18-13-dev-dash-phone.png"
+        }
+      ]
+    },
+    {
+      "title": "Batch 19 (Oct 28)",
+      "explanation": "Batch 19, item by item (§ numbers are the items in docs/BATCH-19.md): the “Closing soon” bell heading, rating on the paused banner, Pay again after a cancelled bank check, the Length row, the Let it go stop box, the Terms' How payments work, and the Charge tick and Open until line on Post and Edit.",
+      "cases": [
+        {
+          "title": "§1 Closing soon (developer)",
+          "explanation": "Nora's bell stacks the close-out reminders under one heading, “Closing soon: 2 tests”, instead of an entry with no title.",
+          "kind": "image",
+          "desktop": "b19-01-dev-stack.png",
+          "phone": "b19-01-dev-stack-phone.png"
+        },
+        {
+          "title": "§1 Opened (developer)",
+          "explanation": "Inside: “Pay Dee Park's work on “Kelp Forest: iPhone beta” by <date>” and the same for Sky Lab.",
+          "kind": "image",
+          "desktop": "b19-01-dev-stack-open.png",
+          "phone": "b19-01-dev-stack-open-phone.png"
+        },
+        {
+          "title": "§1 Closing soon (tester)",
+          "explanation": "Dee's bell stacks the close-out reminders under one heading, “Closing soon: 2 tests”, instead of an entry with no title.",
+          "kind": "image",
+          "desktop": "b19-01-tester-stack.png",
+          "phone": "b19-01-tester-stack-phone.png"
+        },
+        {
+          "title": "§1 Opened (tester)",
+          "explanation": "Inside: “Charge or let go of your work on “Kelp Forest: iPhone beta” by <date>” and the same for Sky Lab.",
+          "kind": "image",
+          "desktop": "b19-01-tester-stack-open.png",
+          "phone": "b19-01-tester-stack-open-phone.png"
+        },
+        {
+          "title": "§2 The paused banner lists rating",
+          "explanation": "The team paused the test while Nora's Rate box for Ana is open, so the last line reads “For now you can stop this test, or rate testers.”, built from what's really there.",
+          "kind": "image",
+          "desktop": "b19-02-paused-rate.png",
+          "phone": "b19-02-paused-rate-phone.png"
+        },
+        {
+          "title": "§5 The Length row keeps its shape",
+          "explanation": "With the red line showing, “Length”, the box and “min” stay on one line (no letter-by-letter wrapping on a phone) and the red line sits under the whole row.",
+          "kind": "image",
+          "desktop": "b19-05-length-row.png",
+          "phone": "b19-05-length-row-phone.png"
+        },
+        {
+          "title": "§5 The stop box names the press",
+          "explanation": "Ben's Let it go stops once for Nora's Stop: “Your Let it go didn't go through.” (it used to say Charge), then the stop and “Press Let it go again to go ahead.”",
+          "kind": "image",
+          "desktop": "b19-05-let-it-go-box.png",
+          "phone": "b19-05-let-it-go-box-phone.png"
+        },
+        {
+          "title": "§5 Let it go stops once",
+          "explanation": "Nora stops the test while Ben's page is open: his Let it go stops with “Your Let it go didn't go through.”, and the second press goes through.",
+          "kind": "video",
+          "desktop": "b19-05-let-it-go-video.webm",
+          "phone": "b19-05-let-it-go-video-phone.webm"
+        },
+        {
+          "title": "§5 The check cancelled",
+          "explanation": "Nora cancelled her bank's check: “Your bank didn't confirm the payment, so nothing was charged.” Pay is still there.",
+          "kind": "image",
+          "desktop": "b19-05-cancelled.png",
+          "phone": "b19-05-cancelled-phone.png"
+        },
+        {
+          "title": "§5 Pay again",
+          "explanation": "Pressing Pay again on the same answers is a new attempt with its own bank check (before this fix it failed with “Something went wrong on our side”).",
+          "kind": "image",
+          "desktop": "b19-05-second-check.png",
+          "phone": "b19-05-second-check-phone.png"
+        },
+        {
+          "title": "§5 Paid once",
+          "explanation": "Confirmed this time: Ana's written answers read “paid $10.00 of $10.00” (Pay more takes Pay's place); she is paid once and the cancelled attempt charged nothing.",
+          "kind": "image",
+          "desktop": "b19-05-paid.png",
+          "phone": "b19-05-paid-phone.png"
+        },
+        {
+          "title": "§5 Pay after a cancelled bank check",
+          "explanation": "Nora presses Pay, cancels her bank's check (nothing charged), presses Pay again on the same answers, confirms, and Ana is paid.",
+          "kind": "video",
+          "desktop": "b19-05-pay-again-video.webm",
+          "phone": "b19-05-pay-again-video-phone.webm"
+        },
+        {
+          "title": "§6 How payments work",
+          "explanation": "The Terms of Use open at section 4, How payments work (its own link): “Payment is for the work the tester sent…”, then short headed paragraphs, each with a one-line example, starting with Prices and the split.",
+          "kind": "image",
+          "desktop": "b19-06-payments-top.png",
+          "phone": "b19-06-payments-top-phone.png"
+        },
+        {
+          "title": "§6 One scroll further",
+          "explanation": "The next headed paragraphs of the same section, each in plain words with its example (the whole section runs from Prices and the split to Taxes and refunds).",
+          "kind": "image",
+          "desktop": "b19-06-payments-scroll.png",
+          "phone": "b19-06-payments-scroll-phone.png"
+        },
+        {
+          "title": "§7 The Charge tick",
+          "explanation": "Just above Post the test: “I understand that a tester can charge my card, up to the listing price, for work I haven't paid once 7 days have passed since they sent it and their own deadline has passed.” with the link “How payments work”.",
+          "kind": "image",
+          "desktop": "b19-07-post-tick.png",
+          "phone": "b19-07-post-tick-phone.png"
+        },
+        {
+          "title": "§7 Unticked, Post is refused",
+          "explanation": "The server refuses it with the red line at the tick, “Tick to confirm you understand how payments work.”, and the list above the button counts it.",
+          "kind": "image",
+          "desktop": "b19-07-post-refused.png",
+          "phone": "b19-07-post-refused-phone.png"
+        },
+        {
+          "title": "§7 and §8 Posting with the tick",
+          "explanation": "The Open until line follows the date; Post unticked is refused in red at the tick; ticked, the next press posts the test.",
+          "kind": "video",
+          "desktop": "b19-07-post-video.webm",
+          "phone": "b19-07-post-video-phone.webm"
+        },
+        {
+          "title": "§7 Edit, nothing changed",
+          "explanation": "Save is faded and there's no tick above it.",
+          "kind": "image",
+          "desktop": "b19-07-edit-unchanged.png",
+          "phone": "b19-07-edit-unchanged-phone.png"
+        },
+        {
+          "title": "§7 Edit, with a change",
+          "explanation": "Save is on, and the same tick appears just above it, required for this Save.",
+          "kind": "image",
+          "desktop": "b19-07-edit-tick.png",
+          "phone": "b19-07-edit-tick-phone.png"
+        },
+        {
+          "title": "§7 and §8 The tick on Edit",
+          "explanation": "No tick while nothing changed; moving Open until 5 days later updates the line and brings the tick above Save; ticked, Save goes through.",
+          "kind": "video",
+          "desktop": "b19-07-edit-video.webm",
+          "phone": "b19-07-edit-video-phone.webm"
+        },
+        {
+          "title": "§8 The Open until line on Post",
+          "explanation": "Under the date, live: “Testers can join until this date. Each gets 14 days from when they join, so someone joining on <Open until> has until <14 days later> to send work. You pay each piece within 7 days of it arriving, or the tester can charge you.”",
+          "kind": "image",
+          "desktop": "b19-08-post-line.png",
+          "phone": "b19-08-post-line-phone.png"
+        },
+        {
+          "title": "§8 It follows the date",
+          "explanation": "Open until 20 days ahead: “Each gets 20 days from when they join …” and the last day to send work moves with it.",
+          "kind": "image",
+          "desktop": "b19-08-post-line-20.png",
+          "phone": "b19-08-post-line-20-phone.png"
+        },
+        {
+          "title": "§8 The Open until line on Edit",
+          "explanation": "Moved 5 days later, the line counts the days after the change: “Each gets 19 days from when they join, so someone joining on <Open until> has until <19 days later> to send work. …”",
+          "kind": "image",
+          "desktop": "b19-08-edit-line.png",
+          "phone": "b19-08-edit-line-phone.png"
         }
       ]
     }
