@@ -28,6 +28,16 @@ A listed part (written answers or a recording) sent after the tester's own deadl
 ## 4. Remove a Rate rule that can never apply (owner, Oct 29)
 The developer's Rate "stops once for call changes between the two of them on a running test while that tester is still working" can never trigger: the developer's Rate only opens after the tester rated (which ends their part) or at close-out. Remove it from the stop list (the developer's Rate keeps: a dispute with that tester decided; their own Pay more to that tester in another tab or device; the stop itself on a page opened before it) and from the design doc's "Why a press stops: Rate" (doc agent). Tests unchanged in behaviour.
 
+## 5. Admin: close a developer's open reviews at $0, with a reason (owner, Oct 29)
+For abuse cases (spam testers, a fraudulent test, an abandoned account), the team can settle every unpaid piece at $0 on the developer's behalf.
+- **Where:** the developer's admin box (profile and Accounts list): "Close all open reviews for $0", and on a test's admin box: "Close this test's open reviews for $0".
+- **Preview first** (like Suspend's): "This closes 7 pieces from 4 testers on 3 tests at $0: …" (the list), then a required reason (5+ characters, up to 1,000; testers read it), then the button. The race check: anything paid, charged or let go since the preview is left alone, and the result says so ("5 closed; 2 were settled meanwhile").
+- **What it does:** every sent piece still unpaid (listed or unlisted written answers and recordings, and listed calls not yet charged) is paid $0 with the team's reason as its note: "The team closed this for $0: <reason>". Charge / Let it go and the automatic call charge no longer apply to them; their Needs you rows go; reminders stop. Nothing is charged to anyone.
+- **Testers:** a payment line ("<test>: the team closed your <part> for $0") in the bell's "You were paid" stack and the payment email, the reason on the session page. They can dispute it once, as any $0 payment; another admin decides it, and a raise is charged to the developer as usual.
+- **Developer:** one line ("The team closed 7 open reviews on your tests for $0") in their account stack and email, with the reason.
+- Logged in the admin history (who, when, reason, count); the developer's and the tests' timelines show it in the third person.
+- Tests: preview counts; closing settles exactly the open pieces; a race with a Pay; testers can dispute; nothing charged.
+
 ## Decided, no change (owner, Oct 29)
 - **The tester's Rate still closes at the test's close-out**, not at their own pieces' closing date (a last tester who waits past the close-out to Charge can't rate any more). Don't change it.
 - **Late sending stays** (a tester can still send after their own deadline, "Sent late (deadline was <date>)"); work isn't closed at the deadline. What changes for late work is §3.
