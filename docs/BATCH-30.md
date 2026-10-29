@@ -29,6 +29,7 @@ A listed part (written answers or a recording) sent after the tester's own deadl
 The developer's Rate "stops once for call changes between the two of them on a running test while that tester is still working" can never trigger: the developer's Rate only opens after the tester rated (which ends their part) or at close-out. Remove it from the stop list (the developer's Rate keeps: a dispute with that tester decided; their own Pay more to that tester in another tab or device; the stop itself on a page opened before it) and from the design doc's "Why a press stops: Rate" (doc agent). Tests unchanged in behaviour.
 
 ## Decided, no change (owner, Oct 29)
+- **The tester's Rate still closes at the test's close-out**, not at their own pieces' closing date (a last tester who waits past the close-out to Charge can't rate any more). Don't change it.
 - **Late sending stays** (a tester can still send after their own deadline, "Sent late (deadline was <date>)"); work isn't closed at the deadline. What changes for late work is §3.
 
 ## Check and report
