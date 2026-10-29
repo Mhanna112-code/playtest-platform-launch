@@ -63,6 +63,12 @@ The owner had the tester dashboard open; a new invite only appeared after a relo
 - Check the same baseline issue for every other AutoRefresh user (developer dashboard, Payments, the bank box, Ratings to give) and fix it the same way.
 - Tests: an invite created right after render shows on the next poll; the top-box line and pill.
 
+## 9. A locked field's change is named, and locked boxes are really locked (owner, Oct 29)
+Edit refused Save with only "You've changed the parts and prices 3 times since testers joined. Contact us in Settings to change it again." while the cause (a changed live call rate, outlined red far up the page) wasn't named, and the price boxes could still be typed in although the group was locked. The 3-changes-per-field rule itself stays (parts and prices remain ONE counter; owner, Oct 29).
+- Once a field (group) is locked, every input in it is disabled: for parts and prices that includes the price, rate and call-length boxes, not only the ticks.
+- If a locked field still differs (another tab's save locked it meanwhile), the line at Save names the change and links to it: "Your change to the live call rate ($24.00/h → $30.00/h) can't be saved: you've changed the parts and prices 3 times since testers joined." with **Put it back** (restores the saved value) beside it; the field name scrolls to the field, marked.
+- Tests: locked price boxes disabled; another tab locking it meanwhile → the named line and Put it back; after Put it back the other changes save.
+
 ## Decided, no change (owner, Oct 29)
 - **Charge / Let it go stays** for listed written answers and recordings (the owner said no to charging listed work automatically at its review date; only listed calls are charged automatically).
 - **The tester's Rate still closes at the test's close-out**, not at their own pieces' closing date (a last tester who waits past the close-out to Charge can't rate any more). Don't change it.
