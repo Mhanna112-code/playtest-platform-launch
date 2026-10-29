@@ -60,12 +60,12 @@ describe("applications close on a listing change", () => {
     const a = await act(testId, "application", dev.cookie, { applicationId: appA.id, action: "accept", seenAt: pageLoaded, confirmed: true, tab: "tab-2" });
     expect(a.body.error.message).toMatch(/^Ana Silva's application closed when you changed the listing in another tab at .+\.$/);
     expect(await db.contract.count({ where: { testId } })).toBe(0);
-    // (Batch 16 section 21) The developer's own Save in another tab is never news: no live line (and Stop, which it doesn't touch, isn't stopped by it).
+    // (Batch 29 section 12) The developer's own Save in another tab is a live line (and it stops every press once).
     {
       const { GET: devLive } = await import("@/app/api/live/route");
       await new Promise((r) => setTimeout(r, 30));
       const dl = (await json(await devLive(req(`/api/live?scope=test:${testId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: dev.cookie, headers: { "x-tab": "tab-2" } })))).body.changes.map((c: { text: string }) => c.text);
-      expect(dl.filter((t: string) => /changed the listing/.test(t))).toEqual([]); // (an invite from another tab is the exception: it shows live)
+      expect(dl.filter((t: string) => /changed the listing in another tab/.test(t))).toHaveLength(1);
     }
     // Ana's join page: the line, and she can apply again on the current listing.
     const { GET: liveGET } = await import("@/app/api/live/route");
@@ -202,12 +202,12 @@ describe("owner corrections 2 and 3", () => {
     expect(await db.notification.count({ where: { userId: ana.user.id, text: "“Harbor Run” is now invite only, so your application was closed." } })).toBe(1);
     const acc = await act(testId, "application", dev.cookie, { applicationId: app.id, action: "accept", seenAt: pageLoaded, confirmed: true, tab: "tab-2" });
     expect(acc.body.error.message).toMatch(/^Ana Silva's application closed when the test became invite only at .+\.$/);
-    // (Batch 16 section 21) The developer's own Save in another tab is never news: no live line (and Stop, which it doesn't touch, isn't stopped by it).
+    // (Batch 29 section 12) The developer's own Save in another tab is a live line (and it stops every press once).
     {
       const { GET: devLive } = await import("@/app/api/live/route");
       await new Promise((r) => setTimeout(r, 30));
       const dl = (await json(await devLive(req(`/api/live?scope=test:${testId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: dev.cookie, headers: { "x-tab": "tab-2" } })))).body.changes.map((c: { text: string }) => c.text);
-      expect(dl.filter((t: string) => /changed the listing/.test(t))).toEqual([]); // (an invite from another tab is the exception: it shows live)
+      expect(dl.filter((t: string) => /changed the listing in another tab/.test(t))).toHaveLength(1);
     }
     const { GET: liveGET } = await import("@/app/api/live/route");
     await new Promise((r) => setTimeout(r, 30)); // the database clock can run a few ms ahead: the live route lists changes only up to its own now

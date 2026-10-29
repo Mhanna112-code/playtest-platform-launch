@@ -75,7 +75,8 @@ describe("after a stop: what's gone is refused and names the press; what still w
     await refused("written", { answers: ["a", "b"], confirmed: true }, "Send");
   });
 
-  it("Dispute, chat and Rate go through on the first press after a stop (the stop's own cancellations never stop them)", async () => {
+  // (Batch 29 section 11) The stop itself is a change like any other: Dispute stops once naming it (never for the stop's own cancellations), then goes through.
+  it("after a stop: Dispute stops once for the stop alone (the stop's own cancellations never stop it); chat and Rate go through", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: seen(), confirmed: true });
@@ -88,7 +89,9 @@ describe("after a stop: what's gone is refused and names the press; what still w
     await settle();
     expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
     expect(await db.call.count({ where: { contractId: sessionId, status: "cancelled", cancelledBy: "system" } })).toBe(1);
-    const d = await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question in full.", seenAt: opened });
+    const d0 = await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question in full.", seenAt: opened });
+    expect(d0.body.error.changes.map((x: { text: string }) => x.text), JSON.stringify(d0.body)).toEqual([expect.stringMatching(/^Nora Lane stopped this test at /)]);
+    const d = await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question in full.", seenAt: opened, confirmed: true, boxAt: seen() });
     expect(d.status, JSON.stringify(d.body)).toBe(200);
     const m = await sact(sessionId, "message", tester.cookie, { body: "Thanks for testing with me.", seenAt: opened });
     expect(m.status, JSON.stringify(m.body)).toBe(200);

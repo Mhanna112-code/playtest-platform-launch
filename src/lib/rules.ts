@@ -1357,13 +1357,21 @@ export function stopMomentLine(side: "tester" | "developer", kind: "dev" | "team
   return kind === "team" ? `The team stopped this test at ${t}.` : kind === "early" ? `You ended ${names.tester}'s work early at ${t}.` : `You stopped this test at ${t}.`;
 }
 
+/**
+ * (Owner, Oct 29, batch 29 section 11) A pause as the one change a page opened before it reads, like a stop. Testers: "This test was paused at 3:10 PM." (never why: no
+ * "hold" or "suspended"). The developer: "The team paused this test at …", "Your tests were paused at …" (a payment or chargeback hold), "Your developer account was
+ * suspended at …".
+ */
+export function pauseMomentLine(side: "tester" | "developer", cause: "team" | "hold" | "suspended", at: Date, fmtTime: (d: Date) => string, fmtDateTime: (d: Date) => string, now = new Date()) {
+  const t = stopAt(at, now, fmtTime, fmtDateTime);
+  if (side === "tester") return `This test was paused at ${t}.`;
+  return cause === "team" ? `The team paused this test at ${t}.` : cause === "hold" ? `Your tests were paused at ${t}.` : `Your developer account was suspended at ${t}.`;
+}
+
 // ---------- Rate's stop-once lines (owner, Oct 27-28) ----------
 
 /** The stop-once kinds that still apply to Rate after the test closed (stopped or closed): pay, reject, charge, let go, a dispute filed or decided. */
 export const RATE_AFTER_CLOSE_KINDS = ["paid", "rejected", "payment", "choice", "chargeback", "dispute", "admin"] as const;
-/** The person's own presses in another tab that are about the same: Pay, Reject, Charge, Let it go, a dispute or the developer's side of one. */
-// (Batch 16 section 21) The developer's own lines now read "You paid … in another tab".
-const RATE_OWN = /^(You also did this in another tab: |You )?(paid |rejected |charged for |let your |opened a dispute|added your side to a dispute)/;
 /** Is the test closed for Rate's purposes? */
 export const testClosedForRate = (t: { status: string }) => t.status === "closed" || t.status === "stopped";
 /**
@@ -1371,8 +1379,9 @@ export const testClosedForRate = (t: { status: string }) => t.status === "closed
  * the post-close subset (batch 4 D4): pay, reject, charge, let go, dispute filed or decided.
  */
 export function rateStops(e: TestEventLike, closed: boolean) {
+  // (Owner, Oct 29, batch 29 sections 12-13) Your own changes in another tab never stop Rate (it only races with Rate itself: "You already rated …").
+  if (e.kind === "own") return false;
   if (!closed) return true;
-  if (e.kind === "own") return RATE_OWN.test(e.text);
   return (RATE_AFTER_CLOSE_KINDS as readonly string[]).includes(e.kind);
 }
 

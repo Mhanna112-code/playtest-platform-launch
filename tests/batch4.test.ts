@@ -476,17 +476,17 @@ describe("follow-up 5, 7, 8, 9, 10) cards, the mistakes line, End early, profile
 });
 
 describe("follow-up 6) one Save in another tab is one line in one voice, and 'Changes left' follows live", () => {
-  it("'You changed the description and live call rate in another tab' (no second 'Nora Lane changed the description')", async () => {
+  it("'You saved the listing in another tab: description, live call rate' (no second 'Nora Lane changed the description')", async () => {
     const { dev, testId } = await setup();
     const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     const loaded = seen();
     await new Promise((r) => setTimeout(r, 30));
     expect((await act(testId, "edit", dev.cookie, { version: v, tab: "tab-2", fields: { description: "Sail further", liveRateCents: "40.00" } })).status).toBe(200);
-    // (Batch 16 section 21) A Save in another tab is about Edit only: Next round here isn't stopped by it (one line, one voice, in the log).
+    // (Batch 29 section 12) A Save in another tab stops every press once: Next round here stops with one line, in one voice.
     const next = await act(testId, "next-round", dev.cookie, { seenAt: loaded, tab: "tab-1" });
-    expect(next.body.error?.code).not.toBe("stop_once");
+    expect(next.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["You saved the listing in another tab: description, live call rate"]);
     const log = await db.actionLog.findFirstOrThrow({ where: { testId, tab: "tab-2" } });
-    expect(log.text.split("\u001f")[0]).toBe("You changed the description and live call rate in another tab");
+    expect(log.text.split("\u001f")[0]).toBe("You saved the listing in another tab: description, live call rate");
   });
 
   it("the listing the open Edit page polls carries the change count and whether anyone joined", async () => {

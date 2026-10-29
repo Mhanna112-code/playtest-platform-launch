@@ -140,11 +140,12 @@ describe("section 2: no rating during a suspension; the developer's window pause
     expect((await sact(x.sessionId, "choose", x.tester.cookie, { submissionId: sub.id, choice: "letgo" })).body.error.message).toBe(LIMITED_CHOICE_REFUSAL);
     // Nothing is lost: the piece is still open to Charge.
     expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0);
-    // The developer pays under the listing; the dispute goes straight through from an old page.
+    // The developer pays under the listing; (batch 29 section 11) the dispute from an old page stops once for the payment, then goes through.
     const old = seen();
     await settle();
     expect((await pay(x.dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400, reason: "Short" })).status).toBe(200);
-    expect((await sact(x.sessionId, "dispute", x.tester.cookie, { kind: "submission", id: sub.id, reason: "I answered all", seenAt: old, pageSeenAt: old })).status).toBe(200);
+    expect((await sact(x.sessionId, "dispute", x.tester.cookie, { kind: "submission", id: sub.id, reason: "I answered all", seenAt: old, pageSeenAt: old })).body.error.code).toBe("stop_once");
+    expect((await sact(x.sessionId, "dispute", x.tester.cookie, { kind: "submission", id: sub.id, reason: "I answered all", seenAt: old, pageSeenAt: old, confirmed: true, boxAt: seen() })).status).toBe(200);
     const page = await import("node:fs").then((fs) => fs.readFileSync("src/app/app/sessions/[id]/page.tsx", "utf8"));
     expect(page).toContain("const canChoose = !meOff;");
   });

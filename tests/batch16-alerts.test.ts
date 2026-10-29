@@ -107,14 +107,15 @@ describe("big changes from another tab stop every press once (section 21)", () =
     expect(panel).toContain("`Already booked: ${t.name}, ${fmt(r.startsAt)}`");
   });
 
-  it("Stop in tab A: no live line in B; Stop in B stops once, then 'This test was stopped.'", async () => {
+  // (Batch 29 section 12) Stop and End early from another tab are live lines now too.
+  it("Stop in tab A: a live line in B; Stop in B stops once, then 'This test was stopped.'", async () => {
     const { dev, testId } = await setup();
     await joined(testId);
     await later();
     const loaded = seen();
     await later();
     expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
-    expect((await devLive(dev.cookie, testId, loaded, "B")).filter((t) => /another tab/.test(t))).toEqual([]);
+    expect((await devLive(dev.cookie, testId, loaded, "B")).filter((t) => /another tab/.test(t))).toEqual(["You stopped the test in another tab"]);
     const b = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B" });
     expect(texts(b)).toEqual(["You stopped the test in another tab"]);
     const b2 = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B", ...again() });
@@ -129,7 +130,7 @@ describe("big changes from another tab stop every press once (section 21)", () =
     const loaded = seen();
     await later();
     expect((await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId], reason: "All done.", seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
-    expect((await devLive(dev.cookie, testId, loaded, "B")).filter((t) => /another tab/.test(t))).toEqual([]);
+    expect((await devLive(dev.cookie, testId, loaded, "B")).filter((t) => /another tab/.test(t))).toEqual(["You ended Ana Silva's work early in another tab"]);
     const r = await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId, b.sessionId], reason: "All done.", seenAt: loaded, tab: "B" });
     expect(texts(r)).toEqual(["You ended Ana Silva's work early in another tab"]);
     const r2 = await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId, b.sessionId], reason: "All done.", seenAt: loaded, tab: "B", ...again() });
@@ -149,13 +150,14 @@ describe("big changes from another tab stop every press once (section 21)", () =
     expect(made.status).toBe(200);
     const r = await act(testId, "next-round", dev.cookie, { seenAt: loaded, tab: "B" });
     expect(r.body.error.code).toBe("stop_once");
-    expect(r.body.error.changes).toEqual([expect.objectContaining({ text: "You started a new round in another tab", link: `/app/tests/new?draft=${made.body.id}` })]);
+    expect(r.body.error.changes).toEqual([expect.objectContaining({ text: "You started the next round in another tab", link: `/app/tests/new?draft=${made.body.id}` })]);
     await later(); // (Windows' clock can lag: the box's time must clearly follow the other tab's draft)
     expect((await act(testId, "next-round", dev.cookie, { seenAt: loaded, tab: "B", ...again() })).body.error.message).toMatch(/^This test already has a next round\./);
     expect(src("components/ChangesBox.tsx")).toContain('<a href={c.link} data-stop-link="">{c.text}</a>');
   });
 
-  it("everything else from another tab: no line, no stop; the same press already made is a plain refusal", async () => {
+  // (Batch 29 section 12) An Edit save and an application decision are changes too: live lines that stop every press once.
+  it("an Edit save and a Decline from another tab: live lines that stop Stop once; the same press already made is a plain refusal", async () => {
     const { dev, testId } = await setup({ joinMode: "apply" });
     const ana = await makeUser({ tester: true, name: "Ana Silva" });
     const ap = await act(testId, "apply", ana.cookie, { note: "hi" });
@@ -167,11 +169,14 @@ describe("big changes from another tab stop every press once (section 21)", () =
     const ed = await act(testId, "edit", dev.cookie, { version: (await db.test.findUniqueOrThrow({ where: { id: testId } })).version, fields: { spots: 4 }, seenAt: seen(), confirmed: true, tab: "A" });
     expect(ed.status).toBe(200);
     expect((await act(testId, "application", dev.cookie, { applicationId: app.id, action: "decline", seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
-    expect((await devLive(dev.cookie, testId, loaded, "B")).filter((t) => /another tab/.test(t))).toEqual([]);
+    const lines = ["You saved the listing in another tab: spots", "You declined Ana Silva's application in another tab"];
+    expect((await devLive(dev.cookie, testId, loaded, "B")).filter((t) => /another tab/.test(t))).toEqual(lines);
     const d = await act(testId, "application", dev.cookie, { applicationId: app.id, action: "decline", seenAt: loaded, tab: "B" });
     expect(d.body.error).toMatchObject({ message: "You already declined this application." });
     expect(d.body.error.changes).toBeUndefined();
-    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B" })).status).toBe(200); // an Edit Save and a Decline elsewhere never stop it
+    const st = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B" });
+    expect(texts(st)).toEqual(lines);
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B", ...again() })).status).toBe(200);
     expect(src("lib/server/excerpts.ts")).toContain('"You already allowed this excerpt."');
     expect(src("lib/rules.ts")).toContain('no("You already sent your side.")');
   });

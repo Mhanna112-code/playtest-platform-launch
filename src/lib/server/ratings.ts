@@ -5,7 +5,7 @@ import { HttpError } from "./http";
 import { bell, notify } from "./notify";
 import { finishedAndRatedLine, ratedYouLine, ratingClosedLine, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, TESTER_CHOICE_REASONS, chargeIsOpen, chargeOpensAt, ratePendingLine, rateOpensOnLine, rateOpensReviewLine, rateTheirDisputeLine, type TestEventLike } from "@/lib/rules";
 import { cancelCallsAhead, lockTest, ownContract, ownTest, recordEvent, spotOpened } from "./tests";
-import { CALL_CHANGE_ACTS, ownChanges, tabOf, testerPaymentChanges } from "./live";
+import { tabOf, testerPaymentChanges } from "./live";
 import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges } from "./testerGate";
 import { devStopSince, loadedOf, stopBox, testerStopSince } from "./stopMoment";
 import { closeOutOf, closedOut, devPauseSpans, windowEnd, type Span } from "./closeOut";
@@ -233,18 +233,16 @@ async function devRateGate(testId: string, contractId: string, body: Record<stri
   const since = loadedOf(body);
   if (!since) return;
   const lines: TestEventLike[] = [];
-  // (Batch 20 section 12) A Pay more for this tester made in another tab or device stops Rate once too ("You paid Ana Silva $5.00 more for their written answers in
-  // another tab"); Rate stops only for a payment about the person it rates (batch 16 section 25), so one for someone else doesn't.
-  if (devId) for (const o of await ownChanges(devId, testId, since, tabOf(body))) if (o.about?.a === "pay-more" && o.about.k.includes(`c:${contractId}`)) lines.push({ kind: "own", text: o.live ?? o.text, createdAt: o.createdAt });
+  // (Owner, Oct 29, batch 29 section 12) The developer's own changes in another tab (a Pay more, a call change…) never stop Rate: it only races with Rate itself.
+  void devId;
   const stop = await devStopSince(testId, contractId, since);
   if (stop) lines.push(stop);
   lines.push(...(await db.testEvent.findMany({ where: { testId, contractId, kind: "admin", createdAt: { gt: since }, text: { startsWith: "The team decided" } } })));
-  // (Batch 20 section 14) On a running test: call changes with this tester since the page loaded (theirs, and the developer's own from another tab); other testers'
+  // (Batch 20 section 14) On a running test: call changes with this tester since the page loaded (theirs: batch 29 section 12, never the developer's own from another tab); other testers'
   // never. Alerts: "Call changes" ticked off doesn't stop.
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, select: { status: true, test: { select: { status: true, developer: { select: { ignoredAlerts: true } } } } } });
   if (c.status === "working" && c.test.status === "open" && !c.test.developer.ignoredAlerts.includes("calls")) {
     lines.push(...(await db.testEvent.findMany({ where: { testId, contractId, createdAt: { gt: since }, kind: { in: ["requested", "booked", "confirmed", "cancelled", "withdrew_req", "declined_req"] } } })).filter((e) => !e.text.startsWith("You ")));
-    if (devId) for (const o of await ownChanges(devId, testId, since, tabOf(body))) if (o.about && (CALL_CHANGE_ACTS as readonly string[]).includes(o.about.a) && o.about.k.includes(`c:${contractId}`)) lines.push({ kind: "own", text: o.live ?? o.text, createdAt: o.createdAt });
   }
   if (lines.length) stopBox(lines.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()));
 }
@@ -257,7 +255,7 @@ function refuse(s: RateState, already: string): never {
 export async function testerRate(tester: { id: string; name: string; email: string; pronoun?: string }, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
   const state = await testerRateState(contractId);
-  if (state.kind !== "open") refuse(state, "You already rated this test.");
+  if (state.kind !== "open") refuse(state, `You already rated ${displayName(c0.test.developer)}.`); // (batch 29 section 13) a Rate made in another tab: a plain refusal
   const r = readRating(body);
   await testerRateGate(tester.id, contractId, displayName(c0.test.developer), body);
   await db.$transaction(async (tx) => {

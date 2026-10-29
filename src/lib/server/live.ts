@@ -7,10 +7,8 @@ import { alertOf } from "@/lib/alerts";
 type Tx = Prisma.TransactionClient;
 
 // (Owner, Oct 22, NEWEST+3) Reason E: anything a person did themselves in ANOTHER tab since this page loaded stops the
-// first press once ("You also did this in another tab: sent your written answers at 3:10 PM"). Every action is logged
+// first press once ("You sent your written answers in another tab"; batch 29 sections 12-13). Every action is logged
 // with the browser tab (page load) that sent it; that same tab never stops for its own presses.
-
-export const OWN_PREFIX = "You also did this in another tab: ";
 
 export const tabOf = (body: Record<string, unknown>) => (typeof body.tab === "string" ? body.tab.slice(0, 64) : "");
 
@@ -21,14 +19,11 @@ export const tabOf = (body: Record<string, unknown>) => (typeof body.tab === "st
 export type OwnAbout = { a: string; k: string[] };
 const META = "\u001f";
 /**
- * A press on the developer's side. (Owner, Oct 28, batch 16 section 21) The "big" changes made in another tab (BIG_OWN_ACTS) stop EVERY press on the test page
- * once (`big: false` only for Edit's Save, which has its own notes); an invite or cancelled invite stops only a press it touches (acts × things); nothing else
- * the developer did elsewhere is ever a reason.
+ * A press on the developer's side. (Owner, Oct 29, batch 29 section 12) The changes made in another tab (BIG_OWN_ACTS) stop EVERY press on the test page and on Edit
+ * once; any other action of theirs elsewhere stops only a press it touches (acts × things).
  */
 export type Press = {
-  acts: readonly string[]; keys: readonly string[]; big?: boolean;
-  /** (Batch 16 section 25) Rate on this contract: on a stopped test it still stops once for a payment, Charge, Let it go or dispute decision about this person. */
-  rate?: string;
+  acts: readonly string[]; keys: readonly string[];
   /** (Batch 16 sections 21 and 25) Stop on a test another tab stopped after this page loaded: it still stops once, then it's refused. */
   inState?: boolean;
   /** (Batch 17 section 12) Pay / Pay more on this contract: a stop (or that tester's work ended early) since the page loaded stops it once ("" = test-wide only). */
@@ -47,10 +42,15 @@ export const payPressOf = (contractId: string, piece: { callId?: string | null; 
   acts: [...PAY_ACTS] as string[], keys: [piece.callId ? `call:${piece.callId}` : piece.submissionId ? `sub:${piece.submissionId}` : `c:${contractId}`], stopCheck: contractId,
 });
 export const INVITE_ACTS = ["invite", "cancel-invite"] as const;
-/** End early, Stop the test, Pay or Pay more (any piece) and any call change: they stop every press on the test page once. */
-export const BIG_OWN_ACTS = ["end-early", "stop", ...PAY_ACTS, ...CALL_CHANGE_ACTS] as const;
-/** Live in the live box at once (and the page updates): a Pay or Pay more, a call change, an invite or cancelled invite. Stop and End early are not. */
-export const LIVE_OWN_ACTS = [...PAY_ACTS, ...CALL_CHANGE_ACTS, ...INVITE_ACTS] as const;
+/**
+ * (Owner, Oct 29, batch 29 section 12) The developer's own changes made in another tab or device that stop EVERY developer press on the test page and on Edit once:
+ * an Edit save (any field), Pay, Pay more (and Confirm with your bank, logged as the Pay it finishes), End early, Stop, Next round (the draft made), any call change
+ * (request, withdraw, accept, decline, cancel), Invite / Cancel invite, Accept / Decline of an application or rejoin ask. Ratings and excerpt decisions are never lines
+ * (they only race with the same press). Not in Alerts (your own actions can't be switched off).
+ */
+export const BIG_OWN_ACTS = ["end-early", "stop", "edit", "next-round", ...PAY_ACTS, ...CALL_CHANGE_ACTS, ...INVITE_ACTS, "application"] as const;
+/** (Batch 29 section 12) The same changes show in the live top box at once (and raise the pill), on the test page and on Edit. */
+export const LIVE_OWN_ACTS = BIG_OWN_ACTS;
 const has = (list: readonly string[], a?: string) => !!a && list.includes(a);
 /** Does this action from another tab touch this press? */
 export const touches = (o: OwnEvent, p: Press) => !!o.about && p.acts.includes(o.about.a) && o.about.k.some((k) => p.keys.includes(k) || p.keys.includes("*"));
@@ -58,10 +58,6 @@ export const touches = (o: OwnEvent, p: Press) => !!o.about && p.acts.includes(o
 /** Log one thing a person did on a test (any button that changes something), with what it was about. */
 export async function logAction(userId: string, testId: string, body: Record<string, unknown>, text: string, about?: OwnAbout) {
   await db.actionLog.create({ data: { userId, testId, text: about ? `${text}${META}${JSON.stringify(about)}` : text, tab: tabOf(body) } });
-}
-/** (Batch 16 section 21) Only the big changes made in another tab, as stop lines: for presses that otherwise never stop (excerpt Allow / Deny). */
-export async function bigOwnLines(devId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db): Promise<TestEventLike[]> {
-  return (await ownChanges(devId, testId, since, tab, tx)).filter((o) => has(BIG_OWN_ACTS, o.about?.a)).map((o) => ({ kind: "own", text: o.live ?? o.text, createdAt: o.createdAt }));
 }
 
 /** A log line's text and what it was about. */
@@ -86,8 +82,9 @@ export async function ownChanges(userId: string, testId: string, since: Date, ta
   const rows = await tx.actionLog.findMany({ where: { userId, testId, createdAt: { gt: since }, ...(tab ? { tab: { not: tab } } : { tab: { not: "" } }) }, orderBy: { createdAt: "asc" }, take: 50 });
   return rows.map((r) => {
     const { text, about } = parseLog(r.text);
-    // (Batch 16 section 21) The live box's own wording for invites and calls: "You invited Ana Silva in another tab".
-    return { kind: "own", text: text.startsWith("You ") ? text : OWN_PREFIX + text, createdAt: r.createdAt, ...(about ? { about } : {}), ...(!text.startsWith("You ") ? { live: `You ${text} in another tab` } : {}) };
+    // (Batch 16 section 21; batch 29 sections 12 and 13) One wording on both sides, in the stop box and the live box: "You invited Ana Silva in another tab".
+    const own = text.startsWith("You ") ? text : `You ${text} in another tab`;
+    return { kind: "own", text: own, createdAt: r.createdAt, ...(about ? { about } : {}), live: own };
   });
 }
 
@@ -99,7 +96,7 @@ export async function ownChanges(userId: string, testId: string, since: Date, ta
 export async function devChanges(devId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db, opts: { all?: boolean; press?: Press } = {}): Promise<TestEventLike[]> {
   // (Batch 14) The live box (`all`) also lists the quiet kinds: a tester's Switch (stacked per day) and a key reported as not working. They never stop a press.
   const events = stackSwitches(await tx.testEvent.findMany({ where: { testId, createdAt: { gt: since }, kind: { in: [...DEV_STOP_KINDS, "renamed", ...(opts.all ? DEV_QUIET_KINDS : [])] } }, orderBy: { createdAt: "asc" }, take: 100 }));
-  // (Owner, Oct 28) The developer's OWN listing edit (from another tab) is already said once, in their own voice, by the action log ("You changed the description and access keys in another tab"):
+  // (Owner, Oct 28) The developer's OWN listing edit (from another tab) is already said once, in their own voice, by the action log ("You saved the listing in another tab: description, access keys"):
   // its listing-info event ("Nora Lane changed the description") is dropped, and a rename of their own reads "You renamed the test to ...".
   const me = displayName(await tx.user.findUniqueOrThrow({ where: { id: devId } }));
   const theirs = events.filter((e) => !e.text.startsWith("You ")).flatMap((e) => {
@@ -107,15 +104,13 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
     if (e.kind === "renamed" && e.text.startsWith(`${me} `)) return [{ ...e, text: e.text.replace(`${me} `, "You ") }];
     return [e];
   });
-  // (Owner, Oct 28, batch 16 section 21) What the developer did in another tab is never news and can't be switched off in Alerts: the live box shows only
-  // invites and calls ("You invited Ana Silva in another tab"); a press stops once only for another tab's action that touches it (`press`).
-  // In both, an action of theirs reads "You paid Ana Silva $10.00 for the written answers in another tab".
+  // (Owner, Oct 29, batch 29 section 12) What the developer did in another tab can't be switched off in Alerts: the changes in BIG_OWN_ACTS show in the live box and
+  // stop every press on the test page and on Edit once (Edit's Save turns another tab's Save into its per-field lines); any other action of theirs stops only a
+  // press it touches. A line reads "You paid Ana Silva $10.00 for the written answers in another tab".
   const own = (await ownChanges(devId, testId, since, tab, tx)).flatMap((o): TestEventLike[] => {
     const line = { kind: "own", text: o.live ?? o.text, createdAt: o.createdAt };
     if (opts.all) return has(LIVE_OWN_ACTS, o.about?.a) ? [line] : [];
     if (!opts.press) return [];
-    // Edit's Save keeps its own lines (another tab's Save) as they are.
-    if (opts.press.big === false) return touches(o, opts.press) ? [o] : [];
     return has(BIG_OWN_ACTS, o.about?.a) || touches(o, opts.press) ? [line] : [];
   });
   const all = [...theirs, ...(await devPaymentChanges(devId, testId, since, tx)), ...own].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
