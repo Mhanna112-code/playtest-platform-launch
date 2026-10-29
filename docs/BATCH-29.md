@@ -48,6 +48,9 @@ Today a tester's own press in another tab stops only the SAME press ("You also d
 ## 23. Application and invite lines stack together (owner, Oct 29)
 The tester's lines about their applications and invites ("<test> is full, so your application was closed", "…is full right now. Your invite stays open…", "A spot opened on <test>…", "…is now invite only…", "<test> changed since you applied", "<test>'s listing changed, so your application was closed. You can apply again on the current listing.", "“<test>”: your application was closed.", "Your invite to “<test>” was closed.", and "<dev> updated <test>: your invite was sent again on the new listing." (no longer its own "Invites sent again" stack)) all stack into ONE entry per day across tests, "Applications and invites" (e.g. "Applications and invites · 4 updates today"), opening to show each line, each still opening its own join page. They no longer stack in "that test's day" or "Applications closed". Update the bell table (doc agent). Test: lines from two tests on one day form one entry.
 
+## 24. Joins stack together (owner, Oct 29)
+The tester's "You're in: <test>", "You're back in <test>: your deadline is <date>." and "Your application (or ask to rejoin) wasn't accepted" stack into ONE entry per day across tests, "Joined" (e.g. "Joined · 3 updates today"), each line still opening its own session page (or join page for one not accepted), instead of "that test's day". Update the bell table (doc agent). Test: joins on two tests the same day form one entry.
+
 ## Decided, no change (owner, Oct 29)
 - After a stop, End early, Leave, a block or a removal, a sent piece's review date stays the later of 7 days after sending and the tester's ORIGINAL deadline (the owner said no to opening Charge 7 days after the work ended). Don't change it.
 
