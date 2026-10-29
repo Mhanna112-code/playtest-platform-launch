@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-29T14:02:43.861Z",
+  "generated": "2026-10-29T14:04:46.026Z",
   "sizes": {
     "desktop": "1280x900",
     "phone": "375x812"
@@ -1629,43 +1629,43 @@
       "explanation": "An outage comes from the uptime service's down and up alerts (batch 15): every clock moves later by its length, calls inside it are cancelled with no fault, and open pages say so.",
       "cases": [
         {
-          "title": "Before: the developer's call",
-          "explanation": "A call with Ana booked at the time the site is about to be found down",
+          "title": "Simulated: before",
+          "explanation": "A call with Ana booked inside the 20 minutes the hand-sent alerts will call down (the site kept running)",
           "kind": "image",
           "desktop": "outage-before-dev.png",
           "phone": "outage-before-dev-phone.png"
         },
         {
-          "title": "After: the developer's page",
-          "explanation": "The live box: “The site was down from <a> to <b>. Deadlines and payment dates moved 20 min later.”",
+          "title": "Simulated: the developer's page",
+          "explanation": "The down/up alerts were sent by hand and the site kept running; the live box: “The site was down from <a> to <b>. Deadlines and payment dates moved 20 min later.”",
           "kind": "image",
           "desktop": "outage-live-dev.png",
           "phone": "outage-live-dev-phone.png"
         },
         {
-          "title": "After: the tester's page",
-          "explanation": "Ana's session page says the same in its live box",
+          "title": "Simulated: the tester's page",
+          "explanation": "Ana's session page says the same in its live box (alerts sent by hand; the site kept running)",
           "kind": "image",
           "desktop": "outage-live-tester.png",
           "phone": "outage-live-tester-phone.png"
         },
         {
-          "title": "An outage is found",
-          "explanation": "The developer's test page (left) and the tester's session page (right) are open when the health check finds a 20-minute gap: both say the site was down and every clock moved later",
+          "title": "A simulated outage",
+          "explanation": "The down and up alerts were sent by hand (the down's time moved 20 minutes back); the site kept running. The developer's test page (left) and the tester's session page (right) are open when the up alert arrives: both say the site was down and every clock moved later",
           "kind": "video",
           "desktop": "outage-live.webm",
           "phone": "outage-live-phone.webm"
         },
         {
-          "title": "After: the call",
-          "explanation": "The call inside the outage is cancelled “missed because the site was down”: never a no-show, nothing charged",
+          "title": "Simulated: the call",
+          "explanation": "The call inside the simulated outage is cancelled “missed because the site was down”: never a no-show, nothing charged",
           "kind": "image",
           "desktop": "outage-after-dev.png",
           "phone": "outage-after-dev-phone.png"
         },
         {
-          "title": "After: the tester's page",
-          "explanation": "Ana's call reads as missed because the site was down; her deadline moved 20 minutes later (UTC before / after: 2026-11-11 23:59 → 2026-11-12 00:19)",
+          "title": "Simulated: the tester's page",
+          "explanation": "Ana's call reads as missed because the site was down; her deadline moved 20 minutes later (UTC before / after: 2026-11-11 23:59 → 2026-11-12 00:19) (A simulated outage: the down/up alerts were sent by hand; the site kept running.)",
           "kind": "image",
           "desktop": "outage-after-tester.png",
           "phone": "outage-after-tester-phone.png"
@@ -1693,7 +1693,7 @@
         },
         {
           "title": "The admin's Outages",
-          "explanation": "The console lists the outages recorded from the uptime service's down and up alerts, with their length",
+          "explanation": "The console lists the outages recorded from the down and up alerts (here sent by hand; the site kept running), with their length",
           "kind": "image",
           "desktop": "outage-admin.png",
           "phone": "outage-admin-phone.png"
