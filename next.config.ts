@@ -17,7 +17,8 @@ const csp = [
   "frame-ancestors 'none'",
   "object-src 'none'",
   "base-uri 'self'",
-  "form-action 'self'",
+  // Add a card and payout setup are forms that redirect on to Stripe's own pages (Checkout, Connect onboarding): browsers apply form-action to that redirect too.
+  "form-action 'self' https://checkout.stripe.com https://connect.stripe.com",
 ].join("; ");
 
 const securityHeaders = [
