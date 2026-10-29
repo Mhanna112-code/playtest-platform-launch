@@ -66,6 +66,13 @@ The tester's "Your excerpt from <test> is now on your profile.", "Your excerpt f
 ## 27. Deadline reminders stack across tests (owner, Oct 29)
 The tester's "Your deadline on “<test>” is <date>: send your work before then." (same schedule as today) stacks into ONE entry per day across tests, "Deadlines" (e.g. "Deadlines · 2 tests"), each line opening that session page, instead of "that test's day". Update the bell table (doc agent). Test: two deadline reminders on one day form one entry.
 
+## 28. The bell's number and reading (owner, Oct 29)
+- **The number counts entries, not lines:** the red number on the bell is how many entries in the bell list have anything unread (a stack with 3 unread lines counts 1), "9+" above 9 (src/app/app/layout.tsx; the aria-label says the same number).
+- **Read only when opened:** a single line is marked read when it's clicked (opened); a stack when it's expanded (all its lines at once) or one of its lines is clicked. Opening the Notifications page no longer marks anything read by itself (today it marks single lines read on page load: notifications/page.tsx ~36). No "mark all as read" anywhere.
+- Unread entries look unread (the dot and bold) until opened; a stack that gets a new line after being read shows unread again and counts again.
+- **Live:** the bell's number follows the same ~20-second check as the page, and when the tab comes back into focus, on every page (not only on navigation).
+- Tests: three lines in one stack → 1; expanding it → 0; visiting the page doesn't change the count; a new line in a read stack → 1 again; the number updates without navigation.
+
 ## Decided, no change (owner, Oct 29)
 - After a stop, End early, Leave, a block or a removal, a sent piece's review date stays the later of 7 days after sending and the tester's ORIGINAL deadline (the owner said no to opening Charge 7 days after the work ended). Don't change it.
 
