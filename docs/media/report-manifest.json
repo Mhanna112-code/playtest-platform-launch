@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-29T03:12:48.222Z",
+  "generated": "2026-10-29T14:02:43.861Z",
   "sizes": {
     "desktop": "1280x900",
     "phone": "375x812"
@@ -1492,21 +1492,21 @@
         },
         {
           "title": "A dispute already decided",
-          "explanation": "Bo decides a dispute Ada decided a moment earlier: “This dispute was already decided by Ada Admin at <time>.”",
+          "explanation": "Bo decides a dispute Ada decided a moment earlier: “<Ada's email> already decided this dispute at <time>.”",
           "kind": "image",
           "desktop": "admins2-dispute.png",
           "phone": "admins2-dispute-phone.png"
         },
         {
           "title": "A suspension already lifted",
-          "explanation": "Bo presses Reinstate on a suspension Ada already lifted: “That account isn't suspended.”",
+          "explanation": "Bo presses Reinstate on a suspension Ada already lifted: “Since this page loaded, <Ada's email> reinstated that account's developer side at <date, time>.” (batch 17 §6), and the row updates",
           "kind": "image",
           "desktop": "admins2-suspension.png",
           "phone": "admins2-suspension-phone.png"
         },
         {
           "title": "A pause already lifted",
-          "explanation": "Bo lifts the team's pause Ada already lifted: “That test isn't paused by the team.”",
+          "explanation": "Bo lifts the team's pause Ada already lifted: “That test's pause was already lifted (by <Ada's email> at <time>).” (batch 22 §5), and the row's button is Pause again",
           "kind": "image",
           "desktop": "admins2-pause.png",
           "phone": "admins2-pause-phone.png"
@@ -1520,14 +1520,14 @@
         },
         {
           "title": "An account already deleted",
-          "explanation": "Ada deleted Dee's account; Bo suspends it from his older page: “That account was deleted.”",
+          "explanation": "Ada deleted Dee's account; Bo suspends it from their older page: “That account was deleted. <Ada's email> deleted it at <date, time>.” (batch 17 §6)",
           "kind": "image",
           "desktop": "admins2-deleted.png",
           "phone": "admins2-deleted-phone.png"
         },
         {
           "title": "Two admins at once",
-          "explanation": "Ada (left) acts first in each row; Bo (right) presses the same button on his older page and gets the refusal: a decided dispute, a lifted suspension, a lifted pause, an approved lift, a deleted account",
+          "explanation": "Ada (left) acts first in each row; Bo (right) presses the same button on their older page and gets the refusal: a decided dispute, a lifted suspension, a lifted pause, an approved lift, a deleted account",
           "kind": "video",
           "desktop": "admins2.webm",
           "phone": "admins2-phone.webm"
@@ -1697,6 +1697,69 @@
           "kind": "image",
           "desktop": "outage-admin.png",
           "phone": "outage-admin-phone.png"
+        },
+        {
+          "title": "A real outage: before (developer)",
+          "explanation": "Nora's test page while the site is up: Ana's written answers waiting in Needs you (“Listing: $10.00 for written answers”), with a call booked for later today.",
+          "kind": "image",
+          "desktop": "outage-real-before-dev.png",
+          "phone": "outage-real-before-dev-phone.png"
+        },
+        {
+          "title": "A real outage: before (tester)",
+          "explanation": "Ana's session page while the site is up: “Your deadline on Harbor Run: first 3 levels is in 5 hours 59 minutes: send your work before then.” and “Due Oct 29, 2026 · 5 h 59 min left”.",
+          "kind": "image",
+          "desktop": "outage-real-before-tester.png",
+          "phone": "outage-real-before-tester-phone.png"
+        },
+        {
+          "title": "A real outage: the site is down",
+          "explanation": "The server was really stopped at 07:37 (local): reloading Nora's test page shows the browser's own page, “This site can't be reached · localhost refused to connect · ERR_CONNECTION_REFUSED”.",
+          "kind": "image",
+          "desktop": "outage-real-down-dev.png",
+          "phone": null
+        },
+        {
+          "title": "A real outage: the site is down",
+          "explanation": "Ana's page on a phone, reloaded while the server is stopped: “This site can't be reached”.",
+          "kind": "image",
+          "desktop": null,
+          "phone": "outage-real-down-tester-phone.png"
+        },
+        {
+          "title": "A real outage: after the restart (developer)",
+          "explanation": "The server answers again at 07:53 after 16 real minutes stopped: no “The site was down” line, and Ana's answers still read “sent Thu, Oct 29, 7:36 AM”; nothing moved, because no outage was recorded.",
+          "kind": "image",
+          "desktop": "outage-real-after-dev.png",
+          "phone": "outage-real-after-dev-phone.png"
+        },
+        {
+          "title": "A real outage: after the restart (tester)",
+          "explanation": "“Your deadline on Harbor Run: first 3 levels is in 5 hours 42 minutes” and “Due Oct 29, 2026 · 5 h 43 min left”: 16 minutes less than before the stop, because the deadline didn't move (no outage was recorded).",
+          "kind": "image",
+          "desktop": "outage-real-after-tester.png",
+          "phone": "outage-real-after-tester-phone.png"
+        },
+        {
+          "title": "A real outage, 16 minutes",
+          "explanation": "The server was really stopped at 07:37 and started again at 07:53 (local); about 16 real minutes of waiting were trimmed from this video. Nora's test page (left) and Ana's session page (right): before, the browser's “This site can't be reached” while it's down, and after the restart the same dates as before: no outage was recorded and no clock moved.",
+          "kind": "video",
+          "desktop": "outage-real.webm",
+          "phone": "outage-real-phone.webm"
+        },
+        {
+          "title": "The admin's Outages after the real stop",
+          "explanation": "Only the two older outages from Oct 28 (simulated, alerts sent by hand) are listed; the real 16-minute stop isn't: the stand-in's “down” alert couldn't reach the stopped server, and the “up” alert alone records nothing.",
+          "kind": "image",
+          "desktop": "outage-real-admin.png",
+          "phone": null
+        },
+        {
+          "title": "The stand-in for UptimeRobot",
+          "explanation": "What the local stand-in saw each minute: “keyed /api/health → no answer (ECONNREFUSED)” from 07:38 to 07:53, “down alert → not delivered: ECONNREFUSED”, then “up alert → 200 {\"ok\":true,\"type\":\"up\",\"outage\":null}”.",
+          "kind": "image",
+          "desktop": "outage-real-pinger.png",
+          "phone": null
         }
       ]
     },
@@ -2145,13 +2208,6 @@
           "phone": "b15-28-pill-phone.png"
         },
         {
-          "title": "§29 and §37 The restricted view",
-          "explanation": "A suspended developer opens the test from its card: the red banner (title, reason, what's allowed), the overview with Stop and End early, Booked calls with Cancel",
-          "kind": "image",
-          "desktop": "b15-29-restricted-view.png",
-          "phone": "b15-29-restricted-view-phone.png"
-        },
-        {
           "title": "§29 Done",
           "explanation": "Stop went through silently (no stop-once, whatever changed) and the dashboard top says “Done: you stopped Harbor Run: first 3 levels.”",
           "kind": "image",
@@ -2164,6 +2220,13 @@
           "kind": "video",
           "desktop": "b15-29-restricted.webm",
           "phone": "b15-29-restricted-phone.webm"
+        },
+        {
+          "title": "§29 and §37 The restricted view",
+          "explanation": "A suspended developer opens the test from its card: the red banner (title, reason, what's allowed), the overview with Stop and End early, Booked calls with Cancel",
+          "kind": "image",
+          "desktop": "b15-29-restricted-view.png",
+          "phone": "b15-29-restricted-view-phone.png"
         },
         {
           "title": "§30 $0 needs a reason",
@@ -2215,13 +2278,6 @@
           "phone": "b15-33-live-session-phone.png"
         },
         {
-          "title": "§34 The warning",
-          "explanation": "“$100.00 left of the $1,000 for calls with Ana Silva on this test.”: small, no stop",
-          "kind": "image",
-          "desktop": "b15-34-warning.png",
-          "phone": "b15-34-warning-phone.png"
-        },
-        {
           "title": "§34 Refused at the limit",
           "explanation": "“Calls with Ana Silva on this test can come to at most $1,000; $100.00 is left, so this call can't be booked.”",
           "kind": "image",
@@ -2241,6 +2297,13 @@
           "kind": "image",
           "desktop": "b15-34-tester.png",
           "phone": "b15-34-tester-phone.png"
+        },
+        {
+          "title": "§34 The warning",
+          "explanation": "“$100.00 left of the $1,000 for calls with Ana Silva on this test.”: small, no stop",
+          "kind": "image",
+          "desktop": "b15-34-warning.png",
+          "phone": "b15-34-warning-phone.png"
         },
         {
           "title": "§35 and §38 Upcoming calls",
@@ -3980,6 +4043,1832 @@
           "kind": "image",
           "desktop": "b19-08-edit-line.png",
           "phone": "b19-08-edit-line-phone.png"
+        }
+      ]
+    },
+    {
+      "title": "Batch 20 (Oct 29)",
+      "explanation": "Batch 20, item by item (§ numbers are the items in docs/BATCH-20.md): question lists in scroll boxes, the 20-question notice, Invite anyway naming every missing need, Invite stops only for required items, 18+ at sign-up, profile Open tests, no false overlap flash, the Alerts chip and menu in sync, 1-letter searches, Invite while full, call history boxes, Pay more stopping presses once, the pill while typing, Rate and call changes, Dispute at the max, admin-only accounts, blocked profiles, no reload under typing, number boxes, the Open until line, the updated-Terms tick, prices for ticked parts, “Worked with you on N tests”, ratings live, Switch never stopping the developer, Send after a change, 5-character reasons and Send with the required answer.",
+      "cases": [
+        {
+          "title": "§1 Two questions: no box",
+          "explanation": "On the join page, “Nora Lane wants to know” lists 2 questions as a plain list.",
+          "kind": "image",
+          "desktop": "b20-01-join-2.png",
+          "phone": "b20-01-join-2-phone.png"
+        },
+        {
+          "title": "§1 Twenty questions: a scroll box",
+          "explanation": "The same card with 20 questions: every question is inside a box about 3 questions tall that scrolls (no “+17 more”).",
+          "kind": "image",
+          "desktop": "b20-01-join-20.png",
+          "phone": "b20-01-join-20-phone.png"
+        },
+        {
+          "title": "§1 A long question inside the box",
+          "explanation": "Scrolled to question 4, a long one: it keeps its own 3-line clamp with “Show more” inside the box.",
+          "kind": "image",
+          "desktop": "b20-01-join-long.png",
+          "phone": "b20-01-join-long-phone.png"
+        },
+        {
+          "title": "§1 The answer form in a box",
+          "explanation": "With 6 questions, the questions and their answer boxes (each with its toolbar) sit in a box about 3 questions tall; “Anything else”, the “0 / 50,000” counter and Send my answers stay below it.",
+          "kind": "image",
+          "desktop": "b20-01-form-box.png",
+          "phone": "b20-01-form-box-phone.png"
+        },
+        {
+          "title": "§1 A red mistake scrolls the box",
+          "explanation": "Send with question 6 (required) empty: the box scrolls itself to question 6 and the red line sits right under its answer box: “Answer every required question before sending.”",
+          "kind": "image",
+          "desktop": "b20-01-form-red.png",
+          "phone": "b20-01-form-red-phone.png"
+        },
+        {
+          "title": "§1 Sending with a required answer missing",
+          "explanation": "The tester answers question 1 and presses Send my answers; the box scrolls down to question 6, the empty required one, with “Answer every required question before sending.” under it.",
+          "kind": "video",
+          "desktop": "b20-01-form-video.webm",
+          "phone": "b20-01-form-video-phone.webm"
+        },
+        {
+          "title": "§2 At 20, the notice",
+          "explanation": "The 20th question brings a blue line under the last one: “At most 20 questions.” (a notice, not a red mistake: Post still works).",
+          "kind": "image",
+          "desktop": "b20-02-at-20.png",
+          "phone": "b20-02-at-20-phone.png"
+        },
+        {
+          "title": "§2 Deleting one removes it",
+          "explanation": "Back to 19 questions, the line is gone.",
+          "kind": "image",
+          "desktop": "b20-02-back-19.png",
+          "phone": "b20-02-back-19-phone.png"
+        },
+        {
+          "title": "§2 The 20-question notice",
+          "explanation": "With 19 questions there's no line; typing the 20th shows “At most 20 questions.” under the list; deleting it takes the line away.",
+          "kind": "video",
+          "desktop": "b20-02-video.webm",
+          "phone": "b20-02-video-phone.webm"
+        },
+        {
+          "title": "§3 One line per tester, both kinds",
+          "explanation": "“Fen Bao doesn't list a language this test needs (Chinese or Portuguese).”; Gus Hale: only the device part; Hana Ito, missing both: one line naming the languages and the devices, the long device list cut to its first 3 with “+5 more”.",
+          "kind": "image",
+          "desktop": "b20-03-three.png",
+          "phone": "b20-03-three-phone.png"
+        },
+        {
+          "title": "§3 “+5 more” opens the rest in place",
+          "explanation": "Pressed, Hana Ito's line lists every device the test needs (Windows PC, Switch, VR headset, Steam Deck, iPhone, Android phone, iPad or Android tablet), with “fewer” to fold it back.",
+          "kind": "image",
+          "desktop": "b20-03-more-open.png",
+          "phone": "b20-03-more-open-phone.png"
+        },
+        {
+          "title": "§3 Five testers: a scroll box",
+          "explanation": "With 5 testers ticked, the 5 lines sit in a small box that scrolls (about 4 lines show at once); Invite anyway and Cancel stay below it.",
+          "kind": "image",
+          "desktop": "b20-03-five.png",
+          "phone": "b20-03-five-phone.png"
+        },
+        {
+          "title": "§3 Invite anyway names every missing need",
+          "explanation": "Three testers ticked: one line each naming the missing languages, devices or both, a long list opened with “+5 more”; then five testers: the lines scroll in a box above Invite anyway.",
+          "kind": "video",
+          "desktop": "b20-03-video.webm",
+          "phone": "b20-03-video-phone.webm"
+        },
+        {
+          "title": "§4 An unrelated change never stops Invite",
+          "explanation": "Kai Noor added French and PlayStation to their profile after the page loaded; this test only needs Chinese, so Invite went straight through: Invited lists “Kai Noor · waiting for them to join”.",
+          "kind": "image",
+          "desktop": "b20-04-unrelated.png",
+          "phone": "b20-04-unrelated-phone.png"
+        },
+        {
+          "title": "§4 A required item added: one line",
+          "explanation": "Lea Ford changed their profile twice; only the net change to what this test needs is listed, once: “Lea Ford now lists Chinese, which this test needs.” with one time (French and Xbox aren't mentioned).",
+          "kind": "image",
+          "desktop": "b20-04-now-lists.png",
+          "phone": "b20-04-now-lists-phone.png"
+        },
+        {
+          "title": "§4 Added then removed: no stop",
+          "explanation": "Mo Reid added Chinese and took it out again: the edits cancel out, so there's no “now lists” line; the press opens the usual box for what they're missing: “Mo Reid doesn't list a language this test needs (Chinese).”",
+          "kind": "image",
+          "desktop": "b20-04-cancelled-out.png",
+          "phone": "b20-04-cancelled-out-phone.png"
+        },
+        {
+          "title": "§4 Invite stops only for required items",
+          "explanation": "An unrelated profile change goes straight through; a tester adding the required Chinese stops Invite once with one line; added-then-removed gives no stop.",
+          "kind": "video",
+          "desktop": "b20-04-video.webm",
+          "phone": "b20-04-video-phone.webm"
+        },
+        {
+          "title": "§5 The age tick at sign-up",
+          "explanation": "Next to the Terms agreement, a second required tick: “I'm 18 or older.”",
+          "kind": "image",
+          "desktop": "b20-05-signup-tick.png",
+          "phone": "b20-05-signup-tick-phone.png"
+        },
+        {
+          "title": "§5 Unticked, Sign up is refused",
+          "explanation": "Red at the tick: “You must be 18 or older to use Playtest.”, listed under Sign up with “Fix the mistake above, then press Sign up again.”; no account is made (the red line sits between the box and its words, pushing “I'm 18 or older.” to the side).",
+          "kind": "image",
+          "desktop": "b20-05-signup-refused.png",
+          "phone": "b20-05-signup-refused-phone.png"
+        },
+        {
+          "title": "§5 The Google sign-up step",
+          "explanation": "After Google answers for a new account, one short step before the account exists: the Terms agreement and “I'm 18 or older.”, then Continue (staged here without Google).",
+          "kind": "image",
+          "desktop": "b20-05-google-step.png",
+          "phone": "b20-05-google-step-phone.png"
+        },
+        {
+          "title": "§5 Continue with neither tick",
+          "explanation": "Nothing is created: “Agree to the Terms of Use to sign up” is red at the Terms tick and listed under Continue (“Fix the mistake above, then press Continue again.”); the age tick isn't marked yet.",
+          "kind": "image",
+          "desktop": "b20-05-google-refused.png",
+          "phone": "b20-05-google-refused-phone.png"
+        },
+        {
+          "title": "§5 Terms ticked, age not",
+          "explanation": "The next Continue is refused at the age tick: “You must be 18 or older to use Playtest.”; still no account.",
+          "kind": "image",
+          "desktop": "b20-05-google-age-red.png",
+          "phone": "b20-05-google-age-red-phone.png"
+        },
+        {
+          "title": "§6 A full test you're working in",
+          "explanation": "“Harbor Run: invite only” is full (1 of 1, invite only), yet it stays on Nora Lane's profile for the tester working in it, with “You're in this test” (it opens their session page).",
+          "kind": "image",
+          "desktop": "b20-06-in-test.png",
+          "phone": "b20-06-in-test-phone.png"
+        },
+        {
+          "title": "§6 An open invite to a full test",
+          "explanation": "For an invited tester the same full test stays listed with “Full right now: your invite stays open” (it opens the join page).",
+          "kind": "image",
+          "desktop": "b20-06-invite-full.png",
+          "phone": "b20-06-invite-full-phone.png"
+        },
+        {
+          "title": "§6 A pending application",
+          "explanation": "“Sky Lab: apply to join” is listed with “Applied (waiting)” for the tester who applied; the full invite-only test isn't shown to them.",
+          "kind": "image",
+          "desktop": "b20-06-applied.png",
+          "phone": "b20-06-applied-phone.png"
+        },
+        {
+          "title": "§7 A weekly call, nothing else booked",
+          "explanation": "The tester (no calls or requests yet) fills in a time, Weekly, 4 calls, 30 minutes: no red line.",
+          "kind": "image",
+          "desktop": "b20-07-before.png",
+          "phone": "b20-07-before-phone.png"
+        },
+        {
+          "title": "§7 After the press: no red flash",
+          "explanation": "The request went through and the form cleared; at no moment after the press (checked every 0.1 s, then after the next poll) did a red “overlaps” line show. The request waits in Call requests: “weekly calls: Sun 3:00 PM · 4 calls from Sun, Nov 1, 3:00 PM · 30 min · Contract $30/h · asked by you”.",
+          "kind": "image",
+          "desktop": "b20-07-after.png",
+          "phone": "b20-07-after-phone.png"
+        },
+        {
+          "title": "§7 Request a time, no false overlap",
+          "explanation": "A tester with no other calls asks for a weekly call: no red “overlaps” line appears at any moment; the request goes straight into Call requests.",
+          "kind": "video",
+          "desktop": "b20-07-video.webm",
+          "phone": "b20-07-video-phone.webm"
+        },
+        {
+          "title": "§8 The chip in the stop box",
+          "explanation": "Next round stops once for the tester's new call request; under it: “Don't stop me for: Call changes”.",
+          "kind": "image",
+          "desktop": "b20-08-chip.png",
+          "phone": "b20-08-chip-phone.png"
+        },
+        {
+          "title": "§8 Pressed: “Call changes (off)”",
+          "explanation": "The chip saves the same setting the Alerts menu uses.",
+          "kind": "image",
+          "desktop": "b20-08-chip-off.png",
+          "phone": "b20-08-chip-off-phone.png"
+        },
+        {
+          "title": "§8 The Alerts menu agrees at once",
+          "explanation": "Opened right after, the menu shows “Call changes” ticked (and the button reads “Alerts (1 off)”).",
+          "kind": "image",
+          "desktop": "b20-08-menu.png",
+          "phone": "b20-08-menu-phone.png"
+        },
+        {
+          "title": "§8 Another tab too",
+          "explanation": "A second tab of the test page opened afterwards: its Alerts menu also has “Call changes” ticked.",
+          "kind": "image",
+          "desktop": "b20-08-other-tab.png",
+          "phone": "b20-08-other-tab-phone.png"
+        },
+        {
+          "title": "§8 Un-ticked in the menu, the chip comes back",
+          "explanation": "After un-ticking “Call changes” in Alerts, the stop box's chip reads “Call changes” again (pressable).",
+          "kind": "image",
+          "desktop": "b20-08-chip-back.png",
+          "phone": "b20-08-chip-back-phone.png"
+        },
+        {
+          "title": "§8 The chip and the menu in sync",
+          "explanation": "Next round stops for a call request; “Don't stop me for: Call changes” turns to “(off)”; the Alerts menu opened right after has it ticked; un-ticking it there turns the chip back.",
+          "kind": "video",
+          "desktop": "b20-08-video.webm",
+          "phone": "b20-08-video-phone.webm"
+        },
+        {
+          "title": "§9 One letter finds a one-letter name",
+          "explanation": "“z” finds the tester named “Z” (the exact match first) and “Zan Okoro” (a word starting with z), and other testers named Z… (greyed when they can't join this test), but not “Ozanne Wilde”.",
+          "kind": "image",
+          "desktop": "b20-09-one-letter.png",
+          "phone": "b20-09-one-letter-phone.png"
+        },
+        {
+          "title": "§9 From 3 letters, any part",
+          "explanation": "“zan” also finds “Ozanne Wilde” (the letters inside a word) next to “Zan Okoro”.",
+          "kind": "image",
+          "desktop": "b20-09-three-letters.png",
+          "phone": "b20-09-three-letters-phone.png"
+        },
+        {
+          "title": "§9 Searching from 1 character",
+          "explanation": "Typing “z” finds “Z” and “Zan Okoro”; typing on to “zan” adds “Ozanne Wilde”.",
+          "kind": "video",
+          "desktop": "b20-09-video.webm",
+          "phone": "b20-09-video-phone.webm"
+        },
+        {
+          "title": "§10 Full: Invite is disabled",
+          "explanation": "Every spot is taken (1 of 1): Invite is greyed with the line under it, “This test is full. Add spots in Edit to invite more people.” (“in Edit” opens Edit's spots); the tick on Bo Tran stays.",
+          "kind": "image",
+          "desktop": "b20-10-full.png",
+          "phone": "b20-10-full-phone.png"
+        },
+        {
+          "title": "§10 A spot opens: Invite is back, live",
+          "explanation": "The tester in the only spot left the test; without a reload the line goes, Invite lights up with Bo Tran still ticked, and the tester who left can be ticked again under “People you've worked with”.",
+          "kind": "image",
+          "desktop": "b20-10-spot-opens.png",
+          "phone": "b20-10-spot-opens-phone.png"
+        },
+        {
+          "title": "§10 Invite while full",
+          "explanation": "On a full test Invite is greyed with “This test is full. Add spots in Edit to invite more people.”; the tester in the only spot leaves and Invite comes back on its own.",
+          "kind": "video",
+          "desktop": "b20-10-video.webm",
+          "phone": "b20-10-video-phone.webm"
+        },
+        {
+          "title": "§11 The tester's Call history: 6 calls",
+          "explanation": "More than 3 past calls sit in a plain scroll box about 3 calls tall, newest first, every call inside (no “Show 3 more”).",
+          "kind": "image",
+          "desktop": "b20-11-tester-history.png",
+          "phone": "b20-11-tester-history-phone.png"
+        },
+        {
+          "title": "§11 The developer's “Calls (6)”",
+          "explanation": "In the tester's row, the 6 calls sit in a scroll box (about 5 show at once), newest first, each with its own controls inside (here “Pay it in Needs you ↑”).",
+          "kind": "image",
+          "desktop": "b20-11-dev-calls.png",
+          "phone": "b20-11-dev-calls-phone.png"
+        },
+        {
+          "title": "§11 A link to the 5th call",
+          "explanation": "Opened from a link to the 5th call (newest first), the Call history box opens already scrolled down so that call is in view.",
+          "kind": "image",
+          "desktop": "b20-11-link-5th.png",
+          "phone": "b20-11-link-5th-phone.png"
+        },
+        {
+          "title": "§11 A link to an older call",
+          "explanation": "The session page opens from a link to the 5th call: the Call history box opens scrolled down to that call.",
+          "kind": "video",
+          "desktop": "b20-11-link-video.webm",
+          "phone": "b20-11-link-video-phone.webm"
+        },
+        {
+          "title": "§12 A Pay more stops the tester's press once",
+          "explanation": "Pay more was missing from the tester's stop list: now the Cancel call press stops once with “Nora Lane paid you $2.50 more for your written answers” (Alerts On).",
+          "kind": "image",
+          "desktop": "b20-12-tester-stop.png",
+          "phone": "b20-12-tester-stop-phone.png"
+        },
+        {
+          "title": "§12 Pay more, then Cancel call",
+          "explanation": "The developer pays $2.50 more while the tester's page is open; the tester's Cancel call stops once naming it, and the second press cancels the call.",
+          "kind": "video",
+          "desktop": "b20-12-tester-video.webm",
+          "phone": "b20-12-tester-video-phone.webm"
+        },
+        {
+          "title": "§12 The developer's other tab",
+          "explanation": "A Pay more made in another tab stops Pay here once: “You paid Ana Silva $1.00 more for their written answers in another tab”.",
+          "kind": "image",
+          "desktop": "b20-12-dev-stop.png",
+          "phone": "b20-12-dev-stop-phone.png"
+        },
+        {
+          "title": "§12 Pay more from another tab",
+          "explanation": "The developer pays Ana $1.00 more in another tab; Pay on Cam's answers here stops once and lists it.",
+          "kind": "video",
+          "desktop": "b20-12-dev-video.webm",
+          "phone": "b20-12-dev-video-phone.webm"
+        },
+        {
+          "title": "§13 While typing: the pill, no scroll",
+          "explanation": "The developer requested a call while the tester was typing an answer: the page stays put and a small “1 new update ↑” pill shows at the bottom.",
+          "kind": "image",
+          "desktop": "b20-13-pill.png",
+          "phone": "b20-13-pill-phone.png"
+        },
+        {
+          "title": "§13 The line in the live box",
+          "explanation": "Pressing the pill goes up to the live box, which lists the request (“Nora Lane requested a call …”).",
+          "kind": "image",
+          "desktop": "b20-13-live-line.png",
+          "phone": "b20-13-live-line-phone.png"
+        },
+        {
+          "title": "§13 A call request while typing",
+          "explanation": "The tester keeps typing as the developer requests a call: no jump, the “1 new update ↑” pill appears; pressed, it goes up to the live box's line.",
+          "kind": "video",
+          "desktop": "b20-13-video.webm",
+          "phone": "b20-13-video-phone.webm"
+        },
+        {
+          "title": "§15 Paid below the listing",
+          "explanation": "Ana's written answers were paid $8.00 of the $10.00 listing, so “Dispute the pay” is open to them.",
+          "kind": "image",
+          "desktop": "b20-15-can-dispute.png",
+          "phone": "b20-15-can-dispute-phone.png"
+        },
+        {
+          "title": "§15 Nothing left to award",
+          "explanation": "After Nora's Pay more of $2.00 (“Extra $2.00”), the page's own refresh greys “Dispute the pay” with the line “Already paid the most a dispute could award, so there's nothing to dispute.”",
+          "kind": "image",
+          "desktop": "b20-15-nothing-to-dispute.png",
+          "phone": "b20-15-nothing-to-dispute-phone.png"
+        },
+        {
+          "title": "§15 Dispute greys out live",
+          "explanation": "Ana's page is open with “Dispute the pay”; Nora pays $2.00 more, reaching the $10.00 listing, and without a reload the button greys with “Already paid the most a dispute could award, so there's nothing to dispute.”",
+          "kind": "video",
+          "desktop": "b20-15-video.webm",
+          "phone": "b20-15-video-phone.webm"
+        },
+        {
+          "title": "§16 An admin's setup",
+          "explanation": "“Welcome to Playtest” asks only Name and Pronoun: no “I'm here to” (an admin account has no developer or tester side).",
+          "kind": "image",
+          "desktop": "b20-16-setup.png",
+          "phone": "b20-16-setup-phone.png"
+        },
+        {
+          "title": "§16 Then the console",
+          "explanation": "Continue goes to the admin console (/admin), which is an admin's home from then on.",
+          "kind": "image",
+          "desktop": "b20-16-console.png",
+          "phone": "b20-16-console-phone.png"
+        },
+        {
+          "title": "§16 Admin only",
+          "explanation": "The setup asks only Name and Pronoun; Continue opens the console; Post a test and the dashboard move the admin back to /admin (Find stays: the admin version).",
+          "kind": "video",
+          "desktop": "b20-16-video.webm",
+          "phone": "b20-16-video-phone.webm"
+        },
+        {
+          "title": "§17 Before the block",
+          "explanation": "Nora's profile as Ana sees it: the stats, Open tests listing “Sky Lab: tutorial” and “Harbor Run: first 3 levels”, then “Report Nora Lane” and “Block Nora Lane”.",
+          "kind": "image",
+          "desktop": "b20-17-before.png",
+          "phone": "b20-17-before-phone.png"
+        },
+        {
+          "title": "§17 You blocked them",
+          "explanation": "The profile still opens (name, stats, ratings); Open tests reads “You blocked Nora Lane, so their tests are hidden.”, and where Block was there's “Unblock Nora Lane” (Report Nora Lane stays).",
+          "kind": "image",
+          "desktop": "b20-17-blocked.png",
+          "phone": "b20-17-blocked-phone.png"
+        },
+        {
+          "title": "§17 They blocked you",
+          "explanation": "Nora opens Ana's profile: the normal header, “← Back” and “This profile isn't available.” (the block is never named).",
+          "kind": "image",
+          "desktop": "b20-17-they-blocked.png",
+          "phone": "b20-17-they-blocked-phone.png"
+        },
+        {
+          "title": "§17 An unknown profile",
+          "explanation": "A profile address that doesn't exist: the header, “← Back” and “This page doesn't exist.” instead of the bare 404 page.",
+          "kind": "image",
+          "desktop": "b20-17-missing.png",
+          "phone": "b20-17-missing-phone.png"
+        },
+        {
+          "title": "§17 Unblock",
+          "explanation": "One press, no confirm, and the profile comes back in full at once: Open tests lists both tests again, with “Block Nora Lane” back under Report.",
+          "kind": "image",
+          "desktop": "b20-17-unblocked.png",
+          "phone": "b20-17-unblocked-phone.png"
+        },
+        {
+          "title": "§17 Block and Unblock on a profile",
+          "explanation": "Ana blocks Nora from Nora's profile: it stays open with Unblock and the tests hidden; Unblock brings everything back at once.",
+          "kind": "video",
+          "desktop": "b20-17-video.webm",
+          "phone": "b20-17-video-phone.webm"
+        },
+        {
+          "title": "§18 Typing kept",
+          "explanation": "Ben joined while Nora was typing in Request a time: the page showed it without reloading (a marker set before the change was still there), and the ticked tester, the time and Length “45” stayed.",
+          "kind": "image",
+          "desktop": "b20-18-kept.png",
+          "phone": "b20-18-kept-phone.png"
+        },
+        {
+          "title": "§18 Never reload under typing",
+          "explanation": "Nora fills in Request a time; Ben joins meanwhile; the page brings him in without a reload and the typed time and Length stay.",
+          "kind": "video",
+          "desktop": "b20-18-video.webm",
+          "phone": "b20-18-video-phone.webm"
+        },
+        {
+          "title": "§19 Spots takes digits only",
+          "explanation": "Typing “-20” leaves “20” (the minus is ignored); typed one after the other: -20 → “20”, 0 → “”, 1e3 → “13”, 2.5 → “25”.",
+          "kind": "image",
+          "desktop": "b20-19-spots.png",
+          "phone": "b20-19-spots-phone.png"
+        },
+        {
+          "title": "§19 The arrow keys stop at the minimum",
+          "explanation": "From 1, the down arrow keeps “1”: it never goes to 0 or below.",
+          "kind": "image",
+          "desktop": "b20-19-spots-min.png",
+          "phone": "b20-19-spots-min-phone.png"
+        },
+        {
+          "title": "§19 Money boxes take no minus",
+          "explanation": "Typing “-12.50” into the written answers' price leaves “12.50”.",
+          "kind": "image",
+          "desktop": "b20-19-price.png",
+          "phone": "b20-19-price-phone.png"
+        },
+        {
+          "title": "§19 Number boxes",
+          "explanation": "Typing “-20”, “0”, “1e3” and “2.5” into Spots: only digits stay and a lone 0 is ignored; the down arrow stops at 1; a minus in a price is ignored.",
+          "kind": "video",
+          "desktop": "b20-19-video.webm",
+          "phone": "b20-19-video-phone.webm"
+        },
+        {
+          "title": "§20 The Open until line",
+          "explanation": "The last sentence now names the later date: “You pay each piece within 7 days of it arriving or by that tester's deadline, whichever is later, or the tester can charge you.”",
+          "kind": "image",
+          "desktop": "b20-20-line.png",
+          "phone": "b20-20-line-phone.png"
+        },
+        {
+          "title": "§21 Two ticks above Post",
+          "explanation": "On an older Terms version: “I agree to the updated Terms of Use. Read what changed” first, then the Charge tick, then Post the test.",
+          "kind": "image",
+          "desktop": "b20-21-post-ticks.png",
+          "phone": "b20-21-post-ticks-phone.png"
+        },
+        {
+          "title": "§21 Required",
+          "explanation": "Unticked, Post is refused: the red line “Tick to agree to the updated Terms of Use.” right under the tick.",
+          "kind": "image",
+          "desktop": "b20-21-post-red.png",
+          "phone": "b20-21-post-red-phone.png"
+        },
+        {
+          "title": "§21 The updated-Terms tick on Post",
+          "explanation": "Refused while unticked; ticked, Post goes through (and the account is on the current Terms from then on).",
+          "kind": "video",
+          "desktop": "b20-21-post-video.webm",
+          "phone": "b20-21-post-video-phone.webm"
+        },
+        {
+          "title": "§21 On the join page",
+          "explanation": "Ana, on the older version, gets the same tick above Join this test (no “I'm 18 or older”: age is asked only at sign-up).",
+          "kind": "image",
+          "desktop": "b20-21-join.png",
+          "phone": "b20-21-join-phone.png"
+        },
+        {
+          "title": "§21 On the current version",
+          "explanation": "No tick: just Join this test.",
+          "kind": "image",
+          "desktop": "b20-21-join-current.png",
+          "phone": "b20-21-join-current-phone.png"
+        },
+        {
+          "title": "§22 A ticked part needs a price",
+          "explanation": "Recorded session ticked and its price left empty: red on leaving it, “Enter a price for the recording, or tick Free.”",
+          "kind": "image",
+          "desktop": "b20-22-price-red.png",
+          "phone": "b20-22-price-red-phone.png"
+        },
+        {
+          "title": "§22 Post refused",
+          "explanation": "Post the test is refused while the ticked part has no price; the list above the button names it and goes to the field.",
+          "kind": "image",
+          "desktop": "b20-22-post-refused.png",
+          "phone": "b20-22-post-refused-phone.png"
+        },
+        {
+          "title": "§22 Free",
+          "explanation": "$0 only through the Free tick: ticking Free clears the red line.",
+          "kind": "image",
+          "desktop": "b20-22-free.png",
+          "phone": "b20-22-free-phone.png"
+        },
+        {
+          "title": "§22 A ticked part with no price",
+          "explanation": "Ticking Recorded session and leaving its price empty turns it red; Post is refused; the Free tick is the way to $0.",
+          "kind": "video",
+          "desktop": "b20-22-post-video.webm",
+          "phone": "b20-22-post-video-phone.webm"
+        },
+        {
+          "title": "§22 Save looks disabled",
+          "explanation": "Nothing changed yet: Save is greyed (its tooltip: “Nothing has changed yet”).",
+          "kind": "image",
+          "desktop": "b20-22-save-idle.png",
+          "phone": "b20-22-save-idle-phone.png"
+        },
+        {
+          "title": "§22 “Not saved yet”",
+          "explanation": "Typed on Edit, then the page reloaded: the changes are back with the badge “Not saved yet” next to Save.",
+          "kind": "image",
+          "desktop": "b20-22-not-saved.png",
+          "phone": "b20-22-not-saved-phone.png"
+        },
+        {
+          "title": "§22 “Not posted yet”",
+          "explanation": "The same on Post: “Not posted yet”.",
+          "kind": "image",
+          "desktop": "b20-22-not-posted.png",
+          "phone": "b20-22-not-posted-phone.png"
+        },
+        {
+          "title": "§23 Worked with you on 4 tests",
+          "explanation": "In the invite panel's People you've worked with, Ana's fold now says how each one went: “Night Market demo · ended”, “Kelp Forest: iPhone beta · left”, “Sky Lab: tutorial · left”, “Harbor Run: lighthouse · in it now”.",
+          "kind": "image",
+          "desktop": "b20-23-worked-with.png",
+          "phone": "b20-23-worked-with-phone.png"
+        },
+        {
+          "title": "§24 A working tester's rating stops a press once",
+          "explanation": "Ana was still working when they rated, which ends their part: Nora's Pay on Ben's answers, pressed on a page opened before it, stops once with “Your Pay on Ben Okafor's written answers didn't go through. Since you opened this page: Ana Silva finished their part (rated you) · 5:17 AM”",
+          "kind": "image",
+          "desktop": "b20-24-stop.png",
+          "phone": "b20-24-stop-phone.png"
+        },
+        {
+          "title": "§24 A working tester rates",
+          "explanation": "Ana rates Nora just before Nora presses Pay on Ben's answers: the press stops once for “Ana Silva finished their part (rated you)” (Testers leaving), and the second press pays.",
+          "kind": "video",
+          "desktop": "b20-24-working-video.webm",
+          "phone": "b20-24-working-video-phone.webm"
+        },
+        {
+          "title": "§24 An ended tester's rating, live",
+          "explanation": "Cam's work had ended early; Cam rated Nora while the page was open: the live box says “Updated · 7:12 AM: Cam Lee rated you. You can rate them until Nov 12, 2026.” (info only, no reload).",
+          "kind": "image",
+          "desktop": "b20-24-live-line.png",
+          "phone": "b20-24-live-line-phone.png"
+        },
+        {
+          "title": "§24 Needs you",
+          "explanation": "The same poll adds “Rate Cam Lee · 14 days left”, linking to Cam's Rate box.",
+          "kind": "image",
+          "desktop": "b20-24-needs-rate.png",
+          "phone": "b20-24-needs-rate-phone.png"
+        },
+        {
+          "title": "§24 An ended tester rates, live",
+          "explanation": "Cam (whose work had ended) rates Nora while the test page is open: the live line and Needs you's “Rate Cam Lee” arrive without a reload, and Nora's next Pay (on Ben's answers) goes straight through.",
+          "kind": "video",
+          "desktop": "b20-24-ended-video.webm",
+          "phone": "b20-24-ended-video-phone.webm"
+        },
+        {
+          "title": "§25 No stop",
+          "explanation": "Ben switched a moment before Nora pressed Pay on Ana's answers from a page that hadn't refreshed: the Pay went straight through (“paid $10.00 of $10.00”), since a tester's Switch or Keep never stops a developer press.",
+          "kind": "image",
+          "desktop": "b20-25-paid.png",
+          "phone": "b20-25-paid-phone.png"
+        },
+        {
+          "title": "§25 Switch is a quiet line",
+          "explanation": "In another tab of Nora's left open, the only sign of it: the live box's line “Ben Okafor switched to the new terms” with “See their contract”.",
+          "kind": "image",
+          "desktop": "b20-25-quiet-line.png",
+          "phone": "b20-25-quiet-line-phone.png"
+        },
+        {
+          "title": "§25 A tester's Switch never stops the developer",
+          "explanation": "Ben switches to the new terms while Nora's page is open and Nora presses Pay at once: the Pay goes straight through (the only sign of the Switch is a quiet live line, shown in another tab).",
+          "kind": "video",
+          "desktop": "b20-25-video.webm",
+          "phone": "b20-25-video-phone.webm"
+        },
+        {
+          "title": "§26 Nothing changed yet",
+          "explanation": "Right after sending, “Send my updated answers” is greyed (its tooltip: “Nothing has changed since you sent it”).",
+          "kind": "image",
+          "desktop": "b20-26-unchanged.png",
+          "phone": "b20-26-unchanged-phone.png"
+        },
+        {
+          "title": "§26 Changed",
+          "explanation": "With “ The ramp after it too.” added to the second answer, the button lights up.",
+          "kind": "image",
+          "desktop": "b20-26-changed.png",
+          "phone": "b20-26-changed-phone.png"
+        },
+        {
+          "title": "§26 Changed back",
+          "explanation": "Deleting the added words makes the answers match what was sent again, and the button greys again.",
+          "kind": "image",
+          "desktop": "b20-26-undone.png",
+          "phone": "b20-26-undone-phone.png"
+        },
+        {
+          "title": "§26 Send waits for a change",
+          "explanation": "Greyed after sending; typing in an answer lights it up; deleting the typing greys it again (the server also refuses an identical resend with “Nothing has changed since you sent it.”).",
+          "kind": "video",
+          "desktop": "b20-26-video.webm",
+          "phone": "b20-26-video-phone.webm"
+        },
+        {
+          "title": "§27 Four characters",
+          "explanation": "End early's “Why?” with “Done” (4 characters): red “Say a little more: at least 5 characters.” on leaving the box, and End their work now stays disabled.",
+          "kind": "image",
+          "desktop": "b20-27-end-4.png",
+          "phone": "b20-27-end-4-phone.png"
+        },
+        {
+          "title": "§27 Five characters",
+          "explanation": "“Done!” (5 characters): the red line goes and the button is enabled.",
+          "kind": "image",
+          "desktop": "b20-27-end-5.png",
+          "phone": "b20-27-end-5-phone.png"
+        },
+        {
+          "title": "§27 The same for Stop the test",
+          "explanation": "Stop's “Are you sure…?” pop-up, its required “Why? (testers read it)” with “Done”: red “Say a little more: at least 5 characters.”",
+          "kind": "image",
+          "desktop": "b20-27-stop-4.png",
+          "phone": "b20-27-stop-4-phone.png"
+        },
+        {
+          "title": "§27 At least 5 characters",
+          "explanation": "End early with “Done” is red and disabled; one more character enables it; Stop the test's reason follows the same rule.",
+          "kind": "video",
+          "desktop": "b20-27-video.webm",
+          "phone": "b20-27-video-phone.webm"
+        },
+        {
+          "title": "§28 The required star",
+          "explanation": "Written answers aren't listed on this test, so the form asks the one default question “Your feedback”, with its required “*” on the same line as the label (at the right end of that line), not wrapped onto a line of its own.",
+          "kind": "image",
+          "desktop": "b20-28-star.png",
+          "phone": "b20-28-star-phone.png"
+        },
+        {
+          "title": "§28 Sent",
+          "explanation": "“ee” as the answer to “Your feedback” and nothing in “Anything else”: Send my answers goes through, and Your parts reads “Written answers: Under review · Sent <time>” (before the fix it was refused with “Answer every required question before sending.”).",
+          "kind": "image",
+          "desktop": "b20-28-sent.png",
+          "phone": "b20-28-sent-phone.png"
+        },
+        {
+          "title": "§28 The owner's case",
+          "explanation": "Written answers not listed: “ee” in “Your feedback”, “Anything else” empty, Send my answers goes through.",
+          "kind": "video",
+          "desktop": "b20-28-video.webm",
+          "phone": "b20-28-video-phone.webm"
+        },
+        {
+          "title": "§28 A required answer missing",
+          "explanation": "“Where did you get stuck?” left empty: the red line “Answer every required question before sending.” sits right under that question's box (which gets the focus), not only under the button.",
+          "kind": "image",
+          "desktop": "b20-28-red-at-question.png",
+          "phone": "b20-28-red-at-question-phone.png"
+        }
+      ]
+    },
+    {
+      "title": "Batch 21 (Oct 29)",
+      "explanation": "Batch 21 (docs/BATCH-21.md): the built-in call room that replaced Jitsi, between two browsers with a fake camera and microphone: connecting, mute, camera and screen share, the 2-minute warning, every end the server makes (both pages show “Call ended: …” and the room can't be rejoined), and the camera and microphone check.",
+      "cases": [
+        {
+          "title": "§1 Connected",
+          "explanation": "Nora's call page: “Call with Ana Silva”, Ana's large tile and Nora's own small one (“You”), “Connected · measured so far: …”, with Mute, Camera off, Share screen and Leave (the test browsers' fake camera gives a black picture here: Nora's own tile is black and Ana's tile shows “No camera”; sound and screen share still go through).",
+          "kind": "image",
+          "desktop": "b21-01-connected-dev.png",
+          "phone": "b21-01-connected-dev-phone.png"
+        },
+        {
+          "title": "§1 The tester's side",
+          "explanation": "Ana's page: “Call with Nora Lane”, Nora's tile large and their own small, and “Connected”.",
+          "kind": "image",
+          "desktop": "b21-01-connected-tester.png",
+          "phone": "b21-01-connected-tester-phone.png"
+        },
+        {
+          "title": "§1 Mute and camera off",
+          "explanation": "Nora pressed Mute: the button reads Unmute and their own “You” tag carries the crossed microphone; Ana pressed Camera off, and Ana's tile on Nora's page shows the initial with “No camera”.",
+          "kind": "image",
+          "desktop": "b21-01-muted-camera-off-dev.png",
+          "phone": "b21-01-muted-camera-off-dev-phone.png"
+        },
+        {
+          "title": "§1 What Ana sees",
+          "explanation": "Nora's name tag carries the crossed microphone (muted); Ana's button now reads Camera on and their own tile shows the initial with “No camera”.",
+          "kind": "image",
+          "desktop": "b21-01-muted-camera-off-tester.png",
+          "phone": "b21-01-muted-camera-off-tester-phone.png"
+        },
+        {
+          "title": "§1 Share screen",
+          "explanation": "Nora shares their screen (the test browser's fake screen, a green test pattern): their own tile shows it with “You're sharing your screen”.",
+          "kind": "image",
+          "desktop": "b21-01-share-dev.png",
+          "phone": "b21-01-share-dev-phone.png"
+        },
+        {
+          "title": "§1 Ana sees the shared screen",
+          "explanation": "Nora's large tile is the shared screen, marked “Sharing their screen”.",
+          "kind": "image",
+          "desktop": "b21-01-share-tester.png",
+          "phone": "b21-01-share-tester-phone.png"
+        },
+        {
+          "title": "§1 and §2 A call in the app",
+          "explanation": "Nora (left) and Ana (right) are connected; Nora mutes and Ana presses Camera off and on again, Nora shares their screen, then the warning “This call ends at <time>.” shows and both pages end the call at 150% of the booked time (the clock is moved on for the recording).",
+          "kind": "video",
+          "desktop": "b21-01-video.webm",
+          "phone": "b21-01-video-phone.webm"
+        },
+        {
+          "title": "§1 Not your call",
+          "explanation": "Ben (another tester on the same test) opens the call's address: “This call isn't available.”",
+          "kind": "image",
+          "desktop": "b21-01-not-yours.png",
+          "phone": "b21-01-not-yours-phone.png"
+        },
+        {
+          "title": "§1 Check your call setup",
+          "explanation": "Before the room opens (“You can join from <time>.”), the in-app check “Check your call setup · Preview your camera and microphone before the call. Nothing is sent or recorded.” shows the camera preview (black with the test browser's fake camera) and the microphone level, with Done; no call is made and nothing is measured.",
+          "kind": "image",
+          "desktop": "b21-01-check-panel.png",
+          "phone": "b21-01-check-panel-phone.png"
+        },
+        {
+          "title": "§2 Two minutes before the end",
+          "explanation": "The call was booked for 10 minutes (paid up to 15) and both have been connected about 13 (the recording skips ahead): the room says “This call ends at 8:03 AM CDT.” above the pictures.",
+          "kind": "image",
+          "desktop": "b21-02-warning-dev.png",
+          "phone": "b21-02-warning-dev-phone.png"
+        },
+        {
+          "title": "§2 The same warning for Ana",
+          "explanation": "“This call ends at 8:03 AM CDT.”",
+          "kind": "image",
+          "desktop": "b21-02-warning-tester.png",
+          "phone": "b21-02-warning-tester-phone.png"
+        },
+        {
+          "title": "§2 Ended at 150%",
+          "explanation": "Both pages hang up at once and the room is replaced by “Call ended: it reached 150% of the booked time.”",
+          "kind": "image",
+          "desktop": "b21-02-ended-length-dev.png",
+          "phone": "b21-02-ended-length-dev-phone.png"
+        },
+        {
+          "title": "§2 The same on Ana's page",
+          "explanation": "“Call ended: it reached 150% of the booked time.”",
+          "kind": "image",
+          "desktop": "b21-02-ended-length-tester.png",
+          "phone": "b21-02-ended-length-tester-phone.png"
+        },
+        {
+          "title": "§2 No rejoining",
+          "explanation": "Ana opens the call page again: only “Call ended: it reached 150% of the booked time.”, no room; the room itself answers 403 “This call isn't available.” to their browser.",
+          "kind": "image",
+          "desktop": "b21-02-rejoin-refused.png",
+          "phone": "b21-02-rejoin-refused-phone.png"
+        },
+        {
+          "title": "§2 Ended at the $1,000 (developer)",
+          "explanation": "The developer's call page hangs up at that moment: “Call ended: the $1,000 for calls with Ana Silva on this test is reached.”.",
+          "kind": "image",
+          "desktop": "b21-02-cap-dev.png",
+          "phone": "b21-02-cap-dev-phone.png"
+        },
+        {
+          "title": "§2 Ended at the $1,000: the warning",
+          "explanation": "Two minutes before the planned end the room says “This call ends at 8:17 AM CDT.” (the recording skips ahead to it).",
+          "kind": "image",
+          "desktop": null,
+          "phone": "b21-02-cap-warning-phone.png"
+        },
+        {
+          "title": "§2 Ended at the $1,000 (tester)",
+          "explanation": "At the same moment the tester's page reads “Call ended: the $1,000 for calls with Nora Lane on this test is reached.”.",
+          "kind": "image",
+          "desktop": "b21-02-cap-tester.png",
+          "phone": "b21-02-cap-tester-phone.png"
+        },
+        {
+          "title": "§2 Ended at the $1,000",
+          "explanation": "The developer (left) and the tester (right) are connected; the warning shows, then the server ends the call and both pages hang up at once (developer: “Call ended: the $1,000 for calls with Ana Silva on this test is reached.”; tester: “Call ended: the $1,000 for calls with Nora Lane on this test is reached.”).",
+          "kind": "video",
+          "desktop": "b21-02-cap-video.webm",
+          "phone": "b21-02-cap-video-phone.webm"
+        },
+        {
+          "title": "§2 Ended by a block (developer)",
+          "explanation": "The developer's call page hangs up at that moment: “Call ended: this call isn't available.”.",
+          "kind": "image",
+          "desktop": "b21-02-block-dev.png",
+          "phone": "b21-02-block-dev-phone.png"
+        },
+        {
+          "title": "§2 Ended by a block (tester)",
+          "explanation": "At the same moment the tester's page reads “Call ended: this call isn't available.”.",
+          "kind": "image",
+          "desktop": "b21-02-block-tester.png",
+          "phone": "b21-02-block-tester-phone.png"
+        },
+        {
+          "title": "§2 Ended by a block",
+          "explanation": "The developer (left) and the tester (right) are connected; then the server ends the call and both pages hang up at once (developer: “Call ended: this call isn't available.”; tester: “Call ended: this call isn't available.”).",
+          "kind": "video",
+          "desktop": "b21-02-block-video.webm",
+          "phone": "b21-02-block-video-phone.webm"
+        },
+        {
+          "title": "§2 Ended by the tester leaving (developer)",
+          "explanation": "The developer's call page hangs up at that moment: “Call ended: they left the test.”.",
+          "kind": "image",
+          "desktop": "b21-02-leave-dev.png",
+          "phone": "b21-02-leave-dev-phone.png"
+        },
+        {
+          "title": "§2 Ended by the tester leaving (tester)",
+          "explanation": "At the same moment the tester's page reads “Call ended: you left this test.”.",
+          "kind": "image",
+          "desktop": "b21-02-leave-tester.png",
+          "phone": "b21-02-leave-tester-phone.png"
+        },
+        {
+          "title": "§2 Ended by the tester leaving",
+          "explanation": "The developer (left) and the tester (right) are connected; then the server ends the call and both pages hang up at once (developer: “Call ended: they left the test.”; tester: “Call ended: you left this test.”).",
+          "kind": "video",
+          "desktop": "b21-02-leave-video.webm",
+          "phone": "b21-02-leave-video-phone.webm"
+        },
+        {
+          "title": "§2 Ended by End early (developer)",
+          "explanation": "The developer's call page hangs up at that moment: “Call ended: their session ended.”.",
+          "kind": "image",
+          "desktop": "b21-02-end-early-dev.png",
+          "phone": "b21-02-end-early-dev-phone.png"
+        },
+        {
+          "title": "§2 Ended by End early (tester)",
+          "explanation": "At the same moment the tester's page reads “Call ended: your session ended.”.",
+          "kind": "image",
+          "desktop": "b21-02-end-early-tester.png",
+          "phone": "b21-02-end-early-tester-phone.png"
+        },
+        {
+          "title": "§2 Ended by End early",
+          "explanation": "The developer (left) and the tester (right) are connected; then the server ends the call and both pages hang up at once (developer: “Call ended: their session ended.”; tester: “Call ended: your session ended.”).",
+          "kind": "video",
+          "desktop": "b21-02-end-early-video.webm",
+          "phone": "b21-02-end-early-video-phone.webm"
+        },
+        {
+          "title": "§2 Ended by the tester's suspension (developer)",
+          "explanation": "The developer's call page hangs up at that moment: “Call ended: they left the test.”.",
+          "kind": "image",
+          "desktop": "b21-02-suspended-tester-dev.png",
+          "phone": "b21-02-suspended-tester-dev-phone.png"
+        },
+        {
+          "title": "§2 Ended by the tester's suspension (tester)",
+          "explanation": "At the same moment the tester's page reads “Call ended: your session ended.”.",
+          "kind": "image",
+          "desktop": "b21-02-suspended-tester-tester.png",
+          "phone": null
+        },
+        {
+          "title": "§2 Ended by the tester's suspension",
+          "explanation": "The developer (left) and the tester (right) are connected; then the server ends the call and both pages hang up at once (developer: “Call ended: they left the test.”; tester: “Call ended: your session ended.”).",
+          "kind": "video",
+          "desktop": "b21-02-suspended-tester-video.webm",
+          "phone": "b21-02-suspended-tester-video-phone.webm"
+        },
+        {
+          "title": "§2 Ended by the team's pause (developer)",
+          "explanation": "The developer's call page hangs up at that moment: “Call ended: the test is paused.”.",
+          "kind": "image",
+          "desktop": "b21-02-pause-dev.png",
+          "phone": "b21-02-pause-dev-phone.png"
+        },
+        {
+          "title": "§2 Ended by the team's pause (tester)",
+          "explanation": "At the same moment the tester's page reads “Call ended: the test is paused.”.",
+          "kind": "image",
+          "desktop": "b21-02-pause-tester.png",
+          "phone": "b21-02-pause-tester-phone.png"
+        },
+        {
+          "title": "§2 Ended by the team's pause",
+          "explanation": "The developer (left) and the tester (right) are connected; then the server ends the call and both pages hang up at once (developer: “Call ended: the test is paused.”; tester: “Call ended: the test is paused.”).",
+          "kind": "video",
+          "desktop": "b21-02-pause-video.webm",
+          "phone": "b21-02-pause-video-phone.webm"
+        },
+        {
+          "title": "§2 Ended by Stop (developer)",
+          "explanation": "The developer's call page hangs up at that moment: “Call ended: the test was stopped.”.",
+          "kind": "image",
+          "desktop": "b21-02-stop-dev.png",
+          "phone": "b21-02-stop-dev-phone.png"
+        },
+        {
+          "title": "§2 Ended by Stop (tester)",
+          "explanation": "At the same moment the tester's page reads “Call ended: the test was stopped.”.",
+          "kind": "image",
+          "desktop": "b21-02-stop-tester.png",
+          "phone": "b21-02-stop-tester-phone.png"
+        },
+        {
+          "title": "§2 Ended by Stop",
+          "explanation": "The developer (left) and the tester (right) are connected; then the server ends the call and both pages hang up at once (developer: “Call ended: the test was stopped.”; tester: “Call ended: the test was stopped.”).",
+          "kind": "video",
+          "desktop": "b21-02-stop-video.webm",
+          "phone": "b21-02-stop-video-phone.webm"
+        },
+        {
+          "title": "§2 Ended by the developer's suspension (developer)",
+          "explanation": "The developer's call page hangs up at that moment: “Call ended: the test is paused.”.",
+          "kind": "image",
+          "desktop": "b21-02-suspended-dev-dev.png",
+          "phone": "b21-02-suspended-dev-dev-phone.png"
+        },
+        {
+          "title": "§2 Ended by the developer's suspension (tester)",
+          "explanation": "At the same moment the tester's page reads “Call ended: the test is paused.”.",
+          "kind": "image",
+          "desktop": "b21-02-suspended-dev-tester.png",
+          "phone": "b21-02-suspended-dev-tester-phone.png"
+        },
+        {
+          "title": "§2 Ended by the developer's suspension",
+          "explanation": "The developer (left) and the tester (right) are connected; then the server ends the call and both pages hang up at once (developer: “Call ended: the test is paused.”; tester: “Call ended: the test is paused.”).",
+          "kind": "video",
+          "desktop": "b21-02-suspended-dev-video.webm",
+          "phone": "b21-02-suspended-dev-video-phone.webm"
+        }
+      ]
+    },
+    {
+      "title": "Batch 22 (Oct 29)",
+      "explanation": "Batch 22 (docs/BATCH-22.md): no automatic retries during a chargeback hold, a suspended tester paid normally, waiting payouts sent when payout setup is done, the admin timeline in the third person, and Lift the pause races.",
+      "cases": [
+        {
+          "title": "§1 A payment hold retries",
+          "explanation": "During a payment hold Payments shows what's owed with “Last try: <time> · next try: <time>” (the daily automatic try, up to 7).",
+          "kind": "image",
+          "desktop": "b22-01-payment-hold.png",
+          "phone": "b22-01-payment-hold-phone.png"
+        },
+        {
+          "title": "§1 A chargeback hold never retries",
+          "explanation": "The same account after a chargeback: the three steps and what's owed, with no “next try” line; the daily job charged nothing (charged payments 2 before, 2 after) although the card works again.",
+          "kind": "image",
+          "desktop": "b22-01-chargeback-hold.png",
+          "phone": "b22-01-chargeback-hold-phone.png"
+        },
+        {
+          "title": "§2 A suspended tester is paid normally",
+          "explanation": "Cam is suspended (“Suspended (tester side)”) and Nora paid their answers afterwards: the team's view of Cam reads “Total paid out $8.00” and Payouts to them “$8.00 from <Nora> (review) · payout sent”; nothing is held (transfer sent).",
+          "kind": "image",
+          "desktop": "b22-02-suspended-paid.png",
+          "phone": "b22-02-suspended-paid-phone.png"
+        },
+        {
+          "title": "§4 The team's timeline",
+          "explanation": "On the test's page, “For the team (only admins see this)” speaks in the third person: “Nora Lane paid Cam Lee $10.00 …”, the pause and the developer account's suspension naming who, one line for Ana's dispute with the reason in italics and one for the decision naming the admin.",
+          "kind": "image",
+          "desktop": "b22-04-timeline.png",
+          "phone": "b22-04-timeline-phone.png"
+        },
+        {
+          "title": "§5 Two admins at once",
+          "explanation": "Bo presses Lift the pause a moment after Ada: “That test's pause was already lifted (by admin+media1793280331054dr1v4x@playtest.test at 8:29 AM).”, and the row's button turns back into Pause.",
+          "kind": "image",
+          "desktop": "b22-05-two-admins.png",
+          "phone": "b22-05-two-admins-phone.png"
+        },
+        {
+          "title": "§5 Live rows (before)",
+          "explanation": "Bo's console shows Lift the pause on the paused test.",
+          "kind": "image",
+          "desktop": "b22-05-live-before.png",
+          "phone": "b22-05-live-before-phone.png"
+        },
+        {
+          "title": "§5 Live rows (after)",
+          "explanation": "Ada lifted it elsewhere; Bo's row (no reload) as it is 30 seconds later.",
+          "kind": "image",
+          "desktop": "b22-05-live-after.png",
+          "phone": "b22-05-live-after-phone.png"
+        },
+        {
+          "title": "§5 Closed meanwhile",
+          "explanation": "Bo lifts the pause of a test that was stopped after the page loaded: “That test's pause was already lifted when it closed at Thu, Oct 29, 8:31 AM.”",
+          "kind": "image",
+          "desktop": "b22-05-closed.png",
+          "phone": "b22-05-closed-phone.png"
+        },
+        {
+          "title": "§5 Lift the pause, two admins",
+          "explanation": "Ada (left) lifts the pause; Bo (right) presses Lift on their older row and is told who lifted it and when; later rows follow Ada's changes on their own, and a test stopped meanwhile is refused with its own line.",
+          "kind": "video",
+          "desktop": "b22-05-video.webm",
+          "phone": "b22-05-video-phone.webm"
+        },
+        {
+          "title": "§5 Paused by a hold",
+          "explanation": "Omar's test is paused by their payment hold: its row has no Lift the pause button, since only the team's own pause can be lifted there.",
+          "kind": "image",
+          "desktop": "b22-05-hold-no-lift.png",
+          "phone": "b22-05-hold-no-lift-phone.png"
+        }
+      ]
+    },
+    {
+      "title": "Batch 23 (Oct 29)",
+      "explanation": "Batch 23 (docs/BATCH-23.md; §4 and §8 were dropped): emails that wait and retry and the owner told when they don't send (red box, failed-for-good list, bell, the health keyword), Edit keeping what you typed with “Use theirs”, the chargeback reservation and the team's Approve, Suspend's Preview above the boxes, and Confirm with your bank stopping once.",
+      "cases": [
+        {
+          "title": "§2 The red box",
+          "explanation": "At the top of the admin console while emails wait: “Emails aren't sending: 3 waiting since 5:16 AM CDT. Resend says: 503: Service unavailable.” and “Each is tried again after 5, 15 and 30 minutes, then every hour, for 48 hours. …” (three failing emails set up in the database for the recording; this server has no Resend key).",
+          "kind": "image",
+          "desktop": "b23-02-red-box.png",
+          "phone": "b23-02-red-box-phone.png"
+        },
+        {
+          "title": "§2 The admins' bell",
+          "explanation": "One line per incident, in the app (so it doesn't depend on Resend): “Emails aren't sending (since 5:16 AM CDT)”, linking to the red box (written for the recording as the first failure writes it).",
+          "kind": "image",
+          "desktop": "b23-02-bell.png",
+          "phone": "b23-02-bell-phone.png"
+        },
+        {
+          "title": "§2 The keyword for the uptime monitor",
+          "explanation": "/api/health with the key answers {\"ok\":true,\"emails\":\"degraded: emails\"} (HTTP 200: the site itself is up), so a keyword monitor alerts the owner through its own emails and texts.",
+          "kind": "image",
+          "desktop": "b23-02-health-keyword.png",
+          "phone": "b23-02-health-keyword-phone.png"
+        },
+        {
+          "title": "§2 Without the key",
+          "explanation": "The plain /api/health answers only {\"ok\":true}: the email state is for the keyed monitor.",
+          "kind": "image",
+          "desktop": "b23-02-health-plain.png",
+          "phone": "b23-02-health-plain-phone.png"
+        },
+        {
+          "title": "§2 Resend's daily limit",
+          "explanation": "The same red box when Resend answered with its daily limit: “Emails aren't sending: 3 waiting since 4:39 AM CDT. Resend's daily limit was reached (free plan: 100 a day). Emails will go out tomorrow, or upgrade the plan.” (set up in the database for the recording).",
+          "kind": "image",
+          "desktop": "b23-02-red-box-cap.png",
+          "phone": null
+        },
+        {
+          "title": "§2 The missing key",
+          "explanation": "Emails waiting because the deploy has no key: “Emails aren't sending: 3 waiting since 4:39 AM CDT. RESEND_API_KEY isn't set on this deploy.” (set up in the database for the recording).",
+          "kind": "image",
+          "desktop": "b23-02-red-box-no-key.png",
+          "phone": null
+        },
+        {
+          "title": "§2 Failed for good",
+          "explanation": "Emails tried for 48 hours are kept and listed under the waiting line: “2 emails failed for good (tried for 48 hours, kept):”, each “To … · “Nora Lane paid you $10.00” · written 4:39 AM CDT · 503: Service unavailable”, with “Clear this list (the emails are kept)” (set up in the database for the recording).",
+          "kind": "image",
+          "desktop": "b23-02-failed-list.png",
+          "phone": null
+        },
+        {
+          "title": "§5 A field you didn't touch",
+          "explanation": "The name, untouched here, took the other tab's save silently: “Harbor Run: all five harbors”, with no note (so this tab's Save never undoes it).",
+          "kind": "image",
+          "desktop": "b23-05-untouched.png",
+          "phone": "b23-05-untouched-phone.png"
+        },
+        {
+          "title": "§5 A field you typed in",
+          "explanation": "The instructions keep what was typed here; the blue note under them shows what the other tab saved: “Saved in another tab or device at <time>:” with their text and “Use theirs”.",
+          "kind": "image",
+          "desktop": "b23-05-typed-note.png",
+          "phone": "b23-05-typed-note-phone.png"
+        },
+        {
+          "title": "§5 Save stops once",
+          "explanation": "The first Save stops in the blue box under it: “Your Save didn't go through. Since you opened this page: Instructions: your version will replace the one saved in another tab at 5:23 AM. Press Save again to save.”",
+          "kind": "image",
+          "desktop": "b23-05-save-stop.png",
+          "phone": "b23-05-save-stop-phone.png"
+        },
+        {
+          "title": "§5 Edit keeps what you typed",
+          "explanation": "Instructions are typed here while another tab saves new instructions and a new name: the name updates silently, the instructions keep this tab's text with the “Saved in another tab or device at …” note, Save stops once naming the field, and the second press saves this version on top.",
+          "kind": "video",
+          "desktop": "b23-05-edit-video.webm",
+          "phone": "b23-05-edit-video-phone.webm"
+        },
+        {
+          "title": "§5 A short field",
+          "explanation": "“Saved in another tab or device at <time>: Product: Sky Lab Junior” on one line with “Use theirs”; the box still says what was typed here, “Sky Lab Kids”.",
+          "kind": "image",
+          "desktop": "b23-05-use-theirs-before.png",
+          "phone": "b23-05-use-theirs-before-phone.png"
+        },
+        {
+          "title": "§5 Use theirs",
+          "explanation": "One press puts the other tab's value in the box (“Sky Lab Junior”) and the note goes.",
+          "kind": "image",
+          "desktop": "b23-05-use-theirs-after.png",
+          "phone": "b23-05-use-theirs-after-phone.png"
+        },
+        {
+          "title": "§5 Use theirs",
+          "explanation": "“Sky Lab Kids” is typed while another tab saves “Sky Lab Junior”: the note shows theirs with Use theirs, and one press takes it.",
+          "kind": "video",
+          "desktop": "b23-05-use-theirs-video.webm",
+          "phone": "b23-05-use-theirs-video-phone.webm"
+        },
+        {
+          "title": "§5 Who changed it",
+          "explanation": "The keys' note has two headings: “Changed in another tab or device at 4:42 AM:” over this developer's own save elsewhere (“Added: N-1, N-2”) and “Updated at 4:42 AM:” over what someone else caused (“Ana Silva joined and was given K-1”).",
+          "kind": "image",
+          "desktop": "b23-05-headings.png",
+          "phone": "b23-05-headings-phone.png"
+        },
+        {
+          "title": "§5 Two headings",
+          "explanation": "Keys added in another tab, then a tester joins and is given a key: one note, each change under its own heading.",
+          "kind": "video",
+          "desktop": "b23-05-headings-video.webm",
+          "phone": "b23-05-headings-video-phone.webm"
+        },
+        {
+          "title": "§6 Reserve, then Approve",
+          "explanation": "The developer (left) verifies a card and reserves what's owed; the tester charges meanwhile, so the team's Approve (right) is refused “Not yet: …”; the developer reserves the difference and the next Approve takes it and lifts the hold.",
+          "kind": "video",
+          "desktop": "b23-06-reserve-video.webm",
+          "phone": null
+        },
+        {
+          "title": "§6 The developer's notice",
+          "explanation": "One bell line from the team's Approve: “The team approved lifting your hold: the $37.00 reserved on your card was taken, and your tests are running again.”",
+          "kind": "image",
+          "desktop": "b23-06-dev-notice.png",
+          "phone": null
+        },
+        {
+          "title": "§6 The tester's side",
+          "explanation": "Ana's bell: “Tests paused or running again” (each test “is running again”) and “Nora Lane paid $10.00 for your written answers” for the charge taken at the Approve; nothing about the developer's hold or chargeback.",
+          "kind": "image",
+          "desktop": "b23-06-tester-bell.png",
+          "phone": null
+        },
+        {
+          "title": "§6 Reserved, not taken",
+          "explanation": "Pay what you owe during a chargeback hold puts the money on hold on the card: “Reserved $27.00: it's taken when the team approves lifting your hold.”",
+          "kind": "image",
+          "desktop": "b23-06-reserved.png",
+          "phone": "b23-06-reserved-phone.png"
+        },
+        {
+          "title": "§6 The team's row",
+          "explanation": "“Chargeback hold: card verified ✓, owed reserved ✓ ($27.00 reserved)” with Approve and “Don't approve: release the reservation”.",
+          "kind": "image",
+          "desktop": "b23-06-admin-ready.png",
+          "phone": null
+        },
+        {
+          "title": "§6 Approve refused while short",
+          "explanation": "Ana charged meanwhile, so the reserved money no longer covers what's owed: “Not yet: $37.00 is owed but $27.00 is reserved.”",
+          "kind": "image",
+          "desktop": "b23-06-not-yet.png",
+          "phone": null
+        },
+        {
+          "title": "§6 What was added",
+          "explanation": "Payments keeps the reserved line and lists Ana's charge, added since: “… What was added since needs its own Pay what you owe:” with the button again.",
+          "kind": "image",
+          "desktop": "b23-06-added.png",
+          "phone": null
+        },
+        {
+          "title": "§6 The difference reserved",
+          "explanation": "A second Pay what you owe reserves the difference: the whole amount is now on hold on the card.",
+          "kind": "image",
+          "desktop": "b23-06-reserved-all.png",
+          "phone": null
+        },
+        {
+          "title": "§7 Preview on the profile's admin view",
+          "explanation": "Top to bottom, full width: Preview suspension and its line “1 test paused with 1 working tester; 1 call in the next 3 days cancelled; 0 later calls cancelled if the suspension lasts.”, then the Why box, then Suspend.",
+          "kind": "image",
+          "desktop": "b23-07-profile.png",
+          "phone": "b23-07-profile-phone.png"
+        },
+        {
+          "title": "§7 The same in the Accounts list",
+          "explanation": "The developer's row in the Accounts list: Preview suspension and its line first, full width, then the Why box and Suspend, then Delete account; nothing sits beside the Preview any more.",
+          "kind": "image",
+          "desktop": "b23-07-accounts.png",
+          "phone": "b23-07-accounts-phone.png"
+        },
+        {
+          "title": "§9 Confirm stops once",
+          "explanation": "Pressed after a change this page hadn't shown, “Confirm with your bank” stops in the blue box under it: “Your Confirm with your bank didn't go through. Since you opened this page: You paid Cam Lee $10.00 for the written answers in another tab · 5:08 AM. Press Confirm with your bank again to go ahead.” (Ben Okafor's dispute, made after the page opened too, isn't listed.)",
+          "kind": "image",
+          "desktop": "b23-09-stop.png",
+          "phone": null
+        },
+        {
+          "title": "§9 The second press",
+          "explanation": "Pressed again, it opens the bank's check (the fake Stripe's stand-in) right under the button.",
+          "kind": "image",
+          "desktop": "b23-09-check.png",
+          "phone": null
+        },
+        {
+          "title": "§9 Confirm with your bank stops once",
+          "explanation": "While the test page is open, Ben Okafor disputes and another tab pays Cam Lee: the first Confirm stops once in the blue box, the second opens the bank's check, and the payment is confirmed.",
+          "kind": "video",
+          "desktop": "b23-09-confirm-video.webm",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Batch 24 (Oct 29)",
+      "explanation": "Batch 24 (docs/BATCH-24.md): “Your bank wants you to confirm” at the top of the developer dashboard (red under 24 hours, links to the piece or to Payments, live, during a hold too), and a call request closed by rating reading “the tester finished their part”.",
+      "cases": [
+        {
+          "title": "§1 At the top of the dashboard",
+          "explanation": "“Your bank wants you to confirm (3)”, soonest first: “$12.50 on “Harbor Run: first 3 levels” · Ana Silva's written answers · confirm by today, 9:12 AM”, “$12.50 on “Harbor Run: first 3 levels” · Ben Okafor's call on Oct 20 · confirm by tomorrow, 4:12 AM”, “$7.00 for your plan · confirm by Nov 1, 4:12 AM”, each with “Confirm with your bank →”; under 24 hours the “confirm by” part is red (the deadlines were moved for the recording).",
+          "kind": "image",
+          "desktop": "b24-01-box.png",
+          "phone": "b24-01-box-phone.png"
+        },
+        {
+          "title": "§1 Confirm with your bank →",
+          "explanation": "The row opens the test page at Ana Silva's written answers, the piece marked for a few seconds: “Your bank wants you to confirm a $12.50 payment for Ana Silva's written answers, made while you were away. Confirm it by Thu, Oct 29, 9:12 AM.” with its own Confirm with your bank.",
+          "kind": "image",
+          "desktop": "b24-01-piece.png",
+          "phone": null
+        },
+        {
+          "title": "§1 A renewal",
+          "explanation": "The plan's row has no test, so its link opens Payments at the renewal: “Your subscription $7.00 · confirm by Sun, Nov 1, 4:12 AM” with Confirm with your bank.",
+          "kind": "image",
+          "desktop": "b24-01-renewal.png",
+          "phone": null
+        },
+        {
+          "title": "§1 Gone when confirmed elsewhere",
+          "explanation": "Confirmed on the test page in another tab, Ana Silva's row leaves the dashboard's box on its next poll without a reload: “Your bank wants you to confirm (2)”.",
+          "kind": "image",
+          "desktop": "b24-01-after.png",
+          "phone": null
+        },
+        {
+          "title": "§1 Live",
+          "explanation": "The dashboard (left) and the test page (right): the payment is confirmed on the right and its row leaves the box on the left.",
+          "kind": "video",
+          "desktop": "b24-01-live-video.webm",
+          "phone": null
+        },
+        {
+          "title": "§1 During a hold",
+          "explanation": "During a hold the restricted dashboard shows “Your bank wants you to confirm (2)” first, above the blue box “Your account is on hold”.",
+          "kind": "image",
+          "desktop": "b24-01-hold.png",
+          "phone": null
+        },
+        {
+          "title": "§2 Before",
+          "explanation": "The developer's call request to Ana Silva waits in Call requests.",
+          "kind": "image",
+          "desktop": "b24-02-before.png",
+          "phone": "b24-02-before-phone.png"
+        },
+        {
+          "title": "§2 The live line",
+          "explanation": "On the developer's open page: “Updated · 6:41 AM: Ana Silva finished their part (rated you)”. The waiting call request is closed with the reason “the tester finished their part” (stored as “closed: the tester finished their part”).",
+          "kind": "image",
+          "desktop": "b24-02-live.png",
+          "phone": "b24-02-live-phone.png"
+        },
+        {
+          "title": "§2 A rating closes the request",
+          "explanation": "The developer's page is open with a call request waiting; Ana rates and the live box says “Updated · 6:41 AM: Ana Silva finished their part (rated you)”.",
+          "kind": "video",
+          "desktop": "b24-02-video.webm",
+          "phone": "b24-02-video-phone.webm"
+        },
+        {
+          "title": "§2 A press from an older page",
+          "explanation": "Withdraw on the closed request, from a page opened before the rating: “Your Answer didn't go through: This request closed: the tester finished their part.”",
+          "kind": "image",
+          "desktop": "b24-02-withdraw.png",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Blocks",
+      "explanation": "A tester blocks a developer in the middle of a test, with both pages open: what closes at once, the presses that race the block, what still works afterwards, and Unblock.",
+      "cases": [
+        {
+          "title": "Before the block",
+          "explanation": "Rio's dashboard while working on Nora's test: under “Upcoming calls”, “Nora Lane · Harbor Run: first 3 levels · Sat, Oct 31 · 30 min”, and the invitation “Nora Lane invited you to “Harbor Run: friends and family”. Accept opens the test page.” (Rio's application to “Harbor Run: night harbor” is waiting too).",
+          "kind": "image",
+          "desktop": "blk-01-before-tester.png",
+          "phone": null
+        },
+        {
+          "title": "Blocked mid-session, both pages open",
+          "explanation": "Nora's test page (left) and Rio on Nora's profile (right, listing “Applied (waiting)” and “You're in this test”): Rio presses Block Nora Lane and confirms; Rio's page then reads “You blocked Nora Lane, so their tests are hidden.” with Unblock Nora Lane, and Nora's page, on its next update, shows Rio's row as “Work ended” with “Calls: 1 cancelled”; Rio's session page reads “Your session on Harbor Run: first 3 levels ended.”",
+          "kind": "video",
+          "desktop": "blk-01-video.webm",
+          "phone": null
+        },
+        {
+          "title": "The developer's row",
+          "explanation": "Rio's row on Nora's test page: “Work ended”, the sent answers still “paid $0.00 of $10.00” (payable), and “Paid in all: $0.00 · Calls: 1 cancelled”.",
+          "kind": "image",
+          "desktop": "blk-01-dev-row.png",
+          "phone": null
+        },
+        {
+          "title": "Calls and requests closed",
+          "explanation": "Nora's Live session: “Nobody is working on this test right now, so there is nobody to request a call with.” and “No call requests waiting.”: the booked call was cancelled and the waiting request closed.",
+          "kind": "image",
+          "desktop": "blk-01-dev-calls.png",
+          "phone": null
+        },
+        {
+          "title": "Chat closed",
+          "explanation": "Nora's chat with Rio ends with “This chat is closed.”",
+          "kind": "image",
+          "desktop": "blk-01-dev-chat.png",
+          "phone": null
+        },
+        {
+          "title": "The developer's bell",
+          "explanation": "Nora reads only “Rio Vance's session on Harbor Run: first 3 levels ended.” (never that it was a block).",
+          "kind": "image",
+          "desktop": "blk-01-dev-bell.png",
+          "phone": null
+        },
+        {
+          "title": "The tester's session page",
+          "explanation": "Rio's page reads “Your session on Harbor Run: first 3 levels ended.”, the test is “Ended” and the sent answers stay “Under review”.",
+          "kind": "image",
+          "desktop": "blk-01-tester-session.png",
+          "phone": null
+        },
+        {
+          "title": "The tester's dashboard",
+          "explanation": "No invitation and no upcoming call any more; the test is under History: “Ended (Oct 29, 2026): what you sent is still reviewed and paid.”",
+          "kind": "image",
+          "desktop": "blk-01-tester-dash.png",
+          "phone": null
+        },
+        {
+          "title": "The tester's bell",
+          "explanation": "“Harbor Run: night harbor”: your application was closed.” (the application to Nora's other test closed with the block).",
+          "kind": "image",
+          "desktop": "blk-01-tester-bell.png",
+          "phone": null
+        },
+        {
+          "title": "Invite vs the block",
+          "explanation": "Nora's Invite for Rio, ticked on a page opened before the block and pressed right after it: nothing is sent; on tonight's overloaded media server the press failed with “Your Invite didn't go through: Something went wrong on our side. Try again in a moment.” (a database time-out; on a quieter earlier run it stopped once with “Rio Vance is no longer in your list”).",
+          "kind": "image",
+          "desktop": "blk-02-invite.png",
+          "phone": null
+        },
+        {
+          "title": "Pay vs the block",
+          "explanation": "Nora's Pay on Rio's sent answers, ticked on a page opened before the block and pressed right after it: the press goes ahead with no stop (sent work stays payable).",
+          "kind": "image",
+          "desktop": "blk-02-pay.png",
+          "phone": null
+        },
+        {
+          "title": "Paid after the block",
+          "explanation": "Moments later Rio's row reads “Work ended” and “paid $10.00 of $10.00”, with Pay more: one payment went through.",
+          "kind": "image",
+          "desktop": "blk-02-pay-again.png",
+          "phone": null
+        },
+        {
+          "title": "Request a time vs the block",
+          "explanation": "From a page opened before the block, with Rio ticked: “Your Request a time didn't go through: Rio Vance's session has ended.” (the rest of that page still shows the state from before the block).",
+          "kind": "image",
+          "desktop": "blk-02-request.png",
+          "phone": null
+        },
+        {
+          "title": "Join call vs the block",
+          "explanation": "Rio's Join call from a page opened before the block: “Your Join call didn't go through: this call isn't available.”",
+          "kind": "image",
+          "desktop": "blk-02-join-call.png",
+          "phone": null
+        },
+        {
+          "title": "Send vs the block",
+          "explanation": "Rio's answers, typed on a session page opened before the block: Send is refused with “Your session on Harbor Run: lighthouse ended.”, and the typed answers stay in their boxes.",
+          "kind": "image",
+          "desktop": "blk-02-send.png",
+          "phone": null
+        },
+        {
+          "title": "Presses that race the block",
+          "explanation": "Nora's invite panel (left, Rio ticked) and Rio typing answers (right): Rio blocks Nora in another tab and both press right after it: Nora's Invite doesn't go through and Rio's Send is refused; then both pages update: Rio is gone from Nora's invite list and Rio's page reads “Your session on Harbor Run: lighthouse ended.”",
+          "kind": "video",
+          "desktop": "blk-02-video.webm",
+          "phone": null
+        },
+        {
+          "title": "The blocker's view",
+          "explanation": "Rio still opens Nora's profile: under Open tests “You blocked Nora Lane, so their tests are hidden.”, and Unblock Nora Lane stands where Block was (Report Nora Lane stays).",
+          "kind": "image",
+          "desktop": "blk-03-unblock-button.png",
+          "phone": null
+        },
+        {
+          "title": "Their tests hidden",
+          "explanation": "A direct link to Nora's test posted after the block reads only “This test isn't available right now.”",
+          "kind": "image",
+          "desktop": "blk-03-test-hidden.png",
+          "phone": null
+        },
+        {
+          "title": "The blocked side",
+          "explanation": "Nora opens Rio's profile: “This profile isn't available.”, with ← Back (it never says why).",
+          "kind": "image",
+          "desktop": "blk-03-profile-unavailable.png",
+          "phone": null
+        },
+        {
+          "title": "Sent work still payable",
+          "explanation": "After the block Nora paid $5.00 of the $10.00 listing for Rio's sent answers: Rio's row (“Work ended”) reads “paid $5.00 of $10.00”, with Pay more still offered.",
+          "kind": "image",
+          "desktop": "blk-03-paid.png",
+          "phone": null
+        },
+        {
+          "title": "Dispute still works",
+          "explanation": "After the block Rio's part reads “Paid $5.00: you get $4.00 (…) · “Only the first answer was about this build.”” and, once Rio sends a dispute, “You disputed this: waiting for the team.” (cut from the last frame of the video below).",
+          "kind": "image",
+          "desktop": "blk-03-dispute.png",
+          "phone": null
+        },
+        {
+          "title": "Dispute after the block",
+          "explanation": "Rio's sent answers were paid $5.00 of $10.00 after the block; Rio opens “Dispute the pay”, writes why and presses Send the dispute: “You disputed this: waiting for the team.”",
+          "kind": "video",
+          "desktop": "blk-03-dispute-video.webm",
+          "phone": null
+        },
+        {
+          "title": "Unblock",
+          "explanation": "One press, no confirm: “Unblocked.” shows next to the greyed Unblock Nora Lane button, then the page reloads.",
+          "kind": "image",
+          "desktop": "blk-04-unblocked.png",
+          "phone": null
+        },
+        {
+          "title": "Unblock",
+          "explanation": "Rio presses Unblock Nora Lane on Nora's profile: “Unblocked.”, and the reloaded profile lists Nora's open tests again.",
+          "kind": "video",
+          "desktop": "blk-04-unblock-video.webm",
+          "phone": null
+        },
+        {
+          "title": "After Unblock",
+          "explanation": "Nora's profile lists their open tests again (“Harbor Run: open sea”, “Harbor Run: night harbor”, “Harbor Run: first 3 levels”), with Block Nora Lane back at the bottom.",
+          "kind": "image",
+          "desktop": "blk-04-profile-back.png",
+          "phone": null
+        },
+        {
+          "title": "Both ways",
+          "explanation": "Nora can open Rio's profile again: “Your tests with Rio Vance” lists “Harbor Run: first 3 levels · Ended”, with Chat with Rio Vance and Block Rio Vance.",
+          "kind": "image",
+          "desktop": "blk-04-nora-sees.png",
+          "phone": null
+        },
+        {
+          "title": "Closed things stay closed",
+          "explanation": "After Unblock Rio's session page still reads “Your session on Harbor Run: first 3 levels ended.”: nothing reopens by itself (the invite stays cancelled, the application closed and the call cancelled).",
+          "kind": "image",
+          "desktop": "blk-04-still-closed.png",
+          "phone": null
+        },
+        {
+          "title": "The tester's dashboard after Unblock",
+          "explanation": "No invitation comes back; the test stays under History: “Ended (Oct 29, 2026): what you sent is still reviewed and paid.”",
+          "kind": "image",
+          "desktop": "blk-04-dash.png",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Charge timing",
+      "explanation": "When Charge opens: the later of the tester's own deadline and 7 days after sending, shown on both sides with the bell line; and Rate after the team's Stop.",
+      "cases": [
+        {
+          "title": "(a) 7 days after sending: the developer",
+          "explanation": "Ana sent on day 2 of a 30-day test (“sent Wed, Oct 21”); 7.5 days later Nora's row still reads “If you don't pay by Nov 20, Ana Silva can charge you $10.00, their contract price, or let it go.”: Nov 20 is Ana's own deadline, later than 7 days after sending.",
+          "kind": "image",
+          "desktop": "ct-01-dev-waiting.png",
+          "phone": "ct-01-dev-waiting-phone.png"
+        },
+        {
+          "title": "(a) 7 days after sending: the tester",
+          "explanation": "Ana's dashboard keeps the test under “Waiting for the developer” (“Written answers sent: waiting for review”); no Charge yet (the tester's pages don't say when Charge opens).",
+          "kind": "image",
+          "desktop": "ct-01-tester-waiting.png",
+          "phone": "ct-01-tester-waiting-phone.png"
+        },
+        {
+          "title": "(a) The session page",
+          "explanation": "“Written answers: Under review”, sent Oct 21: no Charge or Let it go yet.",
+          "kind": "image",
+          "desktop": "ct-01-tester-session.png",
+          "phone": "ct-01-tester-session-phone.png"
+        },
+        {
+          "title": "(a) After their own deadline: Charge opens",
+          "explanation": "The day after Ana's deadline the sweep opens it: “Nora Lane didn't review your written answers in 7 days: charge $10.00 or let it go.”, with “Charge Nora Lane $10.00” and Let it go.",
+          "kind": "image",
+          "desktop": "ct-01-tester-open.png",
+          "phone": "ct-01-tester-open-phone.png"
+        },
+        {
+          "title": "(a) Charge opens at the tester's own deadline",
+          "explanation": "Nora's test page (left) and Ana's session page (right) are open the day after Ana's deadline: the 5-minute sweep opens Charge and Ana's page shows Charge and Let it go.",
+          "kind": "video",
+          "desktop": "ct-01-video.webm",
+          "phone": "ct-01-video-phone.webm"
+        },
+        {
+          "title": "(a) The developer's row once Charge is open",
+          "explanation": "Pay is still there and the “If you don't pay by …” line is gone (the row itself doesn't say Ana can now charge; Nora's bell does).",
+          "kind": "image",
+          "desktop": "ct-01-dev-open.png",
+          "phone": "ct-01-dev-open-phone.png"
+        },
+        {
+          "title": "(a) The tester's bell",
+          "explanation": "“Nora Lane didn't review your written answers in 7 days: charge $10.00 or let it go”.",
+          "kind": "image",
+          "desktop": "ct-01-tester-bell.png",
+          "phone": "ct-01-tester-bell-phone.png"
+        },
+        {
+          "title": "(a) The developer's bell",
+          "explanation": "““Harbor Run: first 3 levels”: Ana Silva's written answers waited over 7 days: pay it (Ana Silva can now charge or let it go).”",
+          "kind": "image",
+          "desktop": "ct-01-dev-bell.png",
+          "phone": "ct-01-dev-bell-phone.png"
+        },
+        {
+          "title": "(b) The late joiner still waits: the developer",
+          "explanation": "The first testers' deadlines have passed, but Cam joined on day 20: Cam's row (sent Oct 18) reads “If you don't pay by Nov 16, Cam Lee can charge you $10.00, their contract price, or let it go.”, Nov 16 being Cam's own deadline.",
+          "kind": "image",
+          "desktop": "ct-02-dev-cam-waits.png",
+          "phone": "ct-02-dev-cam-waits-phone.png"
+        },
+        {
+          "title": "(b) The early tester: Charge is open",
+          "explanation": "Ben joined on day 1 and sent on day 2 (“sent Tue, Sep 29”); their deadline passed yesterday, so Charge opened and the “If you don't pay by” line is gone.",
+          "kind": "image",
+          "desktop": "ct-02-dev-ben-open.png",
+          "phone": "ct-02-dev-ben-open-phone.png"
+        },
+        {
+          "title": "(b) The late joiner's dashboard",
+          "explanation": "Cam's answers stay under “Waiting for the developer” (“Written answers sent: waiting for review”): no Charge or cancel yet.",
+          "kind": "image",
+          "desktop": "ct-02-cam-waiting.png",
+          "phone": "ct-02-cam-waiting-phone.png"
+        },
+        {
+          "title": "(b) The early tester's dashboard",
+          "explanation": "“Charge or cancel 1”: “Parts the developer hasn't reviewed once 7 days have passed since you sent them and your deadline has passed: charge for them, or let them go.” and “Harbor Run: lighthouse · 1 part” with “Charge or let it go →”.",
+          "kind": "image",
+          "desktop": "ct-02-ben-charge.png",
+          "phone": "ct-02-ben-charge-phone.png"
+        },
+        {
+          "title": "(b) After the late joiner's own deadline",
+          "explanation": "Charge opens for Cam only now: “Nora Lane didn't review your written answers in 7 days: charge $10.00 or let it go.”",
+          "kind": "image",
+          "desktop": "ct-02-cam-open.png",
+          "phone": "ct-02-cam-open-phone.png"
+        },
+        {
+          "title": "(b) The late joiner's bell",
+          "explanation": "“Nora Lane didn't review your written answers in 7 days: charge $10.00 or let it go” arrives only after Cam's own deadline.",
+          "kind": "image",
+          "desktop": "ct-02-cam-bell.png",
+          "phone": "ct-02-cam-bell-phone.png"
+        },
+        {
+          "title": "Rate after the team's Stop: the first press stops",
+          "explanation": "Ana's Rate and finish, from a page opened before the team stopped the test: “Your Rate didn't go through. Since you opened this page: This test was stopped at <time>.” and “Press Rate again to go ahead.” (the stop time shows twice: “<time>. · <time>”).",
+          "kind": "image",
+          "desktop": "ct-04-rate-stops.png",
+          "phone": null
+        },
+        {
+          "title": "The second press rates",
+          "explanation": "The page then reads “You rated Nora Lane.”; its banner says “Nora Lane stopped the test on Oct 29, 2026. You can still ask to show an excerpt and chat. Work you sent is still reviewed.”, although the team stopped it.",
+          "kind": "image",
+          "desktop": "ct-04-rated.png",
+          "phone": null
+        },
+        {
+          "title": "Rate stops once for the team's Stop",
+          "explanation": "The team stops the test while Ana's page is open: the first Rate press stops with “This test was stopped at <time>.”, the second rates and the page reads “You rated Nora Lane.”",
+          "kind": "video",
+          "desktop": "ct-04-rate-video.webm",
+          "phone": null
+        },
+        {
+          "title": "A page opened after the stop",
+          "explanation": "Ben opens their session page after the team's Stop and rates: the first press goes through (no stop box) and the page reads “You rated Nora Lane.”",
+          "kind": "image",
+          "desktop": "ct-04-after-stop.png",
+          "phone": null
+        },
+        {
+          "title": "Opened after the stop",
+          "explanation": "Ben's page was opened after the team stopped the test, so Rate goes through on the first press.",
+          "kind": "video",
+          "desktop": "ct-04-after-video.webm",
+          "phone": null
+        },
+        {
+          "title": "(c) Sent on the last day: the developer",
+          "explanation": "Dee's deadline passed yesterday, but they sent on their last day (“sent Wed, Oct 28”), so the row reads “If you don't pay by Nov 4, Dee Park can charge you $10.00, their contract price, or let it go.”: 7 days after sending.",
+          "kind": "image",
+          "desktop": "ct-03-dev-waiting.png",
+          "phone": "ct-03-dev-waiting-phone.png"
+        },
+        {
+          "title": "(c) Sent on the last day: the tester",
+          "explanation": "“Written answers: Under review”, sent Oct 28: no Charge yet, although Dee's deadline has passed.",
+          "kind": "image",
+          "desktop": "ct-03-tester-waiting.png",
+          "phone": "ct-03-tester-waiting-phone.png"
+        },
+        {
+          "title": "(c) 7 days after sending: Charge opens",
+          "explanation": "“Nora Lane didn't review your written answers in 7 days: charge $10.00 or let it go.”, with Charge and Let it go.",
+          "kind": "image",
+          "desktop": "ct-03-tester-open.png",
+          "phone": "ct-03-tester-open-phone.png"
+        },
+        {
+          "title": "(c) The tester's bell",
+          "explanation": "“Nora Lane didn't review your written answers in 7 days: charge $10.00 or let it go”, 7 days after “Work sent: your written answers for “Harbor Run: reef””.",
+          "kind": "image",
+          "desktop": "ct-03-tester-bell.png",
+          "phone": "ct-03-tester-bell-phone.png"
+        },
+        {
+          "title": "(c) Charge closes on D+21",
+          "explanation": "15 days after sending, the tester's Charge box says “Charge closes on Nov 4, 2026.”: sent on day D (Oct 14), Charge opened D+7 (Oct 21), the test's close-out was D+14 (Oct 28), this piece closes D+21 (Nov 4), so this piece stays open a week past the close-out.",
+          "kind": "image",
+          "desktop": "ct-03-tester-charge-closes.png",
+          "phone": null
+        },
+        {
+          "title": "(c) Pay closes on D+21",
+          "explanation": "The developer's Needs you row for the same piece: “Pay closes on Nov 4, 2026.” (sent on day D (Oct 14), Charge opened D+7 (Oct 21), the test's close-out was D+14 (Oct 28), this piece closes D+21 (Nov 4)).",
+          "kind": "image",
+          "desktop": "ct-03-dev-pay-closes.png",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Emails",
+      "explanation": "Every kind of email the app sends, as received (rendered from the dev outbox's HTML): developer and tester emails, money lines, the bank confirmation, reminders, and the admins' emails.",
+      "cases": [
+        {
+          "title": "Confirm your email",
+          "explanation": "Sent at sign-up (HTML part): “Welcome to Playtest! Confirm your email.” with the link, and “The link works for 48 hours.”",
+          "kind": "image",
+          "desktop": "email-confirm.png",
+          "phone": "email-confirm-phone.png"
+        },
+        {
+          "title": "Reset your password",
+          "explanation": "After “Forgot your password?”: “Someone (hopefully you) asked to reset the password for <email>.”, “Choose a new password (the link works once, for 60 minutes).” and “If it wasn't you, ignore this email: your password stays the same.”",
+          "kind": "image",
+          "desktop": "email-reset.png",
+          "phone": "email-reset-phone.png"
+        },
+        {
+          "title": "Choose a password",
+          "explanation": "The same request from an account with no password yet (a Google sign-up): “Your account has no password yet. Choose one here: Choose a password” and “The link works once, for 60 minutes. You can keep using Continue with Google too.”",
+          "kind": "image",
+          "desktop": "email-choose-password.png",
+          "phone": "email-choose-password-phone.png"
+        },
+        {
+          "title": "The developer's daily summary",
+          "explanation": "“Your Playtest summary: 15 updates”: every update since the last email, each with its link: the subscription receipt, joins, sent answers, “Receipt: you paid $10.00 for Ana Silva's written answers”, the booked call and its cancelling, “… is paused and closes on Nov 5 unless you pay what you owe”, “We charged your card $10.00 for what you owed.”, “Your tests are running again” and “Your tests are paused after a chargeback”.",
+          "kind": "image",
+          "desktop": "email-summary-dev.png",
+          "phone": "email-summary-dev-phone.png"
+        },
+        {
+          "title": "The tester's daily summary",
+          "explanation": "“Your Playtest summary: 8 updates”: “Work sent: your written answers …”, “Nora Lane paid you $10.00 for your written answers …”, “Rate Nora Lane …”, “Your call on Sat, Oct 31 at 3:02 PM UTC was cancelled because the test is paused.”, “… is running again” and “Payment for your work on “Tide Tracker: widgets” may be delayed” (the tester never reads hold or chargeback).",
+          "kind": "image",
+          "desktop": "email-summary-tester.png",
+          "phone": "email-summary-tester-phone.png"
+        },
+        {
+          "title": "Email Off: the bank confirmation",
+          "explanation": "With email Off only the must-send lines go, in one end-of-day email, “Your Playtest account updates: 1”: “Your bank wants you to confirm a $7.00 payment. Confirm this payment by <date>.” with its link to the piece.",
+          "kind": "image",
+          "desktop": "email-off-bank.png",
+          "phone": "email-off-bank-phone.png"
+        },
+        {
+          "title": "Weekly: the payment email",
+          "explanation": "On Weekly email (their summary not due yet), payment lines go out the same day: “Your Playtest payment updates: 3” with the subscription receipt and “Receipt: you paid $8.00 for Ben Okafor's written answers”.",
+          "kind": "image",
+          "desktop": "email-payment-updates.png",
+          "phone": "email-payment-updates-phone.png"
+        },
+        {
+          "title": "Contact us (to the team)",
+          "explanation": "“Contact us: A payment” to the team's addresses (named here, not shown): “From Ana Silva <email> · About: A payment” and the message.",
+          "kind": "image",
+          "desktop": "email-contact.png",
+          "phone": "email-contact-phone.png"
+        },
+        {
+          "title": "New chargeback (to every admin)",
+          "explanation": "“Playtest: new chargeback of $10.00”: “A developer's bank reversed a $10.00 payment (pi_…). The developer's account is on a chargeback hold.” with the link to the console's chargebacks.",
+          "kind": "image",
+          "desktop": "email-admin-chargeback.png",
+          "phone": "email-admin-chargeback-phone.png"
+        },
+        {
+          "title": "The admins' daily email",
+          "explanation": "“Playtest admin: 32 items for the team” (from an earlier media run on Oct 28): one line per item waiting, “New dispute: <tester> vs <developer> on “…”: “<reason>”” and “Hold lift waiting for your Approve: …”, each with its link.",
+          "kind": "image",
+          "desktop": "email-admin-daily.png",
+          "phone": "email-admin-daily-phone.png"
         }
       ]
     }
