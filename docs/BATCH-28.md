@@ -64,7 +64,7 @@ Today a team decision can raise a listed piece's pay only up to the listing (min
 - Update every place that says "up to the listing" for disputes (design doc via the doc agent; the Terms; the landing page's "a decision can only raise the pay" stays true).
 - Tests: a listed part paid above the listing but below its cap can be disputed and raised to the cap; at the cap it's disabled with the new line; the admin sees the chat fold; the server refuses above the cap.
 
-## 16. The bank's check under Pay disappears before it can be done (found by the Stripe test-mode run)
+## 16. (Dropped: not an app bug. Chrome's Local Network Access check blocked the bank frame's return to localhost; on the public site it works.) The bank's check under Pay disappears before it can be done
 On real Stripe, Pay with a card that needs 3D Secure (4000 0027 6000 3184) creates the PaymentIntent correctly (requires_action, a redirect_to_url check page), but within a few seconds the piece leaves Needs you and the inline check (PayBox.tsx, `bank.view`) unmounts with it, so the developer never sees the bank's page; the Payment stays needs_action until it times out. Batch 17 §11 says the piece stays, locked, with the check open, and the page doesn't refresh itself while it's open. Fix: a piece whose Pay is waiting for the bank stays in Needs you (and on the test page) with its check open until the check ends (confirmed, cancelled, failed or timed out); the page's poll / redraw never removes it meanwhile; the same for Pay more, Pay what you owe and Subscribe. Test against real Stripe test mode too (the test key from .env, never printed). Tests: the piece and its check stay through several polls; confirm → paid; fail → "nothing was charged" line, piece free again.
 
 ## 17. Waiting shares must not need the platform's available balance (found by the Stripe test-mode run)
@@ -72,6 +72,9 @@ Sending a tester's waiting share later (payout setup finished, batch 22 §3) mak
 
 ## 18. Payment emails go out even with email Off (owner, Oct 29)
 Today, with email Off only "Your Playtest account updates" lines are emailed; receipts, "You were paid…", the retry line and other payment lines aren't. New: payment lines are emailed the same evening whatever the setting, in "Your Playtest payment updates" (as Weekly / Monthly already do): Off, Daily (still inside the daily summary), Weekly and Monthly. The Notifications page's "How you're notified" text says so: "Payment updates are always emailed the same evening." Update the design doc's Emails rules and the bell table's email column (doc agent). Tests: email Off still gets the evening payment email; nothing else.
+
+## 19. Verify a card never shows Stripe's card form (launch-critical, found by the Stripe test-mode run)
+During a chargeback hold, "Verify a card" (src/components/ChargebackSteps.tsx) never mounts Stripe's card form; "Verify this card" fails with "Could not find a ready element to create a payment method from.", so no chargeback hold could be lifted. Mount the element with the SetupIntent's client secret from /api/payments/verify-card, confirm with the matching Stripe.js call and a return_url, keep the inline 3D Secure and the fake-Stripe stand-in. Verify in real Stripe test mode.
 
 ## Check and report
 - Run `NEXT_DIST_DIR=.next-build npm run check`; it must be green. Migration only if needed (hand-written, checked with `prisma migrate diff` against playtest_lite_shadow with --exit-code, applied only to the local playtest_lite DB; say the 3400 server needs a restart).
