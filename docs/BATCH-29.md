@@ -42,6 +42,9 @@ Today a tester's own press in another tab stops only the SAME press ("You also d
 - **Rating lines get their own stack, on both sides:** "<tester> finished <test>. You can rate them…", the developer's reminders, the tester's "Rate <dev> on <test>" and its reminders no longer stack in "that test's day"; they stack in one "Ratings to give" entry per day across tests (like payments and holds), opening the dashboard's Ratings to give box. Update the bell table's "Stacks in" column (doc agent).
 - Tests: reminders on a running test; the new stack across two tests.
 
+## Decided, no change (owner, Oct 29)
+- After a stop, End early, Leave, a block or a removal, a sent piece's review date stays the later of 7 days after sending and the tester's ORIGINAL deadline (the owner said no to opening Charge 7 days after the work ended). Don't change it.
+
 ## Check and report
 - Run `NEXT_DIST_DIR=.next-build npm run check`; it must be green. Migration only if needed (hand-written, checked with `prisma migrate diff` against playtest_lite_shadow with --exit-code, applied only to the local playtest_lite DB; say the 3400 server needs a restart).
 - Don't touch port 3400 (the owner uses it: write each file in one go). Don't edit docs/DESIGN-DOC.md. Never print secrets from .env.
