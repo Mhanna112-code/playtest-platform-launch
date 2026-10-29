@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money } from "@/lib/format";
-import { TESTER_CHOICE_REASONS, rateStops, stopOnce, type TestEventLike } from "@/lib/rules";
+import { TESTER_CHOICE_REASONS, stopOnce, type TestEventLike } from "@/lib/rules";
 import { rowsOf } from "@/lib/callRows";
 import { HttpError } from "./http";
 import { asLines, ownChanges, seenOf, tabOf, testerPaymentChanges, withRenamed } from "./live";
@@ -94,27 +94,10 @@ const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", 
  */
 export const TESTER_CALL_KINDS = new Set(["requested", "booked", "cancelled"]);
 
-/**
- * (Owner, Oct 28, batch 16 section 25) A press still allowed in a stopped, closed or ended test, a test the tester left or was removed from, or a paused test, goes
- * through on the FIRST press: no stop-once for anything (other people's changes, other tabs, the state itself). The session route marks such a press on its body
- * (a symbol, so a page can't send it): "skip" goes straight through; "rate" keeps the one DEFAULT exception, Rate stops once if a payment, Charge, Let it go or a
- * dispute about the work arrived since the page loaded (the post-close Rate kinds). Refusals are untouched (they're checked by each press itself).
- */
-export const QUIET_PRESS = Symbol.for("playtest.quietPress");
-export type QuietMode = "skip" | "rate";
-export const markQuiet = (body: Record<string | symbol, unknown>, mode: QuietMode) => {
-  body[QUIET_PRESS] = mode;
-};
-const quietOf = (body: Record<string, unknown>) => (body as Record<string | symbol, unknown>)[QUIET_PRESS] as QuietMode | undefined;
-
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
 export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; keep?: (e: TestEventLike) => boolean } = {}) {
-  const quiet = quietOf(body);
-  if (quiet === "skip") return;
-  if (quiet === "rate") {
-    const own = opts.keep;
-    opts = { ...opts, skipTerms: true, keep: (e) => rateStops(e, true) && (own?.(e) ?? true) };
-  }
+  // (Owner, Oct 29, batch 29 section 11; replaces batch 16 section 25) A stopped, closed or paused test, or a tester whose work ended: every press still allowed follows
+  // these same stop-once rules (Rate has its own short list; Leave and Block never stop).
   // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt); Leave and
   // Block send no boxAt, so they still stop just once.
   const boxAt = seenOf(body.boxAt);

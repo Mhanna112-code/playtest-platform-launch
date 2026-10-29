@@ -37,7 +37,9 @@ describe("reason E: your own actions in another tab", () => {
     // Tab 2: Leave stops once listing both, then goes through.
     const r = await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(307), seenAt: pageLoaded, tab: "tab-2" });
     expect(r.body.error.code).toBe("stop_once");
-    expect(texts(r)).toEqual(["You also did this in another tab: sent your written answers", "You also did this in another tab: sent a call request"]);
+    // (Batch 29 section 13) One voice on both sides: "You … in another tab".
+    const q = await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId, fromSide: "tester" } });
+    expect(texts(r)).toEqual(["You sent your written answers in another tab", `You requested a call for ${(await import("@/lib/format")).fmtDateTime(q.startsAt)} in another tab`]);
     expect((await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(314), seenAt: pageLoaded, tab: "tab-2", confirmed: true })).status).toBe(200);
   });
 
@@ -65,7 +67,7 @@ describe("reason E: your own actions in another tab", () => {
     await later();
     expect((await act(testId, "apply", t.cookie, { seenAt: pageLoaded, tab: "tab-1", note: "hi" })).status).toBe(200);
     const w = await act(testId, "withdraw-application", t.cookie, { seenAt: pageLoaded, tab: "tab-2" });
-    expect(texts(w)).toEqual(["You also did this in another tab: applied to join this test"]);
+    expect(texts(w)).toEqual(["You applied to join in another tab"]);
     expect((await act(testId, "withdraw-application", t.cookie, { seenAt: pageLoaded, tab: "tab-2", confirmed: true })).status).toBe(200);
     // No thanks on an invite, after the developer changed the description (F).
     const cara = await makeUser({ tester: true, name: "Cara Diaz" });
@@ -184,7 +186,7 @@ describe("(F) listing info", () => {
     await joined(testId);
     const r = await act(testId, "edit", dev.cookie, { version: v, fields: { writtenCents: "12.00" }, seenAt: editOpened, tab: "tab-1" });
     expect(r.body.error.code).toBe("changed");
-    expect(texts(r)).toEqual(["You changed the description in another tab", "Ana Silva joined"]);
+    expect(texts(r)).toEqual(["You saved the listing in another tab: description", "Ana Silva joined"]);
     expect(r.body.error.listingEdited).toBe(true); // the "fields you didn't touch keep the newer values" tail
     expect((await act(testId, "edit", dev.cookie, { version: v, fields: { writtenCents: "12.00" }, seenAt: editOpened, tab: "tab-1", confirmed: true })).status).toBe(200);
   });

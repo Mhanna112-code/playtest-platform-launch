@@ -254,28 +254,21 @@ describe("the reminders 3 days and 1 day before close-out (DEFAULT protections)"
     expect(closeOutMark(at(-0.1), now)).toBeNull();
   });
 
-  it("to the tester with work to Charge and the developer with work unpaid, once each, ignoring the email setting", async () => {
+  it("(batch 29 §22) the tester's 3-day / 1-day lines are replaced by their one daily 'Charge or let go' line, which ignores the email setting", async () => {
     const w = await sentWork();
     await db.user.update({ where: { id: w.tester.user.id }, data: { emailPref: "off" } });
     await deadlinesAt(w.testId, 11.5); // close-out in 2.5 days
     await overdue(w.sub.id);
     await cron();
     await cron();
-    const tester = { userId: w.tester.user.id, text: { startsWith: "Charge or let go of your work on “Harbor Run” by " } };
-    const dev = { userId: w.dev.user.id, text: { startsWith: "Pay Ana Silva's work on “Harbor Run” by " } };
+    expect(await db.notification.count({ where: { userId: w.tester.user.id, text: { startsWith: "Charge or let go of your work on" } } })).toBe(0);
+    const tester = { userId: w.tester.user.id, text: { startsWith: "Charge or let go: your written answers on “Harbor Run” ($10.00, by " } };
     expect(await db.notification.count({ where: tester })).toBe(1);
-    expect(await db.notification.count({ where: dev })).toBe(1);
-    expect(await db.notification.findFirstOrThrow({ where: tester })).toMatchObject({ mustEmail: true, payment: true, reminderKey: expect.stringMatching(new RegExp(`^closeout:3d:tester:${w.sessionId}:\\d{4}-\\d{2}-\\d{2}$`)), link: `/app/sessions/${w.sessionId}#part-written` });
-    expect(await db.notification.findFirstOrThrow({ where: dev })).toMatchObject({ mustEmail: true, reminderKey: expect.stringMatching(new RegExp(`^closeout:3d:dev:${w.sessionId}:`)), link: `/app/tests/${w.testId}#piece-${w.sub.id}` });
+    expect(await db.notification.findFirstOrThrow({ where: tester })).toMatchObject({ mustEmail: true, payment: true, groupKey: "charge", link: "/app#charge-or-cancel" });
     // Email Off: the money line still went out in the end-of-day email.
-    expect((await db.outboxEmail.findFirstOrThrow({ where: { to: w.tester.user.email } })).text).toContain("Charge or let go of your work on “Harbor Run” by ");
-    // A day before: the second reminder, once.
-    await deadlinesAt(w.testId, 13.5);
-    await cron();
-    await cron();
-    expect(await db.notification.count({ where: tester })).toBe(2);
-    expect(await db.notification.count({ where: dev })).toBe(2);
-    expect(await db.notification.count({ where: { ...tester, reminderKey: { startsWith: `closeout:1d:tester:${w.sessionId}:` } } })).toBe(1);
+    expect((await db.outboxEmail.findFirstOrThrow({ where: { to: w.tester.user.email } })).text).toContain("Charge or let go: your written answers on “Harbor Run”");
+    // The developer's old per-piece "Pay <tester>'s work on … by <date>" is gone (their closing-soon line is the countdown, tests/batch29-bell.test.ts).
+    expect(await db.notification.count({ where: { userId: w.dev.user.id, text: { startsWith: "Pay Ana Silva's work on" } } })).toBe(0);
   });
 
   it("nothing open, nothing sent: a paid piece, or a test paused (its close-out moves on)", async () => {

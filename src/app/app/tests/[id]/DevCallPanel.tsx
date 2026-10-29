@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { lengthCap } from "@/lib/callMeasure";
-import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
 import { useRouter } from "next/navigation";
 import { checkFields, useLocalMin } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -39,7 +38,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  * "N of 3 booked"; [Request a time] to everyone ticked; then per-tester blocks (ticked testers, or everyone with a call or
  * request when nothing is ticked): booked calls, daily/weekly sets as one line, waiting requests. Boxes under the button.
  */
-export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestReason = "", requests = [], elsewhere = [] }: { testId: string; seenAt: string; testers: DevTester[]; canRequest: boolean; noRequestReason?: string; /** (Batch 16 section 33) every waiting request, both directions */ requests?: PanelReq[]; elsewhere?: OtherCall[] }) {
+export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestReason = "", requests = [], elsewhere = [], leadMinutes }: { testId: string; seenAt: string; /** (Batch 29 section 20) the server's call lead, passed down */ leadMinutes: number; testers: DevTester[]; canRequest: boolean; noRequestReason?: string; /** (Batch 16 section 33) every waiting request, both directions */ requests?: PanelReq[]; elsewhere?: OtherCall[] }) {
   const router = useRouter();
   // (Batch 16 section 21) A call request, booking or cancellation from another tab stops a press touching it once: the panel shows it at once.
   const { press, changes, error, busy, at, errData } = usePress(seenAt, () => router.refresh());
@@ -57,7 +56,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
     if (Array.isArray(v.ticked)) setTicked(v.ticked.filter((id) => testers.some((t) => t.contractId === id)));
   });
   const form = useRef<HTMLDivElement>(null);
-  const minNow = useLocalMin(CALL_MIN_AHEAD_MINUTES); // (batch 27 section 6) the server's lead
+  const minNow = useLocalMin(leadMinutes); // (batch 27 section 6; batch 29 section 20) the server's lead, passed from the server
   const [open, setOpen] = useState<Record<string, boolean>>({});
   // (Batch 16 section 10) A mistake in the request form is red at its box and listed under Request a time (not as a plain line).
   const red = error.startsWith(FIELD);

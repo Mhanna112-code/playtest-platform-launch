@@ -9,9 +9,8 @@ import { openDispute } from "@/lib/server/payments";
 import { reportKeyBroken } from "@/lib/server/accessKeys";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, stopTimeIn } from "@/lib/format";
-import { CALL_CANCELLED_BY_STOP, LIMITED_CHOICE_REFUSAL, RATE_INACTIVE, PAUSE_DEFAULTS, PAUSED_SEND, WORK_OVER_ACTIONS, testPaused, testerPaused, testerRefusal, workOver, workOverLine, workOverPress } from "@/lib/rules";
-import { markQuiet } from "@/lib/server/testerGate";
-import { loadedOf, stopBox, testerStopSince } from "@/lib/server/stopMoment";
+import { CALL_CANCELLED_BY_STOP, LIMITED_CHOICE_REFUSAL, RATE_INACTIVE, PAUSE_DEFAULTS, PAUSED_SEND, WORK_OVER_ACTIONS, testerPaused, testerRefusal, workOver, workOverLine, workOverPress } from "@/lib/rules";
+import { loadedOf, stopBox, testerPauseSince, testerStopSince } from "@/lib/server/stopMoment";
 import { requireUser } from "@/lib/server/session";
 import { leaveTest, sendWritten } from "@/lib/server/tests";
 import { requireActive, requireConfirmed } from "@/lib/server/users";
@@ -65,20 +64,17 @@ async function pausedRefusal(userId: string, contractId: string, action: string)
 }
 
 /**
- * (Owner, Oct 28, batch 16 section 25) What still works in these states goes through on the FIRST press (no stop-once for anything; refusals unchanged):
- * - the test stopped or closed, the tester's work ended early, a test they left or were removed from (incl. by a suspension of their tester side): Charge, Let it go,
- *   Dispute, Rate, chat (excerpts have their own route, which never stops);
- * - the test paused (any cause): drafts, Charge, Let it go, Dispute, Rate, Leave, Cancel call, chat.
- * Rate keeps the DEFAULT exception (it stops once for a payment, Charge, Let it go or dispute about the work since the page loaded).
+ * (Owner, Oct 29, batch 29 section 11; replaces batch 16 section 25's "goes through on the first press") On a stopped, closed or paused test (any cause) and after the
+ * tester's work ended, every press still allowed follows the same stop-once rules as on a running test. The stop, close, early end or pause itself is a change like any
+ * other: a press on a page opened before it stops once naming it ("Nora Lane stopped this test at 3:10 PM.", "This test was paused at 3:10 PM."); the second goes ahead.
+ * Rate checks the same in its own gate (its short list: no pause); Leave and Block never stop; chat and the excerpt presses keep their own rules.
  */
-const QUIET_WHEN_OVER = new Set(["choose", "dispute", "rate", "message"]);
-const QUIET_WHEN_PAUSED = new Set(["choose", "dispute", "rate", "leave", "cancel-call", "cancel-set", "message", "recording-start", "recording-done", "recording-remove"]);
-async function markQuietPress(userId: string, contractId: string, action: string, body: Record<string, unknown>) {
-  if (!QUIET_WHEN_OVER.has(action) && !QUIET_WHEN_PAUSED.has(action)) return;
-  const c = await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true, status: true, test: { select: { adminPausedAt: true, developer: { select: { devSuspendedAt: true, holdStartedAt: true } } } } } });
-  if (!c || c.testerId !== userId) return;
-  const quiet = (c.status !== "working" && QUIET_WHEN_OVER.has(action)) || (testPaused(c.test.developer, c.test) && QUIET_WHEN_PAUSED.has(action));
-  if (quiet) markQuiet(body, action === "rate" ? "rate" : "skip");
+const MOMENT_ACTIONS = new Set(["choose", "dispute", "cancel-call", "cancel-set", "request-time", "answer-request", "terms"]);
+async function stateMoment(contractId: string, action: string, body: Record<string, unknown>) {
+  if (!MOMENT_ACTIONS.has(action)) return;
+  const loaded = loadedOf(body);
+  const stop = (await testerStopSince(contractId, loaded)) ?? (await testerPauseSince(contractId, loaded));
+  if (stop) stopBox([stop]);
 }
 
 /**
@@ -109,13 +105,9 @@ export async function POST(req: Request, { params }: Ctx) {
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
     await finalRefusal(u.id, id, action, body);
     await pausedRefusal(u.id, id, action);
-    // (Batch 17 section 12) Charge / Let it go on a page opened before the test stopped, closed or this tester's work ended early: it stops once with the stop as the
-    // change (the second press goes ahead). Rate checks the same in its own gate (section 14); Dispute never stops for it.
-    if (action === "choose") {
-      const stop = await testerStopSince(id, loadedOf(body));
-      if (stop) stopBox([stop]);
-    }
-    await markQuietPress(u.id, id, action, body);
+    // (Batch 17 section 12; batch 29 section 11) A press on a page opened before the test stopped, closed, paused or this tester's work ended: it stops once with that
+    // as the change (the second press goes ahead).
+    await stateMoment(id, action, body);
     const res0 = await run(u, id, action, body);
     const data = await res0.clone().json().catch(() => null);
     // A rename the page hadn't shown: the press went ahead; the note goes under the button.

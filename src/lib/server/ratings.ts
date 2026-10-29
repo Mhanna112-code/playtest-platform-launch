@@ -3,9 +3,9 @@ import { T } from "@/lib/tz";
 import { displayName, fmtDate, money, pronouns } from "@/lib/format";
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
-import { finishedAndRatedLine, ratedYouLine, ratingClosedLine, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, TESTER_CHOICE_REASONS, chargeIsOpen, chargeOpensAt, ratePendingLine, rateOpensOnLine, rateOpensReviewLine, rateTheirDisputeLine, testPaused, type TestEventLike } from "@/lib/rules";
+import { finishedAndRatedLine, ratedYouLine, ratingClosedLine, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, TESTER_CHOICE_REASONS, chargeIsOpen, chargeOpensAt, ratePendingLine, rateOpensOnLine, rateOpensReviewLine, rateTheirDisputeLine, type TestEventLike } from "@/lib/rules";
 import { cancelCallsAhead, lockTest, ownContract, ownTest, recordEvent, spotOpened } from "./tests";
-import { CALL_CHANGE_ACTS, ownChanges, tabOf, testerPaymentChanges } from "./live";
+import { tabOf, testerPaymentChanges } from "./live";
 import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges } from "./testerGate";
 import { devStopSince, loadedOf, stopBox, testerStopSince } from "./stopMoment";
 import { closeOutOf, closedOut, devPauseSpans, windowEnd, type Span } from "./closeOut";
@@ -21,8 +21,14 @@ import { closeOutOf, closedOut, devPauseSpans, windowEnd, type Span } from "./cl
 export type Side = "tester" | "developer";
 const DAY = 86_400_000;
 export const WINDOW_DAYS = 14;
-/** (Owner, Oct 27) Rating reminders after a stop or close: every 3 days, for 2 weeks only. */
+/** (Owner, Oct 27) Rating reminders: every 3 days, for 2 weeks only. (Batch 29 §21) On running tests too. */
 export const REMINDER_WEEKS = 2;
+/**
+ * (Owner, Oct 29, batch 29 §21) Every rating line ("<tester> finished <test>. You can rate them…", the developer's reminders, the tester's "Rate <dev> on <test>" and its
+ * reminders) stacks in ONE "Ratings to give" entry per day across tests, opening the dashboard's Ratings to give box.
+ */
+const RATINGS = { group: "ratings" } as const;
+export const RATINGS_HREF = "/app#ratings-to-give";
 
 /**
  * (Batch 17) One Rate box's state: "open" (pressable), "disabled" (shown with its grey line), "hidden" (not shown; an old page's press is refused with the line),
@@ -155,7 +161,7 @@ export async function maybePromptRating(contractId: string) {
   await maybeOpenDevRating(c.id);
   if (c.ratePromptedAt || (await rateBlocker(c.id, "tester"))) return;
   await db.contract.update({ where: { id: c.id }, data: { ratePromptedAt: new Date() } });
-  await notify(c.tester.email, `Rate ${displayName(c.test.developer)} on “${c.title}”`, [`You can now rate ${displayName(c.test.developer)} for “${c.title}”.`], `/app/sessions/${c.id}#rate`, { own: c.test.status === "stopped" });
+  await notify(c.tester.email, `Rate ${displayName(c.test.developer)} on “${c.title}”`, [`You can now rate ${displayName(c.test.developer)} for “${c.title}”.`], RATINGS_HREF, { ...RATINGS, testId: c.testId });
 }
 
 /** (Batch 17 section 16) The developer's Rate for this tester just opened (they rated and everything they sent is settled): "<tester> finished <test>. You can rate them for 14 days.", once. */
@@ -165,7 +171,7 @@ export async function maybeOpenDevRating(contractId: string, now = new Date()) {
   const key = `rate-open:${contractId}`;
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { tester: true, test: true } });
   if (await db.notification.findFirst({ where: { userId: c.test.developerId, reminderKey: key }, select: { id: true } })) return false;
-  await bell(c.test.developerId, `${displayName(c.tester)} finished ${c.title}. You can rate ${pronouns(c.tester.pronoun).obj} for ${WINDOW_DAYS} days.`, `/app/tests/${c.testId}#rate-${c.id}`, undefined, { own: c.test.status === "stopped", reminder: key });
+  await bell(c.test.developerId, `${displayName(c.tester)} finished ${c.title}. You can rate ${pronouns(c.tester.pronoun).obj} for ${WINDOW_DAYS} days.`, RATINGS_HREF, undefined, { ...RATINGS, testId: c.testId, reminder: key });
   return true;
 }
 
@@ -227,18 +233,16 @@ async function devRateGate(testId: string, contractId: string, body: Record<stri
   const since = loadedOf(body);
   if (!since) return;
   const lines: TestEventLike[] = [];
-  // (Batch 20 section 12) A Pay more for this tester made in another tab or device stops Rate once too ("You paid Ana Silva $5.00 more for their written answers in
-  // another tab"); Rate stops only for a payment about the person it rates (batch 16 section 25), so one for someone else doesn't.
-  if (devId) for (const o of await ownChanges(devId, testId, since, tabOf(body))) if (o.about?.a === "pay-more" && o.about.k.includes(`c:${contractId}`)) lines.push({ kind: "own", text: o.live ?? o.text, createdAt: o.createdAt });
+  // (Owner, Oct 29, batch 29 section 12) The developer's own changes in another tab (a Pay more, a call change…) never stop Rate: it only races with Rate itself.
+  void devId;
   const stop = await devStopSince(testId, contractId, since);
   if (stop) lines.push(stop);
   lines.push(...(await db.testEvent.findMany({ where: { testId, contractId, kind: "admin", createdAt: { gt: since }, text: { startsWith: "The team decided" } } })));
-  // (Batch 20 section 14) On a running test: call changes with this tester since the page loaded (theirs, and the developer's own from another tab); other testers'
+  // (Batch 20 section 14) On a running test: call changes with this tester since the page loaded (theirs: batch 29 section 12, never the developer's own from another tab); other testers'
   // never. Alerts: "Call changes" ticked off doesn't stop.
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, select: { status: true, test: { select: { status: true, developer: { select: { ignoredAlerts: true } } } } } });
   if (c.status === "working" && c.test.status === "open" && !c.test.developer.ignoredAlerts.includes("calls")) {
     lines.push(...(await db.testEvent.findMany({ where: { testId, contractId, createdAt: { gt: since }, kind: { in: ["requested", "booked", "confirmed", "cancelled", "withdrew_req", "declined_req"] } } })).filter((e) => !e.text.startsWith("You ")));
-    if (devId) for (const o of await ownChanges(devId, testId, since, tabOf(body))) if (o.about && (CALL_CHANGE_ACTS as readonly string[]).includes(o.about.a) && o.about.k.includes(`c:${contractId}`)) lines.push({ kind: "own", text: o.live ?? o.text, createdAt: o.createdAt });
   }
   if (lines.length) stopBox(lines.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()));
 }
@@ -251,7 +255,7 @@ function refuse(s: RateState, already: string): never {
 export async function testerRate(tester: { id: string; name: string; email: string; pronoun?: string }, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
   const state = await testerRateState(contractId);
-  if (state.kind !== "open") refuse(state, "You already rated this test.");
+  if (state.kind !== "open") refuse(state, `You already rated ${displayName(c0.test.developer)}.`); // (batch 29 section 13) a Rate made in another tab: a plain refusal
   const r = readRating(body);
   await testerRateGate(tester.id, contractId, displayName(c0.test.developer), body);
   await db.$transaction(async (tx) => {
@@ -313,8 +317,8 @@ async function testerSuspendedMs(testerId: string, from: Date, now: Date) {
 }
 
 /**
- * (Owner, Oct 26-27) Rating prompts: while the test is open they stack with that test's other same-day lines. Once the test is closed (stopped) each is its own line, with a
- * reminder every 3 days. Tester: until they have rated or 2 weeks have passed (from the later of the stop / close and the first prompt), not counting the time their side
+ * (Owner, Oct 26-27; batch 29 §21) Rating prompts and their reminders every 3 days, whatever the test's state (running, paused, stopped or closed), stacked in the day's
+ * "Ratings to give" entry across tests. Tester: until they have rated or 2 weeks have passed (from the later of the stop / close and the first prompt), not counting the time their side
  * was suspended (batch 17 section 2: their Rate has no end date, so only the reminders pause). Developer (batch 17 section 16): from when their Rate opened, until they
  * rate or their 14 days end, paused while they can't rate.
  */
@@ -325,16 +329,17 @@ export async function ratingReminders(now = new Date()) {
     const last = await db.notification.findFirst({ where: { userId, testId, text: { startsWith: "Reminder: rate " } }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
     return last && last.createdAt > fallback ? last.createdAt : fallback;
   };
-  // Tester: prompted once, then every 3 days until they rate.
-  const prompted = await db.contract.findMany({ where: { test: { status: "stopped" }, ratePromptedAt: { not: null, lt: new Date(now.getTime() - every) } }, orderBy: { ratePromptedAt: "desc" }, take: 500, include: { tester: { select: { testerSuspendedAt: true } }, test: { include: { developer: true } } } });
+  // Tester: prompted once (when their Rate opens), then every 3 days for 2 weeks until they rate, whatever the test's state (batch 29 §21: running tests too).
+  const prompted = await db.contract.findMany({ where: { ratePromptedAt: { not: null, lt: new Date(now.getTime() - every), gt: new Date(now.getTime() - 365 * DAY) } }, orderBy: { ratePromptedAt: "desc" }, take: 500, include: { tester: { select: { testerSuspendedAt: true } }, test: { include: { developer: true } } } });
   const rated = new Set((await db.rating.findMany({ where: { contractId: { in: prompted.map((c) => c.id) }, side: "tester" }, select: { contractId: true } })).map((r) => r.contractId));
   for (const c of prompted) {
-    if (rated.has(c.id) || testPaused(c.test.developer, c.test) || c.tester.testerSuspendedAt) continue;
-    const from = new Date(Math.max(c.ratePromptedAt!.getTime(), c.test.stoppedAt?.getTime() ?? 0));
+    if (rated.has(c.id) || c.tester.testerSuspendedAt) continue;
+    // (Batch 29 §21) 2 weeks from when their Rate opened (the prompt), not counting the time their tester side was suspended.
+    const from = c.ratePromptedAt!;
     if (now.getTime() > from.getTime() + REMINDER_WEEKS * 7 * DAY + (await testerSuspendedMs(c.testerId, from, now))) continue; // 2 weeks only
     if (now.getTime() - (await sinceLast(c.testerId, c.testId, c.ratePromptedAt!)).getTime() < every) continue;
     if ((await rateBlocker(c.id, "tester", now)) !== "") continue;
-    await bell(c.testerId, `Reminder: rate ${displayName(c.test.developer)} on “${c.title}”`, `/app/sessions/${c.id}#rate`, undefined, { own: true, reminder: `rate:${c.id}` });
+    await bell(c.testerId, `Reminder: rate ${displayName(c.test.developer)} on “${c.title}”`, RATINGS_HREF, undefined, { ...RATINGS, testId: c.testId, reminder: `rate:${c.id}` });
     n++;
   }
   // Developer: once their Rate opened (the tester rated and everything is settled, or (section 19) a never-rated tester at the close-out); every 3 days until they
@@ -349,9 +354,9 @@ export async function ratingReminders(now = new Date()) {
     if (!s || s.kind !== "open" || s.paused) continue;
     if (await maybeOpenDevRating(r.contractId, now)) continue; // the opening line itself (once)
     const c = await db.contract.findUnique({ where: { id: r.contractId }, include: { tester: true, test: true } });
-    if (!c || c.test.status !== "stopped") continue;
+    if (!c) continue; // (batch 29 §21) on a running test too
     if (now.getTime() - (await sinceLast(c.test.developerId, c.testId, s.opensAt!)).getTime() < every) continue;
-    await bell(c.test.developerId, `Reminder: rate ${displayName(c.tester)} for “${c.title}” (until ${T(s.endsAt!, "date")})`, `/app/tests/${c.testId}#rate-${c.id}`, undefined, { own: true, reminder: `rate-dev:${c.id}` });
+    await bell(c.test.developerId, `Reminder: rate ${displayName(c.tester)} for “${c.title}” (until ${T(s.endsAt!, "date")})`, RATINGS_HREF, undefined, { ...RATINGS, testId: c.testId, reminder: `rate-dev:${c.id}` });
     n++;
   }
   return n;

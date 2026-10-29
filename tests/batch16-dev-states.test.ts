@@ -8,7 +8,6 @@ import { fmtDate } from "@/lib/format";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { POST as excerptsPOST } from "@/app/api/excerpts/route";
 import { startHold } from "@/lib/server/holds";
-import { bigOwnGate } from "@/lib/server/tests";
 import { json, req } from "./helpers";
 import { act, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 
@@ -62,8 +61,9 @@ describe("Pay more closes with the test's last Pay / Charge (Batch 17 §19 repla
   });
 });
 
-describe("developer, stopped / closed or paused / held: what still works goes through on the first press (section 25)", () => {
-  it("stopped: Pay, Pay more, Next round and the side of a dispute go through despite news and other tabs; Rate stops once only for a payment about that person", async () => {
+// (Owner, Oct 29, batch 29 section 11) Section 25's "goes through on the first press" is replaced: what still works follows the same stop-once rules as on a running test.
+describe("developer, stopped / closed or paused / held: what still works follows the running test's stop-once rules (batch 29 section 11)", () => {
+  it("stopped: Pay, Pay more and Next round stop once for news and other tabs; the side of a dispute keeps its rules; Rate keeps its own list", async () => {
     const w = await paidWork({ recordingCents: "5.00" });
     const b = await joined(w.testId, "Ben Carter", "he");
     await sact(b.sessionId, "written", b.tester.cookie, { answers: ["a", "b"] });
@@ -75,25 +75,26 @@ describe("developer, stopped / closed or paused / held: what still works goes th
     await later();
     const loaded = seen();
     await later();
-    // News since the page loaded: a tester's line, and a big change from another tab.
+    // News since the page loaded: a tester's line, and a change from another tab.
     await db.testEvent.create({ data: { testId: w.testId, kind: "left", text: "Cara Diaz left the test" } });
     expect((await act(w.testId, "pay-extra", w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100, seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
     const B = { seenAt: loaded, tab: "B" };
-    expect((await pay(w.dev.cookie, { kind: "submission", id: subB.id, amount: "10.00", tickedCents: 1000, ...B, confirmed: false })).status).toBe(200);
-    expect((await act(w.testId, "pay-extra", w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100, ...B })).status).toBe(200);
+    const news = ["Cara Diaz left the test", "You paid Ana Silva $1.00 more for their written answers in another tab"];
+    const p1 = await pay(w.dev.cookie, { kind: "submission", id: subB.id, amount: "10.00", tickedCents: 1000, ...B, confirmed: false });
+    expect(p1.body.error.changes.map((c: { text: string }) => c.text)).toEqual(news);
+    expect((await pay(w.dev.cookie, { kind: "submission", id: subB.id, amount: "10.00", tickedCents: 1000, ...B, confirmed: true, boxAt: seen() })).status).toBe(200);
     expect((await act(w.testId, "dispute-side", w.dev.cookie, { disputeId: d.id, text: "They skipped two answers", ...B })).status).toBe(200);
-    // Rate Ben: the payment about Ben arrived since the page loaded (from this tab's Pay above, as the page didn't show it): stops once, then goes ahead.
-    await db.testEvent.create({ data: { testId: w.testId, kind: "paid", text: "Ben Carter charged $1.00 for their recording", contractId: b.sessionId } });
-    // (Batch 17 sections 14 and 16) Everything was settled before the developer's Rate opened: a Charge line no longer stops it.
+    // Rate Ben: its own short list (everything was settled before the developer's Rate opened; your own changes never stop it).
     const rate = await act(w.testId, "rate", w.dev.cookie, { contractId: b.sessionId, stars: 4, ...B });
     expect(rate.status, JSON.stringify(rate.body)).toBe(200);
-    // Next round on the stopped test: through at once.
-    expect((await act(w.testId, "next-round", w.dev.cookie, B)).status).toBe(200);
+    // Next round on the stopped test: stops once, then goes ahead.
+    expect((await act(w.testId, "next-round", w.dev.cookie, B)).body.error.code).toBe("stop_once");
+    expect((await act(w.testId, "next-round", w.dev.cookie, { ...B, confirmed: true, boxAt: seen() })).status).toBe(200);
     // Repeats are plain refusals.
     expect((await act(w.testId, "dispute-side", w.dev.cookie, { disputeId: d.id, text: "Again", ...B })).body.error.message).toBe("You already sent your side.");
   });
 
-  it("paused (a payment hold): Stop, End early and Cancel call go through on the first press", async () => {
+  it("paused (a payment hold): Stop, End early and Cancel call stop once for news, then go ahead", async () => {
     const { dev, testId } = await setup({ spots: 5 });
     const a = await joined(testId, "Ana Silva");
     const b = await joined(testId, "Ben Okafor");
@@ -103,21 +104,21 @@ describe("developer, stopped / closed or paused / held: what still works goes th
     const loaded = seen();
     await later();
     await db.testEvent.create({ data: { testId, kind: "left", text: "Cara Diaz left the test" } });
-    expect((await act(testId, "cancel-call", dev.cookie, { callId: call.id, seenAt: loaded })).status).toBe(200);
-    expect((await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "All done.", seenAt: loaded })).status).toBe(200);
-    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded })).status).toBe(200);
+    expect((await act(testId, "cancel-call", dev.cookie, { callId: call.id, seenAt: loaded })).body.error.code).toBe("stop_once");
+    expect((await act(testId, "cancel-call", dev.cookie, { callId: call.id, seenAt: loaded, confirmed: true, boxAt: seen() })).status).toBe(200);
+    expect((await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "All done.", seenAt: loaded })).body.error.code).toBe("stop_once");
+    expect((await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "All done.", seenAt: loaded, confirmed: true, boxAt: seen() })).status).toBe(200);
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen() })).status).toBe(200);
   });
 
-  it("excerpt Allow / Deny: a big change in another tab stops them once on a running test, never on a stopped or paused one", async () => {
+  it("excerpt Allow / Deny: never stopped by your own changes in another tab (batch 29 section 12)", async () => {
     const w = await paidWork();
     await later();
     const loaded = seen();
     await later();
     expect((await act(w.testId, "pay-extra", w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100, seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
-    await expect(bigOwnGate(w.dev.user.id, w.testId, { seenAt: loaded, tab: "B" })).rejects.toMatchObject({ code: "stop_once" });
-    await db.test.update({ where: { id: w.testId }, data: { status: "stopped", stoppedAt: new Date(Date.now() - DAY) } });
-    await expect(bigOwnGate(w.dev.user.id, w.testId, { seenAt: loaded, tab: "B" })).resolves.toBeUndefined();
     expect((await ex(w.dev.cookie, { action: "decide", excerptId: "nope", decision: "allow", seenAt: loaded })).body.error.message).toBe("This request was already decided.");
+    expect(src("lib/server/excerpts.ts")).not.toContain("bigOwnGate");
   });
 
   it("a state that began after the page loaded is news: Stop in another tab still stops this tab's Stop once (section 21)", async () => {

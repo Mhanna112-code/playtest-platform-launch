@@ -72,7 +72,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
     case "decided": {
       const d = row as DisputeVM;
       return (
-        <div id={`dispute-${d.id}`} className="scroll-mt-24 space-y-1 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-dispute-row={d.id}>
+        <div id={`dispute-${d.id}`} className="scroll-mt-24 space-y-1 rounded data-[marked]:ring-2 data-[marked]:ring-sky-300 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-dispute-row={d.id}>
           <p><b>{d.head}</b></p>
           <p>{d.money}</p>
           <p>{d.said}</p>
@@ -97,7 +97,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
     case "lifts": {
       const l = row as LiftVM;
       return (
-        <div id={`lift-${l.id}`} className="scroll-mt-24 space-y-1 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-lift-row={l.id}>
+        <div id={`lift-${l.id}`} className="scroll-mt-24 space-y-1 rounded data-[marked]:ring-2 data-[marked]:ring-sky-300 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-lift-row={l.id}>
           <p><b>{l.head}</b></p>
           <p>{l.owed} · {l.paid}</p>
           <LiftApprove id={l.id} />
@@ -107,7 +107,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
     case "reports": {
       const r = row as ReportVM;
       return (
-        <div className="space-y-0.5 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-report-row={r.id}>
+        <div id={`report-${r.id}`} className="scroll-mt-24 space-y-0.5 rounded border-t border-white/[0.06] py-2 text-sm first:border-t-0 data-[marked]:ring-2 data-[marked]:ring-sky-300" data-report-row={r.id}>
           <p><a href={r.reporterHref}>{r.reporter}</a> reported <a href={r.reportedHref}>{r.reported}</a> · {r.when}</p>
           <p className="text-slate-300">“{r.note}”</p>
         </div>
@@ -309,9 +309,24 @@ export function PagedList({ kind, initial, empty = "None.", arg = "", title, lev
   const updateShown = useCallback((fresh: AnyRow[]) => {
     setRows((prev) => shownWithFresh(prev, fresh));
   }, []);
+  /**
+   * (Owner, Oct 29, batch 29 section 20) The Tests rows shown below the first 25 (loaded by scrolling) are asked for by id, so they follow a pause set or lifted
+   * elsewhere too (the first page alone covered only the top 25).
+   */
+  const refreshBeyond = useCallback(async (firstIds: Set<string>) => {
+    if (kind !== "tests") return;
+    const rest = rowsRef.current.map((x) => x.id).filter((id) => !firstIds.has(id));
+    for (let i = 0; i < rest.length; i += 100) {
+      const r = await api<Page<AnyRow>>(`/api/admin/more?kind=tests&ids=${encodeURIComponent(rest.slice(i, i + 100).join(","))}`).catch(() => null);
+      if (r) updateShown(r.rows);
+    }
+  }, [kind, updateShown]);
   const refreshRows = useCallback(() => {
-    void api<Page<AnyRow>>(url(null, appliedRef.current)).then((r) => updateShown(r.rows), () => null);
-  }, [url, updateShown]);
+    void api<Page<AnyRow>>(url(null, appliedRef.current)).then((r) => {
+      updateShown(r.rows);
+      void refreshBeyond(new Set(r.rows.map((x) => x.id)));
+    }, () => null);
+  }, [url, updateShown, refreshBeyond]);
 
   // Opened without rows (a lazy list): fetch its first 25.
   useEffect(() => {
@@ -347,6 +362,7 @@ export function PagedList({ kind, initial, empty = "None.", arg = "", title, lev
         if (my !== seq.current) return;
         setTotal(r.total);
         updateShown(r.rows);
+        void refreshBeyond(new Set(r.rows.map((x) => x.id)));
         if (!r.rows.length || !newRowsAhead(r.rows, rowsRef.current).length) return setPending(null);
         if (!box.current || atTop(box.current)) takeTop(r);
         else setPending(r);
@@ -369,7 +385,7 @@ export function PagedList({ kind, initial, empty = "None.", arg = "", title, lev
       window.removeEventListener("focus", now);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [fixed, url, takeTop, updateShown]);
+  }, [fixed, url, takeTop, updateShown, refreshBeyond]);
 
   const filtered = applied.q !== "" || applied.ticks.length > 0;
   const fresh = pending ? newRowsAhead(pending.rows, rows).length : 0;

@@ -77,7 +77,7 @@ describe("N) Block and Report live only on profiles", () => {
     expect(await lines(t.user.id)).toHaveLength(0); // not told
     const mine = (await lines(a.user.id)).filter((l) => l.text.startsWith("New report: Nora Lane reported Ana Silva"));
     expect(mine).toHaveLength(1);
-    expect(mine[0]).toMatchObject({ groupKey: "disputes", own: false });
+    expect(mine[0]).toMatchObject({ groupKey: "adminreports", own: false });
     const list = (await adminPage("reports", a.user.id, null)) as { rows: { reporter: string; reported: string; note: string; reporterHref: string; reportedHref: string }[]; total: number };
     const row = list.rows.find((r) => r.reporter === "Nora Lane" && r.reported === "Ana Silva")!;
     expect(row).toMatchObject({ note: "They were rude to me", reportedHref: `/app/testers/${t.user.id}`, reporterHref: `/app/developers/${dev.user.id}` });
@@ -254,7 +254,7 @@ describe("R, W) the 4th payment hold needs an admin's Approve (in the Lifts box)
     await expect(payOwed(fourth.user)).rejects.toMatchObject({ code: "nothing_owed" }); // the line is told once
     const told = (await lines(a.user.id)).filter((l) => l.text.startsWith("Hold lift waiting:") && l.text.includes("More than 3 holds") && l.text.includes(fourth.user.name));
     expect(told.length).toBeGreaterThanOrEqual(1);
-    expect(told[0]).toMatchObject({ groupKey: "disputes", own: false, link: `/admin#lift-${fourth.user.id}` });
+    expect(told[0]).toMatchObject({ groupKey: "adminlifts", own: false, link: `/admin#lift-${fourth.user.id}` });
     // The Lifts box (newest first), with the hold number. (Rows left in the test schema by earlier runs, some dated ahead by outage tests, are approved first so the
     // first page holds this one.)
     await db.user.updateMany({ where: { id: { not: fourth.user.id }, holdStartedAt: { not: null }, holdCount: { gt: 3 }, holdApprovedAt: null }, data: { holdApprovedAt: new Date() } });
@@ -353,7 +353,7 @@ describe("T) extra pay beside each sent part, capped per piece (batch 29 §38: t
     const p = await db.payment.findFirstOrThrow({ where: { contractId: sessionId, kind: "extra" } });
     expect(p).toMatchObject({ amountCents: 15_000, feeCents: 3000, testerCents: 12_000, submissionId: sub.id });
     const bell = (await lines(tester.user.id)).find((l) => /paid you \$150\.00 more for your written answers on “Harbor Run”$/.test(l.text))!;
-    expect(bell).toMatchObject({ own: false, groupKey: "textra", payment: true }); // (Owner, Oct 27) "<dev> paid you $X extra" lines stack across tests, one entry a day
+    expect(bell).toMatchObject({ own: false, groupKey: "tpaid", payment: true }); // (Owner, Oct 27) "<dev> paid you $X extra" lines stack across tests, one entry a day
     expect((await roomOf(sub.id)).aboveBaseCents).toBe(65_000);
     const over = await extra(dev.cookie, testId, { contractId: sessionId, submissionId: sub.id, amount: "650.01", over200: true });
     expect(over.status).toBe(400);
@@ -491,6 +491,8 @@ describe("the final list of emails that ignore Off, and each notification emaile
     // (Batch 11) confirm.ts: "Your bank wants you to confirm a $X payment. Confirm it in Payments by <date>." (sent even with email Off).
     // (Batch 17 §19) holds.ts also: the reminders 3 days and 1 day before close-out, to the tester ("Charge or let go of your work on …") and the developer ("Pay …'s work on …").
     // (Batch 24) chargeback.ts: the team's Approve that lifts a chargeback hold sends the developer's one "running again" notice itself.
-    expect(names).toEqual(["chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
+    // (Batch 29 §22, §27, §31, §34) holds.ts: the tester's 3-day / 1-day close-out lines are gone; added: the developer's closing-soon line, the developer's daily
+    // "Pay now", the tester's daily "Charge or let go" and the tester's deadline reminders.
+    expect(names).toEqual(["chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
   });
 });

@@ -20,12 +20,12 @@ export async function reportPerson(me: { id: string }, body: Record<string, unkn
   if (note.length < REPORT_NOTE_MIN) throw new HttpError(400, "bad_note", "Say what happened (the team reads it).");
   const r = await db.report.create({ data: { reporterId: me.id, reportedId: otherId, note } }).catch(() => null);
   if (!r) throw new HttpError(409, "already", `You already reported ${displayName(other)}.`);
-  // The admins are told (stacked one a day with the dispute / lift line); the reported person is NOT told.
+  // The admins are told (batch 29 §29: their own daily entry, "Reports · 2 new"; each line opens its row, marked); the reported person is NOT told.
   const flagged = await reportedOver3([me.id, otherId]);
   const meRow = await db.user.findUniqueOrThrow({ where: { id: me.id } });
   for (const a of await adminUsers()) {
     const line = `New report: ${labelled(displayName(meRow), flagged.has(me.id))} reported ${labelled(displayName(other), flagged.has(otherId))}`;
-    await notify(a.email, line, [line], "/admin#reports", { group: "disputes" }); // follows the admin's own email setting, like a normal notification
+    await notify(a.email, line, [line], `/admin#report-${r.id}`, { group: "adminreports" }); // follows the admin's own email setting, like a normal notification
   }
   return { reported: true, at: r.createdAt.toISOString() };
 }

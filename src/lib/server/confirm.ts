@@ -1,10 +1,10 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTimeIn, money } from "@/lib/format";
-import { CONFIRM_DAYS, PRESS_ACTION_MS, bankAnchor, bankConfirmLine, bankConfirmTestLine, bankHref, bankWaitingLine, BANK_NOT_CONFIRMED } from "@/lib/rules";
+import { CONFIRM_DAYS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED } from "@/lib/rules";
 import { bankTopLead, confirmByText, pieceWords, shortDay, type BankTopRow } from "@/lib/bankTop";
 import { HttpError } from "./http";
 import { payPressOf, seenOf } from "./live";
-import { notify } from "./notify";
+import { notify, renderFor } from "./notify";
 import { bankReturnUrl, checkUrlOf, fakeConfirm, fakeOn, getStripe, stripeOn, type NeedsAction } from "./stripe";
 
 // (Owner, Oct 29, batch 11) "Your bank wants to confirm this payment": Stripe's requires_action is NOT a decline.
@@ -48,13 +48,28 @@ export async function awayAction(paymentId: string, r: NeedsAction & { feeCents?
     where: { id: paymentId },
     data: { ...(keepStatus ? {} : { status: "needs_confirmation" }), actionPi: r.stripePaymentIntentId, actionBy: by, stripePaymentIntentId: r.stripePaymentIntentId, ...(r.feeCents != null ? { feeCents: r.feeCents, testerCents: r.testerCents, transferStatus: r.transferStatus } : {}) },
   });
-  const dev = await db.user.findUniqueOrThrow({ where: { id: p.developerId } });
-  // (Batch 17 §11) On a test: "Confirm this payment by <date>.", linking straight to its button on the test page.
-  const home = await bankHome(p);
-  const line = home ? bankConfirmTestLine(p.amountCents, by) : bankConfirmLine(p.amountCents, by);
-  // (Batch 25 section 3) A renewal's line opens its own row on Payments (marked), like the dashboard's link.
-  await notify(dev.email, line, [line], home ?? `/app/payments#${bankAnchor(p.id)}`, { always: true, payment: true, group: "payhold" });
+  await tellBankWaiting(p.developerId);
   return p;
+}
+
+/**
+ * (Owner, Oct 29, batch 29 §32; replaces the per-charge line) ONE bell line covering every charge waiting for the bank, across tests and renewals, opening the dashboard's
+ * "Your bank wants you to confirm" box. A new waiting charge on a later day sends it again with the new totals; on the same day the day's line is updated in place (at most
+ * one a day). Still in "Payments and holds", and emailed whatever the setting (the end-of-day email takes the line as it stands then).
+ */
+export async function tellBankWaiting(devId: string, now = new Date()) {
+  const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
+  const waiting = await waitingConfirmation(devId, undefined, now);
+  if (!waiting.length) return;
+  const titles = new Map((await db.contract.findMany({ where: { id: { in: waiting.map((w) => w.contractId).filter((x): x is string => !!x) } }, select: { id: true, title: true } })).map((c) => [c.id, c.title]));
+  const line = bankWaitingAllLine(waiting.map((w) => ({ cents: w.amountCents, title: w.contractId ? titles.get(w.contractId) ?? null : null, by: w.actionBy! })));
+  const key = `bankwait:${now.toISOString().slice(0, 10)}`;
+  const today = await db.notification.findFirst({ where: { userId: devId, reminderKey: key }, select: { id: true, summarizedAt: true } });
+  if (today && !today.summarizedAt) {
+    await db.notification.update({ where: { id: today.id }, data: { text: await renderFor(devId, line), readAt: null, createdAt: now } });
+    return;
+  }
+  await notify(dev.email, line, [line + "."], BANK_TO_CONFIRM_HREF, { always: true, payment: true, group: "payhold", reminder: key });
 }
 
 /** (Batch 25 section 1) The developer's saved time zone, for the times these lists show them. */

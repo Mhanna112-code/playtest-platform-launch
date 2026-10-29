@@ -111,13 +111,13 @@ describe("batch 25 section 2: a retried chargeback reads the same on the dashboa
 });
 
 describe("batch 25 section 3: the renewal's bell line opens its own row", () => {
-  it("links to #bank-<id> on Payments (marked), not the whole list", async () => {
+  it("(batch 29 §32) the bell line opens the dashboard's box; the box's row links to #bank-<id> on Payments (marked)", async () => {
     const x = await withWork();
     const sub = await db.payment.create({ data: { kind: "subscription", developerId: x.dev.user.id, testerId: x.dev.user.id, amountCents: 700, feeCents: 700, testerCents: 0, status: "needs_confirmation" } });
     await awayAction(sub.id, { status: "requires_action", stripePaymentIntentId: "pi_" + randomUUID(), clientSecret: "" });
-    const n = await db.notification.findFirstOrThrow({ where: { userId: x.dev.user.id, text: { startsWith: "Your bank wants you to confirm a $7.00 payment. Confirm it in Payments by " } } });
-    expect(n.link).toBe(`/app/payments#bank-${sub.id}`);
-    expect((await bankToConfirm(x.dev.user.id)).find((r) => r.id === sub.id)!.href).toBe(n.link);
+    const n = await db.notification.findFirstOrThrow({ where: { userId: x.dev.user.id, text: { startsWith: "Your bank wants you to confirm a $7.00 payment by " } } });
+    expect(n.link).toBe("/app#bank-to-confirm");
+    expect((await bankToConfirm(x.dev.user.id)).find((r) => r.id === sub.id)!.href).toBe(`/app/payments#bank-${sub.id}`);
   });
 });
 

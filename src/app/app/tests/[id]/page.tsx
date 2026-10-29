@@ -1,4 +1,5 @@
 import { hasPerks } from "@/lib/server/subscription";
+import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, pronouns } from "@/lib/format";
@@ -65,7 +66,7 @@ import { itemsOf, prevSetsOf } from "@/lib/answerSets";
 import { qStored } from "@/lib/questions";
 import { pendingForDeveloper } from "@/lib/server/excerpts";
 import { ExcerptQuestion } from "@/components/ExcerptList"; // (batch 16 section 37) the question above each excerpt request
-import { ExcerptDecision, ExcerptRemove } from "@/components/Excerpts";
+import { ExcerptDecision } from "@/components/Excerpts";
 
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
@@ -247,7 +248,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     ...c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), what: x.kind === "written" ? "their written answers" : "their recording", reason: x.dispute!.reason })),
     ...c.calls.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), what: `the call on ${fmtDateTime(x.startsAt)}`, reason: x.dispute!.reason })),
   ]);
-  // (Owner, Oct 29, batch 13) Excerpt requests waiting for Allow or Deny (hidden while the test has an NDA), and excerpts shown from this test (Take down in the row).
+  // (Owner, Oct 29, batch 13) Excerpt requests waiting for Allow or Deny (hidden while the test has an NDA), and excerpts shown from this test (shown in the row; batch 29 section 30: only the tester removes one).
   const excerptReqs = await pendingForDeveloper(u.id, t.id);
   const shownEx = await db.excerpt.findMany({ where: { testId: t.id, status: "shown" }, orderBy: { decidedAt: "desc" } });
   // (Batch 15 section 43) The developer's Contract changes: one entry per Save that changed the terms or the names, with who switched or kept.
@@ -299,7 +300,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             {bankRows.map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} seenAt={seenAt} />)}
           </section>
         )}
-        {/* (Batch 15 section 39) Excerpts go through anything: Allow / Deny (hidden while the test has an NDA, as always) and Take down. */}
+        {/* (Batch 15 section 39) Excerpts go through anything: Allow / Deny (hidden while the test has an NDA, as always). (Batch 29 section 30) No Take down: only the tester removes an excerpt. */}
         {(excerptReqs.length > 0 || shownEx.length > 0) && (
           <section className="card space-y-2" data-restricted-excerpts="">
             <h2 className="font-semibold text-white">Excerpts</h2>
@@ -315,7 +316,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             {shownEx.map((e) => (
               <div key={e.id} className="flex flex-wrap items-start gap-2 text-sm" data-shown-excerpt="">
                 <span className="min-w-0 flex-1"><span className="text-slate-400">On a tester&apos;s profile: </span><ClampText text={`“${e.text}”`} className="text-slate-200" /></span>
-                <ExcerptRemove excerptId={e.id} label="Take down" body="It leaves the tester's profile at once, and they're told." />
               </div>
             ))}
           </section>
@@ -608,11 +608,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 )}
                 {/* (Batch 13 section 8) Earlier SENT sets this tester replaced after switching to changed questions. */}
                 <PrevSetFolds developer sets={prevSetsOf(c.submissions.find((s) => s.kind === "written")?.prevSets)} />
-                {/* (Batch 13) Excerpts shown from this test: the developer can take one down at any time. */}
+                {/* (Batch 13) Excerpts shown from this test. (Batch 29 section 30) Only the tester removes one (Remove on their profile): no Take down here. */}
                 {shownEx.filter((e) => e.contractId === c.id).map((e) => (
                   <div key={e.id} className="flex flex-wrap items-start gap-2 text-sm" data-shown-excerpt="">
                     <span className="min-w-0 flex-1"><span className="text-slate-400">On {name}&apos;s profile{t.ndaText ? " (hidden while this test has an NDA)" : ""}: </span><ClampText text={`“${e.text}”`} className="text-slate-200" /></span>
-                    {!restricted && <ExcerptRemove excerptId={e.id} label="Take down" body={`It leaves ${name}'s profile at once, and ${name} is told.`} />}
                   </div>
                 ))}
                 {/* (Batch 11, DEFAULT) A tester who deleted their account with no payout account: their unreviewed work left Needs you. */}
@@ -637,6 +636,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {(u.holdStartedAt || (owedList.length > 0 && !u.devSuspendedAt)) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} chargeback={!!cbSteps} verifyFirst={!!cbSteps && !cbSteps.cardVerified} reservedCents={cbSteps?.reservedCents ?? 0} reserveExpired={cbSteps?.expired ?? false} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />}
       {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date(), "developer")}</p>}
       <DevCallPanel
+        leadMinutes={CALL_MIN_AHEAD_MINUTES}
         testId={t.id}
         seenAt={seenAt}
         canRequest={t.status !== "stopped" && t.status !== "draft" && !u.holdStartedAt && !restricted}

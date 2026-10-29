@@ -588,9 +588,9 @@ describe("batch 20 section 12: a Pay more stops presses once", () => {
       const r = await act(w.testId, action, w.dev.cookie, { ...body, seenAt: loaded, loadedAt: loaded, tab: "B" });
       expect(texts(r), action).toContain(line);
     }
-    // The developer's live box lists it (in the other tab), and Rate's stop list counts it.
-    expect(src("lib/server/ratings.ts")).toContain('if (devId) for (const o of await ownChanges(devId, testId, since, tabOf(body))) if (o.about?.a === "pay-more" && o.about.k.includes(`c:${contractId}`))');
-    expect(src("lib/server/live.ts")).toContain("export const LIVE_OWN_ACTS = [...PAY_ACTS, ...CALL_CHANGE_ACTS, ...INVITE_ACTS] as const;");
+    // The developer's live box lists it (in the other tab). (Batch 29 section 12) Rate is never stopped by your own changes in another tab.
+    expect(src("lib/server/ratings.ts")).not.toContain('o.about?.a === "pay-more"');
+    expect(src("lib/server/live.ts")).toContain("export const LIVE_OWN_ACTS = BIG_OWN_ACTS;");
   });
 });
 

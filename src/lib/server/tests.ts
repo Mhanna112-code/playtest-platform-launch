@@ -1,6 +1,6 @@
-import { devStopSince, loadedOf } from "./stopMoment";
+import { devPauseSince, devStopSince, loadedOf } from "./stopMoment";
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
-import { CALL_ACTS, PAY_ACTS, bigOwnLines, devChanges, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
+import { CALL_ACTS, PAY_ACTS, devChanges, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { NOT_REQUIRED, answersMissing } from "@/lib/questions";
 import { itemsFor, itemsOf, prevSetsOf, pushPrev, sameQuestions } from "@/lib/answerSets";
 import { overLimitText } from "@/lib/capacity";
@@ -22,9 +22,8 @@ import { gapsOf, gapsUnseen, missingNeedText, noGaps, readGaps } from "@/lib/gap
 import { HttpError, readText } from "./http";
 import { notify } from "./notify";
 import { answerTermsFirst, offerNewTerms, testerSendGate } from "./terms";
-import { testerGate } from "./testerGate";
 import { blockPartners } from "./blocks";
-import { callCancelledLine, rateStops, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, NOTHING_CHANGED_LINE, WHY_MIN_CHARS, WHY_TOO_SHORT } from "@/lib/rules";
+import { callCancelledLine, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, NOTHING_CHANGED_LINE, WHY_MIN_CHARS, WHY_TOO_SHORT } from "@/lib/rules";
 
 type Tx = Prisma.TransactionClient;
 type U = { id: string; email: string; name: string; pronoun: string; isDeveloper: boolean; isTester: boolean; timeZone?: string | null };
@@ -171,9 +170,12 @@ export async function closeOnFull(tx: Tx, testId: string, exceptTesterId: string
 export const fullInviteLine = (title: string) => `${title} is full right now. Your invite stays open; we'll tell you when a spot opens.`;
 export const spotOpenLine = (title: string, dev: string) => `A spot opened on ${title}: you can accept ${dev}'s invite now.`;
 
+/** (Owner, Oct 29, batch 29 §23) The tester's lines about their applications and invites stack into ONE entry per day across tests: "Applications and invites". */
+export const APPS_GROUP = { group: "apps" } as const;
+
 export async function tellFull(f: { title: string; testId: string; dev: string; apps: string[]; invites: string[] }) {
-  for (const e of f.apps) if (e) await notify(e, `${f.title} is full, so your application was closed.`, [`${f.title} is full, so your application was closed.`], `/app/find/${f.testId}`);
-  for (const e of f.invites) if (e) await notify(e, fullInviteLine(f.title), [fullInviteLine(f.title)], `/app/find/${f.testId}`);
+  for (const e of f.apps) if (e) await notify(e, `${f.title} is full, so your application was closed.`, [`${f.title} is full, so your application was closed.`], `/app/find/${f.testId}`, { ...APPS_GROUP, testId: f.testId });
+  for (const e of f.invites) if (e) await notify(e, fullInviteLine(f.title), [fullInviteLine(f.title)], `/app/find/${f.testId}`, { ...APPS_GROUP, testId: f.testId });
 }
 
 /**
@@ -190,7 +192,7 @@ export async function spotOpened(testId: string) {
   const invs = await db.invite.findMany({ where: { testId, status: "sent", openNotifiedAt: null } });
   await db.invite.updateMany({ where: { id: { in: invs.map((i) => i.id) } }, data: { openNotifiedAt: new Date() } });
   const people = await db.user.findMany({ where: { id: { in: invs.map((i) => i.testerId) } } });
-  for (const p of people) await notify(p.email, spotOpenLine(t.title, displayName(t.developer)), [spotOpenLine(t.title, displayName(t.developer))], `/app/find/${testId}`);
+  for (const p of people) await notify(p.email, spotOpenLine(t.title, displayName(t.developer)), [spotOpenLine(t.title, displayName(t.developer))], `/app/find/${testId}`, { ...APPS_GROUP, testId });
 }
 
 /** (NEWEST+4) Rejoining keeps exactly the time they had left when they left (hours count; if it had passed, it stays passed). */
@@ -321,8 +323,9 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // (NEWEST+3) Save follows the same rule as the test page's buttons: every developer reason since Edit opened
     // (testers' actions, and anything saved or done in another tab), then any other change to the listing's version.
     const seen = boxAt ?? (confirmed ? null : seenOf(body.seenAt));
-    // (Batch 16 section 21) Of the developer's own actions elsewhere, only another tab's Save is about this press (the rest are never a reason).
-    const dc = seen ? withRenamed(await devChanges(dev.id, testId, seen, tabOf(body), tx, { press: { acts: ["edit"], keys: ["*"], big: false } }), body) : [];
+    // (Owner, Oct 29, batch 29 section 12) The developer's own changes in another tab stop Save once like every test-page press (a Pay, a call change, Next round,
+    // an invite…); another tab's Save becomes the per-field lines below.
+    const dc = seen ? withRenamed(await devChanges(dev.id, testId, seen, tabOf(body), tx, { press: { acts: ["edit"], keys: ["*"] } }), body) : [];
     // The "fields you didn't touch keep the newer values" tail only when the listing itself was saved elsewhere.
     const listingEdited = events.some((e) => e.kind === "edited" || e.kind === "edited_spots");
     const current = asListing(t);
@@ -501,8 +504,8 @@ function testerDaysFor(openUntil: Date | string | null, dev: { timeZone?: string
  * (seenAt) any tester joined, left or sent work, a call was booked/confirmed/cancelled, times were offered/removed, or a
  * payment/rejection was made, the first press stops and returns the list; the second press (confirmed) goes ahead.
  */
-/** The developer's own listing save in another tab, as the action log says it ("You changed the description and access keys in another tab"). */
-const OTHER_TAB_EDIT = /^You changed the (?!listing in another tab:).+ in another tab$/;
+/** The developer's own listing save in another tab, as the action log says it ("You saved the listing in another tab: description, access keys"). */
+const OTHER_TAB_EDIT = /^You saved the listing in another tab: /;
 /** Fields the form never sends as typed (kept from an older page, or set by the server). */
 const NOT_COMPARED = new Set<keyof Listing>(["deadlineDays", "liveMinutes"]);
 /** Two values of one field are the same (Open until by its day: a pause shift moves it by the minute). */
@@ -554,7 +557,7 @@ export const devLine = (c: TestEventLike & { contractId?: string | null }, withA
 
 /**
  * (Batch 16 section 21) `press`: what this press is and touches. What the developer did in another tab stops it once only when that action touches it (the same
- * press, or one on the same thing: "You also did this in another tab: …"); every other action of theirs elsewhere is never a reason.
+ * press, or one on the same thing); (batch 29 section 12) the changes in BIG_OWN_ACTS stop every press once ("You paid Ana Silva $10.00 … in another tab").
  */
 export async function devGate(tx: Tx, testId: string, body: Record<string, unknown>, extra: Record<string, unknown> = {}, extraChanges: TestEventLike[] = [], keep?: (e: TestEventLike) => boolean, press: Press = { acts: [], keys: [] }) {
   // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt).
@@ -564,57 +567,33 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
   // (Owner, Oct 28, batch 17 section 12) Pay / Pay more on a page opened BEFORE the test stopped, closed or this tester's work ended early: it stops once with the stop as the
   // one change; the second press (its box shown after the stop) goes ahead, as on a page opened after it.
   if (press.stopCheck !== undefined) {
-    const stop = await devStopSince(testId, press.stopCheck || null, loadedOf(body));
+    const stop = (await devStopSince(testId, press.stopCheck || null, loadedOf(body))) ?? (await devPauseSince(testId, loadedOf(body)));
     if (stop) throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [devLine(stop)], ...extra });
   }
-  // (Owner, Oct 28, batch 16 section 25) The test stopped or closed, paused (any cause), or the developer held or suspended, as the page showed it: every press still
-  // allowed goes through on the FIRST press (no stop-once, no other-tab stops; repeats are plain refusals). The one exception: Rate on a stopped test stops once
-  // for a payment, Charge, Let it go or dispute decision about that person since the page loaded.
-  const quiet = await quietState(tx, testId, body);
-  if (quiet && !press.inState) {
-    if (!(quiet === "stopped" && press.rate)) return;
-    const about = (await devChanges((await tx.test.findUniqueOrThrow({ where: { id: testId }, select: { developerId: true } })).developerId, testId, seenAt, tabOf(body), tx, { press: { acts: [], keys: [], big: false } }))
-      .filter((e) => e.kind !== "own" && rateStops(e, true) && (e as { contractId?: string | null }).contractId === press.rate);
-    if (about.length) throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: about.map((c) => devLine(c)), ...extra });
-    return;
+  // (Owner, Oct 29, batch 29 section 11; replaces batch 16 section 25's "goes through on the first press") On a stopped, closed or paused test (any cause), and while the
+  // developer is held or suspended, every press still allowed follows the SAME stop-once rules as on a running test. The stop, close or pause itself is a change like any
+  // other: a page opened before it stops once naming it ("You stopped this test at 3:10 PM.", "The team paused this test at 3:10 PM.").
+  const moments: TestEventLike[] = [];
+  if (press.stopCheck === undefined && !press.inState) {
+    const stop = await devStopSince(testId, null, loadedOf(body));
+    if (stop) moments.push(stop);
+    const pause = await devPauseSince(testId, loadedOf(body));
+    if (pause) moments.push(pause);
   }
   if (body.confirmed === true) extraChanges = extraChanges.filter((c) => c.createdAt > seenAt);
   const t = await tx.test.findUniqueOrThrow({ where: { id: testId }, select: { developerId: true } });
-  const raw = [...(await devChanges(t.developerId, testId, seenAt, tabOf(body), tx, { press })), ...extraChanges].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const found = await devChanges(t.developerId, testId, seenAt, tabOf(body), tx, { press });
+  // The developer's own Stop in another tab already reads "You stopped the test in another tab": the stop moment isn't said twice.
+  const own = found.some((e) => e.kind === "own" && e.text === OWN_STOP_LINE);
+  const raw = [...found, ...extraChanges, ...moments.filter((m) => !(own && m.text.startsWith("You stopped this test")))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Owner, Oct 28) `keep`: a button that stops for only some kinds (Rate after the test closed).
-  const changes = withRenamed(keep ? raw.filter((e) => e.kind === "renamed" || keep(e)) : raw, body);
+  const changes = withRenamed(keep ? raw.filter((e) => e.kind === "renamed" || e.kind === "stop" || keep(e)) : raw, body);
   if (changes.length) {
     throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: changes.map((c) => devLine(c)), ...extra });
   }
 }
-
-/**
- * (Batch 16 section 25) The state the page showed when it loaded: "stopped" (stopped or closed), "paused" (the team's pause, or the developer held or suspended),
- * or null. A state that began after the page loaded doesn't count (the press then stops once for it as usual).
- */
-export async function quietState(tx: Tx | typeof db, testId: string, body: Record<string, unknown>): Promise<"stopped" | "paused" | null> {
-  const page = seenOf(body.pageSeenAt) ?? seenOf(body.seenAt);
-  // (Batch 17 section 12) A second press whose stop box was shown after the state began counts as a page opened in that state.
-  const box = body.confirmed === true ? seenOf(body.boxAt) : null;
-  const loaded = page && box && box > page ? box : page ?? box;
-  if (!loaded) return null;
-  const t = await tx.test.findUnique({ where: { id: testId }, select: { status: true, stoppedAt: true, adminPausedAt: true, developer: { select: { holdStartedAt: true, devSuspendedAt: true } } } });
-  if (!t) return null;
-  if (t.status === "stopped" && (!t.stoppedAt || t.stoppedAt <= loaded)) return "stopped";
-  const pausedAt = [t.adminPausedAt, t.developer.holdStartedAt, t.developer.devSuspendedAt].filter((d): d is Date => !!d).sort((a, b) => a.getTime() - b.getTime())[0];
-  return pausedAt && pausedAt <= loaded ? "paused" : null;
-}
-
-/** (Batch 16 section 21) For presses that never stop for anything else (excerpt Allow / Deny): only the big changes made in another tab stop them once. */
-export async function bigOwnGate(devId: string, testId: string, body: Record<string, unknown>) {
-  const boxAt = seenOf(body.boxAt);
-  if (body.confirmed === true && !boxAt) return;
-  if (await quietState(db, testId, body)) return; // (batch 16 section 25) stopped, closed, paused, held or suspended: the first press goes through
-  const since = body.confirmed === true && boxAt ? boxAt : seenOf(body.seenAt);
-  if (!since) return;
-  const lines = await bigOwnLines(devId, testId, since, tabOf(body));
-  if (lines.length) throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: lines.map((c) => devLine(c)) });
-}
+/** The developer's own Stop made in another tab, as its line reads. */
+const OWN_STOP_LINE = "You stopped the test in another tab";
 
 /** Is this developer on a payment hold? (All their tests are paused.) */
 export async function devOnHold(devId: string) {
@@ -647,13 +626,6 @@ export async function tellCancelled(list: { email: string; startsAt: Date; contr
   for (const c of list) await notify(c.email, callCancelledLine(c.startsAt, why), [callCancelledLine(c.startsAt, why)], `/app/sessions/${c.contractId}${c.callId ? `#call-${c.callId}` : ""}`);
 }
 
-/** (Batch 15 section 37) Is this test paused for its developer right now (the team's pause, a payment or chargeback hold, a developer-side suspension)? */
-async function pausedForDeveloper(tx: Tx, t: { adminPausedAt: Date | null }, devId: string) {
-  if (t.adminPausedAt) return true;
-  const d = await tx.user.findUnique({ where: { id: devId }, select: { holdStartedAt: true, devSuspendedAt: true } });
-  return !!(d?.holdStartedAt || d?.devSuspendedAt);
-}
-
 export async function stopTest(dev: U, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
   // (Batch 17 §15) A required "Why?" like End early's: at least one character, at most 10,000, refused beyond (never cut). Testers read it (also when paused or restricted).
@@ -663,13 +635,13 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
   let cancelled: Awaited<ReturnType<typeof cancelCallsAhead>> = [];
   const contracts = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
-    // (Batch 16 section 21) Stopped in another tab: this Stop stops once naming it ("You also did this in another tab: stopped the test"), then it's already done.
+    // (Batch 16 section 21) Stopped in another tab: this Stop stops once naming it ("You stopped the test in another tab"), then it's already done.
     if (t.status === "stopped") {
       await topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["stop"], keys: ["test"], inState: true });
       throw new HttpError(409, "stopped", "This test was stopped." + (await staleNote(testId, body.seenAt)));
     }
-    // (Owner, Oct 30, batch 15 sections 23, 29 and 37) While the test is paused (any cause) Stop goes through silently: no stop-once.
-    if (!(await pausedForDeveloper(tx, t, dev.id))) await topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["stop"], keys: ["test"] });
+    // (Owner, Oct 29, batch 29 section 11; replaces batch 15 sections 23, 29 and 37) While the test is paused (any cause) Stop follows the same stop-once rules.
+    await topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["stop"], keys: ["test"] });
     const cs = await tx.contract.findMany({ where: working(testId), include: { tester: true } });
     // (Batch 17 §15) The reason is each ended contract's endReason, and an entry in each tester's contract changes (the marker that it's the developer's own reason).
     await tx.contract.updateMany({ where: working(testId), data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: reason } });
@@ -707,8 +679,8 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
     // (Owner) After a stop, a stale press fails and names the stop.
     if (lockedTest.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped." + (await staleNote(testId, body.seenAt)));
     const list = [];
-    // (Owner, Oct 28, batch 16 section 21) Testers this developer already ended early in another tab: this press stops once ("You also did this in another
-    // tab: ended Ana Silva's work early"); on the second press they're dropped and the rest go through.
+    // (Owner, Oct 28, batch 16 section 21) Testers this developer already ended early in another tab: this press stops once ("You ended Ana Silva's work early
+    // in another tab"); on the second press they're dropped and the rest go through.
     const endedElsewhere: { id: string; name: string }[] = [];
     for (const id of ids) {
       const c = await tx.contract.findUnique({ where: { id }, include: { tester: true } });
@@ -719,9 +691,9 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
       if (c.status !== "working") throw new HttpError(409, "gone", `${name}'s work already ended.` + (await staleNote(testId, body.seenAt)));
       list.push(c);
     }
-    // (Batch 15 sections 23, 29 and 37) While paused (any cause) End early goes through silently too. (Batch 16 section 21) It stops once for what another tab did
-    // to the ticked testers: ended them early, paid their work, or requested, booked or cancelled a call with them (the pop-up's summary for them changed).
-    if (!(await pausedForDeveloper(tx, lockedTest, dev.id))) await topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["end-early", ...PAY_ACTS, ...CALL_ACTS], keys: ids.map((id) => `c:${id}`) });
+    // (Batch 29 sections 11-12) Paused or not, it stops once for what changed since the page loaded, the developer's own changes in another tab included (batch 16
+    // section 21: ended the ticked testers early, paid their work, or requested, booked or cancelled a call with them; batch 29: any of BIG_OWN_ACTS).
+    await topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["end-early", ...PAY_ACTS, ...CALL_ACTS], keys: ids.map((id) => `c:${id}`) });
     if (!list.length && endedElsewhere.length) throw new HttpError(409, "gone", `${andList(endedElsewhere.map((x) => x.name))}'s work already ended.`);
     for (const c of list) {
       await tx.contract.update({ where: { id: c.id }, data: { status: "ended", endKind: "early", endedAt: new Date(), endReason: reason } });
@@ -752,7 +724,7 @@ export async function nextRound(dev: U, testId: string, body: Record<string, unk
       const boxAt = seenOf(body.boxAt);
       const since = body.confirmed === true && boxAt ? boxAt : seenOf(body.seenAt);
       const made = since ? (await ownChanges(dev.id, testId, since, tabOf(body), tx)).filter((o) => o.about?.a === "next-round") : [];
-      if (made.length && !(body.confirmed === true && !boxAt) && !(await quietState(tx, testId, body))) {
+      if (made.length && !(body.confirmed === true && !boxAt)) {
         const m = made[made.length - 1];
         throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text: m.live ?? m.text, at: m.createdAt, link: `/app/tests/new?draft=${existing.id}` }] });
       }
@@ -776,8 +748,8 @@ export async function nextRound(dev: U, testId: string, body: Record<string, unk
 
 /**
  * (Owner, Oct 29, batch 27 section 2) "Go to the next round" (the test already has its next-round draft) is a press, not a plain link: it runs the developer's stop-once
- * gate first, with the same changes and Alerts types as Next round (a tester sent or updated work, left, a call change, a paymentâ€¦): the first press stops once in
- * the box under the button, the second opens the draft. On a stopped, closed or paused test (as the page showed it) it opens at once, like the other presses there.
+ * gate first, with the same changes and Alerts types as Next round (a tester sent or updated work, left, a call change, a payment…): the first press stops once in
+ * the box under the button, the second opens the draft. (Batch 29 section 11) On a stopped, closed or paused test it follows the same stop-once rules.
  */
 export async function goNextRound(dev: U, testId: string, body: Record<string, unknown>) {
   const t = await ownTest(dev.id, testId);
@@ -1016,7 +988,7 @@ export async function closeJoiningAfterOpenUntil(now = new Date()) {
     await db.invite.updateMany({ where: { id: { in: invs.map((i) => i.id) } }, data: { status: "cancelled" } });
     const people = await db.user.findMany({ where: { id: { in: [...apps.map((a) => a.testerId), ...invs.map((i) => i.testerId)] } }, select: { id: true, email: true } });
     const line = closedToNewLine(t.openUntil!, (d) => T(d, "date"));
-    for (const p of people) await notify(p.email, line, [line], `/app/find/${t.id}`);
+    for (const p of people) await notify(p.email, line, [line], `/app/find/${t.id}`, { ...APPS_GROUP, testId: t.id });
     n += apps.length + invs.length;
   }
   return n;
