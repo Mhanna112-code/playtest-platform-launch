@@ -147,6 +147,7 @@ describe("batch 7 item 4: stop-once on every press still allowed", () => {
     await settle();
     await db.testEvent.create({ data: { testId, kind: "left", text: "Ben Carter left the test" } });
     stops(await act(testId, "cancel-call", dev.cookie, { callId: call.id, seenAt: loaded }), "cancel call");
+    await settle(); // (the database clock can run a few ms ahead of this process: the box's time is after the news)
     expect((await act(testId, "cancel-call", dev.cookie, { callId: call.id, seenAt: loaded, confirmed: true, boxAt: seen() })).status).toBe(200);
     expect(src("app/app/CallsBox.tsx")).toContain("<ChangesBox changes={changes} error={error} />");
   });

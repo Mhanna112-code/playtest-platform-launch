@@ -162,6 +162,8 @@ describe("a paused or restricted developer's Stop needs it too (section 15)", ()
       await bookCall(testId, dev.cookie, a.sessionId, a.tester.cookie, 72);
       if (cause === "team-paused") expect((await aact((await admin()).cookie, "pause-test", { id: testId, note: "Checking" })).status).toBe(200);
       else await db.user.update({ where: { id: dev.user.id }, data: cause === "hold" ? { holdStartedAt: new Date(), holdReason: "failed" } : { devSuspendedAt: new Date() } });
+      // (Batch 29 §11: a paused page's presses stop once for news too) The database clock can run a few ms ahead of this process: let the setup's events settle first.
+      await new Promise((r) => setTimeout(r, 40));
       const loaded = seen();
       const none = await act(testId, "stop", dev.cookie, { seenAt: loaded });
       expect(none.body.error).toMatchObject({ code: "bad_reason", message: "Say why you're stopping the test (testers read it)." });
