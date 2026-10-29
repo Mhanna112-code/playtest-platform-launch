@@ -80,6 +80,15 @@ Today nothing says it; the Pay more box just disappears at the cap, and the test
 - The tester's Dispute line stays: "Already paid the most a dispute could award, so there's nothing to dispute." (a dispute can only raise the pay up to the listing, minus what's already paid for that part).
 - Tests: both lines at and below the cap; after Pay more closed.
 
+## 15. A dispute can award up to the piece's cap, not just the listing (owner, Oct 29)
+Today a team decision can raise a listed piece's pay only up to the listing (minus what was paid for that part on other pieces), so a recording listed at $10 and paid $20 can't be disputed. The owner: a tester and developer may have agreed more in chat. New rule:
+- **The decision range runs up to the piece's own cap** (the same cap Pay + Pay more have: for a listed part the listing plus its extra-pay room; for an unlisted part its cap; for a call, also within what's left of the $1,000 for that tester's calls), minus what that piece was already paid. A decision still only raises pay.
+- **Dispute is open while the piece is below its cap.** At the cap: "Already paid the most this piece can be paid, so there's nothing to dispute." (replaces the old line).
+- The admin form shows the new range ("$20.00 paid · can raise up to $20.00 more"); the server refuses outside it.
+- **The team can read the chat for a dispute (DEFAULT):** the admin's dispute view gets a read-only "Their chat on this test" fold (both people's messages, newest last, scroll box), so an agreement made in chat can be checked. The Terms' dispute paragraph says so: "To decide a dispute, our team can read the chat between the tester and the developer." (If the Terms text changes, follow how earlier Terms changes were versioned; nothing has launched.)
+- Update every place that says "up to the listing" for disputes (design doc via the doc agent; the Terms; the landing page's "a decision can only raise the pay" stays true).
+- Tests: a listed part paid above the listing but below its cap can be disputed and raised to the cap; at the cap it's disabled with the new line; the admin sees the chat fold; the server refuses above the cap.
+
 ## Check and report
 - Run `NEXT_DIST_DIR=.next-build npm run check`; it must be green. Migration only if needed (hand-written, checked with `prisma migrate diff` against playtest_lite_shadow with --exit-code, applied only to the local playtest_lite DB; say the 3400 server needs a restart).
 - Don't touch port 3400 (the owner uses it: write each file in one go). Don't edit docs/DESIGN-DOC.md. Never print secrets from .env.
