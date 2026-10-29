@@ -72,6 +72,14 @@ Today a tester's own press in another tab stops only the SAME press ("You also d
 - Live: these lines show in the top box and raise the pill. §11 (stopped / closed / paused keep stop-once) applies.
 - Tests: Send in tab A stops Charge in tab B once; a call request in A stops Dispute in B once; Apply in A stops Join on B's join page once; Rate in A refuses Rate in B plainly.
 
+## 14. Say when a piece can't be paid more (owner, Oct 29; DEFAULT wording)
+Today nothing says it; the Pay more box just disappears at the cap, and the tester can keep sending updates that can't be paid more.
+- **Developer, on the piece:** once the cap is reached, where Pay more was: "Paid the most this piece can be paid ($20.00)." (grey).
+- **Tester, on a paid part, above Send my updated answers / recording:** while Pay more is still possible: "<dev> has paid $10.00 for this. An update can be paid more, up to $20.00 in all."; once the cap is reached: "This part is already paid the most it can be ($20.00): an update can't be paid more." (grey, not a stop; Send still works, e.g. to fix something).
+- After Pay more closed (close-out): the tester's line says "Pay more closed on <date>: an update can't be paid more."
+- The tester's Dispute line stays: "Already paid the most a dispute could award, so there's nothing to dispute." (a dispute can only raise the pay up to the listing, minus what's already paid for that part).
+- Tests: both lines at and below the cap; after Pay more closed.
+
 ## Check and report
 - Run `NEXT_DIST_DIR=.next-build npm run check`; it must be green. Migration only if needed (hand-written, checked with `prisma migrate diff` against playtest_lite_shadow with --exit-code, applied only to the local playtest_lite DB; say the 3400 server needs a restart).
 - Don't touch port 3400 (the owner uses it: write each file in one go). Don't edit docs/DESIGN-DOC.md. Never print secrets from .env.
