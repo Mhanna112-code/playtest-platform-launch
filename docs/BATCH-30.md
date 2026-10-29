@@ -16,8 +16,17 @@ Today a paid part is locked ("Your written answers were already paid for, so the
 - Disputes: an update doesn't reopen a dispute; the existing rules apply to the piece's total.
 - Tests: update below the cap → Needs you row with Pay more; $0 closes it; at the cap → no Needs you row, the quiet line; Pay more closed → the row leaves.
 
+## 3. Late work: no Charge (owner, Oct 29)
+A listed part (written answers or a recording) sent after the tester's own deadline never opens Charge or Let it go: only the developer's own Pay settles it, like unlisted work.
+- **Developer:** the piece sits in Needs you with its Pay box (starting at the listing), labelled "Sent late (deadline was <date>)"; any amount, $0 included (below the listing still needs the reason the tester reads). Review reminders count down to its review date (7 days after sending) like other work, then stop; it isn't in the daily "Pay now" line (§31 of batch 29) since the tester can't charge. If still unpaid at the piece's closing date it closes "Closed on <date>: not paid." as other pieces do.
+- **Tester, before sending after their deadline:** a grey line above Send: "Your deadline passed on <date>. You can still send this: <dev> decides what to pay for late work, and you can't charge for it." After sending: "Sent late (deadline was <date>): <dev> decides what to pay. You can't charge for late work." Dispute still works on whatever is paid (once, up to the cap).
+- An update of a late piece stays late; an update sent before the deadline of a piece first sent on time stays on time.
+- Listed calls are unchanged (a call is booked by both sides; it's still charged automatically after 7 days).
+- Post's Charge tick, the Terms and the design doc: Charge applies to listed work sent by the tester's deadline (doc agent for the doc).
+- Tests: on-time listed work → Charge opens as today; late listed work → no Charge / Let it go anywhere (UI and server: "You can't charge for work sent after your deadline."), Pay works, closes unpaid at its closing date; the tester's lines before and after sending.
+
 ## Decided, no change (owner, Oct 29)
-- **Late sending stays.** A tester can still send after their own deadline ("Sent late (deadline was <date>)"), and a late listed piece's Charge opens at its review date (7 days after it was sent, since the deadline has passed). Don't close work at the deadline.
+- **Late sending stays** (a tester can still send after their own deadline, "Sent late (deadline was <date>)"); work isn't closed at the deadline. What changes for late work is §3.
 
 ## Check and report
 - Run `NEXT_DIST_DIR=.next-build npm run check`; it must be green. Migration only if needed (hand-written, checked with `prisma migrate diff` against playtest_lite_shadow with --exit-code, applied only to the local playtest_lite DB; say the 3400 server needs a restart).
