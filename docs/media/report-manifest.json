@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-29T17:36:19.489Z",
+  "generated": "2026-10-29T18:49:14.191Z",
   "sizes": {
     "desktop": "1280x900",
     "phone": "375x812"
@@ -6287,6 +6287,139 @@
           "explanation": "The admin's chargeback row for Jo: “card verified ✓, owed reserved ✗ ($25.00 owed, $0.00 reserved)” and “Reservation expired”.",
           "kind": "image",
           "desktop": "stripe-cb-expired-admin.png",
+          "phone": null
+        },
+        {
+          "title": "Stripe's card form under Verify a card",
+          "explanation": "Rae is on a chargeback hold (test card 0259's dispute) and presses Verify a card: Stripe's card form (the Payment Element, cards only) now appears inside the steps, with Verify this card under it.",
+          "kind": "image",
+          "desktop": "stripe-verify-form.png",
+          "phone": null
+        },
+        {
+          "title": "Before the fix: Link's Bank tab",
+          "explanation": "As batch 28 left it, Stripe's card form under Verify a card also showed Link's “Bank” tab (instant bank payments, “$5 back”). Picking Bank and pressing Verify this card without connecting a bank fails cleanly: “No account connected” in the form and under the button, and nothing is sent to Stripe. Connecting a bank goes on into Link's sign-up (terms to accept), which this run didn't do. Fixed since: the form is created with wallets link / Apple Pay / Google Pay “never”, so it shows Card only (see the card form above).",
+          "kind": "image",
+          "desktop": "stripe-verify-bank-tab.png",
+          "phone": null
+        },
+        {
+          "title": "The bank's page, inline",
+          "explanation": "Rae types test card 4000 0027 6000 3184 and presses Verify this card: the bank's real 3D Secure test page opens inline under the button (Complete / Fail); Stripe shows the card check (SetupIntent) “Requires action”.",
+          "kind": "image",
+          "desktop": "stripe-verify-frame.png",
+          "phone": null
+        },
+        {
+          "title": "Fail: not verified",
+          "explanation": "Rae presses Fail on the bank's page: the card isn't verified (the step stays ✗) and the steps say “The card wasn't verified. Try again or use another card.”; Verify a card can be pressed again. Stripe shows the SetupIntent failed (it needs a new card).",
+          "kind": "image",
+          "desktop": "stripe-verify-failed.png",
+          "phone": null
+        },
+        {
+          "title": "Verify a card, Fail",
+          "explanation": "Rae presses Verify a card: Stripe's card form appears, Rae types 4000 0027 6000 3184 and presses Verify this card, the bank's 3D Secure page opens inline, Rae presses Fail, and the card stays unverified.",
+          "kind": "video",
+          "desktop": "stripe-verify-fail-video.webm",
+          "phone": null
+        },
+        {
+          "title": "Complete: verified",
+          "explanation": "Rae verifies again with the same card and presses Complete on the bank's page: “A card verified with 3D Secure” is ticked and Pay what you owe can be pressed. Stripe shows the SetupIntent “Succeeded” (3D Secure: authenticated).",
+          "kind": "image",
+          "desktop": "stripe-verify-verified.png",
+          "phone": null
+        },
+        {
+          "title": "Pay what you owe asks the bank",
+          "explanation": "Rae presses Pay what you owe ($25.00): this card always asks the bank, so its 3D Secure page opens inline under the button; Stripe shows a manual-capture PaymentIntent “Incomplete”.",
+          "kind": "image",
+          "desktop": "stripe-verify-pay-frame.png",
+          "phone": null
+        },
+        {
+          "title": "Pay what you owe reserves",
+          "explanation": "After the bank's check, the $25.00 owed is reserved on the card, not taken: “What you owe reserved on your card” is ticked and Payments says “Reserved $25.00…”, and Stripe shows the manual-capture PaymentIntent “Uncaptured”. Only the team's approval is left.",
+          "kind": "image",
+          "desktop": "stripe-verify-reserved.png",
+          "phone": null
+        },
+        {
+          "title": "Verify a card, Complete, then reserve",
+          "explanation": "Rae presses Verify a card, types 4000 0027 6000 3184 into Stripe's card form, completes the bank's 3D Secure page inline, and the card is verified; Pay what you owe then asks the bank again and reserves the $25.00 (Stripe: Uncaptured).",
+          "kind": "video",
+          "desktop": "stripe-verify-video.webm",
+          "phone": null
+        },
+        {
+          "title": "Subscribe with 4242: active",
+          "explanation": "Kit presses Subscribe for $7/month with the saved 4242 card: the box says Active since today and when it renews; Stripe shows the $7.00 PaymentIntent “Succeeded” and the subscription “active” with its paid invoice.",
+          "kind": "image",
+          "desktop": "stripe-subscribe-4242.png",
+          "phone": null
+        },
+        {
+          "title": "Subscribe with 4242",
+          "explanation": "Kit presses Subscribe for $7/month: Stripe charges the first $7.00 at once and the subscription is active, in the app and in Stripe.",
+          "kind": "video",
+          "desktop": "stripe-subscribe-4242-video.webm",
+          "phone": null
+        },
+        {
+          "title": "The bank's check under Subscribe",
+          "explanation": "Lou's saved card is 4000 0027 6000 3184 (the bank always asks): Subscribe opens the bank's real 3D Secure page inline, under the button; Stripe shows the $7.00 PaymentIntent “Incomplete” and the subscription “incomplete”.",
+          "kind": "image",
+          "desktop": "stripe-subscribe-bank.png",
+          "phone": null
+        },
+        {
+          "title": "Cancelled: not subscribed, nothing charged",
+          "explanation": "Lou presses Cancel under the bank's page: “Your bank didn't confirm the payment, so nothing was charged.” Lou isn't subscribed (Subscribe is there again); Stripe shows the $7.00 PaymentIntent “Canceled”, its invoice void and the subscription “incomplete_expired”, and What you’ve paid is still $0.00.",
+          "kind": "image",
+          "desktop": "stripe-subscribe-cancelled.png",
+          "phone": null
+        },
+        {
+          "title": "Complete: active",
+          "explanation": "Lou presses Subscribe again and completes the bank's page: the subscription is active; Stripe shows the $7.00 PaymentIntent “Succeeded” (3D Secure: authenticated) and the subscription “active”.",
+          "kind": "image",
+          "desktop": "stripe-subscribe-3ds-active.png",
+          "phone": null
+        },
+        {
+          "title": "Subscribe with a card the bank checks",
+          "explanation": "Lou presses Subscribe: the bank's 3D Secure page opens inline; Cancel leaves Lou not subscribed with nothing charged; Subscribe again, Complete, and the subscription is active in the app and in Stripe.",
+          "kind": "video",
+          "desktop": "stripe-subscribe-3ds-video.webm",
+          "phone": null
+        },
+        {
+          "title": "A renewal the bank wants confirmed",
+          "explanation": "Stripe bills Lou's next $7.00 month off-session (the period was ended early through Stripe's API: a month can't be fast-forwarded); the bank asks, invoice.payment_action_required reaches the app, and Payments shows “Your bank wants you to confirm” with Confirm with your bank. Stripe shows the renewal PaymentIntent “Incomplete”, the invoice open and the subscription “past_due” while it waits; the app keeps it active for the 3 days to confirm. (The box reads “Renews on Oct 29” here only because the early end was made through a short trial, whose $0 invoice moved the date; after Confirm it reads Nov 29.)",
+          "kind": "image",
+          "desktop": "stripe-subscribe-renewal-ask.png",
+          "phone": null
+        },
+        {
+          "title": "The bank's page for the renewal",
+          "explanation": "Confirm with your bank opens the bank's real 3D Secure page inline, under the button.",
+          "kind": "image",
+          "desktop": "stripe-subscribe-renewal-frame.png",
+          "phone": null
+        },
+        {
+          "title": "Confirmed: renewed",
+          "explanation": "Lou completes the bank's page: the renewal is paid, “Your bank wants you to confirm” is gone and the subscription stays active; Stripe shows the renewal PaymentIntent “Succeeded” and the invoice paid.",
+          "kind": "image",
+          "desktop": "stripe-subscribe-renewal-confirmed.png",
+          "phone": null
+        },
+        {
+          "title": "A renewal the bank wants confirmed",
+          "explanation": "Stripe bills Lou's next month off-session and the bank asks; Payments shows Confirm with your bank, Lou completes the bank's page inline and the renewal is paid.",
+          "kind": "video",
+          "desktop": "stripe-subscribe-renewal-video.webm",
           "phone": null
         }
       ]
