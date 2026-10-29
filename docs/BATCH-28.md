@@ -63,6 +63,15 @@ Today only End early, Stop, Pay / Pay more and call changes made in another tab 
 - Not in Alerts (your own actions can't be switched off), as today. The batch 28 §11 rule (stopped / closed / paused tests keep stop-once) applies to these too.
 - Tests: Pay in tab A stops Save on Edit in tab B once; an Edit save in tab A stops Next round, End early and Request a time in tab B once; Rate / excerpt presses not stopped; same rating twice refused.
 
+## 13. The tester's own changes in another tab, the same way (owner, Oct 29; mirrors §12)
+Today a tester's own press in another tab stops only the SAME press ("You also did this in another tab: …"). New rule, across the tester's session page, the join page and their dashboard buttons for that test:
+- **Changes that count** (made by the tester in another tab or device since the page loaded): Send / Send updated (answers or recording), Switch or Keep, Charge, Let it go, Dispute, any call change (request, withdraw, accept, decline, cancel), Leave, joining / applying / asking to rejoin / withdrawing an application, accepting or declining an invite ("No thanks").
+- **Presses they stop once:** every tester press on those pages: Send, Switch / Keep, Charge, Let it go, Dispute, the call buttons, Join / Apply / Ask to rejoin / Withdraw application, Accept invite / No thanks. Lines: "You sent your updated answers in another tab", "You charged Nora Lane $10.00 for your recording in another tab", "You requested a call for Thu, Nov 5, 3:00 PM in another tab", "You applied to join in another tab". Second press goes ahead (or is refused if it can no longer happen: "You already disputed this payment.").
+- **Exceptions:** Rate (and its finishing your part) keeps its own short list and, done in another tab, only races with Rate itself ("You already rated Nora Lane."); excerpt requests / Remove the same way; Leave and Block never stop (but a Leave made in another tab is a line that stops the others).
+- These stop even with Alerts Off? No: they follow Alerts like "other tabs" today (Off = only contract changes stop), except the same press, which is always a plain refusal.
+- Live: these lines show in the top box and raise the pill. §11 (stopped / closed / paused keep stop-once) applies.
+- Tests: Send in tab A stops Charge in tab B once; a call request in A stops Dispute in B once; Apply in A stops Join on B's join page once; Rate in A refuses Rate in B plainly.
+
 ## Check and report
 - Run `NEXT_DIST_DIR=.next-build npm run check`; it must be green. Migration only if needed (hand-written, checked with `prisma migrate diff` against playtest_lite_shadow with --exit-code, applied only to the local playtest_lite DB; say the 3400 server needs a restart).
 - Don't touch port 3400 (the owner uses it: write each file in one go). Don't edit docs/DESIGN-DOC.md. Never print secrets from .env.
