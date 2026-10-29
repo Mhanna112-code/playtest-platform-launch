@@ -1,0 +1,346 @@
+ok admins2-phone.webm
+ok admins2.webm
+ok alerts-flow-phone.webm
+ok alerts-flow.webm
+ok b15-23-team-pause-phone.webm
+CHANGE b15-23-team-pause.webm [{"part":"right","strip":"right","frames":5,"of":144,"first":22,"last":22.8},{"part":"right","strip":"bottom","frames":6,"of":144,"first":21.8,"last":22.8}]
+ok b15-28-scroll-up-phone.webm
+ok b15-28-scroll-up.webm
+ok b15-29-restricted-phone.webm
+CHANGE b15-29-restricted.webm [{"part":"left","strip":"right","frames":2,"of":51,"first":0.4,"last":3.6},{"part":"left","strip":"bottom","frames":1,"of":51,"first":0.4,"last":0.4}]
+ok b15-31-paybox-video-phone.webm
+ok b15-31-paybox-video.webm
+ok b15-34-ceiling-phone.webm
+CHANGE b15-34-ceiling.webm [{"part":"left","strip":"right","frames":1,"of":34,"first":6.6,"last":6.6},{"part":"left","strip":"bottom","frames":1,"of":34,"first":6.6,"last":6.6}]
+ok b15-36-tester-stop-once-phone.webm
+ok b15-36-tester-stop-once.webm
+ok b15-40-call-page-phone.webm
+ok b15-40-call-page.webm
+ok b15-40-rate-amount-video-phone.webm
+ok b15-40-rate-amount-video.webm
+CHANGE b16-04-alerts-video-phone.webm [{"part":"left","strip":"bottom","frames":1,"of":34,"first":2,"last":2}]
+ok b16-04-alerts-video.webm
+CHANGE b16-09-mature-video-phone.webm [{"part":"left","strip":"right","frames":2,"of":50,"first":3.6,"last":6.4},{"part":"left","strip":"bottom","frames":2,"of":50,"first":3.6,"last":6.4}]
+ok b16-09-mature-video.webm
+ok b16-10-mistakes-phone.webm
+ok b16-10-mistakes.webm
+ok b16-12-invite-video-phone.webm
+ok b16-12-invite-video.webm
+CHANGE b16-13-search-video-phone.webm [{"part":"left","strip":"bottom","frames":1,"of":57,"first":7,"last":7}]
+ok b16-13-search-video.webm
+ok b16-14-dev-video-phone.webm
+ok b16-14-dev-video.webm
+ok b16-14-tester-video-phone.webm
+ok b16-14-tester-video.webm
+ok b16-16-video-phone.webm
+ok b16-16-video.webm
+CHANGE b16-17-19-video-phone.webm [{"part":"left","strip":"right","frames":1,"of":76,"first":5.8,"last":5.8},{"part":"left","strip":"bottom","frames":1,"of":76,"first":5.8,"last":5.8}]
+CHANGE b16-17-19-video.webm [{"part":"left","strip":"right","frames":3,"of":76,"first":5,"last":13.2},{"part":"left","strip":"bottom","frames":3,"of":76,"first":5,"last":13.2}]
+CHANGE b16-18-20-video-phone.webm [{"part":"left","strip":"bottom","frames":1,"of":46,"first":9,"last":9}]
+ok b16-18-20-video.webm
+ok b16-21-video-phone.webm
+ok b16-21-video.webm
+ok b16-24-video-phone.webm
+ok b16-24-video.webm
+ok b16-25-video-phone.webm
+ok b16-25-video.webm
+ok b16-27-video-phone.webm
+ok b16-27-video.webm
+ok b16-31-invite-video-phone.webm
+ok b16-31-invite-video.webm
+ok b16-32-join-video-phone.webm
+ok b16-32-join-video.webm
+ok b16-32-video-phone.webm
+ok b16-32-video.webm
+ok b16-33-video-phone.webm
+ok b16-33-video.webm
+ok b16-36-video-phone.webm
+ok b16-36-video.webm
+ok b16-38-video-phone.webm
+ok b16-38-video.webm
+CHANGE b16-41-video-phone.webm [{"part":"left","strip":"bottom","frames":1,"of":57,"first":2,"last":2}]
+ok b16-41-video.webm
+ok b16-x1-end-video-phone.webm
+ok b16-x1-end-video.webm
+ok b16-x1-next-video-phone.webm
+ok b16-x1-next-video.webm
+ok b16-x1-off-video-phone.webm
+ok b16-x1-off-video.webm
+ok b16-x1-stop-video-phone.webm
+ok b16-x1-stop-video.webm
+ok b16-x2-dev-video-phone.webm
+ok b16-x2-dev-video.webm
+ok b16-x2-video-phone.webm
+ok b16-x2-video.webm
+ok b16-x3-off-video-phone.webm
+ok b16-x3-off-video.webm
+ok b16-x3-on-video-phone.webm
+ok b16-x3-on-video.webm
+CHANGE b17-01-live-video-phone.webm [{"part":"left","strip":"bottom","frames":6,"of":34,"first":2,"last":3}]
+ok b17-01-live-video.webm
+ok b17-04-video-phone.webm
+ok b17-04-video.webm
+CHANGE b17-05-video-phone.webm [{"part":"left","strip":"right","frames":9,"of":124,"first":9.8,"last":11.4},{"part":"left","strip":"bottom","frames":10,"of":124,"first":9.8,"last":22.8}]
+CHANGE b17-05-video.webm [{"part":"left","strip":"right","frames":15,"of":113,"first":7.8,"last":20.4},{"part":"left","strip":"bottom","frames":15,"of":113,"first":7.8,"last":20.4}]
+CHANGE b17-06-video-phone.webm [{"part":"left","strip":"bottom","frames":1,"of":68,"first":9.2,"last":9.2}]
+CHANGE b17-06-video.webm [{"part":"left","strip":"bottom","frames":1,"of":64,"first":12.6,"last":12.6}]
+CHANGE b17-07-video-phone.webm [{"part":"left","strip":"right","frames":7,"of":40,"first":6.4,"last":7.6},{"part":"left","strip":"bottom","frames":8,"of":40,"first":6.4,"last":7.8}]
+CHANGE b17-07-video.webm [{"part":"left","strip":"right","frames":8,"of":32,"first":4.8,"last":6.2},{"part":"left","strip":"bottom","frames":8,"of":32,"first":4.8,"last":6.2}]
+CHANGE b17-08-admin-video-phone.webm [{"part":"left","strip":"right","frames":2,"of":93,"first":8.4,"last":8.6}]
+CHANGE b17-08-admin-video.webm [{"part":"left","strip":"right","frames":1,"of":90,"first":8,"last":8}]
+CHANGE b17-08-tester-video-phone.webm [{"part":"left","strip":"right","frames":1,"of":46,"first":5,"last":5}]
+CHANGE b17-08-tester-video.webm [{"part":"left","strip":"right","frames":1,"of":45,"first":4.8,"last":4.8},{"part":"left","strip":"bottom","frames":2,"of":45,"first":4.8,"last":8.8}]
+ok b17-09-live-video-phone.webm
+CHANGE b17-09-live-video.webm [{"part":"left","strip":"right","frames":6,"of":120,"first":2,"last":3},{"part":"left","strip":"bottom","frames":6,"of":120,"first":2,"last":3}]
+CHANGE b17-09-stale-video-phone.webm [{"part":"left","strip":"bottom","frames":5,"of":38,"first":6.6,"last":7.4}]
+ok b17-09-stale-video.webm
+ok b17-12-cancel-video-phone.webm
+ok b17-12-cancel-video.webm
+CHANGE b17-12-own-video-phone.webm [{"part":"left","strip":"bottom","frames":1,"of":130,"first":22.8,"last":22.8}]
+ok b17-12-own-video.webm
+ok b17-12-team-video-phone.webm
+CHANGE b17-12-team-video.webm [{"part":"left","strip":"right","frames":1,"of":30,"first":3,"last":3},{"part":"left","strip":"bottom","frames":1,"of":30,"first":3,"last":3},{"part":"right","strip":"right","frames":4,"of":30,"first":5.2,"last":5.8},{"part":"right","strip":"bottom","frames":4,"of":30,"first":5.2,"last":5.8}]
+ok b17-15-video-phone.webm
+ok b17-15-video.webm
+ok b17-16-video-phone.webm
+CHANGE b17-16-video.webm [{"part":"left","strip":"right","frames":1,"of":121,"first":2.2,"last":2.2},{"part":"left","strip":"bottom","frames":1,"of":121,"first":2.2,"last":2.2}]
+ok b17-17-dev-video-phone.webm
+ok b17-17-dev-video.webm
+CHANGE b17-17-tester-video-phone.webm [{"part":"left","strip":"bottom","frames":1,"of":28,"first":5.4,"last":5.4}]
+ok b17-17-tester-video.webm
+CHANGE b17-18-video-phone.webm [{"part":"left","strip":"bottom","frames":1,"of":49,"first":2,"last":2}]
+CHANGE b17-18-video.webm [{"part":"left","strip":"right","frames":1,"of":54,"first":3,"last":3},{"part":"left","strip":"bottom","frames":1,"of":54,"first":3,"last":3}]
+ok b18-01-join-video-phone.webm
+CHANGE b18-01-join-video.webm [{"part":"left","strip":"right","frames":1,"of":69,"first":3.4,"last":3.4},{"part":"left","strip":"bottom","frames":1,"of":69,"first":3.4,"last":3.4}]
+ok b18-01-post-video-phone.webm
+ok b18-01-post-video.webm
+ok b18-03-video-phone.webm
+CHANGE b18-03-video.webm [{"part":"right","strip":"right","frames":4,"of":44,"first":3.2,"last":3.8},{"part":"right","strip":"bottom","frames":4,"of":44,"first":3.2,"last":3.8}]
+ok b18-06-video-phone.webm
+CHANGE b18-06-video.webm [{"part":"left","strip":"right","frames":1,"of":35,"first":6.2,"last":6.2},{"part":"left","strip":"bottom","frames":1,"of":35,"first":6.2,"last":6.2}]
+ok b18-07-ask-video-phone.webm
+ok b18-07-ask-video.webm
+ok b18-09-video-phone.webm
+CHANGE b18-09-video.webm [{"part":"right","strip":"bottom","frames":1,"of":101,"first":15.6,"last":15.6}]
+CHANGE b19-05-let-it-go-video-phone.webm [{"part":"left","strip":"bottom","frames":1,"of":31,"first":3.4,"last":3.4}]
+CHANGE b19-05-let-it-go-video.webm [{"part":"left","strip":"right","frames":1,"of":36,"first":4.4,"last":4.4},{"part":"left","strip":"bottom","frames":1,"of":36,"first":4.4,"last":4.4}]
+ok b19-05-pay-again-video-phone.webm
+CHANGE b19-05-pay-again-video.webm [{"part":"left","strip":"right","frames":1,"of":88,"first":12.4,"last":12.4},{"part":"left","strip":"bottom","frames":1,"of":88,"first":12.4,"last":12.4}]
+CHANGE b19-07-edit-video-phone.webm [{"part":"left","strip":"right","frames":2,"of":65,"first":2,"last":7.8}]
+CHANGE b19-07-edit-video.webm [{"part":"left","strip":"right","frames":3,"of":79,"first":2,"last":8.2},{"part":"left","strip":"bottom","frames":3,"of":79,"first":2,"last":8.2}]
+CHANGE b19-07-post-video-phone.webm [{"part":"left","strip":"right","frames":4,"of":87,"first":2.4,"last":7.4},{"part":"left","strip":"bottom","frames":4,"of":87,"first":2.4,"last":7.4}]
+CHANGE b19-07-post-video.webm [{"part":"left","strip":"right","frames":6,"of":87,"first":10.6,"last":11.6},{"part":"left","strip":"bottom","frames":6,"of":87,"first":10.6,"last":11.6}]
+ok b20-01-form-video-phone.webm
+ok b20-01-form-video.webm
+ok b20-02-video-phone.webm
+ok b20-02-video.webm
+ok b20-03-video-phone.webm
+ok b20-03-video.webm
+ok b20-04-video-phone.webm
+ok b20-04-video.webm
+ok b20-07-video-phone.webm
+ok b20-07-video.webm
+ok b20-08-video-phone.webm
+ok b20-08-video.webm
+ok b20-09-video-phone.webm
+ok b20-09-video.webm
+ok b20-10-video-phone.webm
+ok b20-10-video.webm
+ok b20-11-link-video-phone.webm
+ok b20-11-link-video.webm
+ok b20-12-dev-video-phone.webm
+ok b20-12-dev-video.webm
+ok b20-12-tester-video-phone.webm
+ok b20-12-tester-video.webm
+ok b20-13-video-phone.webm
+ok b20-13-video.webm
+ok b20-15-video-phone.webm
+ok b20-15-video.webm
+ok b20-16-video-phone.webm
+ok b20-16-video.webm
+ok b20-17-video-phone.webm
+ok b20-17-video.webm
+ok b20-18-video-phone.webm
+ok b20-18-video.webm
+ok b20-19-video-phone.webm
+ok b20-19-video.webm
+ok b20-21-post-video-phone.webm
+ok b20-21-post-video.webm
+ok b20-22-post-video-phone.webm
+ok b20-22-post-video.webm
+ok b20-24-ended-video-phone.webm
+ok b20-24-ended-video.webm
+ok b20-24-working-video-phone.webm
+ok b20-24-working-video.webm
+ok b20-25-video-phone.webm
+ok b20-25-video.webm
+ok b20-26-video-phone.webm
+ok b20-26-video.webm
+ok b20-27-video-phone.webm
+ok b20-27-video.webm
+ok b20-28-video-phone.webm
+ok b20-28-video.webm
+ok b21-01-video-phone.webm
+ok b21-01-video.webm
+ok b21-02-block-video-phone.webm
+ok b21-02-block-video.webm
+ok b21-02-cap-video-phone.webm
+ok b21-02-cap-video.webm
+ok b21-02-end-early-video-phone.webm
+ok b21-02-end-early-video.webm
+ok b21-02-leave-video-phone.webm
+ok b21-02-leave-video.webm
+ok b21-02-pause-video-phone.webm
+ok b21-02-pause-video.webm
+ok b21-02-stop-video-phone.webm
+ok b21-02-stop-video.webm
+ok b21-02-suspended-dev-video-phone.webm
+ok b21-02-suspended-dev-video.webm
+ok b21-02-suspended-tester-video-phone.webm
+ok b21-02-suspended-tester-video.webm
+ok b22-05-video-phone.webm
+ok b22-05-video.webm
+ok b23-05-edit-video-phone.webm
+ok b23-05-edit-video.webm
+ok b23-05-headings-video-phone.webm
+ok b23-05-headings-video.webm
+ok b23-05-use-theirs-video-phone.webm
+ok b23-05-use-theirs-video.webm
+ok b23-06-reserve-video.webm
+ok b23-09-confirm-video.webm
+ok b24-01-live-video.webm
+ok b24-02-video-phone.webm
+ok b24-02-video.webm
+CHANGE bank-press-phone.webm [{"part":"left","strip":"right","frames":1,"of":80,"first":3.4,"last":3.4}]
+CHANGE bank-press.webm [{"part":"left","strip":"right","frames":1,"of":71,"first":3,"last":3},{"part":"left","strip":"bottom","frames":1,"of":71,"first":3,"last":3}]
+ok blk-01-video.webm
+ok blk-02-video.webm
+ok blk-03-dispute-video.webm
+ok blk-04-unblock-video.webm
+CHANGE cbhold-lift-phone.webm [{"part":"left","strip":"right","frames":6,"of":105,"first":13.6,"last":14.6}]
+CHANGE cbhold-lift.webm [{"part":"right","strip":"right","frames":6,"of":125,"first":15.8,"last":16.8},{"part":"right","strip":"bottom","frames":6,"of":125,"first":15.8,"last":16.8}]
+CHANGE changedq-switch-phone.webm [{"part":"left","strip":"bottom","frames":2,"of":45,"first":2,"last":7}]
+CHANGE changedq-switch.webm [{"part":"left","strip":"right","frames":2,"of":45,"first":2,"last":7},{"part":"left","strip":"bottom","frames":2,"of":45,"first":2,"last":7}]
+ok ct-01-video-phone.webm
+ok ct-01-video.webm
+ok ct-04-after-video.webm
+ok ct-04-rate-video.webm
+ok drafts-next-round-phone.webm
+ok drafts-next-round.webm
+ok edit-changed-elsewhere-phone.webm
+CHANGE edit-changed-elsewhere.webm [{"part":"left","strip":"right","frames":2,"of":83,"first":15,"last":16.4},{"part":"left","strip":"bottom","frames":2,"of":83,"first":15,"last":16.4}]
+CHANGE edit-stop-tester-change-video-phone.webm [{"part":"left","strip":"right","frames":1,"of":59,"first":7.4,"last":7.4},{"part":"left","strip":"bottom","frames":1,"of":59,"first":7.4,"last":7.4}]
+ok edit-stop-tester-change-video.webm
+CHANGE edit-team-stopped-phone.webm [{"part":"left","strip":"right","frames":1,"of":37,"first":7.2,"last":7.2}]
+ok edit-team-stopped.webm
+ok every-hold-routing-phone.webm
+ok every-hold-routing.webm
+ok excerpt-ask-phone.webm
+CHANGE excerpt-ask.webm [{"part":"left","strip":"right","frames":1,"of":40,"first":3.2,"last":3.2},{"part":"left","strip":"bottom","frames":1,"of":40,"first":3.2,"last":3.2}]
+ok holds-suspend-routing-phone.webm
+ok holds-suspend-routing.webm
+CHANGE holds-tester-routing-phone.webm [{"part":"left","strip":"right","frames":1,"of":120,"first":23.8,"last":23.8}]
+CHANGE holds-tester-routing.webm [{"part":"left","strip":"right","frames":1,"of":122,"first":24.2,"last":24.2},{"part":"left","strip":"bottom","frames":1,"of":122,"first":24.2,"last":24.2}]
+ok keysrace-phone.webm
+CHANGE keysrace.webm [{"part":"left","strip":"right","frames":1,"of":148,"first":19.4,"last":19.4},{"part":"left","strip":"bottom","frames":1,"of":148,"first":19.4,"last":19.4},{"part":"right","strip":"right","frames":2,"of":148,"first":9.8,"last":10},{"part":"right","strip":"bottom","frames":2,"of":148,"first":9.8,"last":10}]
+ok money-chargeback-starts-phone.webm
+ok money-chargeback-starts.webm
+ok money-chargeback-won-phone.webm
+ok money-chargeback-won.webm
+ok money-decline-hold-phone.webm
+ok money-decline-hold.webm
+ok money-retry-lift-phone.webm
+ok money-retry-lift.webm
+ok outage-live-phone.webm
+CHANGE outage-live.webm [{"part":"right","strip":"right","frames":1,"of":48,"first":9.4,"last":9.4},{"part":"right","strip":"bottom","frames":1,"of":48,"first":9.4,"last":9.4}]
+ok outage-real-phone.webm
+ok outage-real.webm
+ok paused-live-phone.webm
+ok paused-live.webm
+ok plans-lapse-phone.webm
+CHANGE plans-lapse.webm [{"part":"left","strip":"right","frames":1,"of":28,"first":5.4,"last":5.4},{"part":"left","strip":"bottom","frames":1,"of":28,"first":5.4,"last":5.4}]
+ok plans-ten-tests-phone.webm
+CHANGE plans-ten-tests.webm [{"part":"left","strip":"right","frames":1,"of":50,"first":3,"last":3},{"part":"left","strip":"bottom","frames":1,"of":50,"first":3,"last":3}]
+CHANGE post-all-red-scroll-phone.webm [{"part":"left","strip":"right","frames":2,"of":79,"first":3.8,"last":4},{"part":"left","strip":"bottom","frames":1,"of":79,"first":3.8,"last":3.8}]
+CHANGE post-red-checks-phone.webm [{"part":"left","strip":"right","frames":3,"of":41,"first":2.2,"last":4.4}]
+CHANGE post-red-checks.webm [{"part":"left","strip":"right","frames":2,"of":40,"first":2.2,"last":4.2},{"part":"left","strip":"bottom","frames":1,"of":40,"first":4.2,"last":4.2}]
+ok post-the-test-phone.webm
+ok post-the-test.webm
+ok stopped-live-phone.webm
+ok stopped-live.webm
+CHANGE tester-join-flow-phone.webm [{"part":"left","strip":"right","frames":2,"of":40,"first":2,"last":4},{"part":"left","strip":"bottom","frames":1,"of":40,"first":2,"last":2}]
+CHANGE tester-join-flow.webm [{"part":"left","strip":"right","frames":2,"of":56,"first":2,"last":4},{"part":"left","strip":"bottom","frames":1,"of":56,"first":2,"last":2}]
+ok tp-live-box-phone.webm
+ok tp-live-box.webm
+ok tp-stop-once-phone.webm
+ok tp-stop-once.webm
+CHANGE tp-team-paused-phone.webm [{"part":"left","strip":"right","frames":1,"of":29,"first":5.6,"last":5.6},{"part":"left","strip":"bottom","frames":1,"of":29,"first":5.6,"last":5.6}]
+ok tp-team-paused.webm
+CHANGE tp-team-stopped-phone.webm [{"part":"left","strip":"right","frames":1,"of":34,"first":6.6,"last":6.6}]
+CHANGE tp-team-stopped.webm [{"part":"left","strip":"right","frames":1,"of":37,"first":7.2,"last":7.2}]
+
+with a size change: 64 
+b15-23-team-pause.webm
+b15-29-restricted.webm
+b15-34-ceiling.webm
+b16-04-alerts-video-phone.webm
+b16-09-mature-video-phone.webm
+b16-13-search-video-phone.webm
+b16-17-19-video-phone.webm
+b16-17-19-video.webm
+b16-18-20-video-phone.webm
+b16-41-video-phone.webm
+b17-01-live-video-phone.webm
+b17-05-video-phone.webm
+b17-05-video.webm
+b17-06-video-phone.webm
+b17-06-video.webm
+b17-07-video-phone.webm
+b17-07-video.webm
+b17-08-admin-video-phone.webm
+b17-08-admin-video.webm
+b17-08-tester-video-phone.webm
+b17-08-tester-video.webm
+b17-09-live-video.webm
+b17-09-stale-video-phone.webm
+b17-12-own-video-phone.webm
+b17-12-team-video.webm
+b17-16-video.webm
+b17-17-tester-video-phone.webm
+b17-18-video-phone.webm
+b17-18-video.webm
+b18-01-join-video.webm
+b18-03-video.webm
+b18-06-video.webm
+b18-09-video.webm
+b19-05-let-it-go-video-phone.webm
+b19-05-let-it-go-video.webm
+b19-05-pay-again-video.webm
+b19-07-edit-video-phone.webm
+b19-07-edit-video.webm
+b19-07-post-video-phone.webm
+b19-07-post-video.webm
+bank-press-phone.webm
+bank-press.webm
+cbhold-lift-phone.webm
+cbhold-lift.webm
+changedq-switch-phone.webm
+changedq-switch.webm
+edit-changed-elsewhere.webm
+edit-stop-tester-change-video-phone.webm
+edit-team-stopped-phone.webm
+excerpt-ask.webm
+holds-tester-routing-phone.webm
+holds-tester-routing.webm
+keysrace.webm
+outage-live.webm
+plans-lapse.webm
+plans-ten-tests.webm
+post-all-red-scroll-phone.webm
+post-red-checks-phone.webm
+post-red-checks.webm
+tester-join-flow-phone.webm
+tester-join-flow.webm
+tp-team-paused-phone.webm
+tp-team-stopped-phone.webm
+tp-team-stopped.webm

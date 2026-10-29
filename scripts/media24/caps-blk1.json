@@ -1,0 +1,11 @@
+{
+"blk-01-before-tester": "Before the block | Rio's dashboard while working on Nora's test: under “Upcoming calls”, “Nora Lane · Harbor Run: first 3 levels · Sat, Oct 31 · 30 min”, and the invitation “Nora Lane invited you to “Harbor Run: friends and family”. Accept opens the test page.” (Rio's application to “Harbor Run: night harbor” is waiting too).",
+"blk-01-video": "Blocked mid-session, both pages open | Nora's test page (left) and Rio on Nora's profile (right, listing “Applied (waiting)” and “You're in this test”): Rio presses Block Nora Lane and confirms; Rio's page then reads “You blocked Nora Lane, so their tests are hidden.” with Unblock Nora Lane, and Nora's page, on its next update, shows Rio's row as “Work ended” with “Calls: 1 cancelled”; Rio's session page reads “Your session on Harbor Run: first 3 levels ended.”",
+"blk-01-dev-row": "The developer's row | Rio's row on Nora's test page: “Work ended”, the sent answers still “paid $0.00 of $10.00” (payable), and “Paid in all: $0.00 · Calls: 1 cancelled”.",
+"blk-01-dev-calls": "Calls and requests closed | Nora's Live session: “Nobody is working on this test right now, so there is nobody to request a call with.” and “No call requests waiting.”: the booked call was cancelled and the waiting request closed.",
+"blk-01-dev-chat": "Chat closed | Nora's chat with Rio ends with “This chat is closed.”",
+"blk-01-dev-bell": "The developer's bell | Nora reads only “Rio Vance's session on Harbor Run: first 3 levels ended.” (never that it was a block).",
+"blk-01-tester-session": "The tester's session page | Rio's page reads “Your session on Harbor Run: first 3 levels ended.”, the test is “Ended” and the sent answers stay “Under review”.",
+"blk-01-tester-dash": "The tester's dashboard | No invitation and no upcoming call any more; the test is under History: “Ended (Oct 29, 2026): what you sent is still reviewed and paid.”",
+"blk-01-tester-bell": "The tester's bell | “Harbor Run: night harbor”: your application was closed.” (the application to Nora's other test closed with the block)."
+}

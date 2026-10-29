@@ -1,0 +1,173 @@
+{
+  "b23-02-red-box-cap.png": {
+    "caption": "The same red box when Resend answered with its daily limit: “Emails aren't sending: 3 waiting since 4:39 AM CDT. Resend's daily limit was reached (free plan: 100 a day). Emails will go out tomorrow, or upgrade the plan.” (set up in the database for the recording).",
+    "kind": "image",
+    "title": "§2 Resend's daily limit",
+    "section": "Batch 23 (Oct 29)",
+    "group": "b23a",
+    "order": 68005,
+    "size": "desktop"
+  },
+  "b23-02-red-box-no-key.png": {
+    "caption": "Emails waiting because the deploy has no key: “Emails aren't sending: 3 waiting since 4:39 AM CDT. RESEND_API_KEY isn't set on this deploy.” (set up in the database for the recording).",
+    "kind": "image",
+    "title": "§2 The missing key",
+    "section": "Batch 23 (Oct 29)",
+    "group": "b23a",
+    "order": 68006,
+    "size": "desktop"
+  },
+  "b23-02-failed-list.png": {
+    "caption": "Emails tried for 48 hours are kept and listed under the waiting line: “2 emails failed for good (tried for 48 hours, kept):”, each “To … · “Nora Lane paid you $10.00” · written 4:39 AM CDT · 503: Service unavailable”, with “Clear this list (the emails are kept)” (set up in the database for the recording).",
+    "kind": "image",
+    "title": "§2 Failed for good",
+    "section": "Batch 23 (Oct 29)",
+    "group": "b23a",
+    "order": 68007,
+    "size": "desktop"
+  },
+  "b23-05-save-stop.png": {
+    "caption": "The first Save stops in the blue box under it: “Your Save didn't go through. Since you opened this page: Instructions: your version will replace the one saved in another tab at 5:23 AM. Press Save again to save.”",
+    "kind": "image",
+    "title": "§5 Save stops once",
+    "section": "Batch 23 (Oct 29)",
+    "group": "b23b",
+    "order": 69003,
+    "size": "desktop"
+  },
+  "b23-05-headings.png": {
+    "caption": "The keys' note has two headings: “Changed in another tab or device at 4:42 AM:” over this developer's own save elsewhere (“Added: N-1, N-2”) and “Updated at 4:42 AM:” over what someone else caused (“Ana Silva joined and was given K-1”).",
+    "kind": "image",
+    "title": "§5 Who changed it",
+    "section": "Batch 23 (Oct 29)",
+    "group": "b23b",
+    "order": 69008,
+    "size": "desktop"
+  },
+  "b23-05-headings-video.webm": {
+    "caption": "Keys added in another tab, then a tester joins and is given a key: one note, each change under its own heading.",
+    "kind": "video",
+    "title": "§5 Two headings",
+    "section": "Batch 23 (Oct 29)",
+    "group": "b23b",
+    "order": 69009,
+    "size": "desktop"
+  },
+  "b23-07-profile.png": {
+    "caption": "Top to bottom, full width: Preview suspension and its line “1 test paused with 1 working tester; 1 call in the next 3 days cancelled; 0 later calls cancelled if the suspension lasts.”, then the Why box, then Suspend.",
+    "kind": "image",
+    "title": "§7 Preview on the profile's admin view",
+    "section": "Batch 23 (Oct 29)",
+    "group": "b23d",
+    "order": 71001,
+    "size": "desktop"
+  },
+  "b23-07-accounts.png": {
+    "caption": "The developer's row in the Accounts list: Preview suspension and its line first, full width, then the Why box and Suspend, then Delete account; nothing sits beside the Preview any more.",
+    "kind": "image",
+    "title": "§7 The same in the Accounts list",
+    "section": "Batch 23 (Oct 29)",
+    "group": "b23d",
+    "order": 71002,
+    "size": "desktop"
+  },
+  "b23-09-stop.png": {
+    "caption": "Pressed after a change this page hadn't shown, “Confirm with your bank” stops in the blue box under it: “Your Confirm with your bank didn't go through. Since you opened this page: You paid Cam Lee $10.00 for the written answers in another tab · 5:08 AM. Press Confirm with your bank again to go ahead.” (Ben Okafor's dispute, made after the page opened too, isn't listed.)",
+    "kind": "image",
+    "title": "§9 Confirm stops once",
+    "section": "Batch 23 (Oct 29)",
+    "group": "b23e",
+    "order": 72001,
+    "size": "desktop"
+  },
+  "b23-09-confirm-video.webm": {
+    "caption": "While the test page is open, Ben Okafor disputes and another tab pays Cam Lee: the first Confirm stops once in the blue box, the second opens the bank's check, and the payment is confirmed.",
+    "kind": "video",
+    "title": "§9 Confirm with your bank stops once",
+    "section": "Batch 23 (Oct 29)",
+    "group": "b23e",
+    "order": 72003,
+    "size": "desktop"
+  },
+  "b24-01-piece.png": {
+    "caption": "The row opens the test page at Ana Silva's written answers, the piece marked for a few seconds: “Your bank wants you to confirm a $12.50 payment for Ana Silva's written answers, made while you were away. Confirm it by Thu, Oct 29, 9:12 AM.” with its own Confirm with your bank.",
+    "kind": "image",
+    "title": "§1 Confirm with your bank →",
+    "section": "Batch 24 (Oct 29)",
+    "group": "b24a",
+    "order": 73002,
+    "size": "desktop"
+  },
+  "b24-01-renewal.png": {
+    "caption": "The plan's row has no test, so its link opens Payments at the renewal: “Your subscription $7.00 · confirm by Sun, Nov 1, 4:12 AM” with Confirm with your bank.",
+    "kind": "image",
+    "title": "§1 A renewal",
+    "section": "Batch 24 (Oct 29)",
+    "group": "b24a",
+    "order": 73003,
+    "size": "desktop"
+  },
+  "b24-01-after.png": {
+    "caption": "Confirmed on the test page in another tab, Ana Silva's row leaves the dashboard's box on its next poll without a reload: “Your bank wants you to confirm (2)”.",
+    "kind": "image",
+    "title": "§1 Gone when confirmed elsewhere",
+    "section": "Batch 24 (Oct 29)",
+    "group": "b24a",
+    "order": 73004,
+    "size": "desktop"
+  },
+  "b24-01-hold.png": {
+    "caption": "During a hold the restricted dashboard shows “Your bank wants you to confirm (2)” first, above the blue box “Your account is on hold”.",
+    "kind": "image",
+    "title": "§1 During a hold",
+    "section": "Batch 24 (Oct 29)",
+    "group": "b24a",
+    "order": 73006,
+    "size": "desktop"
+  },
+  "b23-06-added.png": {
+    "caption": "Payments after the tester charged during the hold: “Reserved $27.00: it's taken when the team approves lifting your hold. What was added since needs its own Pay what you owe:” with “Ana Silva's written answers $10.00 · charged by the tester while your tests were paused” and “Pay what you owe ($10.00)”.",
+    "kind": "image",
+    "title": "§6 What was added",
+    "section": "Batch 23 (Oct 29)",
+    "group": "b23c",
+    "order": 70004,
+    "size": "desktop"
+  },
+  "b23-06-reserved-all.png": {
+    "caption": "A second Pay what you owe reserves the difference: “Reserved $37.00: it's taken when the team approves lifting your hold.”",
+    "kind": "image",
+    "title": "§6 The difference reserved",
+    "section": "Batch 23 (Oct 29)",
+    "group": "b23c",
+    "order": 70005,
+    "size": "desktop"
+  },
+  "b23-06-dev-notice.png": {
+    "caption": "One bell line from the team's Approve: “The team approved lifting your hold: the $37.00 reserved on your card was taken, and your tests are running again.”",
+    "kind": "image",
+    "title": "§6 The developer's notice",
+    "section": "Batch 23 (Oct 29)",
+    "group": "b23c",
+    "order": 70007,
+    "size": "desktop"
+  },
+  "b23-06-tester-bell.png": {
+    "caption": "Ana's bell: “Tests paused or running again” (each test “is running again”) and “Nora Lane paid $10.00 for your written answers” for the charge taken at the Approve; nothing about the developer's hold or chargeback.",
+    "kind": "image",
+    "title": "§6 The tester's side",
+    "section": "Batch 23 (Oct 29)",
+    "group": "b23c",
+    "order": 70008,
+    "size": "desktop"
+  },
+  "b23-06-not-yet.png": {
+    "caption": "Ana charged meanwhile; the team's page (still showing “owed reserved ✓ ($27.00 reserved)”) presses Approve and is refused: “Not yet: $37.00 is owed but $27.00 is reserved.”",
+    "kind": "image",
+    "title": "§6 Approve refused while short",
+    "section": "Batch 23 (Oct 29)",
+    "group": "b23c",
+    "order": 70003,
+    "size": "desktop"
+  }
+}

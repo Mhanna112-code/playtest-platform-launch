@@ -1,0 +1,9 @@
+{
+"blk-02-invite": "Invite vs the block | Nora's Invite for Rio, ticked on a page opened before the block and pressed right after it: nothing is sent; on tonight's overloaded media server the press failed with “Your Invite didn't go through: Something went wrong on our side. Try again in a moment.” (a database time-out; on a quieter earlier run it stopped once with “Rio Vance is no longer in your list”).",
+"blk-02-pay": "Pay vs the block | Nora's Pay on Rio's sent answers, ticked on a page opened before the block and pressed right after it: the press goes ahead with no stop (sent work stays payable).",
+"blk-02-pay-again": "Paid after the block | Moments later Rio's row reads “Work ended” and “paid $10.00 of $10.00”, with Pay more: one payment went through.",
+"blk-02-request": "Request a time vs the block | From a page opened before the block, with Rio ticked: “Your Request a time didn't go through: Rio Vance's session has ended.” (the rest of that page still shows the state from before the block).",
+"blk-02-send": "Send vs the block | Rio's answers, typed on a session page opened before the block: Send is refused with “Your session on Harbor Run: lighthouse ended.”, and the typed answers stay in their boxes.",
+"blk-02-join-call": "Join call vs the block | Rio's Join call from a page opened before the block: “Your Join call didn't go through: this call isn't available.”",
+"blk-02-video": "Presses that race the block | Nora's invite panel (left, Rio ticked) and Rio typing answers (right): Rio blocks Nora in another tab and both press right after it: Nora's Invite doesn't go through and Rio's Send is refused with “Your session on Harbor Run: lighthouse ended.”"
+}

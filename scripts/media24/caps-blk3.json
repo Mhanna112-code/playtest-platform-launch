@@ -1,0 +1,11 @@
+{
+"blk-03-unblock-button": "The blocker's view | Rio still opens Nora's profile: under Open tests “You blocked Nora Lane, so their tests are hidden.”, and Unblock Nora Lane stands where Block was (Report Nora Lane stays).",
+"blk-03-test-hidden": "Their tests hidden | A direct link to Nora's test posted after the block reads only “This test isn't available right now.”",
+"blk-03-profile-unavailable": "The blocked side | Nora opens Rio's profile: “This profile isn't available.”, with ← Back (it never says why).",
+"blk-03-paid": "Sent work still payable | After the block Nora paid $5.00 of the $10.00 listing for Rio's sent answers: Rio's row (“Work ended”) reads “paid $5.00 of $10.00”, with Pay more still offered.",
+"ct-04-rate-stops": "Rate after the team's Stop: the first press stops | Ana's Rate, from a page opened before the team stopped the test: “Your Rate didn't go through. Since you opened this page: This test was stopped at <time>.” and “Press Rate again to go ahead.” (the time is printed twice, “4:19 AM. · 4:19 AM”).",
+"ct-04-rated": "The second press rates | The page then reads “You rated Nora Lane.”; its banner says “Nora Lane stopped the test on Oct 29, 2026. You can still ask to show an excerpt and chat. Work you sent is still reviewed.”, although the team stopped it.",
+"ct-04-rate-video": "Rate stops once for the team's Stop | The team stops the test while Ana's page is open: the first Rate press stops with “This test was stopped at <time>.”, the second rates and the page reads “You rated Nora Lane.”",
+"ct-04-after-stop": "A page opened after the stop | Ben opens their session page after the team's Stop and rates: the first press goes through (no stop box) and the page reads “You rated Nora Lane.”",
+"ct-04-after-video": "Opened after the stop | Ben's page was opened after the team stopped the test, so Rate goes through on the first press."
+}

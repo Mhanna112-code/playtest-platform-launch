@@ -1,0 +1,19 @@
+{
+"ct-01-dev-waiting": "(a) 7 days after sending: the developer | Ana sent on day 2 of a 30-day test (“sent Wed, Oct 21”); 7.5 days later Nora's row still reads “If you don't pay by Nov 20, Ana Silva can charge you $10.00, their contract price, or let it go.”: Nov 20 is Ana's own deadline, later than 7 days after sending.",
+"ct-01-tester-waiting": "(a) 7 days after sending: the tester | Ana's dashboard keeps the test under “Waiting for the developer” (“Written answers sent: waiting for review”); no Charge yet (the tester's pages don't say when Charge opens).",
+"ct-01-tester-session": "(a) The session page | “Written answers: Under review”, sent Oct 21: no Charge or Let it go yet.",
+"ct-01-tester-open": "(a) After their own deadline: Charge opens | The day after Ana's deadline the sweep opens it: “Nora Lane didn't review your written answers in 7 days: charge $10.00 or let it go.”, with “Charge Nora Lane $10.00” and Let it go.",
+"ct-01-dev-open": "(a) The developer's row once Charge is open | Pay is still there and the “If you don't pay by …” line is gone (the row itself doesn't say Ana can now charge; Nora's bell does).",
+"ct-01-tester-bell": "(a) The tester's bell | “Nora Lane didn't review your written answers in 7 days: charge $10.00 or let it go”.",
+"ct-01-dev-bell": "(a) The developer's bell | ““Harbor Run: first 3 levels”: Ana Silva's written answers waited over 7 days: pay it (Ana Silva can now charge or let it go).”",
+"ct-02-dev-cam-waits": "(b) The late joiner still waits: the developer | The first testers' deadlines have passed, but Cam joined on day 20: Cam's row (sent Oct 18) reads “If you don't pay by Nov 16, Cam Lee can charge you $10.00, their contract price, or let it go.”, Nov 16 being Cam's own deadline.",
+"ct-02-dev-ben-open": "(b) The early tester: Charge is open | Ben joined on day 1 and sent on day 2 (“sent Tue, Sep 29”); their deadline passed yesterday, so Charge opened and the “If you don't pay by” line is gone.",
+"ct-02-cam-waiting": "(b) The late joiner's dashboard | Cam's answers stay under “Waiting for the developer” (“Written answers sent: waiting for review”): no Charge or cancel yet.",
+"ct-02-ben-charge": "(b) The early tester's dashboard | “Charge or cancel 1”: “Parts the developer hasn't reviewed once 7 days have passed since you sent them and your deadline has passed: charge for them, or let them go.” and “Harbor Run: lighthouse · 1 part” with “Charge or let it go →”.",
+"ct-02-cam-open": "(b) After the late joiner's own deadline | Charge opens for Cam only now: “Nora Lane didn't review your written answers in 7 days: charge $10.00 or let it go.”",
+"ct-02-cam-bell": "(b) The late joiner's bell | “Nora Lane didn't review your written answers in 7 days: charge $10.00 or let it go” arrives only after Cam's own deadline.",
+"ct-03-dev-waiting": "(c) Sent on the last day: the developer | Dee's deadline passed yesterday, but they sent on their last day (“sent Wed, Oct 28”), so the row reads “If you don't pay by Nov 4, Dee Park can charge you $10.00, their contract price, or let it go.”: 7 days after sending.",
+"ct-03-tester-waiting": "(c) Sent on the last day: the tester | “Written answers: Under review”, sent Oct 28: no Charge yet, although Dee's deadline has passed.",
+"ct-03-tester-open": "(c) 7 days after sending: Charge opens | “Nora Lane didn't review your written answers in 7 days: charge $10.00 or let it go.”, with Charge and Let it go.",
+"ct-03-tester-bell": "(c) The tester's bell | “Nora Lane didn't review your written answers in 7 days: charge $10.00 or let it go”, 7 days after “Work sent: your written answers for “Harbor Run: reef””."
+}

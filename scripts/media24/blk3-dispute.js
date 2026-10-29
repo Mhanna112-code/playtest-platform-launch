@@ -1,0 +1,17 @@
+    const dsum = T.locator("summary", { hasText: "Dispute the pay" }).first();
+    await dsum.waitFor({ state: "visible", timeout: 60000 });
+    await dsum.scrollIntoViewIfNeeded();
+    await pause(T, 800);
+    await dsum.click();
+    await pause(T, 800);
+    const box = T.locator("textarea[id^='d-']").first();
+    await box.click();
+    await T.keyboard.type("I answered both questions in full, as listed.", { delay: 25 });
+    await pause(T, 600);
+    await T.locator("button", { hasText: /^Send the dispute$/ }).first().click();
+    const done = T.locator("p", { hasText: "You disputed this" }).first();
+    await done.waitFor({ state: "visible", timeout: 120000 }).catch(() => console.log("   ! blk3: no “You disputed this” line"));
+    await done.scrollIntoViewIfNeeded().catch(() => {});
+    await pause(T, 2000);
+    console.log("   after dispute:", await say(T, "p:has-text('You disputed this')"));
+    await shot(T, "blk-03-dispute", "Dispute still works | Rio disputes the $5.00 on their answers after the block: “You disputed this: waiting for the team.”", (await done.isVisible().catch(() => false)) ? done.locator("xpath=..") : undefined);
