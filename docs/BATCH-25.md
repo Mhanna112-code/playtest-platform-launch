@@ -11,6 +11,14 @@ The dashboard row says "what you owe" for a retried chargeback, while the test p
 ## 3. The renewal bell line opens its row
 The renewal's bell line ("…Confirm it in Payments by <date>.") links to `/app/payments#confirm` (the whole list, no highlight). Link it to the renewal's own row (`#bank-<id>`), highlighted, like the dashboard's link.
 
+## 5. One bell line for an automatic retry (owner, Oct 29)
+An automatic retry of what's owed (`retryOwed` in src/lib/server/holds.ts) sends "We charged your card $10.00 for what you owed." AND, per item, `chargeOwedOne`'s "Receipt: you paid $10.00 for an amount you owed" (outside the Payments and holds group). The owner saw the same $10 twice in the bell list. Fix:
+- An automatic retry gives ONE bell line, in the "Payments and holds" group, naming what was paid: "We charged your card $10.00 for what you owed: Ana Silva's call on Oct 30." (several items: "…for what you owed: Ana Silva's call on Oct 30 and Ben Okafor's written answers"; more than 3: "…and 2 more").
+- The receipt EMAIL still goes out (it's a money line), naming the same items instead of "an amount you owed"; no separate receipt bell line for a retry.
+- Pay what you owe (the developer's press) keeps one receipt, also naming the items.
+- Check the other receipts the same way: a payment should never produce two bell lines for the same money (e.g. the bank confirming a waiting charge, a paused-time Pay going through at lift, a reserved chargeback taken on Approve).
+- Tests: a retry of one and of several items gives one bell line and one email; no duplicate on the bank's confirmation.
+
 ## 4. Small
 - The `bank=1` branch of /api/pulse answers only for a developer (anyone else gets the plain pulse).
 - BATCH-24.md's wording is history; nothing to change there.
