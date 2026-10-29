@@ -29,6 +29,14 @@ A sent, listed part on the tester's session page doesn't show "If <dev> hasn't p
 ## 7. Admin "Payouts waiting": oldest first
 Batch 26 §12 made it newest first; the oldest waiting payouts are the most urgent. Oldest first, with "waiting since <date>", still the scroll box.
 
+## 8. A Charge after the reservation never blocks Approve (owner, Oct 29; replaces batch 23 §6's "Approve is refused while short")
+During a chargeback hold, when a tester's Charge (or anything else) is added to what's owed AFTER the developer reserved with Pay what you owe:
+- **Approve still goes through:** it takes the reserved amount and lifts the hold, as when nothing was added. No "Not yet: $X is owed but $Y is reserved." refusal any more.
+- **What was added after the reservation is charged right after the lift,** on the card the developer verified, as an ordinary charge (receipt naming it: "Receipt: you paid $X for Ana Silva's written answers (charged by them after 7 days)"); the tester is paid when it goes through. If the bank asks to confirm, it waits as "Your bank wants you to confirm" (dashboard box, 3 days); if it's declined, it starts a normal payment hold (not a chargeback hold).
+- The admin's chargeback row shows it before Approve: "$X reserved · $Y added since (charged after the hold lifts)".
+- Payments, before Approve: "Reserved $X: it's taken when the team approves lifting your hold. $Y added since will be charged right after." Pay what you owe no longer asks the developer to reserve the difference (it may still, if they want: then everything is taken at Approve).
+- Tests: reserve, a Charge added, Approve → reservation taken, hold lifted, the added amount charged once; declined → payment hold; bank asks → waits for Confirm.
+
 ## Check and report
 - Run `NEXT_DIST_DIR=.next-build npm run check`; it must be green. Migration only if needed (hand-written, checked with `prisma migrate diff` against playtest_lite_shadow with --exit-code, applied only to the local playtest_lite DB; say the 3400 server needs a restart).
 - Don't touch port 3400 (the owner uses it: write each file in one go). Don't edit docs/DESIGN-DOC.md. Never print secrets from .env.
