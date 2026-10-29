@@ -1251,21 +1251,21 @@
     "size": "desktop"
   },
   "bank-press-cancelled.png": {
-    "caption": "The bank's pop-up was cancelled: “Your bank didn't confirm the payment, so nothing was charged.” No hold",
+    "caption": "The bank's check was cancelled: “Your bank didn't confirm the payment, so nothing was charged.” No hold",
     "kind": "image",
-    "title": "Not confirmed: nothing charged",
-    "section": "Payments",
+    "title": "§11 Not confirmed: nothing charged",
+    "section": "Batch 17 (Oct 28)",
     "group": "bank",
-    "order": 11001,
+    "order": 11002,
     "size": "desktop"
   },
   "bank-press.webm": {
-    "caption": "Nora presses Pay and her bank asks her to confirm: cancelled, nothing is charged; pressed again and confirmed, Ana is paid",
+    "caption": "Nora presses Pay and her bank's check opens under it: cancelled on Ana's answers, nothing is charged; on Dee's answers confirmed, and Dee is paid",
     "kind": "video",
-    "title": "Pay with a bank check",
-    "section": "Payments",
+    "title": "§11 Pay with a bank check",
+    "section": "Batch 17 (Oct 28)",
     "group": "bank",
-    "order": 11002,
+    "order": 11003,
     "size": "desktop"
   },
   "bank-away-tester.png": {
@@ -1274,25 +1274,25 @@
     "title": "The tester's side",
     "section": "Payments",
     "group": "bank",
-    "order": 11003,
-    "size": "desktop"
-  },
-  "bank-away-bell.png": {
-    "caption": "Nora's bell (also emailed, even with email Off): “Your bank wants you to confirm a $10.00 payment. Confirm it in Payments by <date>.”",
-    "kind": "image",
-    "title": "Confirm it in Payments",
-    "section": "Payments",
-    "group": "bank",
     "order": 11004,
     "size": "desktop"
   },
-  "bank-confirm-list.png": {
-    "caption": "Payments lists the payment waiting for her bank, with Confirm",
+  "bank-away-bell.png": {
+    "caption": "Nora's bell (also emailed, even with email Off): “Your bank wants you to confirm a $10.00 payment. Confirm this payment by <date>.” It opens the button on the test page",
     "kind": "image",
-    "title": "The Confirm button",
+    "title": "Confirm this payment by",
     "section": "Payments",
     "group": "bank",
     "order": 11005,
+    "size": "desktop"
+  },
+  "bank-confirm-list.png": {
+    "caption": "Payments lists the payment waiting for her bank, with a link to “Confirm with your bank” on the test page (no Confirm of its own)",
+    "kind": "image",
+    "title": "§11 The link on Payments",
+    "section": "Batch 17 (Oct 28)",
+    "group": "bank",
+    "order": 11006,
     "size": "desktop"
   },
   "bank-confirmed.png": {
@@ -1301,16 +1301,16 @@
     "title": "Confirmed",
     "section": "Payments",
     "group": "bank",
-    "order": 11006,
+    "order": 11009,
     "size": "desktop"
   },
   "bank-locked.png": {
-    "caption": "Cam presses Charge while Nora's bank pop-up for the same answers is open: “A payment for this is being confirmed right now.”",
+    "caption": "Cam presses Charge while Nora's bank check for the same answers is open under her Pay: “A payment for this is being confirmed right now.”",
     "kind": "image",
     "title": "Locked while the bank confirms",
     "section": "Payments",
     "group": "bank",
-    "order": 11007,
+    "order": 11010,
     "size": "desktop"
   },
   "plans-free-launch.png": {
@@ -1566,7 +1566,7 @@
     "size": "desktop"
   },
   "excerpt-picker.png": {
-    "caption": "Ana picks one paid answer and trims it (10 to 500 characters); “Don't name the product” is ticked by default",
+    "caption": "Ana picks one paid answer and trims it (10 to 500 characters); it will read “From” the test (no product tick since batch 18)",
     "kind": "image",
     "title": "The picker",
     "section": "Tester session page",
@@ -1584,7 +1584,7 @@
     "size": "desktop"
   },
   "excerpt-needs-you.png": {
-    "caption": "The quote, whether it names the product, and Allow or Deny",
+    "caption": "The quote, the test it's from, and Allow or Deny",
     "kind": "image",
     "title": "Excerpt request in Needs you",
     "section": "Developer test page",
@@ -1611,7 +1611,7 @@
     "size": "desktop"
   },
   "excerpt-profile.png": {
-    "caption": "Shown excerpts as plain quotes; the one that names the product says so",
+    "caption": "Shown excerpts as plain quotes, each with the test it's from",
     "kind": "image",
     "title": "On Ana's profile",
     "section": "Tester session page",
@@ -1944,7 +1944,7 @@
     "size": "desktop"
   },
   "paused-banner-full.png": {
-    "caption": "Ana's banner lists only what she can do now (drafts, charge or let go, rate, leave, cancel her booked call) and says her deadline is paused too",
+    "caption": "Ana's banner lists only what she can do now (drafts, charge or let go, leave, cancel her booked call; batch 17: no rate while her answers are unreviewed) and says her deadline is paused too",
     "kind": "image",
     "title": "The paused banner",
     "section": "Tester session page",
@@ -1962,7 +1962,7 @@
     "size": "desktop"
   },
   "paused-page.png": {
-    "caption": "Only what works is shown: the banner, Charge or Let it go (payment may be delayed), Cancel on the booked call, Rate and Leave; no Send, no call requests, “Chat is paused while the test is paused.”",
+    "caption": "Only what works is shown: the banner, Charge or Let it go (payment may be delayed), Cancel on the booked call and Leave, with Rate disabled until she charges or lets go; no Send, no call requests, “Chat is paused while the test is paused.”",
     "kind": "image",
     "title": "A paused session page",
     "section": "Tester session page",
@@ -1971,7 +1971,7 @@
     "size": "desktop"
   },
   "paused-banner-short.png": {
-    "caption": "Ben has nothing to charge and no calls: his banner offers only drafts, rate and leave",
+    "caption": "Ben has nothing to charge and no calls: his banner offers only drafts and leave (his answers are still in their review window, so Rate waits)",
     "kind": "image",
     "title": "A shorter banner",
     "section": "Tester session page",
@@ -2025,7 +2025,7 @@
     "size": "desktop"
   },
   "stopped-tester-page.png": {
-    "caption": "Her agreed scope, each part with its status, the work she sent, and what still works: Charge or Let it go later, Dispute, Rate",
+    "caption": "Her agreed scope, each part with its status, the work she sent, and what still works; Rate waits with its line (“Rating opens on <date>, or sooner if Nora Lane reviews everything you sent.”)",
     "kind": "image",
     "title": "The tester's stopped page",
     "section": "Tester session page",
@@ -2763,21 +2763,21 @@
     "size": "phone"
   },
   "bank-press-cancelled-phone.png": {
-    "caption": "The bank's pop-up was cancelled: “Your bank didn't confirm the payment, so nothing was charged.” No hold",
+    "caption": "The bank's check was cancelled: “Your bank didn't confirm the payment, so nothing was charged.” No hold",
     "kind": "image",
-    "title": "Not confirmed: nothing charged",
-    "section": "Payments",
+    "title": "§11 Not confirmed: nothing charged",
+    "section": "Batch 17 (Oct 28)",
     "group": "bank",
-    "order": 11001,
+    "order": 11002,
     "size": "phone"
   },
   "bank-press-phone.webm": {
-    "caption": "Nora presses Pay and her bank asks her to confirm: cancelled, nothing is charged; pressed again and confirmed, Ana is paid",
+    "caption": "Nora presses Pay and her bank's check opens under it: cancelled on Ana's answers, nothing is charged; on Dee's answers confirmed, and Dee is paid",
     "kind": "video",
-    "title": "Pay with a bank check",
-    "section": "Payments",
+    "title": "§11 Pay with a bank check",
+    "section": "Batch 17 (Oct 28)",
     "group": "bank",
-    "order": 11002,
+    "order": 11003,
     "size": "phone"
   },
   "bank-away-tester-phone.png": {
@@ -2786,25 +2786,25 @@
     "title": "The tester's side",
     "section": "Payments",
     "group": "bank",
-    "order": 11003,
-    "size": "phone"
-  },
-  "bank-away-bell-phone.png": {
-    "caption": "Nora's bell (also emailed, even with email Off): “Your bank wants you to confirm a $10.00 payment. Confirm it in Payments by <date>.”",
-    "kind": "image",
-    "title": "Confirm it in Payments",
-    "section": "Payments",
-    "group": "bank",
     "order": 11004,
     "size": "phone"
   },
-  "bank-confirm-list-phone.png": {
-    "caption": "Payments lists the payment waiting for her bank, with Confirm",
+  "bank-away-bell-phone.png": {
+    "caption": "Nora's bell (also emailed, even with email Off): “Your bank wants you to confirm a $10.00 payment. Confirm this payment by <date>.” It opens the button on the test page",
     "kind": "image",
-    "title": "The Confirm button",
+    "title": "Confirm this payment by",
     "section": "Payments",
     "group": "bank",
     "order": 11005,
+    "size": "phone"
+  },
+  "bank-confirm-list-phone.png": {
+    "caption": "Payments lists the payment waiting for her bank, with a link to “Confirm with your bank” on the test page (no Confirm of its own)",
+    "kind": "image",
+    "title": "§11 The link on Payments",
+    "section": "Batch 17 (Oct 28)",
+    "group": "bank",
+    "order": 11006,
     "size": "phone"
   },
   "bank-confirmed-phone.png": {
@@ -2813,16 +2813,16 @@
     "title": "Confirmed",
     "section": "Payments",
     "group": "bank",
-    "order": 11006,
+    "order": 11009,
     "size": "phone"
   },
   "bank-locked-phone.png": {
-    "caption": "Cam presses Charge while Nora's bank pop-up for the same answers is open: “A payment for this is being confirmed right now.”",
+    "caption": "Cam presses Charge while Nora's bank check for the same answers is open under her Pay: “A payment for this is being confirmed right now.”",
     "kind": "image",
     "title": "Locked while the bank confirms",
     "section": "Payments",
     "group": "bank",
-    "order": 11007,
+    "order": 11010,
     "size": "phone"
   },
   "plans-free-launch-phone.png": {
@@ -3042,7 +3042,7 @@
     "size": "phone"
   },
   "excerpt-picker-phone.png": {
-    "caption": "Ana picks one paid answer and trims it (10 to 500 characters); “Don't name the product” is ticked by default",
+    "caption": "Ana picks one paid answer and trims it (10 to 500 characters); it will read “From” the test (no product tick since batch 18)",
     "kind": "image",
     "title": "The picker",
     "section": "Tester session page",
@@ -3060,7 +3060,7 @@
     "size": "phone"
   },
   "excerpt-needs-you-phone.png": {
-    "caption": "The quote, whether it names the product, and Allow or Deny",
+    "caption": "The quote, the test it's from, and Allow or Deny",
     "kind": "image",
     "title": "Excerpt request in Needs you",
     "section": "Developer test page",
@@ -3087,7 +3087,7 @@
     "size": "phone"
   },
   "excerpt-profile-phone.png": {
-    "caption": "Shown excerpts as plain quotes; the one that names the product says so",
+    "caption": "Shown excerpts as plain quotes, each with the test it's from",
     "kind": "image",
     "title": "On Ana's profile",
     "section": "Tester session page",
@@ -3420,7 +3420,7 @@
     "size": "phone"
   },
   "paused-banner-full-phone.png": {
-    "caption": "Ana's banner lists only what she can do now (drafts, charge or let go, rate, leave, cancel her booked call) and says her deadline is paused too",
+    "caption": "Ana's banner lists only what she can do now (drafts, charge or let go, leave, cancel her booked call; batch 17: no rate while her answers are unreviewed) and says her deadline is paused too",
     "kind": "image",
     "title": "The paused banner",
     "section": "Tester session page",
@@ -3438,7 +3438,7 @@
     "size": "phone"
   },
   "paused-page-phone.png": {
-    "caption": "Only what works is shown: the banner, Charge or Let it go (payment may be delayed), Cancel on the booked call, Rate and Leave; no Send, no call requests, “Chat is paused while the test is paused.”",
+    "caption": "Only what works is shown: the banner, Charge or Let it go (payment may be delayed), Cancel on the booked call and Leave, with Rate disabled until she charges or lets go; no Send, no call requests, “Chat is paused while the test is paused.”",
     "kind": "image",
     "title": "A paused session page",
     "section": "Tester session page",
@@ -3447,7 +3447,7 @@
     "size": "phone"
   },
   "paused-banner-short-phone.png": {
-    "caption": "Ben has nothing to charge and no calls: his banner offers only drafts, rate and leave",
+    "caption": "Ben has nothing to charge and no calls: his banner offers only drafts and leave (his answers are still in their review window, so Rate waits)",
     "kind": "image",
     "title": "A shorter banner",
     "section": "Tester session page",
@@ -3501,7 +3501,7 @@
     "size": "phone"
   },
   "stopped-tester-page-phone.png": {
-    "caption": "Her agreed scope, each part with its status, the work she sent, and what still works: Charge or Let it go later, Dispute, Rate",
+    "caption": "Her agreed scope, each part with its status, the work she sent, and what still works; Rate waits with its line (“Rating opens on <date>, or sooner if Nora Lane reviews everything you sent.”)",
     "kind": "image",
     "title": "The tester's stopped page",
     "section": "Tester session page",
@@ -6317,15 +6317,6 @@
     "order": 47008,
     "size": "desktop"
   },
-  "b16-22-pay-more-closes.png": {
-    "caption": "The test stopped 25 days ago: the Pay more box shows the small grey line “Pay more closes on <date>.” in its last 7 days.",
-    "kind": "image",
-    "title": "§22 Pay more closes",
-    "section": "Batch 16 (Oct 28)",
-    "group": "b16d",
-    "order": 49001,
-    "size": "desktop"
-  },
   "b16-24-stale-send.png": {
     "caption": "The press is refused and the page jumps to the top, where the stopped line says “Nora Lane stopped the test on <date>, so your Send didn't go through.” and what still works.",
     "kind": "image",
@@ -6477,15 +6468,6 @@
     "section": "Batch 16 (Oct 28)",
     "group": "b16e",
     "order": 50008,
-    "size": "desktop"
-  },
-  "b16-28-limited-view.png": {
-    "caption": "The page opens with “Your account is paused. You can still dispute, charge or let go of unreviewed work, and rate.” over his parts and the work he sent, read-only, with no Send, calls, chat or key box.",
-    "kind": "image",
-    "title": "§28 The limited view",
-    "section": "Batch 16 (Oct 28)",
-    "group": "b16e",
-    "order": 50009,
     "size": "desktop"
   },
   "b16-30-account-dev.png": {
@@ -7181,15 +7163,6 @@
     "order": 48011,
     "size": "phone"
   },
-  "b16-22-pay-more-closes-phone.png": {
-    "caption": "The test stopped 25 days ago: the Pay more box shows the small grey line “Pay more closes on <date>.” in its last 7 days.",
-    "kind": "image",
-    "title": "§22 Pay more closes",
-    "section": "Batch 16 (Oct 28)",
-    "group": "b16d",
-    "order": 49001,
-    "size": "phone"
-  },
   "b16-24-stale-send-phone.png": {
     "caption": "The press is refused and the page jumps to the top, where the stopped line says “Nora Lane stopped the test on <date>, so your Send didn't go through.” and what still works.",
     "kind": "image",
@@ -7341,15 +7314,6 @@
     "section": "Batch 16 (Oct 28)",
     "group": "b16e",
     "order": 50008,
-    "size": "phone"
-  },
-  "b16-28-limited-view-phone.png": {
-    "caption": "The page opens with “Your account is paused. You can still dispute, charge or let go of unreviewed work, and rate.” over his parts and the work he sent, read-only, with no Send, calls, chat or key box.",
-    "kind": "image",
-    "title": "§28 The limited view",
-    "section": "Batch 16 (Oct 28)",
-    "group": "b16e",
-    "order": 50009,
     "size": "phone"
   },
   "b16-30-account-dev-phone.png": {
@@ -7692,6 +7656,1680 @@
     "section": "Batch 16 (Oct 28)",
     "group": "b16j",
     "order": 55007,
+    "size": "phone"
+  },
+  "b17-01-rate-window.png": {
+    "caption": "Ana's Rate button is disabled, with one grey line under it: “Rating opens on <date>, or sooner if Nora Lane reviews everything you sent.”",
+    "kind": "image",
+    "title": "§1 Rate waits for the review",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56001,
+    "size": "desktop"
+  },
+  "b17-01-rate-open.png": {
+    "caption": "Nora paid Ana's answers while her page was open: the grey line went and Rate is enabled, without a reload.",
+    "kind": "image",
+    "title": "§1 Rate opens live",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56002,
+    "size": "desktop"
+  },
+  "b17-01-live-video.webm": {
+    "caption": "Ana's Rate is disabled with its date line; Nora pays her answers and, on the page's next refresh, the line goes and Rate can be pressed.",
+    "kind": "video",
+    "title": "§1 Rate opening live",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56003,
+    "size": "desktop"
+  },
+  "b17-01-rate-charge.png": {
+    "caption": "Ben's answers were never reviewed and Charge is open: Rate is disabled with “Charge or let go of your unreviewed work first.”",
+    "kind": "image",
+    "title": "§1 Charge first",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56004,
+    "size": "desktop"
+  },
+  "b17-01-rate-dispute.png": {
+    "caption": "Cam disputed what Nora paid: Rate is disabled with “Rating opens once the team decides your dispute.”",
+    "kind": "image",
+    "title": "§1 Their own dispute",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56005,
+    "size": "desktop"
+  },
+  "b17-17-tester-box.png": {
+    "caption": "Ana's dashboard lists the one rating she can give now: “Rate Nora Lane on “Harbor Run: first 3 levels””.",
+    "kind": "image",
+    "title": "§17 Ratings to give (tester)",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56006,
+    "size": "desktop"
+  },
+  "b17-17-tester-opens.png": {
+    "caption": "The session page opens at its Rate box, highlighted for a few seconds.",
+    "kind": "image",
+    "title": "§17 The row opens the Rate box",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56007,
+    "size": "desktop"
+  },
+  "b17-17-tester-video.webm": {
+    "caption": "Ana's row opens her session page at the Rate box, highlighted.",
+    "kind": "video",
+    "title": "§17 From Ratings to give to Rate",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56008,
+    "size": "desktop"
+  },
+  "b17-16-hidden.png": {
+    "caption": "Ana's answers are paid, but she hasn't rated Nora yet: her row has no Rate box.",
+    "kind": "image",
+    "title": "§16 Not before the tester rates",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56009,
+    "size": "desktop"
+  },
+  "b17-16-shown.png": {
+    "caption": "Ana rated Nora: the Rate box for Ana appears in her row (everything she sent is settled).",
+    "kind": "image",
+    "title": "§16 After she rated",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56010,
+    "size": "desktop"
+  },
+  "b17-16-video.webm": {
+    "caption": "Ana's row has no Rate box; Ana rates Nora, and on the page's next refresh the Rate box for Ana appears.",
+    "kind": "video",
+    "title": "§16 The developer rates second",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56011,
+    "size": "desktop"
+  },
+  "b17-01-dev-dispute.png": {
+    "caption": "Dee rated Nora, then disputed her pay: Nora's Rate for Dee is disabled with “Rating opens once the team decides Dee Park's dispute.”",
+    "kind": "image",
+    "title": "§1 The developer's side",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56012,
+    "size": "desktop"
+  },
+  "b17-17-dev-box.png": {
+    "caption": "Nora's dashboard lists only Ana, who rated her and is settled: “Rate Ana Silva on “Harbor Run: first 3 levels” · 14 days left”. Dee's open dispute keeps her out.",
+    "kind": "image",
+    "title": "§17 Ratings to give (developer)",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56013,
+    "size": "desktop"
+  },
+  "b17-17-dev-video.webm": {
+    "caption": "It opens the test page at Ana's Rate box, highlighted for a few seconds.",
+    "kind": "video",
+    "title": "§17 The developer's row",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56014,
+    "size": "desktop"
+  },
+  "b17-10-dispute-only.png": {
+    "caption": "Fay's account is paused: the page says “Your account is paused. You can still dispute a payment.” and “Dispute the pay” is the only press (no Charge, Let it go or Rate).",
+    "kind": "image",
+    "title": "§10 Only Dispute",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17c",
+    "order": 58001,
+    "size": "desktop"
+  },
+  "b17-10-no-charge.png": {
+    "caption": "On her other test Charge was open, but the limited view shows no Charge or Let it go; the part stays open to Charge for when she's back.",
+    "kind": "image",
+    "title": "§10 Charge waits",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17c",
+    "order": 58002,
+    "size": "desktop"
+  },
+  "b17-19-charge-closes.png": {
+    "caption": "In its last 7 days Ana's Charge box says “Charge closes on <date>.” (14 days after the last tester's deadline).",
+    "kind": "image",
+    "title": "§19 Charge closes on …",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17c",
+    "order": 58003,
+    "size": "desktop"
+  },
+  "b17-19-pay-closes.png": {
+    "caption": "The same date on Nora's Needs you row for Ana's answers: “Pay closes on <date>.”",
+    "kind": "image",
+    "title": "§19 Pay closes on …",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17c",
+    "order": 58004,
+    "size": "desktop"
+  },
+  "b17-19-pay-more-closes.png": {
+    "caption": "Cam's paid answers keep their Pay more box, which now closes with the test's last Pay or Charge: “Pay more closes on <date>.” (no longer 30 days after the test ended).",
+    "kind": "image",
+    "title": "§19 Pay more closes on …",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17c",
+    "order": 58005,
+    "size": "desktop"
+  },
+  "b17-19-closed-not-paid.png": {
+    "caption": "Ben's answers were never paid or charged by the close-out: his row reads “Closed on <date>: not paid.” and they left Needs you.",
+    "kind": "image",
+    "title": "§19 Closed unpaid (developer)",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17c",
+    "order": 58006,
+    "size": "desktop"
+  },
+  "b17-19-not-paid-tester.png": {
+    "caption": "Ben's part reads “Not paid (closed on <date>)”, with no Charge or Let it go.",
+    "kind": "image",
+    "title": "§19 Closed unpaid (tester)",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17c",
+    "order": 58007,
+    "size": "desktop"
+  },
+  "b17-19-rating-closed.png": {
+    "caption": "Dee never rated Nora: after the close-out her page says “Rating closed on <date>.” instead of a Rate box.",
+    "kind": "image",
+    "title": "§19 Rating closed",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17c",
+    "order": 58008,
+    "size": "desktop"
+  },
+  "b17-12-cancel-refused.png": {
+    "caption": "Gus's page was open before Nora stopped the test: his Cancel is refused with “This call was cancelled when the test stopped.”",
+    "kind": "image",
+    "title": "§12 Cancel call is refused",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57001,
+    "size": "desktop"
+  },
+  "b17-12-cancel-video.webm": {
+    "caption": "Nora stops the test while Gus's page is open; his Cancel on the booked call is refused: the stop already cancelled it.",
+    "kind": "video",
+    "title": "§12 Cancel after a stop",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57002,
+    "size": "desktop"
+  },
+  "b17-12-charge-once.png": {
+    "caption": "The one change listed is the stop itself: “Nora Lane stopped this test at <time>.”, then “Press Charge again to go ahead.”",
+    "kind": "image",
+    "title": "§12 Charge stops once",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57003,
+    "size": "desktop"
+  },
+  "b17-12-own-video.webm": {
+    "caption": "Nora stops the test while Ana's page is open: Charge stops once naming the stop, and the second press charges.",
+    "kind": "video",
+    "title": "§12 A stop on a page already open",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57004,
+    "size": "desktop"
+  },
+  "b17-12-rate-once.png": {
+    "caption": "Dee's Rate from a page opened before the stop: “Nora Lane stopped this test at <time>.” Her next press rates.",
+    "kind": "image",
+    "title": "§12 Rate stops once too",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57005,
+    "size": "desktop"
+  },
+  "b17-12-team-dev.png": {
+    "caption": "Nora's Pay from a page opened before it: “The team stopped this test at <time>.” (the reason is on her banner).",
+    "kind": "image",
+    "title": "§12 The team's Stop, for the developer",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57006,
+    "size": "desktop"
+  },
+  "b17-12-team-tester.png": {
+    "caption": "Ben's Let it go stops once with only “This test was stopped at <time>.”: never that the team did it, never the reason.",
+    "kind": "image",
+    "title": "§12 The team's Stop, for the tester",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57007,
+    "size": "desktop"
+  },
+  "b17-12-team-video.webm": {
+    "caption": "Nora's Pay (left) stops once with “The team stopped this test at …”; Ben's Let it go (right) with only “This test was stopped at …”.",
+    "kind": "video",
+    "title": "§12 The team stops the test",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57008,
+    "size": "desktop"
+  },
+  "b17-15-why-empty.png": {
+    "caption": "The pop-up has a required “Why? (testers read it)” box with its 0 / 10,000 counter; Stop the test stays disabled with “Say why first”.",
+    "kind": "image",
+    "title": "§15 Stop asks why",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57009,
+    "size": "desktop"
+  },
+  "b17-15-why-typed.png": {
+    "caption": "Once the box has text the counter counts it and Stop the test can be pressed.",
+    "kind": "image",
+    "title": "§15 With a reason",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57010,
+    "size": "desktop"
+  },
+  "b17-15-video.webm": {
+    "caption": "Stop the test opens the pop-up; Stop stays disabled until Nora says why, then the test stops.",
+    "kind": "video",
+    "title": "§15 Stopping with a reason",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57011,
+    "size": "desktop"
+  },
+  "b17-15-tester-reads.png": {
+    "caption": "Eli's page says the test was stopped, with Nora's reason in italics in its scroll box under the line.",
+    "kind": "image",
+    "title": "§15 The tester reads it",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57012,
+    "size": "desktop"
+  },
+  "b17-05-accounts.png": {
+    "caption": "“Ana Silva” with Tester ticked: the heading becomes “Accounts: N match” and only that list reloads (any part of a name or email, any case, over every account).",
+    "kind": "image",
+    "title": "§5 Accounts: search and ticks",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59001,
+    "size": "desktop"
+  },
+  "b17-05-tests.png": {
+    "caption": "The developer's email with Stopped / closed ticked: “Tests: 29 match”, her one open test left out.",
+    "kind": "image",
+    "title": "§5 Tests: search and ticks",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59002,
+    "size": "desktop"
+  },
+  "b17-05-video.webm": {
+    "caption": "Typing a name narrows Accounts as you type, ticks narrow it further; the Tests list searches by the developer's email and its own ticks.",
+    "kind": "video",
+    "title": "§5 Searching the admin lists",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59003,
+    "size": "desktop"
+  },
+  "b17-07-end.png": {
+    "caption": "Scrolling inside the box loaded the next 25 (a “Loading…” row shows meanwhile); at the end, “That's all (30)”. The heading keeps the count: “Tests: 30 match”.",
+    "kind": "image",
+    "title": "§7 The end of the list",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59004,
+    "size": "desktop"
+  },
+  "b17-07-video.webm": {
+    "caption": "The Tests list is a box about 10 rows tall: scrolling near its end loads the next 25, until “That's all (30)”.",
+    "kind": "video",
+    "title": "§7 A box that loads as you scroll",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59005,
+    "size": "desktop"
+  },
+  "b17-06-profile-actions.png": {
+    "caption": "Ana's profile, seen by an admin, has Preview suspension, Suspend (with its reason) and Delete account, as in the Accounts list.",
+    "kind": "image",
+    "title": "§6 On the profile",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59006,
+    "size": "desktop"
+  },
+  "b17-08-tester-search.png": {
+    "caption": "“rosa q” finds Rosa Quill's tests open to join (any part of a test, product or developer name, any case), together with the chips and filters.",
+    "kind": "image",
+    "title": "§8 Search tests or developers",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60001,
+    "size": "desktop"
+  },
+  "b17-08-tester-none.png": {
+    "caption": "“No open tests match “Zed Quarry”.”",
+    "kind": "image",
+    "title": "§8 No match",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60002,
+    "size": "desktop"
+  },
+  "b17-08-tester-video.webm": {
+    "caption": "Ana types a developer's name and the list narrows as she types; a name nobody matches shows the no-match line.",
+    "kind": "video",
+    "title": "§8 Searching Find tests",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60003,
+    "size": "desktop"
+  },
+  "b17-08-admin-states.png": {
+    "caption": "The admin header's Find tests lists every test, each card with its state: Open, Full, Joining closed, Paused, Stopped, Closed, Draft, Invite only (no Join or Apply).",
+    "kind": "image",
+    "title": "§8 Admins' Find tests",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60004,
+    "size": "desktop"
+  },
+  "b17-09-open-tests.png": {
+    "caption": "Ana sees Omar's three open tests.",
+    "kind": "image",
+    "title": "§9 Open tests on a developer's profile",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17f",
+    "order": 61001,
+    "size": "desktop"
+  },
+  "b17-09-live.png": {
+    "caption": "Omar stopped “Tide Tracker: alarms” while the profile was open: it left the list on the page's own refresh, no reload.",
+    "kind": "image",
+    "title": "§9 It stays current",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17f",
+    "order": 61002,
+    "size": "desktop"
+  },
+  "b17-09-live-video.webm": {
+    "caption": "Omar stops one of his tests while Ana reads his profile; it leaves her list on the next refresh.",
+    "kind": "video",
+    "title": "§9 Open tests, live",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17f",
+    "order": 61003,
+    "size": "desktop"
+  },
+  "b17-09-stale-click.png": {
+    "caption": "The test paused after Ana's profile page loaded: its page shows only “This test isn't available right now.” and a link back, nothing of the listing.",
+    "kind": "image",
+    "title": "§9 A stale click",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17f",
+    "order": 61004,
+    "size": "desktop"
+  },
+  "b17-09-stale-video.webm": {
+    "caption": "Ana clicks a test the team has just paused on the profile she opened earlier: its page shows only the refusal, with a link back.",
+    "kind": "video",
+    "title": "§9 A stale click",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17f",
+    "order": 61005,
+    "size": "desktop"
+  },
+  "b17-06-since-preview.png": {
+    "caption": "Another admin suspended Ana after this Preview was loaded: the press is refused with “Since your Preview, <admin> suspended that account's tester side at <time>.” and the box now shows her suspended, with Reinstate.",
+    "kind": "image",
+    "title": "§6 Since your Preview",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59007,
+    "size": "desktop"
+  },
+  "b17-06-reinstated.png": {
+    "caption": "Reinstate on the profile brings her tester side back; Suspend shows again.",
+    "kind": "image",
+    "title": "§6 Reinstate",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59008,
+    "size": "desktop"
+  },
+  "b17-06-video.webm": {
+    "caption": "The admin loads a Preview; another admin suspends Ana meanwhile; Suspend is refused naming who and when, the box updates, and Reinstate brings her back.",
+    "kind": "video",
+    "title": "§6 Suspend and Reinstate on a profile",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59009,
+    "size": "desktop"
+  },
+  "b17-04-no-thanks-once.png": {
+    "caption": "Omar changed the listing, so the invite was sent again: No thanks stops once in blue with “Omar Reyes updated … your invite was sent again on the new listing” and the new listing, instead of a refusal.",
+    "kind": "image",
+    "title": "§4 No thanks on a re-sent invite",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17f",
+    "order": 61006,
+    "size": "desktop"
+  },
+  "b17-04-video.webm": {
+    "caption": "The first press stops once with the new listing; the second says no thanks and the card goes.",
+    "kind": "video",
+    "title": "§4 No thanks, re-sent",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17f",
+    "order": 61007,
+    "size": "desktop"
+  },
+  "b18-01-post-box.png": {
+    "caption": "Nora's first press of Post the test shows the box under it: “We updated our Terms of Use. Read what changed.” with the tick “I agree to the updated Terms”.",
+    "kind": "image",
+    "title": "§1 Updated Terms on Post",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62001,
+    "size": "desktop"
+  },
+  "b18-01-post-video.webm": {
+    "caption": "The first press shows the Terms box; Nora ticks “I agree to the updated Terms” and the next press posts the round.",
+    "kind": "video",
+    "title": "§1 Agreeing on Post",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62002,
+    "size": "desktop"
+  },
+  "b18-01-join-box.png": {
+    "caption": "Ben's Join shows the same box under the button; nothing else he does is blocked.",
+    "kind": "image",
+    "title": "§1 Updated Terms on Join",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62003,
+    "size": "desktop"
+  },
+  "b18-01-join-video.webm": {
+    "caption": "Join shows the Terms box; Ben ticks it and the next press joins.",
+    "kind": "video",
+    "title": "§1 Agreeing on Join",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62004,
+    "size": "desktop"
+  },
+  "b18-02-what-changed.png": {
+    "caption": "“Read what changed” opens the Terms at a short note for version 2: the content rule now matches the Mature line, calls end at the $1,000, every call uses Jitsi, and agreeing again.",
+    "kind": "image",
+    "title": "§2 What changed",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62005,
+    "size": "desktop"
+  },
+  "b18-08-switch-line.png": {
+    "caption": "The Switch / Keep box for changed questions adds: “Switching means answering the new questions: send your updated answers. Answers you already sent stay payable at $10.00.” (the price they were sent at)",
+    "kind": "image",
+    "title": "§8 Old answers stay payable",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62006,
+    "size": "desktop"
+  },
+  "b18-07-picker.png": {
+    "caption": "The excerpt picker has no “Don't name the product” tick any more: an excerpt always reads “From Night Market demo”.",
+    "kind": "image",
+    "title": "§7 No product tick",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62007,
+    "size": "desktop"
+  },
+  "b18-07-ask-video.webm": {
+    "caption": "Ben picks a paid answer, trims it and asks Nora: no product tick.",
+    "kind": "video",
+    "title": "§7 Asking for an excerpt",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62008,
+    "size": "desktop"
+  },
+  "b18-07-nda-request.png": {
+    "caption": "Nora added an NDA after Ben asked: the request can still be allowed, and says it will stay hidden while the NDA is on.",
+    "kind": "image",
+    "title": "§7 Pending when the NDA came",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62009,
+    "size": "desktop"
+  },
+  "b18-07-allowed-hidden.png": {
+    "caption": "Ben's list reads “Allowed · hidden while Night Market demo has an NDA”: it shows on his profile if the NDA is removed.",
+    "kind": "image",
+    "title": "§7 Allowed into hidden",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62010,
+    "size": "desktop"
+  },
+  "b18-06-length-hint.png": {
+    "caption": "With Ben ticked the hint reads “10–40 min (the $1,000 for calls with Ben Okafor)”: what's left of his $1,000 at the call's $150/h.",
+    "kind": "image",
+    "title": "§6 The Length cap",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64001,
+    "size": "desktop"
+  },
+  "b18-06-length-red.png": {
+    "caption": "60 minutes turns the box red: “At most 40 minutes: the $1,000 for calls with Ben Okafor on this test.” (the server refuses it too).",
+    "kind": "image",
+    "title": "§6 Too long",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64002,
+    "size": "desktop"
+  },
+  "b18-06-video.webm": {
+    "caption": "Ticking Ben shows his cap in the Length hint; 60 minutes is red at the box.",
+    "kind": "video",
+    "title": "§6 Booking within the $1,000",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64003,
+    "size": "desktop"
+  },
+  "b18-03-warning.png": {
+    "caption": "From 10 minutes before, Nora's call page says “This call ends at <time>: the $1,000 for calls with Ana Silva on this test is reached.”",
+    "kind": "image",
+    "title": "§3 The warning",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64004,
+    "size": "desktop"
+  },
+  "b18-03-warning-tester.png": {
+    "caption": "“This call ends at <time>: the $1,000 for calls with Nora Lane on this test is reached.”",
+    "kind": "image",
+    "title": "§3 The same line for Ana",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64005,
+    "size": "desktop"
+  },
+  "b18-03-ended.png": {
+    "caption": "At that moment both pages say “Call ended: the $1,000 for calls with Ana Silva on this test is reached. Minutes after this don't count.”; measuring stops and Join goes.",
+    "kind": "image",
+    "title": "§3 Call ended at the $1,000",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64006,
+    "size": "desktop"
+  },
+  "b18-03-video.webm": {
+    "caption": "Nora (left) and Ana (right) read when the call ends; when the time comes both pages end the call (the clock is moved on for the recording).",
+    "kind": "video",
+    "title": "§3 A call reaching the $1,000",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64007,
+    "size": "desktop"
+  },
+  "b17-08-admin-ticks.png": {
+    "caption": "Paused, Stopped and Closed ticked: only those cards remain.",
+    "kind": "image",
+    "title": "§8 The state ticks",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60005,
+    "size": "desktop"
+  },
+  "b17-08-admin-video.webm": {
+    "caption": "From the admin header: search a developer, read each test's state, tick states to narrow the list.",
+    "kind": "video",
+    "title": "§8 Find tests for the team",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60006,
+    "size": "desktop"
+  },
+  "b17-18-visited.png": {
+    "caption": "Every join page Ana opened but never joined, latest first, with its state now: Accepting testers, Applied (waiting), Invited, and further down the box Invite only, Full, Closed to new testers on <date>, Paused, Stopped, Closed.",
+    "kind": "image",
+    "title": "§18 Tests visited",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60007,
+    "size": "desktop"
+  },
+  "b17-18-invite-only.png": {
+    "caption": "Its card says “Invite only”; the join page shows only “This test isn't available right now.”, nothing of the listing.",
+    "kind": "image",
+    "title": "§18 An invite-only card",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60008,
+    "size": "desktop"
+  },
+  "b17-18-video.webm": {
+    "caption": "Ana scrolls her visited tests, removes the closed one with ×, then opens the invite-only card: “This test isn't available right now.”",
+    "kind": "video",
+    "title": "§18 Tests visited",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60009,
+    "size": "desktop"
+  },
+  "b18-04-avatars.png": {
+    "caption": "12 circles, then “+2 more joined · 26 open”: the joined testers beyond the circles, and the spots still open.",
+    "kind": "image",
+    "title": "§4 The avatar row",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18b",
+    "order": 63001,
+    "size": "desktop"
+  },
+  "b18-13-join-later.png": {
+    "caption": "Join opens only 10 minutes before (“You can join from <time>.”); “Check your call setup” is there from booking on, with its line about signing in to Jitsi ahead of time.",
+    "kind": "image",
+    "title": "§13 Before the call",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64008,
+    "size": "desktop"
+  },
+  "b18-12-dev-call-page.png": {
+    "caption": "Join opens the Jitsi room in a new tab, “Keep this page open: it measures the call.”, and the host tip “Join a few minutes early: Jitsi asks the host to sign in with Google, GitHub or Facebook.”",
+    "kind": "image",
+    "title": "§10 and §12 The developer's call page",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64009,
+    "size": "desktop"
+  },
+  "b18-12-tester-call-page.png": {
+    "caption": "The same Join line, and “If Jitsi says it's waiting for the host, Nora Lane is on the way: keep this page open.”",
+    "kind": "image",
+    "title": "§10 and §12 The tester's call page",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64010,
+    "size": "desktop"
+  },
+  "b18-13-session-row.png": {
+    "caption": "Each booked call in Cam's Live session has “Check your call setup” (a private practice room, never measured).",
+    "kind": "image",
+    "title": "§13 On the call's row",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64011,
+    "size": "desktop"
+  },
+  "b18-13-tester-dash.png": {
+    "caption": "Upcoming calls shows the link once per call.",
+    "kind": "image",
+    "title": "§13 On the tester dashboard",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64012,
+    "size": "desktop"
+  },
+  "b18-13-dev-dash.png": {
+    "caption": "Nora's Calls box has it too.",
+    "kind": "image",
+    "title": "§13 On the developer dashboard",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64013,
+    "size": "desktop"
+  },
+  "b18-12-dev-reminder.png": {
+    "caption": "15 minutes before: “Your call with Cam Lee on “Harbor Run: live” starts at <time>.” with “Open it a few minutes early: Jitsi asks the first person to sign in with Google, GitHub or Facebook.”",
+    "kind": "image",
+    "title": "§12 The developer's reminder",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64014,
+    "size": "desktop"
+  },
+  "b18-12-tester-reminder.png": {
+    "caption": "“Your call with Nora Lane on “Harbor Run: live” starts at <time>.”",
+    "kind": "image",
+    "title": "§12 The tester's reminder",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64015,
+    "size": "desktop"
+  },
+  "b18-09-still-on.png": {
+    "caption": "Nora ended Dee's work early during the call: Dee's call page keeps the room and keeps measuring.",
+    "kind": "image",
+    "title": "§9 Not cut",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64016,
+    "size": "desktop"
+  },
+  "b18-09-dev-in-progress.png": {
+    "caption": "Dee's row: “In progress: it ends when you both leave”.",
+    "kind": "image",
+    "title": "§9 On the test page",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64017,
+    "size": "desktop"
+  },
+  "b18-09-tester-in-progress.png": {
+    "caption": "Her work ended, and the call still reads “In progress”.",
+    "kind": "image",
+    "title": "§9 On Dee's page",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64018,
+    "size": "desktop"
+  },
+  "b18-09-video.webm": {
+    "caption": "Nora (left) and Dee (right) stay on the call page while Nora's End early goes through: neither page closes.",
+    "kind": "video",
+    "title": "§9 A call in progress is never cut",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64019,
+    "size": "desktop"
+  },
+  "b18-09-ended.png": {
+    "caption": "Once both have left (the 5-minute gap), the call page reads “Call ended at <time>.” and its measured minutes are payable as usual.",
+    "kind": "image",
+    "title": "§9 Then it ends",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64020,
+    "size": "desktop"
+  },
+  "bank-stand-in.png": {
+    "caption": "Pay opens it inline, right under the button: “Stand-in for your bank's check” with Confirm and Cancel (the fake Stripe; with Stripe live, the bank's own page shows in the same place)",
+    "kind": "image",
+    "title": "§11 The bank's check, inline",
+    "section": "Batch 17 (Oct 28)",
+    "group": "bank",
+    "order": 11001,
+    "size": "desktop"
+  },
+  "bank-stand-in-phone.png": {
+    "caption": "Pay opens it inline, right under the button: “Stand-in for your bank's check” with Confirm and Cancel (the fake Stripe; with Stripe live, the bank's own page shows in the same place)",
+    "kind": "image",
+    "title": "§11 The bank's check, inline",
+    "section": "Batch 17 (Oct 28)",
+    "group": "bank",
+    "order": 11001,
+    "size": "phone"
+  },
+  "b17-01-rate-window-phone.png": {
+    "caption": "Ana's Rate button is disabled, with one grey line under it: “Rating opens on <date>, or sooner if Nora Lane reviews everything you sent.”",
+    "kind": "image",
+    "title": "§1 Rate waits for the review",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56001,
+    "size": "phone"
+  },
+  "b17-01-rate-open-phone.png": {
+    "caption": "Nora paid Ana's answers while her page was open: the grey line went and Rate is enabled, without a reload.",
+    "kind": "image",
+    "title": "§1 Rate opens live",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56002,
+    "size": "phone"
+  },
+  "b17-01-live-video-phone.webm": {
+    "caption": "Ana's Rate is disabled with its date line; Nora pays her answers and, on the page's next refresh, the line goes and Rate can be pressed.",
+    "kind": "video",
+    "title": "§1 Rate opening live",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56003,
+    "size": "phone"
+  },
+  "b17-01-rate-charge-phone.png": {
+    "caption": "Ben's answers were never reviewed and Charge is open: Rate is disabled with “Charge or let go of your unreviewed work first.”",
+    "kind": "image",
+    "title": "§1 Charge first",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56004,
+    "size": "phone"
+  },
+  "b17-01-rate-dispute-phone.png": {
+    "caption": "Cam disputed what Nora paid: Rate is disabled with “Rating opens once the team decides your dispute.”",
+    "kind": "image",
+    "title": "§1 Their own dispute",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56005,
+    "size": "phone"
+  },
+  "b17-17-tester-box-phone.png": {
+    "caption": "Ana's dashboard lists the one rating she can give now: “Rate Nora Lane on “Harbor Run: first 3 levels””.",
+    "kind": "image",
+    "title": "§17 Ratings to give (tester)",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56006,
+    "size": "phone"
+  },
+  "b17-17-tester-opens-phone.png": {
+    "caption": "The session page opens at its Rate box, highlighted for a few seconds.",
+    "kind": "image",
+    "title": "§17 The row opens the Rate box",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56007,
+    "size": "phone"
+  },
+  "b17-17-tester-video-phone.webm": {
+    "caption": "Ana's row opens her session page at the Rate box, highlighted.",
+    "kind": "video",
+    "title": "§17 From Ratings to give to Rate",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56008,
+    "size": "phone"
+  },
+  "b17-16-hidden-phone.png": {
+    "caption": "Ana's answers are paid, but she hasn't rated Nora yet: her row has no Rate box.",
+    "kind": "image",
+    "title": "§16 Not before the tester rates",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56009,
+    "size": "phone"
+  },
+  "b17-16-shown-phone.png": {
+    "caption": "Ana rated Nora: the Rate box for Ana appears in her row (everything she sent is settled).",
+    "kind": "image",
+    "title": "§16 After she rated",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56010,
+    "size": "phone"
+  },
+  "b17-16-video-phone.webm": {
+    "caption": "Ana's row has no Rate box; Ana rates Nora, and on the page's next refresh the Rate box for Ana appears.",
+    "kind": "video",
+    "title": "§16 The developer rates second",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56011,
+    "size": "phone"
+  },
+  "b17-01-dev-dispute-phone.png": {
+    "caption": "Dee rated Nora, then disputed her pay: Nora's Rate for Dee is disabled with “Rating opens once the team decides Dee Park's dispute.”",
+    "kind": "image",
+    "title": "§1 The developer's side",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56012,
+    "size": "phone"
+  },
+  "b17-17-dev-box-phone.png": {
+    "caption": "Nora's dashboard lists only Ana, who rated her and is settled: “Rate Ana Silva on “Harbor Run: first 3 levels” · 14 days left”. Dee's open dispute keeps her out.",
+    "kind": "image",
+    "title": "§17 Ratings to give (developer)",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56013,
+    "size": "phone"
+  },
+  "b17-17-dev-video-phone.webm": {
+    "caption": "It opens the test page at Ana's Rate box, highlighted for a few seconds.",
+    "kind": "video",
+    "title": "§17 The developer's row",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17a",
+    "order": 56014,
+    "size": "phone"
+  },
+  "b17-12-cancel-refused-phone.png": {
+    "caption": "Gus's page was open before Nora stopped the test: his Cancel is refused with “This call was cancelled when the test stopped.”",
+    "kind": "image",
+    "title": "§12 Cancel call is refused",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57001,
+    "size": "phone"
+  },
+  "b17-12-cancel-video-phone.webm": {
+    "caption": "Nora stops the test while Gus's page is open; his Cancel on the booked call is refused: the stop already cancelled it.",
+    "kind": "video",
+    "title": "§12 Cancel after a stop",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57002,
+    "size": "phone"
+  },
+  "b17-12-charge-once-phone.png": {
+    "caption": "The one change listed is the stop itself: “Nora Lane stopped this test at <time>.”, then “Press Charge again to go ahead.”",
+    "kind": "image",
+    "title": "§12 Charge stops once",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57003,
+    "size": "phone"
+  },
+  "b17-12-own-video-phone.webm": {
+    "caption": "Nora stops the test while Ana's page is open: Charge stops once naming the stop, and the second press charges.",
+    "kind": "video",
+    "title": "§12 A stop on a page already open",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57004,
+    "size": "phone"
+  },
+  "b17-12-rate-once-phone.png": {
+    "caption": "Dee's Rate from a page opened before the stop: “Nora Lane stopped this test at <time>.” Her next press rates.",
+    "kind": "image",
+    "title": "§12 Rate stops once too",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57005,
+    "size": "phone"
+  },
+  "b17-12-team-dev-phone.png": {
+    "caption": "Nora's Pay from a page opened before it: “The team stopped this test at <time>.” (the reason is on her banner).",
+    "kind": "image",
+    "title": "§12 The team's Stop, for the developer",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57006,
+    "size": "phone"
+  },
+  "b17-12-team-tester-phone.png": {
+    "caption": "Ben's Let it go stops once with only “This test was stopped at <time>.”: never that the team did it, never the reason.",
+    "kind": "image",
+    "title": "§12 The team's Stop, for the tester",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57007,
+    "size": "phone"
+  },
+  "b17-12-team-video-phone.webm": {
+    "caption": "Nora's Pay (left) stops once with “The team stopped this test at …”; Ben's Let it go (right) with only “This test was stopped at …”.",
+    "kind": "video",
+    "title": "§12 The team stops the test",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57008,
+    "size": "phone"
+  },
+  "b17-15-why-empty-phone.png": {
+    "caption": "The pop-up has a required “Why? (testers read it)” box with its 0 / 10,000 counter; Stop the test stays disabled with “Say why first”.",
+    "kind": "image",
+    "title": "§15 Stop asks why",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57009,
+    "size": "phone"
+  },
+  "b17-15-why-typed-phone.png": {
+    "caption": "Once the box has text the counter counts it and Stop the test can be pressed.",
+    "kind": "image",
+    "title": "§15 With a reason",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57010,
+    "size": "phone"
+  },
+  "b17-15-video-phone.webm": {
+    "caption": "Stop the test opens the pop-up; Stop stays disabled until Nora says why, then the test stops.",
+    "kind": "video",
+    "title": "§15 Stopping with a reason",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57011,
+    "size": "phone"
+  },
+  "b17-15-tester-reads-phone.png": {
+    "caption": "Eli's page says the test was stopped, with Nora's reason in italics in its scroll box under the line.",
+    "kind": "image",
+    "title": "§15 The tester reads it",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17b",
+    "order": 57012,
+    "size": "phone"
+  },
+  "b17-10-dispute-only-phone.png": {
+    "caption": "Fay's account is paused: the page says “Your account is paused. You can still dispute a payment.” and “Dispute the pay” is the only press (no Charge, Let it go or Rate).",
+    "kind": "image",
+    "title": "§10 Only Dispute",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17c",
+    "order": 58001,
+    "size": "phone"
+  },
+  "b17-10-no-charge-phone.png": {
+    "caption": "On her other test Charge was open, but the limited view shows no Charge or Let it go; the part stays open to Charge for when she's back.",
+    "kind": "image",
+    "title": "§10 Charge waits",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17c",
+    "order": 58002,
+    "size": "phone"
+  },
+  "b17-19-charge-closes-phone.png": {
+    "caption": "In its last 7 days Ana's Charge box says “Charge closes on <date>.” (14 days after the last tester's deadline).",
+    "kind": "image",
+    "title": "§19 Charge closes on …",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17c",
+    "order": 58003,
+    "size": "phone"
+  },
+  "b17-19-pay-closes-phone.png": {
+    "caption": "The same date on Nora's Needs you row for Ana's answers: “Pay closes on <date>.”",
+    "kind": "image",
+    "title": "§19 Pay closes on …",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17c",
+    "order": 58004,
+    "size": "phone"
+  },
+  "b17-19-pay-more-closes-phone.png": {
+    "caption": "Cam's paid answers keep their Pay more box, which now closes with the test's last Pay or Charge: “Pay more closes on <date>.” (no longer 30 days after the test ended).",
+    "kind": "image",
+    "title": "§19 Pay more closes on …",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17c",
+    "order": 58005,
+    "size": "phone"
+  },
+  "b17-19-closed-not-paid-phone.png": {
+    "caption": "Ben's answers were never paid or charged by the close-out: his row reads “Closed on <date>: not paid.” and they left Needs you.",
+    "kind": "image",
+    "title": "§19 Closed unpaid (developer)",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17c",
+    "order": 58006,
+    "size": "phone"
+  },
+  "b17-19-not-paid-tester-phone.png": {
+    "caption": "Ben's part reads “Not paid (closed on <date>)”, with no Charge or Let it go.",
+    "kind": "image",
+    "title": "§19 Closed unpaid (tester)",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17c",
+    "order": 58007,
+    "size": "phone"
+  },
+  "b17-19-rating-closed-phone.png": {
+    "caption": "Dee never rated Nora: after the close-out her page says “Rating closed on <date>.” instead of a Rate box.",
+    "kind": "image",
+    "title": "§19 Rating closed",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17c",
+    "order": 58008,
+    "size": "phone"
+  },
+  "b17-05-accounts-phone.png": {
+    "caption": "“Ana Silva” with Tester ticked: the heading becomes “Accounts: N match” and only that list reloads (any part of a name or email, any case, over every account).",
+    "kind": "image",
+    "title": "§5 Accounts: search and ticks",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59001,
+    "size": "phone"
+  },
+  "b17-05-tests-phone.png": {
+    "caption": "The developer's email with Stopped / closed ticked: “Tests: 29 match”, her one open test left out.",
+    "kind": "image",
+    "title": "§5 Tests: search and ticks",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59002,
+    "size": "phone"
+  },
+  "b17-05-video-phone.webm": {
+    "caption": "Typing a name narrows Accounts as you type, ticks narrow it further; the Tests list searches by the developer's email and its own ticks.",
+    "kind": "video",
+    "title": "§5 Searching the admin lists",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59003,
+    "size": "phone"
+  },
+  "b17-07-end-phone.png": {
+    "caption": "Scrolling inside the box loaded the next 25 (a “Loading…” row shows meanwhile); at the end, “That's all (30)”. The heading keeps the count: “Tests: 30 match”.",
+    "kind": "image",
+    "title": "§7 The end of the list",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59004,
+    "size": "phone"
+  },
+  "b17-07-video-phone.webm": {
+    "caption": "The Tests list is a box about 10 rows tall: scrolling near its end loads the next 25, until “That's all (30)”.",
+    "kind": "video",
+    "title": "§7 A box that loads as you scroll",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59005,
+    "size": "phone"
+  },
+  "b17-06-profile-actions-phone.png": {
+    "caption": "Ana's profile, seen by an admin, has Preview suspension, Suspend (with its reason) and Delete account, as in the Accounts list.",
+    "kind": "image",
+    "title": "§6 On the profile",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59006,
+    "size": "phone"
+  },
+  "b17-06-since-preview-phone.png": {
+    "caption": "Another admin suspended Ana after this Preview was loaded: the press is refused with “Since your Preview, <admin> suspended that account's tester side at <time>.” and the box now shows her suspended, with Reinstate.",
+    "kind": "image",
+    "title": "§6 Since your Preview",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59007,
+    "size": "phone"
+  },
+  "b17-06-reinstated-phone.png": {
+    "caption": "Reinstate on the profile brings her tester side back; Suspend shows again.",
+    "kind": "image",
+    "title": "§6 Reinstate",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59008,
+    "size": "phone"
+  },
+  "b17-06-video-phone.webm": {
+    "caption": "The admin loads a Preview; another admin suspends Ana meanwhile; Suspend is refused naming who and when, the box updates, and Reinstate brings her back.",
+    "kind": "video",
+    "title": "§6 Suspend and Reinstate on a profile",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17d",
+    "order": 59009,
+    "size": "phone"
+  },
+  "b17-08-tester-search-phone.png": {
+    "caption": "“rosa q” finds Rosa Quill's tests open to join (any part of a test, product or developer name, any case), together with the chips and filters.",
+    "kind": "image",
+    "title": "§8 Search tests or developers",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60001,
+    "size": "phone"
+  },
+  "b17-08-tester-none-phone.png": {
+    "caption": "“No open tests match “Zed Quarry”.”",
+    "kind": "image",
+    "title": "§8 No match",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60002,
+    "size": "phone"
+  },
+  "b17-08-tester-video-phone.webm": {
+    "caption": "Ana types a developer's name and the list narrows as she types; a name nobody matches shows the no-match line.",
+    "kind": "video",
+    "title": "§8 Searching Find tests",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60003,
+    "size": "phone"
+  },
+  "b17-09-open-tests-phone.png": {
+    "caption": "Ana sees Omar's three open tests.",
+    "kind": "image",
+    "title": "§9 Open tests on a developer's profile",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17f",
+    "order": 61001,
+    "size": "phone"
+  },
+  "b17-09-live-phone.png": {
+    "caption": "Omar stopped “Tide Tracker: alarms” while the profile was open: it left the list on the page's own refresh, no reload.",
+    "kind": "image",
+    "title": "§9 It stays current",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17f",
+    "order": 61002,
+    "size": "phone"
+  },
+  "b17-09-live-video-phone.webm": {
+    "caption": "Omar stops one of his tests while Ana reads his profile; it leaves her list on the next refresh.",
+    "kind": "video",
+    "title": "§9 Open tests, live",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17f",
+    "order": 61003,
+    "size": "phone"
+  },
+  "b17-09-stale-click-phone.png": {
+    "caption": "The test paused after Ana's profile page loaded: its page shows only “This test isn't available right now.” and a link back, nothing of the listing.",
+    "kind": "image",
+    "title": "§9 A stale click",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17f",
+    "order": 61004,
+    "size": "phone"
+  },
+  "b17-09-stale-video-phone.webm": {
+    "caption": "Ana clicks a test the team has just paused on the profile she opened earlier: its page shows only the refusal, with a link back.",
+    "kind": "video",
+    "title": "§9 A stale click",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17f",
+    "order": 61005,
+    "size": "phone"
+  },
+  "b17-04-no-thanks-once-phone.png": {
+    "caption": "Omar changed the listing, so the invite was sent again: No thanks stops once in blue with “Omar Reyes updated … your invite was sent again on the new listing” and the new listing, instead of a refusal.",
+    "kind": "image",
+    "title": "§4 No thanks on a re-sent invite",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17f",
+    "order": 61006,
+    "size": "phone"
+  },
+  "b17-04-video-phone.webm": {
+    "caption": "The first press stops once with the new listing; the second says no thanks and the card goes.",
+    "kind": "video",
+    "title": "§4 No thanks, re-sent",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17f",
+    "order": 61007,
+    "size": "phone"
+  },
+  "b18-01-post-box-phone.png": {
+    "caption": "Nora's first press of Post the test shows the box under it: “We updated our Terms of Use. Read what changed.” with the tick “I agree to the updated Terms”.",
+    "kind": "image",
+    "title": "§1 Updated Terms on Post",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62001,
+    "size": "phone"
+  },
+  "b18-01-post-video-phone.webm": {
+    "caption": "The first press shows the Terms box; Nora ticks “I agree to the updated Terms” and the next press posts the round.",
+    "kind": "video",
+    "title": "§1 Agreeing on Post",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62002,
+    "size": "phone"
+  },
+  "b18-01-join-box-phone.png": {
+    "caption": "Ben's Join shows the same box under the button; nothing else he does is blocked.",
+    "kind": "image",
+    "title": "§1 Updated Terms on Join",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62003,
+    "size": "phone"
+  },
+  "b18-01-join-video-phone.webm": {
+    "caption": "Join shows the Terms box; Ben ticks it and the next press joins.",
+    "kind": "video",
+    "title": "§1 Agreeing on Join",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62004,
+    "size": "phone"
+  },
+  "b18-02-what-changed-phone.png": {
+    "caption": "“Read what changed” opens the Terms at a short note for version 2: the content rule now matches the Mature line, calls end at the $1,000, every call uses Jitsi, and agreeing again.",
+    "kind": "image",
+    "title": "§2 What changed",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62005,
+    "size": "phone"
+  },
+  "b18-08-switch-line-phone.png": {
+    "caption": "The Switch / Keep box for changed questions adds: “Switching means answering the new questions: send your updated answers. Answers you already sent stay payable at $10.00.” (the price they were sent at)",
+    "kind": "image",
+    "title": "§8 Old answers stay payable",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62006,
+    "size": "phone"
+  },
+  "b18-07-picker-phone.png": {
+    "caption": "The excerpt picker has no “Don't name the product” tick any more: an excerpt always reads “From Night Market demo”.",
+    "kind": "image",
+    "title": "§7 No product tick",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62007,
+    "size": "phone"
+  },
+  "b18-07-ask-video-phone.webm": {
+    "caption": "Ben picks a paid answer, trims it and asks Nora: no product tick.",
+    "kind": "video",
+    "title": "§7 Asking for an excerpt",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62008,
+    "size": "phone"
+  },
+  "b18-07-nda-request-phone.png": {
+    "caption": "Nora added an NDA after Ben asked: the request can still be allowed, and says it will stay hidden while the NDA is on.",
+    "kind": "image",
+    "title": "§7 Pending when the NDA came",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62009,
+    "size": "phone"
+  },
+  "b18-07-allowed-hidden-phone.png": {
+    "caption": "Ben's list reads “Allowed · hidden while Night Market demo has an NDA”: it shows on his profile if the NDA is removed.",
+    "kind": "image",
+    "title": "§7 Allowed into hidden",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18a",
+    "order": 62010,
+    "size": "phone"
+  },
+  "b18-04-avatars-phone.png": {
+    "caption": "12 circles, then “+2 more joined · 26 open”: the joined testers beyond the circles, and the spots still open.",
+    "kind": "image",
+    "title": "§4 The avatar row",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18b",
+    "order": 63001,
+    "size": "phone"
+  },
+  "b18-06-length-hint-phone.png": {
+    "caption": "With Ben ticked the hint reads “10–40 min (the $1,000 for calls with Ben Okafor)”: what's left of his $1,000 at the call's $150/h.",
+    "kind": "image",
+    "title": "§6 The Length cap",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64001,
+    "size": "phone"
+  },
+  "b18-06-length-red-phone.png": {
+    "caption": "60 minutes turns the box red: “At most 40 minutes: the $1,000 for calls with Ben Okafor on this test.” (the server refuses it too).",
+    "kind": "image",
+    "title": "§6 Too long",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64002,
+    "size": "phone"
+  },
+  "b18-06-video-phone.webm": {
+    "caption": "Ticking Ben shows his cap in the Length hint; 60 minutes is red at the box.",
+    "kind": "video",
+    "title": "§6 Booking within the $1,000",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64003,
+    "size": "phone"
+  },
+  "b18-03-warning-phone.png": {
+    "caption": "From 10 minutes before, Nora's call page says “This call ends at <time>: the $1,000 for calls with Ana Silva on this test is reached.”",
+    "kind": "image",
+    "title": "§3 The warning",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64004,
+    "size": "phone"
+  },
+  "b18-03-warning-tester-phone.png": {
+    "caption": "“This call ends at <time>: the $1,000 for calls with Nora Lane on this test is reached.”",
+    "kind": "image",
+    "title": "§3 The same line for Ana",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64005,
+    "size": "phone"
+  },
+  "b18-03-ended-phone.png": {
+    "caption": "At that moment both pages say “Call ended: the $1,000 for calls with Ana Silva on this test is reached. Minutes after this don't count.”; measuring stops and Join goes.",
+    "kind": "image",
+    "title": "§3 Call ended at the $1,000",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64006,
+    "size": "phone"
+  },
+  "b18-03-video-phone.webm": {
+    "caption": "Nora (left) and Ana (right) read when the call ends; when the time comes both pages end the call (the clock is moved on for the recording).",
+    "kind": "video",
+    "title": "§3 A call reaching the $1,000",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64007,
+    "size": "phone"
+  },
+  "b18-13-join-later-phone.png": {
+    "caption": "Join opens only 10 minutes before (“You can join from <time>.”); “Check your call setup” is there from booking on, with its line about signing in to Jitsi ahead of time.",
+    "kind": "image",
+    "title": "§13 Before the call",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64008,
+    "size": "phone"
+  },
+  "b18-12-dev-call-page-phone.png": {
+    "caption": "Join opens the Jitsi room in a new tab, “Keep this page open: it measures the call.”, and the host tip “Join a few minutes early: Jitsi asks the host to sign in with Google, GitHub or Facebook.”",
+    "kind": "image",
+    "title": "§10 and §12 The developer's call page",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64009,
+    "size": "phone"
+  },
+  "b18-12-tester-call-page-phone.png": {
+    "caption": "The same Join line, and “If Jitsi says it's waiting for the host, Nora Lane is on the way: keep this page open.”",
+    "kind": "image",
+    "title": "§10 and §12 The tester's call page",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64010,
+    "size": "phone"
+  },
+  "b18-13-session-row-phone.png": {
+    "caption": "Each booked call in Cam's Live session has “Check your call setup” (a private practice room, never measured).",
+    "kind": "image",
+    "title": "§13 On the call's row",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64011,
+    "size": "phone"
+  },
+  "b18-13-tester-dash-phone.png": {
+    "caption": "Upcoming calls shows the link once per call.",
+    "kind": "image",
+    "title": "§13 On the tester dashboard",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64012,
+    "size": "phone"
+  },
+  "b18-13-dev-dash-phone.png": {
+    "caption": "Nora's Calls box has it too.",
+    "kind": "image",
+    "title": "§13 On the developer dashboard",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64013,
+    "size": "phone"
+  },
+  "b18-12-dev-reminder-phone.png": {
+    "caption": "15 minutes before: “Your call with Cam Lee on “Harbor Run: live” starts at <time>.” with “Open it a few minutes early: Jitsi asks the first person to sign in with Google, GitHub or Facebook.”",
+    "kind": "image",
+    "title": "§12 The developer's reminder",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64014,
+    "size": "phone"
+  },
+  "b18-12-tester-reminder-phone.png": {
+    "caption": "“Your call with Nora Lane on “Harbor Run: live” starts at <time>.”",
+    "kind": "image",
+    "title": "§12 The tester's reminder",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64015,
+    "size": "phone"
+  },
+  "b18-09-still-on-phone.png": {
+    "caption": "Nora ended Dee's work early during the call: Dee's call page keeps the room and keeps measuring.",
+    "kind": "image",
+    "title": "§9 Not cut",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64016,
+    "size": "phone"
+  },
+  "b18-09-dev-in-progress-phone.png": {
+    "caption": "Dee's row: “In progress: it ends when you both leave”.",
+    "kind": "image",
+    "title": "§9 On the test page",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64017,
+    "size": "phone"
+  },
+  "b18-09-tester-in-progress-phone.png": {
+    "caption": "Her work ended, and the call still reads “In progress”.",
+    "kind": "image",
+    "title": "§9 On Dee's page",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64018,
+    "size": "phone"
+  },
+  "b18-09-video-phone.webm": {
+    "caption": "Nora (left) and Dee (right) stay on the call page while Nora's End early goes through: neither page closes.",
+    "kind": "video",
+    "title": "§9 A call in progress is never cut",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64019,
+    "size": "phone"
+  },
+  "b18-09-ended-phone.png": {
+    "caption": "Once both have left (the 5-minute gap), the call page reads “Call ended at <time>.” and its measured minutes are payable as usual.",
+    "kind": "image",
+    "title": "§9 Then it ends",
+    "section": "Batch 18 (Oct 28)",
+    "group": "b18c",
+    "order": 64020,
+    "size": "phone"
+  },
+  "bank-away-button.png": {
+    "caption": "The link opens the test page at Ben's written answers: the piece is marked, with “Confirm with your bank” under it",
+    "kind": "image",
+    "title": "§11 Confirm with your bank",
+    "section": "Batch 17 (Oct 28)",
+    "group": "bank",
+    "order": 11007,
+    "size": "desktop"
+  },
+  "bank-away-stand-in.png": {
+    "caption": "“Confirm with your bank” opens the stand-in for the bank's check right under it",
+    "kind": "image",
+    "title": "§11 The same inline check",
+    "section": "Batch 17 (Oct 28)",
+    "group": "bank",
+    "order": 11008,
+    "size": "desktop"
+  },
+  "bank-away-button-phone.png": {
+    "caption": "The link opens the test page at Ben's written answers: the piece is marked, with “Confirm with your bank” under it",
+    "kind": "image",
+    "title": "§11 Confirm with your bank",
+    "section": "Batch 17 (Oct 28)",
+    "group": "bank",
+    "order": 11007,
+    "size": "phone"
+  },
+  "b17-08-admin-states-phone.png": {
+    "caption": "The admin header's Find tests lists every test, each card with its state: Open, Full, Joining closed, Paused, Stopped, Closed, Draft, Invite only (no Join or Apply).",
+    "kind": "image",
+    "title": "§8 Admins' Find tests",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60004,
+    "size": "phone"
+  },
+  "b17-08-admin-ticks-phone.png": {
+    "caption": "Paused, Stopped and Closed ticked: only those cards remain.",
+    "kind": "image",
+    "title": "§8 The state ticks",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60005,
+    "size": "phone"
+  },
+  "b17-08-admin-video-phone.webm": {
+    "caption": "From the admin header: search a developer, read each test's state, tick states to narrow the list.",
+    "kind": "video",
+    "title": "§8 Find tests for the team",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60006,
+    "size": "phone"
+  },
+  "b17-18-visited-phone.png": {
+    "caption": "Every join page Ana opened but never joined, latest first, with its state now: Accepting testers, Applied (waiting), Invited, and further down the box Invite only, Full, Closed to new testers on <date>, Paused, Stopped, Closed.",
+    "kind": "image",
+    "title": "§18 Tests visited",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60007,
+    "size": "phone"
+  },
+  "b17-18-invite-only-phone.png": {
+    "caption": "Its card says “Invite only”; the join page shows only “This test isn't available right now.”, nothing of the listing.",
+    "kind": "image",
+    "title": "§18 An invite-only card",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60008,
+    "size": "phone"
+  },
+  "b17-18-video-phone.webm": {
+    "caption": "Ana scrolls her visited tests, removes the closed one with ×, then opens the invite-only card: “This test isn't available right now.”",
+    "kind": "video",
+    "title": "§18 Tests visited",
+    "section": "Batch 17 (Oct 28)",
+    "group": "b17e",
+    "order": 60009,
+    "size": "phone"
+  },
+  "bank-away-stand-in-phone.png": {
+    "caption": "“Confirm with your bank” opens the stand-in for the bank's check right under it",
+    "kind": "image",
+    "title": "§11 The same inline check",
+    "section": "Batch 17 (Oct 28)",
+    "group": "bank",
+    "order": 11008,
     "size": "phone"
   }
 }

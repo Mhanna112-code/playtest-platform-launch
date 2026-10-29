@@ -13,6 +13,8 @@
 // Groups (see the group() calls): every, dash, post, edit, testpage, tpvideo, tpstop, check, and the report's money, outage,
 // holds, alerts, emails, admin, admins2, excerpts, long, keysrace, changedq, paused, stopped, drafts, plans, tester, settings,
 // and batch 16 (the report's "Batch 16 (Oct 28)" section): b16a to b16j.
+// Batch 17 (the "Batch 17 (Oct 28)" section): b17a to b17f, plus the bank group's §11 cases; batch 18 ("Batch 18 (Oct 28)"): b18a to b18c.
+// (Batch 17 media run) The media database needs the batch 17/18 migrations: apply them with `prisma migrate deploy` pointed at playtest_lite_media only.
 // docs/media/captions.json maps each file to its caption (and the report's title and section);
 // docs/media/report-manifest.json lists the report's sections and cases, each with its desktop and phone files.
 /* eslint-disable */
@@ -197,6 +199,7 @@ async function shot(page, name, caption, target, after) {
     // From the top of the page, so the sticky header stays at the top and never covers the element.
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(150);
+    await innerScroll(loc);
     if (after) await after();
     const b = await loc.boundingBox();
     if (!b) throw new Error("no box for " + name);
@@ -209,6 +212,12 @@ async function shot(page, name, caption, target, after) {
   record(file, caption, "image");
   return file;
 }
+/** (Batch 17 media run) An element inside a scroll box (e.g. the tester rows): its box scrolls to it, the page itself stays put. */
+const innerScroll = (loc) => loc.evaluate((el) => {
+  for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+    if (p.scrollHeight > p.clientHeight + 2 && /auto|scroll/.test(getComputedStyle(p).overflowY)) p.scrollTop += el.getBoundingClientRect().top - p.getBoundingClientRect().top - 8;
+  }
+}).catch(() => {});
 /** The whole page, top to bottom (long pages such as dashboards). */
 async function shotFull(page, name, caption) {
   await page.bringToFront();
@@ -1027,7 +1036,8 @@ function bankPopup(page, yes, before) {
     await box.scrollIntoViewIfNeeded().catch(() => {});
     if (before) await before();
     await page.waitForTimeout(1200);
-    await box.locator(yes ? "[data-bank-confirm]" : "[data-bank-cancel]").click();
+    const btn = box.locator(yes ? "[data-bank-confirm]" : "[data-bank-cancel]");
+    await btn.click({ timeout: 5000 }).catch(() => btn.evaluate((b) => b.click())); // (on a phone the sticky header can sit over it)
   })();
   answered.catch((e) => console.error("[media] bank stand-in:", e.message));
   return answered;
@@ -1242,31 +1252,36 @@ group("bank", async () => {
   const ana = await account(`tester+media${TS}bka@playtest.test`, "Ana Silva", "tester", "she");
   const ben = await account(`tester+media${TS}bkb@playtest.test`, "Ben Okafor", "tester", "he");
   const cam = await account(`tester+media${TS}bkc@playtest.test`, "Cam Lee", "tester", "they");
+  const dee = await account(`tester+media${TS}bkd@playtest.test`, "Dee Park", "tester", "she");
   setCard(nora.email, "pm_card_authenticationRequired");
   const t = await postTest(nora, { productName: "Kelp Forest", title: "Kelp Forest: iPhone beta", writtenCents: "10.00", spots: "5" });
-  const sA = await join(ana, t), sB = await join(ben, t), sC = await join(cam, t);
-  for (const [p, s] of [[ana, sA], [ben, sB], [cam, sC]]) await sendWritten(p, s);
-  const subA = subOf(sA);
-  // 1. Her own press: the bank's pop-up. Cancelled: nothing charged, no hold. Confirmed: paid.
+  const sA = await join(ana, t), sB = await join(ben, t), sC = await join(cam, t), sDee = await join(dee, t);
+  for (const [p, s] of [[ana, sA], [ben, sB], [cam, sC], [dee, sDee]]) await sendWritten(p, s);
+  const subA = subOf(sA), subDee = subOf(sDee);
+  // 1. Her own press: the bank's check, inline. Cancelled: nothing charged, no hold. Confirmed: paid. (Batch 17 §11: in the Batch 17 section.)
+  sec(B17);
   {
     const D = await rec(V, nora);
     await D.goto(`/app/tests/${t}`);
     await D.waitForSelector(`#piece-${subA}`);
     const from = at(D);
     await pause(D, 800);
-    const cancelled = bankPopup(D, false, () => shot(D, "bank-stand-in", "The stand-in for the bank's check | Pay opens it inline, right under the button: “Stand-in for your bank's check” with Confirm and Cancel (the fake Stripe; with Stripe live, the bank's own page shows in the same place)", D.locator(`#piece-${subA}`)));
+    const cancelled = bankPopup(D, false, () => shot(D, "bank-stand-in", "§11 The bank's check, inline | Pay opens it inline, right under the button: “Stand-in for your bank's check” with Confirm and Cancel (the fake Stripe; with Stripe live, the bank's own page shows in the same place)", D.locator(`#piece-${subA}`)));
     await payPiece(D, subA);
     await cancelled;
     await D.waitForSelector(`#piece-${subA} [data-bank-not-confirmed]`, { timeout: 15000 });
     await pause(D, 2800);
-    await shot(D, "bank-press-cancelled", "Not confirmed: nothing charged | The bank's pop-up was cancelled: “Your bank didn't confirm the payment, so nothing was charged.” No hold", D.locator(`#piece-${subA}`));
+    await shot(D, "bank-press-cancelled", "§11 Not confirmed: nothing charged | The bank's check was cancelled: “Your bank didn't confirm the payment, so nothing was charged.” No hold", D.locator(`#piece-${subA}`));
+    // (Batch 17 media run) Pay pressed again on the same piece after a cancelled check fails on the server today (the cancelled press's key is reused: a unique-key error),
+    // so the confirmed check is shown on Dee's answers.
     const confirmed = bankPopup(D, true);
-    await payPiece(D, subA);
+    await payPiece(D, subDee);
     await confirmed;
     await pause(D, 4000);
     finishVideo([{ file: await saveVideo(D, "bank-press.webm"), from }], "bank-press",
-      "Pay with a bank check | Nora presses Pay and her bank asks her to confirm: cancelled, nothing is charged; pressed again and confirmed, Ana is paid");
+      "§11 Pay with a bank check | Nora presses Pay and her bank's check opens under it: cancelled on Ana's answers, nothing is charged; on Dee's answers confirmed, and Dee is paid");
   }
+  sec("Payments");
   // 2. Made while she's away: Ben charges after the review window; the payment waits for her bank. (Batch 17 §11) It is confirmed on the test page, under Ben's answers:
   //    the bell line and Payments link straight to that "Confirm with your bank".
   openCharge(sB, t);
@@ -1276,19 +1291,21 @@ group("bank", async () => {
   await shot(ben, "bank-away-tester", "The tester's side | Ben charged for his unreviewed answers: “Charged $10.00. Payment may be delayed.”", ben.locator("#part-written"));
   await openBell(nora);
   await shot(nora, "bank-away-bell", "Confirm this payment by | Nora's bell (also emailed, even with email Off): “Your bank wants you to confirm a $10.00 payment. Confirm this payment by <date>.” It opens the button on the test page", bellList(nora));
+  sec(B17);
   await nora.goto("/app/payments");
   await nora.waitForSelector("[data-confirm-list]");
-  await shot(nora, "bank-confirm-list", "The link on Payments | Payments lists the payment waiting for her bank, with a link to “Confirm with your bank” on the test page (no Confirm of its own)", "[data-confirm-list]");
+  await shot(nora, "bank-confirm-list", "§11 The link on Payments | Payments lists the payment waiting for her bank, with a link to “Confirm with your bank” on the test page (no Confirm of its own)", "[data-confirm-list]");
   await nora.locator("[data-confirm-list] [data-bank-link]").first().click();
   const waiting = nora.locator("[data-bank-waiting]").first();
   await waiting.waitFor({ state: "visible", timeout: 15000 });
   await pause(nora, 900);
-  await shot(nora, "bank-away-button", "Confirm with your bank | The link opens the test page at Ben's written answers: the piece is marked, with “Confirm with your bank” under it", waiting);
-  const away = bankPopup(nora, true, () => shot(nora, "bank-away-stand-in", "The same inline check | “Confirm with your bank” opens the stand-in for the bank's check right under it", waiting));
-  await waiting.locator("button", { hasText: "Confirm with your bank" }).click();
+  await shot(nora, "bank-away-button", "§11 Confirm with your bank | The link opens the test page at Ben's written answers: the piece is marked, with “Confirm with your bank” under it", waiting);
+  const away = bankPopup(nora, true, () => shot(nora, "bank-away-stand-in", "§11 The same inline check | “Confirm with your bank” opens the stand-in for the bank's check right under it", waiting));
+  await waiting.locator("button", { hasText: "Confirm with your bank" }).evaluate((b) => b.click()); // (on a phone the sticky header can sit over it)
   await away;
   await nora.waitForSelector("[data-bank-confirmed]", { timeout: 15000 });
   await pause(nora, 1500);
+  sec("Payments");
   await nora.goto("/app/payments");
   await waitGone(nora, "[data-confirm-list]", 15000);
   await shot(nora, "bank-confirmed", "Confirmed | After Confirm the list is gone and the payment shows in What you've paid", nora.locator("section", { hasText: "What you've paid" }).first());
@@ -1611,7 +1628,7 @@ group("excerpts", async () => {
   const p2 = await paidPart(nora, ana, { productName: "Sky Lab", title: "Sky Lab: tutorial", categories: ["Education"] });
   const p3 = await paidPart(nora, ana, { productName: "Pocket Chef", title: "Pocket Chef: recipe search", categories: ["Shopping"] });
   const p4 = await paidPart(omar, ana, { productName: "Tide Tracker", title: "Tide Tracker: widgets", categories: ["Productivity"] });
-  // 1. Ana asks from her session page: pick an answer, trim it, "Don't name the product" ticked by default.
+  // 1. Ana asks from her session page: pick an answer, trim it (batch 18 §7: no "Don't name the product" tick).
   {
     const T = await rec(V, ana);
     await T.goto(`/app/sessions/${p1.s}`);
@@ -1624,7 +1641,7 @@ group("excerpts", async () => {
     await pick.locator("input[type=radio]").first().check();
     await T.locator(`#excerpt-text-${p1.sub}`).fill("tight turns, and the wake looks lovely at night.");
     await pause(T, 1200);
-    await shot(T, "excerpt-picker", "The picker | Ana picks one paid answer and trims it (10 to 500 characters); “Don't name the product” is ticked by default", pick);
+    await shot(T, "excerpt-picker", "The picker | Ana picks one paid answer and trims it (10 to 500 characters); it will read “From” the test (no product tick since batch 18)", pick);
     await pick.locator("button", { hasText: "Ask the developer" }).click();
     await T.waitForSelector("[data-excerpt-pending]");
     await pause(T, 2000);
@@ -1636,7 +1653,7 @@ group("excerpts", async () => {
   await nora.goto(`/app/tests/${p3.t}`);
   await nora.waitForSelector("[data-excerpt-request]");
   sec("Developer test page");
-  await shot(nora, "excerpt-needs-you", "Excerpt request in Needs you | The quote, whether it names the product, and Allow or Deny", "[data-excerpt-request]");
+  await shot(nora, "excerpt-needs-you", "Excerpt request in Needs you | The quote, the test it's from, and Allow or Deny", "[data-excerpt-request]");
   await nora.locator("[data-excerpt-request] button", { hasText: "Allow" }).click();
   await pause(nora, 1500);
   await decide(nora, p1.sub, "allow");
@@ -1653,7 +1670,7 @@ group("excerpts", async () => {
   sec("Tester session page");
   await nora.goto(`/app/testers/${ana.uid}`);
   await pause(nora, 800);
-  await shot(nora, "excerpt-profile", "On Ana's profile | Shown excerpts as plain quotes; the one that names the product says so", nora.locator("[data-shown-excerpts]"));
+  await shot(nora, "excerpt-profile", "On Ana's profile | Shown excerpts as plain quotes, each with the test it's from", nora.locator("[data-shown-excerpts]"));
   // Take down from the row: Ana is told.
   await nora.goto(`/app/tests/${p3.t}`);
   await nora.locator("[data-shown-excerpt] button", { hasText: "Take down" }).first().click();
@@ -1993,17 +2010,17 @@ group("paused", async () => {
     if (!(await T.locator("[data-paused]").isVisible().catch(() => false))) await T.reload();
     await T.waitForSelector("[data-paused]");
     await pause(T, 3000);
-    await shot(T, "paused-banner-full", "The paused banner | Ana's banner lists only what she can do now (drafts, charge or let go, rate, leave, cancel her booked call) and says her deadline is paused too", "[data-paused]");
+    await shot(T, "paused-banner-full", "The paused banner | Ana's banner lists only what she can do now (drafts, charge or let go, leave, cancel her booked call; batch 17: no rate while her answers are unreviewed) and says her deadline is paused too", "[data-paused]");
     await T.locator("#part-written").scrollIntoViewIfNeeded().catch(() => {});
     await pause(T, 2500);
     finishVideo([{ file: await saveVideo(T, "paused.webm"), from }], "paused-live", "The test is paused while the page is open | The blue banner appears; Send, the call-request tools, Join and the chat box are hidden until it resumes");
   }
   await ana.goto(`/app/sessions/${sA}`);
   await pause(ana, 800);
-  await shotFull(ana, "paused-page", "A paused session page | Only what works is shown: the banner, Charge or Let it go (payment may be delayed), Cancel on the booked call, Rate and Leave; no Send, no call requests, “Chat is paused while the test is paused.”");
+  await shotFull(ana, "paused-page", "A paused session page | Only what works is shown: the banner, Charge or Let it go (payment may be delayed), Cancel on the booked call and Leave, with Rate disabled until she charges or lets go; no Send, no call requests, “Chat is paused while the test is paused.”");
   await ben.goto(`/app/sessions/${sB}`);
   await pause(ben, 800);
-  await shot(ben, "paused-banner-short", "A shorter banner | Ben has nothing to charge and no calls: his banner offers only drafts, rate and leave", "[data-paused]");
+  await shot(ben, "paused-banner-short", "A shorter banner | Ben has nothing to charge and no calls: his banner offers only drafts and leave (his answers are still in their review window, so Rate waits)", "[data-paused]");
   sec("Tester dashboard and Find");
   await ana.goto("/app");
   await pause(ana, 800);
@@ -2056,7 +2073,7 @@ group("stopped", async () => {
   sec("Tester session page");
   await ana.goto(`/app/sessions/${sA}`);
   await pause(ana, 800);
-  await shotFull(ana, "stopped-tester-page", "The tester's stopped page | Her agreed scope, each part with its status, the work she sent, and what still works: Charge or Let it go later, Dispute, Rate");
+  await shotFull(ana, "stopped-tester-page", "The tester's stopped page | Her agreed scope, each part with its status, the work she sent, and what still works; Rate waits with its line (“Rating opens on <date>, or sooner if Nora Lane reviews everything you sent.”)");
   await ben.goto(`/app/sessions/${sB}`);
   await pause(ben, 800);
   await shotFull(ben, "stopped-tester-calls", "Calls after a stop | Ben's booked call was cancelled by the stop; the call that already happened stays listed");
@@ -3677,23 +3694,12 @@ group("b16c", async () => {
 }, { section: B16, fake: true });
 
 group("b16d", async () => {
-  // §22 Pay more's closing line; §24 the tester page after a stop; §25 the first press on a stopped test; §36 rounding; §39 Charge; §40 the grey call line.
+  // §24 the tester page after a stop; §25 the first press on a stopped test; §36 rounding; §39 Charge; §40 the grey call line.
   const nora = await account(`dev+media${TS}bd@playtest.test`, "Nora Lane", "developer", "she");
   await subscribeDev(nora);
   const ana = await account(`tester+media${TS}bda@playtest.test`, "Ana Silva", "tester", "she");
   const ben = await account(`tester+media${TS}bdb@playtest.test`, "Ben Okafor", "tester", "he");
-  // §22 A test stopped 25 days ago: Pay more closes in 5 days.
-  {
-    const t = await postTest(nora, { title: "Harbor Run: first 3 levels", spots: "4" });
-    const s = await join(ana, t);
-    await sendWritten(ana, s);
-    const sub = subOf(s);
-    await apiPay(nora, sub, "10.00");
-    await stopTest(nora, t);
-    own(`update "Test" set "stoppedAt" = (now() at time zone 'utc') - interval '25 days' where id = '${t}'`);
-    await open(nora, `/app/tests/${t}`, `[data-pay-more="${sub}"]`);
-    await shot(nora, "b16-22-pay-more-closes", "§22 Pay more closes | The test stopped 25 days ago: the Pay more box shows the small grey line “Pay more closes on <date>.” in its last 7 days.", `[data-pay-more="${sub}"]`);
-  }
+  // (§22's Pay more line was replaced by batch 17 §19: see group b17c.)
   // §24 A stale Send after the stop: refused, and the page goes to the top where the stopped line names it.
   {
     const t = await postTest(nora, { title: "Harbor Run: lighthouse", spots: "4" });
@@ -3849,10 +3855,7 @@ group("b16e", async () => {
     await adminDo(admin, "suspend", ben.uid, { note: "Media pass check: reported for copied answers", side: "tester" });
     await open(ben, "/app", `[data-removed-open="${s}"]`);
     await shot(ben, "b16-28-removed-list", "§28 Tests you were removed from | Each row opens a limited view of that test.", ben.locator("section", { has: ben.locator(`[data-removed-open="${s}"]`) }).last());
-    await ben.click(`[data-removed-open="${s}"]`);
-    await ben.waitForSelector("[data-limited-view]");
-    await pause(ben, 1000);
-    await shotFull(ben, "b16-28-limited-view", "§28 The limited view | The page opens with “Your account is paused. You can still dispute, charge or let go of unreviewed work, and rate.” over his parts and the work he sent, read-only, with no Send, calls, chat or key box.");
+    // (The limited view itself changed in batch 17 §10: Dispute only; see group b17c.)
   }
   // §30 The account page: the side you're on only.
   await open(nora, "/app/account", "[data-account-heading]");
@@ -4175,6 +4178,790 @@ group("b16j", async () => {
   }
 }, { section: B16, fake: true });
 
+// ---------- Batch 17 (owner, Oct 28): one case or more per item, in the report's "Batch 17 (Oct 28)" section (§ numbers are the items in docs/BATCH-17.md) ----------
+const B17 = "Batch 17 (Oct 28)";
+const B18 = "Batch 18 (Oct 28)";
+/** Waits for this page's next live poll to come back (so a change made right after lands before the page's next refresh: a press then comes from a page opened before it). */
+const waitPulse = (page, ms = 25000, q = "") => page.waitForResponse((r) => r.url().includes("/api/pulse") && r.url().includes(q), { timeout: ms }).catch(() => null);
+/** The tester's own presses on a session (the same API the page uses). */
+const sessionDo = (tester, s, action, body = {}) => post(tester, `/api/sessions/${s}/${action}`, { ...go, ...body });
+const rateDev = (tester, s, stars = 5, comment = "") => sessionDo(tester, s, "rate", { stars, comment }).then((r) => ok(r, "tester rate"));
+const disputeOf = (tester, s, sub, reason = "I answered every question in full.") => sessionDo(tester, s, "dispute", { kind: "submission", id: sub, reason }).then((r) => ok(r, "dispute"));
+/** Waits for the page's own 20-second refresh to show (or hide) something, without a reload. */
+async function waitPoll(page, selector, gone = false, ms = 45000) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    const vis = await page.locator(selector).first().isVisible().catch(() => false);
+    if (gone ? !vis : vis) return true;
+    await page.waitForTimeout(700);
+  }
+  console.log(`   ! waitPoll: ${gone ? "still there" : "nothing for"}`, selector, "on", page.url());
+  return false;
+}
+/** Older throwaway accounts with this display name (earlier media runs) are renamed, so a search for the name finds only this run's. */
+const retireName = (name) => own(`update "User" set name = 'Earlier media run' where name like ${lit(`%${name}`)} and email like '%@playtest.test' and email not like ${lit(`%media${TS}%`)}`);
+
+group("b17a", async () => {
+  // §1 Rate disabled with its line, §16 the developer's Rate only after the tester rated, §17 Ratings to give.
+  const nora = await account(`dev+media${TS}ca@playtest.test`, "Nora Lane", "developer", "she");
+  await subscribeDev(nora);
+  const ana = await account(`tester+media${TS}caa@playtest.test`, "Ana Silva", "tester", "she");
+  const ben = await account(`tester+media${TS}cab@playtest.test`, "Ben Okafor", "tester", "he");
+  const cam = await account(`tester+media${TS}cac@playtest.test`, "Cam Lee", "tester", "they");
+  const dee = await account(`tester+media${TS}cad@playtest.test`, "Dee Park", "tester", "she");
+  const t = await postTest(nora, { title: "Harbor Run: first 3 levels", spots: "6" });
+  const sA = await join(ana, t), sC = await join(cam, t), sD = await join(dee, t);
+  for (const [p, s] of [[ana, sA], [cam, sC], [dee, sD]]) await sendWritten(p, s);
+  const subA = subOf(sA), subC = subOf(sC), subD = subOf(sD);
+  // §1 Inside the review window: "Rating opens on <date>, or sooner if Nora Lane reviews everything you sent." Then Nora pays and Rate opens live.
+  {
+    const T = await rec(V, ana);
+    await open(T, `/app/sessions/${sA}`, "#rate [data-rate-disabled]");
+    await T.locator("#rate").scrollIntoViewIfNeeded();
+    const from = at(T);
+    await pause(T, 1500);
+    await shot(T, "b17-01-rate-window", "§1 Rate waits for the review | Ana's Rate button is disabled, with one grey line under it: “Rating opens on <date>, or sooner if Nora Lane reviews everything you sent.”", "#rate");
+    await apiPay(nora, subA, "10.00");
+    await waitPoll(T, "#rate [data-rate-disabled]", true);
+    await T.locator("#rate").scrollIntoViewIfNeeded();
+    await pause(T, 2000);
+    await shot(T, "b17-01-rate-open", "§1 Rate opens live | Nora paid Ana's answers while her page was open: the grey line went and Rate is enabled, without a reload.", "#rate");
+    finishVideo([{ file: await saveVideo(T, "b17-01-live.webm"), from }], "b17-01-live-video", "§1 Rate opening live | Ana's Rate is disabled with its date line; Nora pays her answers and, on the page's next refresh, the line goes and Rate can be pressed.");
+  }
+  // §1 Charge first: Ben's answers passed their review window unreviewed (on his own test, so the others keep their dates).
+  const t2 = await postTest(nora, { productName: "Sky Lab", title: "Sky Lab: tutorial", categories: ["Education"], spots: "4" });
+  const sB = await join(ben, t2);
+  await sendWritten(ben, sB);
+  openCharge(sB, t2);
+  await open(ben, `/app/sessions/${sB}`, "#rate [data-rate-disabled]");
+  await shot(ben, "b17-01-rate-charge", "§1 Charge first | Ben's answers were never reviewed and Charge is open: Rate is disabled with “Charge or let go of your unreviewed work first.”", "#rate");
+  // §1 A dispute of hers: Cam was paid under the listing and disputed it.
+  await payWith(nora, subC, "6.00", "Only the first answer was about this build.");
+  await disputeOf(cam, sC, subC);
+  await open(cam, `/app/sessions/${sC}`, "#rate [data-rate-disabled]");
+  await shot(cam, "b17-01-rate-dispute", "§1 Their own dispute | Cam disputed what Nora paid: Rate is disabled with “Rating opens once the team decides your dispute.”", "#rate");
+  // §1 (developer) Dee was paid, rated Nora, then disputed: Nora's Rate for Dee is disabled with the dispute line.
+  await payWith(nora, subD, "5.00", "Only the first answer was about this build.");
+  await rateDev(dee, sD, 4, "Clear steps.");
+  await disputeOf(dee, sD, subD);
+  // §17 Ana's dashboard lists the rating she can give.
+  {
+    const T = await rec(V, ana);
+    await open(T, "/app", "[data-ratings-to-give]");
+    await T.locator("[data-ratings-to-give]").scrollIntoViewIfNeeded();
+    const from = at(T);
+    await pause(T, 1500);
+    await shot(T, "b17-17-tester-box", "§17 Ratings to give (tester) | Ana's dashboard lists the one rating she can give now: “Rate Nora Lane on “Harbor Run: first 3 levels””.", "[data-ratings-to-give]");
+    await T.locator("[data-ratings-to-give] [data-rate-row]").first().click();
+    await T.waitForURL(/\/app\/sessions\//, { timeout: 15000 });
+    await pause(T, 2500);
+    await shot(T, "b17-17-tester-opens", "§17 The row opens the Rate box | The session page opens at its Rate box, highlighted for a few seconds.", "#rate");
+    finishVideo([{ file: await saveVideo(T, "b17-17-t.webm"), from }], "b17-17-tester-video", "§17 From Ratings to give to Rate | Ana's row opens her session page at the Rate box, highlighted.");
+  }
+  // §16 Nora's Rate for Ana is hidden until Ana rates; then it appears live, and Ratings to give lists it.
+  {
+    const D = await rec(V, nora);
+    await open(D, `/app/tests/${t}`, `#tester-${sA}`);
+    await D.locator(`#tester-${sA}`).scrollIntoViewIfNeeded();
+    const from = at(D);
+    await pause(D, 1500);
+    if (await D.locator(`#rate-${sA}`).count()) console.log("   ! §16: Nora's Rate for Ana shows before Ana rated");
+    await shot(D, "b17-16-hidden", "§16 Not before the tester rates | Ana's answers are paid, but she hasn't rated Nora yet: her row has no Rate box.", `#tester-${sA}`);
+    await rateDev(ana, sA, 5, "Quick pay and clear steps.");
+    await waitPoll(D, `#rate-${sA}`);
+    await D.locator(`#rate-${sA}`).scrollIntoViewIfNeeded();
+    await pause(D, 2000);
+    await shot(D, "b17-16-shown", "§16 After she rated | Ana rated Nora: the Rate box for Ana appears in her row (everything she sent is settled).", `#tester-${sA}`);
+    finishVideo([{ file: await saveVideo(D, "b17-16.webm"), from }], "b17-16-video", "§16 The developer rates second | Ana's row has no Rate box; Ana rates Nora, and on the page's next refresh the Rate box for Ana appears.");
+  }
+  await open(nora, `/app/tests/${t}`, `#tester-${sD}`);
+  await unfold(nora, `#rate-${sD}`);
+  await pause(nora, 500);
+  await shot(nora, "b17-01-dev-dispute", "§1 The developer's side | Dee rated Nora, then disputed her pay: Nora's Rate for Dee is disabled with “Rating opens once the team decides Dee Park's dispute.”", `#rate-${sD}`);
+  {
+    const D = await rec(V, nora);
+    await open(D, "/app", "[data-ratings-to-give]");
+    await D.locator("[data-ratings-to-give]").scrollIntoViewIfNeeded();
+    const from = at(D);
+    await pause(D, 1500);
+    await shot(D, "b17-17-dev-box", "§17 Ratings to give (developer) | Nora's dashboard lists only Ana, who rated her and is settled: “Rate Ana Silva on “Harbor Run: first 3 levels” · 14 days left”. Dee's open dispute keeps her out.", "[data-ratings-to-give]");
+    await D.locator("[data-ratings-to-give] [data-rate-row]").first().click();
+    await D.waitForURL(/\/app\/tests\//, { timeout: 15000 });
+    await pause(D, 2500);
+    finishVideo([{ file: await saveVideo(D, "b17-17-d.webm"), from }], "b17-17-dev-video", "§17 The developer's row | It opens the test page at Ana's Rate box, highlighted for a few seconds.");
+  }
+}, { section: B17, fake: true });
+
+group("b17b", async () => {
+  // §12 A stop while a page is open: Charge, Pay and Rate stop once with it, Cancel call is refused; §15 Stop's required reason, read by the tester.
+  const nora = await account(`dev+media${TS}cb@playtest.test`, "Nora Lane", "developer", "she");
+  await subscribeDev(nora);
+  const ana = await account(`tester+media${TS}cba@playtest.test`, "Ana Silva", "tester", "she");
+  const ben = await account(`tester+media${TS}cbb@playtest.test`, "Ben Okafor", "tester", "he");
+  const cam = await account(`tester+media${TS}cbc@playtest.test`, "Cam Lee", "tester", "they");
+  const dee = await account(`tester+media${TS}cbd@playtest.test`, "Dee Park", "tester", "she");
+  const eli = await account(`tester+media${TS}cbe@playtest.test`, "Eli Novak", "tester", "he");
+  const admin = await adminAccount();
+  // §12 Cancel call on a page opened before Nora's Stop: refused (the stop cancelled the call).
+  {
+    const gus = await account(`tester+media${TS}cbg@playtest.test`, "Gus Hale", "tester", "he");
+    const t = await postTest(nora, { title: "Harbor Run: harbor tour", liveRateCents: "30.00", spots: "5" });
+    const sG = await join(gus, t);
+    const call = await bookCall(nora, gus, t, sG, 50);
+    const G = await rec(V, gus);
+    await G.goto(`/app/sessions/${sG}`);
+    await G.waitForSelector(`#call-${call} [data-cancel-menu]`);
+    await G.locator(`#call-${call}`).scrollIntoViewIfNeeded();
+    const from = at(G);
+    await waitPulse(G);
+    await pause(G, 800);
+    await stopTest(nora, t);
+    await G.locator(`#call-${call} [data-cancel-menu] summary`).click();
+    await pause(G, 600);
+    await G.locator(`#call-${call} button`, { hasText: "Cancel this call" }).click();
+    await G.waitForSelector("text=This call was cancelled when the test stopped.", { timeout: 15000 });
+    await pause(G, 1800);
+    await shot(G, "b17-12-cancel-refused", "§12 Cancel call is refused | Gus's page was open before Nora stopped the test: his Cancel is refused with “This call was cancelled when the test stopped.”", G.locator(`#call-${call}`));
+    finishVideo([{ file: await saveVideo(G, "b17-12-cancel.webm"), from }], "b17-12-cancel-video", "§12 Cancel after a stop | Nora stops the test while Gus's page is open; his Cancel on the booked call is refused: the stop already cancelled it.");
+  }
+  // §12 Nora's own Stop while Ana's and Dee's pages are open: Charge and Rate stop once with it.
+  {
+    const t = await postTest(nora, { title: "Harbor Run: lighthouse", spots: "5" });
+    const sA = await join(ana, t), sD = await join(dee, t);
+    await sendWritten(ana, sA);
+    await sendWritten(dee, sD);
+    await apiPay(nora, subOf(sD), "10.00");
+    openCharge(sA, t);
+    const R = await same(dee);
+    const T = await rec(V, ana);
+    await Promise.all([open(R, `/app/sessions/${sD}`, "#rate"), (async () => { await T.goto(`/app/sessions/${sA}`); await T.waitForSelector("button:has-text('Let it go')"); })()]);
+    const charge = T.locator("button", { hasText: /^Charge / }).first();
+    await charge.scrollIntoViewIfNeeded();
+    const from = at(T);
+    await Promise.all([waitPulse(T), waitPulse(R)]);
+    await pause(T, 800);
+    await stopTest(nora, t);
+    await charge.click();
+    await T.waitForSelector("[data-stop-box]", { timeout: 15000 });
+    await pause(T, 1800);
+    await shot(T, "b17-12-charge-once", "§12 Charge stops once | The one change listed is the stop itself: “Nora Lane stopped this test at <time>.”, then “Press Charge again to go ahead.”", T.locator("[data-stop-box]").first().locator("xpath=ancestor::*[@id][1]"));
+    await T.locator("button", { hasText: /^Charge / }).first().click();
+    await T.waitForSelector("text=/Charged|may be delayed/i", { timeout: 15000 }).catch(() => {});
+    await pause(T, 2500);
+    finishVideo([{ file: await saveVideo(T, "b17-12-own.webm"), from }], "b17-12-own-video", "§12 A stop on a page already open | Nora stops the test while Ana's page is open: Charge stops once naming the stop, and the second press charges.");
+    // Rate on Dee's page opened before the stop: stops once the same way.
+    await R.locator("#rate select").selectOption("5");
+    await pressConfirm(R, R.locator("#rate button", { hasText: /^Rate( and finish)?$/ }).first(), "Rate and finish");
+    await R.waitForSelector("#rate [data-stop-box]", { timeout: 15000 });
+    await pause(R, 1200);
+    await shot(R, "b17-12-rate-once", "§12 Rate stops once too | Dee's Rate from a page opened before the stop: “Nora Lane stopped this test at <time>.” Her next press rates.", "#rate");
+  }
+  // §12 The team's Stop: the tester reads only the time; the developer reads that the team did it.
+  {
+    const t = await postTest(nora, { title: "Harbor Run: reef", spots: "5" });
+    const sB = await join(ben, t), sC = await join(cam, t);
+    await sendWritten(ben, sB);
+    await sendWritten(cam, sC);
+    openCharge(sB, t);
+    const subC = subOf(sC);
+    ensureCard(nora.email);
+    const D = await rec(V, nora), B = await rec(V, ben);
+    await Promise.all([D.goto(`/app/tests/${t}`), B.goto(`/app/sessions/${sB}`)]);
+    await Promise.all([D.waitForSelector(`#piece-${subC}`), B.waitForSelector("button:has-text('Let it go')")]);
+    await D.locator(`#piece-${subC}`).scrollIntoViewIfNeeded();
+    await B.locator("button:has-text('Let it go')").first().scrollIntoViewIfNeeded();
+    const fromD = at(D), fromB = at(B);
+    await Promise.all([waitPulse(D), waitPulse(B)]);
+    await adminDo(admin, "stop-test", t, { note: "Media pass check: against the content rules" });
+    await payPiece(D, subC);
+    await D.waitForSelector(`#piece-${subC} [data-stop-box]`, { timeout: 15000 });
+    await pause(D, 1200);
+    await shot(D, "b17-12-team-dev", "§12 The team's Stop, for the developer | Nora's Pay from a page opened before it: “The team stopped this test at <time>.” (the reason is on her banner).", D.locator(`#piece-${subC} [data-stop-box]`));
+    await pressConfirm(B, B.locator("button", { hasText: /^Let it go$/ }).first(), "Let it go");
+    await B.waitForSelector("[data-stop-box]", { timeout: 15000 });
+    await pause(B, 1500);
+    await shot(B, "b17-12-team-tester", "§12 The team's Stop, for the tester | Ben's Let it go stops once with only “This test was stopped at <time>.”: never that the team did it, never the reason.", B.locator("[data-stop-box]").first());
+    await pause(D, 800);
+    finishVideo([{ file: await saveVideo(D, "b17-12-team-d.webm"), from: fromD }, { file: await saveVideo(B, "b17-12-team-b.webm"), from: fromB }], "b17-12-team-video", "§12 The team stops the test | Nora's Pay (left) stops once with “The team stopped this test at …”; Ben's Let it go (right) with only “This test was stopped at …”.");
+  }
+  // §15 Stop needs a reason testers read.
+  {
+    const t = await postTest(nora, { title: "Harbor Run: night harbor", spots: "5" });
+    const sE = await join(eli, t);
+    const D = await rec(V, nora);
+    await open(D, `/app/tests/${t}`, "button:has-text('Stop the test')");
+    const from = at(D);
+    await pause(D, 1000);
+    await D.locator("section[aria-label='Test'] button", { hasText: "Stop the test" }).first().click();
+    await D.waitForSelector("dialog[open] #stop-reason");
+    await pause(D, 1500);
+    await shot(D, "b17-15-why-empty", "§15 Stop asks why | The pop-up has a required “Why? (testers read it)” box with its 0 / 10,000 counter; Stop the test stays disabled with “Say why first”.", "dialog[open]");
+    await typeSlow(D, "dialog[open] #stop-reason", "We found what we needed in this build: thank you! The next round opens next week.", 22);
+    await pause(D, 1200);
+    await shot(D, "b17-15-why-typed", "§15 With a reason | Once the box has text the counter counts it and Stop the test can be pressed.", "dialog[open]");
+    await D.locator("dialog[open] button[data-confirm='Stop the test']").click();
+    await D.waitForSelector("text=/Stopped/", { timeout: 15000 }).catch(() => {});
+    await pause(D, 2500);
+    finishVideo([{ file: await saveVideo(D, "b17-15.webm"), from }], "b17-15-video", "§15 Stopping with a reason | Stop the test opens the pop-up; Stop stays disabled until Nora says why, then the test stops.");
+    await open(eli, `/app/sessions/${sE}`, "#stopped-line");
+    await shot(eli, "b17-15-tester-reads", "§15 The tester reads it | Eli's page says the test was stopped, with Nora's reason in italics in its scroll box under the line.", "#stopped-line");
+  }
+}, { section: B17, fake: true });
+
+/** (Batch 17 §19) Moves a stopped test and its pieces back in time: the stop and every tester's deadline `days` ago, each piece sent `days + 10` days ago (Charge opened `days` ago). */
+function stoppedDaysAgo(testId, days, unpaidSubs = [], paidSubs = []) {
+  const ago = (n) => `${utcNow} - interval '${n} days'`;
+  own(`update "Test" set "stoppedAt" = ${ago(days)}, "openUntil" = ${ago(days + 2)} where id = '${testId}'`);
+  own(`update "Contract" set "dueAt" = ${ago(days)}, "joinedAt" = ${ago(days + 14)} where "testId" = '${testId}'`);
+  for (const sub of [...unpaidSubs, ...paidSubs]) own(`update "Submission" set "sentAt" = ${ago(days + 10)}, "updatedAt" = ${ago(days + 10)}, "payBy" = ${ago(days + 3)} where id = '${sub}'`);
+  for (const sub of unpaidSubs) own(`update "Submission" set "choiceOfferedAt" = ${ago(days)}, "choiceBy" = ${utcNow} + interval '${14 - days} days' where id = '${sub}'`);
+}
+
+group("b17c", async () => {
+  // §10 The suspended tester's Dispute-only view; §19 the close-out lines.
+  const nora = await account(`dev+media${TS}cc@playtest.test`, "Nora Lane", "developer", "she");
+  await subscribeDev(nora);
+  const ana = await account(`tester+media${TS}cca@playtest.test`, "Ana Silva", "tester", "she");
+  const ben = await account(`tester+media${TS}ccb@playtest.test`, "Ben Okafor", "tester", "he");
+  const cam = await account(`tester+media${TS}ccc@playtest.test`, "Cam Lee", "tester", "they");
+  const dee = await account(`tester+media${TS}ccd@playtest.test`, "Dee Park", "tester", "she");
+  const fay = await account(`tester+media${TS}ccf@playtest.test`, "Fay Mendes", "tester", "she");
+  const admin = await adminAccount();
+  // §10 Fay: paid under the listing on one test (she can dispute it), Charge open on another; then her tester side is suspended.
+  {
+    const ta = await postTest(nora, { title: "Harbor Run: reef", spots: "4" });
+    const tb = await postTest(nora, { productName: "Sky Lab", title: "Sky Lab: tutorial", categories: ["Education"], spots: "4" });
+    const sa = await join(fay, ta), sb = await join(fay, tb);
+    await sendWritten(fay, sa);
+    await sendWritten(fay, sb);
+    await payWith(nora, subOf(sa), "5.00", "Only the first answer was about this build.");
+    openCharge(sb, tb);
+    await adminDo(admin, "suspend", fay.uid, { note: "Media pass check: reported for copied answers", side: "tester" });
+    await open(fay, `/app/sessions/${sa}`, "[data-limited-view]");
+    await shotFull(fay, "b17-10-dispute-only", "§10 Only Dispute | Fay's account is paused: the page says “Your account is paused. You can still dispute a payment.” and “Dispute the pay” is the only press (no Charge, Let it go or Rate).");
+    await open(fay, `/app/sessions/${sb}`, "[data-limited-view]");
+    if (await fay.locator("button", { hasText: /^Charge |^Let it go$/ }).count()) console.log("   ! §10: Charge or Let it go shows in the limited view");
+    await shotSpan(fay, "b17-10-no-charge", "§10 Charge waits | On her other test Charge was open, but the limited view shows no Charge or Let it go; the part stays open to Charge for when she's back.", "[data-limited-view]", "#part-written");
+  }
+  // §19 A test stopped 10 days ago: close-out in 4 days. Ana's unpaid answers show when Charge and Pay close; Cam's paid answers when Pay more closes.
+  {
+    const t = await postTest(nora, { title: "Harbor Run: lighthouse", spots: "4" });
+    const sA = await join(ana, t), sC = await join(cam, t);
+    await sendWritten(ana, sA);
+    await sendWritten(cam, sC);
+    const subA = subOf(sA), subC = subOf(sC);
+    await apiPay(nora, subC, "10.00");
+    await stopTest(nora, t);
+    stoppedDaysAgo(t, 10, [subA], [subC]);
+    await open(ana, `/app/sessions/${sA}`, "[data-charge-closes]");
+    await shot(ana, "b17-19-charge-closes", "§19 Charge closes on … | In its last 7 days Ana's Charge box says “Charge closes on <date>.” (14 days after the last tester's deadline).", ana.locator("[data-charge-closes]").first().locator("xpath=ancestor::*[@id][1]"));
+    await open(nora, `/app/tests/${t}`, `#piece-${subA} [data-pay-closes]`);
+    await shot(nora, "b17-19-pay-closes", "§19 Pay closes on … | The same date on Nora's Needs you row for Ana's answers: “Pay closes on <date>.”", nora.locator(`#piece-${subA}`).locator("[data-pay-closes]").locator("xpath=.."));
+    await unfold(nora, `[data-pay-more="${subC}"]`);
+    await shot(nora, "b17-19-pay-more-closes", "§19 Pay more closes on … | Cam's paid answers keep their Pay more box, which now closes with the test's last Pay or Charge: “Pay more closes on <date>.” (no longer 30 days after the test ended).", `[data-pay-more="${subC}"]`);
+  }
+  // §19 A test stopped 20 days ago: close-out passed. Ben's unpaid answers closed unpaid; Dee (paid) can no longer rate.
+  {
+    const t = await postTest(nora, { productName: "Night Market", title: "Night Market demo", categories: ["Game"], spots: "4" });
+    const sB = await join(ben, t), sD = await join(dee, t);
+    await sendWritten(ben, sB);
+    await sendWritten(dee, sD);
+    const subB = subOf(sB), subD = subOf(sD);
+    await apiPay(nora, subD, "10.00");
+    await stopTest(nora, t);
+    stoppedDaysAgo(t, 20, [subB], [subD]);
+    await open(nora, `/app/tests/${t}`, `#tester-${sB}`);
+    await unfold(nora, `#tester-${sB}`);
+    await shot(nora, "b17-19-closed-not-paid", "§19 Closed unpaid (developer) | Ben's answers were never paid or charged by the close-out: his row reads “Closed on <date>: not paid.” and they left Needs you.", nora.locator(`#tester-${sB} [data-closed-not-paid]`).locator("xpath=ancestor::li[1]"));
+    await open(ben, `/app/sessions/${sB}`, "[data-part-status=closed]");
+    await shot(ben, "b17-19-not-paid-tester", "§19 Closed unpaid (tester) | Ben's part reads “Not paid (closed on <date>)”, with no Charge or Let it go.", "#part-written");
+    await open(dee, `/app/sessions/${sD}`, "[data-rating-closed]");
+    await shot(dee, "b17-19-rating-closed", "§19 Rating closed | Dee never rated Nora: after the close-out her page says “Rating closed on <date>.” instead of a Rate box.", "[data-rating-closed]");
+  }
+}, { section: B17, fake: true });
+
+group("b17d", async () => {
+  // §5 Admin search with ticks, §7 scroll boxes that load as you scroll, §6 Suspend / Reinstate on a profile and the Preview check.
+  const nora = await account(`dev+media${TS}cd@playtest.test`, "Nora Lane", "developer", "she");
+  await subscribeDev(nora);
+  const ana = await account(`tester+media${TS}cda@playtest.test`, "Ana Silva", "tester", "she");
+  const admin = await adminAccount();
+  const admin2 = await account(`admin2+media${TS}cd@playtest.test`, "Second Admin", "developer", "they");
+  own(`update "User" set "isAdmin" = true where email = ${lit(admin2.email)}`);
+  // 30 of Nora's tests (each stopped after posting: 10 open at most), so her Tests list runs past one load of 25.
+  for (let i = 1; i <= 30; i++) {
+    const id = await postTest(nora, { title: `Harbor Run: level ${i}`, spots: "3" });
+    if (i < 30) await stopTest(nora, id);
+  }
+  const key = `dev+media${TS}cd`;
+  // §5 Accounts and Tests: a search box and ticks; only that list reloads.
+  {
+    const A = await rec(V, admin);
+    await open(A, "/admin", "[data-list-search=users]");
+    await A.locator("#users").scrollIntoViewIfNeeded();
+    const from = at(A);
+    await pause(A, 1200);
+    await typeSlow(A, "[data-list-search=users]", "Ana Silva", 90);
+    await A.waitForSelector("[data-list-heading=users] >> text=/match/", { timeout: 15000 });
+    await pause(A, 1500);
+    await A.locator("[data-list-tick=tester]").check();
+    await pause(A, 2000);
+    await shot(A, "b17-05-accounts", "§5 Accounts: search and ticks | “Ana Silva” with Tester ticked: the heading becomes “Accounts: N match” and only that list reloads (any part of a name or email, any case, over every account).", "#users");
+    await A.locator("[data-list-tick=suspended]").check();
+    await pause(A, 2000);
+    await A.locator("[data-list-tick=suspended]").uncheck();
+    await A.locator("[data-list-tick=tester]").uncheck();
+    await A.locator("[data-list-search=users]").fill("");
+    await pause(A, 1500);
+    await A.locator("#tests").scrollIntoViewIfNeeded();
+    await typeSlow(A, "[data-list-search=tests]", key, 40);
+    await A.waitForSelector("[data-list-heading=tests] >> text=/match/", { timeout: 15000 });
+    await pause(A, 1200);
+    await A.locator("[data-list-tick=stopped]").check();
+    await pause(A, 2000);
+    await shot(A, "b17-05-tests", "§5 Tests: search and ticks | The developer's email with Stopped / closed ticked: “Tests: 29 match”, her one open test left out.", "#tests");
+    await A.locator("[data-list-tick=stopped]").uncheck();
+    await pause(A, 2000);
+    finishVideo([{ file: await saveVideo(A, "b17-05.webm"), from }], "b17-05-video", "§5 Searching the admin lists | Typing a name narrows Accounts as you type, ticks narrow it further; the Tests list searches by the developer's email and its own ticks.");
+  }
+  // §7 The Tests box loads the next 25 as you near its end, then says “That's all (30)”.
+  {
+    const A = await rec(V, admin);
+    await open(A, "/admin", "[data-list-search=tests]");
+    await A.locator("[data-list-search=tests]").fill(key);
+    await A.waitForSelector("[data-list-heading=tests] >> text=/30 match/", { timeout: 15000 });
+    await A.locator("#tests").scrollIntoViewIfNeeded();
+    const from = at(A);
+    await pause(A, 1500);
+    const box = A.locator("[data-scroll-box=tests]");
+    const b = await box.boundingBox();
+    await A.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    for (let i = 0; i < 14 && !(await A.locator("[data-end-line=tests]").isVisible().catch(() => false)); i++) { await A.mouse.wheel(0, 260); await A.waitForTimeout(450); }
+    await A.waitForSelector("[data-end-line=tests]", { timeout: 15000 });
+    await box.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+    await pause(A, 1800);
+    await shot(A, "b17-07-end", "§7 The end of the list | Scrolling inside the box loaded the next 25 (a “Loading…” row shows meanwhile); at the end, “That's all (30)”. The heading keeps the count: “Tests: 30 match”.", "#tests");
+    finishVideo([{ file: await saveVideo(A, "b17-07.webm"), from }], "b17-07-video", "§7 A box that loads as you scroll | The Tests list is a box about 10 rows tall: scrolling near its end loads the next 25, until “That's all (30)”.");
+  }
+  // §6 Suspend from the profile: the Preview check refuses a press made after another admin acted.
+  {
+    const A = await rec(V, admin);
+    await open(A, `/app/testers/${ana.uid}`, "[data-admin-account]");
+    await A.locator("[data-admin-account]").scrollIntoViewIfNeeded();
+    const from = at(A);
+    await pause(A, 1200);
+    await shot(A, "b17-06-profile-actions", "§6 On the profile | Ana's profile, seen by an admin, has Preview suspension, Suspend (with its reason) and Delete account, as in the Accounts list.", "[data-admin-account]");
+    await A.locator("[data-admin-account] button", { hasText: "Preview suspension" }).click();
+    await A.waitForSelector("[data-admin-account] [data-preview]", { timeout: 15000 });
+    await pause(A, 1500);
+    await adminDo(admin2, "suspend", ana.uid, { side: "tester", note: "Media pass check: reported for copied answers" });
+    await typeSlow(A, `#suspend-${ana.uid}-note`, "Copied answers on two tests", 30);
+    await A.locator("[data-admin-account] button.btn-danger", { hasText: /^Suspend/ }).first().click();
+    await A.waitForSelector("[data-account-msg]", { timeout: 15000 });
+    await pause(A, 2000);
+    await shot(A, "b17-06-since-preview", "§6 Since your Preview | Another admin suspended Ana after this Preview was loaded: the press is refused with “Since your Preview, <admin> suspended that account's tester side at <time>.” and the box now shows her suspended, with Reinstate.", "[data-admin-account]");
+    await A.locator("[data-admin-account] button", { hasText: "Reinstate" }).first().click();
+    await A.waitForSelector("[data-admin-account] [data-account-state=normal]", { timeout: 20000 }).catch(() => {});
+    await pause(A, 2500);
+    await shot(A, "b17-06-reinstated", "§6 Reinstate | Reinstate on the profile brings her tester side back; Suspend shows again.", "[data-admin-account]");
+    finishVideo([{ file: await saveVideo(A, "b17-06.webm"), from }], "b17-06-video", "§6 Suspend and Reinstate on a profile | The admin loads a Preview; another admin suspends Ana meanwhile; Suspend is refused naming who and when, the box updates, and Reinstate brings her back.");
+  }
+}, { section: B17, fake: true });
+
+/** (Batch 17 §8, §18) Rosa Quill's tests in every state a tester or an admin can see. */
+async function rosaTests(rosa, ben, admin) {
+  const mk = (product, title, over = {}) => postTest(rosa, { productName: product, title: `${product}: ${title}`, spots: "4", ...over });
+  const L = {};
+  L.open = await mk("Lantern Bay", "harbor lights");
+  L.open2 = await mk("Driftwood", "first dive", { categories: ["Education"] });
+  L.full = await mk("Tidepool", "tutorial", { spots: "1" });
+  await join(ben, L.full);
+  L.closing = await mk("Saltmarsh", "map", { categories: ["Productivity"] });
+  own(`update "Test" set "openUntil" = ${utcNow} - interval '1 day' where id = '${L.closing}'`);
+  L.paused = await mk("Kelp Kart", "race 1");
+  await adminDo(admin, "pause-test", L.paused);
+  L.stopped = await mk("Reef Rally", "boss fight");
+  await stopTest(rosa, L.stopped);
+  L.closed = await mk("Coral Cove", "night dive");
+  await adminDo(admin, "pause-test", L.closed);
+  await adminDo(admin, "close-paused", L.closed);
+  L.invite = await mk("Moonfish", "private beta", { joinMode: "invite" });
+  L.invited = await mk("Moonfish", "sync beta", { joinMode: "invite" });
+  L.apply = await mk("Driftwood", "night dive", { joinMode: "apply", categories: ["Education"] });
+  await nextRound(rosa, L.open);
+  return L;
+}
+
+group("b17e", async () => {
+  // §8 Find tests search (tester, and admins with state badges); §18 Tests visited.
+  retireName("Rosa Quill");
+  const rosa = await account(`dev+media${TS}ce@playtest.test`, "Rosa Quill", "developer", "she");
+  await subscribeDev(rosa);
+  const ana = await account(`tester+media${TS}cea@playtest.test`, "Ana Silva", "tester", "she");
+  const ben = await account(`tester+media${TS}ceb@playtest.test`, "Ben Okafor", "tester", "he");
+  const admin = await adminAccount();
+  const L = await rosaTests(rosa, ben, admin);
+  ok(await post(rosa, `/api/tests/${L.invited}/invite`, { ...go, testerIds: [ana.uid] }), "invite");
+  // §8 The tester's search box.
+  {
+    const T = await rec(V, ana);
+    await open(T, "/app/find?mine=0", "#findSearch");
+    const from = at(T);
+    await pause(T, 1200);
+    await typeSlow(T, "#findSearch", "rosa q", 120);
+    await T.waitForURL(/q=rosa/, { timeout: 15000 });
+    await pause(T, 2000);
+    await shotSpan(T, "b17-08-tester-search", "§8 Search tests or developers | “rosa q” finds Rosa Quill's tests open to join (any part of a test, product or developer name, any case), together with the chips and filters.", "[data-find-search]", T.locator("main ul.grid").first());
+    await T.locator("#findSearch").fill("");
+    await typeSlow(T, "#findSearch", "Zed Quarry", 120);
+    await T.waitForSelector("[data-find-none]", { timeout: 15000 });
+    await pause(T, 1800);
+    await shotSpan(T, "b17-08-tester-none", "§8 No match | “No open tests match “Zed Quarry”.”", "[data-find-search]", "[data-find-none]");
+    finishVideo([{ file: await saveVideo(T, "b17-08-t.webm"), from }], "b17-08-tester-video", "§8 Searching Find tests | Ana types a developer's name and the list narrows as she types; a name nobody matches shows the no-match line.");
+  }
+  // §8 Admins get Find tests too: every test, with its state, and tick boxes for the states.
+  {
+    const A = await rec(V, admin);
+    await open(A, "/admin", "[data-admin-find]");
+    const from = at(A);
+    await pause(A, 1000);
+    await A.click("[data-admin-find]");
+    await A.waitForSelector("#findSearch");
+    await typeSlow(A, "#findSearch", "Rosa Quill", 90);
+    await A.waitForURL(/q=Rosa/, { timeout: 15000 });
+    await A.waitForSelector("[data-test-state]");
+    await pause(A, 2000);
+    await shotFull(A, "b17-08-admin-states", "§8 Admins' Find tests | The admin header's Find tests lists every test, each card with its state: Open, Full, Joining closed, Paused, Stopped, Closed, Draft, Invite only (no Join or Apply).");
+    for (const s of ["Paused", "Stopped", "Closed"]) { await A.locator("[data-state-ticks] label", { hasText: new RegExp("^\\s*" + s + "\\s*$") }).locator("input").click(); await pause(A, 2500); }
+    await pause(A, 1500);
+    await shotSpan(A, "b17-08-admin-ticks", "§8 The state ticks | Paused, Stopped and Closed ticked: only those cards remain.", "[data-state-ticks]", A.locator("main ul.grid").first());
+    finishVideo([{ file: await saveVideo(A, "b17-08-a.webm"), from }], "b17-08-admin-video", "§8 Find tests for the team | From the admin header: search a developer, read each test's state, tick states to narrow the list.");
+  }
+  // §18 Tests visited: Ana opens join pages of tests she never joins.
+  ok(await post(ana, `/api/tests/${L.apply}/apply`, { seenAt: nowIso(), confirmed: true, anyway: true, note: "I play a lot of diving games." }), "apply");
+  for (const id of [L.closed, L.stopped, L.paused, L.closing, L.full, L.invite, L.invited, L.apply, L.open2]) {
+    await ana.goto(`/app/find/${id}`);
+    await pause(ana, 400);
+  }
+  {
+    const T = await rec(V, ana);
+    await open(T, "/app", "#tests-visited");
+    await T.locator("#tests-visited").scrollIntoViewIfNeeded();
+    const from = at(T);
+    await pause(T, 1500);
+    await shot(T, "b17-18-visited", "§18 Tests visited | Every join page Ana opened but never joined, latest first, with its state now: Accepting testers, Applied (waiting), Invited, and further down the box Invite only, Full, Closed to new testers on <date>, Paused, Stopped, Closed.", "#tests-visited");
+    const list = T.locator("#tests-visited [data-scroll-list]").first();
+    const b = await list.boundingBox().catch(() => null);
+    if (b) { await T.mouse.move(b.x + b.width / 2, b.y + Math.min(b.height / 2, 120)); for (let i = 0; i < 5; i++) { await T.mouse.wheel(0, 160); await T.waitForTimeout(350); } }
+    await pause(T, 800);
+    await T.locator(`[data-remove-visit="${L.closed}"]`).click();
+    await waitPoll(T, `[data-visited="${L.closed}"]`, true, 10000);
+    await pause(T, 1800);
+    await T.locator(`[data-visited-open="${L.invite}"]`).click();
+    await T.waitForSelector("[data-unavailable]", { timeout: 15000 });
+    await pause(T, 2000);
+    await shot(T, "b17-18-invite-only", "§18 An invite-only card | Its card says “Invite only”; the join page shows only “This test isn't available right now.”, nothing of the listing.", "main");
+    finishVideo([{ file: await saveVideo(T, "b17-18.webm"), from }], "b17-18-video", "§18 Tests visited | Ana scrolls her visited tests, removes the closed one with ×, then opens the invite-only card: “This test isn't available right now.”");
+  }
+}, { section: B17, fake: true });
+
+group("b17f", async () => {
+  // §9 A developer profile's Open tests stay current (live, and a stale click); §4 No thanks on an invite re-sent on a new listing.
+  const omar = await account(`dev+media${TS}cf@playtest.test`, "Omar Reyes", "developer", "he");
+  await subscribeDev(omar);
+  const ana = await account(`tester+media${TS}cfa@playtest.test`, "Ana Silva", "tester", "she");
+  const admin = await adminAccount();
+  const mk = (title, over = {}) => postTest(omar, { productName: "Tide Tracker", title: `Tide Tracker: ${title}`, categories: ["Productivity"], spots: "4", ...over });
+  const widgets = await mk("widgets"), alarms = await mk("alarms"), sync = await mk("sync");
+  const link = (P, id) => P.locator(`a[href^="/app/find/${id}"]`);
+  // §9 Live: Omar stops a test while Ana has his profile open; it leaves her list on the page's next refresh.
+  {
+    const T = await rec(V, ana);
+    await open(T, `/app/developers/${omar.uid}`, `a[href^="/app/find/${alarms}"]`);
+    const list = T.locator("section.card", { has: T.locator("h2", { hasText: "Open tests" }) });
+    await list.scrollIntoViewIfNeeded();
+    const from = at(T);
+    await pause(T, 1500);
+    await shot(T, "b17-09-open-tests", "§9 Open tests on a developer's profile | Ana sees Omar's three open tests.", list);
+    await stopTest(omar, alarms);
+    await waitPoll(T, `a[href^="/app/find/${alarms}"]`, true);
+    await pause(T, 2000);
+    await shot(T, "b17-09-live", "§9 It stays current | Omar stopped “Tide Tracker: alarms” while the profile was open: it left the list on the page's own refresh, no reload.", list);
+    finishVideo([{ file: await saveVideo(T, "b17-09-live.webm"), from }], "b17-09-live-video", "§9 Open tests, live | Omar stops one of his tests while Ana reads his profile; it leaves her list on the next refresh.");
+  }
+  // §9 A stale click: the team pauses a test just before Ana clicks it on the profile she opened earlier.
+  {
+    const T = await rec(V, ana);
+    await T.goto(`/app/developers/${omar.uid}`);
+    await waitPulse(T);
+    await link(T, widgets).first().scrollIntoViewIfNeeded();
+    const from = at(T);
+    await pause(T, 1000);
+    await adminDo(admin, "pause-test", widgets);
+    await link(T, widgets).first().click();
+    await T.waitForSelector("[data-profile-gone]", { timeout: 15000 });
+    await pause(T, 2000);
+    await shot(T, "b17-09-stale-click", "§9 A stale click | The test paused after Ana's profile page loaded: its page shows only “This test isn't available right now.” and a link back, nothing of the listing.", "main");
+    await pause(T, 1000);
+    finishVideo([{ file: await saveVideo(T, "b17-09-stale.webm"), from }], "b17-09-stale-video", "§9 A stale click | Ana clicks a test the team has just paused on the profile she opened earlier: its page shows only the refusal, with a link back.");
+  }
+  // §4 No thanks on an invite that was re-sent on a new listing: it stops once (blue), the next press says no thanks.
+  {
+    const t = await mk("private beta", { joinMode: "invite" });
+    ok(await post(omar, `/api/tests/${t}/invite`, { ...go, testerIds: [ana.uid] }), "invite");
+    const T = await rec(V, ana);
+    await T.goto("/app");
+    await T.waitForSelector("#invitations");
+    await waitPulse(T, 25000, "invites=1");
+    await T.locator("#invitations").scrollIntoViewIfNeeded();
+    const from = at(T);
+    await pause(T, 1200);
+    await apiEdit(omar, t, { description: "Install the private beta and set two alarms for the morning tide." });
+    await T.locator("#invitations button", { hasText: "No thanks" }).first().click();
+    await T.waitForSelector("#invitations [data-stop-box]", { timeout: 15000 });
+    await pause(T, 2000);
+    await shot(T, "b17-04-no-thanks-once", "§4 No thanks on a re-sent invite | Omar changed the listing, so the invite was sent again: No thanks stops once in blue with “Omar Reyes updated … your invite was sent again on the new listing” and the new listing, instead of a refusal.", T.locator("#invitations [data-stop-box]").first());
+    await T.locator("#invitations button", { hasText: "No thanks" }).first().click();
+    await waitPoll(T, "#invitations", true, 15000);
+    await pause(T, 2000);
+    finishVideo([{ file: await saveVideo(T, "b17-04.webm"), from }], "b17-04-video", "§4 No thanks, re-sent | The first press stops once with the new listing; the second says no thanks and the card goes.");
+  }
+}, { section: B17, fake: true });
+
+// ---------- Batch 18 (owner, Oct 28 evening): the report's "Batch 18 (Oct 28)" section (§ numbers are the items in docs/BATCH-18.md) ----------
+group("b18a", async () => {
+  // §1 Agreeing to updated Terms on Post and on Join, §2 the Terms' What changed, §8 the switch line, §7 excerpts without the product tick and under an NDA.
+  const nora = await account(`dev+media${TS}da@playtest.test`, "Nora Lane", "developer", "she");
+  await subscribeDev(nora);
+  const ana = await account(`tester+media${TS}daa@playtest.test`, "Ana Silva", "tester", "she");
+  const ben = await account(`tester+media${TS}dab@playtest.test`, "Ben Okafor", "tester", "he");
+  const t = await postTest(nora, { title: "Harbor Run: first 3 levels", spots: "5" });
+  // §1 Post: Nora accepted version 1 of the Terms; posting her next round asks her to agree to version 2 first.
+  {
+    await nextRound(nora, t);
+    const draftId = sql(`select id from "Test" where "developerId" = '${nora.uid}' and status = 'draft' order by "createdAt" desc limit 1`);
+    own(`update "User" set "termsVersion" = 1 where email = ${lit(nora.email)}`);
+    const D = await rec(V, nora);
+    await D.goto(`/app/tests/new?draft=${draftId}`);
+    await D.waitForSelector("[data-draft-note]");
+    await D.locator("#openUntil").fill(day(14));
+    const btn = D.locator("button", { hasText: "Post the test" });
+    await btn.scrollIntoViewIfNeeded();
+    const from = at(D);
+    await pause(D, 1000);
+    await btn.click();
+    await D.waitForSelector("[data-terms-again]", { timeout: 15000 });
+    await pause(D, 1800);
+    await shotSpan(D, "b18-01-post-box", "§1 Updated Terms on Post | Nora's first press of Post the test shows the box under it: “We updated our Terms of Use. Read what changed.” with the tick “I agree to the updated Terms”.", btn, "[data-terms-again]");
+    await D.locator("#agree-terms").check();
+    await pause(D, 900);
+    await btn.click();
+    await D.waitForURL((u) => /\/app\/tests\/\w+$/.test(u.pathname) && !u.pathname.endsWith("/new"), { timeout: 20000 });
+    await pause(D, 2000);
+    finishVideo([{ file: await saveVideo(D, "b18-01-post.webm"), from }], "b18-01-post-video", "§1 Agreeing on Post | The first press shows the Terms box; Nora ticks “I agree to the updated Terms” and the next press posts the round.");
+  }
+  // §1 Join: the same box under Join for a tester on the older version.
+  {
+    const t2 = await postTest(nora, { productName: "Sky Lab", title: "Sky Lab: tutorial", categories: ["Education"], spots: "5" });
+    own(`update "User" set "termsVersion" = 1 where email = ${lit(ben.email)}`);
+    const T = await rec(V, ben);
+    await open(T, `/app/find/${t2}`, "button.btn:has-text('Join')");
+    const btn = T.locator("button.btn", { hasText: /Join/ }).first();
+    await btn.scrollIntoViewIfNeeded();
+    const from = at(T);
+    await pause(T, 1000);
+    await btn.click();
+    await T.waitForSelector("[data-terms-again]", { timeout: 15000 });
+    await pause(T, 1800);
+    await shotSpan(T, "b18-01-join-box", "§1 Updated Terms on Join | Ben's Join shows the same box under the button; nothing else he does is blocked.", btn, "[data-terms-again]");
+    await T.locator("#agree-terms").check();
+    await pause(T, 900);
+    await btn.click();
+    await T.waitForURL(/\/app\/sessions\//, { timeout: 20000 });
+    await pause(T, 2000);
+    finishVideo([{ file: await saveVideo(T, "b18-01-join.webm"), from }], "b18-01-join-video", "§1 Agreeing on Join | Join shows the Terms box; Ben ticks it and the next press joins.");
+  }
+  // §2 The Terms page opens at "What changed".
+  await open(ana, "/terms#what-changed", "[data-what-changed]");
+  await shot(ana, "b18-02-what-changed", "§2 What changed | “Read what changed” opens the Terms at a short note for version 2: the content rule now matches the Mature line, calls end at the $1,000, every call uses Jitsi, and agreeing again.", "[data-what-changed]");
+  // §8 The switch line: Ana sent answers, then Nora changed the questions.
+  {
+    const sA = await join(ana, t);
+    await sendWritten(ana, sA);
+    await apiEdit(nora, t, { questions: ["What did you like?", "Which harbor was the hardest to sail into?"] });
+    await open(ana, `/app/sessions/${sA}`, "[data-switch-questions]");
+    await shot(ana, "b18-08-switch-line", "§8 Old answers stay payable | The Switch / Keep box for changed questions adds: “Switching means answering the new questions: send your updated answers. Answers you already sent stay payable at $10.00.” (the price they were sent at)", "#terms-offer");
+  }
+  // §7 Excerpts: no "Don't name the product" tick; a request pending when the test gets an NDA can still be allowed, into hidden.
+  {
+    const p = await paidPart(nora, ben, { productName: "Night Market", title: "Night Market demo", categories: ["Game"] });
+    const T = await rec(V, ben);
+    await open(T, `/app/sessions/${p.s}`, "[data-excerpt-picker]");
+    const pick = T.locator("[data-excerpt-picker]");
+    await pick.scrollIntoViewIfNeeded();
+    const from = at(T);
+    await pick.locator("button", { hasText: "Show an excerpt on your profile" }).click();
+    await pause(T, 600);
+    await pick.locator("input[type=radio]").first().check();
+    await T.locator(`#excerpt-text-${p.sub}`).fill("tight turns, and the wake looks lovely at night.");
+    await pause(T, 1200);
+    if (await pick.locator("text=/name the product/i").count()) console.log("   ! §7: the product tick is still there");
+    await shot(T, "b18-07-picker", "§7 No product tick | The excerpt picker has no “Don't name the product” tick any more: an excerpt always reads “From Night Market demo”.", pick);
+    await pick.locator("button", { hasText: "Ask the developer" }).click();
+    await T.waitForSelector("[data-excerpt-pending]", { timeout: 15000 });
+    await pause(T, 1500);
+    finishVideo([{ file: await saveVideo(T, "b18-07-ask.webm"), from }], "b18-07-ask-video", "§7 Asking for an excerpt | Ben picks a paid answer, trims it and asks Nora: no product tick.");
+    await apiEdit(nora, p.t, { ndaText: "Don't share screenshots or details of the market before launch." });
+    await open(nora, `/app/tests/${p.t}`, "[data-excerpt-request]");
+    await shot(nora, "b18-07-nda-request", "§7 Pending when the NDA came | Nora added an NDA after Ben asked: the request can still be allowed, and says it will stay hidden while the NDA is on.", "[data-excerpt-request]");
+    await nora.locator("[data-excerpt-request] button", { hasText: "Allow" }).click();
+    await pause(nora, 2000);
+    await open(ben, `/app/testers/${ben.uid}`, "#excerpts");
+    await shot(ben, "b18-07-allowed-hidden", "§7 Allowed into hidden | Ben's list reads “Allowed · hidden while Night Market demo has an NDA”: it shows on his profile if the NDA is removed.", "#excerpts");
+  }
+}, { section: B18, fake: true });
+
+group("b18b", async () => {
+  // §4 The avatar row: "+N more joined · M open".
+  const nora = await account(`dev+media${TS}db@playtest.test`, "Nora Lane", "developer", "she");
+  await subscribeDev(nora);
+  const t = await postTest(nora, { title: "Harbor Run: open beta", spots: "10" });
+  // (A developer starts at 10 spots per test; one who earned more has up to 50: this test is given 40.)
+  own(`update "Test" set spots = 40 where id = '${t}'`);
+  const names = ["Ana Silva", "Ben Okafor", "Cam Lee", "Dee Park", "Eli Novak", "Fay Mendes", "Gus Hale", "Hana Ito", "Ivo Brandt", "Jo Kim", "Kai Moreno", "Lia Costa", "Max Weber", "Noor Aziz"];
+  for (const [i, n] of names.entries()) {
+    const p = await account(`tester+media${TS}db${i}@playtest.test`, n, "tester", "they");
+    await join(p, t);
+    await p.context().close();
+  }
+  await open(nora, `/app/tests/${t}`, "[data-seats-more]");
+  await shot(nora, "b18-04-avatars", "§4 The avatar row | 12 circles, then “+2 more joined · 26 open”: the joined testers beyond the circles, and the spots still open.", nora.locator("[data-seats-more]").locator("xpath=.."));
+}, { section: B18, fake: true });
+
+group("b18c", async () => {
+  // §3 a call ending at the $1,000, §6 the Length cap, §9 a call in progress never cut, §10 and §12 the call page's lines, §13 Check your call setup.
+  const nora = await account(`dev+media${TS}dc@playtest.test`, "Nora Lane", "developer", "she");
+  await subscribeDev(nora);
+  const ana = await account(`tester+media${TS}dca@playtest.test`, "Ana Silva", "tester", "she");
+  const ben = await account(`tester+media${TS}dcb@playtest.test`, "Ben Okafor", "tester", "he");
+  const cam = await account(`tester+media${TS}dcc@playtest.test`, "Cam Lee", "tester", "they");
+  const dee = await account(`tester+media${TS}dcd@playtest.test`, "Dee Park", "tester", "she");
+  const t = await postTest(nora, { title: "Harbor Run: live", liveRateCents: "150.00", spots: "6" });
+  const sA = await join(ana, t), sB = await join(ben, t), sC = await join(cam, t), sD = await join(dee, t);
+  // §6 Ben's two 180-minute calls at $150/h use $900 of his $1,000: a new call can be at most 40 minutes.
+  await bookCall(nora, ben, t, sB, 48, 180);
+  await bookCall(nora, ben, t, sB, 72, 180);
+  {
+    const D = await rec(V, nora);
+    await open(D, `/app/tests/${t}`, "#calls");
+    await unfold(D, "#calls");
+    await D.locator("#calls fieldset label", { hasText: "Ben Okafor" }).scrollIntoViewIfNeeded();
+    const from = at(D);
+    await pause(D, 1000);
+    await D.locator("#calls fieldset label", { hasText: "Ben Okafor" }).locator("input").check();
+    await D.locator("[aria-label='Requested time 1']").fill(dtLocal(localAt(5, 15, 0)));
+    await D.waitForSelector("#calls [data-length-hint] >> text=/Ben/", { timeout: 10000 }).catch(() => {});
+    await pause(D, 1500);
+    await shot(D, "b18-06-length-hint", "§6 The Length cap | With Ben ticked the hint reads “10–40 min (the $1,000 for calls with Ben Okafor)”: what's left of his $1,000 at the call's $150/h.", D.locator("#calls [data-length-hint]").locator("xpath=ancestor::div[1]"));
+    const len = D.locator("#calls [aria-label='Length in minutes']");
+    await len.fill("");
+    await typeSlow(D, "#calls [aria-label='Length in minutes']", "60", 150);
+    await D.locator("[aria-label='Requested time 1']").click();
+    await pause(D, 1500);
+    await shot(D, "b18-06-length-red", "§6 Too long | 60 minutes turns the box red: “At most 40 minutes: the $1,000 for calls with Ben Okafor on this test.” (the server refuses it too).", len.locator("xpath=ancestor::div[2]"));
+    finishVideo([{ file: await saveVideo(D, "b18-06.webm"), from }], "b18-06-video", "§6 Booking within the $1,000 | Ticking Ben shows his cap in the Length hint; 60 minutes is red at the box.");
+  }
+  // §3 Ana's calls: two long ones leave $100, so her call in progress (60 minutes booked at $150/h) ends at 40 minutes.
+  await bookCall(nora, ana, t, sA, 100, 180);
+  const a2 = await bookCall(nora, ana, t, sA, 124, 150);
+  const a3 = await bookCall(nora, ana, t, sA, 148, 60);
+  own(`update "Call" set minutes = 180 where id = '${a2}'`);
+  const startCall = (call, devId, testerId, ago) => {
+    own(`update "Call" set "startsAt" = ${utcNow} - interval '${ago} minutes', "devJoinedAt" = ${utcNow} - interval '${ago} minutes', "testerJoinedAt" = ${utcNow} - interval '${ago} minutes' where id = '${call}'`);
+    sql(`insert into "CallPresence" (id, "callId", "userId", side, "startAt", "endAt") values ('pr' || md5(random()::text), '${call}', '${devId}', 'developer', ${utcNow} - interval '${ago} minutes', ${utcNow}), ('pr' || md5(random()::text), '${call}', '${testerId}', 'tester', ${utcNow} - interval '${ago} minutes', ${utcNow})`);
+  };
+  const shiftCall = (call, mins, ends = true) => {
+    own(`update "Call" set "startsAt" = "startsAt" - interval '${mins} minutes', "devJoinedAt" = "devJoinedAt" - interval '${mins} minutes', "testerJoinedAt" = "testerJoinedAt" - interval '${mins} minutes' where id = '${call}'`);
+    sql(`update "CallPresence" set "startAt" = "startAt" - interval '${mins} minutes'${ends ? `, "endAt" = "endAt" - interval '${mins} minutes'` : ""} where "callId" = '${call}'`);
+  };
+  startCall(a3, nora.uid, ana.uid, 32);
+  {
+    const D = await rec(V, nora), T = await rec(V, ana);
+    await Promise.all([D.goto(`/app/calls/${a3}`), T.goto(`/app/calls/${a3}`)]);
+    await Promise.all([D.waitForSelector("[data-call-cap]", { timeout: 20000 }), T.waitForSelector("[data-call-cap]", { timeout: 20000 })]);
+    const fromD = at(D), fromT = at(T);
+    await pause(D, 2000);
+    await shot(D, "b18-03-warning", "§3 The warning | From 10 minutes before, Nora's call page says “This call ends at <time>: the $1,000 for calls with Ana Silva on this test is reached.”", "main");
+    await shot(T, "b18-03-warning-tester", "§3 The same line for Ana | “This call ends at <time>: the $1,000 for calls with Nora Lane on this test is reached.”", "[data-call-cap]");
+    // (The recording skips ahead: the call's clock moves on 9 minutes.)
+    shiftCall(a3, 9, false);
+    await Promise.all([D.waitForSelector("[data-call-line] >> text=/Call ended/", { timeout: 30000 }), T.waitForSelector("[data-call-line] >> text=/Call ended/", { timeout: 30000 })]);
+    await pause(D, 2500);
+    await shot(D, "b18-03-ended", "§3 Call ended at the $1,000 | At that moment both pages say “Call ended: the $1,000 for calls with Ana Silva on this test is reached. Minutes after this don't count.”; measuring stops and Join goes.", "main");
+    finishVideo([{ file: await saveVideo(D, "b18-03-d.webm"), from: fromD }, { file: await saveVideo(T, "b18-03-t.webm"), from: fromT }], "b18-03-video", "§3 A call reaching the $1,000 | Nora (left) and Ana (right) read when the call ends; when the time comes both pages end the call (the clock is moved on for the recording).");
+    console.log(`   capped call measured: ${sql(`select "measuredMinutes" from "Call" where id = '${a3}'`)} min`);
+  }
+  // (Ana's ended call moves out of the way of the next bookings.)
+  own(`update "Call" set "startsAt" = "startsAt" - interval '3 hours' where id = '${a3}'`);
+  // §10, §12, §13 The call page before a call: Join from 10 minutes before, the Jitsi lines, Check your call setup.
+  const c1 = await bookCall(nora, cam, t, sC, 0.1, 30);
+  const c2 = await bookCall(nora, cam, t, sC, 30, 30);
+  await open(cam, `/app/calls/${c2}`, "[data-call-join-later]");
+  await shot(cam, "b18-13-join-later", "§13 Before the call | Join opens only 10 minutes before (“You can join from <time>.”); “Check your call setup” is there from booking on, with its line about signing in to Jitsi ahead of time.", "main");
+  await open(nora, `/app/calls/${c1}`, "[data-call-join]");
+  await shot(nora, "b18-12-dev-call-page", "§10 and §12 The developer's call page | Join opens the Jitsi room in a new tab, “Keep this page open: it measures the call.”, and the host tip “Join a few minutes early: Jitsi asks the host to sign in with Google, GitHub or Facebook.”", "main");
+  await open(cam, `/app/calls/${c1}`, "[data-call-join]");
+  await shot(cam, "b18-12-tester-call-page", "§10 and §12 The tester's call page | The same Join line, and “If Jitsi says it's waiting for the host, Nora Lane is on the way: keep this page open.”", "main");
+  const href = await cam.locator("[data-call-check] a").first().getAttribute("href");
+  console.log(`   practice room link: ${/^https:\/\/meet\.jit\.si\/playtest-check-[a-f0-9]+$/.test(href || "") ? "ok" : "UNEXPECTED " + href}`);
+  await open(cam, `/app/sessions/${sC}`, `#call-${c1} [data-call-check]`);
+  await shot(cam, "b18-13-session-row", "§13 On the call's row | Each booked call in Cam's Live session has “Check your call setup” (a private practice room, never measured).", `#call-${c1}`);
+  await open(cam, "/app", "[data-call-check]");
+  await shot(cam, "b18-13-tester-dash", "§13 On the tester dashboard | Upcoming calls shows the link once per call.", cam.locator("[data-call-check]").first().locator("xpath=ancestor::section[1]"));
+  await open(nora, "/app", "[data-call-check]");
+  await shot(nora, "b18-13-dev-dash", "§13 On the developer dashboard | Nora's Calls box has it too.", nora.locator("[data-call-check]").first().locator("xpath=ancestor::section[1]"));
+  // §12 The reminder 15 minutes before (the second call is moved to start in 14 minutes; booked a day ago).
+  own(`update "Call" set "startsAt" = ${utcNow} + interval '14 minutes', "createdAt" = ${utcNow} - interval '1 day' where id = '${c2}'`);
+  await open(nora, `/app/tests/${t}`, "#calls");
+  await openBell(nora);
+  const devLine = nora.locator("main li", { hasText: "Your call with Cam Lee" }).last();
+  if (await devLine.count()) await shot(nora, "b18-12-dev-reminder", "§12 The developer's reminder | 15 minutes before: “Your call with Cam Lee on “Harbor Run: live” starts at <time>.” with “Open it a few minutes early: Jitsi asks the first person to sign in with Google, GitHub or Facebook.”", devLine);
+  else console.log("   ! §12: no reminder line for Nora");
+  await openBell(cam);
+  const camLine = cam.locator("main li", { hasText: "Your call with Nora Lane" }).last();
+  if (await camLine.count()) await shot(cam, "b18-12-tester-reminder", "§12 The tester's reminder | “Your call with Nora Lane on “Harbor Run: live” starts at <time>.”", camLine);
+  else console.log("   ! §12: no reminder line for Cam");
+  // §9 A call in progress when Nora ends Dee's work early: it goes on until they both leave, then “Call ended at …”.
+  const d1 = await bookCall(nora, dee, t, sD, 200, 30);
+  startCall(d1, nora.uid, dee.uid, 5);
+  {
+    const D = await rec(V, nora), T = await rec(V, dee);
+    await Promise.all([D.goto(`/app/calls/${d1}`), T.goto(`/app/calls/${d1}`)]);
+    await Promise.all([D.waitForSelector("[data-call-join]"), T.waitForSelector("[data-call-join]")]);
+    const fromD = at(D), fromT = at(T);
+    await pause(D, 3000);
+    ok(await post(nora, `/api/tests/${t}/end-early`, { ...go, contractIds: [sD], reason: "We have enough answers for this round." }), "end early");
+    await pause(D, 12000);
+    if (await T.locator("[data-call-line]").count()) console.log("   ! §9: Dee's call page was cut");
+    await shot(T, "b18-09-still-on", "§9 Not cut | Nora ended Dee's work early during the call: Dee's call page keeps the room and keeps measuring.", "main");
+    await open(nora, `/app/tests/${t}`, "[data-in-progress-call]");
+    await unfold(nora, "[data-in-progress-call]");
+    await shot(nora, "b18-09-dev-in-progress", "§9 On the test page | Dee's row: “In progress: it ends when you both leave”.", nora.locator("[data-in-progress-call]").first());
+    await open(dee, `/app/sessions/${sD}`, "[data-measuring]");
+    await shot(dee, "b18-09-tester-in-progress", "§9 On Dee's page | Her work ended, and the call still reads “In progress”.", `#call-${d1}`);
+    finishVideo([{ file: await saveVideo(D, "b18-09-d.webm"), from: fromD }, { file: await saveVideo(T, "b18-09-t.webm"), from: fromT }], "b18-09-video", "§9 A call in progress is never cut | Nora (left) and Dee (right) stay on the call page while Nora's End early goes through: neither page closes.");
+  }
+  // Both left 6 minutes ago (the clock moved on): the length is final.
+  shiftCall(d1, 6);
+  for (let i = 0; i < 8; i++) {
+    await open(dee, `/app/calls/${d1}`, "[data-call-line]");
+    if (/Call ended at/.test(await dee.locator("[data-call-line]").innerText())) break;
+    await open(nora, `/app/tests/${t}`, "#calls");
+    await pause(dee, 3000);
+  }
+  await shot(dee, "b18-09-ended", "§9 Then it ends | Once both have left (the 5-minute gap), the call page reads “Call ended at <time>.” and its measured minutes are payable as usual.", "[data-call-line]");
+}, { section: B18, fake: true });
+
 // ---------- the report manifest ----------
 const SECTIONS = [
   ["Every page", "Rules every signed-in page follows: a page moves on its own when the account changes underneath it (deleted in another tab, a hold or suspension starting), and long lists stay short."],
@@ -4193,6 +4980,8 @@ const SECTIONS = [
   ["Notifications and emails", "Bell lines as each person reads them, stacked by kind, and the emails they become, including the few sent even with email Off."],
   ["Launch fixes", "Batch 15, item by item (§ numbers are the items in docs/BATCH-15.md): measured calls and the Pay boxes, one $1,000 for a tester's calls, one rule for every pause, stop boxes that name the press, keys, admins, and the security audit's fixes. Items with nothing on screen link to their text proof."],
   ["Batch 16 (Oct 28)", "Batch 16, item by item (§ numbers are the items in docs/BATCH-16.md): the tester Alerts line, Pays on average, the Mature box, blocks, invite and dashboard search, scroll boxes, Edit's notes from other tabs, other-tab and stopped-test rules, invitations and calls live, rounding, Charge and the chargeback steps; then the owner's extra cases on stop-once, Contract changes and the tester's live box."],
+  ["Batch 17 (Oct 28)", "Batch 17, item by item (§ numbers are the items in docs/BATCH-17.md): when Rate can be pressed and who rates first, Ratings to give, what a stop does to a page already open, Stop's reason, the suspended tester's Dispute-only view, the close-out dates, the bank's check inline, admin search and scroll boxes, Find search, profile lists that stay current, Tests visited and No thanks on a re-sent invite."],
+  ["Batch 18 (Oct 28)", "Batch 18, item by item (§ numbers are the items in docs/BATCH-18.md): agreeing to updated Terms, a call ending at the $1,000, the Length cap, the avatar row, excerpts without the product tick, the switch line about old answers, calls in progress never cut, and the Jitsi call page with its practice room."],
 ];
 /** (Batch 15) Launch fixes proven in text (tests and settings), linked from the report. */
 const LAUNCH_TEXT = [
@@ -4236,6 +5025,8 @@ function writeManifest(list) {
   // (Batch 16) Its own section in item order (§ number), the owner's extra cases (no §) after them, each group's order kept within a number.
   const b16 = sections.find((x) => x.title === "Batch 16 (Oct 28)");
   if (b16) { const num = (c) => Number((/^§(\d+)/.exec(c.title) || [0, 99])[1]); b16.cases.sort((a, b) => num(a) - num(b)); }
+  // (Batch 17 and 18) The same: item order (§ number), each group's order kept within a number.
+  for (const t of ["Batch 17 (Oct 28)", "Batch 18 (Oct 28)"]) { const x = sections.find((y) => y.title === t); if (x) { const num = (c) => Number((/^§(\d+)/.exec(c.title) || [0, 99])[1]); x.cases.sort((a, b) => num(a) - num(b)); } }
   const unknown = [...new Set([...cases.values()].map((c) => c.section).filter((s) => !SECTIONS.some(([t]) => t === s)))];
   if (unknown.length) console.log("   ! manifest: unknown sections", unknown);
   fs.writeFileSync(path.join(OUT, "report-manifest.json"), JSON.stringify({ generated: new Date().toISOString(), sizes: { desktop: "1280x900", phone: "375x812" }, sections }, null, 2));
