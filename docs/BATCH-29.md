@@ -60,6 +60,9 @@ The tester's "<dev> paid you $X more for your <part> on “<test>”" stacks in 
 ## 26. Excerpt answers stack across tests (owner, Oct 29)
 The tester's "Your excerpt from <test> is now on your profile.", "Your excerpt from <test> was allowed. It stays hidden while <test> has an NDA." and "<dev> prefers that work from <test> isn't shown on profiles." stack into ONE entry per day across tests, "Excerpts" (e.g. "Excerpts · 2 updates today"), each line opening its own place (the profile's excerpts, or the session page's excerpt), instead of "that test's day". Update the bell table (doc agent). Test: answers on two tests the same day form one entry.
 
+## 27. Deadline reminders stack across tests (owner, Oct 29)
+The tester's "Your deadline on “<test>” is <date>: send your work before then." (same schedule as today) stacks into ONE entry per day across tests, "Deadlines" (e.g. "Deadlines · 2 tests"), each line opening that session page, instead of "that test's day". Update the bell table (doc agent). Test: two deadline reminders on one day form one entry.
+
 ## Decided, no change (owner, Oct 29)
 - After a stop, End early, Leave, a block or a removal, a sent piece's review date stays the later of 7 days after sending and the tester's ORIGINAL deadline (the owner said no to opening Charge 7 days after the work ended). Don't change it.
 
