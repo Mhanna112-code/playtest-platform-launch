@@ -91,6 +91,18 @@ Replace the per-charge "Your bank wants you to confirm a $X payment. Confirm thi
 ## 33. The team's pause / stop / close lines stack with the hold lines (owner, Oct 29)
 The developer's "The team paused / stopped “<test>”" and "“<test>” was closed. <why>" stack into the same daily entry as "Your tests are paused", "…paused after a chargeback", "…your payment hold is now a chargeback hold", "Your tests are running again" and "Your payment went through. Your tests stay paused while your account is suspended." (across tests), instead of their own lines; each still opens its test (the reason in full stays in the email and on the page, never in the bell). They're in the same end-of-day email ("Your Playtest account updates", whatever the setting). Update the bell table (doc agent). Test: a team pause and a hold on one day → one entry.
 
+## 34. Email rules for admins and testers (owner, Oct 29)
+- **The admin's end-of-day summary follows each admin's own email setting** (Daily / Weekly / Monthly / Off) instead of ignoring it: new disputes, hold lifts and chargeback holds waiting for Approve, call no-show and late reports. The console and the bell show all of it anyway.
+- **"Playtest: new chargeback of $X" stays sent right away, one email per chargeback, to every admin, whatever their setting** (Stripe's response deadline).
+- **Testers' deadline reminders at 3 days and 1 day before** ("Your deadline on “<test>” is <date>: send your work before then.") ignore the setting: they go in the end-of-day email, stacked across tests (the "Deadlines" entry, §27). The 1-month and 1-week ones still follow the setting.
+- Update the design doc's Emails table (doc agent). Tests: an admin with email Off gets no summary but does get the chargeback email; a tester with Off gets the 3-day deadline email, not the 1-week one.
+
+## 35. Storage running out: tell the admins, inside and outside the app (owner, Oct 29)
+- Once a day (the daily timed run) the app measures the database's size (pg_database_size) and the total size of stored uploads (from its own records of R2 files). Limits come from settings: `DB_STORAGE_LIMIT_GB` (e.g. 0.5 on Neon's free plan, the plan's size on a paid one) and `UPLOADS_LIMIT_GB` (the R2 budget); unset = not checked.
+- At 80% or more of either: a red box at the top of the admin console ("Storage is 82% full: database 410 MB of 500 MB." / "Uploads are 85% full: 8.5 GB of 10 GB."), one admin bell line per crossing ("Storage is filling up (database 82%)"), and the keyed /api/health answers "degraded: storage" (HTTP 200, alongside the emails keyword), so the UptimeRobot keyword monitor alerts the owner outside the app. Under 80% again: the box goes.
+- HANDOVER: set the two limits; add "degraded: storage" to the keyword monitor; also turn on Neon's usage alerts (Neon console) and Cloudflare's billing notifications for R2.
+- Tests: 79% → nothing; 81% → box, one bell line, health keyword; back under → gone; limits unset → no check.
+
 ## Decided, no change (owner, Oct 29)
 - After a stop, End early, Leave, a block or a removal, a sent piece's review date stays the later of 7 days after sending and the tester's ORIGINAL deadline (the owner said no to opening Charge 7 days after the work ended). Don't change it.
 
