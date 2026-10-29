@@ -5,7 +5,6 @@ import { checkFields, useLocalMin } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
 import { FormMistakes } from "@/components/FormMistakes";
 import { FIELD, offerShown } from "@/lib/client";
-import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
 import { usePress } from "@/lib/usePress";
 import { NotSentTag, useKept } from "@/lib/useKept";
 import type { RowJson } from "@/lib/callRows";
@@ -23,6 +22,8 @@ type Req = { id: string; rows: RowJson[]; mine: boolean; who: string; contractId
  */
 export function CallRequests(p: {
   path: string; seenAt: string; side: "developer" | "tester"; requests: Req[]; targets: { contractId: string; name: string; rate: string }[]; canRequest: boolean;
+  /** (Owner, Oct 29, batch 29 section 20) The server's call lead (CALL_MIN_AHEAD_MINUTES, read on the server and passed down), so form and server agree. */
+  leadMinutes: number;
   /** (Batch 16 section 33) For the clash checks: the booked calls between you, your other calls, and the limits (waiting, booked, what's left of the $1,000, the rate). */
   clash?: { calls: Slot[]; elsewhere: (Slot & { name: string })[]; pending: number; booked: number; leftCents: number | null; rateCents: number | null };
 }) {
@@ -69,7 +70,7 @@ export function CallRequests(p: {
   // (Batch 18 section 6) The Length is at most what's left of the $1,000 for your calls at the call's rate.
   const lenCap = p.clash && p.side === "tester" && p.targets[0] ? lengthCap([{ name: p.targets[0].name, leftCents: p.clash.leftCents, rateCents: p.clash.rateCents }]) : null;
   const form = useRef<HTMLDivElement>(null);
-  const minNow = useLocalMin(CALL_MIN_AHEAD_MINUTES); // (batch 27 section 6) the server's lead
+  const minNow = useLocalMin(p.leadMinutes); // (batch 27 section 6; batch 29 section 20) the server's lead, passed from the server
   // (Batch 27 section 1) The tester's open new-terms offer comes first: the press goes straight to its refusal (the page goes up to Switch / Keep).
   const send = () =>
     ((p.side === "tester" && offerShown()) || checkFields(form.current)) &&

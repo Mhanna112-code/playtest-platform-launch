@@ -75,7 +75,7 @@ describe("batch 13 sections 1-3: excerpt requests", () => {
     }
   });
 
-  it("Allow and Deny tell the tester by bell only; decided twice is refused; either side takes a shown one down", async () => {
+  it("Allow and Deny tell the tester by bell only; decided twice is refused; only the tester removes a shown one", async () => {
     const s = await paidWork();
     const id = (await ask(s.tester.cookie, s.sub.id, { hideProduct: false })).body.id;
     expect((await X.pendingForDeveloper(s.dev.user.id, s.testId)).map((x) => x.id)).toEqual([id]);
@@ -84,9 +84,9 @@ describe("batch 13 sections 1-3: excerpt requests", () => {
     expect((await ex(s.dev.cookie, { action: "decide", excerptId: id, decision: "deny" })).body.error.message).toBe("You already allowed this excerpt."); // (batch 16 section 21) the same item already decided: says how
     expect(await X.pendingForDeveloper(s.dev.user.id, s.testId)).toEqual([]);
     expect(await X.shownExcerpts(s.tester.user.id)).toEqual([{ id, text: "the second boss was far too hard", question: "What did you like?", source: "Harbor Run" }]);
-    // The developer takes it down from the tester's row: the tester is told.
-    expect((await ex(s.dev.cookie, { action: "remove", excerptId: id })).status).toBe(200);
-    expect(await db.notification.count({ where: { userId: s.tester.user.id, text: "Nora Lane took down the excerpt from Harbor Run." } })).toBe(1);
+    // (Batch 29 section 30) Only the tester removes it: the developer's Take down (from an older page) is refused; the tester's Remove sends no line.
+    expect((await ex(s.dev.cookie, { action: "remove", excerptId: id })).body.error.message).toBe("Only the tester can remove an excerpt from their profile.");
+    expect((await ex(s.tester.cookie, { action: "remove", excerptId: id })).status).toBe(200);
     expect((await ex(s.tester.cookie, { action: "remove", excerptId: id })).body.error.message).toBe("This excerpt was already taken down.");
     // Deny, then a new request allowed and taken down by the tester: the developer is told.
     const id2 = (await ask(s.tester.cookie, s.sub.id)).body.id;
@@ -96,10 +96,10 @@ describe("batch 13 sections 1-3: excerpt requests", () => {
     const id3 = (await ask(s.tester.cookie, s.sub.id)).body.id;
     await ex(s.dev.cookie, { action: "decide", excerptId: id3, decision: "allow" });
     await ex(s.tester.cookie, { action: "remove", excerptId: id3 });
-    expect(await db.notification.count({ where: { userId: s.dev.user.id, text: "Ana Silva took down the excerpt from Harbor Run." } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: s.dev.user.id, text: { contains: "took down" } } })).toBe(0);
     // Where it shows.
     expect(src("app/app/tests/[id]/page.tsx")).toContain("<b className=\"text-white\">Excerpt request</b>");
-    expect(src("app/app/tests/[id]/page.tsx")).toContain('label="Take down"');
+    expect(src("app/app/tests/[id]/page.tsx")).not.toContain('label="Take down"');
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("<ExcerptPicker submissionId={written.id} choices={excerptPicks} />");
     expect(src("components/Excerpts.tsx")).toContain("Show an excerpt on your profile");
     expect(src("app/app/testers/[id]/page.tsx")).toContain("<MyExcerpts items={await myExcerpts(p.id)} />");

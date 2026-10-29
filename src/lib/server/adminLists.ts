@@ -243,17 +243,23 @@ export async function testRow(t: Awaited<ReturnType<typeof db.test.findMany<{ in
   // (Batch 27 section 5) The pause's history reads as the test's state now: paused ("paused by X"; an older lift isn't listed), or, once lifted, open with who paused
   // and who lifted it ("open · paused by X, lifted by Y at Thu, Oct 29, 8:29 AM"), never "paused by" alone on a test that isn't paused.
   const acted = (await lastActions([t.id], ["extend-pause", "close-paused", "allow-critical-changes", ...(t.adminStoppedAt ? [] : ["stop-test"])])).get(t.id) ?? [];
-  const [lastPause, lastLift] = await Promise.all(["pause-test", "unpause-test"].map((action) => db.adminAction.findFirst({ where: { targetId: t.id, action }, orderBy: { createdAt: "desc" } })));
+  // (Owner, Oct 29, batch 29 section 20) A lift is paired with the pause it ended: only a lift made after the last pause counts (an older one belongs to an earlier pause).
+  const lastPause = await db.adminAction.findFirst({ where: { targetId: t.id, action: "pause-test" }, orderBy: { createdAt: "desc" } });
+  const lastLift = await db.adminAction.findFirst({ where: { targetId: t.id, action: "unpause-test", ...(lastPause ? { createdAt: { gte: lastPause.createdAt } } : {}) }, orderBy: { createdAt: "desc" } });
   const name = await adminEmails([t.adminStoppedById, t.adminPausedById, lastPause?.adminId, lastLift?.adminId]);
-  const lifted = !t.adminPausedAt && lastLift ? `${t.status} · paused by ${name(lastPause?.adminId) || "the team"}, lifted by ${name(lastLift.adminId)} at ${fmtDateTime(lastLift.createdAt)}` : "";
-  const state = t.adminStoppedAt ? `stopped by ${name(t.adminStoppedById) || "the team"}` : t.adminPausedAt ? `paused by ${name(t.adminPausedById) || "the team"}` : lifted || (lastPause ? `${t.status} · paused by ${name(lastPause.adminId)} ${fmtDateTime(lastPause.createdAt)}` : t.status);
+  // (Batch 29 section 20) "the team" whenever an admin's name is missing (a deleted admin).
+  const who = (id: string | null | undefined) => name(id) || "the team";
+  const lifted = !t.adminPausedAt && lastLift ? `${t.status} · paused by ${who(lastPause?.adminId)}, lifted by ${who(lastLift.adminId)} at ${fmtDateTime(lastLift.createdAt)}` : "";
+  // (Batch 29 section 20) A team-paused test closed after 7 days keeps its adminPausedAt (pauseClosure.ts): it reads as closed, never as paused (no Lift the pause).
+  const closed = !!t.pauseClosedAt;
+  const state = t.adminStoppedAt ? `stopped by ${who(t.adminStoppedById)}` : closed ? "closed" : t.adminPausedAt ? `paused by ${who(t.adminPausedById)}` : lifted || (lastPause ? `${t.status} · paused by ${who(lastPause.adminId)} at ${fmtDateTime(lastPause.createdAt)}` : t.status);
   return {
     id: t.id,
     at: t.createdAt.toISOString(),
     line: `${fmtDateTime(t.createdAt)} · “${t.title}” · ${state} · ${displayName(t.developer)} · ${t._count.contracts} joined${countsText(t.criticalCounts) ? ` · changes since testers joined: ${countsText(t.criticalCounts)}` : ""}${acted.length ? ` · ${acted.slice(0, 3).join(" · ")}` : ""}`,
     href: `/app/find/${t.id}`,
     status: t.status,
-    adminPaused: !!t.adminPausedAt,
+    adminPaused: !!t.adminPausedAt && !closed && t.status !== "stopped",
     stopped: t.status === "stopped",
     critical: lockedFields(countsOf(t.criticalCounts)).length, // fields that used all 3 changes
     closedLine: t.pauseClosedAt ? `Closed after 7 days paused: ${t.pauseClosedReason}` : "",
@@ -420,6 +426,15 @@ async function chargebacks(cursor: string | null): Promise<Page<ChargebackVM & {
     expired: steps.expired,
   }));
   return slice(all, (r) => r.date, cursor);
+}
+
+/**
+ * (Owner, Oct 29, batch 29 section 20) The Tests list's rows by id: the live check refreshes every row shown, also those loaded further down by scrolling (beyond the
+ * first 25), so their state line and Pause / Lift the pause follow a pause set or lifted elsewhere. At most 100 at once.
+ */
+export async function testRowsByIds(ids: string[]): Promise<TestVM[]> {
+  const list = await db.test.findMany({ where: { id: { in: ids.slice(0, 100) } }, include: { developer: true, _count: { select: { contracts: true } } } });
+  return Promise.all(list.map(testRow));
 }
 
 /** One page of one list. `adminId` is the admin looking (for "mine"). */

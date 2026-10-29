@@ -779,7 +779,7 @@ export async function nextRound(dev: U, testId: string, body: Record<string, unk
 
 /**
  * (Owner, Oct 29, batch 27 section 2) "Go to the next round" (the test already has its next-round draft) is a press, not a plain link: it runs the developer's stop-once
- * gate first, with the same changes and Alerts types as Next round (a tester sent or updated work, left, a call change, a paymentâ€¦): the first press stops once in
+ * gate first, with the same changes and Alerts types as Next round (a tester sent or updated work, left, a call change, a payment…): the first press stops once in
  * the box under the button, the second opens the draft. On a stopped, closed or paused test (as the page showed it) it opens at once, like the other presses there.
  */
 export async function goNextRound(dev: U, testId: string, body: Record<string, unknown>) {

@@ -6,7 +6,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { api, errOf } from "@/lib/client";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
 
-// (Owner, Oct 29, batch 13) Excerpt requests: the tester's picker, the developer's Allow / Deny, and Remove / Take down. None of them stops once: a press goes through
+// (Owner, Oct 29, batch 13) Excerpt requests: the tester's picker, the developer's Allow / Deny, and the tester's Remove. None of them stops once: a press goes through
 // whatever changed meanwhile, and is refused only when the request (or excerpt) no longer exists, or (a request, an Allow) when the test now has an NDA.
 // (Owner, Oct 28, batch 16 section 21) The exception: a big change made in another tab (End early, Stop, a Pay, a call change) stops Allow / Deny once.
 
@@ -95,8 +95,9 @@ export function ExcerptDecision({ excerptId, seenAt }: { excerptId: string; /** 
   );
 }
 
-/** Remove (the tester's own list) or Take down (the developer, from the tester's row), with a confirm. */
-export function ExcerptRemove({ excerptId, label = "Remove", body = "It leaves your profile at once." }: { excerptId: string; label?: string; body?: string }) {
+/** Remove (the tester's own list), with a confirm. (Batch 29 section 30) Only the tester removes an excerpt: the developer's Take down is gone. */
+export function ExcerptRemove({ excerptId }: { excerptId: string }) {
+  const label = "Remove", body = "It leaves your profile at once.";
   const [err, setErr] = useState("");
   return (
     <span className="inline-flex flex-col gap-1">

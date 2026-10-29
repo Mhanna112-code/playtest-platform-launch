@@ -14,7 +14,8 @@ import { bell } from "./notify";
 //     hidden keep their "a <category> test" wording (the tester chose that).
 //   - At most 3 shown or pending per tester, and one pending request per part.
 //   - Request, Allow, Deny and Remove ignore stop-once and blocks; suspensions and holds don't touch them. Only a request (or excerpt) that no longer exists is refused.
-//   - The tester hears of the decision by bell only; a take-down by either side is a bell to the other side.
+//   - The tester hears of the decision by bell only. (Owner, Oct 29, batch 29 section 30) Only the tester removes an excerpt (Remove on their profile); the developer has no
+//     Take down any more, and the tester's Remove sends no bell line.
 //   - Deleting an account: a tester's requests and excerpts are removed; a developer's pending requests close (excerpts already shown stay).
 
 export const MAX_EXCERPTS = 3;
@@ -33,7 +34,8 @@ export const ONE_PENDING = "You already asked to show an excerpt from this part.
 export const excerptLength = `An excerpt is ${EXCERPT_MIN} to ${EXCERPT_MAX} characters.`;
 export const allowedLine = (test: string) => `Your excerpt from ${test} is now on your profile.`;
 export const deniedLine = (dev: string, test: string) => `${dev} prefers that work from ${test} isn't shown on profiles.`;
-export const tookDownLine = (name: string, test: string) => `${name} took down the excerpt from ${test}.`;
+/** (Batch 29 section 30) A developer's Take down pressed on a page loaded before it went. */
+export const ONLY_TESTER_REMOVES = "Only the tester can remove an excerpt from their profile.";
 export const devDeletedClosedLine = (test: string) => `${test}'s developer deleted their account, so this request was closed`;
 export const ndaHiddenLine = (test: string) => `Hidden while ${test} has an NDA`;
 
@@ -104,18 +106,16 @@ export async function decideExcerpt(dev: { id: string; name: string; email: stri
   return { status: allow ? "shown" : "denied", ...(hidden ? { hidden: true } : {}) };
 }
 
-/** Remove: the tester, any of theirs (a request, a shown or a denied one); the developer, an excerpt shown from their test. A shown one taken down tells the other side. */
+/**
+ * Remove: the tester, any of theirs (a request, a shown or a denied one). (Owner, Oct 29, batch 29 section 30) Only the tester: the developer's Take down is gone (a press
+ * from a page loaded earlier is refused), and removing one sends no bell line.
+ */
 export async function removeExcerpt(user: { id: string; name: string; email: string }, body: Record<string, unknown>) {
-  const x = await db.excerpt.findUnique({ where: { id: String(body.excerptId ?? "") }, include: { test: true, tester: true } });
-  const mine = x?.testerId === user.id;
-  const devSide = !!x && x.test.developerId === user.id && x.status === "shown";
-  if (!x || (!mine && !devSide)) throw new HttpError(404, "gone", ALREADY_DOWN);
+  const x = await db.excerpt.findUnique({ where: { id: String(body.excerptId ?? "") }, include: { test: true } });
+  if (x && x.testerId !== user.id && x.test.developerId === user.id) throw new HttpError(409, "tester_only", ONLY_TESTER_REMOVES);
+  if (!x || x.testerId !== user.id) throw new HttpError(404, "gone", ALREADY_DOWN);
   const gone = await db.excerpt.deleteMany({ where: { id: x.id } });
   if (gone.count !== 1) throw new HttpError(404, "gone", ALREADY_DOWN);
-  if (x.status === "shown") {
-    if (mine) await bell(x.test.developerId, tookDownLine(displayName(user), x.test.title), `/app/tests/${x.testId}#tester-${x.contractId}`, undefined, { testId: x.testId });
-    else await bell(x.testerId, tookDownLine(displayName(user), x.test.title), `/app/testers/${x.testerId}#excerpts`, undefined, { testId: x.testId });
-  }
   return { removed: true };
 }
 

@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
 import { LET_GO_BY_TESTER, chargedByTester, LIMITED_VIEW_LINE, WORK_OVER_PRESSES, stillWorksLine, workOver, devDeletedLine, NOT_LISTED, byTesterChoice, PAUSE_DEFAULTS, chargedDelayedLine, disputeLimitText, testerPaused, STOP_NOTE_KIND, stopReasonOf, chargeOpensNote, chargeOpensAt } from "@/lib/rules";
 import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, MessagesSquare, Users, XCircle } from "lucide-react";
 import { db } from "@/lib/db";
@@ -467,6 +468,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             <section className="space-y-1.5" aria-label="Call requests" data-live-section="Requests">
               <h3 className="text-sm font-semibold text-white">Requests</h3>
               <CallRequests
+                leadMinutes={CALL_MIN_AHEAD_MINUTES}
                 side="tester"
                 path={`/api/sessions/${c.id}`}
                 seenAt={seenAt}

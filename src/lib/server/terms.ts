@@ -59,7 +59,8 @@ export async function answerTermsFirst(contractId: string) {
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || testerRefusal(c, c.test, displayName(c.test.developer), fmtDate, new Date())) return;
   const offer = await openOffer(contractId);
-  if (offer) throw new HttpError(409, ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST, { offerId: offer.id });
+  // (Batch 29 section 20) `sessionId`: a Join call refused away from the session page (the dashboard's Upcoming calls) links to the Switch / Keep box there.
+  if (offer) throw new HttpError(409, ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST, { offerId: offer.id, sessionId: contractId });
 }
 
 /** (Batch 27 section 1) Send's own stop-once, after answerTermsFirst: every other reason as before; new terms are no longer a stop-once for it (they block). */
@@ -75,7 +76,7 @@ export async function testerSendGate(contractId: string, body: Record<string, un
 export async function testerTermsGate(contractId: string, _devName: string, body: Record<string, unknown>) {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId } });
   const fresh = typeof body.seenAt === "string" ? await db.termsOffer.count({ where: { contractId, createdAt: { gt: new Date(body.seenAt) } } }) : 0;
-  await testerGate(c.testerId, contractId, c.testId, body, fresh ? "Press again to send under your current terms, or switch first." : "Press again to go ahead.");
+  await testerGate(c.testerId, contractId, c.testId, body, fresh ? "Press again to go ahead under your current terms, or switch first." : "Press again to go ahead.");
 }
 
 /** (Batch 16 section 38A) Switch / Keep when no offer is open any more. */
