@@ -37,6 +37,11 @@ Today a tester's own press in another tab stops only the SAME press ("You also d
 - **Local call lead:** the forms always use 1 minute in the browser (CALL_MIN_AHEAD_MINUTES isn't public); expose it as NEXT_PUBLIC_ or pass it from the server so form and server agree.
 - Fix the garbled characters in goNextRound's comment (tests.ts); confirm "Go to the next round" opens at once on a paused test (trace devGate's quiet state) and add a test.
 
+## 21. Rating reminders (owner, Oct 29)
+- **The developer's reminders come on running tests too.** Today "Reminder: rate <tester> for “<test>” (until <date>)" is sent every 3 days only on a stopped test (ratings.ts ~352); on a running test the developer gets just the first line ("<tester> finished <test>. You can rate them for 14 days."). Send it every 3 days inside the 14 days whatever the test's state, waiting while the developer can't rate (hold, suspension).
+- **Rating lines get their own stack, on both sides:** "<tester> finished <test>. You can rate them…", the developer's reminders, the tester's "Rate <dev> on <test>" and its reminders no longer stack in "that test's day"; they stack in one "Ratings to give" entry per day across tests (like payments and holds), opening the dashboard's Ratings to give box. Update the bell table's "Stacks in" column (doc agent).
+- Tests: reminders on a running test; the new stack across two tests.
+
 ## Check and report
 - Run `NEXT_DIST_DIR=.next-build npm run check`; it must be green. Migration only if needed (hand-written, checked with `prisma migrate diff` against playtest_lite_shadow with --exit-code, applied only to the local playtest_lite DB; say the 3400 server needs a restart).
 - Don't touch port 3400 (the owner uses it: write each file in one go). Don't edit docs/DESIGN-DOC.md. Never print secrets from .env.
