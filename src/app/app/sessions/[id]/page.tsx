@@ -15,7 +15,7 @@ import { ReasonQuote } from "@/components/ScrollText";
 import { TesterAlertsToggle } from "@/components/TesterAlertsToggle";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
-import { roomUrl } from "@/lib/server/calls";
+import { callCheckUrl, roomUrl } from "@/lib/server/calls";
 import { paidLines } from "@/lib/server/paid";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeForm, LeaveButton, WrittenForm } from "./SessionActions";
@@ -441,6 +441,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           {callsWarning && <p className="text-xs text-amber-200" data-calls-warning="">{callsWarning}</p>}
           <TesterCallPanel
             sessionId={c.id}
+            checkUrl={await callCheckUrl(u.id)}
             seenAt={seenAt}
             refusal={refusal}
             devName={dev}

@@ -6,7 +6,7 @@ import { POST as joinPOST } from "@/app/api/calls/[id]/join/route";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import * as R from "@/lib/rules";
 import { json, makeUser, req } from "./helpers";
-import { act, bookCall, joined, sact, seen, setup } from "./fixtures";
+import { act, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 
 const block = (cookie: string, userId: string, action?: string) => blocksPOST(req("/api/blocks", { cookie, body: { userId, action } })).then(json);
 const join = (cookie: string, id: string) => joinPOST(req(`/api/calls/${id}/join`, { cookie, body: {} }), { params: Promise.resolve({ id }) }).then(json);
@@ -65,6 +65,7 @@ describe("block", () => {
     const ben = await makeUser({ tester: true, name: "Ben Carter", pronoun: "he" });
     await block(dev.cookie, ben.user.id);
     expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test isn't taking new testers right now.");
+    await settle(); // Windows' clock can lag: the page load comes clearly after the block
     const inv = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [ben.user.id] });
     expect(inv.body.message).toBe("Ben Carter can't be invited right now.");
     await block(dev.cookie, ben.user.id, "unblock");

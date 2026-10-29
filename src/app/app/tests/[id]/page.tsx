@@ -21,6 +21,7 @@ import { InvitePanel } from "./InvitePanel";
 import { inviteExpired, invitePanel } from "@/lib/server/invites";
 import { owedForBox } from "@/lib/server/holds";
 import { termsRowLines } from "@/lib/server/terms";
+import { callCheckUrl } from "@/lib/server/calls";
 import { rejoinAskLine } from "@/lib/server/joining";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, devRateStates, ratingSummary } from "@/lib/server/ratings";
@@ -617,6 +618,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       <DevCallPanel
         testId={t.id}
         seenAt={seenAt}
+        checkUrl={await callCheckUrl(u.id)}
         canRequest={t.status !== "stopped" && t.status !== "draft" && !u.holdStartedAt && !restricted}
         noRequestReason={t.status === "stopped" ? "" : u.holdStartedAt ? "Your tests are paused until you pay what you owe: calls wait meanwhile." : ""}
         testers={restricted ? devTesters.map((x) => ({ ...x, requests: [] })) : devTesters}

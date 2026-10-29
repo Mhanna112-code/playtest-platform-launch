@@ -1,7 +1,8 @@
+import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { T } from "@/lib/tz";
 import { displayName, fmtDateTime, pronouns } from "@/lib/format";
-import { callClosedToJoins, cancelLine, checkCancel, type TestEventLike, NOBODY_JOINED, JOIN_OPENS_MIN, payByFrom, testPaused } from "@/lib/rules";
+import { callCheckRoom, callClosedToJoins, cancelLine, checkCancel, type TestEventLike, NOBODY_JOINED, JOIN_OPENS_MIN, payByFrom, testPaused } from "@/lib/rules";
 import { MEASURE_CAP, PRESENCE_GAP_MS, capEnd, capMinutesFor, measureDeadline, measureIsFinal, measureOverlap, type Span } from "@/lib/callMeasure";
 import { callsLeftCents } from "./callMoney";
 import { HttpError, readText } from "./http";
@@ -206,6 +207,16 @@ export async function sweepNobodyJoined(now = new Date()) {
   return due.length;
 }
 
+// ---------- (Owner, Oct 28, batch 18 section 13) "Check your call setup": each account's private Jitsi practice room ----------
+/** The account's practice room (an unguessable id, the same for that account, made on first use). Never a call, never measured. */
+export async function callCheckUrl(userId: string) {
+  const u = await db.user.findUnique({ where: { id: userId }, select: { callCheckId: true } });
+  if (u?.callCheckId) return callCheckRoom(u.callCheckId);
+  await db.user.updateMany({ where: { id: userId, callCheckId: null }, data: { callCheckId: randomBytes(12).toString("hex") } });
+  const again = await db.user.findUnique({ where: { id: userId }, select: { callCheckId: true } });
+  return again?.callCheckId ? callCheckRoom(again.callCheckId) : "";
+}
+
 // ---------- (Owner, Oct 28, batch 18 section 12) The reminder 15 minutes before each booked call ----------
 export const CALL_REMINDER_MIN = 15;
 /** "Your call with Ana on “Harbor Run” starts at 3:00 PM." (the time token is written in each reader's zone). */
@@ -215,7 +226,8 @@ const reminderKey = (callId: string) => `call15:${callId}`;
 
 /**
  * Bell and email (following each person's email setting) 15 minutes before a booked call, to both; the developer's adds the Jitsi sign-in tip. Once per call and person;
- * none for a call booked less than 15 minutes ahead. Checked with the call sweep (every page load / poll, and the daily job).
+ * none for a call booked less than 15 minutes ahead. Checked with the call sweep (every page load / poll, and the daily job). (Batch 18 section 13) It opens the call's row,
+ * where "Check your call setup" is.
  */
 export async function remindCallsSoon(now = new Date()) {
   const soon = new Date(now.getTime() + CALL_REMINDER_MIN * 60_000);

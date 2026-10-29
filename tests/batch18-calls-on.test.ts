@@ -4,12 +4,12 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import * as R from "@/lib/rules";
 import { fmtFor } from "@/lib/tz";
-import { JITSI_HOST_TIP, finishMeasuring, heartbeat, remindCallsSoon, roomUrl } from "@/lib/server/calls";
+import { JITSI_HOST_TIP, callCheckUrl, finishMeasuring, heartbeat, remindCallsSoon, roomUrl } from "@/lib/server/calls";
 import { bellKey } from "@/lib/bell";
 import { callStatus, joinCall } from "@/lib/server/blocks";
 import { act, bookCall, joined, sact, seen, setup } from "./fixtures";
 
-// Batch 18 sections 9, 10 and 12 (owner, Oct 28): a call in progress keeps counting until the people on it leave; calls use only the app's Jitsi room.
+// Batch 18 sections 9, 10, 12 and 13 (owner, Oct 28): a call in progress keeps counting until the people on it leave; calls use only the app's Jitsi room.
 const MIN = 60_000;
 const at = (base: Date, min: number) => new Date(base.getTime() + min * MIN);
 const src = (f: string) => fs.readFileSync(path.resolve(__dirname, "../src", f), "utf8");
@@ -135,5 +135,31 @@ describe("batch 18 section 12: get the Jitsi sign-in out of the way early", () =
     expect(R.jitsiWaitingLine("Nora Lane")).toBe("If Jitsi says it's waiting for the host, Nora Lane is on the way: keep this page open.");
     expect(src("app/app/calls/[id]/page.tsx")).toContain("hostLine={amTester ? jitsiWaitingLine(other ? displayName(other) : \"the developer\") : JITSI_HOST_DEV_LINE}");
     expect(src("app/app/calls/[id]/CallRoom.tsx")).toContain("{hostLine && <p className=\"note\" data-call-host-line=\"\">{hostLine}</p>}");
+  });
+});
+
+describe("batch 18 section 13: Check your call setup", () => {
+  it("a private practice room per account (unguessable, the same each time), never the call's room; shown from booking on with its line", async () => {
+    const s = await setup();
+    const j = await joined(s.testId);
+    const a = await callCheckUrl(s.dev.user.id);
+    expect(a).toMatch(/^https:\/\/meet\.jit\.si\/playtest-check-[0-9a-f]{24}$/);
+    expect(await callCheckUrl(s.dev.user.id)).toBe(a); // the same for that account
+    expect(await callCheckUrl(j.tester.user.id)).not.toBe(a);
+    expect(R.CALL_CHECK_LABEL).toBe("Check your call setup");
+    expect(R.CALL_CHECK_LINE).toBe("Sign in to Jitsi and test your camera and microphone ahead of time. Jitsi usually remembers you in this browser.");
+    const link = src("components/CallCheckLink.tsx");
+    expect(link).toContain('<a href={url} target="_blank" rel="noreferrer"');
+    expect(src("app/app/calls/[id]/CallRoom.tsx")).toContain("<CallCheckLink url={checkUrl} />");
+    expect(src("app/app/calls/[id]/page.tsx")).toContain("checkUrl={await callCheckUrl(u.id)}");
+    // Join for the real call still opens only 10 minutes before the start.
+    expect(src("app/app/calls/[id]/CallRoom.tsx")).toContain("const open = !opensAt || now >= new Date(opensAt).getTime();");
+    expect(src("app/app/tests/[id]/DevCallPanel.tsx")).toContain('<CallCheckLink url={checkUrl} className="w-full" />');
+    expect(src("app/app/sessions/[id]/TesterCallPanel.tsx")).toContain('{!m.cancelled && !m.ended && <CallCheckLink url={p.checkUrl ?? ""} className="w-full" />}');
+    expect(src("app/app/CallsBox.tsx")).toContain("<CallCheckLink url={checkUrl} />");
+    expect(src("app/app/page.tsx")).toContain('<CallCheckLink url={checkUrl} className="w-full" />');
+    // Never measured: it isn't the call's room.
+    const call = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie);
+    expect(roomUrl(call)).not.toBe(a);
   });
 });

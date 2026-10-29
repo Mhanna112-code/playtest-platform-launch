@@ -6,6 +6,7 @@ import { CancelMenu } from "@/components/CancelMenu";
 import { JoinCall } from "@/components/JoinCall";
 import { ScrollList } from "@/components/ScrollList";
 import { usePress } from "@/lib/usePress";
+import { CallCheckLink } from "@/components/CallCheckLink";
 
 export type DashCall = { id: string; testId: string; test: string; who: string; when: string; minutes: number; needsReason: boolean; joinable: boolean };
 
@@ -16,7 +17,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  * the test page, where it can be cancelled; while the account is suspended or on hold the test pages are closed, so the row has Cancel itself (the one press that still works). The
  * press follows the stop-once and refusal rules: its box shows right under the row.
  */
-export function CallsBox({ calls, seenAt, restricted }: { calls: DashCall[]; seenAt: string; restricted: boolean }) {
+export function CallsBox({ calls, seenAt, restricted, checkUrl = "" }: { calls: DashCall[]; seenAt: string; restricted: boolean; /** (Batch 18 section 13) this account's practice room, once per upcoming call */ checkUrl?: string }) {
   const { press, changes, error, busy, at } = usePress(seenAt);
   return (
     <section className="space-y-3" aria-label="Calls" id="calls-box">
@@ -35,6 +36,7 @@ export function CallsBox({ calls, seenAt, restricted }: { calls: DashCall[]; see
                   {c.joinable && <JoinCall callId={c.id} />}
                   {restricted && <CancelMenu needsReason={c.needsReason} busy={busy} other={c.who} onCancel={(reason) => void press(`/api/tests/${c.testId}/cancel-call`, { callId: c.id, reason }, c.id).then((r) => r && window.location.reload())} />}
                 </div>
+                <CallCheckLink url={checkUrl} />
                 {at === c.id && <ChangesBox changes={changes} error={error} />}
               </li>
             ))}

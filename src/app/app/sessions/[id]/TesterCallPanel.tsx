@@ -9,6 +9,7 @@ import { ReportProblem } from "@/components/ReportProblem";
 import { CallPresence, CallTimelineLine } from "@/components/CallPresence";
 import { LIVE_SECTIONS, LiveSection } from "@/components/LivePanel";
 import { CancelMenu } from "@/components/CancelMenu";
+import { CallCheckLink } from "@/components/CallCheckLink";
 
 export type TesterSet = { id: string; label: string; minutes: number; rate: string; needsReason: boolean; callIds: string[] };
 type Mine = { id: string; setId?: string | null; when: string; minutes: number; room: string; canCancel: boolean; started: boolean; ended?: boolean; reported: boolean; cancelled: string; late?: string; rate?: string; joinable?: boolean; devJoinedAt?: string | null; testerJoinedAt?: string | null; joined?: string; outcome?: { label: string; tone: "grey" | "amber" | "green" | "rose" }[]; logged?: number | null; lengthText?: string; report?: { byMe: boolean; note: string } | null };
@@ -21,7 +22,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  * Cancel). (Batch 15 section 42) Calls that are over are in the page's "Call history". Cancel and Report a problem stop once for call changes since the page
  * loaded (box under the button).
  */
-export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mine[]; sets?: TesterSet[]; refusal: string; lateNote?: string; devName: string; noReport?: boolean }) {
+export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mine[]; sets?: TesterSet[]; refusal: string; lateNote?: string; devName: string; noReport?: boolean; /** (Batch 18 section 13) this account's practice room */ checkUrl?: string }) {
   const { press, changes, error, busy, at } = usePress(p.seenAt);
   const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox side="tester" changes={changes} error={error} /></div> : null);
   async function go(action: string, body: Record<string, unknown>, key = action) {
@@ -58,6 +59,7 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
       {!m.cancelled && m.joinable && <div className="w-full"><CallTimer startsAt={m.when} minutes={m.minutes} role="tester" label={`Call with ${p.devName}`} /></div>}
       {box("cancel-" + m.id)}
       {box("noshow-" + m.id)}
+      {!m.cancelled && !m.ended && <CallCheckLink url={p.checkUrl ?? ""} className="w-full" />}
     </li>
   );
   if (!p.mine.length) return null;

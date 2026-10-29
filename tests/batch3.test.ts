@@ -28,6 +28,7 @@ async function withCall(over: Record<string, unknown> = {}, heldAgo = false) {
   const call = await db.call.findFirstOrThrow({ where: { contractId: j.sessionId } });
   // (Batch 15 section 40) A call that took place: its measured length is final.
   if (heldAgo) await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 3_600_000), measuredMinutes: 30, measuredAt: new Date() } });
+  await settle(); // Windows' clock can lag: the next page load comes clearly after the booking
   return { ...s, ...j, call, slots };
 }
 
@@ -95,7 +96,9 @@ describe("email settings and the bell", () => {
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    await settle();
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "0", reason: "Not what we asked" });
+    await settle();
     await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question" });
     expect(await db.outboxEmail.count({ where: { to: adm.user.email } })).toBe(0);
     await cron();

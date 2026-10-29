@@ -25,6 +25,8 @@ import { ExcerptQuestion, MyExcerpts } from "@/components/ExcerptList";
 import { devRestricted, restrictionsOf } from "@/lib/restricted";
 import { PayoutBanner } from "@/components/PayoutBanner";
 import { CallsBox } from "./CallsBox";
+import { CallCheckLink } from "@/components/CallCheckLink";
+import { callCheckUrl } from "@/lib/server/calls";
 import { JoinCall } from "@/components/JoinCall";
 import { ReasonQuote } from "@/components/ScrollText";
 import { DisputeSide } from "./tests/[id]/DisputeSide";
@@ -279,7 +281,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
         </section>
       )}
 
-      <CallsBox calls={calls} seenAt={seenAt} restricted={restricted} />
+      <CallsBox calls={calls} seenAt={seenAt} restricted={restricted} checkUrl={calls.length ? await callCheckUrl(userId) : ""} />
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -440,6 +442,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
     ...devReqs.flatMap((r) => { const c = byId.get(r.contractId); return c ? [{ key: `req-${r.id}`, c, text: `${displayName(c.test.developer)} asked for a live call`, href: `/app/sessions/${c.id}#req-${r.id}`, cta: "Answer in Live session →" }] : []; }), // (batch 16 section 35)
   ];
   const upcoming = suspended ? [] : contracts.flatMap((c) => c.calls.map((x) => ({ c, x }))).sort((a, b) => a.x.startsAt.getTime() - b.x.startsAt.getTime());
+  const checkUrl = upcoming.length ? await callCheckUrl(userId) : ""; // (batch 18 section 13) the practice room
   const more = recommended.filter((t) => !t.contracts.some((c) => c.status === "working")).slice(0, 4);
   const removedCard = (c: (typeof contracts)[number]) => {
     const may = !suspended && c.test.status === "open" && !pausedTest(c.test) && hasSpot(c) && askable(c);
@@ -601,6 +604,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                   <Link href={`/app/sessions/${c.id}#live`} className="mr-auto min-w-0 truncate text-slate-200 no-underline hover:underline" title={`${displayName(c.test.developer)} · ${c.title}`}><b className="text-white">{displayName(c.test.developer)}</b> · {c.title} · {fmtDateTime(x.startsAt)} · {x.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></Link>
                   {/* (Batch 15 sections 35 and 38) Join wherever a call is listed, from 10 minutes before to 30 minutes after its booked end. */}
                   {callJoinable(x, now) && !testPaused(c.test.developer, c.test) && <JoinCall callId={x.id} />}
+                  {/* (Batch 18 section 13) The practice room, once per upcoming call. */}
+                  <CallCheckLink url={checkUrl} className="w-full" />
                 </li>
               ))}
             </ScrollList>

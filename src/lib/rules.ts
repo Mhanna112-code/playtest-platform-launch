@@ -1349,3 +1349,7 @@ export const CALL_JOIN_LINE = "The call opens in Jitsi in a new tab. Keep this p
 /** (Owner, Oct 28, batch 18 section 12) meet.jit.si asks the first person in a room to sign in as the host: the call page's line under Join, per side. */
 export const JITSI_HOST_DEV_LINE = "Join a few minutes early: Jitsi asks the host to sign in with Google, GitHub or Facebook.";
 export const jitsiWaitingLine = (dev: string) => `If Jitsi says it's waiting for the host, ${dev} is on the way: keep this page open.`;
+/** (Owner, Oct 28, batch 18 section 13) The private practice room link, from booking onward. */
+export const CALL_CHECK_LABEL = "Check your call setup";
+export const CALL_CHECK_LINE = "Sign in to Jitsi and test your camera and microphone ahead of time. Jitsi usually remembers you in this browser.";
+export const callCheckRoom = (checkId: string) => `https://meet.jit.si/playtest-check-${checkId}`;
