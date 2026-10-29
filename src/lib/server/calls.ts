@@ -208,7 +208,7 @@ async function roomShut(call: RoomCall, now: Date) {
   if (now.getTime() < call.startsAt.getTime() - JOIN_OPENS_MIN * 60_000 || now.getTime() > measureDeadline(call.startsAt, call.minutes).getTime()) return true;
   const kind = await callClosedKindOf(call);
   if (!kind) return false;
-  if (together(call.presences).ms > 0) await endCall(call, kind, now, now);
+  if (together(call.presences).ms > 0) await endCall(call, await endReasonOf(call, kind), now, now);
   return true;
 }
 
@@ -217,8 +217,27 @@ export async function endIfClosed(callId: string, now = new Date()) {
   const call = await loadRoomCall(callId);
   if (!call || call.status !== "booked" || call.endedAt || call.cappedAt || call.measuredAt || call.actualMinutes != null || !call.presences.length) return false;
   const kind = await callClosedKindOf(call);
-  return !!kind && together(call.presences).ms > 0 && (await endCall(call, kind, now, now));
+  return !!kind && together(call.presences).ms > 0 && (await endCall(call, await endReasonOf(call, kind), now, now));
 }
+
+/** (Batch 26 section 2) The stored end reason: a block names the side that blocked ("blocked:developer"), so each page says its own line. */
+async function endReasonOf(call: { contract: { testerId: string; test: { developerId: string } } }, kind: string) {
+  if (kind !== "blocked") return kind;
+  const byTester = await db.block.count({ where: { blockerId: call.contract.testerId, blockedId: call.contract.test.developerId } });
+  return `blocked:${byTester ? "tester" : "developer"}`;
+}
+
+/**
+ * (Owner, Oct 29, batch 26 section 2) A block ends a call already in progress AT ONCE (both pages hang up on their next poll), whether or not the two were connected:
+ * its measured length is final at that moment. `by`: the side that blocked. False when it had already ended.
+ */
+export async function endCallForBlock(callId: string, by: "tester" | "developer", now = new Date()) {
+  const call = await loadRoomCall(callId);
+  if (!call || call.status !== "booked" || call.endedAt || call.cappedAt || call.measuredAt || call.actualMinutes != null) return false;
+  return endCall(call, `blocked:${by}`, now, now);
+}
+/** (Batch 26 section 2, DEFAULT) The call page's line after a block: the person who blocked reads who; the other reads only that the call was cancelled (never "blocked"). */
+export const blockEndedLine = (mine: boolean, otherName: string) => (mine ? `Call ended: you blocked ${otherName}.` : "Call ended: the call was cancelled.");
 
 /**
  * The line the call page shows instead of the room, for one of its two people ("" while the room can be used, or before it opens): "This call was cancelled.",
@@ -228,6 +247,8 @@ export function callLineFor(call: { status: string; startsAt: Date; minutes: num
   if (call.status === "cancelled") return "This call was cancelled.";
   if (call.endedAt || call.cappedAt) {
     const r = call.endReason || "calls_cap";
+    // (Batch 26 section 2) "blocked:<side that blocked>"; an older row's plain "blocked" reads as cancelled on both pages.
+    if (r.startsWith("blocked")) return blockEndedLine(r === `blocked:${side}`, otherName);
     return r === "calls_cap" ? capEndedLine(otherName) : r === "length" ? LENGTH_ENDED_LINE : closedEndedLine(callClosedLineOf(r, side, call.contract.endKind));
   }
   if (call.measuredAt || call.actualMinutes != null) return (call.measuredMinutes ?? 0) > 0 ? callEndedLine(fmtFor(tz, call.measuredTo ?? call.measuredAt ?? now, "time")) : CALL_OVER_LINE;

@@ -41,7 +41,9 @@ const SAME_TEXT: [string, string, string][] = [
   ["app/app/profile/ProfileForm.tsx", "lib/server/users.ts", "Enter your name (others see it)."],
   ["app/app/help/ContactForm.tsx", "app/api/help/route.ts", "Choose what it's about."],
   ["app/app/help/ContactForm.tsx", "app/api/help/route.ts", "Write a few words about what happened (at least 10 characters)."],
-  ["app/app/sessions/[id]/SessionActions.tsx", "lib/server/tests.ts", "Answer every required question before sending."],
+  // (Batch 26 section 14) The form and the server both check with answersMissing, which holds the lines.
+  ["lib/questions.ts", "lib/questions.ts", "Answer every required question before sending."],
+  ["lib/questions.ts", "lib/questions.ts", "Answer at least one question before sending."],
   ["app/app/sessions/[id]/SessionActions.tsx", "lib/server/payments.ts", "Say why you think the pay should be higher (at least a sentence)."],
   ["components/RateBox.tsx", "lib/server/ratings.ts", "Choose 1 to 5 stars."],
   ["app/app/tests/[id]/PayBox.tsx", "lib/rules.ts", "Enter an amount like 7.50."],
@@ -77,7 +79,7 @@ describe("section 10: one rule for every form with field mistakes", () => {
     expect(src("app/signup/page.tsx")).toContain('data-match="terms of use"');
     expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('data-match="^Tick “I understand"');
     expect(src("components/RateBox.tsx")).toContain('data-match="stars"');
-    expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("find={(m) => (m === ANSWER_REQUIRED");
+    expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("find={(m) => (m === ANSWER_ONE ? document.getElementById(`a${missingAt ?? 0}`) : m === ANSWER_REQUIRED");
   });
   it("boxes that aren't forms are their own root; a component's own red line is data-red-msg", () => {
     for (const f of ["app/app/tests/[id]/PayBox.tsx", "app/app/sessions/[id]/ChoiceBox.tsx", "components/RateBox.tsx", "components/CancelMenu.tsx", "app/admin/DisputeDecision.tsx", "app/app/tests/[id]/InvitePanel.tsx"])

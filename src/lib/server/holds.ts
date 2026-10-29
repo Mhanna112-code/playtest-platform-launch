@@ -564,6 +564,8 @@ export const VERIFY_FIRST = "Verify your card first.";
 export async function runSweep(now = new Date(), co = closeOutMemo(now)) {
   // (Batch 23 section 1) Emails that failed are tried again when due (first: a later step's error never holds them up). (Batch 23 section 6) Reservations past their
   // days are released.
+  // (Batch 26 section 1) The app's own heartbeat first (wall-clock time, never a test's `now`): a gap of 15 minutes or more since the last sweep is an outage.
+  await (await import("./outages")).sweepGap().catch((e) => console.error("[outage] heartbeat:", (e as Error).message));
   await (await import("./email")).retryEmails(now).catch((e) => console.error("[email] retry:", (e as Error).message));
   await (await import("./chargeback")).expireReservations(now).catch((e) => console.error("[reserve] expire:", (e as Error).message));
   await (await import("./calls")).sweepNobodyJoined(now);

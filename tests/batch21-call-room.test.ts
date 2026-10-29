@@ -158,9 +158,11 @@ describe("batch 21 section 2: the server ends calls for real", () => {
     const x = await inProgress(12, 12);
     const r = await json(await blocksPOST(req("/api/blocks", { cookie: x.tester.cookie, body: { userId: x.dev.user.id } })));
     expect(r.status).toBe(200);
-    for (const u of [x.dev.user, x.tester.user]) await expect(roomPoll(u, x.call.id, 0, true)).rejects.toMatchObject(refusedWith("Call ended: this call isn't available."));
+    // (Batch 26 section 2) The one who blocked reads who; the other only that the call was cancelled.
+    await expect(roomPoll(x.tester.user, x.call.id, 0, true)).rejects.toMatchObject(refusedWith("Call ended: you blocked Nora Lane."));
+    await expect(roomPoll(x.dev.user, x.call.id, 0, true)).rejects.toMatchObject(refusedWith("Call ended: the call was cancelled."));
     const c = await db.call.findUniqueOrThrow({ where: { id: x.call.id } });
-    expect(c).toMatchObject({ status: "booked", endReason: "blocked", measuredMinutes: 12 });
+    expect(c).toMatchObject({ status: "booked", endReason: "blocked:tester", measuredMinutes: 12 });
   });
 
   it("a pause (a developer's hold here) ends it; the tester's line is neutral", async () => {

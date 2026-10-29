@@ -15,7 +15,7 @@ import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
 import { isAdmin } from "@/lib/server/session";
 import { LiveTop } from "@/components/LiveTop";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { qOptional, qText } from "@/lib/questions";
+import { qRequired, qText } from "@/lib/questions";
 import { ratingSummary } from "@/lib/server/ratings";
 import { NoThanksButton } from "./NoThanksButton";
 import { ClampText } from "@/components/ClampText";
@@ -178,9 +178,9 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
           {l.questions.length ? (
             // (Batch 20 section 1) More than 3 questions: every one inside a scroll box about 3 questions tall, each long one cut to 3 lines with "Show more".
             l.questions.length > QUESTION_BOX_AFTER ? (
-              <QuestionBox count={l.questions.length} as="ul" className="list-disc space-y-1 pl-5 text-sm text-slate-300">{l.questions.map((q, i) => <li key={i} data-question=""><ClampText text={qText(q)} />{qOptional(q) && <span className="text-ink-500"> · not required</span>}</li>)}</QuestionBox>
+              <QuestionBox count={l.questions.length} as="ul" className="list-disc space-y-1 pl-5 text-sm text-slate-300">{l.questions.map((q, i) => <li key={i} data-question=""><ClampText text={qText(q)} />{qRequired(q) && <span className="text-ink-500"> · required</span>}</li>)}</QuestionBox>
             ) : (
-              <ul className="list-disc space-y-1 pl-5 text-sm text-slate-300">{l.questions.map((q) => <li key={q}><ScrollText text={qText(q)} label="Question" />{qOptional(q) && <span className="text-ink-500"> · not required</span>}</li>)}</ul>
+              <ul className="list-disc space-y-1 pl-5 text-sm text-slate-300">{l.questions.map((q) => <li key={q}><ScrollText text={qText(q)} label="Question" />{qRequired(q) && <span className="text-ink-500"> · required</span>}</li>)}</ul>
             )
           ) : (
             <p className="text-sm text-slate-400">Where you got stuck, any bugs, and what you liked.</p>

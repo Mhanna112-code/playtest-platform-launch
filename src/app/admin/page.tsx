@@ -29,17 +29,16 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   if (adminAccount(u) && !isAdmin(u)) return <main className="wrap space-y-4"><Brand /><p className="info" data-admin-paused="">{ADMIN_PAUSED} Contact the owner if you think this is a mistake.</p></main>;
   if (!isAdmin(u)) notFound();
   const q = await searchParams;
-  const [disputes, liftsP, mine, paused, chargebacks, decided, noShows, reportsP, usersP, testsP, paymentsP, contactP] = await Promise.all(
-    (["disputes", "lifts", "mine", "paused", "chargebacks", "decided", "noshows", "reports", "users", "tests", "payments", "contact"] as const).map((k) => adminPage(k, u.id, null)),
+  const [disputes, liftsP, mine, paused, chargebacks, decided, noShows, reportsP, usersP, testsP, paymentsP, contactP, payoutsP] = await Promise.all(
+    (["disputes", "lifts", "mine", "paused", "chargebacks", "decided", "noshows", "reports", "users", "tests", "payments", "contact", "payouts"] as const).map((k) => adminPage(k, u.id, null)),
   );
-  const [waiting, held, devCount, testerCount, openTests] = await Promise.all([
-    db.payment.findMany({ where: { transferStatus: "waiting", status: "charged" }, orderBy: { createdAt: "asc" }, take: 100 }),
+  const [held, devCount, testerCount, openTests] = await Promise.all([
     db.user.findMany({ where: { holdStartedAt: { not: null }, holdReason: { not: "chargeback" } }, orderBy: { holdStartedAt: "asc" }, take: 100 }),
     db.user.count({ where: { isDeveloper: true } }),
     db.user.count({ where: { isTester: true } }),
     db.test.count({ where: { status: "open" } }),
   ]);
-  const people = new Map((await db.user.findMany({ where: { id: { in: waiting.flatMap((p) => [p.developerId, p.testerId]) } }, select: { id: true, email: true } })).map((x) => [x.id, x.email]));
+
   // A link or a bell line can open one exact row: ?dispute=ID or ?user=ID shows it first.
   const focusDispute: DisputeVM | null = q.dispute ? await db.dispute.findUnique({ where: { id: q.dispute } }).then((d) => (d ? disputeRow(d) : null)) : null;
   const focusUser = q.user ? await db.user.findUnique({ where: { id: q.user } }) : null;
@@ -195,16 +194,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <PagedList kind="noshows" title="No-show reports" initial={rows(noShows)} />
       </section>
 
-      <section className="card space-y-3">
-        <h2 id="payouts" className="scroll-mt-24 text-lg font-semibold text-white">Payouts waiting for a payout account</h2>
-        {/* (Batch 22 section 3) Read-only: each goes out on its own when that tester finishes their payout setup. */}
+      <section className="card scroll-mt-24 space-y-3" id="payouts">
+        {/* (Batch 22 section 3) Read-only: each goes out on its own when that tester finishes their payout setup. (Batch 26 section 12) Every one, in the plain scroll
+            box of batch 17 §7: it loads more as it nears its end and ends with "That's all (N)". */}
+        <PagedList kind="payouts" title="Payouts waiting for a payout account" initial={rows(payoutsP)} empty="None." />
         <p className="note">Each goes out on its own when the tester finishes their payout setup.</p>
-        {waiting.length === 0 && <p className="note">None.</p>}
-        {waiting.map((p) => (
-          <p key={p.id} className="text-sm" data-waiting-payout={p.id}>
-            {people.get(p.testerId)} · {money(p.testerCents)} · waiting since {fmtDateTime(p.createdAt)}
-          </p>
-        ))}
         <PagedList kind="payments" title="Latest payments" level={3} initial={rows(paymentsP)} />
       </section>
 

@@ -49,6 +49,24 @@ type Ctx = Awaited<ReturnType<typeof ctx>>;
 /** A call's rate as both sides read it: "Contract $30/h" for a listed call; (owner, Oct 28 evening) "Not listed" for one that isn't a listed part of the contract. */
 export const rateLabel = (rateCents: number | null, contractRate: number | null) =>
   rateCents == null ? NOT_LISTED : `${rateCents === contractRate ? "Contract" : "Agreed"} ${money(rateCents).replace(/\.00$/, "")}/h`;
+/**
+ * (Owner, Oct 29, batch 26 section 10, DEFAULT) The developer's call request row: a tester on older terms than the listing says so, "Their terms: $30/h (the listing
+ * is now $24/h)"; otherwise the usual label.
+ */
+export const devRateLabel = (rateCents: number | null, contractRate: number | null, listingRate: number | null) =>
+  rateCents != null && rateCents === contractRate && listingRate != null && listingRate !== contractRate
+    ? `Their terms: ${money(rateCents).replace(/\.00$/, "")}/h (the listing is now ${money(listingRate).replace(/\.00$/, "")}/h)`
+    : rateLabel(rateCents, contractRate);
+/**
+ * (Batch 26 section 10) A waiting call request that is no longer waiting, as its row says it live on an open page: "Closed: the tester finished their part",
+ * "Withdrawn", "Declined", "Booked", or the taken line. "" while it waits.
+ */
+export function requestGoneLine(r: { status: string; closedReason: string }) {
+  if (r.status === "pending") return "";
+  if (r.status === "closed") return `Closed${r.closedReason ? `: ${r.closedReason}` : ""}`;
+  if (r.status === "taken") return r.closedReason || "Taken";
+  return r.status === "booked" ? "Booked" : r.status === "withdrawn" ? "Withdrawn" : r.status === "declined" ? "Declined" : "Closed";
+}
 /** The rate a call is booked at: the contract rate when the call is a listed part, else none (not a listed part: pay is up to the developer). */
 export const bookRate = (test: { liveRateCents: number | null }, c: { liveRateCents: number | null }) => (callListed(test, c) ? c.liveRateCents : null);
 

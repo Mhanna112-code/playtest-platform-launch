@@ -40,8 +40,10 @@ export async function GET(req: Request) {
       changes = (await testerChanges(u.id, c.id, c.testId, since, tab)).filter((x) => x.kind !== "terms");
       // The test was stopped, or this tester's work was ended: a line in the live box (a final refusal for later presses, never a stop-once reason).
       if (c.status === "ended" && c.endedAt && c.endedAt > since && (c.endKind === "stopped" || c.endKind === "closed" || c.endKind === "early")) {
-        const dev = displayName((await db.user.findUniqueOrThrow({ where: { id: (await db.test.findUniqueOrThrow({ where: { id: c.testId } })).developerId } })));
-        changes.push({ kind: "ended", text: c.endKind === "stopped" ? `${dev} stopped the test` : c.endKind === "closed" ? "This test ended" : `${dev} ended your work`, createdAt: c.endedAt });
+        const t = await db.test.findUniqueOrThrow({ where: { id: c.testId } });
+        const dev = displayName(await db.user.findUniqueOrThrow({ where: { id: t.developerId } }));
+        // (Batch 26 section 3) The team's Stop never names who: "This test was stopped" (the box says when).
+        changes.push({ kind: "ended", text: c.endKind === "stopped" ? (t.adminStoppedAt ? "This test was stopped" : `${dev} stopped the test`) : c.endKind === "closed" ? "This test ended" : `${dev} ended your work`, createdAt: c.endedAt });
       }
     } else if (kind === "test") {
       await ownTest(u.id, id);

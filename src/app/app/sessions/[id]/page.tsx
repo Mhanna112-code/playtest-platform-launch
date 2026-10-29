@@ -1,8 +1,8 @@
 import { notFound, redirect } from "next/navigation";
-import { LET_GO_BY_TESTER, chargedByTester, LIMITED_VIEW_LINE, WORK_OVER_PRESSES, stillWorksLine, workOver, devDeletedLine, NOT_LISTED, byTesterChoice, PAUSE_DEFAULTS, chargedDelayedLine, disputeLimitText, testerPaused, STOP_NOTE_KIND, stopReasonOf } from "@/lib/rules";
+import { LET_GO_BY_TESTER, chargedByTester, LIMITED_VIEW_LINE, WORK_OVER_PRESSES, stillWorksLine, workOver, devDeletedLine, NOT_LISTED, byTesterChoice, PAUSE_DEFAULTS, chargedDelayedLine, disputeLimitText, testerPaused, STOP_NOTE_KIND, stopReasonOf, chargeOpensNote } from "@/lib/rules";
 import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, MessagesSquare, Users, XCircle } from "lucide-react";
 import { db } from "@/lib/db";
-import { displayName, fmtDate, fmtDateTime, money } from "@/lib/format";
+import { displayName, fmtDate, fmtDateTime, money, stopTimeIn } from "@/lib/format";
 import { IN_PROGRESS_TESTER, switchQuestionsLine, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, DELAYED_CALL_LINE, isLate, pausedForTesters, callListed, lateLabel, termsLine, testPaused, testerShare, canAskToRejoin, leftText, paidZeroLine } from "@/lib/rules";
 import { disputeRoom } from "@/lib/server/payments";
 import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, callsLeftWarning, MEASURING_LINE } from "@/lib/callMeasure";
@@ -11,7 +11,7 @@ import { callChargeCap, callChoiceLine } from "@/lib/server/holds";
 import { chargeClosesLine, closeOutSoon, notPaidClosedLine } from "@/lib/rules";
 import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
 import { fmtTime } from "@/lib/format";
-import { renderTimes } from "@/lib/tz";
+import { T, renderTimes } from "@/lib/tz";
 import { ReasonQuote } from "@/components/ScrollText";
 import { TesterAlertsToggle } from "@/components/TesterAlertsToggle";
 import { adminAway, requirePageUser } from "@/lib/server/page-auth";
@@ -248,7 +248,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         switchNote: switchQuestionsLine(written),
       } : null} />
       {limited && <p className="info" data-limited-view="">{LIMITED_VIEW_LINE}</p>}
-      {refusal && !limited && <div className="info space-y-1" id="stopped-line" data-stopped-line="" {...(failedPress ? { "data-work-over-failed": failedPress } : {})}><p>{over ? stillWorksLine(c, dev, fmtDate, stillWorks, failedPress) : refusal}</p>
+      {refusal && !limited && <div className="info space-y-1" id="stopped-line" data-stopped-line="" {...(failedPress ? { "data-work-over-failed": failedPress } : {})}><p>{over ? stillWorksLine({ ...c, teamTime: c.endedAt ? stopTimeIn(c.endedAt, u.timeZone, now) : undefined }, dev, fmtDate, stillWorks, failedPress) : refusal}</p>
         {/* (Batch 15 sections 20 and 22) The developer's End early reason, in italics, scrolling when long (never in the bell line). */}
         {c.status === "ended" && c.endKind === "early" && c.endReason && <ReasonQuote text={c.endReason} />}
         {/* (Batch 17 §15) The developer's Stop reason, the same way (only the developer's own Stop writes the note; the team's Stop reason is never shown here). */}
@@ -417,6 +417,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               <div key={x.id} className="space-y-1">
                 {/* (Owner, Oct 28, batch 16 section 40) One short grey line per call (the part line above has the rate and what's paid so far); blue only for a real notice. */}
                 <p className="text-xs text-slate-400" data-call-row="" data-call-length="">{fmtDateTime(x.startsAt)} · {callMinutesOf(x)} min · {chargeShut(x.id) ? notPaidClosedLine(shutOn(x.id)) : <>waiting for {dev} to pay</>}</p>
+                {/* (Batch 26 section 6) A listed call: Charge opens 7 days after the call (moved by pauses). */}
+                {!chargeShut(x.id) && x.rateCents != null && x.payBy && x.payBy > now && <p className="text-xs text-slate-400" data-charge-opens="">{chargeOpensNote(dev, renderTimes(T(x.payBy, "date"), u.timeZone))}</p>}
                 {failedCalls.has(x.id) && <p className="info">{DELAYED_CALL_LINE}</p>}
                 {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
                 {/* (Batch 15 section 15) A listed call left unpaid past its review date: Charge or Let it go, as a sent part. */}

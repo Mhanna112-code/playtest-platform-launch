@@ -1009,18 +1009,19 @@ describe("batch 20 section 28: Send isn't refused when the required question is 
     const u = await setup({ writtenCents: null, questions: [] });
     const a = await joined(u.testId);
     expect((await sact(a.sessionId, "written", a.tester.cookie, { answers: ["ee"], notes: "" })).status).toBe(200);
-    const l = await setup({ questions: ["One?", "Two?", "Three?"] });
+    // (Batch 26 section 14) Required only when ticked.
+    const l = await setup({ questions: ["One?", "[required] Two?", "Three?"] });
     const b = await joined(l.testId);
     const r = await sact(b.sessionId, "written", b.tester.cookie, { answers: ["x", "", "z"], notes: "" });
     expect(r.body.error).toMatchObject({ code: "bad_answers", message: "Answer every required question before sending.", missing: 1 });
     // Fewer answers than questions: the missing one is blank (named), never a count mismatch refusal for answered ones.
-    const c = await setup({ questions: ["One?", "[not required] Two?"] });
+    const c = await setup({ questions: ["[required] One?", "Two?"] });
     const d = await joined(c.testId);
     expect((await sact(d.sessionId, "written", d.tester.cookie, { answers: ["x"], notes: "" })).status).toBe(200);
     const form = src("app/app/sessions/[id]/SessionActions.tsx");
     expect(form).toContain('const answers = questions.map((_, i) => answers0[i] ?? "");');
     expect(form).toContain("(missingAt != null ? document.getElementById(`a${missingAt}`) : null)");
-    // The "*" stays beside the label.
-    expect(form).toContain('<label className={`label ${qOptional(q) ? "" : "req"} flex items-start gap-1`} htmlFor={`a${i}`}><ScrollText className="min-w-0 flex-1"');
+    // (Batch 26 sections 11 and 14) The "*" right after the question's words, only on a Required question.
+    expect(form).toContain('<label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><ScrollText className="min-w-0" text={qText(q)} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}</label>');
   });
 });

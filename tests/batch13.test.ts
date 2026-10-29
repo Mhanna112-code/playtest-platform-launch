@@ -254,7 +254,8 @@ describe("batch 13 section 8: whole sets of questions and answers", () => {
     const c = await db.contract.findUniqueOrThrow({ where: { id: j.sessionId } });
     const prev = prevSetsOf(c.prevSets);
     expect(prev).toHaveLength(1);
-    expect(prev[0].items).toEqual([{ question: "Q1?", required: true, answer: "My Q1 draft" }, { question: "Q2?", required: true, answer: "" }, { question: "Q3?", required: true, answer: "" }]);
+    // (Batch 26 section 14) Unmarked questions are not required.
+    expect(prev[0].items).toEqual([{ question: "Q1?", required: false, answer: "My Q1 draft" }, { question: "Q2?", required: false, answer: "" }, { question: "Q3?", required: false, answer: "" }]);
     const kept = await db.keptForm.findUniqueOrThrow({ where: { userId_key: { userId: j.tester.user.id, key: `written:${j.sessionId}` } } });
     expect((kept.data as { answers: string[] }).answers).toEqual(["My Q1 draft", "", ""]);
     expect(carryOver(prev[0].items, ["Q1?", "Q2 changed?", "Q3?"])).toEqual(["My Q1 draft", "", ""]);
@@ -280,10 +281,11 @@ describe("batch 13 section 8: whole sets of questions and answers", () => {
     sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId, kind: "written" } });
     expect(sub.setUntil).toBeNull();
     expect(sub.agreedCents).toBe(1200);
-    expect(itemsOf(sub.answers)).toEqual([{ question: "Q1?", required: true, answer: "one" }, { question: "Q2 new?", required: true, answer: "new two" }]);
+    expect(itemsOf(sub.answers)).toEqual([{ question: "Q1?", required: false, answer: "one" }, { question: "Q2 new?", required: false, answer: "new two" }]);
     expect(prevSetsOf(sub.prevSets)[0].items.map((x) => x.answer)).toEqual(["one", "two"]);
     // Older rows (a list of answers) still read, paired by position.
-    expect(itemsOf(["a", "b"], ["[not required] X?", "Y?"])).toEqual([{ question: "X?", required: false, answer: "a" }, { question: "Y?", required: true, answer: "b" }]);
+    // (Batch 26 section 14) The old marker still reads as not required; unmarked is not required; "[required] " is.
+    expect(itemsOf(["a", "b", "c"], ["[not required] X?", "Y?", "[required] Z?"])).toEqual([{ question: "X?", required: false, answer: "a" }, { question: "Y?", required: false, answer: "b" }, { question: "Z?", required: true, answer: "c" }]);
   });
 });
 

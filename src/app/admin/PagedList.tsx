@@ -188,7 +188,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
   }
 }
 
-const LIST_KINDS = new Set<Kind>(["users", "tests", "payments", "u-payments", "u-payouts", "u-disputes", "u-chargebacks", "u-holds", "u-tests", "u-reports", "u-parts", "t-timeline", "t-contracts", "t-payments"]);
+const LIST_KINDS = new Set<Kind>(["users", "tests", "payments", "payouts", "u-payments", "u-payouts", "u-disputes", "u-chargebacks", "u-holds", "u-tests", "u-reports", "u-parts", "t-timeline", "t-contracts", "t-payments"]);
 
 type Filter = { q: string; ticks: string[] };
 const NO_FILTER: Filter = { q: "", ticks: [] };

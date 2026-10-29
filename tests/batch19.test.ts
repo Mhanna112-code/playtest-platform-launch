@@ -189,7 +189,7 @@ describe("batch 19 section 4: timed jobs every 5 minutes, from the uptime check"
   it("the daily job keeps the daily jobs and shares the lock; HANDOVER says the monitor must stay on", () => {
     const holds = src("lib/server/holds.ts");
     expect(holds).toContain("withTimersLock(() => runDailyLocked(now), { waitMs: 60_000 })");
-    expect(holds).toMatch(/export async function runSweep\(now = new Date\(\), co = closeOutMemo\(now\)\) \{[\s\S]{0,700}?await \(await import\("\.\/calls"\)\)\.sweepNobodyJoined\(now\);/); // (batch 23: the email retries and reservation clocks come first)
+    expect(holds).toMatch(/export async function runSweep\(now = new Date\(\), co = closeOutMemo\(now\)\) \{[\s\S]{0,1100}?await \(await import\("\.\/calls"\)\)\.sweepNobodyJoined\(now\);/); // (batch 23: the email retries and reservation clocks come first)
     expect(fs.readFileSync(path.resolve(__dirname, "../vercel.json"), "utf8")).toContain('"schedule": "0 9 * * *"');
     expect(fs.readFileSync(path.resolve(__dirname, "../docs/HANDOVER.md"), "utf8")).toContain("UptimeRobot's 5-minute check now also drives reminders and timers, so the monitor must stay on");
   });

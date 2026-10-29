@@ -19,7 +19,13 @@ export function JustUpdated({ at }: { at: string }) {
   );
 }
 
-export type PopupAnswer = { ok: true } | { stop: string[]; gaps?: undefined } | { gaps: Gaps; stop?: undefined } | { refused: true };
+/**
+ * The pop-up's press answered. (Owner, Oct 29, batch 26 section 13) `ok` with `moving`: the page is going elsewhere (Join anyway opens the session page), so the pop-up
+ * stays as it is; `ok` without it (Apply anyway, Ask to rejoin anyway: the page stays): the pop-up closes and the page shows its done line ("Sent. You'll hear back…").
+ */
+export type PopupAnswer = { ok: true; moving?: boolean } | { stop: string[]; gaps?: undefined } | { gaps: Gaps; stop?: undefined } | { refused: true };
+/** (Batch 26 section 13) What the pop-up does after a press went through: stay while the page moves on, else close. */
+export const afterSent = (r: { ok: true; moving?: boolean }) => (r.moving ? "stay" : "close");
 
 /**
  * The full app's "What this test needs" pop-up (claim-form.tsx / useLanguageGate): opens when Join / Apply is pressed
@@ -109,7 +115,13 @@ export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs
     setSending(true);
     setStop(null);
     const r = await p.send(shownRef.current);
-    if ("ok" in r) return; // the page moves on
+    if ("ok" in r) {
+      if (afterSent(r) === "stay") return; // the page moves on
+      sendingRef.current = false;
+      setSending(false);
+      ref.current?.close(); // (batch 26 section 13) the page stays: its done line shows under the button
+      return;
+    }
     sendingRef.current = false;
     setSending(false);
     if ("refused" in r) {

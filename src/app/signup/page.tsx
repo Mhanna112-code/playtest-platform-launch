@@ -44,12 +44,13 @@ export default async function SignupPage() {
           <label className="label req" htmlFor="password">Password</label>
           <PasswordInput id="password" name="password" autoComplete="new-password" minLength={8} required data-required="" data-required-msg="Password must be at least 8 characters" data-min-chars="8" data-msg="Password must be at least 8 characters" data-match="password|200 characters" />
         </div>
-        <label className="flex items-start gap-2 text-sm text-slate-300">
+        {/* (Batch 26 section 11) data-note-after: a red line goes under the whole tick row, never between the tick and its words. */}
+        <label className="flex items-start gap-2 text-sm text-slate-300" data-note-after="">
           <input type="checkbox" id="acceptTerms" name="acceptTerms" value="yes" required className="mt-1" data-match="terms of use" />
           <span>I agree to the <a href="/terms" target="_blank" className="text-indigo-300 underline">Terms of Use</a> and the <a href="/privacy" target="_blank" className="text-indigo-300 underline">Privacy policy</a>.</span>
         </label>
         {/* (Owner, Oct 28, batch 20 section 5) Required, next to the Terms agreement: Sign up is refused (red here) until it's ticked. */}
-        <label className="flex items-start gap-2 text-sm text-slate-300">
+        <label className="flex items-start gap-2 text-sm text-slate-300" data-note-after="">
           <input type="checkbox" id="over18" name="over18" value="yes" required className="mt-1" data-match="18 or older" />
           <span>{AGE_TICK}</span>
         </label>

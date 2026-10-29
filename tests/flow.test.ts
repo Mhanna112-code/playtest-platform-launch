@@ -179,7 +179,7 @@ describe("tester session", () => {
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a2", "b2"] })).status).toBe(200);
-    expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId } })).answers).toEqual([{ question: "What did you like?", required: true, answer: "a2" }, { question: "Where did you get stuck?", required: true, answer: "b2" }]);
+    expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId } })).answers).toEqual([{ question: "What did you like?", required: false, answer: "a2" }, { question: "Where did you get stuck?", required: false, answer: "b2" }] /* (batch 26 section 14) not required unless ticked */);
     const other = await makeUser({ tester: true });
     expect((await sact(sessionId, "written", other.cookie, { answers: ["x", "y"] })).status).toBe(404);
     expect((await sact(sessionId, "leave", other.cookie)).status).toBe(404);

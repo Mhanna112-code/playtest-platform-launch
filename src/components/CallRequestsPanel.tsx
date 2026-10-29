@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
 import { MARKABLE } from "@/lib/markJump";
@@ -14,8 +15,39 @@ export type PanelReq = { id: string; contractId: string; tester: string; asker: 
  * tall that follows the page live. Needs you's call-request rows open this panel at their request (#req-<id>, highlighted); Accept / Decline happen only here,
  * so they follow every rule of the panel (the stop-once box, the clash refusals, the paused / stopped / restricted refusals).
  */
+/** (Batch 26 section 10) The pressed button's name for its stop box or refusal ("Your Withdraw didn't go through"), from the press key. */
+export const requestPressName = (at: string) => (at.startsWith("w-") ? "Withdraw" : at.startsWith("d-") ? "Decline" : "Accept");
+
 export function CallRequestsPanel({ side, seenAt, requests, path }: { side: "developer" | "tester"; seenAt: string; requests: PanelReq[]; /** where answer-request goes for a request */ path: (r: PanelReq) => string }) {
   const { press, changes, error, busy, at } = usePress(seenAt);
+  // (Owner, Oct 29, batch 26 section 10) A shown request that closed meanwhile (the tester finished their part, left, a block, a stop…) or was answered elsewhere says
+  // so in its row at once ("Closed: the tester finished their part") and its buttons go, without waiting for the page to refresh.
+  const [gone, setGone] = useState<Record<string, string>>({});
+  const ids = requests.map((r) => r.id).join(",");
+  useEffect(() => {
+    if (!ids) return;
+    let alive = true;
+    const check = async () => {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const r = await fetch(`/api/pulse?requests=${encodeURIComponent(ids)}`, { cache: "no-store" });
+        if (!r.ok) return;
+        const { gone: rows } = (await r.json()) as { gone?: { id: string; line: string }[] };
+        if (alive && rows) setGone(Object.fromEntries(rows.map((x) => [x.id, x.line])));
+      } catch {
+        // offline: next time
+      }
+    };
+    const t = setInterval(check, 8_000);
+    window.addEventListener("live-tick", check);
+    window.addEventListener("focus", check);
+    return () => {
+      alive = false;
+      clearInterval(t);
+      window.removeEventListener("live-tick", check);
+      window.removeEventListener("focus", check);
+    };
+  }, [ids]);
   const go = async (r: PanelReq, body: Record<string, unknown>, key: string) => {
     if (await press(`${path(r)}/answer-request`, { requestId: r.id, contractId: r.contractId, ...body }, key)) window.location.reload();
   };
@@ -34,7 +66,9 @@ export function CallRequestsPanel({ side, seenAt, requests, path }: { side: "dev
                 {side === "developer" && <><b className="text-white">{r.tester}</b> · </>}
                 {describeRows(r.rows)} · {r.minutes} min · {r.rate} · asked by {r.mine ? "you" : r.asker}
               </span>
-              {r.mine ? (
+              {gone[r.id] ? (
+                <span className="text-xs font-medium text-amber-200" data-request-gone="">{gone[r.id]}</span>
+              ) : r.mine ? (
                 <button className="btn-ghost" disabled={busy} onClick={() => go(r, { action: "withdraw" }, "w-" + r.id)}>Withdraw</button>
               ) : (
                 <>
@@ -45,7 +79,7 @@ export function CallRequestsPanel({ side, seenAt, requests, path }: { side: "dev
                 </>
               )}
               {r.warning && <span className="basis-full text-xs text-amber-200" data-calls-warning="">{r.warning}</span>}
-              {(at === "a-" + r.id || at === "d-" + r.id || at === "w-" + r.id) && <div className="basis-full"><ChangesBox side={side} changes={changes} error={error} /></div>}
+              {(at === "a-" + r.id || at === "d-" + r.id || at === "w-" + r.id) && <div className="basis-full"><ChangesBox side={side} changes={changes} error={error} press={requestPressName(at)} /></div>}
             </li>
           ))}
         </ul>

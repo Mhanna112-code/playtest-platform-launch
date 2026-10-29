@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { Err } from "@/components/Err";
 import { mergeChanges, useLiveAppend } from "@/lib/live";
-import { NOT_REQUIRED, qOptional, qText, questionLimitLine } from "@/lib/questions";
+import { QUESTIONS_RULE_LINE, qRequired, qStored, qText, questionLimitLine } from "@/lib/questions";
 import { limitHint } from "@/lib/capacity";
 import { MistakeList, focusFirstMistake, markServerMistakes, useLocalMin } from "@/components/FieldChecks";
 import { fieldOfMistake, isCriticalLine, type ListingField } from "@/lib/listingFields";
@@ -35,7 +35,7 @@ type F = {
   productName: string; title: string; description: string; buildUrl: string; categories: string[]; devices: string[]; languages: string[];
   mature: boolean; matureWhy: string; ndaText: string;
   spots: string; deadlineDays: string; written: boolean; writtenPrice: string; recording: boolean; recordingPrice: string;
-  live: boolean; liveRate: string; liveMinutes: string; writtenRequired: boolean; recordingRequired: boolean; liveRequired: boolean; questions: string; optionalQs: string[]; openUntil: string; joinMode: string;
+  live: boolean; liveRate: string; liveMinutes: string; writtenRequired: boolean; recordingRequired: boolean; liveRequired: boolean; questions: string; requiredQs: string[]; openUntil: string; joinMode: string;
 };
 
 const dollars = (c: number | null) => (c == null ? "" : (c / 100).toFixed(2));
@@ -46,7 +46,7 @@ export function toForm(l: Listing): F {
     spots: String(l.spots), deadlineDays: String(l.deadlineDays), written: l.writtenCents != null, writtenPrice: dollars(l.writtenCents),
     recording: l.recordingCents != null, recordingPrice: dollars(l.recordingCents), live: l.liveRateCents != null,
     liveRate: dollars(l.liveRateCents), liveMinutes: String(l.liveMinutes ?? 30),
-    writtenRequired: !!l.writtenRequired, recordingRequired: !!l.recordingRequired, liveRequired: !!l.liveRequired, questions: l.questions.map(qText).join("\n"), optionalQs: l.questions.filter(qOptional).map(qText),
+    writtenRequired: !!l.writtenRequired, recordingRequired: !!l.recordingRequired, liveRequired: !!l.liveRequired, questions: l.questions.map(qText).join("\n"), requiredQs: l.questions.filter(qRequired).map(qText),
     openUntil: l.openUntil ? l.openUntil.slice(0, 10) : "",
     joinMode: l.joinMode ?? "anyone",
   };
@@ -59,7 +59,7 @@ function toApi(f: F): Record<string, unknown> {
     mature: f.mature, matureWhy: f.mature ? f.matureWhy : "", ndaText: f.ndaText,
     spots: f.spots, deadlineDays: f.deadlineDays, writtenCents: f.written ? f.writtenPrice || "" : null,
     recordingCents: f.recording ? f.recordingPrice || "" : null, liveRateCents: f.live ? f.liveRate || "" : null,
-    liveMinutes: null, writtenRequired: f.written && f.writtenRequired, recordingRequired: f.recording && f.recordingRequired, liveRequired: f.live && f.liveRequired, questions: f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (f.optionalQs.includes(q) ? NOT_REQUIRED + q : q)), openUntil: f.openUntil, joinMode: f.joinMode,
+    liveMinutes: null, writtenRequired: f.written && f.writtenRequired, recordingRequired: f.recording && f.recordingRequired, liveRequired: f.live && f.liveRequired, questions: f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => qStored(q, f.requiredQs.includes(q))), openUntil: f.openUntil, joinMode: f.joinMode,
   };
 }
 // Which API fields each form field feeds.
@@ -67,7 +67,7 @@ const API_FIELDS: Record<keyof F, string[]> = {
   productName: ["productName"], title: ["title"], description: ["description"], buildUrl: ["buildUrl"], categories: ["categories"], devices: ["devices"], languages: ["languages"],
   mature: ["mature", "matureWhy"], matureWhy: ["matureWhy"], ndaText: ["ndaText"],
   spots: ["spots"], deadlineDays: ["deadlineDays"], written: ["writtenCents"], writtenPrice: ["writtenCents"], recording: ["recordingCents"],
-  recordingPrice: ["recordingCents"], live: ["liveRateCents", "liveMinutes"], liveRate: ["liveRateCents"], liveMinutes: ["liveMinutes"], writtenRequired: ["writtenRequired"], recordingRequired: ["recordingRequired"], liveRequired: ["liveRequired"], questions: ["questions"], optionalQs: ["questions"], openUntil: ["openUntil"], joinMode: ["joinMode"],
+  recordingPrice: ["recordingCents"], live: ["liveRateCents", "liveMinutes"], liveRate: ["liveRateCents"], liveMinutes: ["liveMinutes"], writtenRequired: ["writtenRequired"], recordingRequired: ["recordingRequired"], liveRequired: ["liveRequired"], questions: ["questions"], requiredQs: ["questions"], openUntil: ["openUntil"], joinMode: ["joinMode"],
 };
 
 /** (Owner, Oct 28, batch 16 section 19) What a field is called in a note: the form label's short name, capitalised ("Spots: 4 → 5", "Instructions:"). */
@@ -75,14 +75,14 @@ const NAMES: Partial<Record<keyof F, string>> = {
   productName: "Product", title: "Name of this test", description: "Instructions", buildUrl: "Link", categories: "Categories", devices: "Devices", languages: "Languages",
   mature: "Mature (18+)", matureWhy: "Why it's mature", ndaText: "NDA", spots: "Spots", deadlineDays: "Tester deadline", openUntil: "Open until", joinMode: "How testers join",
   written: "Written report", writtenPrice: "Price for written answers", recording: "Recorded session", recordingPrice: "Price for a recording", live: "Live session", liveRate: "Live call rate",
-  writtenRequired: "Written report required", recordingRequired: "Recorded session required", liveRequired: "Live session required", questions: "Questions", optionalQs: "Questions not required",
+  writtenRequired: "Written report required", recordingRequired: "Recorded session required", liveRequired: "Live session required", questions: "Questions", requiredQs: "Required questions",
 };
 
 /** (Batch 16 section 19) A field's value as a note shows it ("$8.00", "Windows PC, iPad"); the questions as a list. */
 function valueText(k: keyof F, v: unknown): string | string[] {
   if (typeof v === "boolean") return v ? "on" : "off";
   if (k === "questions") return String(v ?? "").split("\n").map((q) => q.trim()).filter(Boolean);
-  if (k === "optionalQs") return (v as string[]) ?? [];
+  if (k === "requiredQs") return (v as string[]) ?? [];
   if (Array.isArray(v)) return v.length ? v.join(", ") : "none";
   const s = String(v ?? "");
   if (!s) return "empty";
@@ -91,7 +91,7 @@ function valueText(k: keyof F, v: unknown): string | string[] {
 }
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 // Where each form field's note shows (parts and prices share one place).
-const NOTE_AT: Partial<Record<keyof F, string>> = { written: "parts", writtenPrice: "parts", recording: "parts", recordingPrice: "parts", live: "parts", liveRate: "parts", writtenRequired: "parts", recordingRequired: "parts", liveRequired: "parts", questions: "questions", optionalQs: "questions" };
+const NOTE_AT: Partial<Record<keyof F, string>> = { written: "parts", writtenPrice: "parts", recording: "parts", recordingPrice: "parts", live: "parts", liveRate: "parts", writtenRequired: "parts", recordingRequired: "parts", liveRequired: "parts", questions: "questions", requiredQs: "questions" };
 
 // The parts, as the full app's Parts and prices cards (prices-widget.tsx there), with lean's names and price limits.
 const PARTS = [
@@ -610,7 +610,8 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true, termsAga
                       {q.length > LIMITS.question && <span className="err-field block" data-question-red="">{QUESTION_TOO_LONG}</span>}
                     </span>
                     <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-ink-300">
-                      <input type="checkbox" disabled={fieldLocked("questions")} checked={f.optionalQs.includes(q)} onChange={(e) => set({ optionalQs: e.target.checked ? [...f.optionalQs, q] : f.optionalQs.filter((x) => x !== q) })} /> Not required
+                      {/* (Batch 26 section 14) Off by default: a question is required only when ticked. */}
+                      <input type="checkbox" disabled={fieldLocked("questions")} checked={f.requiredQs.includes(q)} onChange={(e) => set({ requiredQs: e.target.checked ? [...f.requiredQs, q] : f.requiredQs.filter((x) => x !== q) })} data-required-tick="" /> Required
                     </label>
                   </li>
                 ))}
@@ -618,6 +619,7 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true, termsAga
             )}
             {/* (Owner, Oct 28, batch 20 section 2) At 20 questions a notice under the last one (not a mistake: not red, Save and Post still work; the server still
                 refuses more than 20). Deleting a question removes it. */}
+            <p className="mt-1 text-xs text-slate-400" data-questions-rule="">{QUESTIONS_RULE_LINE}</p>
             {questionLimitLine(f.questions) && <p className="mt-1 text-xs text-sky-200" data-question-limit="" role="status">{questionLimitLine(f.questions)}</p>}
             {lockNote("questions")}
             {note("questions")}

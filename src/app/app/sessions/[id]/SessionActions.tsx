@@ -8,7 +8,7 @@ import { stopBox, useStopBox } from "@/lib/topStop";
 import { NotSentTag, useKept } from "@/lib/useKept";
 import { restoreDraft } from "@/lib/answerSets";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { qOptional, qText } from "@/lib/questions";
+import { ANSWER_ONE, ANSWER_REQUIRED, answersMissing, qRequired, qText } from "@/lib/questions";
 import { ChangesBox } from "@/components/ChangesBox";
 import { ScrollText } from "@/components/ScrollText";
 import { NOTHING_CHANGED_LINE } from "@/lib/rules";
@@ -36,7 +36,7 @@ function FormatBar({ target, onChange }: { target: React.RefObject<HTMLTextAreaE
 
 /** One answer box with its formatting toolbar. */
 /** (Batch 16 section 10) A required answer left empty is red at its box, with the server's own line. */
-export const ANSWER_REQUIRED = "Answer every required question before sending.";
+export { ANSWER_REQUIRED };
 function AnswerBox({ id, value, onChange, rows = 3, required }: { id: string; value: string; onChange: (v: string) => void; rows?: number; required?: boolean }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   return (
@@ -80,6 +80,12 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     e.preventDefault();
     if (!canSend) return;
     if (length > WRITTEN_MAX_CHARS) return setMsg({ ok: false, text: FIELD + `Your written answers can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters in all (now ${length.toLocaleString("en-US")}).` });
+    // (Batch 26 section 14) The server's rule, at once: at least one question answered, plus every Required one; red at the question.
+    const missing = answersMissing(questions, answers);
+    if (missing) {
+      setMissingAt(missing.at);
+      return setMsg({ ok: false, text: FIELD + missing.message });
+    }
     setBusy(true);
     setMsg(null);
     try {
@@ -106,8 +112,9 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       {questions.map((q, i) => (
         <div key={i} data-question="">
           {/* (Batch 15 section 3) A long question sits in a scroll box about 6 lines tall. */}
-          <label className={`label ${qOptional(q) ? "" : "req"} flex items-start gap-1`} htmlFor={`a${i}`}><ScrollText className="min-w-0 flex-1" text={qText(q)} label={`Question ${i + 1}`} />{qOptional(q) && <span className="ml-1 font-normal text-ink-500">· not required</span>}</label>
-          <AnswerBox id={`a${i}`} required={!qOptional(q)} value={answers[i]} onChange={(v) => setAnswers((all) => questions.map((_, j) => (j === i ? v : all[j] ?? "")))} />
+          {/* (Batch 26 sections 11 and 14) The "*" only on a question the developer ticked Required, right after the question's words (not at the far right). */}
+          <label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><ScrollText className="min-w-0" text={qText(q)} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}</label>
+          <AnswerBox id={`a${i}`} required={qRequired(q)} value={answers[i]} onChange={(v) => setAnswers((all) => questions.map((_, j) => (j === i ? v : all[j] ?? "")))} />
         </div>
       ))}
       </QuestionBox>
@@ -123,7 +130,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       {msg?.ok && <p className="ok">{msg.text}</p>}
       {/* (Batch 16 section 10) The server's "answer every required question" goes to the first empty required box. */}
       <FormMistakes text={msg && !msg.ok ? msg.text : ""} press={update ? "Send my updated answers" : "Send my answers"}
-        find={(m) => (m === ANSWER_REQUIRED ? (missingAt != null ? document.getElementById(`a${missingAt}`) : null) ?? Array.from(document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-required-msg="${ANSWER_REQUIRED}"]`)).find((t) => !t.value.trim()) : null)} />
+        find={(m) => (m === ANSWER_ONE ? document.getElementById(`a${missingAt ?? 0}`) : m === ANSWER_REQUIRED ? (missingAt != null ? document.getElementById(`a${missingAt}`) : null) ?? Array.from(document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-required-msg="${ANSWER_REQUIRED}"]`)).find((t) => !t.value.trim()) : null)} />
     </form>
   );
 }

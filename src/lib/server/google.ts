@@ -156,8 +156,9 @@ export async function pendingGoogleSignup(token: string | null | undefined, now 
  * created (email confirmed by Google, the Terms version and the age confirmation recorded) and signed in.
  */
 export async function finishGoogleSignup(token: string | null | undefined, body: Record<string, unknown>) {
-  if (!isTicked(body.acceptTerms)) throw new HttpError(400, "bad_field", "Agree to the Terms of Use to sign up");
-  if (!isTicked(body.over18)) throw new HttpError(400, "bad_field", AGE_LINE);
+  // (Batch 26 section 11) Every missing tick is red at once, each at its own tick (one line per tick).
+  const missing = [...(!isTicked(body.acceptTerms) ? ["Agree to the Terms of Use to sign up"] : []), ...(!isTicked(body.over18) ? [AGE_LINE] : [])];
+  if (missing.length) throw new HttpError(400, "bad_field", missing.join("\n"));
   const step = await pendingGoogleSignup(token);
   if (!step || !token) throw new HttpError(409, "expired", GOOGLE_STEP_EXPIRED);
   await db.appState.deleteMany({ where: { key: stepKey(token) } });

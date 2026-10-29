@@ -28,7 +28,7 @@ import { LiveTop } from "@/components/LiveTop";
 import { MessagesSquare } from "lucide-react";
 import { Applications } from "./Applications";
 import { NeedsRequests } from "./NeedsRequests";
-import { rateLabel } from "@/lib/server/requests";
+import { devRateLabel, rateLabel } from "@/lib/server/requests";
 import { rowsOf, toJson } from "@/lib/callRows";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
@@ -60,7 +60,7 @@ import { pastCallsBox } from "@/components/QuestionBox";
 import { byQuestion } from "@/lib/byQuestion";
 import { PrevSetFolds, SetView } from "@/components/AnswerSets";
 import { itemsOf, prevSetsOf } from "@/lib/answerSets";
-import { NOT_REQUIRED } from "@/lib/questions";
+import { qStored } from "@/lib/questions";
 import { pendingForDeveloper } from "@/lib/server/excerpts";
 import { ExcerptQuestion } from "@/components/ExcerptList"; // (batch 16 section 37) the question above each excerpt request
 import { ExcerptDecision, ExcerptRemove } from "@/components/Excerpts";
@@ -208,7 +208,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       pending: reqs.filter((r) => r.contractId === c.id).length, leftCents: callsLeft.get(c.id) ?? null, rateCents: callListed(t, c) ? c.liveRateCents : null,
       requests: reqs.filter((r) => r.contractId === c.id).map((r) => ({
         id: r.id, minutes: r.minutes, rows: toJson(rowsOf(r)), mine: r.fromSide === "developer",
-        rate: rateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents),
+        rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents),
       })),
     };
   });
@@ -239,7 +239,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     .sort((a, b) => a.at.getTime() - b.at.getTime());
   const needsRequests = reqs.filter((r) => r.fromSide === "tester").flatMap((r) => {
     const c = t.contracts.find((x) => x.id === r.contractId);
-    return c ? [{ id: r.id, contractId: c.id, name: displayName(c.tester), rows: toJson(rowsOf(r)), minutes: r.minutes, rate: rateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents), warning: callsWarn.get(c.id) }] : [];
+    return c ? [{ id: r.id, contractId: c.id, name: displayName(c.tester), rows: toJson(rowsOf(r)), minutes: r.minutes, rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents), warning: callsWarn.get(c.id) }] : [];
   });
   const disputesWaiting = t.contracts.flatMap((c) => [
     ...c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), what: x.kind === "written" ? "their written answers" : "their recording", reason: x.dispute!.reason })),
@@ -634,7 +634,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         // (Batch 16 sections 33 and 35) The one Call requests panel: every waiting request, both directions (Needs you's rows open it here).
         requests={restricted ? [] : reqs.flatMap((r) => {
           const c = working.find((x) => x.id === r.contractId);
-          return c ? [{ id: r.id, contractId: c.id, tester: displayName(c.tester), asker: r.fromSide === "developer" ? "you" : displayName(c.tester), rows: toJson(rowsOf(r)), minutes: r.minutes, mine: r.fromSide === "developer", rate: rateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents), warning: callsWarn.get(c.id) || undefined }] : [];
+          return c ? [{ id: r.id, contractId: c.id, tester: displayName(c.tester), asker: r.fromSide === "developer" ? "you" : displayName(c.tester), rows: toJson(rowsOf(r)), minutes: r.minutes, mine: r.fromSide === "developer", rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents), warning: callsWarn.get(c.id) || undefined }] : [];
         })}
         elsewhere={otherCalls}
       />
@@ -670,7 +670,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 .filter((s) => s.kind === "written")
                 .map((s) => ({
                   // (Batch 13 section 8) Grouped by the exact text of the question each answer was sent for.
-                  ...((items) => ({ questions: items.map((i) => (i.required ? i.question : NOT_REQUIRED + i.question)), answers: items.map((i) => i.answer) }))(itemsOf(s.answers, writtenQuestions(c))),
+                  ...((items) => ({ questions: items.map((i) => qStored(i.question, i.required)), answers: items.map((i) => i.answer) }))(itemsOf(s.answers, writtenQuestions(c))),
                   contractId: c.id, tester: displayName(c.tester), notes: s.notes, sentAt: s.updatedAt,
                   status: (!s.review ? "waiting" : s.review.rejected && !(s.dispute?.decidedCents) ? "rejected" : "paid") as "paid" | "rejected" | "waiting",
                   paidCents: Math.max(s.review?.amountCents ?? 0, s.dispute?.decidedCents ?? 0),

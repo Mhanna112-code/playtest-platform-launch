@@ -157,7 +157,9 @@ describe("batch 22 section 3: waiting payouts go out when payout setup is done",
     expect(f.transfers).toHaveLength(1);
     const page = src("app/admin/page.tsx");
     expect(page).not.toContain('label="Send now"');
-    expect(page).toContain("waiting since {fmtDateTime(p.createdAt)}");
+    // (Batch 26 section 12) Now a scroll box (PagedList "payouts"): each row still says how long it has waited.
+    expect(page).toContain('<PagedList kind="payouts"');
+    expect(src("lib/server/adminLists.ts")).toContain("waiting since ${fmtDateTime(p.createdAt)}");
     expect(src("app/api/admin/[action]/route.ts")).not.toContain('case "transfer"');
   });
 });

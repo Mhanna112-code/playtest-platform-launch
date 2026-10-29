@@ -39,6 +39,13 @@ export const CALL_ACTS = ["request-time", "answer-request", "cancel-call", "canc
 /** The call changes (request, withdraw, accept, decline, cancel). (Batch 16 section 26: no Lower the length.) */
 export const CALL_CHANGE_ACTS = ["request-time", "answer-request", "cancel-call", "cancel-set"] as const;
 export const PAY_ACTS = ["pay", "pay-more"] as const;
+/**
+ * (Owner, Oct 29, batch 26 section 9) The ONE press description Pay, Pay more and "Confirm with your bank" on a piece share, so Confirm stops for exactly what Pay on
+ * that piece stops for (the same devGate call, the same Alerts types): another tab's Pay or Pay more on the piece, and a stop of the test or of that tester's work.
+ */
+export const payPressOf = (contractId: string, piece: { callId?: string | null; submissionId?: string | null }) => ({
+  acts: [...PAY_ACTS] as string[], keys: [piece.callId ? `call:${piece.callId}` : piece.submissionId ? `sub:${piece.submissionId}` : `c:${contractId}`], stopCheck: contractId,
+});
 export const INVITE_ACTS = ["invite", "cancel-invite"] as const;
 /** End early, Stop the test, Pay or Pay more (any piece) and any call change: they stop every press on the test page once. */
 export const BIG_OWN_ACTS = ["end-early", "stop", ...PAY_ACTS, ...CALL_CHANGE_ACTS] as const;

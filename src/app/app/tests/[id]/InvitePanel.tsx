@@ -53,7 +53,34 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
     const t = setTimeout(() => setClosedNow(true), Math.min(ms + 500, 2_147_000_000));
     return () => clearTimeout(t);
   }, [p.closes]);
-  const blocked = p.blocked ?? (closedNow && p.closes?.line ? { line: p.closes.line, full: false } : null);
+  // (Owner, Oct 29, batch 26 section 7) Invite follows the test live both ways: the panel asks the server every few seconds (and on the page's poll) whether anyone can
+  // be invited now (full → disabled with its line; a spot opens → enabled), so it never waits on the page's own refresh. A fresh page render resets it.
+  const [liveBlocked, setLiveBlocked] = useState<{ line: string; full: boolean } | null | undefined>(undefined);
+  useEffect(() => setLiveBlocked(undefined), [p.blocked]);
+  useEffect(() => {
+    let alive = true;
+    const check = async () => {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const r = await fetch(`/api/pulse?inviteState=${encodeURIComponent(p.testId)}`, { cache: "no-store" });
+        if (!r.ok) return;
+        const j = (await r.json()) as { blocked?: { line: string; full: boolean } | null };
+        if (alive && j.blocked !== undefined) setLiveBlocked(j.blocked);
+      } catch {
+        // offline: next time
+      }
+    };
+    const t = setInterval(check, 8_000);
+    window.addEventListener("live-tick", check);
+    window.addEventListener("focus", check);
+    return () => {
+      alive = false;
+      clearInterval(t);
+      window.removeEventListener("live-tick", check);
+      window.removeEventListener("focus", check);
+    };
+  }, [p.testId]);
+  const blocked = (liveBlocked !== undefined ? liveBlocked : p.blocked) ?? (closedNow && p.closes?.line ? { line: p.closes.line, full: false } : null);
   const [confirm, setConfirm] = useState<string[] | null>(null);
   // (Batch 20 section 3) What each gap line is missing (both kinds), so a long device or language list is cut to 3 with "+N more".
   const [gapItems, setGapItems] = useState<GapItem[]>([]);

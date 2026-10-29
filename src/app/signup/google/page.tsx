@@ -29,11 +29,12 @@ export default async function GoogleSignupStep() {
     <AuthShell title="Finish signing up">
       <AuthForm path="/api/auth/google/finish" next="/app" announce="in" submit="Continue" busy="Creating…">
         <p className="text-sm text-slate-300" data-google-step="">Signing up with Google as <b className="text-white">{step.email}</b>.</p>
-        <label className="flex items-start gap-2 text-sm text-slate-300">
+        {/* (Batch 26 section 11) The red line under the whole tick row; every missing tick is red. */}
+        <label className="flex items-start gap-2 text-sm text-slate-300" data-note-after="">
           <input type="checkbox" id="acceptTerms" name="acceptTerms" value="yes" required className="mt-1" data-match="terms of use" />
           <span>I agree to the <a href="/terms" target="_blank" className="text-indigo-300 underline">Terms of Use</a> and the <a href="/privacy" target="_blank" className="text-indigo-300 underline">Privacy policy</a>.</span>
         </label>
-        <label className="flex items-start gap-2 text-sm text-slate-300">
+        <label className="flex items-start gap-2 text-sm text-slate-300" data-note-after="">
           <input type="checkbox" id="over18" name="over18" value="yes" required className="mt-1" data-match="18 or older" />
           <span>{AGE_TICK}</span>
         </label>

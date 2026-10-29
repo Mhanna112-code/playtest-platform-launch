@@ -365,7 +365,7 @@ describe("batch 11 item 7: the written part", () => {
     expect(wrapSelection("hello world", 6, 11, "bold")).toEqual({ value: "hello **world**", start: 8, end: 13 });
     expect(src("components/Formatted.tsx")).not.toContain("dangerouslySetInnerHTML");
     // (Batch 13) The answers are shown formatted inside each set (SetView).
-    expect(src("components/AnswerSets.tsx")).toContain("<Formatted text={it.answer} />");
+    expect(src("components/AnswerSets.tsx")).toContain("<Formatted text={it.answer} className=\"text-slate-200\" />"); // (batch 26 section 15) indented under its question label
   });
 
   it("files on the written part: images, PDF, text or zip, 25 MB, 5 at most; recordings too; they go with the answers", async () => {

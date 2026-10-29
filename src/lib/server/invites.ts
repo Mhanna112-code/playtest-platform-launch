@@ -122,7 +122,8 @@ async function rankedTesters(devId: string, testId: string) {
 }
 
 /** (Batch 20 section 23) How a tester's part on one of this developer's tests went: "in it now", "left", "finished" (they rated) or "ended". */
-export const togetherState = (c: { status: string; endKind?: string | null }) => (c.status === "working" ? "in it now" : c.status === "left" ? "left" : c.endKind === "rated" ? "finished" : "ended");
+// (Batch 26 section 8) A rating ends the part with status "left" and endKind "rated": that reads "finished", never "left".
+export const togetherState = (c: { status: string; endKind?: string | null }) => (c.status === "working" ? "in it now" : c.endKind === "rated" ? "finished" : c.status === "left" ? "left" : "ended");
 /** "Worked with you on 2 tests". */
 export const workedWithLine = (n: number) => `Worked with you on ${n} test${n === 1 ? "" : "s"}`;
 

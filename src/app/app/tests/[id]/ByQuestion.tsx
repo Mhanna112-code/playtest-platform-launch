@@ -19,7 +19,8 @@ export function ByQuestion({ blocks }: { blocks: QuestionBlock[] }) {
             <section key={b.title} className="card space-y-3">
               <h3 className="flex flex-wrap items-center gap-2 font-semibold text-white">
                 <Icon className={`h-5 w-5 shrink-0 ${b.title === "Other notes" ? "text-slate-300" : "text-indigo-300"}`} /> <ScrollText text={b.title} className="min-w-0 flex-1" label="Question" />
-                {b.notRequired && <span data-not-required="" className="badge border-white/15 text-xs font-normal text-slate-400">not required</span>}
+                {/* (Batch 26 section 14) Not required is the default: only a Required question is marked. */}
+                {b.required && <span data-required="" className="badge border-white/15 text-xs font-normal text-slate-400">required</span>}
                 <span className="text-sm font-normal text-slate-500">{b.answers.length} answer{b.answers.length === 1 ? "" : "s"}</span>
               </h3>
               <ul className="divide-y divide-white/5">

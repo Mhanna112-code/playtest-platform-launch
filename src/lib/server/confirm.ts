@@ -3,7 +3,7 @@ import { displayName, fmtDateTimeIn, money } from "@/lib/format";
 import { CONFIRM_DAYS, PRESS_ACTION_MS, bankAnchor, bankConfirmLine, bankConfirmTestLine, bankHref, bankWaitingLine, BANK_NOT_CONFIRMED } from "@/lib/rules";
 import { bankTopLead, confirmByText, pieceWords, shortDay, type BankTopRow } from "@/lib/bankTop";
 import { HttpError } from "./http";
-import { PAY_ACTS, seenOf } from "./live";
+import { payPressOf, seenOf } from "./live";
 import { notify } from "./notify";
 import { bankReturnUrl, checkUrlOf, fakeConfirm, fakeOn, getStripe, stripeOn, type NeedsAction } from "./stripe";
 
@@ -199,12 +199,19 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
   const p = await startable(dev.id, paymentId);
   // (Owner, Oct 29, batch 23 section 9) On the test page, the developer's stop-once check first, exactly like Pay on that piece: a stop, close or End early (batch 17 §12), a
   // dispute, the tester's Charge or Let it go, a Pay or Pay more in another tab, a call change... (Alerts apply) stops it once; the second press opens the bank's check.
+  // (Owner, Oct 29, batch 26 section 9) EXACTLY Pay's check on that piece: the same devGate call under the same test lock, the same press (payPressOf: a retried
+  // chargeback's row checks the piece of the payment the bank reversed), so whatever stops Pay on it stops Confirm, and the same Alerts types are ignored.
   if (p.contractId && seenOf(body.seenAt)) {
-    const c = await db.contract.findUnique({ where: { id: p.contractId }, select: { id: true, testId: true } });
+    const c = await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } });
     if (c) {
       const { devGate } = await import("./tests");
-      const key = p.callId ? `call:${p.callId}` : p.submissionId ? `sub:${p.submissionId}` : `c:${c.id}`;
-      await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: [...PAY_ACTS], keys: [key], stopCheck: c.id }));
+      const { paidSoFar } = await import("./payments");
+      const orig = p.kind === "chargeback" && p.repaysId && !p.submissionId && !p.callId ? await db.payment.findUnique({ where: { id: p.repaysId }, select: { submissionId: true, callId: true } }) : null;
+      const piece = { submissionId: p.submissionId ?? orig?.submissionId ?? null, callId: p.callId ?? orig?.callId ?? null };
+      await db.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
+        await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name: displayName(c.tester) }, [], undefined, payPressOf(c.id, piece));
+      });
     }
   }
   const u = await db.user.findUniqueOrThrow({ where: { id: dev.id } });

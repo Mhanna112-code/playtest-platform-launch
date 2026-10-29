@@ -47,9 +47,14 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     const action = rejoining ? "rejoin-ask" : applying ? "apply" : "join";
     try {
       const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt: p.seenAt, confirmed, boxAt, anyway: true, gapsShown: shown, inviteId, agreeTerms });
-      if (r.sessionId) window.location.href = `/app/sessions/${r.sessionId}`;
-      else setDone(rejoining ? "Sent. You'll hear back when the developer answers." : "Application sent. You'll hear back when the developer answers.");
-      return { ok: true };
+      // (Batch 26 section 13) Join anyway opens the session page (the pop-up stays meanwhile); Apply anyway and Ask to rejoin anyway stay here: the pop-up closes and the
+      // done line shows.
+      if (r.sessionId) {
+        window.location.href = `/app/sessions/${r.sessionId}`;
+        return { ok: true, moving: true };
+      }
+      setDone(rejoining ? "Sent. You'll hear back when the developer answers." : "Application sent. You'll hear back when the developer answers.");
+      return { ok: true, moving: false };
     } catch (e) {
       if (e instanceof ApiError && e.code === "stop_once") {
         setBoxAt(String(e.data.now ?? new Date().toISOString()));

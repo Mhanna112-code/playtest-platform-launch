@@ -110,7 +110,9 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
  */
 async function questionSetsOnSwitch(c: { id: string; testerId: string; questions: unknown; prevSets: unknown }, next: string[], now: Date) {
   const old = (c.questions as string[]) ?? [];
-  if (JSON.stringify(old) === JSON.stringify(next)) return [];
+  // (Batch 26 sections 14 and 15) Compared by the questions' words only: a Required tick added or removed (or the old "[not required] " marker going) never moves the
+  // current set into "Previous questions and answers".
+  if (JSON.stringify(old.map(qText)) === JSON.stringify(next.map(qText))) return [];
   const sub = await db.submission.findUnique({ where: { contractId_kind: { contractId: c.id, kind: "written" } }, include: { review: true } });
   const kept = await db.keptForm.findUnique({ where: { userId_key: { userId: c.testerId, key: `written:${c.id}` } } });
   const draft = (kept?.data ?? null) as { answers?: unknown; notes?: unknown; questions?: unknown } | null;

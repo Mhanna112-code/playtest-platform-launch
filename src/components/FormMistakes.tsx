@@ -19,7 +19,8 @@ export function FormMistakes({ text, press, find }: { text: string; press: strin
       return;
     }
     const root = ref.current?.closest("[data-mistakes-root], form") ?? null;
-    setOrphans(markServerMistakes(root, [text.slice(1)], find));
+    // (Batch 26 section 11) A refusal naming several fields (one per line, e.g. both sign-up ticks) marks each.
+    setOrphans(markServerMistakes(root, text.slice(1).split("\n").filter(Boolean), find));
     focusFirstMistake(root);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text]);

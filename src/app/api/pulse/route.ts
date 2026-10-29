@@ -57,6 +57,26 @@ export async function GET(req: Request) {
       const { isAdmin } = await import("@/lib/server/session");
       return ok({ v: await profileOpenTestsV(profileId, u, isAdmin(u)), restricted: false });
     }
+    // (Batch 26 section 7) The developer's invite panel follows the test live both ways: full, paused or joining closed (Invite disabled, with its line) and a spot
+    // opening (enabled), without waiting for the page's own refresh.
+    const inviteTest = q.get("inviteState");
+    if (inviteTest) {
+      const t = await db.test.findUnique({ where: { id: inviteTest } });
+      if (!t || t.developerId !== u.id) throw new HttpError(404, "not_found", "Not found.");
+      const { inviteBlocked } = await import("@/lib/rules");
+      const { fmtDate } = await import("@/lib/format");
+      const testersIn = await db.contract.count({ where: { testId: t.id, status: "working" } });
+      return ok({ blocked: inviteBlocked({ ...t, testersIn, paused: !!u.holdStartedAt }, new Date(), fmtDate), restricted: false });
+    }
+    // (Batch 26 section 10) The Call requests panel: each shown request that is no longer waiting, with the line its row then shows ("Closed: the tester finished
+    // their part"). Only requests on this person's own sessions or tests.
+    const reqIds = (q.get("requests") ?? "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 100);
+    if (q.has("requests")) {
+      const { requestGoneLine } = await import("@/lib/server/requests");
+      const rows = reqIds.length ? await db.callRequest.findMany({ where: { id: { in: reqIds } }, select: { id: true, status: true, closedReason: true, contractId: true } }) : [];
+      const mine = new Set((await db.contract.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.contractId))] }, OR: [{ testerId: u.id }, { test: { developerId: u.id } }] }, select: { id: true } })).map((c) => c.id));
+      return ok({ gone: rows.filter((r) => mine.has(r.contractId) && r.status !== "pending").map((r) => ({ id: r.id, line: requestGoneLine(r) })), restricted: false });
+    }
     let testId = q.get("test") ?? "";
     const sessionId = q.get("session") ?? "";
     if (sessionId) {

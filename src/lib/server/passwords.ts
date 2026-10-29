@@ -101,7 +101,9 @@ export async function signUp(body: Record<string, unknown>, base: string, ip = "
   if (role) {
     const name = typeof body.name === "string" ? body.name.trim().slice(0, 80) : "";
     if (name.length < 1) throw field("Enter your name"); // (Owner, Oct 27) at least 1 character, no other rules
-    if (!body.acceptTerms) throw field("Agree to the Terms of Use to sign up");
+    // (Batch 26 section 11) Every missing tick is red at once (the Terms and 18 or older), each at its own tick.
+    const ticks = [...(!body.acceptTerms ? ["Agree to the Terms of Use to sign up"] : []), ...(!isTicked(body.over18) ? [AGE_LINE] : [])];
+    if (ticks.length) throw field(ticks.join("\n"));
     who = { name, isDeveloper: role !== "tester", isTester: role !== "developer", termsVersion: TERMS_VERSION, termsAcceptedAt: now }; // (batch 18 section 1) the version they accepted
   }
   // (Owner, Oct 28, batch 20 section 5) The required "I'm 18 or older." tick: no account without it (red at the tick).

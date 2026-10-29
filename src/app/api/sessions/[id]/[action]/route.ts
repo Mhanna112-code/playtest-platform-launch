@@ -8,7 +8,7 @@ import { decideTerms } from "@/lib/server/terms";
 import { openDispute } from "@/lib/server/payments";
 import { reportKeyBroken } from "@/lib/server/accessKeys";
 import { db } from "@/lib/db";
-import { displayName, fmtDate } from "@/lib/format";
+import { displayName, fmtDate, stopTimeIn } from "@/lib/format";
 import { CALL_CANCELLED_BY_STOP, LIMITED_CHOICE_REFUSAL, RATE_INACTIVE, PAUSE_DEFAULTS, PAUSED_SEND, WORK_OVER_ACTIONS, testPaused, testerPaused, testerRefusal, workOver, workOverLine, workOverPress } from "@/lib/rules";
 import { markQuiet } from "@/lib/server/testerGate";
 import { loadedOf, stopBox, testerStopSince } from "@/lib/server/stopMoment";
@@ -36,13 +36,16 @@ async function finalRefusal(userId: string, contractId: string, action: string, 
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== userId || c.status === "working") return;
   const dev = displayName(c.test.developer);
+  // (Batch 26 section 3) A team Stop reads "This test was stopped at 3:10 PM" (the tester's own zone), never who.
+  const tz = (await db.user.findUnique({ where: { id: userId }, select: { timeZone: true } }))?.timeZone;
+  const ctx = { ...c, teamTime: c.endedAt ? stopTimeIn(c.endedAt, tz) : undefined };
   if (workOver(c)) {
     // (Batch 17 section 12) Cancel call from a page opened before the stop: the stop already cancelled the calls ahead.
     if (action === "cancel-call" || action === "cancel-set") throw new HttpError(409, "call_cancelled", CALL_CANCELLED_BY_STOP);
     const press = workOverPress(action, body);
-    throw new HttpError(409, "work_over", workOverLine(c, dev, fmtDate, press), { failed: press, top: true });
+    throw new HttpError(409, "work_over", workOverLine(ctx, dev, fmtDate, press), { failed: press, top: true });
   }
-  const line = testerRefusal(c, { openUntil: null }, dev, fmtDate, new Date());
+  const line = testerRefusal(ctx, { openUntil: null }, dev, fmtDate, new Date());
   if (line) throw new HttpError(409, "gone", line);
 }
 

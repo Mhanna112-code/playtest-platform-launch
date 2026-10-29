@@ -101,7 +101,8 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
   }
   return (
     <div id="chargeback-steps" data-chargeback-steps="" className="space-y-2 rounded-lg border border-rose-400/40 bg-rose-500/10 p-3 text-sm text-rose-100">
-      <p><b>Your bank reversed a payment, so your account is on a payment hold.</b> Your tests are paused. To lift it:</p>
+      {/* (Batch 26 section 5) The chargeback wording: it's a chargeback hold, not a payment hold. */}
+      <p><b>Your bank reversed a payment, so your account is on a chargeback hold.</b> Your tests are paused. To lift it:</p>
       <ul className="space-y-1">
         {row(steps.cardVerified, "A card verified with 3D Secure")}
         {/* (Batch 23 section 6) Paying reserves it on the card; the team's approval takes it. */}

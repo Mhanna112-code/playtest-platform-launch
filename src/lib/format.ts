@@ -80,5 +80,9 @@ export function zoneOpt(tz?: string | null): { timeZone?: string } {
  */
 export const fmtDateTimeIn = (d: Date | string, tz?: string | null) =>
   new Date(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...zoneOpt(tz) });
+/** (Batch 26 section 3) "3:10 PM" in a person's saved zone (none: the server's clock). */
+export const fmtTimeIn = (d: Date | string, tz?: string | null) => new Date(d).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", ...zoneOpt(tz) });
+/** (Batch 26 section 3) A stop's time as the stop lines say it: "3:10 PM" within 12 hours, else "Tue, Nov 3, 3:10 PM", in the person's saved zone. */
+export const stopTimeIn = (d: Date, tz?: string | null, now = new Date()) => (now.getTime() - d.getTime() < 12 * 3_600_000 ? fmtTimeIn(d, tz) : fmtDateTimeIn(d, tz));
 export const fmtTime = (d: Date | string) => new Date(d).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 export const fmtDate = (d: Date | string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });

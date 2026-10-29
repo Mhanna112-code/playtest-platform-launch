@@ -53,8 +53,9 @@ describe("calls / hold / block refinements", () => {
     const { dev, tester, call, testId } = await booked(-5);
     expect((await status(tester.cookie, call.id)).body.line).toBe("");
     await blocksPOST(req("/api/blocks", { cookie: dev.cookie, body: { userId: tester.user.id } }));
-    expect((await status(tester.cookie, call.id)).body.line).toBe("This call isn't available.");
-    expect((await status(dev.cookie, call.id)).body.line).toBe("This call isn't available.");
+    // (Batch 26 section 2) A call in progress ends at once: the developer (who blocked) reads who; the tester only that it was cancelled.
+    expect((await status(tester.cookie, call.id)).body.line).toBe("Call ended: the call was cancelled.");
+    expect((await status(dev.cookie, call.id)).body.line).toBe("Call ended: you blocked Ana Silva.");
     expect((await invitable(dev.user.id, testId)).some((x) => x.id === tester.user.id)).toBe(false); // Invite hidden for that tester
   });
 

@@ -164,14 +164,14 @@ export const lateLabel = (dueAt: Date, fmt: (d: Date) => string) => `Sent late (
  * developer stopped the test or ended this tester early, or after they left, it's refused with the reason.
  */
 export function testerRefusal(
-  c: { status: string; endKind: string; endedAt: Date | null },
-  test: { openUntil: Date | null },
+  c: StopCtx & { status: string },
+  test: { openUntil: Date | null; adminStoppedAt?: Date | null },
   devName: string,
   fmt: (d: Date) => string,
   now: Date,
 ) {
   if (c.status === "left") return c.endKind === "rated" ? "You rated this test, so your part is finished." : "You left this test.";
-  if (c.status === "ended") return endedLine(c, devName, fmt);
+  if (c.status === "ended") return endedLine({ ...c, test: c.test ?? test }, devName, fmt);
   if (test.openUntil && test.openUntil.getTime() < now.getTime()) return `This test closed on ${fmt(test.openUntil)}.`;
   return "";
 }
@@ -534,10 +534,21 @@ export function devStopOnce(events: TestEventLike[], seenAt: Date, confirmed: bo
   return stopOnce(events, seenAt, confirmed, DEV_STOP_KINDS);
 }
 
+/**
+ * (Owner, Oct 29, batch 26 section 3) What a tester's stop line needs: the contract's end, and the test's `adminStoppedAt` (the team's Stop: the line never names the
+ * developer, "This test was stopped at 3:10 PM."); `teamTime` is that time as the tester reads it (their zone; without it, "on <date>").
+ */
+export type StopCtx = { endKind: string; endedAt: Date | null; test?: { adminStoppedAt?: Date | null } | null; teamTime?: string };
+/** (Batch 26 section 3) Was this tester's work ended by the team's Stop (never named)? */
+export const teamStopped = (c: StopCtx) => c.endKind === "stopped" && !!c.test?.adminStoppedAt;
+/** "This test was stopped at 3:10 PM" (or "…on Oct 29, 2026" when no time was given). */
+const teamStopHalf = (c: StopCtx, fmt: (d: Date) => string) => `This test was stopped ${c.teamTime ? `at ${c.teamTime}` : `on ${fmt(c.endedAt!)}`}`;
+
 /** The one line a tester reads (and every later press is refused with) once their work was ended by the developer. */
-export function endedLine(c: { status: string; endKind: string; endedAt: Date | null; title?: string }, devName: string, fmt: (d: Date) => string) {
+export function endedLine(c: StopCtx & { status: string; title?: string }, devName: string, fmt: (d: Date) => string) {
   if (c.status !== "ended" || !c.endedAt) return "";
   if (c.endKind === "blocked") return `Your session on ${c.title ?? "this test"} ended.`; // neutral: a block is never revealed
+  if (teamStopped(c)) return `${teamStopHalf(c, fmt)}. Work you sent is still reviewed.`;
   if (c.endKind === "stopped") return `${devName} stopped the test on ${fmt(c.endedAt)}. Work you sent is still reviewed.`;
   if (c.endKind === "closed") return `This test ended on ${fmt(c.endedAt)}. Work you sent is still reviewed.`; // neutral: a pause closure never says why
   if (c.endKind === "rated") return `${devName} finished your part in ${c.title ?? "this test"}. Work you sent is still reviewed.`;
@@ -554,8 +565,9 @@ export const LIMITED_CHOICE_REFUSAL = "You can do this once your account is acti
 /** The work is over for this tester (the developer or the team stopped the test, it closed, or their work was ended early): never a block, a rating or a leave. */
 export const workOver = (c: { status: string; endKind: string; endedAt: Date | null }) => c.status === "ended" && !!c.endedAt && !["blocked", "rated"].includes(c.endKind);
 /** The first half of the stopped line, as endedLine says it: "Nora Lane stopped the test on Nov 3" / "This test ended on Nov 3" / "Nora Lane ended your session early on Nov 3". */
-function overHalf(c: { endKind: string; endedAt: Date | null }, devName: string, fmt: (d: Date) => string) {
+function overHalf(c: StopCtx, devName: string, fmt: (d: Date) => string) {
   const d = fmt(c.endedAt!);
+  if (teamStopped(c)) return teamStopHalf(c, fmt); // (batch 26 section 3) never who
   return c.endKind === "stopped" ? `${devName} stopped the test on ${d}` : c.endKind === "closed" ? `This test ended on ${d}` : `${devName} ended your session early on ${d}`;
 }
 /** The presses that go once the work is over (hidden on the page, refused on the server); WORK_OVER_PRESSES are the names the refusal gives them. */
@@ -576,14 +588,14 @@ export function workOverPress(action: string, body: Record<string, unknown> = {}
   return "";
 }
 /** An old page's press after the work ended: "Nora Lane stopped the test on Nov 3, so your Send didn't go through. Work you sent is still reviewed." */
-export const workOverLine = (c: { endKind: string; endedAt: Date | null }, devName: string, fmt: (d: Date) => string, press: string) =>
+export const workOverLine = (c: StopCtx, devName: string, fmt: (d: Date) => string, press: string) =>
   `${overHalf(c, devName, fmt)}, so your ${press} didn't go through. Work you sent is still reviewed.`;
 /**
  * The stopped line at the top of the session page, listing what still works (built from what is actually on the page, as the paused banner does):
  * "Nora Lane stopped the test on Nov 3. You can still charge or let go of unreviewed work, dispute, rate and chat. Work you sent is still reviewed."
  * With `press` (an old page's press was refused), it names it: "Nora Lane stopped the test on Nov 3, so your Send didn't go through. You can still …".
  */
-export function stillWorksLine(c: { endKind: string; endedAt: Date | null }, devName: string, fmt: (d: Date) => string, can: { charge?: boolean; dispute?: boolean; rate?: boolean; chat?: boolean; excerpt?: boolean }, press = "") {
+export function stillWorksLine(c: StopCtx, devName: string, fmt: (d: Date) => string, can: { charge?: boolean; dispute?: boolean; rate?: boolean; chat?: boolean; excerpt?: boolean }, press = "") {
   const list = [can.charge && "charge or let go of unreviewed work", can.dispute && "dispute", can.rate && "rate", can.excerpt && "ask to show an excerpt", can.chat && "chat"].filter((x): x is string => !!x);
   return `${overHalf(c, devName, fmt)}${press ? `, so your ${press} didn't go through` : ""}.${list.length ? ` You can still ${andList(list)}.` : ""} Work you sent is still reviewed.`;
 }
@@ -1034,6 +1046,11 @@ export function chargeOpensAt(s: { payBy: Date | null }, test: { openUntil: Date
   // (Owner, Oct 30, batch 15 section 18, DEFAULT) The review date is the later of THIS tester's own deadline and sent + 7 days (Open until was only the shared deadline).
   return reviewDateOf(s.payBy, contract.dueAt);
 }
+/**
+ * (Owner, Oct 29, batch 26 section 6, DEFAULT) A sent, listed piece waiting for the developer tells the tester when Charge opens: "If Nora Lane hasn't paid by Nov 5, you
+ * can charge or let it go then." (the review date: it moves with pauses like the date itself).
+ */
+export const chargeOpensNote = (devName: string, date: string) => `If ${devName} hasn't paid by ${date}, you can charge or let it go then.`;
 /** (Batch 15 sections 2, 15 and 18) A part's (or a call's) review date: the later of the tester's own deadline and sent (or the call) + 7 days. */
 export const reviewDateOf = (sevenDaysAfter: Date, dueAt: Date) => new Date(Math.max(sevenDaysAfter.getTime(), dueAt.getTime()));
 export const chargeIsOpen = (...a: Parameters<typeof chargeOpensAt>) => {

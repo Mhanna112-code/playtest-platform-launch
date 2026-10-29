@@ -57,6 +57,10 @@ export async function blockUser(me: { id: string; email: string; name: string },
     include: { tester: true, test: { include: { developer: true } } },
   });
   for (const c of contracts) {
+    // (Owner, Oct 29, batch 26 section 2) A call already in progress between them ends at once, on both pages (like a pause, but whether or not they were connected).
+    const by = c.testerId === me.id ? "tester" : "developer";
+    const { endCallForBlock } = await import("./calls");
+    for (const call of await db.call.findMany({ where: { contractId: c.id, status: "booked", startsAt: { lte: now }, endedAt: null, measuredAt: null, actualMinutes: null } })) await endCallForBlock(call.id, by, now);
     await db.contract.update({ where: { id: c.id }, data: { status: "ended", endKind: "blocked", endedAt: now, endReason: "" } });
     const calls = await db.call.findMany({ where: { contractId: c.id, status: "booked", startsAt: { gt: now } } });
     for (const call of calls) {

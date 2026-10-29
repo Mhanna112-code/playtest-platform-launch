@@ -15,7 +15,8 @@ import { DeveloperTiles } from "@/components/ProfileTiles";
 import { StatTile } from "@/components/StatTile";
 import { CategoryBadges } from "@/components/Category";
 import { CategoryChips, CategoryTile, daysLeft, FeedbackBar, mainCategory, PartBadges, Seats, StatusPill } from "@/components/Ui";
-import { callJoinable, canAskToRejoin, chargeAmount, termsLine, testerShare, testPaused, STOP_NOTE_KIND, stopReasonOf } from "@/lib/rules";
+import { callJoinable, canAskToRejoin, chargeAmount, termsLine, testerShare, testPaused, STOP_NOTE_KIND, stopReasonOf, chargeOpensAt, chargeOpensNote } from "@/lib/rules";
+import { T as tzToken, renderTimes as tzRender } from "@/lib/tz";
 import { ratingSummary } from "@/lib/server/ratings";
 import { unreadCount } from "@/lib/server/messages";
 import { asListing, findTests } from "@/lib/server/tests";
@@ -581,10 +582,14 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               </li>
             ))}
             {waiting.map(({ c, s }) => {
+              // (Batch 26 section 6) A listed part: when Charge opens (its review date, moved by pauses like the date itself). Not for an unlisted part.
+              const listed = (s.kind === "recording" ? c.recordingCents : c.writtenCents) != null;
+              const opens = listed ? chargeOpensAt(s, c.test, c, now) : null;
               const inner = (
                 <>
                   <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={c.title}>{c.title} {pausedTest(c.test) && <PausedTag />}</p>
                   <span className="badge text-amber-300"><Clock className="h-3.5 w-3.5" /> {s.kind === "recording" ? "Screen recording" : "Written answers"} sent: waiting for review</span>
+                  {opens && opens > now && <p className="basis-full text-xs text-slate-400" data-charge-opens="">{chargeOpensNote(displayName(c.test.developer), tzRender(tzToken(opens, "date"), user.timeZone))}</p>}
                 </>
               );
               return (

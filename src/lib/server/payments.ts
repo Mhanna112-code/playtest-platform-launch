@@ -18,7 +18,7 @@ import { PAYMENT_CHECKING, freshPayKey, pressKeyFor } from "./recovery";
 import { clientPressKey, serverKey } from "./pressKeys";
 import { amountFromRate, callMinutesOf, overCeilingLine, rateFromAmount } from "@/lib/callMeasure";
 import { callsLeftCents } from "./callMoney";
-import { PAY_ACTS } from "./live";
+import { payPressOf } from "./live";
 import { closedOut, payMoreClosesAt, pieceCloseOut } from "./closeOut";
 
 type U = { id: string; email: string; name: string; pronoun: string; isAdmin?: boolean };
@@ -88,7 +88,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     if (!testerPayable(c.tester) && !(await tx.review.findFirst({ where: piece.where }))) throw new HttpError(409, "gone", deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null })));
     const already = await tx.review.findFirst({ where: piece.where });
     // (Batch 16 section 21) Another tab's Pay on this piece stops this press once, BEFORE it is refused as already done.
-    const payPress = { acts: [...PAY_ACTS], keys: [piece.where.callId ? `call:${piece.where.callId}` : `sub:${piece.where.submissionId}`], stopCheck: c.id };
+    const payPress = payPressOf(c.id, piece.where);
     if (already) {
       await devGate(tx, c.testId, body, {}, [], undefined, payPress);
       if (chargedByTester(already.reason)) throw new HttpError(409, "reviewed", `${name} already charged ${money(already.amountCents)} for this.`);
@@ -474,7 +474,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     if (again) await tx.payment.update({ where: { id: again.id }, data: { pressKey: null } });
     // (Batch 9 section 6) Per piece: listed, 100% of the listing at most (never more than the max); unlisted, 100% of the max on top of the Pay.
     const room = await pieceRoom(piece, tx);
-    const morePress = { acts: [...PAY_ACTS], keys: [at.callId ? `call:${at.callId}` : `sub:${at.submissionId}`], stopCheck: c.id };
+    const morePress = payPressOf(c.id, at);
     if (amount! > room.roomCents) {
       await devGate(tx, testId, body, {}, [], undefined, morePress); // (batch 16 section 21) another tab's Pay on it first stops once
       throw new HttpError(400, "over_cap", overRoomLine(piece, room));

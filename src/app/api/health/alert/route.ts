@@ -3,6 +3,7 @@ import { alertRefusal, healthKeyOf, healthKeyOk, outageChecksOn, parseAlert, rec
 // (Owner, Oct 30, batch 15 section 10) UptimeRobot's alert contact: a webhook, POST, to APP_URL/api/health/alert?key=<HEALTH_KEY>. Its body (JSON, or form
 // fields) carries alertType (1 = down, 2 = up) and alertDateTime (Unix seconds); the same names in the URL's query work too. (Batch 15 section 41, M4) The key may come
 // in the x-health-key header instead; the outage runs on the SERVER's clock (when the down and up alerts arrived); an alert more than 10 minutes off is refused.
+// (Batch 26 section 1) The up alert's alertDuration (seconds, UptimeRobot's *alertDuration*) records the outage when the down alert never arrived (the site was down).
 export async function POST(req: Request) {
   const url = new URL(req.url);
   if (!healthKeyOk(healthKeyOf(req))) return Response.json({ ok: false }, { status: 403 });
@@ -19,6 +20,6 @@ export async function POST(req: Request) {
   const now = new Date();
   const refused = alertRefusal(alert, now);
   if (refused) return Response.json({ ok: false, error: refused }, { status: 400 });
-  const outage = await recordAlert(alert.type, now);
+  const outage = await recordAlert(alert.type, now, alert.durationMs);
   return Response.json({ ok: true, type: alert.type, outage: outage ? { startAt: outage.startAt, endAt: outage.endAt, ms: outage.ms, needsApproval: outage.needsApproval } : null });
 }

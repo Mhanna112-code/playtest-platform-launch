@@ -1,7 +1,7 @@
 import { devStopSince, loadedOf } from "./stopMoment";
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { CALL_ACTS, PAY_ACTS, bigOwnLines, devChanges, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
-import { qOptional } from "@/lib/questions";
+import { NOT_REQUIRED, answersMissing } from "@/lib/questions";
 import { itemsFor, itemsOf, prevSetsOf, pushPrev, sameQuestions } from "@/lib/answerSets";
 import { overLimitText } from "@/lib/capacity";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts } from "@/lib/limits";
@@ -122,7 +122,8 @@ export function parseListing(body: Record<string, unknown>, partial = false): Pa
     const v = str(body.openUntil, 40);
     out.openUntil = v ? (/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T23:59:59.000Z` : v) : null;
   }
-  if (has("questions")) out.questions = Array.isArray(body.questions) ? body.questions.filter((q): q is string => typeof q === "string").map((q) => q.trim()).filter(Boolean) : [];
+  // (Batch 26 section 14) A page from before the switch may still send the old "[not required] " marker: it is the default now, so it's dropped (never a change).
+  if (has("questions")) out.questions = Array.isArray(body.questions) ? body.questions.filter((q): q is string => typeof q === "string").map((q) => q.trim()).map((q) => (q.startsWith(NOT_REQUIRED) ? q.slice(NOT_REQUIRED.length).trim() : q)).filter(Boolean) : [];
   return out;
 }
 
@@ -545,6 +546,8 @@ export async function editNews(tx: Tx, testId: string, body: Record<string, unkn
  */
 export const devLine = (c: TestEventLike & { contractId?: string | null }, withAlert = true) => ({
   text: c.text, at: c.createdAt, ...(c.kind === "terms" && c.contractId ? { kind: "terms", contract: c.contractId } : {}), ...(withAlert && alertOf(c.kind) ? { alert: alertOf(c.kind) } : {}),
+  // (Batch 26 section 4) A stop line says its own time: the box doesn't add it again.
+  ...(c.kind === "stop" ? { kind: "stop" } : {}),
   // (Batch 20 section 4) A line that stands for one thing (a ticked tester's needs): a later stop's line with the same key replaces it in the box.
   ...(c.key ? { key: c.key } : {}),
 });
@@ -919,11 +922,11 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   const c0 = await ownContract(tester.id, contractId);
   const qs = writtenQuestions(c0);
   const sentAnswers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim().slice(0, WRITTEN_MAX_CHARS + 1) : "")) : [];
-  // (Batch 20 section 28) One answer per question of the contract, by position (a missing one is blank); only the required questions need an answer ("not required" ones
-  // may stay empty). The refusal names which question (`missing`), so the page marks it red there.
+  // (Batch 20 section 28) One answer per question of the contract, by position (a missing one is blank). (Batch 26 section 14) At least one question answered, plus
+  // every Required one (the notes box alone doesn't count). The refusal names which question (`missing`), so the page marks it red there.
   const answers = qs.map((_, i) => sentAnswers[i] ?? "");
-  const missing = qs.findIndex((q, i) => !qOptional(q) && !answers[i]);
-  if (missing >= 0) throw new HttpError(400, "bad_answers", "Answer every required question before sending.", { missing });
+  const missing = answersMissing(qs, answers);
+  if (missing) throw new HttpError(400, "bad_answers", missing.message, { missing: missing.at });
   const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, WRITTEN_MAX_CHARS + 1) : "";
   // (Owner, Oct 29, batch 11) At most 10,000 characters for the whole written part (all its answers and notes together).
   const long = checkWrittenLength([...answers, notes]);

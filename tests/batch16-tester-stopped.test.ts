@@ -126,7 +126,7 @@ describe("the session page after the work is over (source)", () => {
     expect(page).toContain("canSend={!refusal && !recording?.review && !meOff && draftsShown}");
     expect(page).toContain("joinable: !paused && !refusal && callJoinable(x, now)");
     expect(page).toContain("(pendingReqs.length > 0 && !paused && !refusal)");
-    expect(page).toContain("over ? stillWorksLine(c, dev, fmtDate, stillWorks, failedPress) : refusal");
+    expect(page).toContain("over ? stillWorksLine({ ...c, teamTime: c.endedAt ? stopTimeIn(c.endedAt, u.timeZone, now) : undefined }, dev, fmtDate, stillWorks, failedPress) : refusal"); // (batch 26 section 3) a team Stop never names who
     expect(page).toContain('"data-work-over-failed": failedPress');
     expect(page).toContain("(!over || stillWorks.charge || stillWorks.dispute || stillWorks.rate) && <TesterAlertsToggle");
     expect(page).not.toContain("This test is stopped. You can still");
