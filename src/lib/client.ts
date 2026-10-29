@@ -1,5 +1,6 @@
 import { boxSeenAt, pageLoadedAt, seenNow } from "./live";
 import { pressLabelOf } from "./pressLabels";
+import { keepRefusal } from "./keptRefusal";
 import { publishTesterAlertsOff, setTesterAlertsOff } from "./testerAlerts";
 import { ANSWER_TERMS_CODE, ANSWER_TERMS_EVENT, ANSWER_TERMS_FIRST, termsBlockedPath } from "./answerTerms";
 
@@ -100,7 +101,12 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
     if (e?.code === "stop_once" && typeof e.alertsOff === "boolean") publishTesterAlertsOff(e.alertsOff, false);
     // (Owner, Oct 29, batch 28 §9) A press refused because the state changed (a block, a stop, a pause, an ended call, a closed request, already paid…): the page
     // redraws at once, as its poll would (AutoRefresh; typed text kept), so the dead buttons go and the new state shows.
-    if (res.status === 409 && e?.code !== "stop_once" && e?.code !== ANSWER_TERMS_CODE && body !== undefined && typeof window !== "undefined") window.dispatchEvent(new Event(PRESS_REFUSED_EVENT));
+    // (Owner, Oct 29, batch 29 §36) If the redraw takes the pressed button away, its refusal line stays where the button was (KeptRefusal, root layout) until the
+    // next press or about 10 seconds: "Your Join call didn't go through: this call isn't available."
+    if (res.status === 409 && e?.code !== "stop_once" && e?.code !== ANSWER_TERMS_CODE && body !== undefined && typeof window !== "undefined") {
+      if (typeof e?.message === "string") keepRefusal(LAST_PRESS, e.message);
+      window.dispatchEvent(new Event(PRESS_REFUSED_EVENT));
+    }
     throw new ApiError(res.status, e?.code ?? "server", e?.message ?? (res.status === 413 ? "That's too much to send at once. Try a smaller amount." : "Something went wrong. Try again in a moment."), e ?? {});
   }
   // A press that went ahead with a note (e.g. "Done. Also: the test was renamed to ..."): kept for the page's top box

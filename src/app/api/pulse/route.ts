@@ -86,7 +86,16 @@ export async function GET(req: Request) {
     }
     const t = await db.test.findUnique({ where: { id: testId }, include: { developer: { select: { holdStartedAt: true, devSuspendedAt: true } } } });
     if (!t || (!sessionId && t.developerId !== u.id)) throw new HttpError(404, "not_found", "Not found.");
-    const ids = (await db.contract.findMany({ where: { testId }, select: { id: true } })).map((c) => c.id);
+    const cons = await db.contract.findMany({ where: { testId }, select: { id: true, status: true, endedAt: true, testerId: true } });
+    const ids = cons.map((c) => c.id);
+    // (Owner, Oct 29, batch 29 §36; batch 28 §9's unchecked part) A block (either way) ends the session, cancels its calls and closes its requests without a test
+    // event: the sessions' states, the calls' states and the block itself are in the fingerprint, so the session page drops Join call, Request a time and the call
+    // requests on its normal poll (and the test page its rows' call buttons).
+    const consV = cons.filter((c) => c.status !== "working").map((c) => `${c.id}:${c.status}:${c.endedAt?.getTime() ?? 0}`).sort().join(",");
+    const callsV = await db.call.aggregate({ where: { contractId: { in: ids } }, _count: { _all: true }, _max: { cancelledAt: true, endedAt: true } });
+    const callsKey = `${callsV._count._all}:${callsV._max.cancelledAt?.getTime() ?? 0}:${callsV._max.endedAt?.getTime() ?? 0}`;
+    const sessionTester = sessionId ? cons.find((c) => c.id === sessionId)?.testerId ?? "" : "";
+    const blocksV = sessionId ? await db.block.count({ where: { OR: [{ blockerId: sessionTester, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: sessionTester }] } }) : 0;
     const [ev, payCount, payLast, disp] = await Promise.all([
       db.testEvent.findFirst({ where: { testId }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
       db.payment.count({ where: { contractId: { in: ids } } }),
@@ -110,7 +119,7 @@ export async function GET(req: Request) {
     const ratingsN = await db.rating.count({ where: { testId } });
     const rateV = sessionId ? (await (await import("@/lib/server/ratings")).testerRateState(sessionId)).line : "";
     // (Batch 10) The developer's suspension and the team's pause are in it too, so a tester's session page shows (or drops) the paused banner live.
-    const v = [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0, ratingsN, rateV].join("|");
+    const v = [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0, ratingsN, rateV, consV, callsKey, blocksV].join("|");
     // (Owner, Oct 28) Whether the team stopped the test: an open test page or Edit moves to the top of the test page at once.
     // (Batch 10) A tester's session page isn't restricted by the developer's hold (only the developer's own pages are): it keeps refreshing, so the paused banner shows live.
     // (Batch 15 section 16) Each side's own suspension: the tester side on a session page, the developer side on a test page.
