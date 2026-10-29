@@ -286,17 +286,21 @@ describe("small things (section 13)", () => {
   it("the tester's stop box knows when Alerts is Off and drops the two Alerts lines", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
+    // (Batch 27 section 1) Send is blocked by an open offer now; Let it go (Charge) keeps the terms stop-once, so it carries this check.
+    await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: seen(), confirmed: true });
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    await db.submission.update({ where: { id: sub.id }, data: { choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 7 * 86_400_000) } });
     await db.user.update({ where: { id: tester.user.id }, data: { testerAlertsOff: true } });
     const before = seen();
     await later();
     const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     expect((await act(testId, "edit", dev.cookie, { version: v, fields: { writtenCents: "12.00" }, seenAt: seen(), confirmed: true })).status).toBe(200);
     // New terms still stop with Alerts Off; the box is told Alerts is Off.
-    const r = await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: before });
+    const r = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: before });
     expect(r.body.error.code).toBe("stop_once");
     expect(r.body.error.alertsOff).toBe(true);
     await db.user.update({ where: { id: tester.user.id }, data: { testerAlertsOff: false } });
-    const r2 = await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: before });
+    const r2 = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: before });
     expect(r2.body.error.alertsOff).toBe(false);
     const q = src("components/QuickIgnore.tsx");
     expect(q).toContain("if (!show || (off && !done)) return null;");

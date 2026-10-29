@@ -4,7 +4,8 @@ import { lengthCap } from "@/lib/callMeasure";
 import { checkFields, useLocalMin } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
 import { FormMistakes } from "@/components/FormMistakes";
-import { FIELD } from "@/lib/client";
+import { FIELD, offerShown } from "@/lib/client";
+import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
 import { usePress } from "@/lib/usePress";
 import { NotSentTag, useKept } from "@/lib/useKept";
 import type { RowJson } from "@/lib/callRows";
@@ -68,9 +69,10 @@ export function CallRequests(p: {
   // (Batch 18 section 6) The Length is at most what's left of the $1,000 for your calls at the call's rate.
   const lenCap = p.clash && p.side === "tester" && p.targets[0] ? lengthCap([{ name: p.targets[0].name, leftCents: p.clash.leftCents, rateCents: p.clash.rateCents }]) : null;
   const form = useRef<HTMLDivElement>(null);
-  const minNow = useLocalMin(5);
+  const minNow = useLocalMin(CALL_MIN_AHEAD_MINUTES); // (batch 27 section 6) the server's lead
+  // (Batch 27 section 1) The tester's open new-terms offer comes first: the press goes straight to its refusal (the page goes up to Switch / Keep).
   const send = () =>
-    checkFields(form.current) &&
+    ((p.side === "tester" && offerShown()) || checkFields(form.current)) &&
     go(
       "request-time",
       {

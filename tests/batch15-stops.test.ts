@@ -53,14 +53,13 @@ describe("the tester's one-press Alerts (section 26) and Leave (section 25)", ()
     expect(live.body.changes.length).toBeGreaterThan(0);
     expect(live.body.changes.every((c: { ignored?: boolean }) => c.ignored)).toBe(true);
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: loaded })).status).toBe(200);
-    // New terms still stop.
+    // New terms still stop it (batch 27 section 1: an open offer blocks Send, with Alerts Off too).
     const loaded2 = seen();
     await settle();
     expect((await edit(testId, dev.cookie, { writtenCents: "12.00" })).status).toBe(200);
     await settle();
     const r = await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"], seenAt: loaded2 });
-    expect(r.body.error?.code).toBe("stop_once");
-    expect(r.body.error.changes.some((c: { text: string }) => /offered new terms/.test(c.text))).toBe(true);
+    expect(r.body.error?.code).toBe("answer_terms");
     // Leave never stops (Alerts On or Off).
     await db.user.update({ where: { id: other.tester.user.id }, data: { testerAlertsOff: false } });
     expect((await sact(other.sessionId, "leave", other.tester.cookie, { seenAt: loaded })).status).toBe(200);

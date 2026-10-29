@@ -61,6 +61,15 @@ export const atTop = (b: { scrollTop: number }) => b.scrollTop < AT_TOP_PX;
 export const LIVE_POLL_MS = 20_000;
 
 /** The rows of a fresh first page that are ahead of every row already shown (the live arrivals). */
+/**
+ * (Batch 22 section 5; batch 27 section 5) The rows shown, each replaced by its fresh copy when the live check has one that differs (a pause lifted elsewhere: the row's
+ * state line and its Pause / Lift the pause follow), searched list or not. The same array when nothing changed (no re-render).
+ */
+export function shownWithFresh<T extends { id: string }>(shown: T[], fresh: T[]): T[] {
+  const byId = new Map(fresh.map((x) => [x.id, x]));
+  return shown.some((x) => byId.has(x.id) && JSON.stringify(byId.get(x.id)) !== JSON.stringify(x)) ? shown.map((x) => byId.get(x.id) ?? x) : shown;
+}
+
 export function newRowsAhead<T extends { id: string }>(fresh: T[], shown: T[]): T[] {
   const known = new Set(shown.map((r) => r.id));
   const out: T[] = [];

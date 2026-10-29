@@ -1,6 +1,9 @@
 "use client";
 import { Err } from "@/components/Err";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { jumpTo } from "@/lib/markJump";
+import { ANSWER_TERMS_EVENT } from "@/lib/answerTerms";
 import { ChangesBox } from "@/components/ChangesBox";
 import { NdaBox } from "@/components/NdaBox";
 import { QuestionList } from "@/components/QuestionList";
@@ -24,6 +27,27 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
     window.addEventListener("tester-top", on);
     return () => window.removeEventListener("tester-top", on);
   }, [setBox]);
+  // (Owner, Oct 29, batch 27 section 1) A Send or call press while an offer is open: the page goes up to this box, highlighted for a few seconds (jumpTo's ring),
+  // every time. A page that doesn't show the offer yet (the server refused it) loads it first, then goes to it.
+  const router = useRouter();
+  const pending = useRef(false);
+  useEffect(() => {
+    const on = () => {
+      if (document.getElementById("terms-offer")) {
+        setTimeout(() => jumpTo("terms-offer"), 30);
+        return;
+      }
+      pending.current = true;
+      router.refresh();
+    };
+    window.addEventListener(ANSWER_TERMS_EVENT, on);
+    return () => window.removeEventListener(ANSWER_TERMS_EVENT, on);
+  }, [router]);
+  useEffect(() => {
+    if (!offer?.id || !pending.current) return;
+    pending.current = false;
+    setTimeout(() => jumpTo("terms-offer"), 30);
+  }, [offer?.id]);
   if (!offer)
     return box ? (
       <div className="space-y-2">
@@ -44,7 +68,7 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
         } else setErr(errOf(e));
       });
   return (
-    <div id="terms-offer" className="info scroll-mt-24 space-y-2">
+    <div id="terms-offer" className="info scroll-mt-24 space-y-2 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300">
       <p>
         {devName} updated the listing: {offer.diff}.
       </p>

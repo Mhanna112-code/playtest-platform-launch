@@ -3,7 +3,7 @@ import { Err } from "@/components/Err";
 import { FormMistakes } from "@/components/FormMistakes";
 import { checkFields } from "@/components/FieldChecks";
 import { useRef, useState } from "react";
-import { api, ApiError, errOf, FIELD } from "@/lib/client";
+import { api, ApiError, errOf, FIELD, offerShown } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { NotSentTag, useKept } from "@/lib/useKept";
 import { restoreDraft } from "@/lib/answerSets";
@@ -79,9 +79,11 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   async function send(e: React.FormEvent) {
     e.preventDefault();
     if (!canSend) return;
-    if (length > WRITTEN_MAX_CHARS) return setMsg({ ok: false, text: FIELD + `Your written answers can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters in all (now ${length.toLocaleString("en-US")}).` });
+    // (Batch 27 section 1) An open new-terms offer comes first: the press goes straight to its refusal (the page goes up to Switch / Keep).
+    const terms = offerShown();
+    if (!terms && length > WRITTEN_MAX_CHARS) return setMsg({ ok: false, text: FIELD + `Your written answers can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters in all (now ${length.toLocaleString("en-US")}).` });
     // (Batch 26 section 14) The server's rule, at once: at least one question answered, plus every Required one; red at the question.
-    const missing = answersMissing(questions, answers);
+    const missing = terms ? null : answersMissing(questions, answers);
     if (missing) {
       setMissingAt(missing.at);
       return setMsg({ ok: false, text: FIELD + missing.message });

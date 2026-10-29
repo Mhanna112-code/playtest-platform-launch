@@ -609,10 +609,10 @@ describe("batch 20 section 13: a change while the tester is typing raises the pi
     expect(await pulse()).not.toBe(v0);
   });
 
-  it("every update nobody pressed for is announced: typing (or a pop-up) raises the pill and counts; only the first may scroll", () => {
+  it("every update nobody pressed for is announced: it raises the pill and counts (batch 27 section 4: never a scroll, typing or not)", () => {
     const top = src("components/LiveTop.tsx");
     expect(top).toContain("if (fresh.length) announceFresh(fresh.length, key(fresh[fresh.length - 1]));");
-    expect(top).toContain("if (busy || !first) setPill((p) => p + n);");
+    expect(top).toContain("setPill((p) => p + n);");
     // The old check read a `pill` frozen at 0 inside the poll's closure.
     expect(top).not.toContain("else if (pill) setPill(");
   });

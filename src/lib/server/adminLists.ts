@@ -230,9 +230,13 @@ async function users(cursor: string | null, f?: ListFilter): Promise<Page<UserVM
 export async function testRow(t: Awaited<ReturnType<typeof db.test.findMany<{ include: { developer: true; _count: { select: { contracts: true } } } }>>>[number]): Promise<TestVM> {
   // (Batch 15 section 21) Which admin did what to this test, by email.
   // (The state already names who stopped or paused it: the list adds the other actions.)
-  const acted = (await lastActions([t.id], ["unpause-test", "extend-pause", "close-paused", "allow-critical-changes", ...(t.adminStoppedAt ? [] : ["stop-test"]), ...(t.adminPausedAt ? [] : ["pause-test"])])).get(t.id) ?? [];
-  const name = await adminEmails([t.adminStoppedById, t.adminPausedById]);
-  const state = t.adminStoppedAt ? `stopped by ${name(t.adminStoppedById) || "the team"}` : t.adminPausedAt ? `paused by ${name(t.adminPausedById) || "the team"}` : t.status;
+  // (Batch 27 section 5) The pause's history reads as the test's state now: paused ("paused by X"; an older lift isn't listed), or, once lifted, open with who paused
+  // and who lifted it ("open · paused by X, lifted by Y at Thu, Oct 29, 8:29 AM"), never "paused by" alone on a test that isn't paused.
+  const acted = (await lastActions([t.id], ["extend-pause", "close-paused", "allow-critical-changes", ...(t.adminStoppedAt ? [] : ["stop-test"])])).get(t.id) ?? [];
+  const [lastPause, lastLift] = await Promise.all(["pause-test", "unpause-test"].map((action) => db.adminAction.findFirst({ where: { targetId: t.id, action }, orderBy: { createdAt: "desc" } })));
+  const name = await adminEmails([t.adminStoppedById, t.adminPausedById, lastPause?.adminId, lastLift?.adminId]);
+  const lifted = !t.adminPausedAt && lastLift ? `${t.status} · paused by ${name(lastPause?.adminId) || "the team"}, lifted by ${name(lastLift.adminId)} at ${fmtDateTime(lastLift.createdAt)}` : "";
+  const state = t.adminStoppedAt ? `stopped by ${name(t.adminStoppedById) || "the team"}` : t.adminPausedAt ? `paused by ${name(t.adminPausedById) || "the team"}` : lifted || (lastPause ? `${t.status} · paused by ${name(lastPause.adminId)} ${fmtDateTime(lastPause.createdAt)}` : t.status);
   return {
     id: t.id,
     at: t.createdAt.toISOString(),

@@ -7,7 +7,7 @@ import { NOTHING_CHANGED_LINE } from "@/lib/rules";
 import { notify } from "./notify";
 import { ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_RECORDING_BYTES, MAX_RECORDINGS, deleteObject, deleteStored, headObject, isVideo, listStored, r2On, uploadTarget } from "./storage";
 import { ownContract, recordEvent, sessionRefusal } from "./tests";
-import { testerTermsGate } from "./terms";
+import { answerTermsFirst, testerSendGate } from "./terms";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -118,7 +118,9 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
   const c0 = await ownContract(tester.id, contractId);
   // (Owner, Oct 28 afternoon) No sending while the test is paused (uploads, the drafts, still work).
   if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", PAUSED_SEND);
-  await testerTermsGate(contractId, displayName(c0.test.developer), body);
+  // (Batch 27 section 1) An open new-terms offer blocks Send until it's answered (Switch or Keep).
+  await answerTermsFirst(contractId);
+  await testerSendGate(contractId, body);
 
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   const { updated, late, subId, gone: goneFiles } = await db.$transaction(async (tx) => {

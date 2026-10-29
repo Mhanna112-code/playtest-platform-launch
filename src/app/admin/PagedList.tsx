@@ -1,7 +1,7 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { api, errOf } from "@/lib/client";
-import { LIVE_POLL_MS, LOADING_LINE, SEARCHABLE, SEARCH_MAX, SEARCH_PAUSE_MS, atTop, endLine, headingText, isSearchKind, mergeTop, nearEnd, newRowsAhead, newRowsPill, searchOf } from "@/lib/adminScroll";
+import { LIVE_POLL_MS, LOADING_LINE, SEARCHABLE, SEARCH_MAX, SEARCH_PAUSE_MS, atTop, endLine, headingText, isSearchKind, mergeTop, nearEnd, newRowsAhead, newRowsPill, searchOf, shownWithFresh } from "@/lib/adminScroll";
 import { AccountActions } from "./AccountActions";
 import { DisputeWork } from "./DisputeWork";
 import { ScrollText } from "@/components/ScrollText";
@@ -56,9 +56,11 @@ function PauseToggle({ t }: { t: TestVM }) {
     setRefused(errOf(e));
     refreshRows();
   };
+  // (Batch 27 section 5) Keyed by the state: a pause lifted (or set) elsewhere swaps in a fresh button (Pause with its own empty Why box, or Lift the pause), never the
+  // old one's leftovers.
   return (
     <>
-      {t.adminPaused ? <AdminButton action="unpause-test" id={t.id} label="Lift the pause" onRefused={onRefused} /> : <AdminButton action="pause-test" id={t.id} label="Pause" fields={[{ name: "note", label: "Why" }]} onRefused={onRefused} />}
+      {t.adminPaused ? <AdminButton key="lift" action="unpause-test" id={t.id} label="Lift the pause" onRefused={onRefused} /> : <AdminButton key="pause" action="pause-test" id={t.id} label="Pause" fields={[{ name: "note", label: "Why" }]} onRefused={onRefused} />}
       {refused && <span className="err" data-pause-refused="">{refused}</span>}
     </>
   );
@@ -295,8 +297,7 @@ export function PagedList({ kind, initial, empty = "None.", arg = "", title, lev
 
   /** (Batch 22 section 5) Rows already shown take their fresh state (a test's pause lifted elsewhere turns its button back into Pause). */
   const updateShown = useCallback((fresh: AnyRow[]) => {
-    const byId = new Map(fresh.map((x) => [x.id, x]));
-    setRows((prev) => (prev.some((x) => byId.has(x.id) && JSON.stringify(byId.get(x.id)) !== JSON.stringify(x)) ? prev.map((x) => byId.get(x.id) ?? x) : prev));
+    setRows((prev) => shownWithFresh(prev, fresh));
   }, []);
   const refreshRows = useCallback(() => {
     void api<Page<AnyRow>>(url(null, appliedRef.current)).then((r) => updateShown(r.rows), () => null);
@@ -344,9 +345,19 @@ export function PagedList({ kind, initial, empty = "None.", arg = "", title, lev
       }
     };
     const t = setInterval(tick, LIVE_POLL_MS);
+    // (Batch 27 section 5) Also at once when the tab comes back into view or gets focus, and on the page's live nudge: rows shown (searched or not) follow a
+    // pause lifted or set elsewhere without waiting for the next 20 s.
+    const now = () => void tick();
+    const onVisible = () => { if (document.visibilityState === "visible") void tick(); };
+    window.addEventListener("live-tick", now);
+    window.addEventListener("focus", now);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       clearInterval(t);
       io?.disconnect();
+      window.removeEventListener("live-tick", now);
+      window.removeEventListener("focus", now);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [fixed, url, takeTop, updateShown]);
 

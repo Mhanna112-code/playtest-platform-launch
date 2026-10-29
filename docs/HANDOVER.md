@@ -213,6 +213,7 @@ The template is [.env.example](../.env.example). Never commit `.env*` files (the
 | `OUTAGE_CHECKS` | `1` turns outage recording on (from the uptime service's alerts, batch 15 §10) | Decide at launch | `0` |
 | `HEALTH_KEY` | Secret the uptime service sends as `?key=` on its ping and on its alert webhook `POST /api/health/alert`. The keyed ping runs the 5-minute sweep of reminders and timers (batch 19 §4) and, with `OUTAGE_CHECKS=1`, writes heartbeats | Yes (the sweep needs it) | a long random value |
 | `SKIP_EMAIL_CONFIRM` | `1` skips the email-confirmation requirement (a strip says so). Ignored in production | Must be off | `0` |
+| `CALL_MIN_AHEAD_MINUTES` | How many minutes ahead a call request's time must be when not in production (batch 27 §6, `src/lib/callLead.ts`). Production always uses 5, whatever this says | No (ignored in production) | `1` |
 | `NEXT_DIST_DIR` | Build output folder, so a check or second server doesn't overwrite the running dev server's `.next` | No | `.next` |
 | `BASE`, `FAKE_BASE`, `ONLY`, `ADMIN`, `PLAYWRIGHT_BROWSERS_PATH` | Read by `scripts/evidence.cjs` / `scripts/media.cjs` only | No | see the script headers |
 
@@ -340,6 +341,9 @@ npm run dev                 # http://localhost:3400
 ```
 
 With no `RESEND_API_KEY`, read emails at `/dev/outbox`. Put your email in `ADMIN_EMAILS` to open `/admin`.
+
+For testing calls locally, a call request may start 1 minute from now (production keeps 5 minutes; set `CALL_MIN_AHEAD_MINUTES`
+to change the local lead). The call room still opens 10 minutes before the start.
 
 ### The full check
 

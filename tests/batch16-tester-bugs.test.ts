@@ -106,6 +106,11 @@ describe("B. every call change stops every tester press once (Alerts On), never 
     for (const [action, body] of presses) {
       // Without the page's load time (as before), the refreshed marker hides the request.
       const r = await sact(s.sessionId, action, s.tester.cookie, { ...body, seenAt: refreshed, loadedAt: loaded });
+      // (Batch 27 section 1) The session's offer is still open: Send and the call presses are blocked until it's answered (no stop-once for them meanwhile).
+      if (["written", "cancel-call", "request-time"].includes(action)) {
+        expect(r.body.error?.code, action).toBe("answer_terms");
+        continue;
+      }
       expect(r.body.error?.code, `${action} ${JSON.stringify(r.body)}`).toBe("stop_once");
       expect(r.body.error.changes.map((c: { text: string }) => c.text).join(" "), action).toMatch(/requested a call/);
     }

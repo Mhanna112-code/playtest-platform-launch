@@ -5,6 +5,7 @@ import { HttpError } from "./http";
 import { fmtFor } from "@/lib/tz";
 import { notify } from "./notify";
 import { callClosedLine, callEndState, callLineFor, endIfClosed } from "./calls";
+import { answerTermsFirst } from "./terms";
 import { CALL_OVER_LINE, END_WARN_MS, endWarnLine } from "@/lib/callMeasure";
 
 // Block (owner rule): either side can block the other. At once: their sessions together end (sent work stays payable
@@ -126,6 +127,8 @@ export async function joinCall(user: { id: string }, callId: string) {
     const why = call.status !== "cancelled" ? refusal[0].toLowerCase() + refusal.slice(1).replace(/.$/, "") : by ? `${mine ? "you" : by} cancelled this call${call.cancelledAt ? ` at ${fmtFor(await db.user.findUnique({ where: { id: user.id }, select: { timeZone: true } }), call.cancelledAt, "time")}` : ""}` : call.cancelNote ? `this call was cancelled: ${call.cancelNote.replace(/[.s]+$/, "")}` : "this call was cancelled";
     throw new HttpError(409, "cant_join", `Your Join call didn't go through: ${why}.`, { cancelled: call.status === "cancelled" });
   }
+  // (Batch 27 section 1) The tester's Join call waits while new terms are open: Switch or Keep first.
+  if (side === "tester") await answerTermsFirst(c.id);
   // (Batch 21) The room itself records who came in (its first poll); a press alone isn't being in the call.
   return { url: `/app/calls/${call.id}` };
 }

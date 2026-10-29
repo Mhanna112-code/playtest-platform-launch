@@ -9,6 +9,7 @@ import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { notify } from "./notify";
 import { testerGate as sharedTesterGate } from "./testerGate";
+import { answerTermsFirst } from "./terms";
 import { devGate, devGateIfSeen, ownContract, ownTest, recordEvent, staleNote } from "./tests";
 import { CALL_ACTS } from "./live";
 
@@ -66,12 +67,13 @@ export async function testerCallChanges(testerId: string, contractId: string, te
   return out;
 }
 
-/** Book / Cancel use the tester's one shared stop-once gate (the box shows under the pressed button). */
-const testerGate = (tester: U, c: { id: string; testId: string }, body: Record<string, unknown>) => sharedTesterGate(tester.id, c.id, c.testId, body);
+/** Book / Cancel use the tester's one shared stop-once gate (the box shows under the pressed button). (Batch 27 section 1) New terms block Cancel call instead (answerTermsFirst). */
+const testerGate = (tester: U, c: { id: string; testId: string }, body: Record<string, unknown>) => sharedTesterGate(tester.id, c.id, c.testId, body, undefined, { skipTerms: true });
 
 /** Tester cancels their booked call: 24 hours or more ahead only. The time opens up again for others. */
 export async function testerCancelCall(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
+  await answerTermsFirst(contractId); // (batch 27 section 1) an open new-terms offer blocks Cancel call until it's answered
   const callId = String(body.callId ?? "");
   const reason = readText(body.reason, LIMITS.reason, "reason"); // (batch 15 section 20) refused over 1,000, never cut
   const call = await db.$transaction(async (tx) => {

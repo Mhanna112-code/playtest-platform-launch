@@ -59,6 +59,8 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
     if (action === "stop") await keepStop.clear();
     // (Owner, Oct 28 evening) Next round creates the draft and goes straight to Post a test with it.
     if (action === "next-round" && r.id) window.location.href = `/app/tests/new?draft=${r.id}`;
+    // (Batch 27 section 2) Go to the next round: past the stop-once gate, its draft opens.
+    else if (action === "go-next-round" && r.id) window.location.href = `/app/tests/${r.id}`;
     // (Batch 15 section 29) A restricted developer's Stop / End early: the dashboard top says it's done.
     else if (p.doneTo && (action === "stop" || action === "end-early"))
       window.location.href = `${p.doneTo}?done=${encodeURIComponent(action === "stop" ? `Done: you stopped ${p.title}.` : `Done: you ended ${picked.length === 1 ? "1 tester's" : `${picked.length} testers'`} work on ${p.title}.`)}`;
@@ -94,7 +96,8 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
               {!p.restricted && !stopped && <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.id}/edit`}><Pencil className="h-4 w-4" /> Edit</a>}
               {(!p.restricted || p.alertKeys) && <AlertsMenu ignored={p.ignoredAlerts ?? []} keys={p.alertKeys} />}
               {p.restricted || p.teamStopped || p.status === "draft" ? null : p.nextRoundId ? (
-                <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.nextRoundId}`}><Repeat className="h-4 w-4" /> Go to the next round</a>
+                // (Owner, Oct 29, batch 27 section 2) A press, not a plain link: it stops once like Next round (the box under these buttons); the second press opens the draft.
+                <button className="btn-secondary px-3 py-1.5 text-sm" disabled={busy} data-go-next-round="" onClick={() => void go("go-next-round")}><Repeat className="h-4 w-4" /> Go to the next round</button>
               ) : (
                 <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(open === "next" ? "" : "next")}><Repeat className="h-4 w-4" /> Next round{p.perks === false && <SubscribersTag />}</button>
               )}
@@ -126,6 +129,7 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
                 onConfirm={() => go("stop", { reason: stopReason })}>
                 <OctagonX className="h-4 w-4" /> Stop the test
               </ConfirmButton>}
+              {box("go-next-round")}
               {box("stop")}
             </div>
           )}

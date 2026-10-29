@@ -10,6 +10,7 @@ import { QuickIgnore, TesterAlertsOff } from "@/components/QuickIgnore";
 import { ContractLink } from "@/components/ContractLink";
 import { lastPressLabel } from "@/lib/client";
 import { pressVerb, refusalLine } from "@/lib/pressLabels";
+import { ANSWER_TERMS_FIRST } from "@/lib/answerTerms";
 
 export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string; /** (Batch 16 section 19) the fields another tab changed (API names) */ fields?: string[]; /** (Batch 20 section 4) one line per thing: a newer line with the same key replaces it */ key?: string; /** (Batch 20 section 25) a live-box line that never stops a press */ quiet?: boolean };
 
@@ -31,7 +32,8 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
   }, [shown, press, error]);
   useEffect(() => {
     if (changes) markShownInBox(changes); // seen: the top box lists them quietly, without its scroll
-    if (changes || error) bringInView(ref.current);
+    // (Batch 27 section 1) The new-terms line stays under its button while the page goes up to the Switch / Keep box.
+    if (changes || (error && error !== ANSWER_TERMS_FIRST)) bringInView(ref.current);
   }, [changes, error]);
   if (!changes && !error) return null;
   if (!changes && error && error.startsWith("\u0001")) return <p ref={ref as unknown as React.RefObject<HTMLParagraphElement>} className="err-field basis-full">{error.slice(1)}</p>;
@@ -67,7 +69,7 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
       {error && (error.startsWith("Confirm your email first.") ? <p className="flex flex-wrap items-center gap-2">{refusalLine(named, error)} <ResendConfirm label="Resend the link" /></p> : isPerkRefusal(error) ? <p className="flex flex-wrap items-center gap-2" data-perk-refusal="">{refusalLine(named, error)} <SubscribeLink /></p> : link ? (
         // The refusal names something on this page (the other side's waiting request): the text links to it.
         <p><a href={`#${link}`} onClick={(e) => { e.preventDefault(); jumpTo(link); }}>{refusalLine(named, error)}</a></p>
-      ) : <p data-refusal="">{refusalLine(named, error)}</p>)}
+      ) : <p data-refusal="" {...(error === ANSWER_TERMS_FIRST ? { "data-answer-terms": "" } : {})}>{refusalLine(named, error)}</p>)}
     </div>
   );
 }

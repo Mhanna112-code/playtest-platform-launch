@@ -12,6 +12,11 @@ import { LIMITS } from "@/lib/limits";
 import { bell, notify } from "./notify";
 import { devGate, recordEvent } from "./tests";
 import { testerGate } from "./testerGate";
+import { answerTermsFirst } from "./terms";
+import { farEnoughAhead } from "@/lib/callLead";
+
+/** (Batch 27 section 1) The tester's call presses: an open new-terms offer blocks them (answerTermsFirst), so new terms are no longer a stop-once for them. */
+const CALL_PRESS = { skipTerms: true } as const;
 import { callsLeftCents, ceilingRefusal, checkCeiling } from "./callMoney";
 import { CALL_MIN_MINUTES } from "@/lib/rules";
 import { bookableMinutes, lengthCapLine } from "@/lib/callMeasure";
@@ -93,7 +98,8 @@ function readMinutes(body: Record<string, unknown>) {
 function readRows(body: Record<string, unknown>): CallRow[] {
   const future = (d: Date) => {
     if (isNaN(d.getTime())) throw new HttpError(400, "bad_time", "Pick a time in the future.");
-    if (d.getTime() < Date.now() + 5 * 60_000) throw new HttpError(400, "bad_time", "Pick times in the future.");
+    // (Batch 27 section 6) At least CALL_MIN_AHEAD_MINUTES ahead: 5 in production, 1 by default when testing locally.
+    if (!farEnoughAhead(d)) throw new HttpError(400, "bad_time", "Pick times in the future.");
     return d;
   };
   let rows: CallRow[];
@@ -353,8 +359,9 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   const { c, side } = x;
   if (side !== "tester") throw new HttpError(404, "not_found", "That session doesn't exist.");
   await refusals(c, "tester");
+  await answerTermsFirst(contractId);
   const kind = readKind(body);
-  await testerGate(c.testerId, contractId, c.testId, body);
+  await testerGate(c.testerId, contractId, c.testId, body, undefined, CALL_PRESS);
   const minutes = readMinutes(body);
   const devName = displayName(c.test.developer);
   // (Batch 18 section 6) The Length is at most what's left of the $1,000 for their calls (red at the box).
@@ -408,6 +415,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   const { c, side, other } = x;
   const r = await db.callRequest.findUnique({ where: { id: String(body.requestId ?? "") } });
   if (!r || r.contractId !== contractId) throw new HttpError(404, "not_found", "That request doesn't exist.");
+  if (side === "tester") await answerTermsFirst(contractId);
   const action = String(body.action ?? "");
   const mine = r.fromSide === side;
   if (r.status === "pending" && r.startsAt < new Date()) await db.callRequest.update({ where: { id: r.id }, data: { status: "closed", closedReason: "its time passed" } });
@@ -417,7 +425,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   if (fresh.status !== "pending") throw new HttpError(409, "gone", refusalFor(fresh, displayName(other), mine));
   if (action === "withdraw" ? !mine : mine) throw new HttpError(409, "not_yours", mine ? "You can't answer your own request: withdraw it instead." : "Only the person who asked can withdraw it.");
   if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`] }));
-  else await testerGate(c.testerId, contractId, c.testId, body);
+  else await testerGate(c.testerId, contractId, c.testId, body, undefined, CALL_PRESS);
   if (action === "accept") {
     await refusals(c, side);
     // Every call books at the contract rate, fixed at acceptance (every week of a weekly); a call that isn't a listed part has none.
@@ -479,6 +487,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
  */
 export async function cancelCallSet(user: U, contractId: string, body: Record<string, unknown>) {
   const { c, side, other } = await ctx(user.id, contractId);
+  if (side === "tester") await answerTermsFirst(contractId);
   const setId = String(body.setId ?? "");
   const reason = readText(body.reason, LIMITS.reason, "reason"); // (batch 15 section 20) refused over 1,000, never cut
   const now = new Date();
@@ -488,7 +497,7 @@ export async function cancelCallSet(user: U, contractId: string, body: Record<st
   const ok = checkCancel(first[0].startsAt, now, reason);
   if (!ok.ok) throw new HttpError(400, "reason", ok.message);
   if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`set:${setId}`, `c:${contractId}`] }));
-  else await testerGate(c.testerId, contractId, c.testId, body);
+  else await testerGate(c.testerId, contractId, c.testId, body, undefined, CALL_PRESS);
   const calls = await ahead();
   if (!calls.length) throw new HttpError(409, "cancelled", "The remaining calls of this set were already cancelled.");
   const set = await db.callSet.findUnique({ where: { id: setId } });

@@ -21,7 +21,7 @@ import {
 import { gapsOf, gapsUnseen, missingNeedText, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError, readText } from "./http";
 import { notify } from "./notify";
-import { offerNewTerms, testerTermsGate } from "./terms";
+import { answerTermsFirst, offerNewTerms, testerSendGate } from "./terms";
 import { testerGate } from "./testerGate";
 import { blockPartners } from "./blocks";
 import { callCancelledLine, rateStops, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, NOTHING_CHANGED_LINE, WHY_MIN_CHARS, WHY_TOO_SHORT } from "@/lib/rules";
@@ -774,6 +774,22 @@ export async function nextRound(dev: U, testId: string, body: Record<string, unk
   return res;
 }
 
+/**
+ * (Owner, Oct 29, batch 27 section 2) "Go to the next round" (the test already has its next-round draft) is a press, not a plain link: it runs the developer's stop-once
+ * gate first, with the same changes and Alerts types as Next round (a tester sent or updated work, left, a call change, a paymentâ€¦): the first press stops once in
+ * the box under the button, the second opens the draft. On a stopped, closed or paused test (as the page showed it) it opens at once, like the other presses there.
+ */
+export async function goNextRound(dev: U, testId: string, body: Record<string, unknown>) {
+  const t = await ownTest(dev.id, testId);
+  const next = await db.test.findFirst({ where: { previousId: testId }, select: { id: true } });
+  if (!next) throw new HttpError(409, "gone", NO_NEXT_ROUND);
+  const closed = !!t.openUntil && t.openUntil.getTime() < Date.now();
+  if (!closed) await db.$transaction((tx) => topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["next-round"], keys: ["test"] }));
+  return { id: next.id };
+}
+/** (Batch 27 section 2) The next round's draft was deleted meanwhile. */
+export const NO_NEXT_ROUND = "This test has no next round any more: its draft was deleted.";
+
 // ---------- tester: find and join ----------
 
 /** Open tests the tester can join (not their own, not full, not already joined). (Batch 17 section 8) `q`: the search box (test, product or developer name). */
@@ -920,6 +936,8 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
  */
 export async function sendWritten(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
+  // (Batch 27 section 1) An open new-terms offer blocks Send until it's answered (Switch or Keep): nothing is checked or sent before.
+  await answerTermsFirst(contractId);
   const qs = writtenQuestions(c0);
   const sentAnswers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim().slice(0, WRITTEN_MAX_CHARS + 1) : "")) : [];
   // (Batch 20 section 28) One answer per question of the contract, by position (a missing one is blank). (Batch 26 section 14) At least one question answered, plus
@@ -933,7 +951,7 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   if (!long.ok) throw new HttpError(400, "too_long", long.message);
   // (Owner, Oct 28 afternoon) No sending while the test is paused (the typed answers stay kept as a draft).
   if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", PAUSED_SEND);
-  await testerTermsGate(contractId, displayName(c0.test.developer), body);
+  await testerSendGate(contractId, body);
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   const { sub, updated } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);

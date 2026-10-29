@@ -1,6 +1,7 @@
 import { boxSeenAt, pageLoadedAt, seenNow } from "./live";
 import { pressLabelOf } from "./pressLabels";
 import { publishTesterAlertsOff, setTesterAlertsOff } from "./testerAlerts";
+import { ANSWER_TERMS_CODE, ANSWER_TERMS_EVENT, ANSWER_TERMS_FIRST, termsBlockedPath } from "./answerTerms";
 
 /** (Batch 15 section 36) The label of the last press that was stopped or refused: the box under it names it ("Your Pay didn't go through."). */
 let LAST_PRESS = "";
@@ -28,7 +29,23 @@ export const setPageUser = (id: string) => {
 /** This page load's id: the server never stops a press for what this same tab did ("another tab" only). */
 export const TAB = typeof window === "undefined" ? "" : Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
 
+/**
+ * (Owner, Oct 29, batch 27 section 1) While the page shows an open new-terms offer (the Switch / Keep box), Send and every call press don't go out: the page goes up
+ * to the box (highlighted for a few seconds) and the press gets the line "Answer the new terms first: Switch or Keep." under its button, on every press until the
+ * tester answers. True when `path` is such a press and it was stopped here.
+ */
+export function blockedByTerms(path: string) {
+  if (!termsBlockedPath(path) || !offerShown()) return false;
+  LAST_PRESS = pressLabelOf(path);
+  window.dispatchEvent(new Event(ANSWER_TERMS_EVENT));
+  return true;
+}
+
+/** (Batch 27 section 1) Does this page show an open new-terms offer (the Switch / Keep box)? A blocked press then skips its own form checks: the offer comes first. */
+export const offerShown = () => typeof document !== "undefined" && !!document.getElementById("terms-offer");
+
 export async function api<T = unknown>(path: string, body?: unknown, method?: string): Promise<T> {
+  if (body !== undefined && blockedByTerms(path)) throw new ApiError(409, ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST);
   // Every press sends the later of the page's render time and what the live top notice has shown (NEWEST+3).
   // (Owner) New terms (reason A) are measured from the page itself: `pageSeenAt` is when the page was rendered, whatever the top box showed.
   if (body && typeof body === "object" && typeof (body as { seenAt?: unknown }).seenAt === "string") body = { ...body, pageSeenAt: (body as { seenAt: string }).seenAt, seenAt: seenNow((body as { seenAt: string }).seenAt), ...(pageLoadedAt() ? { loadedAt: pageLoadedAt() } : {}), ...(boxSeenAt() ? { boxSeenAt: boxSeenAt() } : {}) };
@@ -73,6 +90,8 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
     }
     const e = data?.error;
     LAST_PRESS = typeof e?.press === "string" ? e.press : pressLabelOf(path);
+    // (Batch 27 section 1) The server refused for an open offer (an old page that hasn't shown it too): up to the Switch / Keep box (it loads if the page lacks it).
+    if (e?.code === ANSWER_TERMS_CODE && typeof window !== "undefined") window.dispatchEvent(new Event(ANSWER_TERMS_EVENT));
     // (Batch 17 section 13) A tester's stop box says whether their Alerts is Off (the box then drops "Turn off alerts").
     if (e?.code === "stop_once" && typeof e.alertsOff === "boolean") setTesterAlertsOff(e.alertsOff);
     // (Batch 20 section 8) ... and the Alerts button and the other boxes on the page follow what the server says.

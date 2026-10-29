@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { lengthCap } from "@/lib/callMeasure";
+import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
 import { useRouter } from "next/navigation";
 import { checkFields, useLocalMin } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -56,7 +57,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
     if (Array.isArray(v.ticked)) setTicked(v.ticked.filter((id) => testers.some((t) => t.contractId === id)));
   });
   const form = useRef<HTMLDivElement>(null);
-  const minNow = useLocalMin(5);
+  const minNow = useLocalMin(CALL_MIN_AHEAD_MINUTES); // (batch 27 section 6) the server's lead
   const [open, setOpen] = useState<Record<string, boolean>>({});
   // (Batch 16 section 10) A mistake in the request form is red at its box and listed under Request a time (not as a plain line).
   const red = error.startsWith(FIELD);

@@ -6,6 +6,7 @@ import { announce, clearShown, setShown, wasShownInBox } from "@/lib/live";
 import { LongList } from "@/components/LongList";
 import { ContractLink } from "@/components/ContractLink";
 import { jumpTo } from "@/lib/markJump";
+import { pillLabel, pillSide, type PillSide } from "@/lib/livePill";
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const key = (c: Change) => `${c.at}|${c.text}`;
@@ -21,47 +22,50 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
   const known = useRef(new Set<string>());
   const since = useRef(seenAt); // the page-open time: the list always covers everything since then
   const box = useRef<HTMLDivElement>(null);
-  const scrolled = useRef(false);
 
-  // (Owner, Oct 30, batch 15 section 28) The FIRST live update since the page loaded scrolls the page smoothly up to this box and flashes the new line, once per page
-  // load. Never mid-task (DEFAULT): while a field has focus or a pop-up is open, a small floating pill "1 new update ↑" shows instead (it scrolls up when pressed and
-  // goes once the box is in view). Nothing moves when the box is already in view. Reduced motion: a jump, no animation.
+  // (Owner, Oct 29, batch 27 section 4; replaces batch 15 section 28's first-update scroll) Nothing moves on its own any more: EVERY live update that arrives while
+  // this box is out of view raises the floating pill ("1 new update", counting up), whether or not anything is being typed. Its arrow points where the updates are
+  // ("↑" above the screen, "↓" below: on Edit the box sits under Save). Pressing it scrolls to the box and it goes; it also goes once the box comes into view.
+  // The flash on the new line stays. Reduced motion: a jump, no animation.
   const [pill, setPill] = useState(0);
+  const [side, setSide] = useState<PillSide>("up");
   const [flash, setFlash] = useState("");
-  const inView = () => {
-    const r = box.current?.getBoundingClientRect();
-    return !!r && r.top >= 0 && r.bottom <= window.innerHeight;
-  };
+  const where = () => pillSide(box.current?.getBoundingClientRect(), window.innerHeight);
   const go = () => {
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     box.current?.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
     setPill(0);
   };
   /**
-   * (Owner, Oct 28, batch 20 section 13, bug found by the owner) EVERY live update nobody pressed for is announced, not only the page's first: the first one (box
-   * out of view, nothing being typed) scrolls up once; any one arriving while a text box has focus or a pop-up is open, or after that first scroll, raises the
-   * pill and adds to its count. Before, only the first update of a page load was announced (later ones only checked a `pill` value frozen at 0 in the poll's
+   * (Owner, Oct 28, batch 20 section 13, bug found by the owner) EVERY live update nobody pressed for is announced, not only the page's first (batch 27 section 4:
+   * by the pill alone, adding to its count; the first one no longer scrolls). Before, only the first update of a page load was announced (later ones only checked a `pill` value frozen at 0 in the poll's
    * closure), so a call request arriving while the tester typed in the Dispute box (after an earlier update had used the one scroll) showed nothing.
    */
   function announceFresh(n: number, newest: string) {
     setFlash(newest);
     setTimeout(() => setFlash(""), 2500);
+    // (Batch 27 section 4) Out of view: the pill, never a scroll (typing or not).
     setTimeout(() => {
-      if (inView()) return;
-      const el = document.activeElement;
-      const busy = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement || (el instanceof HTMLElement && el.isContentEditable) || !!document.querySelector("dialog[open], [role='dialog'], [aria-modal='true']");
-      const first = !scrolled.current;
-      scrolled.current = true;
-      if (busy || !first) setPill((p) => p + n);
-      else go();
+      const s = where();
+      if (!s) return;
+      setSide(s);
+      setPill((p) => p + n);
     }, 50);
   }
-  // The pill leaves once the box is in view.
+  // The pill leaves once the box is in view; its arrow follows the box while the page scrolls.
   useEffect(() => {
     if (!pill) return;
-    const onScroll = () => { if (inView()) setPill(0); };
+    const onScroll = () => {
+      const s = where();
+      if (!s) setPill(0);
+      else setSide(s);
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
   }, [pill]);
 
   // A note from a press that went ahead just before the page reloaded ("Done. Also: the test was renamed ...").
@@ -85,7 +89,7 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
       const added = r.changes.filter((c) => !known.current.has(key(c)));
       added.forEach((c) => known.current.add(key(c)));
       if (added.length) setLines((old) => [...old, ...added]);
-      // Scroll once, only for a live update nobody pressed for (lines a stop box showed are quiet); (batch 20 section 13) every later one raises the pill.
+      // Only a live update nobody pressed for is announced (lines a stop box showed are quiet); (batch 27 section 4) each one raises the pill when the box is out of view.
       // Ignored (greyed) Alerts lines count as updates too, since they still show.
       const fresh = added.filter((c) => !wasShownInBox(c));
       if (fresh.length) announceFresh(fresh.length, key(fresh[fresh.length - 1]));
@@ -108,8 +112,8 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
   return (
     <>
     {pill > 0 && (
-      <button type="button" className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full border border-sky-300/50 bg-slate-900/95 px-4 py-2 text-sm text-sky-100 shadow-xl" data-live-pill="" onClick={go}>
-        {pill} new update{pill === 1 ? "" : "s"} ↑
+      <button type="button" className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full border border-sky-300/50 bg-slate-900/95 px-4 py-2 text-sm text-sky-100 shadow-xl" data-live-pill={side} onClick={go}>
+        {pillLabel(pill, side)}
       </button>
     )}
     <div ref={box} className="info flex items-start gap-3 scroll-mt-24" role="status" aria-live="polite" data-live-top>

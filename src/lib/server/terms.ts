@@ -1,7 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate } from "@/lib/format";
-import { newDueAt, switchedLine, termsDiff, type ContractTerms } from "@/lib/rules";
+import { newDueAt, switchedLine, termsDiff, testerRefusal, type ContractTerms } from "@/lib/rules";
+import { ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST } from "@/lib/answerTerms";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { testerGate } from "./testerGate";
@@ -49,8 +50,27 @@ export async function offerNewTerms(testId: string, changeId: string | null = nu
 export const openOffer = (contractId: string) => db.termsOffer.findFirst({ where: { contractId, status: "open" }, orderBy: { createdAt: "desc" } });
 
 /**
- * Tester-side stop once (box at the TOP of the session page): Send and Charge / Let it go stop once if new terms were
- * offered since the page loaded. The second press goes ahead under the current terms.
+ * (Owner, Oct 29, batch 27 section 1) An open offer blocks Send (written answers, recordings) and every call press (Request a time, Accept, Decline, Withdraw,
+ * Cancel call, Cancel the remaining calls, Join call) until the tester answers it: Switch or Keep both unlock. Every press is refused the same way (no second press
+ * gets through), from an old page that hasn't shown the offer too, and with Alerts Off (an offer is about the tester's own contract). A newer Save replaces the
+ * offer (still blocked until the newest is answered); an offer whose work closed (the test stopped or closed, the tester's work ended, they left) blocks nothing.
+ */
+export async function answerTermsFirst(contractId: string) {
+  const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
+  if (!c || testerRefusal(c, c.test, displayName(c.test.developer), fmtDate, new Date())) return;
+  const offer = await openOffer(contractId);
+  if (offer) throw new HttpError(409, ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST, { offerId: offer.id });
+}
+
+/** (Batch 27 section 1) Send's own stop-once, after answerTermsFirst: every other reason as before; new terms are no longer a stop-once for it (they block). */
+export async function testerSendGate(contractId: string, body: Record<string, unknown>) {
+  const c = await db.contract.findUniqueOrThrow({ where: { id: contractId } });
+  await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: true });
+}
+
+/**
+ * Tester-side stop once (box at the TOP of the session page): Charge / Let it go stop once if new terms were offered since the page loaded (batch 27: Send
+ * no longer does; an open offer blocks it). The second press goes ahead under the current terms.
  */
 export async function testerTermsGate(contractId: string, _devName: string, body: Record<string, unknown>) {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId } });

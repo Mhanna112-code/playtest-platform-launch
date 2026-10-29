@@ -3,7 +3,7 @@ import { Err } from "@/components/Err";
 import { checkFields } from "@/components/FieldChecks";
 import { FormMistakes } from "@/components/FormMistakes";
 import { useState } from "react";
-import { api, errOf, FIELD } from "@/lib/client";
+import { api, errOf, FIELD, offerShown } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { uploadToSession } from "@/lib/upload";
 import { ScreenRecorder } from "@/components/ScreenRecorder";
@@ -93,7 +93,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
           title={unchanged ? NOTHING_CHANGED_LINE : undefined}
           data-send-idle={unchanged ? "" : undefined}
           onClick={async (e) => {
-            if (!checkFields(e.currentTarget.parentElement)) return;
+            if (!offerShown() && !checkFields(e.currentTarget.parentElement)) return; // (batch 27 section 1) an open offer comes first
             setBusy(true);
             setErr("");
             try {

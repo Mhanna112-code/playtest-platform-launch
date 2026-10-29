@@ -40,7 +40,8 @@ describe("new terms offered to working testers", () => {
     expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId, kind: "written" } })).agreedCents).toBe(1000); // sent work keeps its price
   });
 
-  it("Send stops once (box under the button) if new terms were offered since the page loaded; the second press sends under current terms", async () => {
+  // (Batch 27 section 1) Send no longer stops once for new terms: an open offer blocks it until Switch or Keep (the second press doesn't get through).
+  it("Send is blocked while new terms are open (every press); after Keep it sends under the current terms", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const pageLoaded = seen();
@@ -48,8 +49,10 @@ describe("new terms offered to working testers", () => {
     await edit(testId, dev.cookie, { writtenCents: "12.00" });
     const first = await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: pageLoaded });
     expect(first.status).toBe(409);
-    expect(first.body.error).toMatchObject({ code: "stop_once", tail: "Press again to send under your current terms, or switch first." });
-    expect(first.body.error.changes[0].text).toBe("Nora Lane offered new terms: written $10 → $12");
+    expect(first.body.error).toMatchObject({ code: "answer_terms", message: "Answer the new terms first: Switch or Keep." });
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: pageLoaded, confirmed: true })).body.error.code).toBe("answer_terms");
+    const offer = await db.termsOffer.findFirstOrThrow({ where: { contractId: sessionId } });
+    expect((await sact(sessionId, "terms", tester.cookie, { offerId: offer.id, choice: "keep" })).status).toBe(200);
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: pageLoaded, confirmed: true })).status).toBe(200);
     expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId } })).agreedCents).toBe(1000);
   });
@@ -74,7 +77,8 @@ describe("new terms offered to working testers", () => {
 });
 
 describe("(Owner, reason A) new terms always stop the next press, even when the top box showed them", () => {
-  it("an offer arrives while the page is open and the top box shows it: Cancel call stops (top = true), the second press goes ahead", async () => {
+  // (Batch 27 section 1) Cancel call is now blocked until the offer is answered (no second press gets through); Keep unlocks it.
+  it("an offer arrives while the page is open and the top box shows it: Cancel call is blocked until Keep, then goes ahead", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const pageSeenAt = new Date(Date.now() - 1000).toISOString();
@@ -91,15 +95,12 @@ describe("(Owner, reason A) new terms always stop the next press, even when the 
     const shown = new Date().toISOString();
     const first = await sact(sessionId, "cancel-call", tester.cookie, { callId: call.id, seenAt: shown, pageSeenAt });
     expect(first.status).toBe(409);
-    expect(first.body.error.code).toBe("stop_once");
-    expect(first.body.error.top).toBe(true);
-    expect((first.body.error.changes as { text: string }[])[0].text).toContain("offered new terms");
-    // The second press (with the box's time) cancels under the tester's current terms.
-    const second = await sact(sessionId, "cancel-call", tester.cookie, { callId: call.id, seenAt: shown, pageSeenAt, confirmed: true, boxAt: first.body.error.now });
-    expect(second.status).toBe(200);
+    expect(first.body.error.code).toBe("answer_terms");
+    expect((await sact(sessionId, "cancel-call", tester.cookie, { callId: call.id, seenAt: shown, pageSeenAt, confirmed: true, boxAt: new Date().toISOString() })).body.error.code).toBe("answer_terms");
     // Once they have decided on the offer, it no longer stops anything.
     const offer = await db.termsOffer.findFirstOrThrow({ where: { contractId: sessionId } });
     await sact(sessionId, "terms", tester.cookie, { offerId: offer.id, choice: "keep", seenAt: shown, pageSeenAt, confirmed: true, boxAt: shown });
+    expect((await sact(sessionId, "cancel-call", tester.cookie, { callId: call.id, seenAt: new Date().toISOString(), pageSeenAt: new Date().toISOString() })).status).toBe(200);
     expect((await sact(sessionId, "leave", tester.cookie, { seenAt: new Date().toISOString(), pageSeenAt })).status).toBe(200);
   });
 });
