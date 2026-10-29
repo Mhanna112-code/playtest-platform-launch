@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { TERMS_VERSION } from "@/lib/termsOfUse";
 import { db } from "@/lib/db";
 import { isEmail, normEmail } from "@/lib/format";
 import { safeZone } from "@/lib/tz";
@@ -93,12 +94,12 @@ export async function signUp(body: Record<string, unknown>, base: string, ip = "
   if (await db.user.findUnique({ where: { email } })) throw field("An account with that email already exists");
   // (NEXT-UI 15) The full app's sign-up form also asks who you are (developer, tester or both), your name and the Terms.
   const role = body.role === "developer" || body.role === "tester" || body.role === "both" ? body.role : "";
-  let who: { name: string; isDeveloper: boolean; isTester: boolean } | null = null;
+  let who: { name: string; isDeveloper: boolean; isTester: boolean; termsVersion: number; termsAcceptedAt: Date } | null = null;
   if (role) {
     const name = typeof body.name === "string" ? body.name.trim().slice(0, 80) : "";
     if (name.length < 1) throw field("Enter your name"); // (Owner, Oct 27) at least 1 character, no other rules
     if (!body.acceptTerms) throw field("Agree to the Terms of Use to sign up");
-    who = { name, isDeveloper: role !== "tester", isTester: role !== "developer" };
+    who = { name, isDeveloper: role !== "tester", isTester: role !== "developer", termsVersion: TERMS_VERSION, termsAcceptedAt: now }; // (batch 18 section 1) the version they accepted
   }
   const user = await db.user.create({
     data: { email, passwordHash: await hashPassword(password), timeZone: readTimeZone(body.timeZone), ...(who ?? {}), ...(who?.isTester ? { profile: { create: { devices: [], languages: [], categories: [] } } } : {}) },

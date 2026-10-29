@@ -46,6 +46,10 @@ model User {
   testerAlertsOff   Boolean   @default(false)
   payoutProblemAt   DateTime?
   payoutRemindedAt  DateTime?
+  /// (Batch 18 section 1) The Terms of Use version this account accepted (at sign-up, or again from the box under Post / Join / Apply / Ask to rejoin), and when.
+  /// 0 = never accepted (an account made before sign-up asked, or through Google). Compared with TERMS_VERSION (src/lib/termsOfUse.ts).
+  termsVersion      Int       @default(0)
+  termsAcceptedAt   DateTime?
   createdAt   DateTime  @default(now())
 
   /// Stripe: developer's customer + saved card; tester's Connect account
@@ -498,7 +502,7 @@ model CallSlot {
   minutes     Int
   /// Empty = every tester with a live call in their contract can book; otherwise only these tester ids
   allowedTesterIds String[]
-  /// Optional meeting link; without one the call uses the site's simple room page
+  /// (Batch 18 section 10) No longer used: every call uses its Jitsi room (an own-link option was removed). Kept so older rows read.
   link        String   @default("")
   /// "open" | "booked" | "removed"
   status      String   @default("open")
@@ -548,6 +552,9 @@ model Call {
   measuredTo      DateTime?
   /// When the measured length became final (both left, or 30 minutes after the latest allowed end); null = in progress / measuring
   measuredAt      DateTime?
+  /// (Batch 18 section 3) When the call ended because its pay at the call's rate reached what was left of the $1,000 for that tester's calls on the test: the
+  /// measured length is final at that point (capped there), the call page says so and Join is refused.
+  cappedAt        DateTime?
   /// (Batch 15 sections 15 and 40) A listed call's review clock: the call's end + 7 days (the review date is the later of this and the tester's deadline); moves with pauses
   payBy           DateTime?
   /// A listed call left unreviewed by its review date: the tester can Charge or Let it go (as a sent part)

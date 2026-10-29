@@ -3,6 +3,7 @@ import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { HttpError } from "./http";
 import { requireUser } from "./session";
 import { accountGate, listLabel, logAccountChange, sidesLabel } from "./accountChanges";
+import { TERMS_CHANGED_HREF, TERMS_UPDATED_CODE, TERMS_UPDATED_LINE, TERMS_VERSION, needsTermsAgain } from "@/lib/termsOfUse";
 
 export const SUSPENDED = "Your account is paused. Contact support if you think this is a mistake.";
 
@@ -131,4 +132,16 @@ export async function saveProfile(userId: string, body: Record<string, unknown>)
     await logAccountChange(userId, tab, { scopes: field === "sides" || field === "name" ? ["profile", "settings"] : ["profile"], field, label: LABELS[field], before: was[field], after, ...(long ? { line: `${LABELS[field]} changed` } : {}) });
   }
   return saved;
+}
+
+/**
+ * (Owner, Oct 28 evening, batch 18 section 1) An account that accepted an older Terms of Use version: its Post a test / post a draft (developer) and Join, Apply,
+ * Accept an invite, Ask to rejoin (tester) need the box's tick ("I agree to the updated Terms", sent as `agreeTerms: true`); the tick records the current version. An
+ * unticked press is refused with the box's line. Nothing else checks this: running tests, pay, charges, disputes and chat carry on under the terms they started with.
+ */
+export async function requireCurrentTerms(u: { id: string; termsVersion: number }, body: Record<string, unknown>) {
+  if (!needsTermsAgain(u)) return;
+  if (body.agreeTerms !== true) throw new HttpError(409, TERMS_UPDATED_CODE, TERMS_UPDATED_LINE, { termsHref: TERMS_CHANGED_HREF, termsVersion: TERMS_VERSION });
+  await db.user.updateMany({ where: { id: u.id, termsVersion: { lt: TERMS_VERSION } }, data: { termsVersion: TERMS_VERSION, termsAcceptedAt: new Date() } });
+  u.termsVersion = TERMS_VERSION;
 }

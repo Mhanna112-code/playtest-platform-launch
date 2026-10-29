@@ -1,5 +1,6 @@
 import { PublicShell } from "@/components/PublicShell";
 import { MAX_ACTIVE_TESTS, REVIEW_DAYS } from "@/lib/rules";
+import { TERMS_VERSION, WHAT_CHANGED, WHAT_CHANGED_ID } from "@/lib/termsOfUse";
 
 export const metadata = { title: "Terms of Use · Playtest" };
 
@@ -41,7 +42,7 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
       "Payment is for the work you sent, judged against the listing, not for whether the feedback is positive.",
       "A developer pays any amount from $0 up for each part; there is no reject. Paying less than the listing, or $0, needs a reason, which the tester reads.",
       `A listed part (or a listed call) not paid by its review date (the later of the tester's deadline and ${REVIEW_DAYS} days after it was sent, or after the call) is the tester's to decide: they can charge the developer the listed amount, or let it go.`,
-      "Live calls are paid for their real length at the contract's hourly rate. The site measures it: the minutes both people had the call page open at the same time (up to 150% of the booked length). The developer can only lower it, with a reason the tester reads. A call that isn't listed is paid what the developer chooses, up to $200 an hour. All of one tester's calls on a test together can come to at most $1,000, extra pay included.",
+      "Live calls are paid for their real length at the contract's hourly rate. The site measures it: the minutes both people had the call page open at the same time (up to 150% of the booked length). The developer can only lower it, with a reason the tester reads. A call that isn't listed is paid what the developer chooses, up to $200 an hour. All of one tester's calls on a test together can come to at most $1,000, extra pay included. A call ends when its pay at the call's rate would pass what's left of that $1,000; minutes after that don't count, even if people keep talking in the video room.",
       "Testers receive 80% of each price and of live call time; the platform keeps 20%.",
       "Ratings (1 to 5, and a note) are given both ways and shown once both sides have rated or after 14 days.",
     ],
@@ -57,7 +58,8 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
     title: "6. Conduct",
     points: [
       "Be respectful. No harassment, spam, fake or copied work, or leaking builds.",
-      "No graphic content: no sexual content involving minors, no illegal content and no real-world gore. Other graphic content must be marked Mature (18+) on the test, with a note saying why.",
+      // (Owner, Oct 28 evening, batch 18 section 2) The same rule as Post / Edit's Mature line.
+      "Never allowed: sexual content involving minors, illegal content, real-world gore. Other graphic or mature content must be marked Mature (18+), with a reason.",
       "Keep payments on the platform: deals arranged outside it aren't covered by reviews, disputes or payouts.",
       "Either side of a test can block the other, or report a problem with a call (no-show or late) to the team. We may remove content and suspend accounts that break these rules.",
     ],
@@ -72,7 +74,7 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
   {
     title: "8. Calls and recordings",
     points: [
-      "Calls run in a room on the site. Only the developer and tester of that call can join, from 10 minutes before the start until 30 minutes after the booked end. Who was in the call page and when is recorded (it measures the length); the team can read it when handling a report.",
+      "Calls run in the call's own Jitsi video room, opened from the call page on the site (keep that page open: it measures the call). Only the developer and tester of that call can join, from 10 minutes before the start until 30 minutes after the booked end. Who was in the call page and when is recorded (it measures the length); the team can read it when handling a report.",
       "Screen recordings are only seen by the developer and tester of that session, and by the team when handling a dispute or report.",
     ],
   },
@@ -81,7 +83,7 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
     points: [
       "The platform is provided as is. We aren't responsible for the products being tested, for builds, or for agreements between users beyond what these terms describe.",
       "If we have an outage, every deadline and payment date that was running moves later by the length of it.",
-      "When these terms change, we'll tell you on the site before the change applies. Tests you're already in carry on under the terms you agreed to.",
+      "When these terms change, we'll tell you on the site before the change applies. You're asked to agree to the new version the next time you post a test, or join, apply, accept an invite or ask to rejoin. Tests you're already in carry on under the terms you agreed to.",
     ],
   },
 ];
@@ -92,7 +94,17 @@ export default function TermsPage() {
       <div className="mx-auto max-w-3xl space-y-6">
         <h1 className="text-3xl font-bold tracking-tight text-white">Terms of Use</h1>
         <p className="text-slate-400">The rules both sides agree to. They&apos;re written plainly, and the site enforces them.</p>
-        <p className="font-mono text-xs text-slate-500">Version 1 · draft, wording to be reviewed before launch</p>
+        <p className="font-mono text-xs text-slate-500">Version {TERMS_VERSION} · DRAFT, wording to be reviewed before launch</p>
+        {/* (Batch 18 section 1) "Read what changed" in the box under Post / Join / Apply / Ask to rejoin opens here. */}
+        <section id={WHAT_CHANGED_ID} className="info scroll-mt-24 space-y-1 text-sm" data-what-changed="">
+          <h2 className="font-semibold text-white">What changed</h2>
+          {WHAT_CHANGED.map((w) => (
+            <div key={w.version}>
+              <p>Version {w.version}, {w.date}:</p>
+              <ul className="list-disc space-y-0.5 pl-5">{w.points.map((p) => <li key={p}>{p}</li>)}</ul>
+            </div>
+          ))}
+        </section>
         {SECTIONS.map((s) => (
           <section key={s.title} className="card space-y-2">
             <h2 className="font-semibold text-white">{s.title}</h2>

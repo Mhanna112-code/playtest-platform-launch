@@ -1,5 +1,7 @@
 "use client";
 import { SubscribersTag } from "@/components/SubscribeLink";
+import { TermsAgainBox } from "@/components/TermsAgainBox";
+import { TERMS_UPDATED_CODE } from "@/lib/termsOfUse";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { Err } from "@/components/Err";
@@ -138,6 +140,9 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
   });
   const [saved, setSaved] = useState("");
   const [refusal, setRefusal] = useState("");
+  // (Batch 18 section 1) The account accepted an older Terms of Use: Post the test shows the box with its tick under the button; ticked, the next press posts.
+  const [termsAsk, setTermsAsk] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
   // Keys: Post types them one per line. (Batch 15 section 19) Edit's Free box holds every free key, one per line: Save works out what was added and deleted against
   // the free keys this page LOADED (freeLoaded), so another tab's work is never undone.
   const [freeLoaded, setFreeLoaded] = useState<string[]>(edit?.keys.free.map((k) => k.value) ?? []);
@@ -346,7 +351,7 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
     try {
       if (!edit) {
         // (Batch 15 section 32) The developer's time zone goes with the press: "today" and the 3 to 30 days are counted in it.
-        const r = await api<{ id: string }>(draft ? `/api/tests/${draft.id}/post-draft` : "/api/tests", { ...toApi(f), accessKeys: keysText, confirmHigh: confirmHigh(), timeZone: browserZone() });
+        const r = await api<{ id: string }>(draft ? `/api/tests/${draft.id}/post-draft` : "/api/tests", { ...toApi(f), accessKeys: keysText, confirmHigh: confirmHigh(), timeZone: browserZone(), agreeTerms });
         await keep.clear();
         window.location.href = `/app/tests/${r.id}`;
         return;
@@ -384,6 +389,10 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
         prior.current = {};
         if (err.data.current) seenBase.current = toForm(err.data.current as Listing);
         if (err.data.keys) keysSeen.current = (err.data.keys as { free: string[] }).free;
+      }
+      else if (err instanceof ApiError && err.code === TERMS_UPDATED_CODE) {
+        setChanges(null);
+        setTermsAsk(true);
       }
       else if (err instanceof ApiError && !isFieldError(err)) {
         // A refusal (e.g. "Confirm your email first."): blue, under the button.
@@ -640,6 +649,7 @@ export function TestForm({ init, edit, spotsLimit, draft, perks = true }: { init
         </div>
         {saved && <p className="ok">{saved}</p>}
         {locked && pressed && lockedNow.map((f) => <p key={f} className="err-field" role="alert" data-critical-limit={f}>{criticalLine(f)}</p>)}
+        {termsAsk && !edit && <TermsAgainBox agreed={agreeTerms} onAgree={setAgreeTerms} />}
         <Err text={refusal} />
         {draft && (
           <ConfirmButton className="btn-secondary px-3 py-1.5 text-sm text-rose-200" title="Delete this draft?" confirmLabel="Delete the draft"

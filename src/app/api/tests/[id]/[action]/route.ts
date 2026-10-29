@@ -11,11 +11,14 @@ import { sendChat, sendMessage } from "@/lib/server/messages";
 import { startedCounting, asListing, deleteDraft, editTest, endEarly, nextRound, openDraft, ownTest, postDraft, stopTest } from "@/lib/server/tests";
 import { keyBoxes } from "@/lib/server/accessKeys";
 import { getUserFromRequest } from "@/lib/server/session";
-import { failedLine, requireActive, requireConfirmed } from "@/lib/server/users";
+import { failedLine, requireActive, requireConfirmed, requireCurrentTerms } from "@/lib/server/users";
 import { RESTRICTED_OK_ACTIONS, TEAM_PAUSED_OK_ACTIONS } from "@/lib/restricted";
 
 // (Owner, Oct 27) Email confirmation is needed only for Post a test (its own route), Join (which is also accepting an invite) and Apply. A blocked press is a blue notice under the button with Resend the link.
 const NEEDS_CONFIRMED = new Set(["join", "apply", "post-draft"]);
+// (Batch 18 section 1) An account on an older Terms of Use version agrees again (the box's tick) on these presses only: post a draft, and Join (also accepting an
+// invite), Apply and Ask to rejoin.
+const NEEDS_CURRENT_TERMS = new Set(["join", "apply", "rejoin-ask", "post-draft"]);
 import { devRate } from "@/lib/server/ratings";
 import { logTestAction } from "@/lib/server/actionText";
 
@@ -45,6 +48,7 @@ export async function POST(req: Request, { params }: Ctx) {
     const body = await readJson(req, 900_000); // (batch 15 sections 3 and 17) an Edit with 20 questions and the steps at 20,000 characters each
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
     await adminRefusal(req, u.id, id, action);
+    if (NEEDS_CURRENT_TERMS.has(action)) await requireCurrentTerms(u, body);
     const res0 = await run(u, id, action, body);
     const data = await res0.clone().json().catch(() => null);
     // A rename the page hadn't shown: the press went ahead; the note goes under the button.

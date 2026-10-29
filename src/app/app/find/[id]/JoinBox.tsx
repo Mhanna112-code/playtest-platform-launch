@@ -10,6 +10,8 @@ import { useRouter } from "next/navigation";
 import { UserPlus } from "lucide-react";
 import { GapDialog, JustUpdated, type PopupAnswer } from "@/components/GapDialog";
 import { noGaps, PROFILE_COVERS, type GapAsk, type Gaps } from "@/lib/gaps";
+import { TermsAgainBox } from "@/components/TermsAgainBox";
+import { TERMS_UPDATED_CODE } from "@/lib/termsOfUse";
 
 /**
  * Join or Apply to join. Stops once (box under the button) if anything about the listing changed since the page loaded;
@@ -34,12 +36,15 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
   const [asking, setAsking] = useState<{ ask: GapAsk; gaps: Gaps } | null>(null);
   const [covered, setCovered] = useState<{ at: string; ask: GapAsk } | null>(null);
   const [inviteId, setInviteId] = useState(p.inviteId ?? "");
+  // (Batch 18 section 1) The account accepted an older Terms of Use: the first press shows the box with its tick under the button; ticked, the next press goes through.
+  const [termsAsk, setTermsAsk] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
 
   // The pop-up's press: "Join anyway" / "Apply anyway", checked on the server against what the pop-up showed.
   async function sendFromPopup(shown: Gaps): Promise<PopupAnswer> {
     const action = rejoining ? "rejoin-ask" : applying ? "apply" : "join";
     try {
-      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt: p.seenAt, confirmed, boxAt, anyway: true, gapsShown: shown, inviteId });
+      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt: p.seenAt, confirmed, boxAt, anyway: true, gapsShown: shown, inviteId, agreeTerms });
       if (r.sessionId) window.location.href = `/app/sessions/${r.sessionId}`;
       else setDone(rejoining ? "Sent. You'll hear back when the developer answers." : "Application sent. You'll hear back when the developer answers.");
       return { ok: true };
@@ -49,6 +54,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
         return { stop: ((e.data.changes as { text: string }[]) ?? []).map((c) => c.text) };
       }
       if (e instanceof ApiError && e.code === "needs" && e.data.gaps) return { gaps: e.data.gaps as Gaps };
+      if (e instanceof ApiError && e.code === TERMS_UPDATED_CODE) { setTermsAsk(true); return { refused: true }; }
       setErr(errOf(e));
       return { refused: true };
     }
@@ -78,13 +84,14 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     setBusy(true);
     setErr("");
     try {
-      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt: p.seenAt, confirmed, boxAt, anyway, inviteId });
+      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt: p.seenAt, confirmed, boxAt, anyway, inviteId, agreeTerms });
       if (r.sessionId) window.location.href = `/app/sessions/${r.sessionId}`;
       else if (action === "withdraw-application") window.location.reload();
       else setDone(action === "rejoin-ask" ? "Sent. You'll hear back when the developer answers." : "Application sent. You'll hear back when the developer answers.");
     } catch (e) {
       const sb = stopBox(e);
-      if (sb) {
+      if (e instanceof ApiError && e.code === TERMS_UPDATED_CODE) setTermsAsk(true);
+      else if (sb) {
         setBox(sb);
         setBoxAt(sb.now);
       } else if (e instanceof ApiError && e.code === "invite_replaced") {
@@ -110,6 +117,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
           <button className="btn" disabled={busy} onClick={() => go("join")}>Join on the current listing</button>
           <button className="btn-ghost" disabled={busy} onClick={() => go("withdraw-application")}>Withdraw application</button>
         </div>
+        {termsAsk && <TermsAgainBox agreed={agreeTerms} onAgree={setAgreeTerms} />}
         <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} />
         <Err text={err} />
       </div>
@@ -154,6 +162,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
         <button className="btn" disabled={busy || !!done} onClick={() => press(rejoining ? "rejoin-ask" : applying ? "apply" : "join")}><UserPlus className="h-4 w-4" /> {busy ? (applying || rejoining ? "Sending…" : "Joining…") : rejoining ? "Ask to rejoin" : applying ? "Apply to join" : "Join this test"}</button>
         <span className="text-sm text-slate-400">{p.spotsLeft} spot{p.spotsLeft === 1 ? "" : "s"} left{(applying || rejoining) && " · the developer accepts"}</span>
       </div>
+      {termsAsk && <TermsAgainBox agreed={agreeTerms} onAgree={setAgreeTerms} />}
       {covered && (
         <p role="status" className="info"><JustUpdated at={covered.at} /> You now meet this test&apos;s needs. Press {covered.ask === "apply" ? "Apply" : "Join"} to {covered.ask === "apply" ? "apply" : "join"}.</p>
       )}
