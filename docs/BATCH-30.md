@@ -38,6 +38,15 @@ For abuse cases (spam testers, a fraudulent test, an abandoned account), the tea
 - Logged in the admin history (who, when, reason, count); the developer's and the tests' timelines show it in the third person.
 - Tests: preview counts; closing settles exactly the open pieces; a race with a Pay; testers can dispute; nothing charged.
 
+## 6. Leftovers from the batch 29 design doc check
+- "Pay now" and "Closing soon" link to `/app#needs-you`, but pieces to pay are in "Needs review" (`#needs-review`) and Needs you isn't rendered when empty: link to where the pieces are (open the dashboard at Needs review, marked).
+- "This test closed to new testers on <date>." (closedToNewLine, tests.ts closeJoiningAfterOpenUntil) now stacks across tests in "Applications and invites" without naming the test: "“<test>” closed to new testers on <date>."
+- "Your invite to “<test>” was closed." is only in the live box (api/live/route.ts): add it as a bell line in "Applications and invites" (per batch 29 §23).
+- The dashboard Calls box Cancel (CallsBox.tsx) sends no seenAt, so it skips stop-once: send it and gate it like the test page's Cancel.
+- goNextRound skips the stop-once gate whenever Open until has passed (`const closed = openUntil < now`): remove the skip (batch 29 §11: stop-once everywhere).
+- Dead code: bell.ts group titles textra, appclosed, reinvited, team, disputes, trejected; rules.ts bankConfirmLine, bankConfirmTestLine, chargeByLine, payByLine.
+- The session route's comment above LIMITED_ACTIONS still says Dispute, Charge, Let it go and Rate work "on the first press": fix the comment.
+
 ## Decided, no change (owner, Oct 29)
 - **The tester's Rate still closes at the test's close-out**, not at their own pieces' closing date (a last tester who waits past the close-out to Charge can't rate any more). Don't change it.
 - **Late sending stays** (a tester can still send after their own deadline, "Sent late (deadline was <date>)"); work isn't closed at the deadline. What changes for late work is §3.
