@@ -134,13 +134,12 @@ describe("the developer's Stop pop-up (section 15)", () => {
     expect((src("app/app/tests/[id]/page.tsx").match(/<TopPanel\b/g) ?? []).length).toBe(2);
   });
 
-  it("the developer's Contract changes shows the Stop and its reason; each stopped tester's contract changes too", () => {
+  it("the developer's page shows the Stop's reason (batch 34 §14: in the red banner, the Contract changes fold gone); each stopped tester's contract changes too", () => {
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page).toContain("<ContractChanges entries={changeEntries} stop={stopEntry}");
+    expect(page).toContain('const bannerReason = bannerCause === "stopped" && stopEntry ? stopEntry.reason : bannerCauseReason;');
+    expect(page).toContain("<TestBanner cause={bannerCause} reason={bannerReason}");
     expect(page).toContain("Test stopped · {fmtDateTime(n.createdAt)}<ReasonQuote text={stopReasonOf(n.text)} />");
-    const cc = src("app/app/tests/[id]/ContractChanges.tsx");
-    expect(cc).toContain("{fmt(stop.at)} · You stopped the test</p>");
-    expect(cc).toContain("<ReasonQuote text={stop.reason} />");
+    expect(src("app/app/tests/[id]/TestBanner.tsx")).toContain("{reason && <ReasonQuote text={reason}");
   });
 
   it("the admin's test timeline shows the reason", async () => {

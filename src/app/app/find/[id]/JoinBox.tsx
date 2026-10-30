@@ -117,7 +117,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
         setBoxAt(String(e.data.now ?? new Date().toISOString()));
         setSince([]);
         afterChanges((e.data.changes as Change[]) ?? []);
-        return { stop: ((e.data.changes as { text: string }[]) ?? []).map((c) => c.text) };
+        return { stop: (e.data.changes as Change[]) ?? [] }; // (batch 34 §14) whole lines: a listing line carries See it
       }
       if (e instanceof ApiError && e.code === "needs" && e.data.gaps) return { gaps: e.data.gaps as Gaps };
       if (e instanceof ApiError && e.code === TERMS_UPDATED_CODE) { setTermsAsk(true); setTermsErr(e.message); return { refused: true }; }
@@ -259,6 +259,8 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
           send={sendFromPopup}
           onCovered={() => { const ask = asking.ask; setAsking(null); void coveredNow(ask); }}
           onClose={() => setAsking(null)}
+          press={rejoining ? "Ask to rejoin" : applying ? "Apply" : "Join"}
+          seeIt="#listing"
         />
       )}
       <MistakeList press={rejoining ? "Ask to rejoin" : applying ? "Apply to join" : "Join this test"} />

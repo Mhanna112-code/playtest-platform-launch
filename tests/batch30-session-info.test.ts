@@ -88,7 +88,7 @@ describe("batch 30 §15: an Edit save and the tester's session", () => {
     expect(lines.find((l) => l.key === "description")).toMatchObject({ now: "Sail to the second island", before: "Sail", updatedAt: rows[0].createdAt });
     expect(lines.find((l) => l.key === "buildUrl")).toMatchObject({ now: "https://example.com/v2", before: "https://example.com/b" });
     // The stored values are never a line: not in the admin timeline, and not a kind any live box or bell lists.
-    expect(src("lib/server/adminLists.ts")).toContain('kind: { notIn: [LISTING_VALUES, "listing_save"] }');
+    expect(src("lib/server/adminLists.ts")).toContain('kind: { notIn: [LISTING_VALUES, LISTING_SAVED, "listing_save"] }'); // (batch 34 §14) the Listing panel's record too
     expect(parseValues({ text: "not json", createdAt: new Date() })).toBeNull();
     // No new terms for an information change: nothing to Switch or Keep.
     expect(await db.termsOffer.count({ where: { contractId: j.sessionId } })).toBe(0);
@@ -124,7 +124,9 @@ describe("batch 30 §15: an Edit save and the tester's session", () => {
     expect(p).toContain("data-history-info");
     // The contract part (fixed) is the contract's own fields.
     expect(p).toContain('{ name: "Written answers", cents: c.writtenCents, required: c.writtenRequired, perHour: false }');
-    expect(src("components/LiveTop.tsx")).toContain("new CustomEvent(SEE_IT_EVENT, { detail: { at: l.at } })");
+    // (Batch 34 §14) The See it press is shared (LiveTop, the stop boxes, the join page's pop-up): it still tells the page the line's time.
+    expect(src("components/LiveTop.tsx")).toContain("onClick={(e) => seeItClick(e, seeIt, l.at)}");
+    expect(src("components/ListingInfo.tsx")).toContain("new CustomEvent(SEE_IT_EVENT, { detail: { at: at ? new Date(at).toISOString() : undefined } })");
     // Access keys aren't part of either: the key box is unchanged.
     expect(p).toContain("<KeyBox canReport={!meOff}");
   });

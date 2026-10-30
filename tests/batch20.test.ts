@@ -83,7 +83,7 @@ describe("batch 20 section 1: more than 3 questions sit in a scroll box", () => 
     expect(session).toContain('<li data-scope-questions="">Questions: <QuestionList items={writtenQuestions(c).map((q) => qText(q))} /></li>');
     expect(session).toContain("<div>Then: <QuestionList items={(o.fromQuestions as string[]).map(qText)} /></div>");
     expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain("<QuestionList items={offer.fromQuestions} />");
-    expect(src("app/app/tests/[id]/ContractChanges.tsx")).toContain("<QuestionList items=");
+    expect(src("app/app/tests/[id]/ListingPanel.tsx")).toContain("<QuestionList items="); // (batch 34 §14) the Listing panel replaced Contract changes
     expect(src("app/app/find/[id]/page.tsx")).toContain("<QuestionBox count={l.questions.length} as=\"ul\"");
     const form = src("app/app/sessions/[id]/SessionActions.tsx");
     const box = form.indexOf('<QuestionBox count={questions.length} size="form"');

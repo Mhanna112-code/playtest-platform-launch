@@ -1,8 +1,36 @@
 "use client";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 /** (Batch 30 §15) The "See it" of a listing line in the top box: the event LiveTop sends (with the line's time) so the page can mark what that save changed. */
 export const SEE_IT_EVENT = "see-it";
+
+/**
+ * (Batch 34 §14) Where a listing line's "See it" goes on this page (e.g. "#listing" on the developer's test page), for every stop box under any of its buttons: the
+ * boxes take it from here unless they're given their own `seeIt`.
+ */
+const SeeItContext = createContext<string | undefined>(undefined);
+export function SeeItTarget({ target, children }: { target: string; children?: React.ReactNode }) {
+  return <SeeItContext.Provider value={target}>{children}</SeeItContext.Provider>;
+}
+export const useSeeItTarget = () => useContext(SeeItContext);
+
+/**
+ * (Batch 30 §15; batch 34 §14) A "See it" press: a line inside a pop-up closes the pop-up first (its own scroll then brings the target into view); a fold opens; and
+ * the page is told the line's time so it can mark what that save changed (ListingSeeIt).
+ */
+export function seeItClick(e: React.MouseEvent<HTMLElement>, target: string, at?: string | Date) {
+  const dialog = e.currentTarget.closest("dialog");
+  if (dialog) {
+    e.preventDefault();
+    dialog.close();
+  }
+  setTimeout(() => {
+    const el = document.querySelector(target);
+    if (el instanceof HTMLDetailsElement) el.open = true;
+    if (dialog && el) el.scrollIntoView({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    window.dispatchEvent(new CustomEvent(SEE_IT_EVENT, { detail: { at: at ? new Date(at).toISOString() : undefined } }));
+  }, 0);
+}
 
 /**
  * (Batch 30 §15) A small "Updated <date/time>" tag on a listing-information line changed since the tester joined: tapping it shows before → now in place.

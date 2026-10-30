@@ -91,7 +91,8 @@ describe("batch 30 §10: one line per listing save for testers", () => {
     const join = src("app/app/find/[id]/JoinBox.tsx");
     expect(join).toContain('seeIt="#listing" alertsWhere="join"');
     expect(join).not.toMatch(/<ChangesBox side="tester" changes=\{box\?\.changes \?\? null\} tail=\{box\?\.tail\} \/>/);
-    expect(src("components/ChangesBox.tsx")).toContain("c.timed && c.kind === \"info\" && seeIt");
+    // (Batch 34 §14) The developer's listing lines too (c.listing); the page can give every box its target (SeeItTarget).
+    expect(src("components/ChangesBox.tsx")).toContain('seeTo && ((c.timed && c.kind === "info") || c.listing)');
   });
 });
 

@@ -468,7 +468,7 @@ export function termsLine(t: Pick<Listing, "writtenCents" | "recordingCents" | "
  */
 export const STOP_ONCE_KINDS = ["joined", "left", "sent", "booked", "confirmed", "cancelled", "offered", "removed"] as const;
 export const CALL_KINDS = ["booked", "confirmed", "cancelled", "offered", "removed"] as const;
-export type TestEventLike = { kind: string; text: string; createdAt: Date; version?: number | null; /** (Batch 20 section 4) one line per thing in a stop box */ key?: string; /** (Batch 30 §10) the line says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** (Batch 30 §12) the join page's NDA changed: its tick clears */ nda?: boolean };
+export type TestEventLike = { kind: string; text: string; createdAt: Date; version?: number | null; /** (Batch 20 section 4) one line per thing in a stop box */ key?: string; /** (Batch 30 §10) the line says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** (Batch 30 §12) the join page's NDA changed: its tick clears */ nda?: boolean; /** (Batch 34 §14) the developer's listing change: See it jumps to the test page's Listing panel */ listing?: boolean };
 
 /** Events since the page's "seen" marker that stop a press once, oldest first. */
 export function stopOnceChanges(events: TestEventLike[], seenAt: Date, kinds: readonly string[] = STOP_ONCE_KINDS) {

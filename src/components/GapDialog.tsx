@@ -4,6 +4,8 @@ import { Languages, RefreshCw } from "lucide-react";
 import { api } from "@/lib/client";
 import { noGaps, sameGaps, TESTER_ASK, testerGapButton, testerGapText, type GapAsk, type Gaps } from "@/lib/gaps";
 import { MissingNeedWords } from "@/components/MissingNeeds";
+import { seeItClick } from "@/components/ListingInfo";
+import type { Change } from "@/components/ChangesBox";
 
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
@@ -23,7 +25,7 @@ export function JustUpdated({ at }: { at: string }) {
  * The pop-up's press answered. (Owner, Oct 29, batch 26 section 13) `ok` with `moving`: the page is going elsewhere (Join anyway opens the session page), so the pop-up
  * stays as it is; `ok` without it (Apply anyway, Ask to rejoin anyway: the page stays): the pop-up closes and the page shows its done line ("Sent. You'll hear back…").
  */
-export type PopupAnswer = { ok: true; moving?: boolean } | { stop: string[]; gaps?: undefined } | { gaps: Gaps; stop?: undefined } | { refused: true };
+export type PopupAnswer = { ok: true; moving?: boolean } | { stop: Change[]; gaps?: undefined } | { gaps: Gaps; stop?: undefined } | { refused: true };
 /** (Batch 26 section 13) What the pop-up does after a press went through: stay while the page moves on, else close. */
 export const afterSent = (r: { ok: true; moving?: boolean }) => (r.moving ? "stay" : "close");
 
@@ -47,14 +49,36 @@ export function needsChange(dev: string, before: Needs, now: Needs) {
   return out;
 }
 
-export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs: Needs; devName: string; send: (shown: Gaps) => Promise<PopupAnswer>; onCovered: (at: string) => void; onClose: () => void }) {
+/** (Batch 34 §14) A listing line in the pop-up's stop: the server's "… edited the listing at 12:23 PM: …" and the test's needs it saw change ("… added Spanish to …"). */
+const isListingLine = (c: Change) => !!c.listing || (!!c.timed && c.kind === "info");
+
+/**
+ * (Owner, Oct 30, batch 34 §14) The pop-up's blue stop: its lines (a listing line ends "· See it", which closes the pop-up and scrolls to the listing), then
+ * "Your Join didn't go through." naming the press (Join / Apply / Ask to rejoin), never "Your press".
+ */
+export function PopupStop({ lines, press, seeIt }: { lines: Change[]; press: string; seeIt?: string }) {
+  return (
+    <div role="alert" className="mb-3 space-y-1.5 rounded-lg border border-sky-300/40 bg-sky-300/[0.08] p-2.5 text-sm text-sky-100" data-popup-stop="">
+      {lines.length > 0 && (
+        <ul className="list-disc space-y-0.5 pl-6">
+          {lines.map((c, i) => (
+            <li key={`${c.text}|${i}`}>{c.text}{seeIt && isListingLine(c) && <> · <a href={seeIt} data-see-it="" onClick={(e) => seeItClick(e, seeIt, c.at)}>See it</a></>}</li>
+          ))}
+        </ul>
+      )}
+      <p><strong className="font-semibold text-sky-50">Your {press} didn&apos;t go through.</strong> Check what this test needs now, then press again.</p>
+    </div>
+  );
+}
+
+export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs: Needs; devName: string; send: (shown: Gaps) => Promise<PopupAnswer>; onCovered: (at: string) => void; onClose: () => void; /** (Batch 34 §14) the page's press: "Join" / "Apply" / "Ask to rejoin" */ press: string; /** (Batch 34 §14) where a listing line's See it goes ("#listing") */ seeIt?: string }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
   const [shown, setShown] = useState<Gaps>(p.initial);
   const shownRef = useRef(shown);
   shownRef.current = shown;
   const [changedAt, setChangedAt] = useState<string | null>(null);
-  const [stop, setStop] = useState<{ lines: string[]; button: string } | null>(null);
+  const [stop, setStop] = useState<{ lines: Change[]; button: string } | null>(null);
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
   // The TEST's needs when this opened, and what it changed since: a listing change, so the first "anyway" press stops
@@ -107,7 +131,8 @@ export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs
     // The test's needs changed while this was open: stop once, naming the change, before joining.
     if (!acked.current && testChangeRef.current.length) {
       acked.current = true;
-      setStop({ lines: testChangeRef.current, button });
+      const at = new Date().toISOString();
+      setStop({ lines: testChangeRef.current.map((text) => ({ text, at, listing: true })), button });
       setChangedAt(new Date().toISOString());
       return;
     }
@@ -144,12 +169,7 @@ export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs
   return (
     <dialog ref={ref} aria-labelledby={`${id}-title`} aria-describedby={`${id}-text`} onClose={p.onClose}
       className="!m-auto w-[min(28rem,calc(100vw-2rem))] rounded-2xl border border-white/15 bg-ink-900 p-5 text-slate-200 shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm">
-      {stop && (
-        <div role="alert" className="mb-3 space-y-1.5 rounded-lg border border-sky-300/40 bg-sky-300/[0.08] p-2.5 text-sm text-sky-100">
-          {stop.lines.length > 0 && <ul className="list-disc space-y-0.5 pl-6">{stop.lines.map((c) => <li key={c}>{c}</li>)}</ul>}
-          <p><strong className="font-semibold text-sky-50">Your press didn&apos;t go through.</strong> Check what this test needs now, then press again.</p>
-        </div>
-      )}
+      {stop && <PopupStop lines={stop.lines} press={p.press} seeIt={p.seeIt} />}
       <h2 id={`${id}-title`} className="flex items-center gap-2 font-semibold text-white"><Languages className="h-5 w-5 text-amber-300" /> {title}</h2>
       <p id={`${id}-text`} role="status" className="mt-2 text-sm text-slate-300">{changedAt && !stop && <><JustUpdated at={changedAt} /> </>}{noGaps(shown) ? testerGapText(shown, p.ask) : <>Your profile <MissingNeedWords g={shown} />. {TESTER_ASK[p.ask].question}</>}</p>
       <div className="mt-4 flex flex-wrap gap-2">
