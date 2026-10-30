@@ -153,7 +153,8 @@ export async function requestReset(body: Record<string, unknown>, base: string, 
         to: email,
         subject: "Choose a password",
         text: `${NO_PASSWORD_YET}\n${link}\n\nThe link works once, for ${RESET_MINUTES} minutes. You can keep using Continue with Google too.`,
-        html: `<p>${NO_PASSWORD_YET} <a href="${link}">Choose a password</a></p><p>The link works once, for ${RESET_MINUTES} minutes. You can keep using Continue with Google too.</p>`,
+        button: { label: "Choose a password", url: link },
+        settings: false,
       });
       return { sent: true };
     }
@@ -161,7 +162,8 @@ export async function requestReset(body: Record<string, unknown>, base: string, 
       to: email,
       subject: "Reset your password",
       text: `Someone (hopefully you) asked to reset the password for ${email}.\n\nChoose a new one here (the link works once, for ${RESET_MINUTES} minutes):\n${link}\n\nIf it wasn't you, ignore this email: your password stays the same.`,
-      html: `<p>Someone (hopefully you) asked to reset the password for ${email}.</p><p><a href="${link}">Choose a new password</a> (the link works once, for ${RESET_MINUTES} minutes).</p><p>If it wasn't you, ignore this email: your password stays the same.</p>`,
+      button: { label: "Reset your password", url: link },
+      settings: false,
     });
   }
   return { sent: true };
@@ -217,7 +219,8 @@ export async function sendVerification(userId: string, base: string) {
     to: user.email,
     subject: "Confirm your email",
     text: `Welcome to Playtest! Confirm your email:\n${link}\n\nThe link works for ${VERIFY_HOURS} hours.`,
-    html: `<p>Welcome to Playtest! <a href="${link}">Confirm your email</a>.</p><p>The link works for ${VERIFY_HOURS} hours.</p>`,
+    button: { label: "Confirm your email", url: link },
+    settings: false,
   });
   return { sent: true };
 }

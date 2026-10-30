@@ -1,7 +1,24 @@
 import { db } from "@/lib/db";
 import { T, safeZone } from "@/lib/tz";
+import { appUrl } from "./auth";
+import { emailHtml, type EmailButton } from "./emailLayout";
 
-export type Email = { to: string; subject: string; text: string; html?: string };
+/**
+ * (Batch 30 §19) Every email is sent as HTML in the shared branded layout (emailLayout.ts) with its plain text alongside. `button`: the email's main link as a button
+ * (when its address is a line of the text, the button takes that line's place). `settings`: the footer's "Notification settings" link (default on; off for confirm / reset).
+ */
+export type Email = { to: string; subject: string; text: string; button?: EmailButton; settings?: boolean };
+
+/** The site's address for the layout's links and logo (APP_URL; the public site when it can't be read). */
+const siteBase = () => {
+  try {
+    return appUrl();
+  } catch {
+    return "https://playtestplatform.com";
+  }
+};
+/** (Batch 30 §19) The email's HTML version. */
+export const htmlOf = (e: Email) => emailHtml(e.subject, e.text, { button: e.button, settings: e.settings ?? true, base: siteBase() });
 
 export const outboxEnabled = () => process.env.NODE_ENV !== "production" || process.env.ALLOW_DEV_OUTBOX === "1";
 
@@ -65,7 +82,8 @@ async function post(row: Row, key: string): Promise<Answer> {
       method: "POST",
       // (Batch 23 section 1) The row id as Resend's idempotency key: a try repeated after a lost answer is never sent twice.
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "Idempotency-Key": `email-${row.id}` },
-      body: JSON.stringify({ from: process.env.EMAIL_FROM || "Playtest <onboarding@resend.dev>", to: [row.to], subject: row.subject, text: row.text, ...(row.html ? { html: row.html } : {}) }),
+      // (Batch 30 §19) An email stored before the branded layout (no html) gets it now, without a button.
+      body: JSON.stringify({ from: process.env.EMAIL_FROM || "Playtest <onboarding@resend.dev>", to: [row.to], subject: row.subject, text: row.text, html: row.html || htmlOf({ to: row.to, subject: row.subject, text: row.text }) }),
     });
     return res.ok ? { ok: true } : { ok: false, status: res.status, body: await res.text().catch(() => "") };
   } catch (e) {
@@ -106,14 +124,15 @@ async function capUntil(now: Date) {
  */
 export async function sendEmail(e: Email, now = new Date()) {
   const k = key();
+  const html = htmlOf(e);
   if (!k && outboxEnabled()) {
-    await db.outboxEmail.create({ data: { to: e.to, subject: e.subject, text: e.text, html: e.html ?? "" } });
+    await db.outboxEmail.create({ data: { to: e.to, subject: e.subject, text: e.text, html } });
     return { via: "outbox" as const };
   }
   const cap = k ? await capUntil(now) : null;
   const row = await db.emailQueue.create({
     data: {
-      to: e.to, subject: e.subject, text: e.text, html: e.html ?? "", giveUpAt: new Date(now.getTime() + EMAIL_RETRY_HOURS * HOUR + (cap ? cap.getTime() - now.getTime() : 0)),
+      to: e.to, subject: e.subject, text: e.text, html, giveUpAt: new Date(now.getTime() + EMAIL_RETRY_HOURS * HOUR + (cap ? cap.getTime() - now.getTime() : 0)),
       // The new row is this try's claim; during a daily-limit wait it simply waits with the others.
       nextTryAt: cap ?? new Date(now.getTime() + CLAIM_MS), ...(cap ? { lastError: EMAIL_CAP_LINE, errorKind: "cap" } : {}),
     },

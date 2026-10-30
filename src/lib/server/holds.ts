@@ -559,7 +559,7 @@ export async function chargebackOpened(paymentIntentId: string) {
   const started = await startHold(p.developerId, "chargeback");
   // (Owner, Oct 26) A chargeback email goes to every admin at once, whatever their email setting.
   const to = new Set([...admins(), ...(await adminUsers()).map((a) => a.email)]);
-  for (const a of to) await sendEmail({ to: a, subject: `Playtest: new chargeback of ${money(p.amountCents)}`, text: [`A developer's bank reversed a ${money(p.amountCents)} payment (${p.stripePaymentIntentId ?? "no payment id"}). The developer's account is on a chargeback hold.`, `${appUrl()}/admin#chargebacks`, "", "Playtest"].join("\n") }).catch((e) => console.error("[email] chargeback:", e.message));
+  for (const a of to) await sendEmail({ to: a, subject: `Playtest: new chargeback of ${money(p.amountCents)}`, text: [`A developer's bank reversed a ${money(p.amountCents)} payment (${p.stripePaymentIntentId ?? "no payment id"}). The developer's account is on a chargeback hold.`, `${appUrl()}/admin#chargebacks`, "", "Playtest"].join("\n"), button: { label: "Open the admin console", url: `${appUrl()}/admin#chargebacks` } }).catch((e) => console.error("[email] chargeback:", e.message));
   if (!started) {
     const line = `Your bank reversed a ${money(p.amountCents)} payment${c ? ` for ${displayName(c.tester)}` : ""}: ${before.holdStartedAt && before.holdReason !== "chargeback" ? "your payment hold is now a chargeback hold" : "it was added to what you owe"}`;
     // A payment hold that becomes a chargeback hold is a chargeback hold starting (its email ignores Off); a further chargeback just adds to what is owed.
