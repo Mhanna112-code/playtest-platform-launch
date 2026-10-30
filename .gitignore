@@ -15,3 +15,6 @@ npm-debug.log*
 next-env.d.ts
 /.test-uploads
 .next-3450/
+
+# local build folders (any NEXT_DIST_DIR)
+.next-*/

@@ -72,8 +72,7 @@ describe("Batch 34 §6: a card before posting, expiry warnings, Get started", ()
     expect(render([{ label: "Set up payouts (to receive your pay)", done: false }])).toContain("Set up payouts (to receive your pay)");
     expect(render([{ label: "Add a card (needed to post a test)", done: true }, { label: "Set up payouts (to receive your pay)", done: false }])).toContain("✓ Add a card");
     const complete = render([{ label: "Add a card (needed to post a test)", done: true }]);
-    expect(complete).toContain("✓ Add a card (needed to post a test)");
-    expect(complete).not.toContain("data-get-started=\"\"");
+    expect(complete).toBe(""); // (batch 34 §6) the box goes once every step is done
   });
 
   it("puts the card prompt by Post and uses account state for both Get started sides", async () => {
