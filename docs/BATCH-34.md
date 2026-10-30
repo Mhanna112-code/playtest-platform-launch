@@ -42,3 +42,24 @@ This file wins over the earlier batches and the design doc where they differ.
 
 ## 8. A save in another tab is one line naming its fields (owner's finding, Oct 30)
 - The developer's own save in another tab reads "You saved the listing in another tab: title (now “X”), description; this re-sent fbbb's invite" (it used to say only "You changed the listing in another tab: re-sent fbbb's invite", with the rename on its own line). A rename alone stays its own info-only line.
+
+## 9. Edit after its own Save (owner's finding, Oct 30)
+- Repro: fields changed on Edit, Save went through (11:15); another tab, then back (maybe Back), Save again: it stopped with "Product / Name of this test / Instructions: your version will replace the one saved in another tab at 11:15 AM." although that save was theirs from this same page, with no blue "Saved in another tab or device at …" note under those fields; and right after a Save a change-limit line ("Changes left…" / "can't be saved: you've changed … 3 times") flashed.
+- After a Save goes through, the page's base (the version and every field's saved value, the free keys) becomes what was just saved and the kept draft ("Not saved yet") is cleared (by the page and by the server), so a tab switch, a Back / forward return (bfcache: `pageshow` with `persisted` refreshes the data) or a draft restore never brings older text back.
+- A save made from this same browser tab is never "another tab": when every listing save since the page loaded was this tab's own (each save keeps its tab), Save has nothing to stop for. A field the tab already holds the saved value of (a live refresh) no longer counts as news to it either.
+- Whenever Save stops with "<field>: your version will replace the one saved in another tab at …", that field shows its blue "Saved in another tab or device at …" note with the saved value and Use theirs (also after a fresh load with a restored draft).
+- No flash of the change-limit line after a successful Save: the page stays as saved ("Saving…") until the test page shows.
+
+## 10. Join after a re-sent invite (owner's finding, Oct 30)
+- Join runs the "changed since you opened this page" stop first, so a press on a page holding an invite that a listing change replaced stops once with the full list (the NDA change included; the NDA tick clears). The second press joins on the tester's CURRENT invite without a reload.
+- If the refusal still happens (the change was already shown), it's one sentence, no dangling colon: "Nora Lane changed the listing at 11:16 AM and sent you a new invite on it. Press Join to join on it."; the page switches to the new invite and the next press joins.
+
+## 11. The invite panel's lists (owner's finding, Oct 30)
+- People you've worked with and Suggested leave out testers currently in this test (a working contract) and testers already invited (they're in the Invited list with Cancel invite). Someone who left the test shows again. Search by name still shows them greyed with the reason (batch 30 §7).
+
+## 12. A key given by a Save shows at once (owner's finding, Oct 30)
+- When the developer's Save gives a working tester an access key (batch 30 §17), the tester's session page redraws at once (its poll includes the tester's own key: id, state) and the key box shows without a reload.
+- The top-box line "Nora Lane gave you an access key for “Harbor Run”" ends "· See it", which jumps to the key box (marked for a moment).
+
+## 13. No rejoin card on the session page (owner, Oct 30)
+- A tester's session page for a test they left no longer shows the "Ask to rejoin <title>" / "<dev> invited you back to <title>" card. They ask to rejoin from the test's own page (/app/find/<test>), whose join box reads "Ask to rejoin" (or "Join" when invited back). The session page links there under its title: "Open the test's page".

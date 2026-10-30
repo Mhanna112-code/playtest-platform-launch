@@ -136,13 +136,13 @@ export async function lockTest(tx: Tx, id: string) {
 }
 
 /** Record what happened. bump=true moves the test's version on (Edit's Save will notice). */
-export async function recordEvent(tx: Tx, testId: string, kind: string, text: string, bump: boolean, extra: Prisma.TestUpdateInput = {}, contractId: string | null = null) {
+export async function recordEvent(tx: Tx, testId: string, kind: string, text: string, bump: boolean, extra: Prisma.TestUpdateInput = {}, contractId: string | null = null, /** (Batch 34 §9) the tab that saved the listing */ tab = "") {
   let version: number | null = null;
   if (bump || Object.keys(extra).length) {
     const t = await tx.test.update({ where: { id: testId }, data: { ...(bump ? { version: { increment: 1 } } : {}), ...extra } });
     if (bump) version = t.version;
   }
-  await tx.testEvent.create({ data: { testId, kind, text, version, contractId } });
+  await tx.testEvent.create({ data: { testId, kind, text, version, contractId, ...(tab ? { tab } : {}) } });
 }
 
 const working = (testId: string) => ({ testId, status: "working" });
@@ -342,7 +342,14 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
     if (typeof touched.title === "string" && touched.title.trim().toLowerCase() !== t.title.trim().toLowerCase()) await requireUniqueTitle(tx, dev.id, touched.title, testId);
-    const events = await tx.testEvent.findMany({ where: { testId, version: { gt: loaded } } });
+    // (Batch 34 §9, owner's finding) A save made from this same browser tab is never "another tab": its own saves never stop it, and when every listing save since
+    // this page loaded was this tab's own (its base is behind only because of them), there is nothing to name per field either.
+    const tab = tabOf(body);
+    const ownSave = (e: { kind: string; tab: string }) => !!tab && e.tab === tab && LISTING_SAVE_KINDS.includes(e.kind);
+    const events = (await tx.testEvent.findMany({ where: { testId, version: { gt: loaded } } })).filter((e) => !ownSave(e));
+    const pageAt = seenOf(body.pageSeenAt) ?? seenOf(body.seenAt);
+    const savesSincePage = pageAt ? await tx.testEvent.findMany({ where: { testId, kind: { in: LISTING_SAVE_KINDS }, createdAt: { gt: pageAt } }, select: { kind: true, tab: true } }) : [];
+    const onlyOwnSaves = savesSincePage.length > 0 && savesSincePage.every(ownSave);
     // (Owner) A second Save goes ahead only if nothing new happened since its box last updated (boxAt).
     const boxAt = confirmed ? seenOf(body.boxAt) : null;
     const newSinceBox = boxAt ? events.filter((e) => e.createdAt > boxAt) : [];
@@ -387,7 +394,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // the page loaded (or its last stop box). A page that doesn't send what it loaded and holds (an older page) keeps every line.
     let dcN: (TestEventLike & { fields?: string[] })[] = dc;
     let gateChanges = gate.go ? [] : gate.changes;
-    const news = seen ? await editNews(tx, testId, body, current) : null;
+    const news = seen && !onlyOwnSaves ? await editNews(tx, testId, body, current) : null;
     // (Batch 16 section 20) A key this press deletes that a joining tester was given meanwhile (the page hadn't shown it): not a mistake, a stop with the
     // warning; the second press saves the rest of the key edits.
     if (seen) {
@@ -434,7 +441,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
       ...listingData(next), ...(fields.includes("openUntil") ? { notified3d: false, notified1d: false } : {}), ...(listingFields.length ? { listingVersion: { increment: 1 } } : {}),
       // (5; owner, Oct 28 afternoon) A save that changed limited fields after the first tester joined uses one change of EACH of them.
       ...(critical.length && everJoined ? { criticalCounts: storedCounts(countsAfter(counts, critical), since) } : {}),
-    });
+    }, null, tab);
     if (keysChanged) {
       await applyKeyChange(tx, testId, plan.toAdd, plan.removable, plan.toReuse);
     }
@@ -482,6 +489,9 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     switchedToInvite = fields.includes("joinMode") && next.joinMode === "invite";
     return tx.test.findUniqueOrThrow({ where: { id: testId } });
   });
+  // (Batch 34 §9) The Save went through: the kept draft ("Not saved yet") is gone, here as well as in the page, so no later visit (a tab switch, Back, another
+  // device) can restore older text.
+  await db.keptForm.deleteMany({ where: { userId: dev.id, key: `test:edit:${testId}` } });
   // Working testers are OFFERED the new contract terms (Switch / Keep); their contract changes only if they switch.
   const offered = termsChanged ? await offerNewTerms(testId, changeId) : 0;
   const closedApps = reinvite ? await (await import("./joining")).closeApplicationsAfterEdit(testId) : switchedToInvite ? await (await import("./joining")).closeApplicationsAfterEdit(testId, "invite_only") : [];
@@ -541,6 +551,8 @@ function testerDaysFor(openUntil: Date | string | null, dev: { timeZone?: string
  * (seenAt) any tester joined, left or sent work, a call was booked/confirmed/cancelled, times were offered/removed, or a
  * payment/rejection was made, the first press stops and returns the list; the second press (confirmed) goes ahead.
  */
+/** (Batch 34 §9) The test events a listing Save records (its version bump). */
+const LISTING_SAVE_KINDS = ["edited", "edited_spots"];
 /** The developer's own listing save in another tab, as the action log says it ("You saved the listing in another tab: description, access keys"). */
 const OTHER_TAB_EDIT = /^You saved the listing in another tab: /;
 /** Fields the form never sends as typed (kept from an older page, or set by the server). */

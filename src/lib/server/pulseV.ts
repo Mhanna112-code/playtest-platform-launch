@@ -77,12 +77,15 @@ export async function testV(viewerId: string, testId: string, sessionId = "") {
   // (Batch 14 section 6) The Access keys notice: keys added or deleted in Edit, or given at a join, refresh the page.
   const keyRows = sessionId ? [] : await db.accessKey.groupBy({ by: ["status"], where: { testId }, _count: { _all: true } });
   const keysV = keyRows.map((k) => `${k.status}:${k._count._all}`).sort().join(",");
+  // (Batch 34 §12, owner's finding) The session's own key (given by the developer's Save, replaced, reported, fixed): the tester's page redraws at once and the key box shows.
+  const myKeys = sessionId ? await db.accessKey.findMany({ where: { contractId: sessionId }, orderBy: { id: "asc" }, select: { id: true, status: true, fixedAt: true } }) : [];
+  const myKeyV = myKeys.map((k) => `${k.id}:${k.status}:${k.fixedAt?.getTime() ?? 0}`).join(",");
   const pay = { n: payCount, last: (payLast?.createdAt.getTime() ?? 0) + (payLast?.status ?? "") };
   // (Batch 17 sections 1 and 16) A Rate box opening, greying or going as things are decided: ratings given, and (a session) the tester's own Rate state.
   const ratingsN = await db.rating.count({ where: { testId } });
   const rateV = sessionId ? (await (await import("./ratings")).testerRateState(sessionId)).line : "";
   // (Batch 10) The developer's suspension and the team's pause are in it too, so a tester's session page shows (or drops) the paused banner live.
-  return [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0, ratingsN, rateV, consV, callsKey, blocksV].join("|");
+  return [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0, ratingsN, rateV, consV, callsKey, blocksV, myKeyV].join("|");
 }
 
 /** (Owner, Oct 29, batch 10) Payments'"Pay what you owe": a declined payment, a chargeback, a tester's Charge during the hold, a payment from another tab, a reservation. */

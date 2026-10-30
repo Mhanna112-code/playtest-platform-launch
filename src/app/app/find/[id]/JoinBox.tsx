@@ -37,8 +37,6 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState("");
-  // (Batch 32 §2) "You already applied to join this test in another tab.": shown in the waiting view the page redraws to.
-  const [already, setAlready] = useState("");
   // (Batch 30 §8) Their application or ask changed (the page followed it live: pending, declined, closed): the "Sent." line gives way to what the page now shows.
   const appState = p.application?.status ?? "";
   useEffect(() => setDone(""), [appState]);
@@ -123,7 +121,8 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       }
       if (e instanceof ApiError && e.code === "needs" && e.data.gaps) return { gaps: e.data.gaps as Gaps };
       if (e instanceof ApiError && e.code === TERMS_UPDATED_CODE) { setTermsAsk(true); setTermsErr(e.message); return { refused: true }; }
-      if (e instanceof ApiError && e.code === "already_waiting") { setAlready(e.message); router.refresh(); return { refused: true }; }
+      // (Batch 32 §2; batch 34 §10, owner) Already applied in another tab: the page just redraws to the waiting view (no extra grey line under it).
+      if (e instanceof ApiError && e.code === "already_waiting") { router.refresh(); return { refused: true }; }
       setErr(errOf(e));
       return { refused: true };
     }
@@ -163,15 +162,17 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       if (e instanceof ApiError && e.code === TERMS_UPDATED_CODE) { setTermsAsk(true); setTermsErr(e.message); }
       else if (sb) showBox(sb);
       else if (e instanceof ApiError && e.code === "invite_replaced") {
-        // The new invite is shown right here; the next press joins on it.
-        setErr(`${e.message}${e.data.terms ? ` ${String(e.data.terms)}. Press Join to join on it.` : ""}`);
+        // The new invite is shown right here; the next press joins on it. (Batch 34 §10) The server's line is one whole sentence ("… sent you a new invite on it. Press
+        // Join to join on it."); the page switches to the new invite and counts the refusal as seen, so the next press goes ahead without a reload.
+        setErr(e.message);
         if (typeof e.data.newInviteId === "string") setInviteId(e.data.newInviteId);
+        if (typeof e.data.now === "string") setBoxAt(e.data.now);
       } else if (e instanceof ApiError && e.code === "needs" && e.data.gaps) setAsking({ ask: action === "apply" ? "apply" : "join", gaps: e.data.gaps as Gaps });
       // (Batch 16 section 10) The server's "Accept the NDA to join." belongs to the tick.
       else if (e instanceof ApiError && e.code === "nda" && p.nda) { setNdaErr(e.message); requestAnimationFrame(() => { const root = document.getElementById("join-card"); announcePress(root); focusFirstMistake(root); }); }
       // (Batch 16 section 32) The invite closed meanwhile: refused with the reason (no stop box), and the page drops the invite.
       else if (e instanceof ApiError && e.code === "invite_closed") { setErr(e.message); router.refresh(); }
-      else if (e instanceof ApiError && e.code === "already_waiting") { setAlready(e.message); router.refresh(); }
+      else if (e instanceof ApiError && e.code === "already_waiting") router.refresh(); // (batch 34 §10) just the waiting view
       else setErr(errOf(e));
     } finally {
       setBusy(false);
@@ -195,7 +196,6 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     return (
       <div className="space-y-2">
         <p className="info">{p.application.kind === "rejoin" ? "You asked to rejoin. You'll hear back when the developer answers." : "You applied to join. You'll hear back when the developer answers."}</p>
-        {already && <p className="note" data-already="">{already}</p>}
         <button className="btn-ghost" disabled={busy} onClick={() => go("withdraw-application")}>Withdraw application</button>
         <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} seeIt="#listing" alertsWhere="join" />
         <Err text={err} />

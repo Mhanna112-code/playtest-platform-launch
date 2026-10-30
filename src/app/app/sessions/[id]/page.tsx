@@ -9,7 +9,7 @@ import { LISTING_VALUES, historyRows, infoLines, parseValues } from "@/lib/listi
 import { ListingSeeIt, UpdatedTag } from "@/components/ListingInfo";
 import { CategoryBadges } from "@/components/Category";
 import { PartBadges } from "@/components/Ui";
-import { IN_PROGRESS_TESTER, switchQuestionsLine, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, DELAYED_CALL_LINE, isLate, pausedForTesters, callListed, lateLabel, termsLine, testPaused, testerShare, canAskToRejoin, leftText, paidZeroLine } from "@/lib/rules";
+import { IN_PROGRESS_TESTER, switchQuestionsLine, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, DELAYED_CALL_LINE, isLate, pausedForTesters, callListed, lateLabel, termsLine, testPaused, testerShare, leftText, paidZeroLine } from "@/lib/rules";
 import { disputeRoom, paidAndCap } from "@/lib/server/payments";
 import { payMoreClosesAt } from "@/lib/server/closeOut";
 import { payClosedLine, testerPaidMostLine, testerPayMoreLine } from "@/lib/rules";
@@ -116,7 +116,6 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const now = new Date();
   const seenAt = now.toISOString();
   const offer = await openOffer(c.id);
-  const invitedBack = c.status !== "working" && (await db.invite.count({ where: { testId: c.testId, testerId: u.id, status: "sent" } })) > 0;
   const key = c.status === "working" ? await keyOf(c.id) : null;
   // A key the developer gave after one was reported: shown as new on the session page.
   const freshKey = key && key.status === "inuse" && (await db.accessKey.count({ where: { contractId: c.id, status: "retired" } })) > 0;
@@ -269,6 +268,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         <div className="min-w-0">
           {c.test.productName && <p className="kicker">{c.test.productName}</p>}
           <h1 className="text-2xl font-bold tracking-tight text-white">{title}</h1>
+          {/* (Batch 34 §13) The test's own page (where a tester who left asks to rejoin). */}
+          <a className="text-sm" href={`/app/find/${c.testId}`} data-test-page-link="">Open the test&apos;s page</a>
         </div>
         {/* (Batch 15 section 26) The tester's one-press Alerts, at the top right. */}
         {/* (Batch 16 section 24) After the work is over, only while something left on the page can still stop (Charge / Let it go, Dispute, Rate). */}
@@ -345,14 +346,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           lines={rateWarn.lines}
         />
       )}
-      {/* (Design doc 8) Back in: an invite brings a Join here; otherwise an ask the developer accepts (before the deadline, never after a stop or a rating). */}
-      {c.status !== "working" && !myRating && !meOff && c.test.status === "open" && (invitedBack || canAskToRejoin(c, false)) && (
-        <section id="rejoin" className="card space-y-3 scroll-mt-24 border-emerald-400/30 text-sm">
-          <p className="font-semibold text-white">{invitedBack ? `${dev} invited you back to ${title}` : `Ask to rejoin ${title}`}</p>
-          <p className="text-ink-300">{invitedBack ? "Join to get your session back, with everything in it (work you sent, payments and chat)." : `If ${dev} accepts, your session comes back with everything in it (work you sent, payments and chat) on the current listing, with the time you had left.`}</p>
-          <a className="btn" href={`/app/find/${c.testId}`}>{invitedBack ? "Join" : "Ask to rejoin"}</a>
-        </section>
-      )}
+      {/* (Batch 34 §13, owner) No "Ask to rejoin" / "invited you back" card here: the tester asks to rejoin (or joins on an invite back) from the test's own page,
+          linked under the title, whose join box reads "Ask to rejoin" (or "Join"). */}
 
       {/* (Owner, Oct 29, batch 32 §1) Payout setup not done: payments wait for it. */}
       {!(u.stripeAccountId && u.payoutsReady) && <p className="text-sm text-slate-400" data-payout-hint="">{PAYOUT_SETUP_HINT} <a href="/app/payments#payout" className="underline">Finish setup</a></p>}

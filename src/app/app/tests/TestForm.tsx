@@ -296,6 +296,10 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     }
     const moved = (Object.keys(now) as (keyof F)[]).filter((k) => !same(now[k], base[k]));
     if (moved.length) setBase((o) => ({ ...o, ...Object.fromEntries(moved.map((k) => [k, now[k]])) }));
+    // (Batch 34 §9) A field this tab already holds the saved value of, or took silently, is no longer news to it: what it sends as loaded moves there too, so typing
+    // in it again later never stops Save as "saved in another tab" (that line only ever comes with its note, below).
+    const known = [...m.settled, ...m.take.filter((k) => !m.oldNote.includes(k))];
+    if (known.length) seenBase.current = { ...seenBase.current, ...Object.fromEntries(known.map((k) => [k, now[k]])) };
     if (Object.keys(takeover).length) setF((o) => ({ ...o, ...takeover }));
     const settled = [...m.take, ...m.settled];
     if (settled.length) setTouched((t) => new Set([...t].filter((k) => !settled.includes(k))));
@@ -346,14 +350,17 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   // and a blue note under it says what changed; the In use / Free boxes follow too.
   const versionRef = useRef(version);
   versionRef.current = version;
+  // (Batch 34 §9) A Save went through and the page is on its way to the test page: nothing redraws it meanwhile (no flash of "Changes left" or of a lock line).
+  const leaving = useRef(false);
   const live = useRef({ applyElsewhere, applyKeys, f, base, keysData });
   live.current = { applyElsewhere, applyKeys, f, base, keysData };
   useEffect(() => {
     if (!edit) return;
     let alive = true;
     const tick = async () => {
+      if (leaving.current) return;
       const r = await api<{ version: number; listing: Listing; keys: KeysData; at: string; criticalCounts?: CriticalCounts; everJoined?: boolean }>(`/api/tests/${edit.id}/listing`).catch(() => null);
-      if (!r || !alive) return;
+      if (!r || !alive || leaving.current) return;
       if (r.criticalCounts) setCritCounts(countsOf(r.criticalCounts));
       if (typeof r.everJoined === "boolean") setEverJoined(r.everJoined);
       if (r.version !== versionRef.current) {
@@ -367,12 +374,55 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     const t = setInterval(tick, 20_000);
     const onTick = () => void tick();
     window.addEventListener("live-tick", onTick);
+    // (Batch 34 §9) Shown again from the browser's back/forward cache (Back after a Save): the data is refreshed at once, from the base the Save left.
+    const onShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      leaving.current = false;
+      setBusy(false);
+      void tick();
+    };
+    window.addEventListener("pageshow", onShow);
     return () => {
       alive = false;
       clearInterval(t);
       window.removeEventListener("live-tick", onTick);
+      window.removeEventListener("pageshow", onShow);
     };
   }, [edit]);
+
+  /**
+   * (Batch 34 §9, owner's finding) The Save went through: the page's base (the version and every field's saved value, the free keys) becomes what was just saved, nothing
+   * is "changed" any more and the kept draft goes, so a tab switch, a Back / forward return or a draft restore never brings older text back or calls this save "another tab".
+   */
+  function savedHere(listing: Listing, v: number, keys?: KeysData) {
+    leaving.current = true;
+    const now = toForm(listing);
+    setF(now);
+    setBase(now);
+    seenBase.current = now;
+    versionRef.current = v;
+    setVersion(v);
+    setTouched(new Set());
+    prior.current = {};
+    details.current = {};
+    setTheirs({});
+    setNotes({});
+    setStopDetails({});
+    setChanges(null);
+    setBoxAt("");
+    setOrphans([]);
+    setPressed(false);
+    setPayTick(false);
+    setHigh({});
+    if (keys) {
+      const free = keys.free.map((k) => k.value);
+      setKeysData(keys);
+      setFreeLoaded(free);
+      setKeysText(free.join("\n"));
+      keysSeen.current = free;
+      setKeysNote({ own: null, others: null });
+    }
+  }
 
   /** (Batch 15 section 19) The Free box after a red line or a stop: the current free keys, with this page's own additions and deletions still applied. */
   async function rebaseKeys() {
@@ -402,12 +452,14 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
       const all = toApi(f);
       const fields: Record<string, unknown> = {};
       for (const k of touched) for (const a of API_FIELDS[k]) fields[a] = all[a];
-      const r = await api<{ offered: number; notReinvited?: string[]; resent?: string[]; closedApps?: string[]; spotClosed?: string[]; spots?: number }>(`/api/tests/${edit.id}/edit`, {
+      const r = await api<{ offered: number; notReinvited?: string[]; resent?: string[]; closedApps?: string[]; spotClosed?: string[]; spots?: number; version?: number; listing?: Listing; keys?: KeysData }>(`/api/tests/${edit.id}/edit`, {
         version, fields, confirmHigh: confirmHigh(), payRulesOk: payTick, seenAt: edit.seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}), timeZone: browserZone(),
         keysAdd: fb.added, keysRemove: fb.removed,
         // (Batch 16 section 17) What this tab loaded and what it holds: another tab's save of the same values is no reason to stop.
         base: toApi(seenBase.current), has: toApi(holding()), keysLoaded: keysSeen.current,
       });
+      if (r.listing && typeof r.version === "number") savedHere(r.listing, r.version, r.keys);
+      else leaving.current = true;
       await keep.clear();
       const q = (k: string, v?: string[]) => (v?.length ? `&${k}=${encodeURIComponent(v.join(", "))}` : "");
       window.location.href = `/app/tests/${edit.id}?saved=1&offered=${r.offered ?? 0}${q("closed", r.closedApps)}${q("resent", r.resent)}${q("skipped", r.notReinvited)}${r.spotClosed?.length ? `${q("spotclosed", r.spotClosed)}&spots=${r.spots}` : ""}`;
@@ -424,6 +476,13 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         // with this page's own edits still applied.
         if (edit) void rebaseKeys();
         if (err.data.current) applyElsewhere(err.data.current as Listing, typeof err.data.now === "string" ? err.data.now : new Date().toISOString());
+        // (Batch 34 §9) Every "<field>: your version will replace the one saved in another tab at …" line shows that field's blue note (their value, Use theirs), also when
+        // this tab's base had already caught up with that save (a live refresh) and after a fresh load with a restored draft.
+        if (err.data.current) {
+          const yours = ((err.data.changes as Change[]) ?? []).filter((c) => c.kind === "yours" && c.fields?.length);
+          const marks = yours.flatMap((c) => (Object.keys(API_FIELDS) as (keyof F)[]).filter((k) => !takesTheirs(String(k)) && API_FIELDS[k].some((a) => c.fields!.includes(a))).map((k) => [k, c.at || (typeof err.data.now === "string" ? err.data.now : new Date().toISOString())] as const));
+          if (marks.length) setTheirs((o) => ({ ...o, ...Object.fromEntries(marks) }));
+        }
         // (Batch 16 section 19) The stop box shows each field's Before / What you typed (from the notes); the next press counts from what it showed.
         const byApi: Record<string, NoteItem[]> = {};
         for (const [k, item] of Object.entries(details.current) as [keyof F, NoteItem][]) for (const a of API_FIELDS[k]) byApi[a] = [...(byApi[a] ?? []), item];
@@ -450,7 +509,8 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         if (err instanceof ApiError && err.data.criticalCounts) setCritCounts(countsOf(err.data.criticalCounts));
       }
     } finally {
-      setBusy(false);
+      // (Batch 34 §9) Leaving after a Save: the button stays "Saving…" until the test page shows (a Back return frees it).
+      if (!leaving.current) setBusy(false);
     }
   }
 

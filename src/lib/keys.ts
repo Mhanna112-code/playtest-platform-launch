@@ -34,6 +34,8 @@ export function keyNeedLine(openSpots: number, freeKeys: number, keyless = 0) {
   const who = openSpots > 0 ? `${plural(keyless, "working tester")} and ${plural(openSpots, "open spot")}` : plural(keyless, "working tester");
   return `${add}: ${who} need${keyless + openSpots === 1 ? "s" : ""} ${need}, you have ${freeKeys}.`;
 }
+/** (Batch 34 §12) The tester's key box on their session page: the "gave you an access key" line's "See it" jumps to it. */
+export const KEY_BOX_ID = "access-key";
 /** (Batch 30 §17) The tester's top-box and bell line when the developer's Save gave them a key (the key itself is only on their page). */
 export const keyGivenToYouLine = (dev: string, title: string) => `${dev} gave you an access key for “${title}”`;
 /** (Batch 30 §17) The event a Save's key leaves (third person: the admin timeline reads it as it is). */

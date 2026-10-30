@@ -152,15 +152,23 @@ async function closedInvite(testerId: string, body: Record<string, unknown>) {
   throw new HttpError(409, "invite_closed", await inviteClosedLine(inv.testId));
 }
 
-/** Accept on an invite a listing change replaced: refused under the button, with the new invite right there. */
+/** (Batch 34 §10) The refusal for a press on an invite a listing change replaced, when the tester has the new one: one sentence, never a dangling colon. */
+export const newInviteLine = (dev: string, at: string) => `${dev} changed the listing at ${at} and sent you a new invite on it. Press Join to join on it.`;
+
+/**
+ * Accept on an invite a listing change replaced. (Batch 34 §10, owner's finding) The join page's "changed since you opened this page" stop runs FIRST (Join), so a
+ * press stops once with the full list; a press that already saw it (the second, confirmed press) joins on the tester's CURRENT invite without a reload. Otherwise
+ * it's refused under the button with the new invite right there (its id and `now`: the page switches to it, and the next press goes ahead).
+ */
 async function replacedInvite(testerId: string, testId: string, body: Record<string, unknown>) {
   if (typeof body.inviteId !== "string" || !body.inviteId) return;
   const inv = await db.invite.findUnique({ where: { id: body.inviteId } });
   if (!inv || inv.testerId !== testerId || inv.status !== "replaced") return;
   const fresh = await db.invite.findFirst({ where: { testId, testerId, status: "sent" }, orderBy: { createdAt: "desc" } });
+  if (fresh && body.confirmed === true) return; // joins on the current invite (join() takes the tester's sent invite)
   const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
-  throw new HttpError(409, "invite_replaced", fresh ? `${displayName(dev)} changed the listing at ${fmtTime(inv.updatedAt)} and sent you a new invite:` : `${displayName(dev)} changed the listing at ${fmtTime(inv.updatedAt)}, and this invite closed.`, fresh ? { newInviteId: fresh.id, terms: termsLine(asListing(t), true), listingVersion: t.listingVersion } : {});
+  throw new HttpError(409, "invite_replaced", fresh ? newInviteLine(displayName(dev), fmtTime(inv.updatedAt)) : `${displayName(dev)} changed the listing at ${fmtTime(inv.updatedAt)}, and this invite closed.`, fresh ? { newInviteId: fresh.id, terms: termsLine(asListing(t), true), listingVersion: t.listingVersion, now: new Date().toISOString() } : {});
 }
 
 /**
@@ -185,8 +193,9 @@ export async function join(tester: U, testId: string, body: Record<string, unkno
   const gone = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } });
   if (gone && gone.status !== "working" && body.rejoinAccepted !== true && !(await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } })))
     throw new HttpError(409, "ask", "You left this test, so you ask to rejoin and the developer accepts.");
-  await replacedInvite(tester.id, testId, body);
+  // (Batch 34 §10) The "changed since you opened this page" stop first: the press stops once with every change (the NDA's too, whose tick clears), then the invite.
   await listingGate(tester.id, testId, body, "join");
+  await replacedInvite(tester.id, testId, body);
   if (t.joinMode === "apply" && !(await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } })) && !(await db.application.findFirst({ where: { testId, testerId: tester.id, status: "pending", changedAt: { not: null } } }))) {
     throw new HttpError(409, "apply", "This test takes applications: press Apply to join.");
   }

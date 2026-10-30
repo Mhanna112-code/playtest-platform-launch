@@ -79,7 +79,7 @@ async function rankedTesters(devId: string, testId: string) {
     const grey = inTestSet.has(t.id) ? "Already in this test" : inv ? `Invited ${fmt(inv.createdAt)}` : t.testerSuspendedAt || n >= MAX_ACTIVE_TESTS ? "Can't join this test" : null;
     const worked = workedWith.has(t.id);
     return {
-      t, inv, grey, name: displayName(t), section: worked ? "worked" : "other",
+      t, inv, grey, inTest: inTestSet.has(t.id), name: displayName(t), section: worked ? "worked" : "other",
       meets: !needsGap(test, t.profile), score: scoreOf(t.id), accepted: acceptedBy.get(t.id) ?? 0, matches: matches(t),
       mineAvg: mineOf.get(t.id) ?? null, together: worked ? togetherCount(t.id) : 0, last: lastTogether.get(t.id) ?? 0,
     };
@@ -157,8 +157,10 @@ export async function invitePanel(devId: string, testId: string, filters: Invite
     const a = appOf.get(x.t.id);
     if (a && !x.grey) x.grey = a.kind === "rejoin" ? "Asked to rejoin: answer them in Needs you" : "Applied: answer them in Needs you";
   }
-  const worked = notInvited.filter((x) => x.section === "worked");
-  const suggested = notInvited.filter((x) => x.section === "other" && !x.grey && passes(x)).slice(0, 5);
+  // (Batch 34 §11) People you've worked with and Suggested leave out testers CURRENTLY in this test (a working contract) and testers already invited (they're in
+  // the Invited list with Cancel invite); someone who left the test shows again. The name search below still finds them, greyed with the reason.
+  const worked = notInvited.filter((x) => x.section === "worked" && !x.inTest);
+  const suggested = notInvited.filter((x) => x.section === "other" && !x.inTest && !x.grey && passes(x)).slice(0, 5);
   // (Batch 30 §7) The name search finds everyone who matches, invitable or not (blocked and deleted accounts are never in `lean`): a match who can't be invited shows
   // greyed with why (already invited, already in this test, applied, or "Can't join this test"), after the invitable ones, so "No testers match" means nobody matches.
   const named = q.length >= 1 ? lean.filter((x) => passes(x) && nameMatches(x.name, q)) : [];

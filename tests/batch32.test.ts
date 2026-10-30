@@ -23,6 +23,10 @@ describe("batch 32 §2: Apply twice", () => {
     expect(a.status).toBe("pending");
     expect(await db.notification.count({ where: { userId: dev.user.id } })).toBe(bells);
     expect(await db.testEvent.count({ where: { testId, kind: "applied" } })).toBe(1);
+    // (Batch 34 §10, owner) The join page just redraws to the waiting view: no grey "You already applied…" line under the blue one.
+    const box = fs.readFileSync(path.join(process.cwd(), "src", "app/app/find/[id]/JoinBox.tsx"), "utf8");
+    expect(box).not.toContain("data-already");
+    expect(box).toContain('else if (e instanceof ApiError && e.code === "already_waiting") router.refresh();');
   });
 });
 

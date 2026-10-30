@@ -6,6 +6,7 @@ import { announce, clearShown, setShown, wasShownInBox } from "@/lib/live";
 import { LongList } from "@/components/LongList";
 import { ContractLink } from "@/components/ContractLink";
 import { jumpTo } from "@/lib/markJump";
+import { KEY_BOX_ID } from "@/lib/keys";
 import { pillLabel, pillSide, type PillSide } from "@/lib/livePill";
 import { SEE_IT_EVENT } from "@/components/ListingInfo";
 
@@ -150,6 +151,8 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
                 <ContractLink contract={l.contract} mode={contractLink} />
               </>
             )}
+            {/* (Batch 34 §12) "Nora Lane gave you an access key for “…”": See it jumps to the key box (the page redraws with it at once: the session's poll includes the key). */}
+            {l.kind === "keygiven" && <> · <a href={`#${KEY_BOX_ID}`} data-see-it="key" onClick={(e) => { e.preventDefault(); jumpTo(KEY_BOX_ID); }}>See it</a></>}
             {l.kind === "info" && seeIt && (
               <>
                 {l.timed ? " · " : " "}
