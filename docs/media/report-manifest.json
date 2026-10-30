@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-30T01:36:43.834Z",
+  "generated": "2026-10-30T02:10:54.204Z",
   "sizes": {
     "desktop": "1280x900",
     "phone": "375x812"
@@ -739,13 +739,6 @@
           "kind": "image",
           "desktop": "stopped-dev-page.png",
           "phone": "stopped-dev-page-phone.png"
-        },
-        {
-          "title": "Payments On: a tester's Charge stops Pay once",
-          "explanation": "Pim charged for their recording just before Pay on Sol's answers: “Your Pay on Sol Varga's written answers didn't go through.” Since you opened this page: “Pim Achebe charged $15.00 for their recording”; “Don't stop me for: Payments (going through or failing)”; “Press Pay again to go ahead.”",
-          "kind": "image",
-          "desktop": "alerts-01-on-charge-stop.png",
-          "phone": null
         }
       ]
     },
@@ -1032,6 +1025,13 @@
           "phone": "tester-recordings-phone.png"
         },
         {
+          "title": "Tester Alerts On: Charge stops once",
+          "explanation": "Odile's Pay was declined just before Pim's press (their tests paused): “Your Charge didn't go through.” Since you opened this page: “This test was paused at 8:54 PM.”, “Turn off alerts” and “Press Charge again to go ahead.” (the delayed-pay line itself isn't in this box; the pause is).",
+          "kind": "image",
+          "desktop": "alerts-02-on-stop.png",
+          "phone": null
+        },
+        {
           "title": "Tester Alerts On",
           "explanation": "Top right of the session page: “Alerts: On”, and under it “Stops a press once for: new terms, your key, pay, calls, delayed pay, your dispute, listing changes, other tabs.”",
           "kind": "image",
@@ -1309,6 +1309,20 @@
           "kind": "video",
           "desktop": "plans-ten-tests.webm",
           "phone": "plans-ten-tests-phone.webm"
+        },
+        {
+          "title": "Add a card",
+          "explanation": "Nora's Payments page with no card yet: “No card yet. You're charged only when you press Pay, for exactly the amount you tick.”, the Add a card button and “Card details are entered on Stripe's page and never reach this site.”",
+          "kind": "image",
+          "desktop": "pay-card-01-add.png",
+          "phone": null
+        },
+        {
+          "title": "Add a card on the media server",
+          "explanation": "The press posts the form to the site and comes back to Payments with “We couldn't save the card. Try again.”: the fake Stripe used for these recordings has no Checkout page, so Stripe's own card form can only be shown on the Stripe test-mode server.",
+          "kind": "image",
+          "desktop": "pay-card-02-after.png",
+          "phone": null
         }
       ]
     },
@@ -5991,13 +6005,6 @@
           "phone": null
         },
         {
-          "title": "Once paid: an update is refused",
-          "explanation": "See the picture for the exact line.",
-          "kind": "image",
-          "desktop": "ct-05-paid-refused.png",
-          "phone": null
-        },
-        {
           "title": "Once paid, an update can't be sent",
           "explanation": "Ines's page was opened before Wren paid; Send my updated answers is pressed after the payment.",
           "kind": "video",
@@ -6033,80 +6040,87 @@
           "phone": null
         },
         {
-          "title": "The developer's Needs you",
-          "explanation": "Both rows.",
-          "kind": "image",
-          "desktop": "ct-06-dev-both.png",
-          "phone": null
-        },
-        {
-          "title": "The tester's three parts",
-          "explanation": "See the picture: the written answers (sent on time, Charge open), the listed recording sent after the deadline, and the call that isn't listed.",
-          "kind": "image",
-          "desktop": "ct-07-tester-parts.png",
-          "phone": null
-        },
-        {
-          "title": "The developer's Needs you",
-          "explanation": "See the picture.",
-          "kind": "image",
-          "desktop": "ct-07-dev-needs.png",
-          "phone": null
-        },
-        {
-          "title": "8 days later: the tester",
-          "explanation": "See the picture.",
-          "kind": "image",
-          "desktop": "ct-07-tester-later.png",
-          "phone": null
-        },
-        {
-          "title": "8 days later: the developer",
-          "explanation": "See the picture.",
-          "kind": "image",
-          "desktop": "ct-07-dev-later.png",
-          "phone": null
-        },
-        {
           "title": "Review dates: joined day 1, sent day 3",
-          "explanation": "Ana joined on day 1 (own deadline day 15) and sent on day 3: the date is their deadline, not 7 days after sending (day 10): “If Nora Lane hasn't paid by Oct 31, you can charge or let it go then.”",
+          "explanation": "One 14-day test that opened Oct 16 (day 1). Ana joined on day 1 (own deadline day 15, Oct 30) and sent on day 3 (Oct 18): the date is their deadline, not 7 days after sending (day 10). Ana reads “If Nora Lane hasn't paid by Oct 31, you can charge or let it go then.”: App bug, one day later than the Oct 30 on Nora's Pay box (rd-04).",
           "kind": "image",
           "desktop": "rd-01-ana.png",
           "phone": null
         },
         {
           "title": "Review dates: joined day 10, sent day 12",
-          "explanation": "Ben joined on day 10 (own deadline day 24) and sent on day 12: the date is their own deadline, day 24, whatever the others' deadlines: “If Nora Lane hasn't paid by Nov 9, you can charge or let it go then.”",
+          "explanation": "Ben joined on day 10 (Oct 25; own deadline day 24, Nov 8) and sent on day 12 (Oct 27): the date is their own deadline, whatever the others' deadlines. Ben reads “If Nora Lane hasn't paid by Nov 9, you can charge or let it go then.” (Nora's Pay box says Nov 8, rd-05).",
           "kind": "image",
           "desktop": "rd-02-ben.png",
           "phone": null
         },
         {
           "title": "Review dates: sent 2 days before the deadline",
-          "explanation": "Cam joined on day 2 (own deadline day 16) and sent today, day 14: the date is 7 days after sending (day 21), so the developer still has a full week: “If Nora Lane hasn't paid by Nov 6, you can charge or let it go then.”",
+          "explanation": "Cam joined on day 2 (own deadline day 16, Oct 31) and sent today, day 14 (Oct 29): the date is 7 days after sending (day 21), so Nora still has a full week. Cam reads “If Nora Lane hasn't paid by Nov 6, you can charge or let it go then.” (Nora's Pay box says Nov 5, rd-06).",
           "kind": "image",
           "desktop": "rd-03-cam.png",
           "phone": null
         },
         {
-          "title": "Review dates: the developer's side",
-          "explanation": "Nora's Pay box for Ana: “If you don't pay by Oct 30, Ana Silva can charge you $10.00, their contract price, or let it go.”",
+          "title": "Review dates: the developer's side, Ana",
+          "explanation": "Nora's Pay box for Ana's answers (sent Sun, Oct 18): “If you don't pay by Oct 30, Ana Silva can charge you $10.00, their contract price, or let it go.” (day 15, Ana's own deadline).",
           "kind": "image",
           "desktop": "rd-04-dev-ana.png",
           "phone": null
         },
         {
-          "title": "Review dates: the developer's side",
-          "explanation": "Nora's Pay box for Ben: “If you don't pay by Nov 8, Ben Okafor can charge you $10.00, their contract price, or let it go.”",
+          "title": "Review dates: the developer's side, Ben",
+          "explanation": "Nora's Pay box for Ben's answers (sent Tue, Oct 27): “If you don't pay by Nov 8, Ben Okafor can charge you $10.00, their contract price, or let it go.” (day 24, Ben's own deadline).",
           "kind": "image",
           "desktop": "rd-05-dev-ben.png",
           "phone": null
         },
         {
-          "title": "Review dates: the developer's side",
-          "explanation": "Nora's Pay box for Cam: “If you don't pay by Nov 5, Cam Reyes can charge you $10.00, their contract price, or let it go.”",
+          "title": "Review dates: the developer's side, Cam",
+          "explanation": "Nora's Pay box for Cam's answers (sent today, Thu, Oct 29): “If you don't pay by Nov 5, Cam Reyes can charge you $10.00, their contract price, or let it go.” (day 21, 7 days after sending).",
           "kind": "image",
           "desktop": "rd-06-dev-cam.png",
+          "phone": null
+        },
+        {
+          "title": "The tester's three parts",
+          "explanation": "Ines's page: the written answers (sent Mon, Oct 19, on time) past their review date, with “Wren Castell didn't review your written answers in 7 days: charge $10.00 or let it go.” and Charge / Let it go; the listed recording sent late (“Sent Thu, Oct 29, 3:53 PM”, “Sent late (deadline was Oct 27, 2026)”) with its own date, “If Wren Castell hasn't paid by Nov 5, you can charge or let it go then.”; and an unlisted call (“Not listed”, “waiting for Wren Castell to pay”, no Charge).",
+          "kind": "image",
+          "desktop": "ct-07-tester-parts.png",
+          "phone": null
+        },
+        {
+          "title": "The developer's Needs you",
+          "explanation": "“Ines Duarte · 3 parts to pay”: the written answers (sent Mon, Oct 19) with Pay at $10.00 and no pay-by line (Charge is already open); the unlisted call with an empty box (“up to $96.67 ($200/h × 29 min)”, any amount, $0 included); and the recording marked “Sent late (deadline was Oct 27, 2026)” with “If you don't pay by Nov 5, Ines Duarte can charge you $15.00, their contract price, or let it go.”",
+          "kind": "image",
+          "desktop": "ct-07-dev-needs.png",
+          "phone": null
+        },
+        {
+          "title": "8 days later: the tester",
+          "explanation": "The same three parts 8 days on (dates moved back): the written answers and now the late recording (“Sent late (deadline was Oct 19, 2026)”) both read “Wren Castell didn't review your … in 7 days: charge … or let it go.” with Charge / Let it go; the unlisted call still “waiting for Wren Castell to pay”, never a Charge.",
+          "kind": "image",
+          "desktop": "ct-07-tester-later.png",
+          "phone": null
+        },
+        {
+          "title": "8 days later: the developer",
+          "explanation": "Wren's Needs you still offers Pay on all three parts: the written answers ($10.00), the late recording ($15.00, “Sent late (deadline was Oct 19, 2026)”) and the unlisted call (empty box, “up to $96.67”); none has a pay-by line any more, since Charge is open for both listed parts.",
+          "kind": "image",
+          "desktop": "ct-07-dev-later.png",
+          "phone": null
+        },
+        {
+          "title": "The developer's Needs you",
+          "explanation": "Ben's answers (sent Thu, Oct 15; Ben's own deadline has passed, so Charge is open: no pay-by line) and Cleo's (sent Sat, Oct 24; Cleo joined later) with “If you don't pay by Nov 6, Cleo Brandt can charge you $10.00, their contract price, or let it go.”",
+          "kind": "image",
+          "desktop": "ct-06-dev-both.png",
+          "phone": null
+        },
+        {
+          "title": "Once paid: the update press",
+          "explanation": "Ines's written form with an extra sentence typed after the answers were paid, caught while the press says “Sending…” (the part still reads “Not sent yet” on this old page); the refusal line itself isn't in this picture, see “Once paid, an update can't be sent”.",
+          "kind": "image",
+          "desktop": "ct-05-paid-refused.png",
           "phone": null
         }
       ]
@@ -6854,6 +6868,20 @@
           "phone": null
         },
         {
+          "title": "§10 Their terms",
+          "explanation": "Quinn's Call requests: Tavi Ross switched to the new $24/h listing (“Contract $24/h”); Uma Pell kept their terms, so their row reads “Their terms: $30/h (the listing is now $24/h)”.",
+          "kind": "image",
+          "desktop": "b26-10-01-their-terms.png",
+          "phone": null
+        },
+        {
+          "title": "§10 Closed live",
+          "explanation": "Tavi Ross rated Quinn (finished their part) while the page was open: their request row turns into “Closed: the tester finished their part” and its Withdraw goes, without a reload.",
+          "kind": "image",
+          "desktop": "b26-10-02-closed-live.png",
+          "phone": null
+        },
+        {
           "title": "§13 Apply anyway",
           "explanation": "Tavi presses Apply to join on an iPhone test: the pop-up “A device this test runs on” reads “Your profile doesn't list a device this test needs (iPhone). Apply anyway?” with Apply anyway, Edit my profile and Cancel.",
           "kind": "image",
@@ -6993,6 +7021,69 @@
       "explanation": "Batch 27 (docs/BATCH-27.md): an open new-terms offer blocks Send and calls until Switch or Keep, “Go to the next round” stops once, the update pill with its arrow, admin Tests rows following the pause live, and calls 1 minute ahead locally.",
       "cases": [
         {
+          "title": "§1 The press goes to Switch / Keep",
+          "explanation": "Tavi presses Send my answers while Quinn's new terms are open: nothing is sent; the page moves up to the box, highlighted: “Quinn Harlow updated the listing: written $10 → $12.” with Switch to the new terms and Keep my current terms.",
+          "kind": "image",
+          "desktop": "b27-01-01-moved-up.png",
+          "phone": null
+        },
+        {
+          "title": "§1 Keep unlocks Send",
+          "explanation": "After Keep my current terms the box is gone and Send my answers goes through: “Written answers: Under review · Sent Thu, Oct 29, 8:48 PM” with “If Quinn Harlow hasn't paid by Nov 12, you can charge or let it go then.”; the form now offers Send my updated answers.",
+          "kind": "image",
+          "desktop": "b27-01-04-kept-sent.png",
+          "phone": null
+        },
+        {
+          "title": "§1 An old page",
+          "explanation": "Uma's page was opened before the offer and showed no box; their Send my answers is refused by the server and the page loads the offer at the top: “Quinn Harlow updated the listing: written $10 → $12.”, with Switch / Keep.",
+          "kind": "image",
+          "desktop": "b27-01-06-old-page-top.png",
+          "phone": null
+        },
+        {
+          "title": "§1 Dispute isn't blocked",
+          "explanation": "Wren has the same open offer at the top and disputes their $0 answers (“Paid $0: “The answers are too short to use.””): it goes through, “You disputed this: waiting for the team.”",
+          "kind": "image",
+          "desktop": "b27-01-08-dispute-not-blocked.png",
+          "phone": null
+        },
+        {
+          "title": "§1 The line under the button",
+          "explanation": "Under Send my answers: “Answer the new terms first: Switch or Keep.”",
+          "kind": "image",
+          "desktop": "b27-01-02-line-under-send.png",
+          "phone": null
+        },
+        {
+          "title": "§1 Calls too",
+          "explanation": "Request a time is refused the same way: “Answer the new terms first: Switch or Keep.” under it, and the page goes up to the box; no request is made.",
+          "kind": "image",
+          "desktop": "b27-01-03-request-blocked.png",
+          "phone": null
+        },
+        {
+          "title": "§1 The server's line",
+          "explanation": "Under Uma's Send my answers: “Answer the new terms first: Switch or Keep.” (nothing was sent).",
+          "kind": "image",
+          "desktop": "b27-01-07-old-page-line.png",
+          "phone": null
+        },
+        {
+          "title": "§2 Go to the next round stops once",
+          "explanation": "Tavi sent updated answers after Quinn's page loaded: “Your Go to the next round didn't go through.” Since you opened this page: “Tavi Ross updated their written answers · 8:49 PM”, “Don't stop me for: Work sent” and “Press Go to the next round again to go ahead.”",
+          "kind": "image",
+          "desktop": "b27-02-01-stopped.png",
+          "phone": null
+        },
+        {
+          "title": "§2 The second press opens the draft",
+          "explanation": "Post a test: “A draft: Lantern Bay: kelp maze (round 2). Check the details, then press Post the test to open it for testers.”",
+          "kind": "image",
+          "desktop": "b27-02-02-draft.png",
+          "phone": null
+        },
+        {
           "title": "§4 The pill, pointing up",
           "explanation": "Quinn's test page is scrolled down when Tavi Ross sends their answers: the page stays where it is and the pill “1 new update ↑” shows at the bottom (the updates are above).",
           "kind": "image",
@@ -7046,6 +7137,34 @@
           "explanation": "At the top of Edit: Wren Adair joins and the pill “1 new update ↓” shows; Tavi Ross's updated answers count it up to 2; nothing scrolls by itself; pressing it scrolls down to the updates under Save.",
           "kind": "video",
           "desktop": "b27-04-08-edit-video.webm",
+          "phone": null
+        },
+        {
+          "title": "§5 Two admins, one paused test",
+          "explanation": "The second admin's console (the plain Tests list): “Lantern Bay: harbor lights” · paused by the first admin (these throwaway admins show by their email), with Lift the pause.",
+          "kind": "image",
+          "desktop": "b27-05-01-before.png",
+          "phone": null
+        },
+        {
+          "title": "§5 The row follows",
+          "explanation": "The first admin lifted the pause on their own console: this row turns into Pause live with no reload, reading “open · paused by …, lifted by … at Thu, Oct 29, 8:49 PM”.",
+          "kind": "image",
+          "desktop": "b27-05-02-after.png",
+          "phone": null
+        },
+        {
+          "title": "§5 A searched list",
+          "explanation": "The Tests list searched for “deep trench”: “Lantern Bay: deep trench” · paused by …, with Lift the pause.",
+          "kind": "image",
+          "desktop": "b27-05-03-searched-before.png",
+          "phone": null
+        },
+        {
+          "title": "§5 The searched row follows too",
+          "explanation": "That pause is lifted on the other console: the searched row turns into Pause live, “open · paused by …, lifted by … at Thu, Oct 29, 8:49 PM”.",
+          "kind": "image",
+          "desktop": "b27-05-04-searched-after.png",
           "phone": null
         },
         {
@@ -7111,31 +7230,73 @@
           "phone": null
         },
         {
-          "title": "§8 Pay what you owe, reserved",
-          "explanation": "During a chargeback hold the developer's Pay what you owe reserved the money: “Reserved $27.00: it's taken when the team approves lifting your hold.”",
+          "title": "§8 Charged right after the lift",
+          "explanation": "After the team's Approve went through, Vera's bell has the added amount's own receipt: “Receipt: you paid $10.00 for Jun Abara's written answers (charged by them after 7 days)”.",
+          "kind": "image",
+          "desktop": "b28-08-04-receipt.png",
+          "phone": null
+        },
+        {
+          "title": "§8 The tester is paid",
+          "explanation": "Jun's bell: “Vera Holt paid $10.00 for your written answers” and ““Harbor Run: first 3 levels” is running again”; nothing about the developer's hold or chargeback.",
+          "kind": "image",
+          "desktop": "b28-08-05-tester-paid.png",
+          "phone": null
+        },
+        {
+          "title": "§8 Reserved",
+          "explanation": "During the chargeback hold Vera verified a card and pressed Pay what you owe: “Reserved $27.00: it's taken when the team approves lifting your hold.”",
           "kind": "image",
           "desktop": "b28-08-01-reserved.png",
           "phone": null
         },
         {
-          "title": "§8 A Charge after the reservation",
-          "explanation": "Jun charged for their written answers after the reservation: the dashboard box reads “Reserved $27.00: it's taken when the team approves lifting your hold. $10.00 added since will be charged right after.”, lists “Jun Abara's written answers $10.00 · charged by the tester while your tests were paused” and offers “Pay what you owe ($10.00)”.",
+          "title": "§8 Added since, charged after",
+          "explanation": "Jun charged for their answers after the reservation: Payments says “Reserved $27.00: it's taken when the team approves lifting your hold. $10.00 added since will be charged right after.” and Pay what you owe is disabled.",
           "kind": "image",
           "desktop": "b28-08-02-added-since.png",
           "phone": null
         },
         {
-          "title": "§8 The admin's row: Approve still works",
-          "explanation": "The hold row reads “Chargeback hold: card verified ✓, owed reserved ✓ ($27.00 reserved · $10.00 added since (charged after the hold lifts))”, with Approve and “Don't approve: release the reservation”; the added $10 doesn't block Approve.",
+          "title": "§8 The team's row",
+          "explanation": "Vera's chargeback row before Approve: “Chargeback hold: card verified ✓, owed reserved ✓ ($27.00 reserved · $10.00 added since (charged after the hold lifts))” with Approve.",
           "kind": "image",
           "desktop": "b28-08-03-admin-row.png",
           "phone": null
         },
         {
           "title": "§15 A listed part paid above its listing can be disputed",
-          "explanation": "See the picture.",
+          "explanation": "Ben's answers ($10.00 listing) were paid $20.00: Dispute the pay opens with “Why should the pay be higher? (the team and the developer read it)” and “You can dispute this once. Our team decides; a decision can only raise the pay, up to $980.00 more.”",
           "kind": "image",
           "desktop": "b28-15-tester-dispute.png",
+          "phone": null
+        },
+        {
+          "title": "§15 The admin's form, with the chat fold",
+          "explanation": "“Listing $10.00 · Paid for this piece $20.00”, the open fold “Their chat on this test (2)” (Ben: “… Could we say $60 for the lot?”, Wren: “Yes, $60 in all for the full map notes is fair.”), “$20.00 paid · can raise up to $980.00 more” and “Total pay for this piece $ … $20.00-$1000.00”.",
+          "kind": "image",
+          "desktop": "b28-15-admin-row.png",
+          "phone": null
+        },
+        {
+          "title": "§15 Decided up to the cap",
+          "explanation": "“Paid for this piece $60.00” and “Decided Thu, Oct 29, 8:58 PM by …: $60.00 in all · “They agreed $60 in all in the chat.””.",
+          "kind": "image",
+          "desktop": "b28-15-admin-decided.png",
+          "phone": null
+        },
+        {
+          "title": "§15 The tester after the decision",
+          "explanation": "“Paid so far $60.00”, “The team decided: $60.00 in all · “They agreed $60 in all in the chat.”.” (a stray full stop after the quote) and “The developer's side: “I meant $60 if the notes came with screenshots.””.",
+          "kind": "image",
+          "desktop": "b28-15-tester-decided.png",
+          "phone": null
+        },
+        {
+          "title": "§15 At the cap: Dispute disabled",
+          "explanation": "Cleo's written answers were paid $1,000.00: “This part is already paid the most it can be ($1,000.00).” and Dispute the pay is disabled with “Already paid the most this piece can be paid, so there's nothing to dispute.”",
+          "kind": "image",
+          "desktop": "b28-15-at-cap.png",
           "phone": null
         },
         {
@@ -7160,7 +7321,7 @@
       "cases": [
         {
           "title": "§11 On a stopped test, Charge still stops once",
-          "explanation": "Nia's page was opened before Yara stopped the test: the first Charge stops once: “Your Charge didn't go through.” Since you opened this page: “Yara Quint stopped this test at 8:32 PM.”, with “Turn off alerts” and “Press Charge again to go ahead.”",
+          "explanation": "Nia's page was opened before Yara stopped the test: the first Charge stops once: “Your Charge didn't go through.” Since you opened this page: “Yara Quint stopped this test at 9:06 PM.”, with “Turn off alerts” and “Press Charge again to go ahead.”",
           "kind": "image",
           "desktop": "b29-11-01-charge-stops-for-stop.png",
           "phone": null
@@ -7181,28 +7342,28 @@
         },
         {
           "title": "§12 Your own Pay in another tab stops Pay once",
-          "explanation": "Zed's answers were paid in another tab a moment before: “Your Pay on Zed Okoro's written answers didn't go through. Since you opened this page: You paid Zed Okoro $10.00 for the written answers in another tab · 8:19 PM Press Pay again to go ahead.”",
+          "explanation": "Zed's answers were paid in another tab a moment before: “Your Pay on Zed Okoro's written answers didn't go through.” Since you opened this page: “You paid Zed Okoro $10.00 for the written answers in another tab · 9:05 PM” and “Press Pay again to go ahead.”",
           "kind": "image",
           "desktop": "b29-12-01-pay-stops.png",
           "phone": null
         },
         {
           "title": "§12 Edit's Save stops once for your own Pay in another tab",
-          "explanation": "“Your Save didn't go through. Since you opened this page: You paid Pim Achebe $10.00 for the written answers in another tab · 8:33 PM Press Save again to save.”",
+          "explanation": "“Your Save didn't go through. Since you opened this page: You paid Pim Achebe $10.00 for the written answers in another tab · 8:44 PM Press Save again to save.”",
           "kind": "image",
           "desktop": "b29-12-02-edit-save-stops.png",
           "phone": null
         },
         {
           "title": "§12 Request a time stops once for your own Edit save",
-          "explanation": "Spots were saved on Edit in another tab a moment before: “Your Request a time didn't go through. Since you opened this page: You saved the listing in another tab: spots · 8:34 PM Press Request a time again to go ahead.”",
+          "explanation": "Spots were saved on Edit in another tab a moment before: “Your Request a time didn't go through. Since you opened this page: You saved the listing in another tab: spots · 8:44 PM Press Request a time again to go ahead.”",
           "kind": "image",
           "desktop": "b29-12-03-request-stops.png",
           "phone": null
         },
         {
           "title": "§13 The tester's own call request in another tab stops Charge once",
-          "explanation": "“Your Charge didn't go through. Since you opened this page: You requested a call for Mon, Nov 2, 3:00 PM in another tab · 8:35 PM You can turn these stops off below, or with Alerts at the top of your test's page. New terms from the developer and a key marked as working still stop. Turn off alerts Press Charge again to go ahead.”",
+          "explanation": "“Your Charge didn't go through. Since you opened this page: You requested a call for Mon, Nov 2, 3:00 PM in another tab · 8:45 PM You can turn these stops off below, or with Alerts at the top of your test's page. New terms from the developer and a key marked as working still stop. Turn off alerts Press Charge again to go ahead.”",
           "kind": "image",
           "desktop": "b29-13-01-charge-stops.png",
           "phone": null
@@ -7216,14 +7377,14 @@
         },
         {
           "title": "§13 The join page: Apply stops once",
-          "explanation": "Kit applied in another tab a moment before: “Your Apply didn't go through. Since you opened this page: You applied to join in another tab · 8:35 PM You can turn these stops off below, or with Alerts at the top of your test's page. New terms from the developer and a key marked as working still stop. Turn off alerts Press again to apply on the current listing.”",
+          "explanation": "Kit applied in another tab a moment before: “Your Apply didn't go through. Since you opened this page: You applied to join in another tab · 8:46 PM You can turn these stops off below, or with Alerts at the top of your test's page. New terms from the developer and a key marked as working still stop. Turn off alerts Press again to apply on the current listing.”",
           "kind": "image",
           "desktop": "b29-13-03-apply-stops.png",
           "phone": null
         },
         {
-          "title": "§13 The second press",
-          "explanation": "“A note to the developer Apply to join 4 spots left · the developer accepts Your Apply didn't go through. Since you opened this page: You applied to join in another tab · 8:35 PM You can turn these sto”",
+          "title": "§13 The second press goes ahead",
+          "explanation": "Pressed again: “Application sent. You'll hear back when the developer answers.” (the stop box stays above it; the database still holds one application, the one from the other tab).",
           "kind": "image",
           "desktop": "b29-13-04-apply-second.png",
           "phone": null
@@ -7293,7 +7454,7 @@
         },
         {
           "title": "§36 Withdraw on a closed request (the line says “Answer”)",
-          "explanation": "Zed's request was declined by Yara a moment before; Withdraw is refused, the request leaves the list (“No call requests waiting.”) and “Your Answer didn't go through: Yara Quint declined this request at 8:32 PM.” stays where Withdraw was. App bug: the kept line names the press “Answer” instead of “Withdraw”.",
+          "explanation": "Zed's request was declined by Yara a moment before; Withdraw is refused, the request leaves the list (“No call requests waiting.”) and “Your Answer didn't go through: Yara Quint declined this request at 9:05 PM.” stays where Withdraw was. App bug: the kept line names the press “Answer” instead of “Withdraw”.",
           "kind": "image",
           "desktop": "b29-36-03-withdraw-refused.png",
           "phone": null
