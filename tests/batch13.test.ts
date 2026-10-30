@@ -259,7 +259,7 @@ describe("batch 13 section 8: whole sets of questions and answers", () => {
     const kept = await db.keptForm.findUniqueOrThrow({ where: { userId_key: { userId: j.tester.user.id, key: `written:${j.sessionId}` } } });
     expect((kept.data as { answers: string[] }).answers).toEqual(["My Q1 draft", "", ""]);
     expect(carryOver(prev[0].items, ["Q1?", "Q2 changed?", "Q3?"])).toEqual(["My Q1 draft", "", ""]);
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("<PrevSetFolds sets={prevSets} sentPart={!!written} />");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("<PrevSetFolds sets={prevSets} sentPart={!!written} attachments=");
     expect(src("components/AnswerSets.tsx")).toContain("Previous questions and answers (until {fmtDate(new Date(s.until))})");
   });
 

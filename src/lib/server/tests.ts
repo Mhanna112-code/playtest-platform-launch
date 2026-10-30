@@ -16,7 +16,7 @@ import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { T, safeZone } from "@/lib/tz";
 import { LISTING_INFO_FIELDS, LISTING_VALUES, valuesText } from "@/lib/listingInfo";
 import {
-  andList, testClosedToNewLine, daysBetween, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, WRITTEN_MAX_CHARS, checkWrittenLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
+  andList, testClosedToNewLine, daysBetween, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, checkWrittenLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { gapsOf, gapsUnseen, missingNeedText, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError, readText } from "./http";
@@ -930,14 +930,15 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   // (Batch 27 section 1) An open new-terms offer blocks Send until it's answered (Switch or Keep): nothing is checked or sent before.
   await answerTermsFirst(contractId);
   const qs = writtenQuestions(c0);
-  const sentAnswers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim().slice(0, WRITTEN_MAX_CHARS + 1) : "")) : [];
+  if ((await db.recording.count({ where: { contractId, part: "written", uploadedAt: null, createdAt: { gt: new Date(Date.now() - 3 * 3_600_000) } } })) || JSON.stringify([body.answers, body.notes]).includes("[Uploading ")) throw new HttpError(409, "uploading", "Wait for the upload to finish before sending.");
+  const sentAnswers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim() : "")) : [];
   // (Batch 20 section 28) One answer per question of the contract, by position (a missing one is blank). (Batch 26 section 14) At least one question answered, plus
   // every Required one (the notes box alone doesn't count). The refusal names which question (`missing`), so the page marks it red there.
   const answers = qs.map((_, i) => sentAnswers[i] ?? "");
   // (Batch 30 §14) Each answer given is at least 50 characters (answerMin): "Each answer needs at least 50 characters." with which question (and how long it is).
   const missing = answersMissing(qs, answers, answerMin());
   if (missing) throw new HttpError(400, "bad_answers", missing.message, { missing: missing.at, ...(missing.chars != null ? { chars: missing.chars } : {}) });
-  const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, WRITTEN_MAX_CHARS + 1) : "";
+  const notes = typeof body.notes === "string" ? body.notes.trim() : "";
   // (Owner, Oct 29, batch 11) At most 10,000 characters for the whole written part (all its answers and notes together).
   const long = checkWrittenLength([...answers, notes]);
   if (!long.ok) throw new HttpError(400, "too_long", long.message);

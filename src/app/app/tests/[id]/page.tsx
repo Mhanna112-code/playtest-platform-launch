@@ -45,7 +45,6 @@ import { BankWaiting } from "@/components/BankWaiting";
 import { bankWaitingOnTest } from "@/lib/server/confirm";
 import { ContractChanges, type ChangeEntry } from "./ContractChanges";
 import { AnswersBox } from "@/components/AnswersBox";
-import { Formatted } from "@/components/Formatted";
 import { AttachmentList } from "@/components/AttachmentList";
 import { pieceOf, pieceRoom } from "@/lib/server/payments";
 import { TopPanel } from "./TopPanel";
@@ -61,7 +60,7 @@ import { testerStats } from "@/lib/server/profileStats";
 import { ByQuestion } from "./ByQuestion";
 import { pastCallsBox } from "@/components/QuestionBox";
 import { byQuestion } from "@/lib/byQuestion";
-import { PrevSetFolds, SetView } from "@/components/AnswerSets";
+import { AnswerWithAttachments, PrevSetFolds, SetView } from "@/components/AnswerSets";
 import { itemsOf, prevSetsOf } from "@/lib/answerSets";
 import { qStored } from "@/lib/questions";
 import { pendingForDeveloper } from "@/lib/server/excerpts";
@@ -450,8 +449,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   <AnswersBox>
                     {/* (Batch 13 section 8) What was last sent, under the questions it answered; an earlier set says so (reviewed and paid at the price it was sent at). */}
                     {x.s!.kind === "written" && x.s!.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(x.s!.setUntil)}</p>}
-                    {x.s!.kind === "written" && <SetView items={itemsOf(x.s!.answers, writtenQuestions(x.c))} />}
-                    {x.s!.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><Formatted text={x.s!.notes} /></div>}
+                    {x.s!.kind === "written" && <SetView items={itemsOf(x.s!.answers, writtenQuestions(x.c))} attachments={x.s!.recordings.filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />}
+                    {x.s!.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><AnswerWithAttachments text={x.s!.notes} attachments={x.s!.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} /></div>}
                     <AttachmentList items={x.s!.recordings.filter((r) => r.uploadedAt)} />
                   </AnswersBox>
                   <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.s!.id)?.box}
@@ -483,8 +482,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <p className="text-sm font-medium"><a href={`/app/testers/${c.testerId}`}>{displayName(c.tester)}</a> · {x.kind === "written" ? "Written answers" : "Recording"} · updated {fmtDateTime(x.paidUpdateAt!)}</p>
               <p className="text-sm text-slate-200" data-update-line="">{updateRowLine(displayName(c.tester), rooms.get(x.id)!.paid, rooms.get(x.id)!.room)}</p>
               <AnswersBox>
-                {x.kind === "written" && <SetView items={itemsOf(x.answers, writtenQuestions(c))} />}
-                {x.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><Formatted text={x.notes} /></div>}
+                {x.kind === "written" && <SetView items={itemsOf(x.answers, writtenQuestions(c))} attachments={x.recordings.filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />}
+                {x.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><AnswerWithAttachments text={x.notes} attachments={x.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} /></div>}
                 <AttachmentList items={x.recordings.filter((r) => r.uploadedAt)} />
               </AnswersBox>
               <PayBox more={{ testId: t.id, contractId: c.id }} update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
@@ -636,7 +635,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   </ul>
                 )}
                 {/* (Batch 13 section 8) Earlier SENT sets this tester replaced after switching to changed questions. */}
-                <PrevSetFolds developer sets={prevSetsOf(c.submissions.find((s) => s.kind === "written")?.prevSets)} />
+                <PrevSetFolds developer attachments={c.submissions.flatMap((s) => s.recordings).filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} sets={prevSetsOf(c.submissions.find((s) => s.kind === "written")?.prevSets)} />
                 {/* (Batch 13) Excerpts shown from this test. (Batch 29 section 30) Only the tester removes one (Remove on their profile): no Take down here. */}
                 {shownEx.filter((e) => e.contractId === c.id).map((e) => (
                   <div key={e.id} className="flex flex-wrap items-start gap-2 text-sm" data-shown-excerpt="">
@@ -712,6 +711,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   // (Batch 13 section 8) Grouped by the exact text of the question each answer was sent for.
                   ...((items) => ({ questions: items.map((i) => qStored(i.question, i.required)), answers: items.map((i) => i.answer) }))(itemsOf(s.answers, writtenQuestions(c))),
                   contractId: c.id, tester: displayName(c.tester), notes: s.notes, sentAt: s.updatedAt,
+                  attachments: s.recordings.filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType })),
                   status: (!s.review ? "waiting" : s.review.rejected && !(s.dispute?.decidedCents) ? "rejected" : "paid") as "paid" | "rejected" | "waiting",
                   paidCents: Math.max(s.review?.amountCents ?? 0, s.dispute?.decidedCents ?? 0),
                 })),

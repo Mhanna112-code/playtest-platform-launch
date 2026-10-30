@@ -4,10 +4,11 @@ import {
   CALL_KINDS, contractSnapshot, devStopOnce, editCheck, endedLine, testerRefusal, joinCheck, mergeEdit, splitFee, stopOnce, stopOnceChanges, termsLine, type Listing,
 } from "@/lib/rules";
 
+const listingOpenUntil = new Date(Date.now() + 12 * 86_400_000).toISOString();
 const listing = (over: Partial<Listing> = {}): Listing => ({
   productName: "Harbor Run", mature: false, matureWhy: "", ndaText: "", title: "Harbor Run", description: "A boat game", buildUrl: "https://example.com/build", categories: ["Game"],
   devices: ["Windows PC"], languages: ["English"], spots: 5, writtenCents: 1000, recordingCents: 1500,
-  liveRateCents: 3000, liveMinutes: 30, deadlineDays: 7, questions: ["What did you like?"], openUntil: new Date(Date.now() + 12 * 86_400_000).toISOString(), joinMode: "anyone", ...over,
+  liveRateCents: 3000, liveMinutes: 30, deadlineDays: 7, questions: ["What did you like?"], openUntil: listingOpenUntil, joinMode: "anyone", ...over,
 });
 const at = (min: number) => new Date(Date.UTC(2026, 10, 5, 15, min));
 const ev = (kind: string, min: number, text = kind, version?: number) => ({ kind, text, createdAt: at(min), version });
@@ -122,7 +123,7 @@ describe("listing checks", () => {
   });
   it("Open until must be in the future", () => {
     expect(checkListing(listing({ openUntil: "2020-01-01" }))).toContain("Open until must be a date in the future.");
-    expect(checkListing(listing({ openUntil: new Date(Date.now() + 12 * 86_400_000).toISOString() }))).toEqual([]);
+    expect(checkListing(listing({ openUntil: listingOpenUntil }))).toEqual([]);
   });
   it("(batch 12 section 6) Open until is required, 3 to 30 days ahead on Post; within 30 days on Edit", () => {
     const now = new Date("2026-11-01T12:00:00Z");

@@ -12,7 +12,7 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2,
  * timer and Stop, then a preview, then uploads through the recording upload (500 MB, 5 per session). `part`: the Recording part, or attached to the written part.
  * Modelled on the full app's recording-uploader.
  */
-export function ScreenRecorder({ sessionId, part, label = "Record" }: { sessionId: string; part: "recording" | "written"; label?: string }) {
+export function ScreenRecorder({ sessionId, part, label = "Record", onUploaded, onUploadProgress, onUploadError, onStart, onCancel, disabled = false }: { sessionId: string; part: "recording" | "written"; label?: string; onUploaded?: (id: string, filename: string, file: Blob) => void; onUploadProgress?: (filename: string, pct: number) => void; onUploadError?: () => void; onStart?: () => void; onCancel?: () => void; disabled?: boolean }) {
   const [phase, setPhase] = useState<Phase>({ name: "idle" });
   const [can, setCan] = useState(false);
   const [withMic, setWithMic] = useState(true);
@@ -28,11 +28,13 @@ export function ScreenRecorder({ sessionId, part, label = "Record" }: { sessionI
   useEffect(() => () => stop(), []);
 
   async function start() {
+    onStart?.();
     setErr("");
     let screen: MediaStream;
     try {
       screen = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true });
     } catch {
+      onCancel?.();
       return setErr("Screen sharing was cancelled or blocked by the browser.");
     }
     let mic: MediaStream | null = null;
@@ -72,9 +74,13 @@ export function ScreenRecorder({ sessionId, part, label = "Record" }: { sessionI
     setErr("");
     setPhase({ name: "uploading", pct: 0 });
     try {
-      await uploadToSession(sessionId, blob, `recording-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.webm`, part, (pct) => setPhase({ name: "uploading", pct }));
-      window.location.reload();
+      const filename = `recording-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.webm`;
+      onUploadProgress?.(filename, 0);
+      const id = await uploadToSession(sessionId, blob, filename, part, (pct) => { setPhase({ name: "uploading", pct }); onUploadProgress?.(filename, pct); });
+      if (onUploaded) onUploaded(id, filename, blob); else window.location.reload();
+      setPhase({ name: "idle" });
     } catch (e) {
+      onUploadError?.();
       setErr((e as Error).message);
       setPhase({ name: "review", blob, url: URL.createObjectURL(blob) });
     }
@@ -86,7 +92,7 @@ export function ScreenRecorder({ sessionId, part, label = "Record" }: { sessionI
     <div className="space-y-2 text-sm" data-recorder={part}>
       {phase.name === "idle" && (
         <div className="flex flex-wrap items-center gap-3">
-          <button type="button" className="btn-secondary" onClick={start}>{label}</button>
+          <button type="button" className="btn-secondary" disabled={disabled} onClick={start}>{label}</button>
           <label className="flex items-center gap-1.5 text-xs text-slate-400"><input type="checkbox" checked={withMic} onChange={(e) => setWithMic(e.target.checked)} /> With my microphone</label>
         </div>
       )}
@@ -100,8 +106,8 @@ export function ScreenRecorder({ sessionId, part, label = "Record" }: { sessionI
         <div className="space-y-2">
           <video src={phase.url} controls className="max-h-72 w-full rounded bg-black" />
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn" onClick={() => upload(phase.blob)}>Upload this recording</button>
-            <button type="button" className="btn-ghost" onClick={() => setPhase({ name: "idle" })}>Discard</button>
+            <button type="button" className="btn" disabled={disabled} onClick={() => upload(phase.blob)}>Upload this recording</button>
+            <button type="button" className="btn-ghost" onClick={() => { onCancel?.(); setPhase({ name: "idle" }); }}>Discard</button>
           </div>
         </div>
       )}

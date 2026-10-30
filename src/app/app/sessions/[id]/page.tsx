@@ -48,14 +48,13 @@ import { TEAM_CLOSED_NO_DISPUTE, pieceDay, canSendAgain, lateBeforeSendLine, lat
 import { keyOf } from "@/lib/server/accessKeys";
 import { KeyBox } from "./KeyBox";
 import { WrittenAttachments } from "./WrittenAttachments";
-import { Formatted } from "@/components/Formatted";
 import { AttachmentList } from "@/components/AttachmentList";
 import { PageLoaded } from "@/components/PageLoaded";
 import { NdaBox } from "@/components/NdaBox";
 import { QuestionList } from "@/components/QuestionList";
 import { pastCallsBox } from "@/components/QuestionBox";
 import { ScrollText } from "@/components/ScrollText";
-import { PrevSetFolds, SetView } from "@/components/AnswerSets";
+import { AnswerWithAttachments, PrevSetFolds, SetView } from "@/components/AnswerSets";
 import { carryOver, itemsFor, itemsOf, prevSetsOf, sameQuestions } from "@/lib/answerSets";
 import { ExcerptPicker } from "@/components/Excerpts";
 import { excerptChoices } from "@/lib/server/excerpts";
@@ -598,8 +597,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         {written && ((written.review && !canSendAgain(written)) || refusal || meOff) ? (
           <div className="space-y-2" data-sent-answers="">
             {written.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(written.setUntil)}</p>}
-            <SetView items={sentItems} />
-            {written.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><Formatted text={written.notes} /></div>}
+            <SetView items={sentItems} attachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && r.submissionId === written.id).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
+            {written.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><AnswerWithAttachments text={written.notes} attachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} /></div>}
             <AttachmentList items={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && r.submissionId === written.id)} />
           </div>
         ) : refusal || meOff || !draftsShown ? (
@@ -608,13 +607,13 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           <>
             {written?.setUntil && <p className="note" data-set-until="">What you sent is for the questions until {fmtDate(written.setUntil)}: {dev} reviews it at the price it was sent at. Send again to send these questions instead.</p>}
             <WrittenForm canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} seenAt={seenAt} sessionId={c.id} questions={writtenQuestions(c)} initial={carryOver(sentItems, writtenQuestions(c))} initialNotes={written?.notes ?? ""} update={!!written}
-              sentSame={!!written && !written.setUntil && sameQuestions(sentItems, itemsFor(writtenQuestions(c)))} newFiles={c.recordings.some((r) => r.part === "written" && r.uploadedAt && !r.submissionId)} />
+              sentSame={!!written && !written.setUntil && sameQuestions(sentItems, itemsFor(writtenQuestions(c)))} newFiles={c.recordings.some((r) => r.part === "written" && r.uploadedAt && !r.submissionId)} initialAttachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
             {/* (Batch 11) Files and recordings attached to the written part (drafts: they can be added while the test is paused). */}
             <WrittenAttachments sessionId={c.id} canAdd items={c.recordings.filter((r) => r.part === "written").map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, uploaded: !!r.uploadedAt, video: r.contentType.startsWith("video/"), sent: !!r.submissionId }))} />
           </>
         )}
         {/* (Batch 13 section 8) The previous sets of questions and answers, newest first, read-only. */}
-        <PrevSetFolds sets={prevSets} sentPart={!!written} />
+        <PrevSetFolds sets={prevSets} sentPart={!!written} attachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
         {/* (Batch 13) Show an excerpt of paid written answers on the profile (the developer allows or denies it). */}
         {written && excerptPicks.length > 0 && <ExcerptPicker submissionId={written.id} choices={excerptPicks} />}
         {excerptPending && <p className="note" data-excerpt-pending="">Your excerpt request is waiting for {dev}.</p>}

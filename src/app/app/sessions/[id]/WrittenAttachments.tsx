@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FormMistakes } from "@/components/FormMistakes";
 import { FIELD, errOf } from "@/lib/client";
 import { ScreenRecorder } from "@/components/ScreenRecorder";
@@ -15,7 +15,18 @@ export function WrittenAttachments({ sessionId, items, canAdd }: { sessionId: st
   const [busy, setBusy] = useState(false);
   const [pct, setPct] = useState<number | null>(null);
   const [err, setErr] = useState("");
-  const uploaded = items.filter((i) => i.uploaded);
+  const [liveItems, setLiveItems] = useState(items);
+  const [places, setPlaces] = useState<{ id: string; labels: string[] }[]>([]);
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const detail = (event as CustomEvent<{ attachments: { id: string; filename: string; size: number; contentType: string }[]; places: { id: string; labels: string[] }[] }>).detail;
+      setPlaces(detail.places);
+      setLiveItems((old) => detail.attachments.map((a) => ({ ...a, uploaded: true, video: a.contentType.startsWith("video/"), sent: old.find((i) => i.id === a.id)?.sent ?? false })));
+    };
+    window.addEventListener(`written-files:${sessionId}`, receive);
+    return () => window.removeEventListener(`written-files:${sessionId}`, receive);
+  }, [sessionId, items]);
+  const uploaded = liveItems.filter((i) => i.uploaded);
   const files = uploaded.filter((i) => !i.video).length;
   async function add(file: File) {
     setErr("");
@@ -36,7 +47,7 @@ export function WrittenAttachments({ sessionId, items, canAdd }: { sessionId: st
       {uploaded.length > 0 && (
         <ul className="space-y-1">
           {uploaded.map((i) => (
-            <li key={i.id}><a href={`/api/recordings/${i.id}/file`} target="_blank" rel="noreferrer">{i.filename}</a> · {(i.size / 1024 / 1024).toFixed(1)} MB{i.sent ? "" : <span className="ml-1 text-xs text-amber-200">· goes with your answers when you send them</span>}</li>
+            <li key={i.id}><a href={`/api/recordings/${i.id}/file`} target="_blank" rel="noreferrer">{i.filename}</a> <span className="text-slate-400">{places.find((p) => p.id === i.id)?.labels.map((q) => `in your answer to “${q}”`).join("; ") || "not in an answer"}</span> · {(i.size / 1024 / 1024).toFixed(1)} MB{i.sent ? "" : <span className="ml-1 text-xs text-amber-200">· goes with your answers when you send them</span>}</li>
           ))}
         </ul>
       )}

@@ -1,7 +1,7 @@
 import { HelpCircle, MessageSquareText } from "lucide-react";
 import { fmtDateTime, money } from "@/lib/format";
 import type { QuestionBlock } from "@/lib/byQuestion";
-import { Formatted } from "@/components/Formatted";
+import { AnswerWithAttachments } from "@/components/AnswerSets";
 import { ScrollText } from "@/components/ScrollText";
 
 const STATUS = { paid: "border-emerald-400/40 text-emerald-200", rejected: "border-rose-400/40 text-rose-200", waiting: "border-amber-300/40 text-amber-200" } as const;
@@ -31,7 +31,7 @@ export function ByQuestion({ blocks }: { blocks: QuestionBlock[] }) {
                       <span className="block text-xs text-slate-500">{fmtDateTime(a.sentAt)}</span>
                       <span className={`badge text-xs ${STATUS[a.status]}`}>{a.status === "paid" ? `Paid ${money(a.paidCents)}` : a.status === "rejected" ? "Rejected" : "Not reviewed yet"}</span>
                     </span>
-                    <Formatted text={a.text} className="min-w-0 text-slate-200" />
+                    <AnswerWithAttachments text={a.text} attachments={a.attachments ?? []} />
                   </li>
                 ))}
               </ul>
