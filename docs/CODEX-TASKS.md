@@ -3,22 +3,9 @@
 Each prompt assumes Codex has read `AGENTS.md` (it does so automatically). Give each task its own number N (codex1, codex2, …):
 it names the worktree's test schema and build folder so tasks never collide.
 
-## Task 1: the stale "Not sent yet" chip after Keep
+## Task 1: closed (Oct 29)
 
-```
-Read AGENTS.md first and follow it. Task number: 1 (schema codex1, build folder .next-codex1, branch codex/not-sent-chip,
-worktree C:/Users/march/Projects/pl-codex-1).
-
-Bug (owner, Oct 29): after a developer changes a test's terms and the tester presses Keep (keeping their current deal), a
-"Not sent yet" chip/badge for a part can stay on screen although nothing about that part changed, until the page is reloaded.
-Search src/ for "Not sent yet" and the new-terms Switch / Keep flow (the tester's session page, and the developer's Edit and test
-pages) to find where the chip is drawn and what state it reads after Keep.
-
-1. Reproduce it in a test first (vitest, tests/codex1-not-sent-chip.test.ts). If you can't reproduce it, stop and report what you
-   checked; don't change code on a guess.
-2. Fix it so the chip always matches the tester's current deal right after Keep (and after Switch), with no reload.
-3. npm run check green with the schema and build folder above. Commit on the branch; don't push or merge.
-```
+The "Not sent yet" label beside Request a time was correct: a call request refused before Keep was still unsent.
 
 ## Task 2: accept waiting applications when a test switches to "joins instantly" (ONLY if the owner says yes)
 
