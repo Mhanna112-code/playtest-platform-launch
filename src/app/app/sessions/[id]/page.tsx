@@ -426,7 +426,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                 return rows ? [{ at: ch.createdAt, key: ch.id, node: (<li key={ch.id} data-history-line="" data-history-info="">
                   {`${fmtDateTimeIn(ch.createdAt, u.timeZone)}: ${dev} updated the listing information (${rows.map((r) => r.name).join(", ")})`}
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">Before and after</summary>
-                    <ul className="mt-1 space-y-1">{rows.map((r) => <li key={r.name}><b>{r.name}:</b> <span className="whitespace-pre-wrap break-words">{r.before}</span> → <span className="whitespace-pre-wrap break-words text-slate-300">{r.after}</span></li>)}</ul>
+                    <ul className="mt-1 space-y-1">{rows.map((r) => <li key={r.name}><b>{r.name}:</b> {/* (Batch 32 §14) each side in its own scroll box, about 8 lines */}<span className="block max-h-32 overflow-y-auto whitespace-pre-wrap break-words" tabIndex={0} data-diff-scroll="">{r.before}</span> → <span className="block max-h-32 overflow-y-auto whitespace-pre-wrap break-words text-slate-300" tabIndex={0} data-diff-scroll="">{r.after}</span></li>)}</ul>
                   </details>
                 </li>) }] : [];
               }),

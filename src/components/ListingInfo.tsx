@@ -17,8 +17,8 @@ export function UpdatedTag({ when, before, now }: { when: string; before: string
       </button>
       {open && (
         <span className="mt-1 block space-y-1 rounded-lg bg-white/[0.03] p-2 text-xs" data-info-before-now="">
-          <span className="block"><b className="text-slate-400">Before:</b> <span className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words">{before}</span></span>
-          <span className="block"><b className="text-slate-400">Now:</b> <span className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words text-slate-200">{now}</span></span>
+          <span className="block"><b className="text-slate-400">Before:</b> <span className="block max-h-32 overflow-y-auto whitespace-pre-wrap break-words" tabIndex={0} data-diff-scroll="">{before}</span></span>
+          <span className="block"><b className="text-slate-400">Now:</b> <span className="block max-h-32 overflow-y-auto whitespace-pre-wrap break-words text-slate-200" tabIndex={0} data-diff-scroll="">{now}</span></span>
         </span>
       )}
     </>

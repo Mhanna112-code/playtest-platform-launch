@@ -54,3 +54,10 @@ describe("batch 32 §13: Let it go has a tick, not a pop-up", () => {
     expect(box).not.toContain('title="Let it go?"');
   });
 });
+
+describe("batch 32 §14: the agreed scope's then-and-now boxes scroll", () => {
+  it("the Updated tag's Before / Now and the history's Before and after are block scroll boxes", () => {
+    expect(src("components/ListingInfo.tsx").match(/block max-h-32 overflow-y-auto/g)?.length).toBe(2);
+    expect(src("app/app/sessions/[id]/page.tsx").match(/block max-h-32 overflow-y-auto/g)?.length).toBe(2);
+  });
+});

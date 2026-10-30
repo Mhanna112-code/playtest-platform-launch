@@ -50,3 +50,6 @@ This file wins over the earlier batches and the design doc where they differ.
 
 ## 13. Let it go: a tick, not a pop-up (owner, Oct 30)
 - Charge / Let it go: no "Let it go?" pop-up. Next to Let it go, a tick "Let it go won't charge <developer>, and you won't be paid for this"; the Let it go button stays disabled until it's ticked.
+
+## 14. Your agreed scope: every then-and-now scrolls (owner, Oct 30)
+- An "Updated" tag's Before / Now and each row of a listing save's "Before and after" sit in their own scroll box, about 8 lines (the tag's boxes were inline, so the scroll never applied; the history rows had none). The questions (a box about 3 questions tall) and the NDA (its own box) already scrolled.
