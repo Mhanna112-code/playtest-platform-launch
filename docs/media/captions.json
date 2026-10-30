@@ -15622,5 +15622,527 @@
     "group": "pA2",
     "order": 116008,
     "size": "desktop"
+  },
+  "cap-02-over-room.png": {
+    "caption": "$10 and then $500 already paid on Ines's written answers: typing 600.00 in Pay more shows “This is more than this piece can be paid (up to $490 more, $1,000 in all).” in red under “up to $490.00 more ($1,000.00 in all)”.",
+    "kind": "image",
+    "title": "Pay more over the room is refused",
+    "section": "Caps",
+    "group": "q0",
+    "order": 115001,
+    "size": "desktop"
+  },
+  "cap-03-dev-paid-most.png": {
+    "caption": "After a last Pay more of $490, Ines's row reads “Sent Oct 29, 2026 · paid $1,000.00 of $10.00” and, where Pay more was, “Paid the most this piece can be paid ($1,000.00).”; “Paid in all: $1,000.00”.",
+    "kind": "image",
+    "title": "At the cap: the developer",
+    "section": "Caps",
+    "group": "q0",
+    "order": 115002,
+    "size": "desktop"
+  },
+  "b28-08-01-reserved.png": {
+    "caption": "During a chargeback hold the developer's Pay what you owe reserved the money: “Reserved $27.00: it's taken when the team approves lifting your hold.”",
+    "kind": "image",
+    "title": "§8 Pay what you owe, reserved",
+    "section": "Batch 28 (Oct 29)",
+    "group": "q0",
+    "order": 115003,
+    "size": "desktop"
+  },
+  "b28-08-02-added-since.png": {
+    "caption": "Jun charged for their written answers after the reservation: the dashboard box reads “Reserved $27.00: it's taken when the team approves lifting your hold. $10.00 added since will be charged right after.”, lists “Jun Abara's written answers $10.00 · charged by the tester while your tests were paused” and offers “Pay what you owe ($10.00)”.",
+    "kind": "image",
+    "title": "§8 A Charge after the reservation",
+    "section": "Batch 28 (Oct 29)",
+    "group": "q0",
+    "order": 115004,
+    "size": "desktop"
+  },
+  "b28-08-03-admin-row.png": {
+    "caption": "The hold row reads “Chargeback hold: card verified ✓, owed reserved ✓ ($27.00 reserved · $10.00 added since (charged after the hold lifts))”, with Approve and “Don't approve: release the reservation”; the added $10 doesn't block Approve.",
+    "kind": "image",
+    "title": "§8 The admin's row: Approve still works",
+    "section": "Batch 28 (Oct 29)",
+    "group": "q0",
+    "order": 115005,
+    "size": "desktop"
+  },
+  "b29-22-01-dev-stacks.png": {
+    "caption": "Vera's bell: “Closing soon: 4 pieces close by Nov 5 (Kit's written answers on “Sky Lab: tutorial”, …)”, “Pay now: 4 pieces on 2 tests: their testers can charge or let them go (the first closes Nov 1)”, “Ratings to give · 2 updates today” and “Payments and holds · 2 updates today” (“Your bank wants you to confirm 2 payments ($22.00 in all): the first by Nov 1”).",
+    "kind": "image",
+    "title": "§22, §31 The developer's new stacks",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q0",
+    "order": 115006,
+    "size": "desktop"
+  },
+  "b29-22-02-tester-stacks.png": {
+    "caption": "Kit's bell: “Ratings to give · 4 updates today”, “Charge or let go: 2 pieces on 2 tests (the first closes Nov 1)”, “Applications and invites · 3 updates today” and “Joined · 2 updates today”.",
+    "kind": "image",
+    "title": "§21-§24 The tester's new stacks",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q0",
+    "order": 115007,
+    "size": "desktop"
+  },
+  "b29-23-01-applications-joined.png": {
+    "caption": "Under “Applications and invites · 3 updates today”: “Vera Holt updated “Lumen Notes private beta”: your invite was sent again on the new listing.” and two “…'s listing changed, so your application was closed. You can apply again on the current listing.” lines from two tests; under “Joined · 2 updates today”: “Your application to “Glow Garden: night levels” wasn't accepted” and “You're in: Night Market demo”. Each line opens its own page.",
+    "kind": "image",
+    "title": "§23, §24 Applications and invites, Joined, expanded",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q0",
+    "order": 115008,
+    "size": "desktop"
+  },
+  "b29-28-01-bell-number.png": {
+    "caption": "Three testers joined “Harbor Run: first 3 levels”: one stack, “Harbor Run: first 3 levels · 3 updates today”, with 3 unread lines, and the bell's number reads 1.",
+    "kind": "image",
+    "title": "§28 The bell's number counts entries",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q0",
+    "order": 115009,
+    "size": "desktop"
+  },
+  "b29-28-02-expanded.png": {
+    "caption": "Expanding the stack shows “Ola Brandt joined …”, “Jun Abara joined …” and “Kit Moreau joined “Harbor Run: first 3 levels””, marks them read, and the bell shows no number any more.",
+    "kind": "image",
+    "title": "§28 Read only when opened",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q0",
+    "order": 115010,
+    "size": "desktop"
+  },
+  "b29-38-01-pay-hint.png": {
+    "caption": "Ivo's written answers ($10.00 listing): the Amount box starts at 10.00 with the hint “up to $1,000.00 in all” beside it.",
+    "kind": "image",
+    "title": "§38 The Pay box: $1,000 in all",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q1",
+    "order": 116001,
+    "size": "desktop"
+  },
+  "b29-38-02-pay-over.png": {
+    "caption": "Typing 1200 in the Pay box: “This is more than this piece can be paid (up to $1,000).” in red, and Pay doesn't go.",
+    "kind": "image",
+    "title": "§38 Over $1,000 in all is refused",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q1",
+    "order": 116002,
+    "size": "desktop"
+  },
+  "b29-38-03-paid-most.png": {
+    "caption": "Ivo's answers paid $1,000.00 in one Pay: the row reads “Paid the most this piece can be paid ($1,000.00).” where Pay more was.",
+    "kind": "image",
+    "title": "§38 At the cap: the developer",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q1",
+    "order": 116003,
+    "size": "desktop"
+  },
+  "b29-38-04-tester-most.png": {
+    "caption": "Ivo's written answers: “This part is already paid the most it can be ($1,000.00).”",
+    "kind": "image",
+    "title": "§38 At the cap: the tester",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q1",
+    "order": 116004,
+    "size": "desktop"
+  },
+  "b29-12-01-pay-stops.png": {
+    "caption": "Zed's answers were paid in another tab a moment before: “Your Pay on Zed Okoro's written answers didn't go through. Since you opened this page: You paid Zed Okoro $10.00 for the written answers in another tab · 8:19 PM Press Pay again to go ahead.”",
+    "kind": "image",
+    "title": "§12 Your own Pay in another tab stops Pay once",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q1",
+    "order": 116005,
+    "size": "desktop"
+  },
+  "b29-36-01-pay-refused.png": {
+    "caption": "The second Pay was refused (already paid in the other tab); the page redrew without the Pay box (1.0 s after the answer) and the line “Your Pay didn't go through: you already paid $10.00 for this.” stays where the button was.",
+    "kind": "image",
+    "title": "§36 The refusal stays where Pay was",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q1",
+    "order": 116005,
+    "size": "desktop"
+  },
+  "b29-36-02-charge-refused.png": {
+    "caption": "Lena's Charge, on a page opened before Yara paid elsewhere, is refused; the page redrew without the Charge box and “Your Charge didn't go through: Yara Quint paid $10.00 for this meanwhile.” stays where the button was.",
+    "kind": "image",
+    "title": "§36 The refusal stays where Charge was",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q1",
+    "order": 116006,
+    "size": "desktop"
+  },
+  "b29-36-03-withdraw-refused.png": {
+    "caption": "Zed's request was declined by Yara a moment before; Withdraw is refused, the request leaves the list (“No call requests waiting.”) and “Your Answer didn't go through: Yara Quint declined this request at 8:32 PM.” stays where Withdraw was. App bug: the kept line names the press “Answer” instead of “Withdraw”.",
+    "kind": "image",
+    "title": "§36 Withdraw on a closed request (the line says “Answer”)",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q1",
+    "order": 116007,
+    "size": "desktop"
+  },
+  "b29-36-04-send-refused.png": {
+    "caption": "Mia's answers, typed on a page opened before Yara stopped the test: Send is refused and the page reloads at its top, where the stopped box names the press: “Yara Quint stopped the test on Oct 29, 2026, so your Send didn't go through. You can still chat. Work you sent is still reviewed.”; no separate kept line, since the box at the top says it.",
+    "kind": "image",
+    "title": "§36 Send after the test stopped",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q1",
+    "order": 116008,
+    "size": "desktop"
+  },
+  "b29-11-01-charge-stops-for-stop.png": {
+    "caption": "Nia's page was opened before Yara stopped the test: the first Charge stops once: “Your Charge didn't go through.” Since you opened this page: “Yara Quint stopped this test at 8:32 PM.”, with “Turn off alerts” and “Press Charge again to go ahead.”",
+    "kind": "image",
+    "title": "§11 On a stopped test, Charge still stops once",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q1",
+    "order": 116009,
+    "size": "desktop"
+  },
+  "b29-11-02-pay-stops-stopped-test.png": {
+    "caption": "Yara's test page, opened after the stop: Nia charged meanwhile, and Pay on Owen's answers stops once: “Your Pay on Owen Hale's written answers didn't go through.” Since you opened this page: “Nia Brook charged $10.00 for their written answers”, “Don't stop me for: Payments (going through or failing)” and “Press Pay again to go ahead.”",
+    "kind": "image",
+    "title": "§11 The developer on a stopped test",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q1",
+    "order": 116010,
+    "size": "desktop"
+  },
+  "b29-11-03-charged-after-stop.png": {
+    "caption": "Nia's part after the second Charge on the stopped test: “Paid $10.00: you get $8.00 (…) · “Charged by the tester after 7 days without a review.”” and “Yara Quint has paid $10.00 for this. It can be paid more, up to $1,000.00 in all.”",
+    "kind": "image",
+    "title": "§11 The second press goes ahead",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q1",
+    "order": 116011,
+    "size": "desktop"
+  },
+  "b29-12-02-edit-save-stops.png": {
+    "caption": "“Your Save didn't go through. Since you opened this page: You paid Pim Achebe $10.00 for the written answers in another tab · 8:33 PM Press Save again to save.”",
+    "kind": "image",
+    "title": "§12 Edit's Save stops once for your own Pay in another tab",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q2",
+    "order": 117001,
+    "size": "desktop"
+  },
+  "b29-12-03-request-stops.png": {
+    "caption": "Spots were saved on Edit in another tab a moment before: “Your Request a time didn't go through. Since you opened this page: You saved the listing in another tab: spots · 8:34 PM Press Request a time again to go ahead.”",
+    "kind": "image",
+    "title": "§12 Request a time stops once for your own Edit save",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q2",
+    "order": 117002,
+    "size": "desktop"
+  },
+  "b29-13-01-charge-stops.png": {
+    "caption": "“Your Charge didn't go through. Since you opened this page: You requested a call for Mon, Nov 2, 3:00 PM in another tab · 8:35 PM You can turn these stops off below, or with Alerts at the top of your test's page. New terms from the developer and a key marked as working still stop. Turn off alerts Press Charge again to go ahead.”",
+    "kind": "image",
+    "title": "§13 The tester's own call request in another tab stops Charge once",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q2",
+    "order": 117003,
+    "size": "desktop"
+  },
+  "b29-13-02-charge-second.png": {
+    "caption": "Pressed again, Charge goes through: “Paid $10.00: you get $8.00 (…) · “Charged by the tester after 7 days without a review.”” and “Odile Marsh has paid $10.00 for this. It can be paid more, up to $1,000.00 in all.”",
+    "kind": "image",
+    "title": "§13 The second press goes ahead",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q2",
+    "order": 117004,
+    "size": "desktop"
+  },
+  "b29-27-01-deadlines.png": {
+    "caption": "Kit's bell after the daily job: one entry, “Deadlines · 2 tests today”, for both tests' reminders, the newest line under it (“Your deadline on “Harbor Run: first 3 levels” is Nov 1: send your work before then.”).",
+    "kind": "image",
+    "title": "§27 Deadlines stack across tests",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q3",
+    "order": 118001,
+    "size": "desktop"
+  },
+  "b29-27-02-deadlines-open.png": {
+    "caption": ", each opening its session page.",
+    "kind": "image",
+    "title": "§27 Expanded, one line per test",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q3",
+    "order": 118002,
+    "size": "desktop"
+  },
+  "cp-01-listed-paybox.png": {
+    "caption": "Zed's listed call (30 min measured): the box starts at the contract rate × the measured minutes, “Listing: $60/h × 30 min = $30.00”, Rate 60.00 and Amount 30.00, “up to $100.00 in all” ($200/h × 30 min), and under it “If you don't pay by Nov 5, it's charged automatically: $30.00 (30 min × $60.00/h).”",
+    "kind": "image",
+    "title": "Listed call: the Pay box",
+    "section": "Calls: paying",
+    "group": "q4",
+    "order": 119001,
+    "size": "desktop"
+  },
+  "cp-02-listed-auto-line.png": {
+    "caption": "Zed's other call, 2 days ago (25 min measured): “Listing: $60/h × 25 min = $25.00”, “up to $83.33 in all”, and “If you don't pay by Nov 3, it's charged automatically: $25.00 (25 min × $60.00/h).”",
+    "kind": "image",
+    "title": "Listed call: charged automatically if not paid",
+    "section": "Calls: paying",
+    "group": "q4",
+    "order": 119002,
+    "size": "desktop"
+  },
+  "cp-03-unlisted-paybox.png": {
+    "caption": "Lena's call on a test whose listing has no calls: “Not listed”, an empty Rate (its grey hint “up to $200” cut short in the narrow box) and Amount, “up to $100.00 ($200/h × 30 min)”, and “This part isn't listed: pay any amount, $0 included. Lena Fisk can dispute the amount once.”; no automatic-charge line.",
+    "kind": "image",
+    "title": "Unlisted call: the empty Pay box",
+    "section": "Calls: paying",
+    "group": "q4",
+    "order": 119003,
+    "size": "desktop"
+  },
+  "cp-04-tester-listed-rows.png": {
+    "caption": "Zed's session page: each call reads “… · waiting for Yara Quint to pay”, with “If Yara Quint doesn't pay by Nov 4, it's charged automatically.” and “If Yara Quint doesn't pay by Nov 6, it's charged automatically.” under them; no Charge or Let it go for listed calls. The Oct 29 call's date reads Nov 6 here but Nov 5 on Yara's Pay box (the 7 days end at 7:20 PM Central, after midnight UTC): the two sides count the date in different time zones.",
+    "kind": "image",
+    "title": "The tester's listed calls",
+    "section": "Calls: paying",
+    "group": "qc",
+    "order": 122001,
+    "size": "desktop"
+  },
+  "cp-05-tester-unlisted-rows.png": {
+    "caption": "Lena's session page: “Not listed · Paid so far $0.00” and each call “… · waiting for Yara Quint to pay”, with no date and no automatic charge (the older call is already 9 days old).",
+    "kind": "image",
+    "title": "The tester's unlisted calls",
+    "section": "Calls: paying",
+    "group": "q4",
+    "order": 119005,
+    "size": "desktop"
+  },
+  "cp-06-listed-rate-follows.png": {
+    "caption": "Yara types a rate of 40 ($/h) and the amount follows: “20.00” (40 × 30 min); below the listing's $30.00 the note turns required: “Say why you're paying less than the listing's $30.00 (the tester reads it).”",
+    "kind": "image",
+    "title": "Listed call: the amount follows the rate",
+    "section": "Calls: paying",
+    "group": "q4",
+    "order": 119006,
+    "size": "desktop"
+  },
+  "cp-07-listed-amount-follows.png": {
+    "caption": "Typing the amount instead works the other way: $24.50 for 30 minutes sets the rate to “49.00”; the note is still required below $30.00.",
+    "kind": "image",
+    "title": "Listed call: the rate follows the amount",
+    "section": "Calls: paying",
+    "group": "q4",
+    "order": 119007,
+    "size": "desktop"
+  },
+  "cp-08-unlisted-rate-follows.png": {
+    "caption": "In the empty box Yara types 45 ($/h): the amount follows (“22.50” for 30 min), beside it “up to $100.00 ($200/h × 30 min)”; the note stays optional.",
+    "kind": "image",
+    "title": "Unlisted call: a rate typed, the amount follows",
+    "section": "Calls: paying",
+    "group": "q4",
+    "order": 119008,
+    "size": "desktop"
+  },
+  "cp-09-unlisted-over-200.png": {
+    "caption": "A rate of 250 makes $125.00, over the call's room: “This is more than you can pay for this call (up to $100.00 at $200 an hour).” in red, and Pay doesn't go.",
+    "kind": "image",
+    "title": "Unlisted call: at most $200 an hour",
+    "section": "Calls: paying",
+    "group": "q4",
+    "order": 119009,
+    "size": "desktop"
+  },
+  "cp-10-unlisted-zero-note.png": {
+    "caption": "At $0 (the rate follows: “0.00”) the note turns required: “Say why you're paying $0 (the tester reads it).”; no payment tick at $0.",
+    "kind": "image",
+    "title": "Unlisted call: $0 needs a note",
+    "section": "Calls: paying",
+    "group": "q4",
+    "order": 119010,
+    "size": "desktop"
+  },
+  "cp-11-tester-listed-paid-below.png": {
+    "caption": "Zed's Oct 29 call: “paid $20.00”, then “Paid $20.00 ($40.00/h): you get $16.00 (…) · “We ended early: the build crashed twice, so half the call was waiting.”” and “Yara Quint has paid $20.00 for this. It can be paid more, up to $100.00 in all.” with Dispute the pay; the older call still reads “waiting for Yara Quint to pay” and “If Yara Quint doesn't pay by Nov 3, it's charged automatically.”",
+    "kind": "image",
+    "title": "The tester: paid below, with the reason",
+    "section": "Calls: paying",
+    "group": "qc",
+    "order": 122002,
+    "size": "desktop"
+  },
+  "cp-12-tester-unlisted-zero.png": {
+    "caption": "Lena's unlisted call: “Paid $0: “Thanks for the chat! This one was a quick hello, so no pay; the next call is paid.”” and “Yara Quint has paid $0.00 for this. It can be paid more, up to $100.00 in all.”, with Dispute the pay; the older call is still “waiting for Yara Quint to pay”.",
+    "kind": "image",
+    "title": "The tester: $0 with the note",
+    "section": "Calls: paying",
+    "group": "qc",
+    "order": 122003,
+    "size": "desktop"
+  },
+  "cp-13-listed-pay-more-over.png": {
+    "caption": "After paying $20.00 the call (“Took place · 30 min · paid $20.00”) keeps a Pay more box, “up to $80.00 more ($100.00 in all)”; typing 90 shows “This is more than this piece can be paid (up to $80 more, $100 in all).” in red. The cap is $200/h × the 30 measured minutes.",
+    "kind": "image",
+    "title": "Listed call: Pay more up to the call's cap",
+    "section": "Calls: paying",
+    "group": "qc",
+    "order": 122004,
+    "size": "desktop"
+  },
+  "cp-14-listed-paid-most.png": {
+    "caption": "After a Pay more of $80.00: “Took place · 30 min · paid $100.00” and “Paid the most this piece can be paid ($100.00).”, with no Pay more box left.",
+    "kind": "image",
+    "title": "Listed call: paid the most it can be",
+    "section": "Calls: paying",
+    "group": "qc",
+    "order": 122005,
+    "size": "desktop"
+  },
+  "cp-15-auto-receipt.png": {
+    "caption": "7 days after the other call (its dates moved back), the 5-minute sweep charged it: “Receipt: you paid $25.00 for Zed Okoro's call on Oct 21 (charged automatically after 7 days)”, above the receipts for the $80.00 extra payment and the $20.00 call.",
+    "kind": "image",
+    "title": "The automatic charge: the developer's receipt",
+    "section": "Calls: paying",
+    "group": "qc",
+    "order": 122006,
+    "size": "desktop"
+  },
+  "cp-16-auto-dev-row.png": {
+    "caption": "The call now reads “Took place · 25 min · paid $25.00” (25 min × $60/h), and Pay more stays open: “up to $58.33 more ($83.33 in all)”.",
+    "kind": "image",
+    "title": "The automatic charge on the developer's row",
+    "section": "Calls: paying",
+    "group": "qc",
+    "order": 122007,
+    "size": "desktop"
+  },
+  "cp-17-auto-tester-bell.png": {
+    "caption": "Zed's bell: “Yara Quint paid you $25.00 for your call on Oct 21”, on its own line beside the “You were paid · 2 updates today” stack (the $20.00 pay and the $80.00 more).",
+    "kind": "image",
+    "title": "The automatic charge: the tester's line",
+    "section": "Calls: paying",
+    "group": "qc",
+    "order": 122008,
+    "size": "desktop"
+  },
+  "cp-18-auto-tester-row.png": {
+    "caption": "Zed's Oct 21 call: “Paid $25.00 ($60.00/h): you get $20.00 (…) · “Charged automatically 7 days after the call.”” and “Yara Quint has paid $25.00 for this. It can be paid more, up to $83.33 in all.”, with Dispute the pay; the other call at its cap: “This part is already paid the most it can be ($100.00).” with Dispute disabled.",
+    "kind": "image",
+    "title": "The automatic charge on the tester's page",
+    "section": "Calls: paying",
+    "group": "qc",
+    "order": 122009,
+    "size": "desktop"
+  },
+  "cp-19-unlisted-weekly-line.png": {
+    "caption": "Lena's older unlisted call, 9 days old and unpaid, is never charged: the daily job gives Yara “Pay your calls: your call with Lena Fisk on “Tidewater: open feedback” isn't paid yet (any amount, $0 included).” (in that test's stack for the day).",
+    "kind": "image",
+    "title": "Unlisted call: the weekly line",
+    "section": "Calls: paying",
+    "group": "qc",
+    "order": 122010,
+    "size": "desktop"
+  },
+  "cp-20-unlisted-no-charge.png": {
+    "caption": "9 days after Lena's older call it still reads “waiting for Yara Quint to pay”: no Charge, no Let it go and no automatic charge for an unlisted call.",
+    "kind": "image",
+    "title": "Unlisted call: no Charge for the tester",
+    "section": "Calls: paying",
+    "group": "q4",
+    "order": 119020,
+    "size": "desktop"
+  },
+  "cp-21-calls-left-tester.png": {
+    "caption": "Two booked calls at $200/h (180 and 114 minutes) take $980 of the $1,000: Zed's page reads “$20.00 left of the $1,000 for your calls on this test.”",
+    "kind": "image",
+    "title": "The $1,000 for a tester's calls: the grey line",
+    "section": "Calls: paying",
+    "group": "q4",
+    "order": 119021,
+    "size": "desktop"
+  },
+  "cp-22-calls-cap-refused.png": {
+    "caption": "Two booked calls (180 and 114 min at $200/h) leave “$20.00 left of the $1,000 for calls with Zed Okoro on this test.” under Zed's name; a 30-minute request ($100) is refused before it is sent: “Calls with Zed Okoro on this test can come to at most $1,000; $20.00 is left, so this call can't be booked.” App bug: the same line shows twice and “Fix the 2 mistakes above, then press Request a time again.” lists it twice.",
+    "kind": "image",
+    "title": "The $1,000 for a tester's calls: booking refused",
+    "section": "Calls: paying",
+    "group": "qc",
+    "order": 122011,
+    "size": "desktop"
+  },
+  "b29-13-03-apply-stops.png": {
+    "caption": "Kit applied in another tab a moment before: “Your Apply didn't go through. Since you opened this page: You applied to join in another tab · 8:35 PM You can turn these stops off below, or with Alerts at the top of your test's page. New terms from the developer and a key marked as working still stop. Turn off alerts Press again to apply on the current listing.”",
+    "kind": "image",
+    "title": "§13 The join page: Apply stops once",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q2",
+    "order": 117005,
+    "size": "desktop"
+  },
+  "b29-13-04-apply-second.png": {
+    "caption": "“A note to the developer Apply to join 4 spots left · the developer accepts Your Apply didn't go through. Since you opened this page: You applied to join in another tab · 8:35 PM You can turn these sto”",
+    "kind": "image",
+    "title": "§13 The second press",
+    "section": "Batch 29 (Oct 29)",
+    "group": "q2",
+    "order": 117006,
+    "size": "desktop"
+  },
+  "rd-01-ana.png": {
+    "caption": "Ana joined on day 1 (own deadline day 15) and sent on day 3: the date is their deadline, not 7 days after sending (day 10): “If Nora Lane hasn't paid by Oct 31, you can charge or let it go then.”",
+    "kind": "image",
+    "title": "Review dates: joined day 1, sent day 3",
+    "section": "Charge timing",
+    "group": "q6",
+    "order": 121001,
+    "size": "desktop"
+  },
+  "rd-02-ben.png": {
+    "caption": "Ben joined on day 10 (own deadline day 24) and sent on day 12: the date is their own deadline, day 24, whatever the others' deadlines: “If Nora Lane hasn't paid by Nov 9, you can charge or let it go then.”",
+    "kind": "image",
+    "title": "Review dates: joined day 10, sent day 12",
+    "section": "Charge timing",
+    "group": "q6",
+    "order": 121002,
+    "size": "desktop"
+  },
+  "rd-03-cam.png": {
+    "caption": "Cam joined on day 2 (own deadline day 16) and sent today, day 14: the date is 7 days after sending (day 21), so the developer still has a full week: “If Nora Lane hasn't paid by Nov 6, you can charge or let it go then.”",
+    "kind": "image",
+    "title": "Review dates: sent 2 days before the deadline",
+    "section": "Charge timing",
+    "group": "q6",
+    "order": 121003,
+    "size": "desktop"
+  },
+  "rd-04-dev-ana.png": {
+    "caption": "Nora's Pay box for Ana: “If you don't pay by Oct 30, Ana Silva can charge you $10.00, their contract price, or let it go.”",
+    "kind": "image",
+    "title": "Review dates: the developer's side",
+    "section": "Charge timing",
+    "group": "q6",
+    "order": 121004,
+    "size": "desktop"
+  },
+  "rd-05-dev-ben.png": {
+    "caption": "Nora's Pay box for Ben: “If you don't pay by Nov 8, Ben Okafor can charge you $10.00, their contract price, or let it go.”",
+    "kind": "image",
+    "title": "Review dates: the developer's side",
+    "section": "Charge timing",
+    "group": "q6",
+    "order": 121005,
+    "size": "desktop"
+  },
+  "rd-06-dev-cam.png": {
+    "caption": "Nora's Pay box for Cam: “If you don't pay by Nov 5, Cam Reyes can charge you $10.00, their contract price, or let it go.”",
+    "kind": "image",
+    "title": "Review dates: the developer's side",
+    "section": "Charge timing",
+    "group": "q6",
+    "order": 121006,
+    "size": "desktop"
   }
 }
