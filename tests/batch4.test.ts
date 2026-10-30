@@ -183,7 +183,9 @@ describe("E2, E3) stacking by kind and reminders in the summary email", () => {
     const { bellKey } = await import("@/lib/bell");
     expect(new Set(l.map(bellKey)).size).toBe(1);
     const bellSrc = src("lib/bell.ts");
-    for (const g of ["payhold", "admindecision", "disputefiled", "disputedecided", "pausedreminder", "tpaid", "trejected", "tdelayed", "tarrived", "textra", "tstopped", "suspendedreview"]) expect(bellSrc).toContain(`${g}:`);
+    for (const g of ["payhold", "admindecision", "disputefiled", "disputedecided", "pausedreminder", "tpaid", "tdelayed", "tarrived", "tstopped", "suspendedreview"]) expect(bellSrc).toContain(`${g}:`);
+    // (Batch 30 §6) Unused stacks removed.
+    for (const g of ["trejected", "textra", "appclosed", "reinvited", "team", "disputes"]) expect(bellSrc).not.toContain(`  ${g}:`);
     expect(bellSrc).not.toContain("owed:");
   });
 

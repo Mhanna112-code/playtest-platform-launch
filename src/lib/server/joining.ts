@@ -164,6 +164,16 @@ async function replacedInvite(testerId: string, testId: string, body: Record<str
   throw new HttpError(409, "invite_replaced", fresh ? `${displayName(dev)} changed the listing at ${fmtTime(inv.updatedAt)} and sent you a new invite:` : `${displayName(dev)} changed the listing at ${fmtTime(inv.updatedAt)}, and this invite closed.`, fresh ? { newInviteId: fresh.id, terms: termsLine(asListing(t), true), listingVersion: t.listingVersion } : {});
 }
 
+/**
+ * (Owner's finding, Oct 29, batch 32 §2) Apply or Ask to rejoin while this tester already has one waiting (sent in another tab): refused, nothing changes (the
+ * first note stays, the developer isn't told again); the page redraws to the waiting state.
+ */
+async function alreadyWaiting(testerId: string, testId: string) {
+  const a = await db.application.findUnique({ where: { testId_testerId: { testId, testerId } } });
+  if (a?.status !== "pending") return;
+  throw new HttpError(409, "already_waiting", a.kind === "rejoin" ? "You already asked to rejoin this test in another tab." : "You already applied to join this test in another tab.");
+}
+
 /** Join (Who can join = Anyone, or an invited tester on an invite-only test). */
 export async function join(tester: U, testId: string, body: Record<string, unknown>) {
   if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
@@ -195,6 +205,7 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
   await closedInvite(tester.id, body); // (batch 16 section 32)
   const refusal = await joinRefusal(tester.id, testId);
   if (refusal) throw new HttpError(409, "refused", refusal);
+  await alreadyWaiting(tester.id, testId);
   await listingGate(tester.id, testId, body, "apply");
   if (t.joinMode !== "anyone" && t.joinMode !== "invite") gapStop(t, await db.testerProfile.findUnique({ where: { userId: tester.id } }), body, "Apply");
   if (t.joinMode === "anyone") return { joined: true, sessionId: (await join(tester, testId, { ...body, confirmed: true })).id };
@@ -337,6 +348,7 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
   if (!canAskToRejoin(old, rated)) throw new HttpError(409, "not_again", rated || old.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't ask to rejoin this test.");
   const refusal = await joinRefusal(tester.id, testId, { rejoin: true });
   if (refusal) throw new HttpError(409, "refused", refusal);
+  await alreadyWaiting(tester.id, testId);
   await listingGate(tester.id, testId, body, "ask");
   if (t.ndaText && body.ndaAccepted !== true) throw new HttpError(400, "nda", "Accept the NDA to ask to rejoin.");
   gapStop(t, await db.testerProfile.findUnique({ where: { userId: tester.id } }), body, "Ask");

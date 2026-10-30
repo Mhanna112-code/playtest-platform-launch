@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 import { displayName, fmtDate, pronouns } from "@/lib/format";
 import { andList, inviteTesterRefusal, inviteTestRefusal, MAX_ACTIVE_TESTS, termsLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
@@ -348,6 +349,7 @@ export async function cancelInvite(dev: U, testId: string, body: Record<string, 
   if (inv.status !== "sent") throw new HttpError(409, "gone", inv.status === "joined" ? "They already joined." : inv.status === "replaced" ? "This invite is no longer valid: it was re-sent on the new listing." : "This invite was already cancelled.");
   await devGateIfSeen(testId, body, { acts: INVITE_ACTS, keys: [`t:${inv.testerId}`] });
   await db.invite.update({ where: { id: inv.id }, data: { status: "cancelled" } });
+  await tellInvitesClosed([inv.id]); // (batch 30 §6)
   return { ok: true };
 }
 
@@ -386,6 +388,27 @@ export async function invitesSentSince(userId: string, since: Date) {
 
 /** (Batch 14 section 3) "<dev> updated <test>: your invite was sent again on the new listing." */
 export const reinvitedLine = (dev: string, test: string) => `${dev} updated “${test}”: your invite was sent again on the new listing.`; // (batch 15 section 32) quoted
+
+/** (Batch 16 section 32) "Your invite to “Harbor Run” was closed." (never why). */
+export const inviteClosedLine = (test: string) => `Your invite to “${test}” was closed.`;
+/**
+ * (Batch 30 §6, per batch 29 §23) The live box's "Your invite to “<test>” was closed." is a bell line too, in "Applications and invites" (stacked across tests), for every
+ * invite closed without its own line: the developer's Cancel invite, a stop or close, a pause (any cause, never why), a block, a deleted developer. (Open until passing
+ * has its own "“<test>” closed to new testers on <date>."; a re-sent invite its "…was sent again" line.) Pass the ids of the invites just closed.
+ */
+export async function tellInvitesClosed(inviteIds: string[]) {
+  if (!inviteIds.length) return;
+  const list = await db.invite.findMany({ where: { id: { in: inviteIds }, status: "cancelled" }, include: { test: { select: { title: true } } } });
+  const people = new Map((await db.user.findMany({ where: { id: { in: list.map((i) => i.testerId) }, deletedAt: null }, select: { id: true, email: true } })).map((u) => [u.id, u.email]));
+  for (const i of list) {
+    const to = people.get(i.testerId);
+    if (!to) continue;
+    const line = inviteClosedLine(i.test.title);
+    await notify(to, line, [line], `/app/find/${i.testId}`, { group: "apps", testId: i.testId });
+  }
+}
+/** The open invites a closing is about to cancel (for tellInvitesClosed after it). */
+export const openInviteIds = async (where: Prisma.InviteWhereInput, tx: Prisma.TransactionClient | typeof db = db) => (await tx.invite.findMany({ where: { ...where, status: "sent" }, select: { id: true } })).map((i) => i.id);
 
 export async function reinviteAfterEdit(testId: string) {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });

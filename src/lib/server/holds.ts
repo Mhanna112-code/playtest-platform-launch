@@ -138,7 +138,9 @@ export async function resumeTests(tx: Prisma.TransactionClient, devId: string, s
 export async function markPaused(where: { developerId?: string; id?: string }, now = new Date()) {
   // (Owner, Oct 28, batch 16 section 32) Open invites close when the test or its developer can't take testers (any pause, hold or suspension); nothing reopens
   // by itself: the developer can invite again after.
-  await db.invite.updateMany({ where: { status: "sent", test: { ...where, status: { in: ["open", "closed"] } } }, data: { status: "cancelled" } });
+  const closing = await (await import("./invites")).openInviteIds({ test: { ...where, status: { in: ["open", "closed"] } } });
+  await db.invite.updateMany({ where: { id: { in: closing }, status: "sent" }, data: { status: "cancelled" } });
+  await (await import("./invites")).tellInvitesClosed(closing); // (batch 30 §6) the neutral line, never why
   await db.test.updateMany({ where: { ...where, status: { in: ["open", "closed"] }, pausedSince: null }, data: { pausedSince: now } });
 }
 
@@ -712,6 +714,7 @@ async function runDailyLocked(now: Date) {
   const rs = await import("./restrictions");
   await rs.cancelLatePauseCalls(now);
   await rs.payoutReminders(now);
+  await rs.payoutWaitReminders(now); // (batch 32 §1) money waiting for payout setup
   await rs.suspendedAccountsReminder(now);
   // (Batch 28 §17) Shares still waiting for a tester whose payout setup is done (a transfer that failed earlier) are sent again, from their own charge.
   await (await import("./stripe")).resendWaitingShares().catch((e) => console.error("[payouts] resend:", (e as Error).message));
@@ -728,6 +731,8 @@ async function runDailyLocked(now: Date) {
   await (await import("./recordings")).purgeUploads(now).catch((e) => console.error("[purge]", (e as Error).message));
   // (Batch 15 section 7) Sign-in attempts older than a day are deleted.
   await (await import("./passwords")).cleanLoginAttempts(now);
+  // (Batch 30 §35) Storage running out: the database's and the uploads' sizes against their limits (a failure never stops the rest of the job).
+  await (await import("./storageAlerts")).checkStorage(now).catch((e) => console.error("[storage]", (e as Error).message));
   await sendSummaries(now);
   return out;
 }
@@ -933,7 +938,7 @@ async function closeOutReminders(now: Date, co: CloseOuts) {
     const key = `closesoon:${now.toISOString().slice(0, 10)}`;
     const had = await db.notification.findFirst({ where: { userId: devId, reminderKey: key }, select: { id: true, summarizedAt: true } });
     if (had && !had.summarizedAt) await db.notification.update({ where: { id: had.id }, data: { text: await renderFor(devId, line), readAt: null } });
-    else await notify(e.email, line, [line + "."], "/app#needs-you", { always: true, payment: true, group: "closeout", reminder: key });
+    else await notify(e.email, line, [line + "."], "/app#needs-review", { always: true, payment: true, group: "closeout", reminder: key }); // (batch 30 §6) where the pieces are: Needs review, marked
   }
 }
 
@@ -1000,7 +1005,7 @@ async function payNowLines(now: Date, co: CloseOuts) {
   for (const [devId, list] of byDev) {
     if (!(await lineDue(devId, "paynow", now))) continue;
     const line = payNowLine(list);
-    await notify(emails.get(devId)!, line, [line + "."], "/app#needs-you", { always: true, payment: true, group: "unreviewed", reminder: "paynow" });
+    await notify(emails.get(devId)!, line, [line + "."], "/app#needs-review", { always: true, payment: true, group: "unreviewed", reminder: "paynow" }); // (batch 30 §6) Needs review, marked
   }
 }
 

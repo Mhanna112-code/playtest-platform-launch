@@ -288,6 +288,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
             devName={dev}
             spotsLeft={t.spots - testersIn}
             dueIfNow={dueIfNow}
+            payoutHint={!(u.stripeAccountId && u.payoutsReady)}
             application={myApp ? { status: myApp.status, changed: !!myApp.changedAt, kind: myApp.kind } : null}
           />
         </div>

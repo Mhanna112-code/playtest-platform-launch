@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { PAYOUT_SETUP_HINT } from "@/lib/payout";
 import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
 import { LET_GO_BY_TESTER, chargedByTester, LIMITED_VIEW_LINE, WORK_OVER_PRESSES, stillWorksLine, workOver, devDeletedLine, NOT_LISTED, byTesterChoice, PAUSE_DEFAULTS, chargedDelayedLine, disputeLimitText, testerPaused, STOP_NOTE_KIND, stopReasonOf, chargeOpensNote, chargeOpensAt } from "@/lib/rules";
 import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, Languages, MessagesSquare, Monitor, Users, XCircle } from "lucide-react";
@@ -352,6 +353,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           <a className="btn" href={`/app/find/${c.testId}`}>{invitedBack ? "Join" : "Ask to rejoin"}</a>
         </section>
       )}
+
+      {/* (Owner, Oct 29, batch 32 §1) Payout setup not done: payments wait for it. */}
+      {!(u.stripeAccountId && u.payoutsReady) && <p className="text-sm text-slate-400" data-payout-hint="">{PAYOUT_SETUP_HINT} <a href="/app/payments#payout" className="underline">Finish setup</a></p>}
 
       {/* The full app's "Your agreed scope" fold. (Batch 30 §15) Two parts: the contract (fixed at joining, changed only through Switch / Keep) and the listing
           information (always the current listing, live; a line changed since joining carries "Updated <time>": before → now). The top box's See it opens it. */}

@@ -66,8 +66,8 @@ describe("the broken-key warning (section 45)", () => {
     await sact(a.sessionId, "key-broken", a.tester.cookie, { seenAt: seen() });
     await sact(b.sessionId, "key-broken", b.tester.cookie, { seenAt: seen() });
     let k = await keyBoxes(testId);
-    expect(k.broken.map((x) => `${x.tester} · ${x.value}`)).toEqual(["Ana Silva · K1", "Ben Okafor · K2"]);
-    const [ka, kb] = k.broken;
+    expect(k.broken.map((x) => `${x.tester} · ${x.value}`).sort()).toEqual(["Ana Silva · K1", "Ben Okafor · K2"]); // keys saved together share a time: the order between them isn't the point here
+    const ka = k.broken.find((x) => x.tester === "Ana Silva")!, kb = k.broken.find((x) => x.tester === "Ben Okafor")!;
     await db.user.update({ where: { id: a.tester.user.id }, data: { testerAlertsOff: true } });
     const loaded = seen();
     await settle();

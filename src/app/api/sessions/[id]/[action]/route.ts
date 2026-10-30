@@ -96,11 +96,11 @@ async function stateMoment(contractId: string, action: string, body: Record<stri
 }
 
 /**
- * (Owner, Oct 28, batch 16 section 28) A suspended tester side: the tests they were removed from open in a limited view, where Dispute, Charge, Let it go and Rate still
- * work (on the first press). Every other press stays refused while suspended (excerpt requests too, through their own route, until the suspension lifts).
+ * (Owner, Oct 28, batch 16 section 28; batch 17 section 10) A suspended tester side: the tests they were removed from open in a limited view where Dispute is the only
+ * press, under the same stop-once rules as everywhere (batch 29 section 11). Charge, Let it go and Rate are hidden there and refused here (nothing is lost: Charge never
+ * happens on its own, so what was open is still open after the reinstatement). Every other press stays refused while suspended (excerpt requests too, through their
+ * own route, until the suspension lifts).
  */
-// (Owner, Oct 28, batch 17 section 10) Dispute is the only press in the limited view; Charge, Let it go and Rate are hidden there and refused here (nothing is lost:
-// Charge never happens on its own, so what was open is still open after the reinstatement).
 const LIMITED_ACTIONS = new Set(["dispute"]);
 async function limitedUser(req: Request, contractId: string, action: string) {
   if (action === "choose" || action === "rate") {

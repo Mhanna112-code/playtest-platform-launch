@@ -298,6 +298,8 @@ export function dueFromJoin(joinedAt: Date, testerDays: number, tz?: string | nu
 export const joiningClosed = (t: { openUntil: Date | null }, now = new Date()) => !!t.openUntil && t.openUntil.getTime() < now.getTime();
 /** "This test closed to new testers on Nov 20." */
 export const closedToNewLine = (openUntil: Date, fmt: (d: Date) => string) => `This test closed to new testers on ${fmt(openUntil)}.`;
+/** (Batch 30 §6) The bell line when Open until passes: it stacks across tests in "Applications and invites", so it names the test. */
+export const testClosedToNewLine = (title: string, openUntil: Date, fmt: (d: Date) => string) => `“${title}” closed to new testers on ${fmt(openUntil)}.`;
 /** The developer's card and test page after Open until: "Joining closed · testers working until Dec 3" ("" when nobody is still working). */
 export const joiningClosedLine = (latestDue: Date | null, fmt: (d: Date) => string) => (latestDue ? `Joining closed · testers working until ${fmt(latestDue)}` : "Joining closed · every tester's time is up");
 /** (Owner, Oct 28, batch 16 section 3) The days a new tester gets: the number in the card's "N days per tester" (null without Open until). */
@@ -783,14 +785,11 @@ export const PAY_WAITS = "Pay what you owe first.";
 export const CONFIRM_DAYS = 3;
 /** (Batch 12 section 5) A press's confirmation pop-up locks the piece for at most this long. */
 export const PRESS_ACTION_MS = 15 * 60_000;
-/** (Batch 15 section 11) The date is a time token: written in the developer's own time zone where the line is stored. */
-export const bankConfirmLine = (cents: number, by: Date) => `Your bank wants you to confirm a ${money(cents)} payment. Confirm it in Payments by ${T(by, "dateYear")}.`;
 export const BANK_NOT_CONFIRMED = "Your bank didn't confirm the payment, so nothing was charged.";
 /**
  * (Batch 17 §11) The bank's check opens inline, under the button that charges. A charge made while the developer was away on a test is confirmed on that test page, under
- * the piece ("Confirm with your bank"); its bell line links straight there. Charges that belong to no test (a renewal) keep bankConfirmLine and Payments.
+ * the piece ("Confirm with your bank"). (Batch 29 §32) Its bell line is bankWaitingAllLine's, one across tests and renewals.
  */
-export const bankConfirmTestLine = (cents: number, by: Date) => `Your bank wants you to confirm a ${money(cents)} payment. Confirm this payment by ${T(by, "dateYear")}.`;
 export const CONFIRM_WITH_BANK = "Confirm with your bank";
 /**
  * (Owner, Oct 29, batch 29 §32) ONE bell line for every charge waiting for the bank, across tests and renewals: "Your bank wants you to confirm a $10.00 payment on
@@ -1460,9 +1459,6 @@ export const payClosesLine = (date: string, more = false) => `${more ? "Pay more
 /** Where an unpaid piece was: the developer's test page, and the tester's part. */
 export const closedNotPaidLine = (date: string) => `Closed on ${date}: not paid.`;
 export const notPaidClosedLine = (date: string) => `Not paid (closed on ${date})`;
-/** The bell reminders 3 days and 1 day before close-out (money: they ignore the email setting). */
-export const chargeByLine = (test: string, date: string) => `Charge or let go of your work on “${test}” by ${date}`;
-export const payByLine = (tester: string, test: string, date: string) => `Pay ${tester}'s work on “${test}” by ${date}`;
 
 // ---------- Extra pay from the Testers panel (owner, Oct 26) ----------
 

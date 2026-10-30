@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { PAYOUT_LINE } from "@/lib/payout";
-import { displayName, fmtDateTime, fmtTime } from "@/lib/format";
+import { PAYOUT_LINE, payoutWaitLine } from "@/lib/payout";
+import { displayName, fmtDateTime, fmtTime, money } from "@/lib/format";
 import { callCancelledLine } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify } from "./notify";
@@ -241,7 +241,9 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
     const tests = await db.test.findMany({ where: { developerId: userId, status: { not: "stopped" } } });
     for (const t of tests) {
       const cs = await db.contract.findMany({ where: { testId: t.id, status: "working" }, include: { tester: true } });
+      let invitesClosed: string[] = [];
       const cancelled = await db.$transaction(async (tx) => {
+        invitesClosed = await (await import("./invites")).openInviteIds({ testId: t.id }, tx);
         await tx.contract.updateMany({ where: { testId: t.id, status: "working" }, data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The test was stopped." } });
         const list = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
         await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test was stopped", decidedAt: new Date() } });
@@ -251,6 +253,7 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
         return list;
       });
       await tellCancelled(cancelled, "stopped");
+      await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6)
       for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
     }
   }
@@ -338,12 +341,14 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
   if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was already stopped.");
   let cs: Awaited<ReturnType<typeof db.contract.findMany<{ include: { tester: true } }>>> = [];
+  let invitesClosed: string[] = [];
   const cancelled = await db.$transaction(async (tx) => {
     // (Batch 15 section 35) The same test lock as the developer's Stop: a developer Stop and an admin Stop at once can't both run; the second is refused.
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
     const now = await tx.test.findUniqueOrThrow({ where: { id: testId }, select: { status: true } });
     if (now.status === "stopped") throw new HttpError(409, "stopped", "This test was already stopped.");
     cs = await tx.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } });
+    invitesClosed = await (await import("./invites")).openInviteIds({ testId }, tx);
     await tx.contract.updateMany({ where: { testId, status: "working" }, data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The test was stopped." } });
     const list = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
     await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test was stopped", decidedAt: new Date() } });
@@ -354,6 +359,7 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
     return list;
   });
   await tellCancelled(cancelled, "stopped");
+  await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6) never who
   for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
   await notify(t.developer.email, `The team stopped “${t.title}”`, [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
   return { ok: true };
@@ -410,4 +416,24 @@ export async function payoutReminders(now = new Date()) {
     await db.user.update({ where: { id: u.id }, data: { payoutRemindedAt: now } });
   }
   return due.length;
+}
+
+/**
+ * (Owner, Oct 29, batch 32 §1) Money waiting for a tester's payout setup: a bell line (and the payment email) as soon as a share waits, then every 3 days until
+ * the setup is done ("$8.00 is waiting for you: finish your payout setup to receive it."). Runs with the sweep; the last line's time is its reminder key's.
+ */
+export async function payoutWaitReminders(now = new Date()) {
+  const rows = await db.payment.groupBy({ by: ["testerId"], where: { transferStatus: "waiting", status: "charged", testerCents: { gt: 0 }, kind: { not: "subscription" } }, _sum: { testerCents: true } });
+  if (!rows.length) return 0;
+  const people = await db.user.findMany({ where: { id: { in: rows.map((r) => r.testerId) }, deletedAt: null, NOT: { payoutsReady: true, stripeAccountId: { not: null } } }, select: { id: true } });
+  const since = new Date(now.getTime() - REMIND_DAYS * DAY + 3_600_000);
+  const recent = new Set((await db.notification.findMany({ where: { userId: { in: people.map((u) => u.id) }, reminderKey: "payoutwait", createdAt: { gt: since } }, select: { userId: true } })).map((n) => n.userId));
+  let n = 0;
+  for (const u of people) {
+    if (recent.has(u.id)) continue;
+    const cents = rows.find((r) => r.testerId === u.id)?._sum.testerCents ?? 0;
+    await bell(u.id, payoutWaitLine(money(cents)), "/app/payments#payout", undefined, { payment: true, group: "payout", reminder: "payoutwait" });
+    n++;
+  }
+  return n;
 }

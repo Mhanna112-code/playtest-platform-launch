@@ -43,7 +43,7 @@ const SAME_TEXT: [string, string, string][] = [
   ["app/app/help/ContactForm.tsx", "app/api/help/route.ts", "Write a few words about what happened (at least 10 characters)."],
   // (Batch 26 section 14) The form and the server both check with answersMissing, which holds the lines.
   ["lib/questions.ts", "lib/questions.ts", "Answer every required question before sending."],
-  ["lib/questions.ts", "lib/questions.ts", "Answer at least one question before sending."],
+  ["lib/questions.ts", "lib/questions.ts", "Answer at least one question before sending (any one; none is required)."],
   ["app/app/sessions/[id]/SessionActions.tsx", "lib/server/payments.ts", "Say why you think the pay should be higher (at least a sentence)."],
   ["components/RateBox.tsx", "lib/server/ratings.ts", "Choose 1 to 5 stars."],
   ["app/app/tests/[id]/PayBox.tsx", "lib/rules.ts", "Enter an amount like 7.50."],

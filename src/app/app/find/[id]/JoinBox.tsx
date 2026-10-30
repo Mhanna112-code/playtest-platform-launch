@@ -1,4 +1,6 @@
 "use client";
+import Link from "next/link";
+import { PAYOUT_SETUP_HINT } from "@/lib/payout";
 import { NdaBox } from "@/components/NdaBox";
 import { Err } from "@/components/Err";
 import { MistakeList, announcePress, focusFirstMistake } from "@/components/FieldChecks";
@@ -21,7 +23,7 @@ import { TERMS_UPDATED_CODE } from "@/lib/termsOfUse";
  * Join or Apply to join. Stops once (box under the button) if anything about the listing changed since the page loaded;
  * the second press goes ahead on the current listing. No offers or counter-offers here.
  */
-export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; brokenKey?: boolean; testId: string; seenAt: string; mode: string; invited: boolean; inviteId?: string | null; application: { status: string; changed: boolean; kind?: string } | null; missing: Gaps; needs: { devices: string[]; languages: string[] }; devName: string; spotsLeft: number; dueIfNow: string; /** (Batch 20 section 21) the account hasn't agreed to the current Terms */ termsAgain?: boolean }) {
+export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; brokenKey?: boolean; testId: string; seenAt: string; mode: string; invited: boolean; inviteId?: string | null; application: { status: string; changed: boolean; kind?: string } | null; missing: Gaps; needs: { devices: string[]; languages: string[] }; devName: string; spotsLeft: number; dueIfNow: string; /** (Batch 32 §1) their payout setup isn't done: payments wait for it */ payoutHint?: boolean; /** (Batch 20 section 21) the account hasn't agreed to the current Terms */ termsAgain?: boolean }) {
   const router = useRouter();
   // (Design doc 7.3) The NDA is accepted before joining or applying; a returning tester says whether the key they had works again.
   const [nda, setNda] = useState(false);
@@ -35,6 +37,8 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState("");
+  // (Batch 32 §2) "You already applied to join this test in another tab.": shown in the waiting view the page redraws to.
+  const [already, setAlready] = useState("");
   // (Batch 30 §8) Their application or ask changed (the page followed it live: pending, declined, closed): the "Sent." line gives way to what the page now shows.
   const appState = p.application?.status ?? "";
   useEffect(() => setDone(""), [appState]);
@@ -119,6 +123,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       }
       if (e instanceof ApiError && e.code === "needs" && e.data.gaps) return { gaps: e.data.gaps as Gaps };
       if (e instanceof ApiError && e.code === TERMS_UPDATED_CODE) { setTermsAsk(true); setTermsErr(e.message); return { refused: true }; }
+      if (e instanceof ApiError && e.code === "already_waiting") { setAlready(e.message); router.refresh(); return { refused: true }; }
       setErr(errOf(e));
       return { refused: true };
     }
@@ -166,6 +171,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       else if (e instanceof ApiError && e.code === "nda" && p.nda) { setNdaErr(e.message); requestAnimationFrame(() => { const root = document.getElementById("join-card"); announcePress(root); focusFirstMistake(root); }); }
       // (Batch 16 section 32) The invite closed meanwhile: refused with the reason (no stop box), and the page drops the invite.
       else if (e instanceof ApiError && e.code === "invite_closed") { setErr(e.message); router.refresh(); }
+      else if (e instanceof ApiError && e.code === "already_waiting") { setAlready(e.message); router.refresh(); }
       else setErr(errOf(e));
     } finally {
       setBusy(false);
@@ -189,6 +195,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     return (
       <div className="space-y-2">
         <p className="info">{p.application.kind === "rejoin" ? "You asked to rejoin. You'll hear back when the developer answers." : "You applied to join. You'll hear back when the developer answers."}</p>
+        {already && <p className="note" data-already="">{already}</p>}
         <button className="btn-ghost" disabled={busy} onClick={() => go("withdraw-application")}>Withdraw application</button>
         <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} seeIt="#listing" alertsWhere="join" />
         <Err text={err} />
@@ -264,6 +271,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
         // (Batch 15 section 18) Every tester gets the same days from when they join.
         <p className="text-sm text-slate-300" data-join-deadline="">Your deadline: {p.dueIfNow}</p>
       )}
+      {p.payoutHint && <p className="text-sm text-slate-400" data-payout-hint="">{PAYOUT_SETUP_HINT} <Link href="/app/payments#payout" className="underline">Finish setup</Link></p>}
     </div>
   );
 }
