@@ -27,7 +27,7 @@ export const usesKeys = async (tx: Tx, testId: string) => (await tx.accessKey.co
  * (Section 45) `broken`: current working testers whose key is marked not working and whose warning the developer hasn't dismissed.
  */
 export async function keyBoxes(testId: string) {
-  const keys = await db.accessKey.findMany({ where: { testId }, orderBy: { createdAt: "asc" }, include: { contract: { include: { tester: true } } } });
+  const keys = await db.accessKey.findMany({ where: { testId }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], include: { contract: { include: { tester: true } } } });
   const free = keys.filter((k) => k.status === "free").map((k) => ({ id: k.id, value: k.value, ...(k.reusedFrom ? { reused: { from: k.reusedFrom, broken: k.reusedBroken } } : {}) }));
   const inUse = keys
     .filter((k) => (k.status === "inuse" || k.status === "broken" || k.status === "held") && k.contract)
