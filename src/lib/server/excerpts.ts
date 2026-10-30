@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 import { itemsOf } from "@/lib/answerSets";
+import { excerptWithFiles } from "@/lib/answerAttachments";
 import { HttpError } from "./http";
 import { bell } from "./notify";
 
@@ -61,7 +62,7 @@ async function paidAboveZero(sub: { id: string; review: { rejected: boolean; amo
 /** The answers of a part the tester could quote (plain text, at least 10 characters), or [] when the part can't be shown. */
 export async function excerptChoices(sub: { id: string; kind: string; answers: unknown; review: { rejected: boolean; amountCents: number } | null; dispute: { decidedCents: number | null } | null }) {
   if (sub.kind !== "written" || !(await paidAboveZero(sub))) return [];
-  return itemsOf(sub.answers).map((it, i) => ({ index: i, question: it.question, text: plainText(it.answer) })).filter((x) => x.text.length >= EXCERPT_MIN);
+  return itemsOf(sub.answers).map((it, i) => ({ index: i, question: it.question, text: plainText(excerptWithFiles(it.answer)) })).filter((x) => x.text.length >= EXCERPT_MIN);
 }
 
 /** A tester asks to show an excerpt. No stop-once; refused only for the rules above. */

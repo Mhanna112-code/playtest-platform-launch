@@ -191,8 +191,8 @@ describe("batch 10 item 3: long written answers scroll on the developer's side",
     const open = page.indexOf("<AnswersBox>"), close = page.indexOf("</AnswersBox>");
     expect(open).toBeGreaterThan(0);
     // The question labels are inside; the Pay box comes after the box closes.
-    expect(page.slice(open, close)).toContain("<SetView items={itemsOf(x.s!.answers, writtenQuestions(x.c))} />"); // (batch 13) each answer under its own question
-    expect(page.slice(open, close)).toContain("<Formatted text={x.s!.notes} />");
+    expect(page.slice(open, close)).toContain("<SetView items={itemsOf(x.s!.answers, writtenQuestions(x.c))} attachments="); // (batch 13) each answer under its own question
+    expect(page.slice(open, close)).toContain("<AnswerWithAttachments text={x.s!.notes} attachments=");
     expect(page.slice(open, close)).not.toContain("<PayBox");
     expect(page.indexOf('<PayBox owes={owesNow} key={x.s!.id} kind="submission"')).toBeGreaterThan(close);
   });

@@ -1,7 +1,6 @@
 "use client";
 import { AnswersBox } from "@/components/AnswersBox";
-import { SetView } from "@/components/AnswerSets";
-import { Formatted } from "@/components/Formatted";
+import { AnswerWithAttachments, SetView } from "@/components/AnswerSets";
 import { AttachmentList } from "@/components/AttachmentList";
 import type { SetItem } from "@/lib/answerSets";
 
@@ -25,8 +24,8 @@ export function DisputeWork({ work }: { work: DisputedWork | null }) {
         ) : (
           <AnswersBox>
             {work.part === "written" && work.setUntil && <p className="note" data-set-until="">Sent for the questions until {new Date(work.setUntil).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>}
-            {work.part === "written" && <SetView items={work.items} />}
-            {work.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><Formatted text={work.notes} /></div>}
+            {work.part === "written" && <SetView items={work.items} attachments={work.files.map((f) => ({ id: f.id, filename: f.filename, contentType: f.contentType, size: f.sizeBytes }))} />}
+            {work.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><AnswerWithAttachments text={work.notes} attachments={work.files.map((f) => ({ id: f.id, filename: f.filename, contentType: f.contentType, size: f.sizeBytes }))} /></div>}
             <AttachmentList items={work.files} />
           </AnswersBox>
         )}

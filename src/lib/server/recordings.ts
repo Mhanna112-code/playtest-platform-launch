@@ -117,8 +117,18 @@ const UPLOADING_MS = 3 * 3_600_000;
  * already sent stays with the sent piece (the developer still sees it) until the next Send, which leaves it out. Either way its slot is free at once.
  */
 export async function removeRecording(tester: U, contractId: string, body: Record<string, unknown>) {
-  await ownContract(tester.id, contractId);
+  const owned = await ownContract(tester.id, contractId);
   const rec = await db.recording.findUnique({ where: { id: String(body.recordingId ?? "") } });
+  if (body.written === true) {
+    if (!rec || rec.contractId !== contractId || rec.part !== "written") throw new HttpError(404, "not_found", "That file was already removed.");
+    // A sent set owns its uploads for its full history. An unsubmitted upload can go once no kept draft uses its marker.
+    if (rec.submissionId || JSON.stringify(owned.prevSets).includes(`[[attachment:${rec.id}|`)) return { removed: true, retained: true };
+    const draft = await db.keptForm.findUnique({ where: { userId_key: { userId: tester.id, key: `written:${contractId}` } }, select: { data: true } });
+    if (JSON.stringify(draft?.data ?? {}).includes(`[[attachment:${rec.id}|`)) return { removed: true, retained: true };
+    await db.recording.delete({ where: { id: rec.id } });
+    await deleteStored(rec.storageKey);
+    return { removed: true };
+  }
   if (!rec || rec.contractId !== contractId || rec.part !== "recording") throw new HttpError(404, "not_found", "That recording was already removed.");
   const sub = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });
   const locked = resendRefusal(sub?.review, "recording"); // (batch 30 §2) a paid recording can be updated

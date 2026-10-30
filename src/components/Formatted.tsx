@@ -1,4 +1,5 @@
 import { parseFormatted } from "@/lib/markdown";
+import React from "react";
 
 /** (Owner, Oct 29, batch 11) A written answer shown formatted: bold, italic and code blocks only, always as escaped text (no HTML, no links). */
 export function Formatted({ text, className = "" }: { text: string; className?: string }) {

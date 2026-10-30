@@ -366,7 +366,7 @@ describe("batch 11 item 7: the written part", () => {
     expect(wrapSelection("hello world", 6, 11, "bold")).toEqual({ value: "hello **world**", start: 8, end: 13 });
     expect(src("components/Formatted.tsx")).not.toContain("dangerouslySetInnerHTML");
     // (Batch 13) The answers are shown formatted inside each set (SetView).
-    expect(src("components/AnswerSets.tsx")).toContain("<Formatted text={it.answer} className=\"text-slate-200\" />"); // (batch 26 section 15) indented under its question label
+    expect(src("components/AnswerSets.tsx")).toContain("<AnswerWithAttachments text={it.answer} attachments={attachments} />"); // (batch 26 section 15) indented under its question label
   });
 
   it("files on the written part: images, PDF, text or zip, 500 MB (batch 31; was 25 MB), 5 at most; recordings too; they go with the answers", async () => {
@@ -383,7 +383,10 @@ describe("batch 11 item 7: the written part", () => {
       ids.push(r.body.recordingId);
     }
     expect((await start({ part: "written", filename: "six.png", size: 100, contentType: "image/png" })).body.error.message).toBe("You can attach at most 5 files to your written answers.");
-    expect((await start({ part: "written", filename: "screen.webm", size: 100, contentType: "video/webm" })).status).toBe(200);
+    const video = await start({ part: "written", filename: "screen.webm", size: 100, contentType: "video/webm" });
+    expect(video.status).toBe(200);
+    expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] })).status).toBe(409);
+    await sact(j.sessionId, "recording-abandon", j.tester.cookie, { recordingId: video.body.recordingId });
     await db.recording.updateMany({ where: { id: { in: ids } }, data: { uploadedAt: new Date() } });
     expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] })).status).toBe(200);
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId, kind: "written" } });

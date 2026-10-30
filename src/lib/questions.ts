@@ -1,5 +1,6 @@
 import { LIMITS } from "./limits";
 import { parseFormatted } from "./markdown";
+import { withoutAttachmentMarkers } from "./answerAttachments";
 // (Owner, Oct 29, batch 26 section 14) Questions are NOT required by default: the developer ticks "Required" on any a tester must answer, stored as the question's text
 // with REQUIRED in front (part of the terms: a change offers new terms like any question change). An unmarked question is not required. Sending written answers needs at
 // least one answered question plus every Required one (answersMissing: the server and the form use the same rule).
@@ -41,7 +42,7 @@ export const answerCounter = (chars: number) => `${chars} / ${ANSWER_MIN_CHARS} 
 
 /** (Batch 30 §14) How long an answer counts as: trimmed, without the formatting marks (** for bold, * for italic, ``` around a code block); spaces inside count. */
 export function answerChars(answer: string) {
-  return parseFormatted((answer ?? "").trim())
+  return parseFormatted(withoutAttachmentMarkers(answer ?? "").trim())
     .map((b) => (b.kind === "code" ? b.text : b.runs.map((r) => r.text).join("")))
     .join("\n")
     .trim().length;

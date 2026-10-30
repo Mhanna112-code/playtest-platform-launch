@@ -1,3 +1,4 @@
+import { withoutAttachmentMarkers } from "./answerAttachments";
 // The shared rules: pure functions used by the server (and shown on pages). Every money rule, the stop-once rule,
 // the Edit version check, the join check and contract snapshots live here so they are tested in one place.
 
@@ -838,7 +839,7 @@ export function retryStatusLine(u: { holdRetries: number; holdRetryAt: Date | nu
 }
 /** (Owner, Oct 29, batch 11) A written part (all its answers and notes together) is at most this many characters. */
 export const WRITTEN_MAX_CHARS = 50_000; // (Owner, Oct 29, batch 14 section 5; was 10,000)
-export const writtenLength = (texts: string[]) => texts.reduce((a, t) => a + (t ?? "").length, 0);
+export const writtenLength = (texts: string[]) => texts.reduce((a, t) => a + withoutAttachmentMarkers(t ?? "").length, 0);
 export function checkWrittenLength(texts: string[]): Check {
   const n = writtenLength(texts);
   return n > WRITTEN_MAX_CHARS ? no(`Your written answers can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters in all (now ${n.toLocaleString("en-US")}).`) : yes;

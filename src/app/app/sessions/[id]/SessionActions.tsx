@@ -16,9 +16,19 @@ import { NOTHING_CHANGED_LINE } from "@/lib/rules";
 import { QuestionBox } from "@/components/QuestionBox";
 import { WRITTEN_MAX_CHARS, writtenLength } from "@/lib/rules";
 import { wrapSelection } from "@/lib/markdown";
+import { uploadToSession } from "@/lib/upload";
+import { attachmentMarker, removeAttachmentMarker, type AnswerAttachment } from "@/lib/answerAttachments";
+import { AnswerWithAttachments } from "@/components/AnswerSets";
+import { ScreenRecorder } from "@/components/ScreenRecorder";
 
 /** (Owner, Oct 29, batch 11) Bold, Italic and Code block for a written answer (stored as Markdown; the developer sees it formatted). */
-function FormatBar({ target, onChange }: { target: React.RefObject<HTMLTextAreaElement | null>; onChange: (v: string) => void }) {
+function FormatBar({ target, onChange, sessionId, onAttach }: { target: React.RefObject<HTMLTextAreaElement | null>; onChange: (v: string) => void; sessionId: string; onAttach: (item: AnswerAttachment) => void }) {
+  const [err, setErr] = useState("");
+  const pending = useRef("");
+  const recordingAt = useRef<number | null>(null);
+  const progress = (filename: string, pct: number) => { const el = target.current; if (!el) return; const next = `[Uploading ${filename}… ${pct}%]`; onChange(pending.current ? el.value.replace(pending.current, next) : el.value.slice(0, recordingAt.current ?? el.selectionStart) + next + el.value.slice(recordingAt.current ?? el.selectionStart)); pending.current = next; recordingAt.current = null; };
+  const finish = (id: string, filename: string, file: Blob) => { if (target.current) onChange(target.current.value.replace(pending.current, attachmentMarker(id, filename))); pending.current = ""; recordingAt.current = null; onAttach({ id, filename, size: file.size, contentType: file.type.split(";")[0] }); };
+  const failed = () => { if (target.current) onChange(target.current.value.replace(pending.current, "")); pending.current = ""; recordingAt.current = null; };
   const apply = (kind: "bold" | "italic" | "code") => {
     const el = target.current;
     if (!el) return;
@@ -27,11 +37,14 @@ function FormatBar({ target, onChange }: { target: React.RefObject<HTMLTextAreaE
     requestAnimationFrame(() => { el.focus(); el.setSelectionRange(r.start, r.end); });
   };
   return (
-    <span className="flex gap-1" role="toolbar" aria-label="Formatting" data-format-bar="">
+    <div className="flex flex-wrap items-center gap-1" role="toolbar" aria-label="Formatting" data-format-bar="">
       <button type="button" className="btn-ghost px-2 py-0.5 text-xs font-bold" title="Bold" onClick={() => apply("bold")}>B</button>
       <button type="button" className="btn-ghost px-2 py-0.5 text-xs italic" title="Italic" onClick={() => apply("italic")}>I</button>
       <button type="button" className="btn-ghost px-2 py-0.5 font-mono text-xs" title="Code block" onClick={() => apply("code")}>{"</>"}</button>
-    </span>
+      <label className="btn-ghost cursor-pointer px-2 py-0.5 text-xs" title="Attach a file">📎<input type="file" aria-label="Attach a file" disabled={!!pending.current} className="sr-only" accept="image/*,application/pdf,text/plain,.zip,video/*" onChange={async (e) => { const file = e.target.files?.[0]; e.target.value = ""; if (!file || pending.current) return; setErr(""); progress(file.name, 0); try { const id = await uploadToSession(sessionId, file, file.name, "written", (pct) => progress(file.name, pct)); finish(id, file.name, file); } catch (e) { failed(); setErr(errOf(e)); } }} /></label>
+      <FormMistakes text={err} press="Attach" />
+      <ScreenRecorder sessionId={sessionId} part="written" label="⏺" disabled={!!pending.current} onCancel={() => { recordingAt.current = null; }} onStart={() => { recordingAt.current = target.current?.selectionStart ?? null; }} onUploadProgress={progress} onUploadError={failed} onUploaded={finish} />
+    </div>
   );
 }
 
@@ -41,13 +54,14 @@ const isShortLine = (m: string) => /^\W?Write at least \d+ characters \(\d+ so f
 /** One answer box with its formatting toolbar. */
 /** (Batch 16 section 10) A required answer left empty is red at its box, with the server's own line. */
 export { ANSWER_REQUIRED };
-function AnswerBox({ id, value, onChange, rows = 3, required, min, short }: { id: string; value: string; onChange: (v: string) => void; rows?: number; required?: boolean; /** (Batch 30 §14) an answer to a question: the counter below the minimum */ min?: boolean; /** red: Send found it too short */ short?: boolean }) {
+function AnswerBox({ id, value, onChange, sessionId, attachments, onAttach, onRemove, rows = 3, required, min, short }: { id: string; value: string; onChange: (v: string) => void; sessionId: string; attachments: AnswerAttachment[]; onAttach: (item: AnswerAttachment) => void; onRemove: (id: string) => void; rows?: number; required?: boolean; /** (Batch 30 §14) an answer to a question: the counter below the minimum */ min?: boolean; /** red: Send found it too short */ short?: boolean }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const chars = min ? answerChars(value) : 0;
   return (
     <div className="space-y-1">
-      <FormatBar target={ref} onChange={onChange} />
+      <FormatBar target={ref} onChange={onChange} sessionId={sessionId} onAttach={onAttach} />
       <textarea ref={ref} id={id} rows={rows} className="input" value={value} onChange={(e) => onChange(e.target.value)} {...(required ? { "data-required": "", "data-required-msg": ANSWER_REQUIRED } : {})} />
+      <AnswerWithAttachments text={value} attachments={attachments} onRemove={(id) => { onChange(removeAttachmentMarker(value, id)); onRemove(id); }} />
       {/* (Batch 30 §14) While an answer is below the minimum: "12 / 50 characters minimum" (grey; red once Send found it short). An empty optional answer shows nothing. */}
       {min && chars < ANSWER_MIN_CHARS && (!!value.trim() || required || short) && <p className={`text-xs ${short ? "text-rose-300" : "text-slate-500"}`} data-answer-count={chars}>{answerCounter(chars)}</p>}
     </div>
@@ -58,7 +72,7 @@ function AnswerBox({ id, value, onChange, rows = 3, required, min, short }: { id
  * Written answers: one box per question in the tester's contract. Can be updated until it's paid. `canSend` false (batch 10: the test is paused): the boxes stay and what is
  * typed is kept as a draft, but Send is hidden until the test resumes.
  */
-export function WrittenForm({ sessionId, questions, initial, initialNotes, update, seenAt, canSend = true, sentSame = false, newFiles = false, lines = [] }: { /** (Batch 30 §2, §3) grey lines above Send */ lines?: string[]; sessionId: string; questions: string[]; initial: string[]; initialNotes: string; update: boolean; seenAt: string; canSend?: boolean; /** (Batch 20 section 26) what was sent is for these same questions (so the form starts from exactly it) */ sentSame?: boolean; /** an attachment added since the last send */ newFiles?: boolean }) {
+export function WrittenForm({ sessionId, questions, initial, initialNotes, update, seenAt, canSend = true, sentSame = false, newFiles = false, lines = [], initialAttachments = [] }: { /** (Batch 30 §2, §3) grey lines above Send */ lines?: string[]; sessionId: string; questions: string[]; initial: string[]; initialNotes: string; update: boolean; seenAt: string; canSend?: boolean; initialAttachments?: AnswerAttachment[]; /** (Batch 20 section 26) what was sent is for these same questions (so the form starts from exactly it) */ sentSame?: boolean; /** an attachment added since the last send */ newFiles?: boolean }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
@@ -71,6 +85,18 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   // (Batch 32 §4) "Answer at least one question…": a line above the questions (no box red), gone once any answer has text.
   const [needOne, setNeedOne] = useState(false);
   const [notes, setNotes] = useState(initialNotes);
+  const [attachments, setAttachments] = useState(initialAttachments);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => window.dispatchEvent(new CustomEvent(`written-files:${sessionId}`, { detail: { attachments, places: attachments.map((a) => ({ id: a.id, labels: [...answers.map((text, i) => ({ text, label: qText(questions[i]) })), { text: notes, label: "Anything else (bugs, ideas)" }].filter((x) => x.text.includes(`[[attachment:${a.id}|`)).map((x) => x.label) })) } })));
+    return () => cancelAnimationFrame(frame);
+  }, [sessionId, attachments, answers, notes, questions]);
+  const addAttachment = (item: AnswerAttachment) => setAttachments((old) => [...old.filter((a) => a.id !== item.id), item]);
+  const removeAttachment = (id: string) => {
+    const refs = [...answers, notes].reduce((n, a) => n + (a.includes(`[[attachment:${id}|`) ? 1 : 0), 0);
+    if (refs > 1) return;
+    const data = { answers: answers.map((a) => removeAttachmentMarker(a, id)), notes: removeAttachmentMarker(notes, id), questions };
+    void api("/api/kept", { key: `written:${sessionId}`, data }).then(() => api(`/api/sessions/${sessionId}/recording-remove`, { recordingId: id, written: true })).then(() => setAttachments((old) => old.filter((a) => a.id !== id))).catch((e) => setMsg({ ok: false, text: errOf(e) }));
+  };
   // (Owner's finding, Oct 30, batch 32 §12) Answers sent from another device or tab arrive with the page's next redraw: boxes nobody touched here take them
   // (they stayed empty while the button already read "Send my updated answers"); anything typed here is kept.
   const lastSent = useRef({ answers: initial, notes: initialNotes });
@@ -99,6 +125,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   async function send(e: React.FormEvent) {
     e.preventDefault();
     if (!canSend) return;
+    if ([...answers, notes].some((a) => a.includes("[Uploading "))) return setMsg({ ok: false, text: FIELD + "Wait for the upload to finish before sending." });
     // (Batch 27 section 1) An open new-terms offer comes first: the press goes straight to its refusal (the page goes up to Switch / Keep).
     const terms = offerShown();
     if (!terms && length > WRITTEN_MAX_CHARS) return setMsg({ ok: false, text: FIELD + `Your written answers can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters in all (now ${length.toLocaleString("en-US")}).` });
@@ -141,13 +168,13 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
           {/* (Batch 15 section 3) A long question sits in a scroll box about 6 lines tall. */}
           {/* (Batch 26 sections 11 and 14) The "*" only on a question the developer ticked Required, right after the question's words (not at the far right). */}
           <label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><ScrollText className="min-w-0" text={qText(q)} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}</label>
-          <AnswerBox id={`a${i}`} required={qRequired(q)} min short={missingAt === i && !!msg && !msg.ok && isShortLine(msg.text)} value={answers[i]} onChange={(v) => setAnswers((all) => questions.map((_, j) => (j === i ? v : all[j] ?? "")))} />
+          <AnswerBox id={`a${i}`} sessionId={sessionId} attachments={attachments} onAttach={addAttachment} onRemove={removeAttachment} required={qRequired(q)} min short={missingAt === i && !!msg && !msg.ok && isShortLine(msg.text)} value={answers[i]} onChange={(v) => setAnswers((all) => questions.map((_, j) => (j === i ? v : all[j] ?? "")))} />
         </div>
       ))}
       </QuestionBox>
       <div>
         <label className="label" htmlFor="notes">Anything else (bugs, ideas)</label>
-        <AnswerBox id="notes" rows={2} value={notes} onChange={setNotes} />
+        <AnswerBox id="notes" rows={2} sessionId={sessionId} attachments={attachments} onAttach={addAttachment} onRemove={removeAttachment} value={notes} onChange={setNotes} />
       </div>
       {/* (Batch 11) (Batch 14) At most 50,000 characters for the whole written part, counted live. */}
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
