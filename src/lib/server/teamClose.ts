@@ -65,6 +65,13 @@ export async function teamClose(adminId: string, scope: TeamCloseScope, body: Re
   if (reason.trim().length < 5) throw new HttpError(400, "bad_reason", TEAM_CLOSE_REASON);
   const asked = Array.isArray(body.pieces) ? (body.pieces as { kind?: unknown; id?: unknown }[]).filter((p) => p && (p.kind === "submission" || p.kind === "call") && typeof p.id === "string") : [];
   if (!asked.length) throw new HttpError(400, "no_preview", "Press Preview first: it lists what this closes.");
+  // (Owner, Oct 30, batch 34 §1) Another admin suspended or reinstated the developer since the Preview: the close-out stops once; the second press goes ahead.
+  const race = await import("./adminRace");
+  const from = race.checkFrom(race.adminSeen(body));
+  if (from) {
+    const devId = "developerId" in scope ? scope.developerId : (await db.test.findUnique({ where: { id: scope.testId }, select: { developerId: true } }))?.developerId;
+    if (devId) race.stopIfChanged("developerId" in scope ? "Close all open reviews for $0" : "Close this test's open reviews for $0", await race.accountChangesSince(devId, adminId, from, ["suspended", "reinstated"]));
+  }
   const now = new Date();
   // Only pieces still open in this scope (a piece outside it is never touched); the rest of the preview's list were settled meanwhile.
   const open = new Map((await openPieces(scope, now)).map((p) => [`${p.kind}:${p.id}`, p]));
@@ -112,5 +119,5 @@ async function tellEveryone(adminId: string, scope: TeamCloseScope, closed: Piec
   const devLine = `The team closed ${plural(closed.length, "open review")} on ${test ? `“${test.title}”` : "your tests"} for $0`;
   await notify(dev.email, devLine, [devLine + ".", `The team's reason: “${reason}”`, "Nothing was charged."], test ? `/app/tests/${"testId" in scope ? scope.testId : ""}` : "/app", { payment: true, group: "payhold" });
   // The developer's account history (their admin box's "Holds and suspensions") and this admin's "Your actions": who, when, the count and the reason.
-  await db.accountEvent.create({ data: { userId: developerId, kind: "team-closed", byId: adminId, note: `${plural(closed.length, "open review")} closed for $0${test ? ` on “${test.title}”` : ""}: ${reason}` } });
+  await db.accountEvent.create({ data: { userId: developerId, kind: "team-closed", byId: adminId, createdAt: new Date(), note: `${plural(closed.length, "open review")} closed for $0${test ? ` on “${test.title}”` : ""}: ${reason}` } });
 }

@@ -289,14 +289,30 @@ async function tellAdminsLiftWaiting(dev: { id: string; email: string; name: str
 }
 
 /** Admin: approve lifting a payment hold (the 4th hold onward). First press wins. The hold lifts once everything owed is paid. */
-export async function approveHoldLift(adminId: string, devId: string, note: string) {
+export async function approveHoldLift(adminId: string, devId: string, note: string, seen: import("./adminRace").AdminSeen | null = null) {
   const dev = await db.user.findUnique({ where: { id: devId } });
-  if (!dev?.holdStartedAt || dev.holdReason === "chargeback" || dev.holdCount <= HOLD_APPROVAL_AFTER) throw new HttpError(409, "not_needed", "That account's hold doesn't need an approval.");
-  const claimed = await db.user.updateMany({ where: { id: devId, holdApprovedAt: null, holdStartedAt: { not: null } }, data: { holdApprovedAt: new Date(), holdApprovedById: adminId } });
-  if (claimed.count !== 1) {
-    const by = dev.holdApprovedById ? await db.user.findUnique({ where: { id: dev.holdApprovedById } }) : null;
-    throw new HttpError(409, "decided", `This lift was already approved${by ? ` by ${displayName(by)}` : ""}${dev.holdApprovedAt ? ` at ${fmtDateTime(dev.holdApprovedAt)}` : ""}.`);
+  if (!dev?.holdStartedAt || dev.holdReason === "chargeback" || dev.holdCount <= HOLD_APPROVAL_AFTER) {
+    // (Batch 34 §1) Approved by another admin and lifted since (the hold no longer says so): the approval on record names them.
+    const ok = dev && !dev.holdStartedAt ? await db.accountEvent.findFirst({ where: { userId: devId, kind: "hold-approved" }, orderBy: { createdAt: "desc" } }) : null;
+    const hold = ok ? await db.accountEvent.findFirst({ where: { userId: devId, kind: "hold" }, orderBy: { createdAt: "desc" } }) : null;
+    if (ok && (!hold || hold.createdAt <= ok.createdAt)) {
+      const by = ok.byId ? await db.user.findUnique({ where: { id: ok.byId } }) : null;
+      throw new HttpError(409, "decided", `This lift was already approved${by ? ` by ${displayName(by)}` : ""} at ${fmtDateTime(ok.createdAt)}.`);
+    }
+    throw new HttpError(409, "not_needed", "That account's hold doesn't need an approval.");
   }
+  const race = await import("./adminRace");
+  const already = async () => {
+    const now = await db.user.findUniqueOrThrow({ where: { id: devId } }); // (batch 34) read again: the first admin's approval names them
+    const by = now.holdApprovedById ? await db.user.findUnique({ where: { id: now.holdApprovedById } }) : null;
+    return new HttpError(409, "decided", `This lift was already approved${by ? ` by ${displayName(by)}` : ""}${now.holdApprovedAt ? ` at ${fmtDateTime(now.holdApprovedAt)}` : ""}.`);
+  };
+  if (dev.holdApprovedAt) throw await already();
+  // (Owner, Oct 30, batch 34 §1) Another admin suspended (or reinstated) this developer since the page loaded: the Approve stops once; the second press goes ahead.
+  const from = race.checkFrom(seen);
+  if (from) race.stopIfChanged("Approve", await race.accountChangesSince(devId, adminId, from, ["suspended", "reinstated"]));
+  const claimed = await db.user.updateMany({ where: { id: devId, holdApprovedAt: null, holdStartedAt: { not: null } }, data: { holdApprovedAt: new Date(), holdApprovedById: adminId } });
+  if (claimed.count !== 1) throw await already();
   await accountEvent(devId, "hold-approved", adminId, note);
   const lifted = await liftHoldIfClear(devId);
   if (!lifted) await notify(dev.email, "The team approved lifting your hold", ["The team approved lifting your hold. It lifts once you have paid what you owe." + (note ? ` Their note: “${note}”` : "")], "/app/payments", { payment: true, group: "admindecision" });

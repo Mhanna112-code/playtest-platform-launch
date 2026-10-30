@@ -23,7 +23,7 @@ describe("rule checklist gaps (section 35)", () => {
   it("the admin's Stop takes the same lock as the developer's: the second is refused", async () => {
     const { dev, testId } = await setup();
     expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
-    await expect(adminStopTest(testId, "Spam", null)).rejects.toMatchObject({ message: "This test was already stopped." });
+    await expect(adminStopTest(testId, "Spam", null)).rejects.toMatchObject({ message: expect.stringMatching(new RegExp(`^That test was already stopped \\(by ${dev.user.email.replace(/[.+]/g, "\\$&")} at .+\\)\\.$`)) }); // (batch 34 §1) who and when
   });
 
   it("a new dispute's live line opens its Needs you row; the dashboard's Needs you has excerpt requests and links applications to their own rows", async () => {
