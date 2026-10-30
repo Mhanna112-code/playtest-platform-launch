@@ -59,7 +59,7 @@ describe("batch 29 §36: a refused press's line survives the redraw that takes i
     expect(comp).toContain("data-kept-refusal");
     // (Batch 32 §10) A blue notice in the page (inside the button's nearest section still there), never floating over the text; never twice.
     expect(comp).toContain('<p className="info mt-2" role="status" data-kept-refusal="">');
-    expect(comp).toContain("anchor.appendChild(h);");
+    expect(comp).toContain("anchor.appendChild(hostRef.current);");
     expect(comp).not.toContain('position: "absolute"');
     expect(comp).toContain("flat(p.textContent).includes(msg)");
   });

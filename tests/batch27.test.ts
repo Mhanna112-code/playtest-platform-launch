@@ -231,7 +231,7 @@ describe("batch 27 section 4: the update pill, always, pointing at the updates",
     expect(top).not.toContain("scrolled.current");
     expect(top).not.toContain("else go();");
     expect(top).toContain("const s = where();\n      if (!s) return;\n      setSide(s);\n      setPill((p) => p + n);");
-    expect(top).toContain("if (!s) setPill(0);\n      else setSide(s);");
+    expect(top).toContain("seenNowInView();"); // (batch 32 §12) the pill goes once the box is in view, and the lines count as seen then
     expect(top).toContain("{pillLabel(pill, side)}");
     expect(top).toContain("onClick={go}");
     expect(top).toContain("behavior: reduce ? \"auto\" : \"smooth\"");

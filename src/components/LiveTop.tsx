@@ -32,10 +32,20 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
   const [side, setSide] = useState<PillSide>("up");
   const [flash, setFlash] = useState("");
   const where = () => pillSide(box.current?.getBoundingClientRect(), window.innerHeight);
+  /**
+   * (Owner's finding, Oct 30, batch 32 §12) Lines count as seen (the press's seen marker moves on) only once this box is in view: lines that arrived while it was
+   * out of view, with only the pill up, still stop the next press once (another device's Send used to go straight through and replace what was sent there).
+   */
+  const unseenUpTo = useRef("");
+  const seenNowInView = () => {
+    if (unseenUpTo.current) setShown(scope, unseenUpTo.current);
+    unseenUpTo.current = "";
+  };
   const go = () => {
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     box.current?.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
     setPill(0);
+    seenNowInView();
   };
   /**
    * (Owner, Oct 28, batch 20 section 13, bug found by the owner) EVERY live update nobody pressed for is announced, not only the page's first (batch 27 section 4:
@@ -58,8 +68,10 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
     if (!pill) return;
     const onScroll = () => {
       const s = where();
-      if (!s) setPill(0);
-      else setSide(s);
+      if (!s) {
+        setPill(0);
+        seenNowInView();
+      } else setSide(s);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
@@ -94,7 +106,12 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
       // Ignored (greyed) Alerts lines count as updates too, since they still show.
       const fresh = added.filter((c) => !wasShownInBox(c));
       if (fresh.length) announceFresh(fresh.length, key(fresh[fresh.length - 1]));
-      setShown(scope, r.now);
+      // (Batch 32 §12) Seen only when the box is in view; otherwise kept until it comes into view (a later poll with nothing new keeps the earlier mark).
+      if (!where()) {
+        unseenUpTo.current = "";
+        setShown(scope, r.now);
+      } else if (added.length || unseenUpTo.current) unseenUpTo.current = r.now;
+      else setShown(scope, r.now);
       announce(added);
     };
     const t = setInterval(tick, every);

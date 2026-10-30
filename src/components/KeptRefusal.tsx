@@ -80,7 +80,23 @@ export function KeptRefusal() {
       return;
     }
     // Checked a few times a second: hidden while the button (or a line saying the same) is on the page; once the redraw took it away, placed in the nearest
-    // section still there, and placed again if a later redraw (a live update) replaced that section.
+    // section still there. (Batch 32 §12) ONE notice element per kept line: when a live redraw throws its section away, the same element goes back in at once
+    // (a MutationObserver runs before the screen repaints), so it never blinks.
+    const place = () => {
+      const anchor = kept.anchors.map((id) => document.getElementById(id)).find((a): a is HTMLElement => !!a && a.getClientRects().length > 0) ?? null;
+      if (!anchor) {
+        if (hostRef.current) dropHost();
+        return;
+      }
+      if (!hostRef.current) {
+        const h = document.createElement(anchor.tagName === "UL" || anchor.tagName === "OL" ? "li" : "div");
+        h.setAttribute("data-kept-host", "");
+        h.style.listStyle = "none";
+        hostRef.current = h;
+        setHost(h);
+      }
+      if (hostRef.current.parentElement !== anchor) anchor.appendChild(hostRef.current);
+    };
     const check = () => {
       if (Date.now() - kept.at >= KEEP_MS) {
         setShow(false);
@@ -93,22 +109,19 @@ export function KeptRefusal() {
         dropHost();
         return;
       }
-      const anchor = kept.anchors.map((id) => document.getElementById(id)).find((a): a is HTMLElement => !!a && a.getClientRects().length > 0) ?? null;
-      if (!anchor) dropHost();
-      else if (!hostRef.current || hostRef.current.parentElement !== anchor) {
-        hostRef.current?.remove();
-        const h = document.createElement(anchor.tagName === "UL" || anchor.tagName === "OL" ? "li" : "div");
-        h.setAttribute("data-kept-host", "");
-        h.style.listStyle = "none";
-        anchor.appendChild(h);
-        hostRef.current = h;
-        setHost(h);
-      }
+      place();
       setShow(true);
     };
     check();
     const t = setInterval(check, 200);
-    return () => clearInterval(t);
+    const mo = new MutationObserver(() => {
+      if (hostRef.current && !hostRef.current.isConnected) place();
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      clearInterval(t);
+      mo.disconnect();
+    };
   }, [kept]);
   if (!kept || !show || typeof document === "undefined") return null;
   if (host) {

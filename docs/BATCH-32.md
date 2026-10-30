@@ -41,3 +41,9 @@ This file wins over the earlier batches and the design doc where they differ.
 
 ## 11. The admin console drops "Needs the team today" (owner, Oct 29)
 - The list stays in the daily admin email.
+
+## 12. Fixes from the Oct 30 screenshot run (owner, Oct 30)
+- Another device's or tab's changes stop the next press until the top box was in view: lines that arrived while it was out of view (the pill up) used to count as seen at once, so device B's Send went straight through and replaced what device A had sent. Answer boxes nobody touched take what was sent elsewhere (typed text stays).
+- "$X is waiting for you: finish your payout setup to receive it." goes out with the 5-minute sweep (it only went out with the daily job).
+- Refusals name the press: Charge / Let it go ("Your Charge didn't go through: …"; "Answer the new terms first: Switch or Keep." reads exactly so), Leave, and the Invite anyway box ("Your Invite anyway didn't go through.", "Press Invite anyway again to go ahead.").
+- The in-page refusal notice no longer blinks: one notice element, put back at once when a live redraw replaces its section.

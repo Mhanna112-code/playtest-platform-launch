@@ -1,8 +1,9 @@
 "use client";
+import { refusalLine } from "@/lib/pressLabels";
 import { Err } from "@/components/Err";
 import { FormMistakes } from "@/components/FormMistakes";
 import { checkFields } from "@/components/FieldChecks";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, ApiError, errOf, FIELD, offerShown } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { NotSentTag, useKept } from "@/lib/useKept";
@@ -70,6 +71,17 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   // (Batch 32 §4) "Answer at least one question…": a line above the questions (no box red), gone once any answer has text.
   const [needOne, setNeedOne] = useState(false);
   const [notes, setNotes] = useState(initialNotes);
+  // (Owner's finding, Oct 30, batch 32 §12) Answers sent from another device or tab arrive with the page's next redraw: boxes nobody touched here take them
+  // (they stayed empty while the button already read "Send my updated answers"); anything typed here is kept.
+  const lastSent = useRef({ answers: initial, notes: initialNotes });
+  useEffect(() => {
+    const was = lastSent.current;
+    lastSent.current = { answers: initial, notes: initialNotes };
+    if (JSON.stringify(was.answers) === JSON.stringify(initial) && was.notes === initialNotes) return;
+    setAnswers((cur) => questions.map((_, i) => ((cur[i] ?? "") === (was.answers[i] ?? "") ? initial[i] ?? "" : cur[i] ?? "")));
+    setNotes((cur) => (cur === was.notes ? initialNotes : cur));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(initial), initialNotes]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // (NEXT-UI 10) Typed and not sent: kept on the server, back after a reload or on another device, with "Not sent yet".
@@ -179,7 +191,7 @@ export function LeaveButton({ sessionId, seenAt, title }: { sessionId: string; s
         Leave this test
       </ConfirmButton>
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} didntGo />
-      <Err text={err ? `Your press didn't go through. ${err}` : ""} />
+      <Err text={err ? refusalLine("Leave", err) : ""} />
     </div>
   );
 }

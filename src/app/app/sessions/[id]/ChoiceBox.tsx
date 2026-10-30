@@ -1,4 +1,5 @@
 "use client";
+import { refusalLine } from "@/lib/pressLabels";
 import { Err } from "@/components/Err";
 import { checkFields } from "@/components/FieldChecks";
 import { FormMistakes } from "@/components/FormMistakes";
@@ -67,7 +68,8 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
         </div>
       )}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} didntGo press={pressed} />
-      <Err text={err && !err.startsWith(FIELD) ? `Your press didn't go through. ${err}` : ""} />
+      {/* (Batch 32 §12) Names the press ("Your Charge didn't go through: …"); "Answer the new terms first: Switch or Keep." reads exactly so. */}
+      <Err text={err && !err.startsWith(FIELD) ? refusalLine(pressed, err) : ""} />
       <FormMistakes text={err.startsWith(FIELD) ? err : ""} press="Charge" />
     </div>
   );

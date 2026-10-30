@@ -333,7 +333,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
             <button className="btn-ghost" onClick={() => setConfirm(null)}>Cancel</button>
           </div>
           {/* A stop for Invite anyway (what's missing changed, or any Invite reason) shows inside the box. */}
-          {at === "anyway" && <ChangesBox changes={changes} error={error} didntGo />}
+          {at === "anyway" && <ChangesBox changes={changes} error={error} didntGo press="Invite anyway" />}
         </div>
       )}
       </div>
