@@ -512,6 +512,7 @@ export const DEV_EXEMPT_KINDS: Record<string, string> = {
   edited_spots: "the developer's own edit of spots (reason E from another tab)",
   listing_save: "(batch 30 section 10) the testers' one line per listing save; the developer's own save is reason E from another tab (with its edited / info lines)",
   opened: "the developer's own Open (reason E from another tab)",
+  auto_joined: "(Task 2) a waiting application accepted while switching to instant joins; the developer sees the single accepted-applications line",
   stopped: "the developer's own Stop (reason E from another tab)",
   ended: "the developer's own End early (reason E from another tab)",
   next_round: "the developer's own Next round (reason E from another tab)",
@@ -542,6 +543,7 @@ export const TESTER_EVENT_KINDS = ["info", "renamed", "full", "spot_open", "list
 export const TESTER_EXEMPT_KINDS: Record<string, string> = {
   payment: "the developer's own payments (batch 11: a chargeback reversed in their favour) are never shown to testers",
   joined: "another tester's activity is never shown to a tester",
+  auto_joined: "the tester is told they joined through the usual joined notification, not a session event",
   left: "another tester's activity (their own Leave is reason E)",
   rated: "(batch 20 section 24) the tester's own rating (another tester's is never shown to a tester)",
   sent: "the tester's own work (reason E from another tab)",
