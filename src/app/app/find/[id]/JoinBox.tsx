@@ -1,4 +1,6 @@
 "use client";
+import Link from "next/link";
+import { PAYOUT_SETUP_HINT } from "@/lib/payout";
 import { NdaBox } from "@/components/NdaBox";
 import { Err } from "@/components/Err";
 import { MistakeList, announcePress, focusFirstMistake } from "@/components/FieldChecks";
@@ -21,7 +23,7 @@ import { TERMS_UPDATED_CODE } from "@/lib/termsOfUse";
  * Join or Apply to join. Stops once (box under the button) if anything about the listing changed since the page loaded;
  * the second press goes ahead on the current listing. No offers or counter-offers here.
  */
-export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; brokenKey?: boolean; testId: string; seenAt: string; mode: string; invited: boolean; inviteId?: string | null; application: { status: string; changed: boolean; kind?: string } | null; missing: Gaps; needs: { devices: string[]; languages: string[] }; devName: string; spotsLeft: number; dueIfNow: string; /** (Batch 20 section 21) the account hasn't agreed to the current Terms */ termsAgain?: boolean }) {
+export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; brokenKey?: boolean; testId: string; seenAt: string; mode: string; invited: boolean; inviteId?: string | null; application: { status: string; changed: boolean; kind?: string } | null; missing: Gaps; needs: { devices: string[]; languages: string[] }; devName: string; spotsLeft: number; dueIfNow: string; /** (Batch 32 §1) their payout setup isn't done: payments wait for it */ payoutHint?: boolean; /** (Batch 20 section 21) the account hasn't agreed to the current Terms */ termsAgain?: boolean }) {
   const router = useRouter();
   // (Design doc 7.3) The NDA is accepted before joining or applying; a returning tester says whether the key they had works again.
   const [nda, setNda] = useState(false);
@@ -264,6 +266,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
         // (Batch 15 section 18) Every tester gets the same days from when they join.
         <p className="text-sm text-slate-300" data-join-deadline="">Your deadline: {p.dueIfNow}</p>
       )}
+      {p.payoutHint && <p className="text-sm text-slate-400" data-payout-hint="">{PAYOUT_SETUP_HINT} <Link href="/app/payments#payout" className="underline">Finish setup</Link></p>}
     </div>
   );
 }

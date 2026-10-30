@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { PAYOUT_LINE } from "@/lib/payout";
-import { displayName, fmtDateTime, fmtTime } from "@/lib/format";
+import { PAYOUT_LINE, payoutWaitLine } from "@/lib/payout";
+import { displayName, fmtDateTime, fmtTime, money } from "@/lib/format";
 import { callCancelledLine } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify } from "./notify";
@@ -416,4 +416,24 @@ export async function payoutReminders(now = new Date()) {
     await db.user.update({ where: { id: u.id }, data: { payoutRemindedAt: now } });
   }
   return due.length;
+}
+
+/**
+ * (Owner, Oct 29, batch 32 §1) Money waiting for a tester's payout setup: a bell line (and the payment email) as soon as a share waits, then every 3 days until
+ * the setup is done ("$8.00 is waiting for you: finish your payout setup to receive it."). Runs with the sweep; the last line's time is its reminder key's.
+ */
+export async function payoutWaitReminders(now = new Date()) {
+  const rows = await db.payment.groupBy({ by: ["testerId"], where: { transferStatus: "waiting", status: "charged", testerCents: { gt: 0 }, kind: { not: "subscription" } }, _sum: { testerCents: true } });
+  if (!rows.length) return 0;
+  const people = await db.user.findMany({ where: { id: { in: rows.map((r) => r.testerId) }, deletedAt: null, NOT: { payoutsReady: true, stripeAccountId: { not: null } } }, select: { id: true } });
+  const since = new Date(now.getTime() - REMIND_DAYS * DAY + 3_600_000);
+  const recent = new Set((await db.notification.findMany({ where: { userId: { in: people.map((u) => u.id) }, reminderKey: "payoutwait", createdAt: { gt: since } }, select: { userId: true } })).map((n) => n.userId));
+  let n = 0;
+  for (const u of people) {
+    if (recent.has(u.id)) continue;
+    const cents = rows.find((r) => r.testerId === u.id)?._sum.testerCents ?? 0;
+    await bell(u.id, payoutWaitLine(money(cents)), "/app/payments#payout", undefined, { payment: true, group: "payout", reminder: "payoutwait" });
+    n++;
+  }
+  return n;
 }

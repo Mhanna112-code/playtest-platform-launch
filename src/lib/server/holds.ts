@@ -714,6 +714,7 @@ async function runDailyLocked(now: Date) {
   const rs = await import("./restrictions");
   await rs.cancelLatePauseCalls(now);
   await rs.payoutReminders(now);
+  await rs.payoutWaitReminders(now); // (batch 32 §1) money waiting for payout setup
   await rs.suspendedAccountsReminder(now);
   // (Batch 28 §17) Shares still waiting for a tester whose payout setup is done (a transfer that failed earlier) are sent again, from their own charge.
   await (await import("./stripe")).resendWaitingShares().catch((e) => console.error("[payouts] resend:", (e as Error).message));
