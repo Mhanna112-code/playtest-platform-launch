@@ -1,23 +1,24 @@
 "use client";
-import { PlusMore } from "@/components/PlusMore";
-import { TAG_NAMES } from "@/lib/inviteRows";
 import { SubscribersTag } from "@/components/SubscribeLink";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChangesBox } from "@/components/ChangesBox";
 import { MistakeList } from "@/components/FieldChecks";
 import { api } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
-import { PressButton } from "@/components/PressButton";
+import { useTesterChanges } from "@/lib/useTesterChanges";
+import type { Needs } from "@/lib/testerState";
 import { UserPlus } from "lucide-react";
 import { bringInView, jumpTo, MARKABLE } from "@/lib/markJump";
 import { LongList } from "@/components/LongList";
 import { MissingNeedWords } from "@/components/MissingNeeds";
-import { isMissingNeedLine, missingNeedLine, type GapItem } from "@/lib/gaps";
+import { gapsOf, isMissingNeedLine, missingNeedLine, type GapItem } from "@/lib/gaps";
 import { LiveNotices } from "@/components/LiveNotices";
 
-type Tester = { id: string; name: string; rating?: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; tagItems?: string[]; detail?: string; together?: { id: string; title: string; state?: string }[]; /** (Batch 30 §7) A search match who can't be invited: why, in the row's words */ why?: string; whyKind?: "invited" | "in" | "applied" | "cant"; appId?: string };
-type Sent = { id: string; name: string; status: string };
+type Tester = { changedAt?: string; id: string; name: string; rating?: string; ratingAvg?: number | null; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; tagItems?: string[]; detail?: string; together?: { id: string; title: string; state?: string }[]; /** (Batch 30 §7) A search match who can't be invited: why, in the row's words */ why?: string; whyKind?: "invited" | "in" | "applied" | "cant"; appId?: string };
+type RowUpdate = { id: string; name: string; seen: SeenTester; tag: string; detail: string; changedAt: string };
+type SeenTester = { devices: string[]; languages: string[]; rating: number | null };
+type Sent = { id: string; testerId: string; name: string; status: string; seen: SeenTester; tag: string; detail: string; changedAt: string };
 /** (Batch 16 section 12) What the server works out over every tester: worked with, Suggested after the ticks, and the name search. */
 type PanelData = { worked: Tester[]; suggested: Tester[]; found: Tester[]; foundTotal: number; capLine: string; searched: boolean };
 
@@ -37,12 +38,13 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   const router = useRouter();
   // (Batch 16 section 21) An invite from another tab for a ticked tester stops Invite once; the panel shows it at once (the row greys, "Invited <date>").
   // (Batch 32 §9) A stop carries what each ticked tester misses NOW: the Invite anyway box redraws to it, so the next Invite anyway goes through.
-  const { press, changes, error, busy, setError, at, errData } = usePress(p.seenAt, (d) => {
+  const { press, changes, setChanges, error, busy, setError, at, errData } = usePress(p.seenAt, (d) => {
     if (Array.isArray(d.lines) && d.lines.length) {
       setConfirm(d.lines.map(String));
       if (Array.isArray(d.items)) setGapItems(d.items as GapItem[]);
       if (typeof d.now === "string") setGapAt(d.now);
     }
+    if (Array.isArray(d.testers)) applyRows(d.testers as RowUpdate[]);
     router.refresh();
   });
   // (NEXT-UI 12b) When the Invite anyway box last updated (its first showing, a changed list, a live update): Invite anyway
@@ -95,6 +97,13 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   const [gapItems, setGapItems] = useState<GapItem[]>([]);
   // (Batch 16 section 12) The server's lists; the ticks and the name search (from 1 character) ask it again after a short pause in typing.
   const [data, setData] = useState<PanelData>(p.initial);
+  const applyRows = useCallback((testers: RowUpdate[]) => setData((old) => {
+    const update = (rows: Tester[]) => rows.map((row) => {
+      const fresh = testers.find((t) => t.id === row.id);
+      return fresh ? { ...row, name: fresh.name, devices: fresh.seen.devices, languages: fresh.seen.languages, ratingAvg: fresh.seen.rating, tag: fresh.tag, detail: fresh.detail, changedAt: fresh.changedAt } : row;
+    });
+    return { ...old, worked: update(old.worked), suggested: update(old.suggested), found: update(old.found) };
+  }), []);
   const [searching, setSearching] = useState(false);
   const term = q.trim().length >= 1 ? q.trim() : "";
   const asked = useRef(0);
@@ -130,10 +139,16 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   const found = term && data.searched ? data.found : [];
   // (Owner, Oct 28, batch 16 section 31) What this panel last showed for each tester (their devices and languages): Invite sends it, with the test's requirements
   // as shown, so the server stops once when either changed since. A ticked tester who is now greyed is unticked when the panel refreshes.
-  const shown = useRef(new Map<string, { devices: string[]; languages: string[] }>());
+  const shown = useRef(new Map<string, SeenTester>());
+  const names = useRef(new Map<string, string>());
+  const pressShown = useRef(new Map<string, Needs>());
+  for (const t of [...data.worked, ...data.suggested, ...data.found]) {
+    shown.current.set(t.id, { devices: t.devices, languages: t.languages, rating: t.ratingAvg ?? null });
+    names.current.set(t.id, t.name);
+  }
+  for (const t of p.sent) { shown.current.set(t.testerId, t.seen); names.current.set(t.testerId, t.name); }
+  useTesterChanges(setChanges, pressShown, [...data.worked, ...data.suggested, ...data.found].map((t) => ({ id: t.id, name: t.name, changedAt: t.changedAt, seen: { devices: t.devices, languages: t.languages, rating: t.ratingAvg ?? null } })), p.options);
   useEffect(() => {
-    // (Batch 20 section 4) As the page loaded (the first time each tester was shown): Invite stops for the net change since then, one line per tester.
-    for (const t of [...data.worked, ...data.suggested, ...data.found]) if (!shown.current.has(t.id)) shown.current.set(t.id, { devices: t.devices, languages: t.languages });
     const grey = new Set([...data.worked, ...data.suggested, ...data.found].filter((t) => t.grey).map((t) => t.id));
     if (grey.size) setTicked((tk) => (tk.some((id) => grey.has(id)) ? tk.filter((id) => !grey.has(id)) : tk));
   }, [data]);
@@ -143,9 +158,22 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
     if (window.location.hash === "#invite") setOpen(true);
   }, []);
 
+  const displayedGapItems = confirm && ticked.every((id) => shown.current.has(id) && names.current.has(id)) ? ticked.flatMap((id) => {
+    const gap = gapsOf(p.options, shown.current.get(id)!);
+    return gap.devices.length || gap.languages.length ? [{ name: names.current.get(id)!, ...gap }] : [];
+  }) : gapItems;
+  const displayedGaps = displayedGapItems.map((g) => missingNeedLine(g.name, g));
+  const displayedGapCount = displayedGaps.length;
+  useEffect(() => {
+    if (confirm && !displayedGapCount && ticked.length) {
+      setConfirm(null);
+      setMsg("Everyone you ticked now meets this test's needs. Press Invite to send.");
+    }
+  }, [confirm, displayedGapCount, ticked.length]);
   async function invite(anyway: boolean) {
     setMsg("");
-    const r = await press<{ message: string }>(`/api/tests/${p.testId}/invite`, { testerIds: ticked, anyway, seenGaps: confirm ? confirm.filter(isMissingNeedLine) : undefined, ...(anyway && gapAt ? { confirmed: true, boxAt: gapAt } : {}), seenNeeds: p.options, seenTesters: Object.fromEntries(ticked.flatMap((id) => (shown.current.has(id) ? [[id, shown.current.get(id)!]] : []))) }, anyway ? "anyway" : "invite");
+    pressShown.current = new Map(shown.current);
+    const r = await press<{ message: string }>(`/api/tests/${p.testId}/invite`, { testerIds: ticked, anyway, seenGaps: confirm ? displayedGaps : undefined, ...(anyway && gapAt ? { confirmed: true, boxAt: gapAt } : {}), seenNeeds: p.options, seenTesters: Object.fromEntries([...ticked, ...p.sent.map((s) => s.testerId)].flatMap((id) => (shown.current.has(id) ? [[id, shown.current.get(id)!]] : []))) }, anyway ? "anyway" : "invite");
     if (r) {
       setConfirm(null);
       setMsg(r.message);
@@ -162,6 +190,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
       setConfirm(error.slice(8).split("\n"));
       if (Array.isArray(errData.items)) setGapItems(errData.items as GapItem[]);
       if (typeof errData.now === "string") setGapAt(errData.now);
+      if (Array.isArray(errData.testers)) applyRows(errData.testers as RowUpdate[]);
       setError("");
     } else if (at === "anyway" && error && !changes && !error.startsWith("Everyone you ticked now meets")) {
       // (Owner, Oct 27) Any other failure of Invite anyway closes the box and shows the blue notice under the original Invite button. (Batch 32 §9) It names the press.
@@ -174,7 +203,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
       setMsg(error);
       setError("");
     }
-  }, [error, setError, errData]);
+  }, [error, setError, errData, at, changes, applyRows]);
   // The box stays up while anyone ticked misses a need, updating live; when everyone fits it closes with a notice.
   const boxOpen = confirm != null;
   // After a press: the Invite anyway box (or the notice under Invite) comes into view with the least scrolling.
@@ -188,8 +217,9 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
     if (!boxOpen) return;
     // At once when the ticks change, then every 15 s as profiles change.
     const check = async () => {
-      const r = await api<{ lines: string[]; items?: GapItem[]; now: string }>(`/api/tests/${p.testId}/invite-check`, { testerIds: ticked }).catch(() => null);
+      const r = await api<{ lines: string[]; items?: GapItem[]; now: string; testers?: { id: string; name: string; seen: SeenTester; tag: string; detail: string; changedAt: string }[] }>(`/api/tests/${p.testId}/invite-check`, { testerIds: ticked }).catch(() => null);
       if (!r) return;
+      if (r.testers) applyRows(r.testers);
       if (!r.lines.length) {
         setConfirm(null);
         setMsg("Everyone you ticked now meets this test's needs. Press Invite to send.");
@@ -206,7 +236,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
     void check();
     const t = setInterval(check, 15_000);
     return () => clearInterval(t);
-  }, [boxOpen, ticked, p.testId]);
+  }, [boxOpen, ticked, p.testId, applyRows]);
 
   // The full app's rows, the same in every section: tick, name (their profile), the amber "Doesn't list …" pill, and on
   // the right in grey "you rated 5.0/5 · 1 test with you" (or, greyed, why it can't be ticked). Ticks only by hand.
@@ -216,10 +246,9 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
       <span className="min-w-[8rem] flex-1 truncate" title={t.name}><a href={`/app/testers/${t.id}`} target="_blank" rel="noopener" className="text-inherit underline-offset-2 hover:underline">{t.name}</a></span>
       {t.was && !t.grey && <span className="badge max-w-[14rem] shrink truncate whitespace-nowrap" title={t.was}>{t.was}</span>}
       {/* (Batch 15 section 35) 3 items, then "+N more" which opens the rest in place. */}
-      {t.tag && !t.grey && (t.tagItems && t.tagItems.length > TAG_NAMES
-        ? <span className="badge shrink border-amber-300/40 text-amber-200" data-tag-more="">Doesn&apos;t list <PlusMore items={t.tagItems} shown={TAG_NAMES} /></span>
-        : <span className="badge max-w-[14rem] shrink truncate whitespace-nowrap border-amber-300/40 text-amber-200" title={t.tag}>{t.tag}</span>)}
-      <label htmlFor={`${key}-${t.id}`} className="shrink-0 cursor-pointer text-xs text-slate-500">{t.grey ?? t.detail}</label>
+      {t.tag && <span className="badge border-amber-300/40 text-amber-200">{t.tag}</span>}
+      <span className="text-xs text-slate-500">{t.detail}</span>
+      {t.grey && <label htmlFor={`${key}-${t.id}`} className="text-xs text-slate-500">{t.grey}</label>}
       {/* "In tests with you": how many, and links to them. */}
       {key === "w" && t.together && t.together.length > 0 && (
         <details className="basis-full pl-6 text-xs text-slate-400">
@@ -247,6 +276,8 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
         ) : t.whyKind === "applied" && t.appId ? (
           <>{lead}: <a href={`#item-app-${t.appId}`} onClick={(e) => { e.preventDefault(); jumpTo(`item-app-${t.appId}`); }}>{link}</a></>
         ) : t.why}
+        {t.tag && <span className="badge ml-2 border-amber-300/40 text-amber-200">{t.tag}</span>}
+        <p className="text-xs text-slate-500">{t.detail}</p>
       </li>
     );
   };
@@ -274,10 +305,12 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
           {/* Only invites still waiting (joined ones are in Testers joined): 3 lines, then Show N more in a scroll box (all of them after a search row pointed here). */}
           <LongList shown={allSent ? p.sent.length : 3} tall="max-h-48" className="space-y-1 text-sm">
             {p.sent.map((s) => (
-              <li key={s.id} id={`invited-${s.id}`} className={`flex items-center gap-2 ${MARKABLE}`}>
+              <li key={s.id} id={`invited-${s.id}`} className={`flex flex-wrap items-center gap-2 ${MARKABLE}`}>
                 <span className="mr-auto">{s.name} · {s.status}</span>
+                {s.tag && <span className="badge border-amber-300/40 text-amber-200">{s.tag}</span>}
+                <span className="text-xs text-slate-500">{s.detail}</span>
                 {s.status === "waiting for them to join" && (
-                  <PressButton seenAt={p.seenAt} path={`/api/tests/${p.testId}/cancel-invite`} body={{ inviteId: s.id }}>Cancel invite</PressButton>
+                  <CancelInviteButton testId={p.testId} seenAt={p.seenAt} row={s} needs={p.options} />
                 )}
               </li>
             ))}
@@ -327,7 +360,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
           {/* (Owner, Oct 28, batch 20 section 3) One line per ticked tester naming everything they're missing (a long list: its first 3, then "+N more"); more
               than 3 testers: their lines in a scroll box about 3 lines tall, with Invite anyway / Cancel below it. */}
           {confirm.filter((l) => !isMissingNeedLine(l)).map((l) => <p key={l}>{l}</p>)}
-          <GapLinesBox lines={confirm.filter(isMissingNeedLine)} items={gapItems} />
+          <GapLinesBox lines={displayedGaps} items={displayedGapItems} />
           <LiveNotices open={!!confirm} />
           <div className="flex gap-2">
             <button className="btn" disabled={busy || !!blocked} onClick={() => invite(true)}>Invite anyway</button>
@@ -350,4 +383,15 @@ export function GapLinesBox({ lines, items }: { lines: string[]; items: GapItem[
   };
   if (lines.length <= 3) return <div className="space-y-1">{lines.map(line)}</div>;
   return <div className="max-h-24 space-y-1 overflow-y-auto pr-1" data-gap-scroll={lines.length} tabIndex={0} role="region" aria-label="What each tester is missing">{lines.map(line)}</div>;
+}
+
+function CancelInviteButton({ testId, seenAt, row, needs }: { testId: string; seenAt: string; row: Sent; needs: Needs }) {
+  const router = useRouter();
+  const before = useRef(new Map<string, Needs>());
+  const { press, changes, setChanges, error, busy } = usePress(seenAt, () => router.refresh());
+  useTesterChanges(setChanges, before, [{ id: row.testerId, name: row.name, seen: row.seen, changedAt: row.changedAt }], needs);
+  return <><button className="btn-ghost" disabled={busy} onClick={async () => {
+    before.current.set(row.testerId, row.seen);
+    if (await press(`/api/tests/${testId}/cancel-invite`, { inviteId: row.id, seenTesters: { [row.testerId]: row.seen } })) window.location.reload();
+  }}>Cancel invite</button><ChangesBox changes={changes} error={error} /></>;
 }

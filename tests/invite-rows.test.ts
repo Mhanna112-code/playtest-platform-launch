@@ -7,13 +7,13 @@ import { db } from "@/lib/db";
 // (Owner) Invite rows in the full app's format; Find testers: nothing invited without a tick.
 describe("invite rows", () => {
   it("the amber pill names the needs they don't list; the grey detail says your rating and tests together", () => {
-    expect(doesntListTag({ devices: ["iPhone", "Android phone"], languages: [] }, { devices: ["Mac"], languages: [] })).toBe("Doesn't list iPhone or Android phone");
-    expect(doesntListTag({ devices: ["Mac"], languages: ["English"] }, { devices: [], languages: [] })).toBe("Doesn't list English, or Mac");
+    expect(doesntListTag({ devices: ["iPhone", "Android phone"], languages: [] }, { devices: ["Mac"], languages: [] })).toBe("Doesn't list devices");
+    expect(doesntListTag({ devices: ["Mac"], languages: ["English"] }, { devices: [], languages: [] })).toBe("Doesn't list devices or languages");
     expect(doesntListTag({ devices: ["Mac"], languages: ["English"] }, { devices: ["Mac"], languages: ["English"] })).toBe("");
     expect(shortList(["English", "Spanish", "French", "German", "Dutch"], "language")).toBe("English, Spanish, French +2 more"); // (batch 15 section 35)
     expect(shortList(["English", "Spanish", "French"], "language")).toBe("English, Spanish or French");
-    expect(withYouText(5, 1)).toBe("you rated 5.0/5 · 1 test with you");
-    expect(withYouText(null, 4)).toBe("not rated by you · 4 tests with you");
+    expect(withYouText(5, 1, 1)).toBe("5.0 ★ (1 rating) · 1 test with you");
+    expect(withYouText(null, 4)).toBe("No ratings yet · 4 tests with you");
   });
 
   it("Invite with nothing ticked is refused: 'Tick at least one tester.'", async () => {
@@ -31,8 +31,8 @@ describe("invite rows", () => {
     await db.test.update({ where: { id: testId }, data: { devices: ["Mac"] } });
     const rows = await invitable(dev.user.id, testId);
     const ana = rows.find((r) => r.id === tester.user.id)!;
-    expect(ana.tag).toBe("Doesn't list Mac");
-    expect(ana.detail).toBe("not rated by you · 1 test with you");
+    expect(ana.tag).toBe("Doesn't list devices");
+    expect(ana.detail).toBe("No ratings yet · 1 test with you");
     expect(ana.grey).toBe("Already in this test");
   });
 });

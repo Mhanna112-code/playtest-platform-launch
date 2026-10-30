@@ -1,15 +1,17 @@
+import { ratingChangedLine, testerNeedsChangedLines, type Needs } from "@/lib/testerState";
+export { ratingChangedLine, testerNeedsChangedLines } from "@/lib/testerState";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { displayName, fmtDate, pronouns } from "@/lib/format";
 import { andList, inviteTesterRefusal, inviteTestRefusal, MAX_ACTIVE_TESTS, TEST_LIMIT_LINE, termsLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
-import { asListing, devGate, devGateIfSeen, needsGap, ownTest, recordEvent, stampCounting } from "./tests";
-import { revealedRatingsWhere } from "./ratings";
+import { asListing, devGate, needsGap, ownTest, recordEvent, stampCounting } from "./tests";
+import { ratingSummary, revealedRatingsWhere } from "./ratings";
 import { doesntListItems, doesntListTag, withYouText } from "@/lib/inviteRows";
 import { INVITE_ACTS } from "./live";
 import { exactFirst, nameMatches } from "@/lib/nameSearch";
-import { gapsOf, missingNeedLine, missingNeedText, orList, type GapItem } from "@/lib/gaps";
+import { gapsOf, missingNeedLine, missingNeedText, type GapItem } from "@/lib/gaps";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -42,7 +44,7 @@ async function rankedTesters(devId: string, testId: string) {
   // Blocked either way and deleted accounts never appear.
   const testers = await db.user.findMany({
     where: { isTester: true, deletedAt: null, id: { notIn: [devId, ...removed] } },
-    select: { id: true, name: true, email: true, deletedAt: true, testerSuspendedAt: true, profile: { select: { devices: true, languages: true, categories: true } } },
+    select: { id: true, name: true, email: true, deletedAt: true, testerSuspendedAt: true, profile: { select: { devices: true, languages: true, categories: true, updatedAt: true } } },
     orderBy: { createdAt: "desc" }, // ties keep the newest first, as before
   });
   const workedWith = new Set(withDev.map((c) => c.testerId));
@@ -93,12 +95,7 @@ async function rankedTesters(devId: string, testId: string) {
   /** The full rows the panel shows, built only for the rows returned. */
   const full = async (xs: L[]) => {
     const ids = xs.map((x) => x.t.id);
-    const grouped = ids.length ? await db.rating.groupBy({ by: ["rateeId"], where: { rateeId: { in: ids }, ...revealedRatingsWhere() }, _avg: { stars: true }, _count: { _all: true } }) : [];
-    // (NEWEST+5) "4.6 ★ (12 ratings)" on each invite row.
-    const ratingLine = (id: string) => {
-      const g = grouped.find((x) => x.rateeId === id);
-      return g ? `${(g._avg.stars ?? 0).toFixed(1)} ★ (${g._count._all} rating${g._count._all === 1 ? "" : "s"})` : "";
-    };
+    const ratings = new Map(await Promise.all(ids.map(async (id) => [id, await ratingSummary(id)] as const)));
     // (Owner, Oct 28, batch 20 section 23) Each test with how their part went (their latest session on it): in it now, left, finished (rated) or ended.
     const together = (id: string) => {
       const seen = new Map<string, { title: string; state: string }>();
@@ -106,13 +103,13 @@ async function rankedTesters(devId: string, testId: string) {
       return [...seen].map(([tid, x]) => ({ id: tid, title: x.title, state: x.state }));
     };
     return xs.map((x) => ({
-      id: x.t.id, name: x.name, devices: x.t.profile?.devices ?? [], languages: x.t.profile?.languages ?? [], categories: x.t.profile?.categories ?? [],
-      invited: !!x.inv, inviteId: x.inv?.id ?? null, grey: x.grey, rating: ratingLine(x.t.id),
+      id: x.t.id, name: x.name, changedAt: new Date(Math.max(x.t.profile?.updatedAt.getTime() ?? 0, ratings.get(x.t.id)?.at?.getTime() ?? 0)).toISOString(), devices: x.t.profile?.devices ?? [], languages: x.t.profile?.languages ?? [], categories: x.t.profile?.categories ?? [],
+      invited: !!x.inv, inviteId: x.inv?.id ?? null, grey: x.grey, rating: ratings.get(x.t.id)?.line || "No ratings yet", ratingAvg: ratings.get(x.t.id)?.n ? Number(ratings.get(x.t.id)!.avg.toFixed(1)) : null,
       // (NEXT-UI 14) Still tickable: a re-invite is how an ended tester can come back.
       was: ((s) => (s === "left" ? "Left this test" : s === "ended" ? "You ended their work" : ""))(past.find((c) => c.testerId === x.t.id)?.status),
       tag: doesntListTag(test, x.t.profile),
       tagItems: doesntListItems(test, x.t.profile),
-      detail: withYouText(x.mineAvg, withDev.filter((c) => c.testerId === x.t.id).length),
+      detail: withYouText(ratings.get(x.t.id)?.n ? ratings.get(x.t.id)!.avg : null, togetherCount(x.t.id), ratings.get(x.t.id)?.n),
       gap: missingNeed(test, x.t.profile),
       section: x.section,
       meets: x.meets, score: x.score, accepted: x.accepted, matches: x.matches,
@@ -196,20 +193,14 @@ function gapLines(t: { devices: string[]; languages: string[] }, people: { name:
   return { lines: items.map((i) => missingNeedLine(i.name, i)), items };
 }
 
-/** What the test needs that this tester's profile no longer has (they list none of a kind it needs): "a language this test needs (English)". */
-function removedNeeds(t: { devices: string[]; languages: string[] }, p: { devices: string[]; languages: string[] } | null) {
-  if (!needsGap(t, p)) return "";
-  return missingNeedText(gapsOf(t, p)).replace(/^doesn't list /, "");
-}
-
-type Needs = { devices: string[]; languages: string[] };
 const listOf = (xs: string[]) => (xs.length ? xs.join(", ") : "none");
 const same = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
-const needsOf = (v: unknown): Needs | null => {
+export const needsOf = (v: unknown): Needs | null => {
   const o = v && typeof v === "object" ? (v as Record<string, unknown>) : null;
   const arr = (x: unknown) => (Array.isArray(x) ? x.map(String) : null);
   const devices = arr(o?.devices), languages = arr(o?.languages);
-  return devices && languages ? { devices, languages } : null;
+  const rating = typeof o?.rating === "number" && Number.isFinite(o.rating) ? o.rating : undefined;
+  return devices && languages ? { devices, languages, ...(rating != null ? { rating } : {}) } : null;
 };
 /** (Owner, Oct 28, batch 16 section 31) "The test's requirements changed: Devices: Windows PC → iPad · Languages: Russian, Turkish → English" ("" when the same). */
 export function requirementsChangedLine(seen: Needs, now: Needs) {
@@ -225,21 +216,6 @@ export function requirementsChangedLine(seen: Needs, now: Needs) {
  * required items. "fbbb now lists Chinese and Windows PC, which this test needs." / "fbbb no longer lists Chinese, which this test needs." / both: "fbbb now lists
  * Windows PC but no longer lists Chinese (this test needs Chinese or Portuguese)." Edits that cancel out (added, then removed again) give no line.
  */
-export function testerNeedsChangedLines(name: string, seen: Needs, now: Needs, test: Needs) {
-  const required = [...test.languages, ...test.devices];
-  const had = new Set([...seen.languages, ...seen.devices]), has = new Set([...now.languages, ...now.devices]);
-  const added = required.filter((x) => has.has(x) && !had.has(x));
-  const removed = required.filter((x) => had.has(x) && !has.has(x));
-  if (!added.length && !removed.length) return [];
-  if (!removed.length) return [`${name} now lists ${andList(added)}, which this test needs.`];
-  if (!added.length) return [`${name} no longer lists ${andList(removed)}, which this test needs.`];
-  // Both: what the test needs, for each kind something was removed from.
-  const needs = [
-    ...(removed.some((x) => test.languages.includes(x)) ? [orList(test.languages)] : []),
-    ...(removed.some((x) => test.devices.includes(x)) ? [orList(test.devices)] : []),
-  ];
-  return [`${name} now lists ${andList(added)} but no longer lists ${andList(removed)} (this test needs ${needs.join(", and ")}).`];
-}
 
 /**
  * Invite ticked testers. Refused for good when the test is full, stopped, past Open until or paused. Stops once for the
@@ -267,6 +243,7 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     const invites = await tx.invite.findMany({ where: { testId, testerId: { in: ids } } });
     // Extra stop-once reasons for the ticked testers.
     const extra: TestEventLike[] = [];
+    const shownRatingRows = new Map(await Promise.all(ids.map(async (id) => [id, await ratingSummary(id)] as const)));
     // (Owner, Oct 28, batch 16 section 31) What the panel showed: the test's requirements and each ticked tester's devices and languages. A change since then always
     // stops Invite / Invite anyway once (they're Invite's own checks, not Alerts types); the page shows the updated panel with it.
     const seenNeeds = needsOf(body.seenNeeds);
@@ -284,10 +261,11 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
         const seenP = seenTesters ? needsOf(seenTesters[p.id]) : null;
         // (Batch 20 section 4) One line per tester (`key`: a later stop's line replaces it in the box), with one time: the latest change.
         if (seenP) {
-          for (const line of testerNeedsChangedLines(name, seenP, { devices: p.profile?.devices ?? [], languages: p.profile?.languages ?? [] }, t)) extra.push({ kind: "profile", text: line, createdAt: p.profile?.updatedAt ?? new Date(), key: `needs:${p.id}` });
-        } else {
-          const gone = removedNeeds(t, p.profile);
-          if (gone && p.profile && p.profile.updatedAt > seenAt) extra.push({ kind: "profile", text: `${name} no longer lists ${gone}.`, createdAt: p.profile.updatedAt, key: `needs:${p.id}` });
+          const lines = testerNeedsChangedLines(name, seenP, { devices: p.profile?.devices ?? [], languages: p.profile?.languages ?? [] }, t);
+          const currentRating = shownRatingRows.get(p.id);
+          const ratingLine = ratingChangedLine(name, seenP.rating ?? null, currentRating?.n ? Number(currentRating.avg.toFixed(1)) : null);
+          if (ratingLine) lines.push(ratingLine);
+          if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: new Date(Math.max(p.profile?.updatedAt.getTime() ?? 0, currentRating?.at?.getTime() ?? 0)), key: `needs:${p.id}` });
         }
         const joined = contracts.find((c) => c.testerId === p.id && c.joinedAt > seenAt);
         if (joined) extra.push({ kind: "joined", text: `${name} joined this test, so ${pronouns(p.pronoun).subj}'s no longer in your invite list`.replace("they's", "they're"), createdAt: joined.joinedAt });
@@ -307,16 +285,18 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     const tickedApps = await tx.application.findMany({ where: { testId, testerId: { in: ids }, status: "pending" } });
     const askLines = new Set(people.flatMap((p) => [`${displayName(p)} applied to join`, `${displayName(p)} asks to rejoin`]));
     const notTheirAsk = (e: TestEventLike) => !(e.kind === "applied" && askLines.has(e.text));
-    await devGate(tx, testId, body, gaps.length ? { lines: gaps, items: gapItems } : {}, extra, notTheirAsk, { acts: INVITE_ACTS, keys: ids.map((id) => `t:${id}`) });
+    const rowInfo = await testerRowInfo(dev.id, t, people);
+    const testers = people.map((p) => ({ id: p.id, name: displayName(p), ...rowInfo.get(p.id)! }));
+    await devGate(tx, testId, body, { ...(gaps.length ? { lines: gaps, items: gapItems } : {}), testers }, extra, notTheirAsk, { acts: INVITE_ACTS, keys: ids.map((id) => `t:${id}`) });
     const seenGaps = Array.isArray(body.seenGaps) ? (body.seenGaps as unknown[]).map(String) : null;
     if (body.anyway === true && !gaps.length) {
       // Everyone ticked now meets the needs: nothing is sent; the box closes and a notice shows under Invite.
       throw new HttpError(409, "needs_none", "Everyone you ticked now meets this test's needs. Press Invite to send.");
     }
-    if (gaps.length && body.anyway !== true) throw new HttpError(409, "needs_confirm", "CONFIRM:" + gaps.join("\n"), { lines: gaps, items: gapItems });
+    if (gaps.length && body.anyway !== true) throw new HttpError(409, "needs_confirm", "CONFIRM:" + gaps.join("\n"), { lines: gaps, items: gapItems, testers });
     if (gaps.length && JSON.stringify(seenGaps) !== JSON.stringify(gaps)) {
       // What's missing changed since the box showed: stop once in the box with the updated list.
-      throw new HttpError(409, "needs_confirm", "CONFIRM:" + ["What's missing changed since you looked. Press Invite anyway again to invite on this:", ...gaps].join("\n"), { lines: gaps, items: gapItems, changed: true });
+      throw new HttpError(409, "needs_confirm", "CONFIRM:" + ["What's missing changed since you looked. Press Invite anyway again to invite on this:", ...gaps].join("\n"), { lines: gaps, items: gapItems, testers, changed: true });
     }
     const invited: { id: string; name: string; email: string; pronoun: string }[] = [];
     const seen = (await import("./joining")).pressSeen(body);
@@ -376,10 +356,19 @@ export async function cancelInvite(dev: U, testId: string, body: Record<string, 
   await ownTest(dev.id, testId);
   const inv = await db.invite.findUnique({ where: { id: String(body.inviteId ?? "") }, include: { test: true } });
   if (!inv || inv.testId !== testId) throw new HttpError(404, "not_found", "That invite doesn't exist.");
+  const tester = await db.user.findUnique({ where: { id: inv.testerId }, include: { profile: true } });
+  const shown = body.seenTesters && typeof body.seenTesters === "object" ? needsOf((body.seenTesters as Record<string, unknown>)[inv.testerId]) : null;
+  const extra: TestEventLike[] = [];
+  if (shown && tester) {
+    const lines = testerNeedsChangedLines(displayName(tester), shown, { devices: tester.profile?.devices ?? [], languages: tester.profile?.languages ?? [] }, inv.test);
+    const latest = await ratingSummary(tester.id);
+    const line = ratingChangedLine(displayName(tester), shown.rating ?? null, latest.n ? Number(latest.avg.toFixed(1)) : null);
+    if (line) lines.push(line);
+    if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: new Date(Math.max(tester.profile?.updatedAt.getTime() ?? 0, latest.at?.getTime() ?? 0)), key: `needs:${tester.id}` });
+  }
   // (Batch 16 section 21) Cancelled in another tab: this press stops once naming it, then it's already done.
-  if (inv.status !== "sent") await devGateIfSeen(testId, body, { acts: INVITE_ACTS, keys: [`t:${inv.testerId}`] });
+  await db.$transaction((tx) => devGate(tx, testId, body, {}, extra, undefined, { acts: INVITE_ACTS, keys: [`t:${inv.testerId}`] }));
   if (inv.status !== "sent") throw new HttpError(409, "gone", inv.status === "joined" ? "They already joined." : inv.status === "replaced" ? "This invite is no longer valid: it was re-sent on the new listing." : "This invite was already cancelled.");
-  await devGateIfSeen(testId, body, { acts: INVITE_ACTS, keys: [`t:${inv.testerId}`] });
   await db.invite.update({ where: { id: inv.id }, data: { status: "cancelled" } });
   await tellInvitesClosed([inv.id]); // (batch 30 §6)
   return { ok: true };
@@ -393,7 +382,8 @@ export const inviteExpired = (t: { status: string; openUntil: Date | null }, now
 export async function inviteGaps(devId: string, testId: string, testerIds: string[]) {
   const t = await ownTest(devId, testId);
   const people = await db.user.findMany({ where: { id: { in: testerIds } }, include: { profile: true } });
-  return { now: new Date().toISOString(), ...gapLines(t, people) };
+  const info = await testerRowInfo(devId, t, people);
+  return { now: new Date().toISOString(), ...gapLines(t, people), testers: people.map((p) => ({ id: p.id, name: displayName(p), ...info.get(p.id)! })) };
 }
 
 /**
@@ -464,4 +454,13 @@ export async function reinviteAfterEdit(testId: string) {
     await notify(p.email, line, [line, `The new listing: ${termsLine(asListing(t), true)}.`, "Open it and press Join to join on these terms."], `/app/find/${testId}`, { group: "apps", testId }); // (batch 29 §23) in "Applications and invites", no longer its own stack
   }
   return { skipped, resent };
+}
+
+/** The state and wording shown by application and invited rows. */
+export async function testerRowInfo(devId: string, test: { devices: string[]; languages: string[] }, people: { id: string; profile: { devices: string[]; languages: string[]; updatedAt: Date } | null }[]) {
+  const together = await db.contract.findMany({ where: { testerId: { in: people.map((p) => p.id) }, test: { developerId: devId } }, select: { testerId: true, testId: true } });
+  return new Map(await Promise.all(people.map(async (p) => {
+    const r = await ratingSummary(p.id);
+    return [p.id, { seen: { devices: p.profile?.devices ?? [], languages: p.profile?.languages ?? [], rating: r.n ? Number(r.avg.toFixed(1)) : null }, tag: doesntListTag(test, p.profile), detail: withYouText(r.n ? r.avg : null, new Set(together.filter((c) => c.testerId === p.id).map((c) => c.testId)).size, r.n), changedAt: new Date(Math.max(p.profile?.updatedAt.getTime() ?? 0, r.at?.getTime() ?? 0)).toISOString() }] as const;
+  })));
 }

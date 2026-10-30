@@ -51,5 +51,5 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
     const newest = added.map((a) => a.at).sort().pop();
     if (newest) setBoxAt((b) => (b && b > newest ? b : newest));
   });
-  return { press, changes, error, busy, setError, at, errData };
+  return { press, changes, setChanges, error, busy, setError, at, errData };
 }

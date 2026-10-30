@@ -135,9 +135,9 @@ export async function ratingSummary(userId: string) {
   const all = await db.rating.findMany({ where: { rateeId: userId, ...revealedWhere() }, orderBy: { createdAt: "desc" } });
   const hidden = await stillHidden(all);
   const rows = all.filter((r) => !hidden.has(r.id));
-  if (!rows.length) return { line: "", comments: [] as string[], n: 0, avg: 0 };
+  if (!rows.length) return { line: "", comments: [] as string[], n: 0, avg: 0, at: null as Date | null };
   const avg = rows.reduce((a, r) => a + r.stars, 0) / rows.length;
-  return { line: `${avg.toFixed(1)} ★ (${rows.length} rating${rows.length === 1 ? "" : "s"})`, comments: rows.filter((r) => r.comment).slice(0, 10).map((r) => r.comment), n: rows.length, avg };
+  return { line: `${avg.toFixed(1)} ★ (${rows.length} rating${rows.length === 1 ? "" : "s"})`, comments: rows.filter((r) => r.comment).slice(0, 10).map((r) => r.comment), n: rows.length, avg, at: new Date(Math.max(...rows.map((r) => (r.revealedAt ?? r.createdAt).getTime()))) };
 }
 
 /** Both ratings on a contract, as each side may see them. */

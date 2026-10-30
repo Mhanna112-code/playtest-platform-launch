@@ -7,6 +7,8 @@ import { HttpError } from "./http";
 import { notify } from "./notify";
 import { asLines, listingSaveLines, logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
 import { asListing, devGate, gapStop, joinTest, needsGap, ownTest, stampCounting } from "./tests";
+import { ratingChangedLine, testerNeedsChangedLines } from "./invites";
+import { ratingSummary } from "./ratings";
 
 // Joining (owner rule): Who can join = Anyone (Join) / Apply (Apply to join → the developer Accepts or Declines) /
 // Invite only. No offers or counter-offers on the join page. Join and Apply stop once if ANYTHING about the listing
@@ -282,8 +284,21 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   // (Batch 16 section 21) Answered already (in another tab): a plain refusal naming it, no stop box.
   if (a.status !== "pending") throw new HttpError(409, "gone", a.status === "withdrawn" ? `${name} withdrew their application.` : a.status === "declined" ? "You already declined this application." : a.status === "accepted" || a.status === "joined" ? "You already accepted this application." : "This application was already answered.");
   const extra: TestEventLike[] = [];
-  const seenAt = typeof body.seenAt === "string" ? new Date(body.seenAt) : null;
-  if (seenAt && tester.profile && tester.profile.updatedAt > seenAt) extra.push({ kind: "profile", text: `${name} changed their profile`, createdAt: tester.profile.updatedAt });
+  const shownTesters = body.seenTesters && typeof body.seenTesters === "object" ? body.seenTesters as Record<string, unknown> : {};
+  const shownRaw = shownTesters[tester.id] && typeof shownTesters[tester.id] === "object" ? shownTesters[tester.id] as Record<string, unknown> : null;
+  if (shownRaw) {
+    const shownDevices = Array.isArray(shownRaw.devices) ? shownRaw.devices.map(String) : [];
+    const shownLanguages = Array.isArray(shownRaw.languages) ? shownRaw.languages.map(String) : [];
+    const current = { devices: tester.profile?.devices ?? [], languages: tester.profile?.languages ?? [] };
+    const listing = await db.test.findUniqueOrThrow({ where: { id: testId } });
+    const lines = testerNeedsChangedLines(name, { devices: shownDevices, languages: shownLanguages }, current, listing);
+    const shownRating = typeof shownRaw.rating === "number" ? shownRaw.rating : null;
+    const rating = await ratingSummary(tester.id);
+    const currentRating = rating.n ? Number(rating.avg.toFixed(1)) : null;
+    const ratingLine = ratingChangedLine(name, shownRating, currentRating);
+    if (ratingLine) lines.push(ratingLine);
+    if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: new Date(Math.max(tester.profile?.updatedAt.getTime() ?? 0, rating.at?.getTime() ?? 0)), key: `needs:${tester.id}` });
+  }
   extra.push(...(await listingChanges(testId, body.seenAt)));
   await db.$transaction((tx) => devGate(tx, testId, body, {}, extra, undefined, { acts: ["application"], keys: [`app:${a.id}`] }));
   if (body.action === "decline") {

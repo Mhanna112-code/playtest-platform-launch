@@ -1,3 +1,4 @@
+import { revealedRatingsWhere } from "./ratings";
 import { db } from "@/lib/db";
 
 /**
@@ -85,9 +86,11 @@ export async function testV(viewerId: string, testId: string, sessionId = "") {
   const pay = { n: payCount, last: (payLast?.createdAt.getTime() ?? 0) + (payLast?.status ?? "") };
   // (Batch 17 sections 1 and 16) A Rate box opening, greying or going as things are decided: ratings given, and (a session) the tester's own Rate state.
   const ratingsN = await db.rating.count({ where: { testId } });
+  const allRatings = sessionId ? null : await db.rating.aggregate({ where: revealedRatingsWhere(), _count: { _all: true }, _sum: { stars: true }, _max: { revealedAt: true, createdAt: true } });
+  const ratingRowsV = allRatings ? `${allRatings._count._all}:${allRatings._sum.stars ?? 0}:${allRatings._max.revealedAt?.getTime() ?? 0}:${allRatings._max.createdAt?.getTime() ?? 0}` : "";
   const rateV = sessionId ? (await (await import("./ratings")).testerRateState(sessionId)).line : "";
   // (Batch 10) The developer's suspension and the team's pause are in it too, so a tester's session page shows (or drops) the paused banner live.
-  return [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0, ratingsN, rateV, consV, callsKey, blocksV, myKeyV].join("|");
+  return [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0, ratingsN, ratingRowsV, rateV, consV, callsKey, blocksV, myKeyV].join("|");
 }
 
 /** (Owner, Oct 29, batch 10) Payments'"Pay what you owe": a declined payment, a chargeback, a tester's Charge during the hold, a payment from another tab, a reservation. */

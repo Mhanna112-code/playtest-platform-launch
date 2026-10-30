@@ -20,7 +20,7 @@ import { unreadCount } from "@/lib/server/messages";
 import { DevCallPanel, type DevCall, type DevTester } from "./DevCallPanel";
 
 import { InvitePanel } from "./InvitePanel";
-import { inviteExpired, invitePanel } from "@/lib/server/invites";
+import { inviteExpired, invitePanel, testerRowInfo } from "@/lib/server/invites";
 import { owedForBox } from "@/lib/server/holds";
 import { termsRowLines } from "@/lib/server/terms";
 import { answerable, rejoinAskLine } from "@/lib/server/joining";
@@ -125,17 +125,19 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Batch 34 §16) An applicant who holds a sent invite isn't answered here: they're in the Invited list, and joining closes the application.
   const pendingApps = await answerable(await db.application.findMany({ where: { testId: id, status: "pending" }, orderBy: { createdAt: "asc" } }));
   const appUsers = await db.user.findMany({ where: { id: { in: pendingApps.map((a) => a.testerId) } }, include: { profile: true } });
-  const appRatings = new Map(await Promise.all(appUsers.map(async (x) => [x.id, (await ratingSummary(x.id)).line] as const)));
+  const appInfo = await testerRowInfo(u.id, t, appUsers);
   const apps = pendingApps.map((a) => {
     const x = appUsers.find((y) => y.id === a.testerId)!;
     const old = a.kind === "rejoin" ? t.contracts.find((c) => c.testerId === a.testerId) : undefined;
-    return { id: a.id, kind: a.kind, line: old ? rejoinAskLine(displayName(x), pronouns(x.pronoun), old) : undefined, userId: x.id, name: displayName(x), note: a.note, profile: [...(x.profile?.devices ?? []), ...(x.profile?.languages ?? []), ...(appRatings.get(x.id) ? [appRatings.get(x.id)!] : [])].join(", ") };
+    return { id: a.id, kind: a.kind, line: old ? rejoinAskLine(displayName(x), pronouns(x.pronoun), old) : undefined, userId: x.id, name: displayName(x), note: a.note, ...appInfo.get(x.id)! };
   });
   // (NEXT-UI 4) Chat is its own page per session: each tester's row links to it with an unread badge.
   const unread = new Map(await Promise.all(t.contracts.map(async (c) => [c.id, await unreadCount(u.id, t.id, c.testerId)] as const)));
   const blockedIds = new Set((await db.block.findMany({ where: { blockerId: u.id } })).map((b) => b.blockedId));
   const [invitePanelData, invites, owedList] = await Promise.all([restricted || t.status === "stopped" ? null : invitePanel(u.id, id), db.invite.findMany({ where: { testId: id, status: { in: ["sent", "joined"] } }, orderBy: { createdAt: "desc" } }), owedForBox(u.id)]);
-  const people = new Map((await db.user.findMany({ where: { id: { in: invites.map((i) => i.testerId) } } })).map((x) => [x.id, displayName(x)]));
+  const inviteUsers = await db.user.findMany({ where: { id: { in: invites.map((i) => i.testerId) } }, include: { profile: true } });
+  const people = new Map(inviteUsers.map((x) => [x.id, displayName(x)]));
+  const inviteInfo = await testerRowInfo(u.id, t, inviteUsers);
   const expired = inviteExpired(t);
   const soon = t.openUntil && t.openUntil > new Date() && t.openUntil.getTime() - Date.now() < 3 * 86_400_000;
   const now = new Date();
@@ -413,7 +415,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay box for sent work and calls that took place lives here. */}
       {needsCount > 0 && !restricted && (
         <NeedsYou count={needsCount}>
-          <Applications testId={t.id} seenAt={seenAt} apps={apps} />
+          <Applications needs={{ devices: t.devices, languages: t.languages }} testId={t.id} seenAt={seenAt} apps={apps} />
           <NeedsRequests testId={t.id} seenAt={seenAt} requests={needsRequests} />
           {rateNeeds.map((r) => <p key={`rate-need-${r.id}`} className="text-sm" data-rate-need={r.id}><a href={`#rate-${r.id}`}>{r.line}</a></p>)}
           {excerptReqs.map((x) => (
@@ -692,7 +694,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           blocked={inviteBlocked({ ...t, testersIn: working.length, paused: !!u.holdStartedAt }, now, fmtDate)}
           closes={t.openUntil && t.openUntil > now ? { at: t.openUntil.toISOString(), line: inviteBlocked({ ...t, testersIn: working.length, paused: !!u.holdStartedAt }, new Date(t.openUntil.getTime() + 1000), fmtDate)?.line ?? "" } : undefined}
           initial={invitePanelData ?? { worked: [], suggested: [], found: [], foundTotal: 0, capLine: "", searched: false }}
-          sent={expired ? [] : invites.filter((i) => i.status === "sent").map((i) => ({ id: i.id, name: people.get(i.testerId) ?? "?", status: "waiting for them to join" }))}
+          sent={expired ? [] : invites.filter((i) => i.status === "sent").map((i) => ({ id: i.id, testerId: i.testerId, name: people.get(i.testerId) ?? "?", status: "waiting for them to join", ...inviteInfo.get(i.testerId)! }))}
         />
       )}
       {saved && (

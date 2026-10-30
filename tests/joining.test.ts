@@ -22,17 +22,17 @@ describe("joining: Anyone / Apply / Invite only", () => {
     expect(await db.notification.count({ where: { userId: ana.user.id, text: "You're in: Harbor Run" } })).toBe(1);
   });
 
-  it("Accept stops once when the tester changed their profile since the page loaded; Decline is neutral", async () => {
-    const { dev, testId } = await setup({ joinMode: "apply" });
+  it("Decline stops once when the tester loses their last needed device", async () => {
+    const { dev, testId } = await setup({ joinMode: "apply", devices: ["Windows PC"] });
     const ana = await makeUser({ tester: true, name: "Ana Silva" });
     await act(testId, "apply", ana.cookie, {});
     const a = await db.application.findFirstOrThrow({ where: { testId } });
     const pageLoaded = seen();
     await later();
     await db.testerProfile.update({ where: { userId: ana.user.id }, data: { devices: ["Mac"] } });
-    const r = await act(testId, "application", dev.cookie, { applicationId: a.id, action: "decline", seenAt: pageLoaded });
-    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toContain("Ana Silva changed their profile");
-    expect((await act(testId, "application", dev.cookie, { applicationId: a.id, action: "decline", seenAt: pageLoaded, confirmed: true })).body).toEqual({ declined: true });
+    const r = await act(testId, "application", dev.cookie, { applicationId: a.id, action: "decline", seenTesters: { [ana.user.id]: { devices: ["Windows PC"], languages: ["English"], rating: null } }, seenAt: pageLoaded });
+    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toContain("Ana Silva no longer lists Windows PC, which this test needs.");
+    expect((await act(testId, "application", dev.cookie, { applicationId: a.id, action: "decline", seenTesters: { [ana.user.id]: { devices: ["Windows PC"], languages: ["English"], rating: null } }, seenAt: pageLoaded, confirmed: true })).body).toEqual({ declined: true });
   });
 
   it("Join and Apply stop once when anything about the listing changed (incl. who can join), but not for spots", async () => {
