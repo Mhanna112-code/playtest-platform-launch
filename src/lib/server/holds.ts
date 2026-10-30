@@ -644,6 +644,7 @@ export async function runSweep(now = new Date(), co = closeOutMemo(now)) {
   await (await import("./email")).retryEmails(now).catch((e) => console.error("[email] retry:", (e as Error).message));
   await (await import("./chargeback")).expireReservations(now).catch((e) => console.error("[reserve] expire:", (e as Error).message));
   await (await import("./calls")).sweepNobodyJoined(now);
+  if (stripeOn()) await (await import("./stripe")).cardExpiryReminders(now).catch((e) => console.error("[card expiry]", (e as Error).message));
   const choices = (await openCharges(now, co)) + (await autoChargeCalls(now));
   // (Batch 29 §22, §31) The one-a-day money lines across tests: the tester's "Charge or let go", the developer's "Pay now".
   await testerChargeLines(now, co);

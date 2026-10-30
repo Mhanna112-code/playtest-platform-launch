@@ -16,6 +16,7 @@ export const listingBody = (over: Record<string, unknown> = {}) => ({
 
 export async function setup(over: Record<string, unknown> = {}) {
   const dev = await makeUser({ dev: true, name: "Nora Lane", pronoun: "she" });
+  await db.user.update({ where: { id: dev.user.id }, data: { stripePaymentMethodId: "pm_test_saved", cardExpMonth: 12, cardExpYear: 2030 } });
   const r = await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: listingBody(over) })));
   expect(r.status).toBe(200);
   await settle();

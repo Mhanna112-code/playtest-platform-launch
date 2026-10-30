@@ -133,6 +133,7 @@ describe("Stripe (test mode, faked)", () => {
   it("needs a card first; a declined Pay is owed and starts the payment hold at once; no second Pay on it", async () => {
     fake(true);
     const { dev, sub } = await sent();
+    await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: null, stripePaymentMethodId: null } });
     expect((await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).body.error.message).toBe("Add a card in Payments first, then press Pay again.");
     await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_1" } });
     const r = await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });

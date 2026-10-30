@@ -39,6 +39,7 @@ async function heldCall(dev: { card?: boolean } = {}) {
   const call = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie, 48);
   await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 8 * DAY), actualMinutes: 30, payBy: new Date(Date.now() - 60_000) } });
   if (dev.card !== false) await db.user.update({ where: { id: s.dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
+  else await db.user.update({ where: { id: s.dev.user.id }, data: { stripeCustomerId: null, stripePaymentMethodId: null } });
   return { ...s, ...j, call };
 }
 const autoCharge = async () => (await import("@/lib/server/holds")).autoChargeCalls(new Date());

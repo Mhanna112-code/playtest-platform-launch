@@ -1,0 +1,1 @@
+ALTER TABLE "User" ADD COLUMN "cardExpMonth" INTEGER, ADD COLUMN "cardExpYear" INTEGER;

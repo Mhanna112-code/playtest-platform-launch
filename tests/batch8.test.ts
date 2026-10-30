@@ -129,7 +129,7 @@ describe("batch 8 items 1-2: the free plan and the perks", () => {
 describe("batch 8 items 2-3: Payments, subscribe, cancel, keep", () => {
   it("Subscribe needs a saved card; it charges $7 with a receipt line; active since / renews on; Cancel; Keep", async () => {
     await freeOver();
-    const dev = await makeUser({ dev: true, name: "Nora Lane" });
+    const dev = await makeUser({ dev: true, name: "Nora Lane", savedCard: false });
     ok();
     expect((await sub(dev.cookie, "subscribe")).body.error.message).toBe("Add a card first, then subscribe.");
     await withCard(dev.user.id);

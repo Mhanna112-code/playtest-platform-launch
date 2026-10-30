@@ -116,7 +116,7 @@ type EditProps = {
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
 /** (Owner, Oct 28 evening) `draft`: a draft (a next round not opened yet) shown in Post a test: Post opens it for testers, and it can be deleted here. */
-export function TestForm({ init, edit, draft, perks = true, termsAgain = false }: { init: Listing; edit?: EditProps; draft?: { id: string }; /** (Batch 8) false on the free plan: "Subscribers" on Approved-only */ perks?: boolean; /** (Batch 20 section 21) the account hasn't agreed to the current Terms: the tick shows above Post */ termsAgain?: boolean }) {
+export function TestForm({ init, edit, draft, perks = true, termsAgain = false, hasCard = true }: { init: Listing; edit?: EditProps; draft?: { id: string }; /** (Batch 8) false on the free plan: "Subscribers" on Approved-only */ perks?: boolean; /** (Batch 20 section 21) the account hasn't agreed to the current Terms: the tick shows above Post */ termsAgain?: boolean; hasCard?: boolean }) {
   const [f, setF] = useState<F>(toForm(init));
   // What this tab last knew the test to be (Edit): fields that differ from it are "changed" (Save is faded when none are).
   const [base, setBase] = useState<F>(toForm(init));
@@ -715,6 +715,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false }
         {edit && edit.testersIn > 0 && <p className="note">Testers already working keep their contract; each is offered these new terms and can switch. Work they&apos;ve already sent keeps its price.</p>}
         {/* (Owner, Oct 28) Above the button: "Fix the N mistakes above…". (Batch 16 section 10) One linked bullet per field red right now, read from the
             fields themselves, so the list and the fields always agree; then any server mistake that belongs to no field. */}
+        {!edit && !hasCard && <p className="note" data-card-needed="">Posting needs a card in Payments. <a className="underline" href="/app/payments">Add a card</a>.</p>}
         <MistakeList press={edit ? "Save" : "Post the test"} orphans={orphans} />
         {/* (Owner, Oct 28, batch 19 section 7) Required, just above the button: on Post (and a draft's Post) always; on Edit only while Save is enabled. Unticked, the
             server refuses the press with its red line at the tick. */}
@@ -748,6 +749,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false }
           );
         })}
         <Err text={refusal} />
+        {refusal.includes("Add a card in Payments before posting") && <p className="text-sm"><a className="underline" href="/app/payments">Open Payments</a></p>}
         {draft && (
           <ConfirmButton className="btn-secondary px-3 py-1.5 text-sm text-rose-200" title="Delete this draft?" confirmLabel="Delete the draft"
             body={<p>The draft and its details are deleted. Nobody has joined it, so nothing else changes. This can&apos;t be undone.</p>}
