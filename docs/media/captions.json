@@ -16378,5 +16378,401 @@
     "group": "qc6",
     "order": 128003,
     "size": "desktop"
+  },
+  "b30-01-send-again-below-cap.png": {
+    "caption": "On Ana's session page the paid written part opens again with “Nora Lane has paid $10.00 for this. An update can be paid more, up to $1,000.00 in all.” above Send.",
+    "kind": "image",
+    "title": "§2 Send again after it's paid",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF1",
+    "order": 115001,
+    "size": "desktop"
+  },
+  "b30-02-send-again-at-cap.png": {
+    "caption": "Ben was paid the piece's cap: “This part is already paid the most it can be ($1,000.00): Nora Lane can't pay more for an update.”",
+    "kind": "image",
+    "title": "§2 Send again after it's paid",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF1",
+    "order": 115002,
+    "size": "desktop"
+  },
+  "b30-03-update-needs-you.png": {
+    "caption": "In Nora's Needs you: “Ana Silva sent an updated version after you paid ($10.00 paid · up to $990.00 more)” with the piece's Pay more box; Ben's update has no row there.",
+    "kind": "image",
+    "title": "§2 Send again after it's paid",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF1",
+    "order": 115003,
+    "size": "desktop"
+  },
+  "b30-04-update-at-cap-tag.png": {
+    "caption": "Ben's row on the developer's test page: “Updated after you paid · already paid the most” (no Needs you row, nothing more to pay).",
+    "kind": "image",
+    "title": "§2 Send again after it's paid",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF1",
+    "order": 115004,
+    "size": "desktop"
+  },
+  "b30-05-update-zero.png": {
+    "caption": "$0 is allowed in the update's Pay more box: “Any amount up to the cap, or $0 to close this update (a note is optional).”",
+    "kind": "image",
+    "title": "§2 Send again after it's paid",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF1",
+    "order": 115005,
+    "size": "desktop"
+  },
+  "b30-06-update-closed.png": {
+    "caption": "After Pay more at $0 the update row has left Needs you; Ana's tester row keeps the usual Pay more box (“paid $10.00 of $10.00”).",
+    "kind": "image",
+    "title": "§2 Send again after it's paid",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF1",
+    "order": 115006,
+    "size": "desktop"
+  },
+  "b30-07-update-zero-tester.png": {
+    "caption": "Ana's payment lines after the $0: “Paid $10.00: you get $8.00”, then “Nora Lane paid $0 more for your update.” with the note “Thanks, nothing new to pay for here.”",
+    "kind": "image",
+    "title": "§2 Send again after it's paid",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF1",
+    "order": 115007,
+    "size": "desktop"
+  },
+  "b30-08-late-before-send.png": {
+    "caption": "Before sending after the deadline: “Your deadline passed on <date>. You can still send this: Nora Lane decides what to pay for late work, and you can't charge for it.”",
+    "kind": "image",
+    "title": "§3 Late work gets no Charge",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF2",
+    "order": 116001,
+    "size": "desktop"
+  },
+  "b30-09-late-after-send.png": {
+    "caption": "15 days after sending late, with the test closed: “Sent late (deadline was <date>): Nora Lane decides what to pay. You can't charge for late work.” No Charge or Let it go.",
+    "kind": "image",
+    "title": "§3 Late work gets no Charge",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF2",
+    "order": 116002,
+    "size": "desktop"
+  },
+  "b30-10-late-dev.png": {
+    "caption": "The developer's Needs you holds the piece with its Pay box and the badge “Sent late (deadline was <date>)”, without the “can charge” line.",
+    "kind": "image",
+    "title": "§3 Late work gets no Charge",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF2",
+    "order": 116003,
+    "size": "desktop"
+  },
+  "b30-11-team-close-preview.png": {
+    "caption": "On the developer's admin box the Preview reads “This closes 3 pieces from 2 testers on 2 tests at $0:” with the list, then the required reason and the button.",
+    "kind": "image",
+    "title": "§5 The team closes open reviews at $0",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF3",
+    "order": 117001,
+    "size": "desktop"
+  },
+  "b30-12-team-close-result.png": {
+    "caption": "Nora paid Ben between the Preview and the press: “2 closed; 1 was settled meanwhile.”",
+    "kind": "image",
+    "title": "§5 The team closes open reviews at $0",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF3",
+    "order": 117002,
+    "size": "desktop"
+  },
+  "b30-13-team-close-tester.png": {
+    "caption": "Ana's session page: “The team closed this for $0: “Spam testers: these answers were copied between accounts.”” and “The team closed this for $0, so it can't be disputed.”",
+    "kind": "image",
+    "title": "§5 The team closes open reviews at $0",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF3",
+    "order": 117003,
+    "size": "desktop"
+  },
+  "b30-14-team-close-dev-bell.png": {
+    "caption": "The developer's bell, Payments and holds: “The team closed 2 open reviews on your tests for $0”.",
+    "kind": "image",
+    "title": "§5 The team closes open reviews at $0",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF3",
+    "order": 117004,
+    "size": "desktop"
+  },
+  "b30-21-locked-named.png": {
+    "caption": "Save names the change another tab's save locked: “Your change to the live call rate ($24.00/h → $30.00/h) can't be saved: you've changed the parts and prices 3 times since testers joined.” with Put it back.",
+    "kind": "image",
+    "title": "§9 Locked fields named",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF6",
+    "order": 120001,
+    "size": "desktop"
+  },
+  "b30-22-locked-disabled.png": {
+    "caption": "Edit opened again after the third change: “Changes left: 0 of 3” and every tick and the price, rate and call-length boxes in the group are disabled.",
+    "kind": "image",
+    "title": "§9 Locked fields named",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF6",
+    "order": 120003,
+    "size": "desktop"
+  },
+  "b30-24-one-line-per-save.png": {
+    "caption": "One Edit save of five fields reaches Ana's session page as ONE top-box line (the listing information only; the recording price comes as new terms): “Nora Lane edited the listing at 10:23 PM: product name, title (now “Harbor Run: one save”), description, build link · See it”.",
+    "kind": "image",
+    "title": "§10 One line per listing save",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF7",
+    "order": 121001,
+    "size": "desktop"
+  },
+  "b30-25-changed-since-join.png": {
+    "caption": "Right above Cam's Join this test: “Changed since you opened this page” with “Nora Lane edited the listing at <time>: questions · See it” above the earlier “…: description, build link · See it” (newest first), live.",
+    "kind": "image",
+    "title": "§11 Changes next to Join",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF7",
+    "order": 121002,
+    "size": "desktop"
+  },
+  "b30-15-invite-search-why.png": {
+    "caption": "Searching “qfjnfd”: Max can be ticked; Ivy “· already invited, waiting for them to join”, Jo “· already in this test” and Kit “· applied: answer them in Needs you →” are greyed with no tick box; Lee (blocked) isn't shown.",
+    "kind": "image",
+    "title": "§7 Invite search says why",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF4",
+    "order": 118001,
+    "size": "desktop"
+  },
+  "b30-16-invite-search-to-invited.png": {
+    "caption": "Ivy's greyed row links “already invited, waiting for them to join” to their row in the Invited list above (“Ivy … · waiting for them to join” with Cancel invite), here already in view.",
+    "kind": "image",
+    "title": "§7 Invite search says why",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF4",
+    "order": 118002,
+    "size": "desktop"
+  },
+  "b30-17-invite-search-blocked.png": {
+    "caption": "A blocked tester is never revealed: “No testers match “lee qfjnfd”.”",
+    "kind": "image",
+    "title": "§7 Invite search says why",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF4",
+    "order": 118003,
+    "size": "desktop"
+  },
+  "b30-18-invite-live-dashboard.png": {
+    "caption": "Ana's dashboard was open when Nora invited them: the top box says “Updated · <time>: Nora Lane invited you to “Lumen Notes private beta”” without a reload.",
+    "kind": "image",
+    "title": "§8 A new invite shows live",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF5",
+    "order": 119001,
+    "size": "desktop"
+  },
+  "b30-23-locked-put-back.png": {
+    "caption": "After Put it back (the rate back at $24.00/h) the second Save goes through with the description change: “Saved. New testers join on the new listing; testers already in keep their contract.”.",
+    "kind": "image",
+    "title": "§9 Locked fields named",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF6",
+    "order": 120002,
+    "size": "desktop"
+  },
+  "b30-26-join-stop-race.png": {
+    "caption": "Ben applied in another tab, then Nora saved twice: Apply stops once with one box, oldest first: “You applied to join in another tab”, “Nora Lane edited the listing at <time>: product name, description · See it”, “Nora Lane changed the listing: your application was closed” and “Nora Lane changed the NDA at 10:23 PM: read and accept it again below”; the NDA tick is cleared.",
+    "kind": "image",
+    "title": "§12 The join page's stop box",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF7",
+    "order": 121003,
+    "size": "desktop"
+  },
+  "b30-27-join-stop-covered.png": {
+    "caption": "The save that made Dee meet the test's needs: “You now meet this test's needs. Press Join to join.” shows together with the stop box listing that save, “Nora Lane edited the listing at <time>: devices, recording price, questions · See it”; the box names the press “Your press didn't go through.” instead of Join.",
+    "kind": "image",
+    "title": "§12 The join page's stop box (App bug: “Your press”)",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF7",
+    "order": 121004,
+    "size": "desktop"
+  },
+  "b30-28-answer-counter.png": {
+    "caption": "While an answer is below the minimum its counter reads “10 / 50 characters minimum” (grey); the second answer has 52 characters and no counter.",
+    "kind": "image",
+    "title": "§14 50-character answers",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF8",
+    "order": 122001,
+    "size": "desktop"
+  },
+  "b30-29-answer-too-short.png": {
+    "caption": "Send finds it short: red at the answer, “Write at least 50 characters (10 so far).”, and in the mistakes list.",
+    "kind": "image",
+    "title": "§14 50-character answers",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF8",
+    "order": 122002,
+    "size": "desktop"
+  },
+  "b31-02-file-limit-line.png": {
+    "caption": "The written part's file box: “Attach a file (images, PDF, text or zip; 500 MB each, 5 at most) or a video”.",
+    "kind": "image",
+    "title": "§2 Files up to 500 MB",
+    "section": "Batch 31 (Oct 29)",
+    "group": "pF8",
+    "order": 122003,
+    "size": "desktop"
+  },
+  "b30-30-ten-char-name.png": {
+    "caption": "Red on leaving the fields: “Name of this test: at least 10 characters (6 so far).” and “What should testers do: at least 10 characters (7 so far).”",
+    "kind": "image",
+    "title": "§18 10-character name and steps",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF8",
+    "order": 122004,
+    "size": "desktop"
+  },
+  "b31-01-spots-cap.png": {
+    "caption": "Post a test with 11 spots: the field turns red with “At most 10 testers per test.” (hint “1–10”).",
+    "kind": "image",
+    "title": "§1 At most 10 testers per test",
+    "section": "Batch 31 (Oct 29)",
+    "group": "pF8",
+    "order": 122005,
+    "size": "desktop"
+  },
+  "b31-03-spots-cap-refused.png": {
+    "caption": "Pressing Post the test with 11 spots: refused, “Fix the mistake above, then press Post the test again.” with “At most 10 testers per test.” listed (the server answers the same line).",
+    "kind": "image",
+    "title": "§1 At most 10 testers per test",
+    "section": "Batch 31 (Oct 29)",
+    "group": "pF8",
+    "order": 122006,
+    "size": "desktop"
+  },
+  "b30-31-header-badges.png": {
+    "caption": "After Nora's save the session page's header shows the new description and the badges “Game” and “Education” with their icons, “Written answers”, “Windows PC”, “English” and “1 tester on this test”.",
+    "kind": "image",
+    "title": "§15 The current listing in the contract box",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF9",
+    "order": 123001,
+    "size": "desktop"
+  },
+  "b30-32-contract-box.png": {
+    "caption": "“Your agreed scope” holds the contract (fixed at joining) and the listing information, always current; changed lines carry an “Updated <date/time>” tag that opens before → now.",
+    "kind": "image",
+    "title": "§15 The current listing in the contract box",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF9",
+    "order": 123002,
+    "size": "desktop"
+  },
+  "b30-33-key-given.png": {
+    "caption": "Nora added keys to a keyless test: Ana's session page shows “Updated · <time>: Nora Lane gave you an access key for “Lumen Notes: keys later”” in the top box, live (never the key itself).",
+    "kind": "image",
+    "title": "§17 Keys for working testers",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF9",
+    "order": 123003,
+    "size": "desktop"
+  },
+  "b30-34-pay-lines-scroll.png": {
+    "caption": "Six payment lines (“Paid $10.00: you get $8.00”, then “Extra $1.00” … “Extra $5.00”): four show in a plain scroll box and the rest scroll; “Nora Lane has paid $25.00 for this. It can be paid more, up to $1,000.00 in all.” and Dispute the pay stay outside it.",
+    "kind": "image",
+    "title": "§16 Payment lines scroll",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF10",
+    "order": 124001,
+    "size": "desktop"
+  },
+  "b30-35-date-tester.png": {
+    "caption": "Ben's side: “If Nora Lane hasn't paid by Nov 12, you can charge or let it go then.”",
+    "kind": "image",
+    "title": "§20 Same date on both sides",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF10",
+    "order": 124002,
+    "size": "desktop"
+  },
+  "b30-36-date-dev.png": {
+    "caption": "Nora's side of the same piece, the same day: “If you don't pay by Nov 12, Ben Okafor can charge you $10.00, their contract price, or let it go.”",
+    "kind": "image",
+    "title": "§20 Same date on both sides",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF10",
+    "order": 124003,
+    "size": "desktop"
+  },
+  "b30-38-branded-email.png": {
+    "caption": "The dev outbox shows the reset email as sent: a “Reset your password” button with the plain link under it, and the footer with the PlaytestPlatform logo, “You got this email because you have a Playtest account.” and “Playtest · playtestplatform.com”.",
+    "kind": "image",
+    "title": "§19 Branded emails",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF10",
+    "order": 124006,
+    "size": "desktop"
+  },
+  "b30-39-alerts-off-grey.png": {
+    "caption": "With Alerts: Off (“Stops a press only for: new terms, your key marked as working.”), Nora's payment shows greyed in the top box.",
+    "kind": "image",
+    "title": "Tester's Alerts Off",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF11",
+    "order": 125001,
+    "size": "desktop"
+  },
+  "b30-40-alerts-off-goes.png": {
+    "caption": "Ana's next press, Send my updated answers, goes straight through with no stop box for the payment: the updated answers are sent (the button greys again).",
+    "kind": "image",
+    "title": "Tester's Alerts Off",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF11",
+    "order": 125002,
+    "size": "desktop"
+  },
+  "b30-19-join-page-applied.png": {
+    "caption": "Before the answer: Ana's join page reads “You applied to join. You'll hear back when the developer answers.” with Withdraw application.",
+    "kind": "image",
+    "title": "§8 The join page follows the application",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF5",
+    "order": 119002,
+    "size": "desktop"
+  },
+  "b30-20-join-page-accepted.png": {
+    "caption": "Accepted while the join page was open: it moved by itself to Ana's session page for “Harbor Run: apply first” (Working), without a reload.",
+    "kind": "image",
+    "title": "§8 The join page follows the application",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF5",
+    "order": 119003,
+    "size": "desktop"
+  },
+  "b30-37-withdraw-stop.png": {
+    "caption": "Ana accepted the time while Nora's page still showed the request: Withdraw stops once, named: “Your Withdraw didn't go through. Since you opened this page: Ana Silva booked a call for <date> · <time>” and “Press Withdraw again to go ahead.”",
+    "kind": "image",
+    "title": "§20 The Withdraw refusal",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF10",
+    "order": 124004,
+    "size": "desktop"
+  },
+  "b30-41-withdraw-refusal.png": {
+    "caption": "Pressing Withdraw again: the kept refusal names the press, “Your Withdraw didn't go through: this time was booked at 10:24 PM.”.",
+    "kind": "image",
+    "title": "§20 The Withdraw refusal",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pF10",
+    "order": 124005,
+    "size": "desktop"
   }
 }

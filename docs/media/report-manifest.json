@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-30T02:14:29.184Z",
+  "generated": "2026-10-30T03:27:19.089Z",
   "sizes": {
     "desktop": "1280x900",
     "phone": "375x812"
@@ -7513,6 +7513,326 @@
           "explanation": "Ivo's written answers: “This part is already paid the most it can be ($1,000.00).”",
           "kind": "image",
           "desktop": "b29-38-04-tester-most.png",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Batch 30 (Oct 29)",
+      "explanation": "Batch 30 (docs/BATCH-30.md and its commits' §16-20): sending a part again after it's paid, no Charge for late work, the team closing open reviews at $0, why a searched person isn't invitable, invites and the join page live, locked fields named with Put it back, one line per listing save, changes next to Join, 50-character answers, the current listing in the contract box, keys for working testers, 10-character names, payment lines scrolling, branded emails, and the screenshot-run fixes.",
+      "cases": [
+        {
+          "title": "§2 Send again after it's paid",
+          "explanation": "On Ana's session page the paid written part opens again with “Nora Lane has paid $10.00 for this. An update can be paid more, up to $1,000.00 in all.” above Send.",
+          "kind": "image",
+          "desktop": "b30-01-send-again-below-cap.png",
+          "phone": null
+        },
+        {
+          "title": "§2 Send again after it's paid",
+          "explanation": "Ben was paid the piece's cap: “This part is already paid the most it can be ($1,000.00): Nora Lane can't pay more for an update.”",
+          "kind": "image",
+          "desktop": "b30-02-send-again-at-cap.png",
+          "phone": null
+        },
+        {
+          "title": "§2 Send again after it's paid",
+          "explanation": "In Nora's Needs you: “Ana Silva sent an updated version after you paid ($10.00 paid · up to $990.00 more)” with the piece's Pay more box; Ben's update has no row there.",
+          "kind": "image",
+          "desktop": "b30-03-update-needs-you.png",
+          "phone": null
+        },
+        {
+          "title": "§2 Send again after it's paid",
+          "explanation": "Ben's row on the developer's test page: “Updated after you paid · already paid the most” (no Needs you row, nothing more to pay).",
+          "kind": "image",
+          "desktop": "b30-04-update-at-cap-tag.png",
+          "phone": null
+        },
+        {
+          "title": "§2 Send again after it's paid",
+          "explanation": "$0 is allowed in the update's Pay more box: “Any amount up to the cap, or $0 to close this update (a note is optional).”",
+          "kind": "image",
+          "desktop": "b30-05-update-zero.png",
+          "phone": null
+        },
+        {
+          "title": "§2 Send again after it's paid",
+          "explanation": "After Pay more at $0 the update row has left Needs you; Ana's tester row keeps the usual Pay more box (“paid $10.00 of $10.00”).",
+          "kind": "image",
+          "desktop": "b30-06-update-closed.png",
+          "phone": null
+        },
+        {
+          "title": "§2 Send again after it's paid",
+          "explanation": "Ana's payment lines after the $0: “Paid $10.00: you get $8.00”, then “Nora Lane paid $0 more for your update.” with the note “Thanks, nothing new to pay for here.”",
+          "kind": "image",
+          "desktop": "b30-07-update-zero-tester.png",
+          "phone": null
+        },
+        {
+          "title": "§3 Late work gets no Charge",
+          "explanation": "Before sending after the deadline: “Your deadline passed on <date>. You can still send this: Nora Lane decides what to pay for late work, and you can't charge for it.”",
+          "kind": "image",
+          "desktop": "b30-08-late-before-send.png",
+          "phone": null
+        },
+        {
+          "title": "§3 Late work gets no Charge",
+          "explanation": "15 days after sending late, with the test closed: “Sent late (deadline was <date>): Nora Lane decides what to pay. You can't charge for late work.” No Charge or Let it go.",
+          "kind": "image",
+          "desktop": "b30-09-late-after-send.png",
+          "phone": null
+        },
+        {
+          "title": "§3 Late work gets no Charge",
+          "explanation": "The developer's Needs you holds the piece with its Pay box and the badge “Sent late (deadline was <date>)”, without the “can charge” line.",
+          "kind": "image",
+          "desktop": "b30-10-late-dev.png",
+          "phone": null
+        },
+        {
+          "title": "§5 The team closes open reviews at $0",
+          "explanation": "On the developer's admin box the Preview reads “This closes 3 pieces from 2 testers on 2 tests at $0:” with the list, then the required reason and the button.",
+          "kind": "image",
+          "desktop": "b30-11-team-close-preview.png",
+          "phone": null
+        },
+        {
+          "title": "§5 The team closes open reviews at $0",
+          "explanation": "Nora paid Ben between the Preview and the press: “2 closed; 1 was settled meanwhile.”",
+          "kind": "image",
+          "desktop": "b30-12-team-close-result.png",
+          "phone": null
+        },
+        {
+          "title": "§5 The team closes open reviews at $0",
+          "explanation": "Ana's session page: “The team closed this for $0: “Spam testers: these answers were copied between accounts.”” and “The team closed this for $0, so it can't be disputed.”",
+          "kind": "image",
+          "desktop": "b30-13-team-close-tester.png",
+          "phone": null
+        },
+        {
+          "title": "§5 The team closes open reviews at $0",
+          "explanation": "The developer's bell, Payments and holds: “The team closed 2 open reviews on your tests for $0”.",
+          "kind": "image",
+          "desktop": "b30-14-team-close-dev-bell.png",
+          "phone": null
+        },
+        {
+          "title": "§7 Invite search says why",
+          "explanation": "Searching “qfjnfd”: Max can be ticked; Ivy “· already invited, waiting for them to join”, Jo “· already in this test” and Kit “· applied: answer them in Needs you →” are greyed with no tick box; Lee (blocked) isn't shown.",
+          "kind": "image",
+          "desktop": "b30-15-invite-search-why.png",
+          "phone": null
+        },
+        {
+          "title": "§7 Invite search says why",
+          "explanation": "Ivy's greyed row links “already invited, waiting for them to join” to their row in the Invited list above (“Ivy … · waiting for them to join” with Cancel invite), here already in view.",
+          "kind": "image",
+          "desktop": "b30-16-invite-search-to-invited.png",
+          "phone": null
+        },
+        {
+          "title": "§7 Invite search says why",
+          "explanation": "A blocked tester is never revealed: “No testers match “lee qfjnfd”.”",
+          "kind": "image",
+          "desktop": "b30-17-invite-search-blocked.png",
+          "phone": null
+        },
+        {
+          "title": "§8 A new invite shows live",
+          "explanation": "Ana's dashboard was open when Nora invited them: the top box says “Updated · <time>: Nora Lane invited you to “Lumen Notes private beta”” without a reload.",
+          "kind": "image",
+          "desktop": "b30-18-invite-live-dashboard.png",
+          "phone": null
+        },
+        {
+          "title": "§8 The join page follows the application",
+          "explanation": "Before the answer: Ana's join page reads “You applied to join. You'll hear back when the developer answers.” with Withdraw application.",
+          "kind": "image",
+          "desktop": "b30-19-join-page-applied.png",
+          "phone": null
+        },
+        {
+          "title": "§8 The join page follows the application",
+          "explanation": "Accepted while the join page was open: it moved by itself to Ana's session page for “Harbor Run: apply first” (Working), without a reload.",
+          "kind": "image",
+          "desktop": "b30-20-join-page-accepted.png",
+          "phone": null
+        },
+        {
+          "title": "§9 Locked fields named",
+          "explanation": "Save names the change another tab's save locked: “Your change to the live call rate ($24.00/h → $30.00/h) can't be saved: you've changed the parts and prices 3 times since testers joined.” with Put it back.",
+          "kind": "image",
+          "desktop": "b30-21-locked-named.png",
+          "phone": null
+        },
+        {
+          "title": "§9 Locked fields named",
+          "explanation": "After Put it back (the rate back at $24.00/h) the second Save goes through with the description change: “Saved. New testers join on the new listing; testers already in keep their contract.”.",
+          "kind": "image",
+          "desktop": "b30-23-locked-put-back.png",
+          "phone": null
+        },
+        {
+          "title": "§9 Locked fields named",
+          "explanation": "Edit opened again after the third change: “Changes left: 0 of 3” and every tick and the price, rate and call-length boxes in the group are disabled.",
+          "kind": "image",
+          "desktop": "b30-22-locked-disabled.png",
+          "phone": null
+        },
+        {
+          "title": "§10 One line per listing save",
+          "explanation": "One Edit save of five fields reaches Ana's session page as ONE top-box line (the listing information only; the recording price comes as new terms): “Nora Lane edited the listing at 10:23 PM: product name, title (now “Harbor Run: one save”), description, build link · See it”.",
+          "kind": "image",
+          "desktop": "b30-24-one-line-per-save.png",
+          "phone": null
+        },
+        {
+          "title": "§11 Changes next to Join",
+          "explanation": "Right above Cam's Join this test: “Changed since you opened this page” with “Nora Lane edited the listing at <time>: questions · See it” above the earlier “…: description, build link · See it” (newest first), live.",
+          "kind": "image",
+          "desktop": "b30-25-changed-since-join.png",
+          "phone": null
+        },
+        {
+          "title": "§12 The join page's stop box",
+          "explanation": "Ben applied in another tab, then Nora saved twice: Apply stops once with one box, oldest first: “You applied to join in another tab”, “Nora Lane edited the listing at <time>: product name, description · See it”, “Nora Lane changed the listing: your application was closed” and “Nora Lane changed the NDA at 10:23 PM: read and accept it again below”; the NDA tick is cleared.",
+          "kind": "image",
+          "desktop": "b30-26-join-stop-race.png",
+          "phone": null
+        },
+        {
+          "title": "§12 The join page's stop box (App bug: “Your press”)",
+          "explanation": "The save that made Dee meet the test's needs: “You now meet this test's needs. Press Join to join.” shows together with the stop box listing that save, “Nora Lane edited the listing at <time>: devices, recording price, questions · See it”; the box names the press “Your press didn't go through.” instead of Join.",
+          "kind": "image",
+          "desktop": "b30-27-join-stop-covered.png",
+          "phone": null
+        },
+        {
+          "title": "§14 50-character answers",
+          "explanation": "While an answer is below the minimum its counter reads “10 / 50 characters minimum” (grey); the second answer has 52 characters and no counter.",
+          "kind": "image",
+          "desktop": "b30-28-answer-counter.png",
+          "phone": null
+        },
+        {
+          "title": "§14 50-character answers",
+          "explanation": "Send finds it short: red at the answer, “Write at least 50 characters (10 so far).”, and in the mistakes list.",
+          "kind": "image",
+          "desktop": "b30-29-answer-too-short.png",
+          "phone": null
+        },
+        {
+          "title": "§15 The current listing in the contract box",
+          "explanation": "After Nora's save the session page's header shows the new description and the badges “Game” and “Education” with their icons, “Written answers”, “Windows PC”, “English” and “1 tester on this test”.",
+          "kind": "image",
+          "desktop": "b30-31-header-badges.png",
+          "phone": null
+        },
+        {
+          "title": "§15 The current listing in the contract box",
+          "explanation": "“Your agreed scope” holds the contract (fixed at joining) and the listing information, always current; changed lines carry an “Updated <date/time>” tag that opens before → now.",
+          "kind": "image",
+          "desktop": "b30-32-contract-box.png",
+          "phone": null
+        },
+        {
+          "title": "§16 Payment lines scroll",
+          "explanation": "Six payment lines (“Paid $10.00: you get $8.00”, then “Extra $1.00” … “Extra $5.00”): four show in a plain scroll box and the rest scroll; “Nora Lane has paid $25.00 for this. It can be paid more, up to $1,000.00 in all.” and Dispute the pay stay outside it.",
+          "kind": "image",
+          "desktop": "b30-34-pay-lines-scroll.png",
+          "phone": null
+        },
+        {
+          "title": "§17 Keys for working testers",
+          "explanation": "Nora added keys to a keyless test: Ana's session page shows “Updated · <time>: Nora Lane gave you an access key for “Lumen Notes: keys later”” in the top box, live (never the key itself).",
+          "kind": "image",
+          "desktop": "b30-33-key-given.png",
+          "phone": null
+        },
+        {
+          "title": "§18 10-character name and steps",
+          "explanation": "Red on leaving the fields: “Name of this test: at least 10 characters (6 so far).” and “What should testers do: at least 10 characters (7 so far).”",
+          "kind": "image",
+          "desktop": "b30-30-ten-char-name.png",
+          "phone": null
+        },
+        {
+          "title": "§19 Branded emails",
+          "explanation": "The dev outbox shows the reset email as sent: a “Reset your password” button with the plain link under it, and the footer with the PlaytestPlatform logo, “You got this email because you have a Playtest account.” and “Playtest · playtestplatform.com”.",
+          "kind": "image",
+          "desktop": "b30-38-branded-email.png",
+          "phone": null
+        },
+        {
+          "title": "§20 Same date on both sides",
+          "explanation": "Ben's side: “If Nora Lane hasn't paid by Nov 12, you can charge or let it go then.”",
+          "kind": "image",
+          "desktop": "b30-35-date-tester.png",
+          "phone": null
+        },
+        {
+          "title": "§20 Same date on both sides",
+          "explanation": "Nora's side of the same piece, the same day: “If you don't pay by Nov 12, Ben Okafor can charge you $10.00, their contract price, or let it go.”",
+          "kind": "image",
+          "desktop": "b30-36-date-dev.png",
+          "phone": null
+        },
+        {
+          "title": "§20 The Withdraw refusal",
+          "explanation": "Ana accepted the time while Nora's page still showed the request: Withdraw stops once, named: “Your Withdraw didn't go through. Since you opened this page: Ana Silva booked a call for <date> · <time>” and “Press Withdraw again to go ahead.”",
+          "kind": "image",
+          "desktop": "b30-37-withdraw-stop.png",
+          "phone": null
+        },
+        {
+          "title": "§20 The Withdraw refusal",
+          "explanation": "Pressing Withdraw again: the kept refusal names the press, “Your Withdraw didn't go through: this time was booked at 10:24 PM.”.",
+          "kind": "image",
+          "desktop": "b30-41-withdraw-refusal.png",
+          "phone": null
+        },
+        {
+          "title": "Tester's Alerts Off",
+          "explanation": "With Alerts: Off (“Stops a press only for: new terms, your key marked as working.”), Nora's payment shows greyed in the top box.",
+          "kind": "image",
+          "desktop": "b30-39-alerts-off-grey.png",
+          "phone": null
+        },
+        {
+          "title": "Tester's Alerts Off",
+          "explanation": "Ana's next press, Send my updated answers, goes straight through with no stop box for the payment: the updated answers are sent (the button greys again).",
+          "kind": "image",
+          "desktop": "b30-40-alerts-off-goes.png",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Batch 31 (Oct 29)",
+      "explanation": "Batch 31 (docs/BATCH-31.md): every test takes at most 10 testers, and files on written answers up to 500 MB each.",
+      "cases": [
+        {
+          "title": "§1 At most 10 testers per test",
+          "explanation": "Post a test with 11 spots: the field turns red with “At most 10 testers per test.” (hint “1–10”).",
+          "kind": "image",
+          "desktop": "b31-01-spots-cap.png",
+          "phone": null
+        },
+        {
+          "title": "§1 At most 10 testers per test",
+          "explanation": "Pressing Post the test with 11 spots: refused, “Fix the mistake above, then press Post the test again.” with “At most 10 testers per test.” listed (the server answers the same line).",
+          "kind": "image",
+          "desktop": "b31-03-spots-cap-refused.png",
+          "phone": null
+        },
+        {
+          "title": "§2 Files up to 500 MB",
+          "explanation": "The written part's file box: “Attach a file (images, PDF, text or zip; 500 MB each, 5 at most) or a video”.",
+          "kind": "image",
+          "desktop": "b31-02-file-limit-line.png",
           "phone": null
         }
       ]
