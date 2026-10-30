@@ -287,25 +287,27 @@ describe("B3) Join call", () => {
 });
 
 describe("C) Edit: 3 significant changes", () => {
-  it("(batch 5 item 2, batch 6 item 3) the steps, NDA, questions, languages and devices count PER FIELD; prices, parts and the link don't; the line reads 'Changes left: 2 of 3'", async () => {
+  it("(batch 5 item 2, batch 6 item 3, batch 34 §15) the steps, questions, languages and devices count PER FIELD; the NDA, prices, parts and the link don't; the line reads 'Changes left: 2 of 3'", async () => {
     expect(changesLeftLine(1)).toBe("Changes left: 2 of 3");
     expect(changesLeftLine(3)).toBe("Changes left: 0 of 3");
     const { dev, testId } = await setup();
     await joined(testId);
     const ver = async () => (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
-    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { ndaText: "Secret", questions: ["A?"] } })).status).toBe(200);
-    expect(countsOf((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).toMatchObject({ ndaText: 1, questions: 1, description: 0 }); // one change of each
-    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { ndaText: "Two" } })).status).toBe(200);
-    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { ndaText: "Three" } })).status).toBe(200);
-    const fourth = await act(testId, "edit", dev.cookie, { version: await ver(), fields: { ndaText: "Another" } });
+    // (Batch 34 §15) The NDA never counts: any number of NDA saves go through.
+    for (const nda of ["Secret", "Two", "Three", "Four", "Five"]) expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { ndaText: nda } })).status).toBe(200);
+    expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { questions: ["A?"] } })).status).toBe(200);
+    expect(countsOf((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).toMatchObject({ questions: 1, description: 0 });
+    for (const d of ["Steps two", "Steps three", "Steps four"]) expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { description: d } })).status).toBe(200);
+    const fourth = await act(testId, "edit", dev.cookie, { version: await ver(), fields: { description: "Steps five" } });
     expect(fourth.status).toBe(400);
-    expect(fourth.body.error.critical).toEqual(["ndaText"]);
+    expect(fourth.body.error.critical).toEqual(["description"]);
     // Not limited: prices, parts and the build link.
     expect((await act(testId, "edit", dev.cookie, { version: await ver(), fields: { writtenCents: "11.00", liveRateCents: "40.00", buildUrl: "https://example.com/z", liveRequired: true } })).status).toBe(200);
-    expect(countsOf((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).toMatchObject({ ndaText: 3, questions: 1, languages: 0, devices: 0, description: 0 });
+    expect(countsOf((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).toMatchObject({ questions: 1, languages: 0, devices: 0, description: 3 });
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain("changesLeftLine");
-    expect(form).toContain('disabled={fieldLocked("ndaText")}');
+    expect(form).toContain('disabled={fieldLocked("description")}');
+    expect(form).not.toContain('fieldLocked("ndaText")'); // (batch 34 §15) the NDA never locks
   });
 });
 
@@ -495,10 +497,11 @@ describe("follow-up 6) one Save in another tab is one line in one voice, and 'Ch
     const { dev, testId } = await setup();
     const { GET } = await import("@/app/api/tests/[id]/[action]/route");
     const read = async () => (await json(await GET(req(`/api/tests/${testId}/listing`, { cookie: dev.cookie }), { params: Promise.resolve({ id: testId, action: "listing" }) }))).body;
-    expect(await read()).toMatchObject({ criticalCounts: { description: 0, ndaText: 0, questions: 0, languages: 0, devices: 0 }, everJoined: false });
+    expect(await read()).toMatchObject({ criticalCounts: { description: 0, questions: 0, languages: 0, devices: 0 }, everJoined: false });
     await joined(testId);
-    await db.test.update({ where: { id: testId }, data: { criticalCounts: { ndaText: 2 } } });
-    expect(await read()).toMatchObject({ criticalCounts: { ndaText: 2, devices: 0 }, everJoined: true });
+    await db.test.update({ where: { id: testId }, data: { criticalCounts: { description: 2 } } });
+    expect(await read()).toMatchObject({ criticalCounts: { description: 2, devices: 0 }, everJoined: true });
+    expect((await read()).criticalCounts).not.toHaveProperty("ndaText"); // (batch 34 §15) the NDA has no count
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain("setCritCounts(countsOf(r.criticalCounts))");
   });
